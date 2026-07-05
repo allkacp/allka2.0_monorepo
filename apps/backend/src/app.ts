@@ -20,6 +20,7 @@ import chatRouter from "./routes/chat";
 import allkademyRouter from "./routes/allkademy";
 import partnersRouter from "./routes/partners";
 import campaignsRouter from "./routes/campaigns";
+import couponsRouter from "./routes/coupons";
 import permissionsRouter from "./routes/permissions";
 import reportsRouter from "./routes/reports";
 import adminReportsRouter from "./routes/admin-reports";
@@ -128,6 +129,7 @@ app.use("/api/chat", chatRouter);
 app.use("/api/allkademy", allkademyRouter);
 app.use("/api/partners", partnersRouter);
 app.use("/api/campaigns", campaignsRouter);
+app.use("/api/coupons", couponsRouter);
 app.use("/api/permissions", permissionsRouter);
 app.use("/api/reports", reportsRouter);
 // Admin report CRUD + permission management

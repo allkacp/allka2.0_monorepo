@@ -2,7 +2,6 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { useSidebar } from "@/contexts/sidebar-context";
 import { apiClient } from "@/lib/api-client";
-import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { NeonBadge } from "@/components/neon-badge";
@@ -18,14 +17,19 @@ import {
   Briefcase,
   Activity,
   ListChecks,
-  Filter,
   Search,
   RefreshCw,
-  TrendingDown,
-  TrendingUp,
+  Plus,
+  ChevronLeft,
+  ChevronRight,
+  Mail,
 } from "lucide-react";
 import { PageHeader } from "@/components/page-header";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { SlidePanel } from "@/components/slide-panel";
+import { ItemsPerPageSelect } from "@/components/items-per-page-select";
+import { useTableScrollSync } from "@/hooks/useTableScrollSync";
+import { useSorting, SortableHeader } from "@/hooks/useSorting";
 
 // ─── helpers ─────────────────────────────────────────────────────────────────
 
@@ -161,7 +165,7 @@ function StatCard({ label, value, icon: Icon, color }) {
         overflow: "hidden",
         padding: "12px 14px",
         background: `linear-gradient(135deg, ${g.from}, ${g.to})`,
-        border: `1px solid ${g.border}`,
+        border: `2px solid ${g.border}`,
         boxShadow: "0 4px 16px rgba(0,0,0,.18)",
         display: "flex",
         flexDirection: "column",
@@ -256,6 +260,29 @@ export default function AdminDisponibilidadePage() {
   const [search, setSearch] = useState("");
   const [tab, setTab] = useState("specialty");
   const [lightFilter, setLightFilter] = useState("all");
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
+  const [pageJumpValue, setPageJumpValue] = useState("");
+
+  // "+" info panel — shows the real nômades (specialty tab) or tasks (task
+  // tab) behind an aggregated row, using data already loaded in state (no
+  // extra request needed).
+  const [infoPanelOpen, setInfoPanelOpen] = useState(false);
+  const [infoGroup, setInfoGroup] = useState(null);
+  const openInfoPanel = useCallback((group, kind) => {
+    setInfoGroup({ ...group, kind });
+    setInfoPanelOpen(true);
+  }, []);
+
+  const {
+    tableScrollRef,
+    topScrollRef,
+    bottomScrollRef,
+    handleTopBarScroll,
+    handleTableScroll,
+    handleBottomBarScroll,
+    hasHorizontalOverflow,
+  } = useTableScrollSync([loading, tab]);
 
   const load = useCallback(async () => {
     setRefreshing(true);
@@ -397,6 +424,69 @@ export default function AdminDisponibilidadePage() {
     return arr;
   }, [taskGroups, search, lightFilter]);
 
+  // ── Pagination (client-side — data is already fully loaded/grouped) ──────
+  useEffect(() => {
+    setPage(1);
+  }, [tab, search, lightFilter, pageSize]);
+
+  const { sortKey, sortDir, handleSort, sortData } = useSorting();
+
+  const currentRows = tab === "specialty" ? filteredSpec : filteredTasks;
+  const sortedRows = useMemo(() => sortData(currentRows), [currentRows, sortData]);
+  const total = currentRows.length;
+  const totalPages = Math.max(1, Math.ceil(total / pageSize));
+  const pageRows = useMemo(
+    () => sortedRows.slice((page - 1) * pageSize, page * pageSize),
+    [sortedRows, page, pageSize],
+  );
+
+  const getPageNumbers = () => {
+    const pages = [];
+    const maxVisible = 5;
+    const halfVisible = Math.floor(maxVisible / 2);
+    if (totalPages <= maxVisible) {
+      for (let i = 1; i <= totalPages; i++) pages.push(i);
+    } else if (page <= halfVisible + 1) {
+      for (let i = 1; i <= maxVisible; i++) pages.push(i);
+      if (totalPages > maxVisible) pages.push("...");
+    } else if (page >= totalPages - halfVisible) {
+      pages.push("...");
+      for (let i = totalPages - maxVisible + 1; i <= totalPages; i++) pages.push(i);
+    } else {
+      pages.push("...");
+      for (let i = page - halfVisible; i <= page + halfVisible; i++) pages.push(i);
+      pages.push("...");
+    }
+    return pages;
+  };
+
+  const commitPageJump = () => {
+    const n = parseInt(pageJumpValue, 10);
+    if (!isNaN(n) && n >= 1 && n <= totalPages) setPage(n);
+    setPageJumpValue("");
+  };
+
+  // ── "+" info panel data (real nômades / tasks behind the group) ──────────
+  const infoNomades = useMemo(() => {
+    if (!infoGroup || infoGroup.kind !== "specialty") return [];
+    return nomades.filter((n) => {
+      const keys =
+        parseList(n.specialties).length > 0
+          ? parseList(n.specialties)
+          : parseList(n.specialty).length > 0
+            ? parseList(n.specialty)
+            : parseList(n.areas_of_interest).length > 0
+              ? parseList(n.areas_of_interest)
+              : ["Geral"];
+      return keys.includes(infoGroup.name);
+    });
+  }, [nomades, infoGroup]);
+
+  const infoTasks = useMemo(() => {
+    if (!infoGroup || infoGroup.kind !== "task") return [];
+    return tasks.filter((t) => (t.template?.name || t.title || "Sem título") === infoGroup.name);
+  }, [tasks, infoGroup]);
+
   // ── KPIs ──────────────────────────────────────────────────────────────────
   const kpi = useMemo(() => {
     const totalN = nomades.length;
@@ -422,6 +512,145 @@ export default function AdminDisponibilidadePage() {
     background: "var(--table-head)",
     boxShadow: "0 1px 0 rgba(148,163,184,0.25)",
   };
+  // Sticky "Ações" column (left) — same recipe as admin/clientes.
+  const acoesThStyle = {
+    position: "sticky",
+    left: 0,
+    top: 0,
+    zIndex: 3,
+    minWidth: 52,
+    background: "var(--table-head)",
+    boxShadow: "0 1px 0 rgba(148,163,184,0.25)",
+    borderRight: "1px solid rgba(100,116,139,0.18)",
+  };
+  const acoesTdClass = (i) =>
+    `px-1 py-2 transition-colors ${
+      i % 2 === 0
+        ? "bg-[#ECEFF4] group-hover:bg-[#D9E1ED] dark:bg-[oklch(0.14_0.026_258)] dark:group-hover:bg-[oklch(0.21_0.024_258)]"
+        : "bg-[#D6DCE8] group-hover:bg-[#C7D2E3] dark:bg-[oklch(0.185_0.024_258)] dark:group-hover:bg-[oklch(0.21_0.024_258)]"
+    }`;
+  const acoesTdStyle = {
+    position: "sticky",
+    left: 0,
+    zIndex: 1,
+    minWidth: 52,
+    borderRight: "1px solid rgba(100,116,139,0.18)",
+  };
+
+  const CountText = ({ side = "bottom" }) => (
+    <TooltipProvider delayDuration={400}>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <span className="text-xs text-slate-400 whitespace-nowrap shrink-0 cursor-default">
+            {tab === "specialty" ? (
+              <>
+                {filteredSpec.length} de{" "}
+                <span className="font-semibold text-slate-600 dark:text-slate-300">
+                  {specGroups.length}
+                </span>{" "}
+                especialidade{specGroups.length !== 1 ? "s" : ""}
+              </>
+            ) : (
+              <>
+                {filteredTasks.length} de{" "}
+                <span className="font-semibold text-slate-600 dark:text-slate-300">
+                  {taskGroups.length}
+                </span>{" "}
+                tarefa{taskGroups.length !== 1 ? "s" : ""}
+              </>
+            )}
+          </span>
+        </TooltipTrigger>
+        <TooltipContent side={side} sideOffset={6}>
+          Total encontrado com os filtros atuais (busca + farol)
+        </TooltipContent>
+      </Tooltip>
+    </TooltipProvider>
+  );
+
+  const PaginationControls = () => (
+    <div className="flex items-center gap-1 flex-shrink-0">
+      <button
+        onClick={() => setPage((p) => Math.max(1, p - 1))}
+        disabled={page === 1}
+        title="Página anterior"
+        className="h-7 w-7 flex items-center justify-center rounded-[8px] text-slate-500 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-30 disabled:pointer-events-none transition-colors"
+      >
+        <ChevronLeft className="h-3.5 w-3.5" />
+      </button>
+      {getPageNumbers().map((p, index) =>
+        p === "..." ? (
+          <span key={index} className="text-xs text-slate-300 px-0.5">·</span>
+        ) : (
+          <button
+            key={index}
+            onClick={() => setPage(Number(p))}
+            title={p === page ? "Página atual" : `Ir para a página ${p}`}
+            className={`h-7 w-7 flex items-center justify-center rounded-[8px] text-xs font-bold transition-colors ${
+              p === page
+                ? "text-white shadow-[0_6px_14px_rgba(110,44,150,0.25)]"
+                : "text-slate-500 hover:text-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 dark:text-slate-400"
+            }`}
+            style={p === page ? { background: "linear-gradient(135deg, #111A4D 0%, #6E2C96 55%, #D92293 100%)" } : undefined}
+          >
+            {p}
+          </button>
+        ),
+      )}
+      <button
+        onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+        disabled={page === totalPages}
+        title="Próxima página"
+        className="h-7 w-7 flex items-center justify-center rounded-[8px] text-slate-500 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-30 disabled:pointer-events-none transition-colors"
+      >
+        <ChevronRight className="h-3.5 w-3.5" />
+      </button>
+      <TooltipProvider delayDuration={400}>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <div className="flex items-center gap-1 flex-shrink-0 ml-1.5 pl-1.5 border-l border-slate-200 dark:border-slate-700">
+              <input
+                type="number"
+                min={1}
+                max={totalPages}
+                value={pageJumpValue}
+                onChange={(e) => setPageJumpValue(e.target.value)}
+                onKeyDown={(e) => { if (e.key === "Enter") commitPageJump(); }}
+                placeholder="Pág."
+                aria-label="Ir para a página"
+                className="h-7 w-14 text-xs text-center rounded-[8px] border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+              />
+              <button
+                onClick={commitPageJump}
+                disabled={!pageJumpValue}
+                className="group relative h-7 px-2.5 rounded-[8px] text-xs font-medium border border-slate-200 dark:border-slate-700 hover:border-transparent overflow-hidden disabled:opacity-40 disabled:pointer-events-none transition-all"
+              >
+                <span
+                  className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none"
+                  style={{ background: "linear-gradient(135deg,#000000 0%,#1a2a6f 45%,#c81a7f 100%)" }}
+                />
+                <span className="relative z-10 text-[#7d1b6a] dark:text-[#c07ab0] group-hover:text-white transition-colors">Ir</span>
+              </button>
+            </div>
+          </TooltipTrigger>
+          <TooltipContent side="bottom">Ir diretamente para uma página</TooltipContent>
+        </Tooltip>
+      </TooltipProvider>
+    </div>
+  );
+
+  const ScrollMirror = ({ variant }) =>
+    hasHorizontalOverflow ? (
+      <div
+        ref={variant === "top" ? topScrollRef : bottomScrollRef}
+        onScroll={variant === "top" ? handleTopBarScroll : handleBottomBarScroll}
+        title="Arraste para rolar a tabela na horizontal e ver as colunas que não couberem na tela"
+        className="hidden md:block flex-1 min-w-[80px] overflow-x-scroll allka-table-scroll self-center"
+        style={{ height: 12 }}
+      >
+        <div style={{ minWidth: 700, height: 1 }} />
+      </div>
+    ) : null;
 
   return (
     <div className="space-y-5">
@@ -521,8 +750,8 @@ export default function AdminDisponibilidadePage() {
       </div>
 
       {/* ── Tabela card ── */}
-      <Card className="border border-slate-200/70 dark:border-slate-700/60 shadow-sm overflow-hidden">
-        {/* toolbar inside card */}
+      <div className="bg-white dark:bg-slate-900 border border-[#e8edf5] dark:border-slate-700 rounded-xl shadow-sm overflow-hidden">
+        {/* Row 1 — search + farol filter pills */}
         <div className="flex items-center gap-3 px-5 py-3 border-b border-slate-200/70 dark:border-slate-700/60 bg-slate-50/60 dark:bg-slate-900/30 flex-wrap">
           <div className="relative flex-1 min-w-48">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400" />
@@ -535,26 +764,6 @@ export default function AdminDisponibilidadePage() {
               onChange={(e) => setSearch(e.target.value)}
             />
           </div>
-
-          <span className="text-xs text-slate-400 whitespace-nowrap shrink-0">
-            {tab === "specialty" ? (
-              <>
-                {filteredSpec.length} de{" "}
-                <span className="font-semibold text-slate-600 dark:text-slate-300">
-                  {specGroups.length}
-                </span>{" "}
-                especialidade{specGroups.length !== 1 ? "s" : ""}
-              </>
-            ) : (
-              <>
-                {filteredTasks.length} de{" "}
-                <span className="font-semibold text-slate-600 dark:text-slate-300">
-                  {taskGroups.length}
-                </span>{" "}
-                tarefa{taskGroups.length !== 1 ? "s" : ""}
-              </>
-            )}
-          </span>
 
           {/* farol filter pills */}
           <div className="flex items-center gap-1.5 shrink-0">
@@ -613,31 +822,61 @@ export default function AdminDisponibilidadePage() {
           </div>
         </div>
 
+        {/* Row 2 (top) — items-per-page + count + scrollbar mirror + pagination */}
+        <div className="flex flex-wrap items-center justify-between gap-3 px-5 py-2 border-b border-slate-200/70 dark:border-slate-800 bg-white dark:bg-slate-900/30">
+          <div className="flex items-center gap-3">
+            <ItemsPerPageSelect
+              value={pageSize.toString()}
+              onValueChange={(value) => setPageSize(Number(value))}
+              variant="top"
+            />
+            <CountText side="bottom" />
+          </div>
+          <ScrollMirror variant="top" />
+          {totalPages > 1 && <PaginationControls />}
+        </div>
+
         {/* ── Por Especialidade ── */}
         {tab === "specialty" && (
           <div
-            className="overflow-auto"
-            style={{ maxHeight: "calc(100vh - 28rem)" }}
+            ref={tableScrollRef}
+            onScroll={handleTableScroll}
+            className="overflow-x-auto allka-table-scroll-body"
           >
             <table className="w-full text-sm min-w-150">
               <thead style={theadStyle}>
                 <tr>
-                  <th className={TH}>Status</th>
-                  <th className={TH}>Especialidade</th>
-                  <th className={TH}>Categoria</th>
-                  <th className={TH}>Total</th>
-                  <th className={TH}>Disponíveis</th>
+                  <th className="text-center px-2 py-3 text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide whitespace-nowrap" style={acoesThStyle}>
+                    Ações
+                  </th>
+                  <th className={TH}>
+                    <SortableHeader label="Status" field="light" type="text" sortKey={sortKey ? String(sortKey) : null} sortDir={sortDir} onSort={handleSort} />
+                  </th>
+                  <th className={TH}>
+                    <SortableHeader label="Especialidade" field="name" type="text" sortKey={sortKey ? String(sortKey) : null} sortDir={sortDir} onSort={handleSort} />
+                  </th>
+                  <th className={TH}>
+                    <SortableHeader label="Categoria" field="category" type="text" sortKey={sortKey ? String(sortKey) : null} sortDir={sortDir} onSort={handleSort} />
+                  </th>
+                  <th className={TH}>
+                    <SortableHeader label="Total" field="total" type="number" sortKey={sortKey ? String(sortKey) : null} sortDir={sortDir} onSort={handleSort} />
+                  </th>
+                  <th className={TH}>
+                    <SortableHeader label="Disponíveis" field="active" type="number" sortKey={sortKey ? String(sortKey) : null} sortDir={sortDir} onSort={handleSort} />
+                  </th>
                   <th className={TH}>Em Atividade</th>
                   <th className={TH} style={{ minWidth: 140 }}>
                     Utilização
                   </th>
-                  <th className={TH}>R$/h</th>
+                  <th className={TH}>
+                    <SortableHeader label="R$/h" field="hourly_rate" type="number" sortKey={sortKey ? String(sortKey) : null} sortDir={sortDir} onSort={handleSort} />
+                  </th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
                 {filteredSpec.length === 0 ? (
                   <tr>
-                    <td colSpan={8} className="py-16 text-center">
+                    <td colSpan={9} className="py-16 text-center">
                       <div className="flex flex-col items-center gap-2 text-slate-400">
                         <Briefcase className="h-8 w-8 opacity-30" />
                         <p className="text-sm">
@@ -647,7 +886,7 @@ export default function AdminDisponibilidadePage() {
                     </td>
                   </tr>
                 ) : (
-                  filteredSpec.map((g, i) => {
+                  pageRows.map((g, i) => {
                     const pct =
                       g.total > 0
                         ? Math.round(((g.total - g.active) / g.total) * 100)
@@ -656,8 +895,29 @@ export default function AdminDisponibilidadePage() {
                     return (
                       <tr
                         key={g.name}
-                        className={`${i % 2 === 0 ? "bg-table-row" : "bg-table-row-alt"} hover:bg-table-row-hover transition-colors`}
+                        className={`group transition-colors ${
+                          i % 2 === 0
+                            ? "bg-[#F1F4F9] dark:bg-[oklch(0.14_0.026_258)] hover:bg-[#D9E1ED] dark:hover:bg-[oklch(0.21_0.024_258)]"
+                            : "bg-[#DCE3EE] dark:bg-[oklch(0.185_0.024_258)] hover:bg-[#C7D2E3] dark:hover:bg-[oklch(0.21_0.024_258)]"
+                        }`}
                       >
+                        <td className={acoesTdClass(i)} style={acoesTdStyle}>
+                          <div className="flex items-center justify-center">
+                            <TooltipProvider delayDuration={400}>
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <button
+                                    onClick={() => openInfoPanel(g, "specialty")}
+                                    className="h-[21px] w-[21px] flex items-center justify-center rounded-full bg-[#2558FF] text-white shadow-[0_2px_6px_rgba(37,88,255,0.35)] hover:bg-gradient-to-br hover:from-[#2558FF] hover:via-[#6E2C96] hover:to-[#D92293] hover:text-white dark:hover:text-[#0a1628] hover:shadow-[0_2px_10px_rgba(110,44,150,0.5)] transition-all"
+                                  >
+                                    <Plus className="h-3 w-3" />
+                                  </button>
+                                </TooltipTrigger>
+                                <TooltipContent className="text-xs font-medium">Ver nômades desta especialidade</TooltipContent>
+                              </Tooltip>
+                            </TooltipProvider>
+                          </div>
+                        </td>
                         <td className="px-4 py-3">
                           <div className="flex items-center gap-2">
                             <Farol light={g.light} />
@@ -677,12 +937,9 @@ export default function AdminDisponibilidadePage() {
                           </div>
                         </td>
                         <td className="px-4 py-3">
-                          <Badge
-                            variant="outline"
-                            className="text-[10px] capitalize bg-slate-50 text-slate-500 border-slate-200 dark:bg-slate-800/50 dark:border-slate-600"
-                          >
+                          <NeonBadge color="slate" className="capitalize">
                             {g.category}
-                          </Badge>
+                          </NeonBadge>
                         </td>
                         <td className="px-4 py-3 text-xs font-bold tabular-nums text-slate-700 dark:text-slate-300">
                           {g.total}
@@ -746,25 +1003,41 @@ export default function AdminDisponibilidadePage() {
         {/* ── Por Tarefa ── */}
         {tab === "task" && (
           <div
-            className="overflow-auto"
-            style={{ maxHeight: "calc(100vh - 28rem)" }}
+            ref={tableScrollRef}
+            onScroll={handleTableScroll}
+            className="overflow-x-auto allka-table-scroll-body"
           >
             <table className="w-full text-sm min-w-150">
               <thead style={theadStyle}>
                 <tr>
-                  <th className={TH}>Status</th>
-                  <th className={TH}>Tarefa</th>
-                  <th className={TH}>Categoria</th>
-                  <th className={TH}>Total</th>
-                  <th className={TH}>Aguardando Nômade</th>
+                  <th className="text-center px-2 py-3 text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide whitespace-nowrap" style={acoesThStyle}>
+                    Ações
+                  </th>
+                  <th className={TH}>
+                    <SortableHeader label="Status" field="light" type="text" sortKey={sortKey ? String(sortKey) : null} sortDir={sortDir} onSort={handleSort} />
+                  </th>
+                  <th className={TH}>
+                    <SortableHeader label="Tarefa" field="name" type="text" sortKey={sortKey ? String(sortKey) : null} sortDir={sortDir} onSort={handleSort} />
+                  </th>
+                  <th className={TH}>
+                    <SortableHeader label="Categoria" field="category" type="text" sortKey={sortKey ? String(sortKey) : null} sortDir={sortDir} onSort={handleSort} />
+                  </th>
+                  <th className={TH}>
+                    <SortableHeader label="Total" field="total" type="number" sortKey={sortKey ? String(sortKey) : null} sortDir={sortDir} onSort={handleSort} />
+                  </th>
+                  <th className={TH}>
+                    <SortableHeader label="Aguardando Nômade" field="waiting" type="number" sortKey={sortKey ? String(sortKey) : null} sortDir={sortDir} onSort={handleSort} />
+                  </th>
                   <th className={TH}>Em Execução</th>
-                  <th className={TH}>Aguardando há</th>
+                  <th className={TH}>
+                    <SortableHeader label="Aguardando há" field="oldestHours" type="number" sortKey={sortKey ? String(sortKey) : null} sortDir={sortDir} onSort={handleSort} />
+                  </th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
                 {tasks.length === 0 ? (
                   <tr>
-                    <td colSpan={7} className="py-16 text-center">
+                    <td colSpan={8} className="py-16 text-center">
                       <div className="flex flex-col items-center gap-2 text-slate-400">
                         <ListChecks className="h-8 w-8 opacity-30" />
                         <p className="text-sm">Nenhuma tarefa encontrada</p>
@@ -777,14 +1050,14 @@ export default function AdminDisponibilidadePage() {
                 ) : filteredTasks.length === 0 ? (
                   <tr>
                     <td
-                      colSpan={7}
+                      colSpan={8}
                       className="py-10 text-center text-sm text-slate-400"
                     >
                       Nenhuma tarefa neste filtro
                     </td>
                   </tr>
                 ) : (
-                  filteredTasks.map((g, i) => {
+                  pageRows.map((g, i) => {
                     const lm = LIGHTS[g.light] ?? LIGHTS.gray;
                     const waitLabel =
                       g.waiting === 0
@@ -797,8 +1070,29 @@ export default function AdminDisponibilidadePage() {
                     return (
                       <tr
                         key={g.name}
-                        className={`${i % 2 === 0 ? "bg-table-row" : "bg-table-row-alt"} hover:bg-table-row-hover transition-colors`}
+                        className={`group transition-colors ${
+                          i % 2 === 0
+                            ? "bg-[#F1F4F9] dark:bg-[oklch(0.14_0.026_258)] hover:bg-[#D9E1ED] dark:hover:bg-[oklch(0.21_0.024_258)]"
+                            : "bg-[#DCE3EE] dark:bg-[oklch(0.185_0.024_258)] hover:bg-[#C7D2E3] dark:hover:bg-[oklch(0.21_0.024_258)]"
+                        }`}
                       >
+                        <td className={acoesTdClass(i)} style={acoesTdStyle}>
+                          <div className="flex items-center justify-center">
+                            <TooltipProvider delayDuration={400}>
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <button
+                                    onClick={() => openInfoPanel(g, "task")}
+                                    className="h-[21px] w-[21px] flex items-center justify-center rounded-full bg-[#2558FF] text-white shadow-[0_2px_6px_rgba(37,88,255,0.35)] hover:bg-gradient-to-br hover:from-[#2558FF] hover:via-[#6E2C96] hover:to-[#D92293] hover:text-white dark:hover:text-[#0a1628] hover:shadow-[0_2px_10px_rgba(110,44,150,0.5)] transition-all"
+                                  >
+                                    <Plus className="h-3 w-3" />
+                                  </button>
+                                </TooltipTrigger>
+                                <TooltipContent className="text-xs font-medium">Ver tarefas deste grupo</TooltipContent>
+                              </Tooltip>
+                            </TooltipProvider>
+                          </div>
+                        </td>
                         <td className="px-4 py-3">
                           <div className="flex items-center gap-2">
                             <Farol light={g.light} />
@@ -818,12 +1112,9 @@ export default function AdminDisponibilidadePage() {
                           </div>
                         </td>
                         <td className="px-4 py-3">
-                          <Badge
-                            variant="outline"
-                            className="text-[10px] capitalize bg-slate-50 text-slate-500 border-slate-200 dark:bg-slate-800/50 dark:border-slate-600"
-                          >
+                          <NeonBadge color="slate" className="capitalize">
                             {g.category}
-                          </Badge>
+                          </NeonBadge>
                         </td>
                         <td className="px-4 py-3 text-xs font-bold tabular-nums text-slate-700 dark:text-slate-300">
                           {g.total}
@@ -887,7 +1178,21 @@ export default function AdminDisponibilidadePage() {
           </div>
         )}
 
-        {/* footer */}
+        {/* Row 3 — bottom mirror of Row 2 (items-per-page + count + scrollbar + pagination) */}
+        <div className="flex flex-wrap items-center justify-between gap-3 px-5 py-2 border-t border-slate-100 dark:border-slate-800 bg-slate-50/40 dark:bg-slate-900/20">
+          <div className="flex items-center gap-3">
+            <ItemsPerPageSelect
+              value={pageSize.toString()}
+              onValueChange={(value) => setPageSize(Number(value))}
+              variant="bottom"
+            />
+            <CountText side="top" />
+          </div>
+          <ScrollMirror variant="bottom" />
+          {totalPages > 1 && <PaginationControls />}
+        </div>
+
+        {/* footer — light breakdown summary (kept, real counts) */}
         <div className="px-5 py-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between bg-slate-50/40 dark:bg-slate-900/20">
           <p className="text-xs text-slate-400">
             {tab === "specialty"
@@ -906,7 +1211,79 @@ export default function AdminDisponibilidadePage() {
             ))}
           </div>
         </div>
-      </Card>
+      </div>
+
+      {/* "+" info panel — real nômades / tasks behind the selected group */}
+      <SlidePanel
+        open={infoPanelOpen}
+        onClose={() => setInfoPanelOpen(false)}
+        title={infoGroup?.name || ""}
+        subtitle={
+          infoGroup
+            ? `${infoGroup.category || "—"} · ${infoGroup.total} ${infoGroup.kind === "specialty" ? "nômade(s)" : "tarefa(s)"}`
+            : undefined
+        }
+        widthMode="compact"
+        compactWidth={420}
+      >
+        <div className="p-5 flex-1 overflow-y-auto space-y-2">
+          {infoGroup?.kind === "specialty" ? (
+            infoNomades.length === 0 ? (
+              <p className="text-xs text-slate-400">Nenhum nômade encontrado para esta especialidade.</p>
+            ) : (
+              infoNomades.map((n) => {
+                const active = n.status === "ativo" || n.status === "active" || n.is_active !== false;
+                return (
+                  <div key={n.id} className="flex items-center justify-between rounded-xl border border-slate-200 dark:border-slate-700 px-3.5 py-2.5">
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium text-slate-700 dark:text-slate-300 truncate">{n.name}</p>
+                      {n.email && (
+                        <p className="flex items-center gap-1.5 text-xs text-slate-400 truncate">
+                          <Mail className="h-3 w-3 flex-shrink-0" />
+                          {n.email}
+                        </p>
+                      )}
+                    </div>
+                    <span
+                      className={`flex-shrink-0 ml-3 inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-bold border ${
+                        active
+                          ? "border-emerald-500 bg-emerald-200 text-emerald-900 dark:bg-emerald-800/70 dark:text-emerald-100"
+                          : "border-slate-400 bg-slate-300 text-slate-800 dark:bg-slate-800 dark:text-slate-300"
+                      }`}
+                    >
+                      {active ? "Disponível" : "Em atividade"}
+                    </span>
+                  </div>
+                );
+              })
+            )
+          ) : infoGroup?.kind === "task" ? (
+            infoTasks.length === 0 ? (
+              <p className="text-xs text-slate-400">Nenhuma tarefa encontrada para este grupo.</p>
+            ) : (
+              infoTasks.map((t) => (
+                <div key={t.id} className="rounded-xl border border-slate-200 dark:border-slate-700 px-3.5 py-2.5">
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="text-sm font-medium text-slate-700 dark:text-slate-300 truncate">
+                      {t.project?.title || t.project?.name || "—"}
+                    </p>
+                    <span className="flex-shrink-0 text-[10px] font-bold uppercase tracking-wide text-slate-400">
+                      {t.status}
+                    </span>
+                  </div>
+                  {(t.project?.client?.name || t.nomade_responsavel?.name) && (
+                    <p className="text-xs text-slate-400 mt-1">
+                      {t.project?.client?.name}
+                      {t.project?.client?.name && t.nomade_responsavel?.name ? " · " : ""}
+                      {t.nomade_responsavel?.name && `Nômade: ${t.nomade_responsavel.name}`}
+                    </p>
+                  )}
+                </div>
+              ))
+            )
+          ) : null}
+        </div>
+      </SlidePanel>
     </div>
   );
 }

@@ -3,21 +3,18 @@ import { useState, useMemo } from "react";
 import {
   Settings2, Trash2, Plus, Check, X, LayoutGrid, Search, Filter,
   RefreshCw, Download, FileText, Activity, Users, Award, Megaphone,
-  Cpu, DollarSign, BarChart3,
+  Cpu, DollarSign, BarChart3, CheckSquare,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import {
-  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
-} from "@/components/ui/select";
-import {
   Tooltip, TooltipContent, TooltipProvider, TooltipTrigger,
 } from "@/components/ui/tooltip";
-import {
-  Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
-} from "@/components/ui/table";
+import { SlidePanel } from "@/components/slide-panel";
+import { IconToolbarButton } from "@/components/icon-toolbar-button";
+import { NeonBadge } from "@/components/neon-badge";
+import { useTableScrollSync } from "@/hooks/useTableScrollSync";
 import { apiClient } from "@/lib/api-client";
 import type { ReportConfig } from "../types";
 
@@ -55,7 +52,7 @@ const REPORT_NAMES: Record<string, { name: string; category: string; icon: React
   "perf-sys":   { name: "Performance do Sistema",    category: "Sistema",             icon: Cpu },
 };
 
-// ─── Cores por categoria ──────────────────────────────────────────────────────
+// ─── Cores por categoria (dot indicator na coluna Relatório) ─────────────────
 
 const CATEGORY_COLORS: Record<string, string> = {
   "Financeiro":          "bg-emerald-500",
@@ -66,7 +63,7 @@ const CATEGORY_COLORS: Record<string, string> = {
   "Sistema":             "bg-slate-500",
 };
 
-// ─── Labels de escopo e perfis ────────────────────────────────────────────────
+// ─── Labels + cores (NeonBadge) de escopo e perfis ───────────────────────────
 
 const SCOPE_LABELS: Record<string, string> = {
   GLOBAL:                "Global",
@@ -79,23 +76,87 @@ const SCOPE_LABELS: Record<string, string> = {
   CUSTOM_USERS:          "Usuários específicos",
 };
 
-const AT_LABELS: Record<string, { label: string; color: string }> = {
-  agencias: { label: "Agências",   color: "bg-blue-100 text-blue-800 border-blue-200" },
-  empresas: { label: "Empresas",   color: "bg-violet-100 text-violet-800 border-violet-200" },
-  nomades:  { label: "Nômades",    color: "bg-emerald-100 text-emerald-800 border-emerald-200" },
-  parceiro: { label: "Parceiros",  color: "bg-amber-100 text-amber-800 border-amber-200" },
-  admin:    { label: "Admin",      color: "bg-slate-100 text-slate-700 border-slate-200" },
-  lider:    { label: "Líderes",    color: "bg-pink-100 text-pink-800 border-pink-200" },
+const SCOPE_COLORS: Record<string, import("@/lib/badge-styles").BadgeColor> = {
+  GLOBAL:                "blue",
+  OWN_PROFILE_SCOPE:     "violet",
+  OWN_COMPANY_SCOPE:     "cyan",
+  OWN_AGENCY_SCOPE:      "indigo",
+  OWN_NOMAD_SCOPE:       "emerald",
+  OWN_PARTNER_SCOPE:     "amber",
+  OWN_LEADER_SCOPE:      "pink",
+  CUSTOM_USERS:          "orange",
 };
+
+const AT_LABELS: Record<string, { label: string; color: import("@/lib/badge-styles").BadgeColor }> = {
+  agencias: { label: "Agências",  color: "blue" },
+  empresas: { label: "Empresas",  color: "violet" },
+  nomades:  { label: "Nômades",   color: "emerald" },
+  parceiro: { label: "Parceiros", color: "amber" },
+  admin:    { label: "Admin",     color: "slate" },
+  lider:    { label: "Líderes",   color: "pink" },
+};
+
+// ─── Gradient stat cards (real aggregate counts, no fabricated trends) ──────
+
+const STAT_COLOR_MAP: Record<string, { gradient: string; darkGradient: string; borderClass: string }> = {
+  blue: {
+    gradient: "from-blue-500 to-blue-700",
+    darkGradient: "dark:from-blue-800 dark:to-blue-950",
+    borderClass: "border-2 border-blue-300/70 dark:border-blue-800/70",
+  },
+  emerald: {
+    gradient: "from-emerald-500 to-teal-600",
+    darkGradient: "dark:from-emerald-800 dark:to-teal-900",
+    borderClass: "border-2 border-emerald-300/70 dark:border-emerald-800/70",
+  },
+  violet: {
+    gradient: "from-violet-500 to-purple-700",
+    darkGradient: "dark:from-violet-800 dark:to-purple-950",
+    borderClass: "border-2 border-violet-300/70 dark:border-violet-800/70",
+  },
+  orange: {
+    gradient: "from-orange-500 to-rose-600",
+    darkGradient: "dark:from-orange-800 dark:to-rose-900",
+    borderClass: "border-2 border-orange-300/70 dark:border-orange-800/70",
+  },
+};
+
+function StatCard({
+  label,
+  value,
+  icon: Icon,
+  color,
+}: {
+  label: string;
+  value: number;
+  icon: React.ElementType;
+  color: keyof typeof STAT_COLOR_MAP;
+}) {
+  const colors = STAT_COLOR_MAP[color];
+  return (
+    <div
+      className={`relative rounded-xl overflow-hidden cursor-default transition-all duration-200 bg-gradient-to-br ${colors.gradient} ${colors.darkGradient} ${colors.borderClass} shadow-lg hover:shadow-xl`}
+    >
+      <div className="px-4 py-3.5">
+        <div className="flex items-center justify-between mb-1">
+          <span className="text-[11px] font-semibold text-white/80 uppercase tracking-wide">{label}</span>
+          <div className="bg-white/20 rounded-md p-1">
+            <Icon className="h-3.5 w-3.5 text-white" />
+          </div>
+        </div>
+        <div className="text-2xl font-bold text-white">{value}</div>
+      </div>
+    </div>
+  );
+}
 
 // ─── Config row ───────────────────────────────────────────────────────────────
 
-function ConfigRow({ config, onEdit, onDelete, onToggle }) {
+function ConfigRow({ config, index, onEdit, onDelete, onToggle }) {
   const [toggling, setToggling] = useState(false);
   const meta = REPORT_NAMES[config.report_key];
   const ptName = meta?.name ?? config.report_key;
   const catColor = CATEGORY_COLORS[meta?.category ?? ""] ?? "bg-slate-400";
-  const Icon = meta?.icon ?? FileText;
 
   async function handleToggle(checked: boolean) {
     setToggling(true);
@@ -103,18 +164,61 @@ function ConfigRow({ config, onEdit, onDelete, onToggle }) {
     finally { setToggling(false); }
   }
 
+  const zebra =
+    index % 2 === 0
+      ? "bg-[#F1F4F9] dark:bg-[oklch(0.14_0.026_258)] hover:bg-[#D9E1ED] dark:hover:bg-[oklch(0.21_0.024_258)]"
+      : "bg-[#DCE3EE] dark:bg-[oklch(0.185_0.024_258)] hover:bg-[#C7D2E3] dark:hover:bg-[oklch(0.21_0.024_258)]";
+  const pinnedBg =
+    index % 2 === 0
+      ? "bg-[#ECEFF4] group-hover:bg-[#D9E1ED] dark:bg-[oklch(0.14_0.026_258)] dark:group-hover:bg-[oklch(0.21_0.024_258)]"
+      : "bg-[#D6DCE8] group-hover:bg-[#C7D2E3] dark:bg-[oklch(0.185_0.024_258)] dark:group-hover:bg-[oklch(0.21_0.024_258)]";
+
   return (
-    <TableRow className={`group transition-colors hover:bg-slate-50/60 ${!config.is_active ? "opacity-50" : ""}`}>
+    <tr className={`group transition-colors ${zebra} ${!config.is_active ? "opacity-50" : ""}`}>
+      {/* Ações — pinned, standard icon-button recipe */}
+      <td
+        className={`px-1 py-2 transition-colors ${pinnedBg}`}
+        style={{ position: "sticky", left: 0, zIndex: 1, minWidth: 76, borderRight: "1px solid rgba(100,116,139,0.18)" }}
+      >
+        <div className="flex items-center justify-center gap-1">
+          <TooltipProvider delayDuration={400}>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button
+                  onClick={() => onEdit(config)}
+                  className="h-[26px] w-[26px] flex items-center justify-center rounded-[8px] bg-white dark:bg-slate-800 border border-[#e8edf5] dark:border-slate-700 text-[#2558FF] dark:text-slate-500 shadow-[0_4px_10px_rgba(15,23,42,0.06)] hover:bg-gradient-to-br hover:from-[#2558FF] hover:via-[#6E2C96] hover:to-[#D92293] hover:text-white dark:hover:text-[#0a1628] hover:border-transparent hover:shadow-[0_8px_18px_rgba(15,23,42,0.18)] hover:-translate-y-px transition-all duration-150"
+                >
+                  <Settings2 className="h-3.5 w-3.5" />
+                </button>
+              </TooltipTrigger>
+              <TooltipContent className="text-xs font-medium">Editar permissões</TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
+          <TooltipProvider delayDuration={400}>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button
+                  onClick={() => onDelete(config.report_key)}
+                  className="h-[26px] w-[26px] flex items-center justify-center rounded-[8px] bg-white dark:bg-slate-800 border border-[#e8edf5] dark:border-slate-700 text-red-400 dark:text-slate-500 shadow-[0_4px_10px_rgba(15,23,42,0.06)] hover:bg-gradient-to-br hover:from-[#2558FF] hover:via-[#6E2C96] hover:to-[#D92293] hover:text-white dark:hover:text-[#0a1628] hover:border-transparent hover:shadow-[0_8px_18px_rgba(15,23,42,0.18)] hover:-translate-y-px transition-all duration-150"
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                </button>
+              </TooltipTrigger>
+              <TooltipContent className="text-xs font-medium">Remover configuração</TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
+        </div>
+      </td>
 
       {/* Nome em português + key como tooltip */}
-      <TableCell className="py-3">
+      <td className="py-3 px-4" style={{ borderRight: "1px solid rgba(148,163,184,0.15)" }}>
         <TooltipProvider delayDuration={300}>
           <Tooltip>
             <TooltipTrigger asChild>
               <div className="flex items-center gap-2.5 cursor-default">
                 <div className={`h-2 w-2 rounded-full shrink-0 ${catColor}`} />
                 <div className="min-w-0">
-                  <p className="text-sm font-medium text-slate-800 leading-tight">{ptName}</p>
+                  <p className="text-sm font-bold text-slate-800 dark:text-slate-100 leading-tight truncate">{ptName}</p>
                   {meta?.category && (
                     <p className="text-[11px] text-slate-400 mt-0.5">{meta.category}</p>
                   )}
@@ -126,27 +230,27 @@ function ConfigRow({ config, onEdit, onDelete, onToggle }) {
             </TooltipContent>
           </Tooltip>
         </TooltipProvider>
-      </TableCell>
+      </td>
 
       {/* Status */}
-      <TableCell className="py-3">
+      <td className="py-3 px-4" style={{ borderRight: "1px solid rgba(148,163,184,0.15)" }}>
         <div className="flex items-center gap-2">
           <Switch checked={config.is_active} disabled={toggling} onCheckedChange={handleToggle} />
-          <span className={`text-xs font-medium ${config.is_active ? "text-emerald-600" : "text-slate-400"}`}>
+          <span className={`text-xs font-medium ${config.is_active ? "text-emerald-600 dark:text-emerald-400" : "text-slate-400"}`}>
             {config.is_active ? "Ativo" : "Inativo"}
           </span>
         </div>
-      </TableCell>
+      </td>
 
       {/* Escopo */}
-      <TableCell className="py-3">
-        <Badge variant="outline" className="text-xs font-normal whitespace-nowrap">
+      <td className="py-3 px-4" style={{ borderRight: "1px solid rgba(148,163,184,0.15)" }}>
+        <NeonBadge color={SCOPE_COLORS[config.data_scope] ?? "slate"}>
           {SCOPE_LABELS[config.data_scope] ?? config.data_scope}
-        </Badge>
-      </TableCell>
+        </NeonBadge>
+      </td>
 
       {/* Perfis */}
-      <TableCell className="py-3">
+      <td className="py-3 px-4" style={{ borderRight: "1px solid rgba(148,163,184,0.15)" }}>
         {config.allowed_account_types.length === 0 ? (
           <span className="text-xs text-slate-400 italic">Nenhum</span>
         ) : (
@@ -154,65 +258,39 @@ function ConfigRow({ config, onEdit, onDelete, onToggle }) {
             {config.allowed_account_types.map((at) => {
               const info = AT_LABELS[at];
               return (
-                <span key={at} className={`inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium border ${info?.color ?? "bg-slate-100 text-slate-700 border-slate-200"}`}>
+                <NeonBadge key={at} color={info?.color ?? "slate"}>
                   {info?.label ?? at}
-                </span>
+                </NeonBadge>
               );
             })}
           </div>
         )}
-      </TableCell>
+      </td>
 
       {/* Permissões */}
-      <TableCell className="py-3">
+      <td className="py-3 px-4">
         <div className="flex flex-wrap gap-1.5">
-          <TooltipProvider delayDuration={200}>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium border cursor-default ${config.can_export ? "bg-emerald-50 text-emerald-700 border-emerald-200" : "bg-slate-50 text-slate-400 border-slate-200"}`}>
-                  {config.can_export ? <Check className="h-3 w-3" /> : <X className="h-3 w-3" />}
-                  Export
-                </span>
-              </TooltipTrigger>
-              <TooltipContent className="text-xs">{config.can_export ? "Exportação permitida" : "Exportação bloqueada"}</TooltipContent>
-            </Tooltip>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium border cursor-default ${config.can_change_filters ? "bg-blue-50 text-blue-700 border-blue-200" : "bg-slate-50 text-slate-400 border-slate-200"}`}>
-                  {config.can_change_filters ? <Check className="h-3 w-3" /> : <X className="h-3 w-3" />}
-                  Filtros
-                </span>
-              </TooltipTrigger>
-              <TooltipContent className="text-xs">{config.can_change_filters ? "Filtros editáveis" : "Filtros fixos"}</TooltipContent>
-            </Tooltip>
-          </TooltipProvider>
+          <NeonBadge
+            color={config.can_export ? "emerald" : "slate"}
+            tooltip={config.can_export ? "Exportação permitida" : "Exportação bloqueada"}
+          >
+            <span className="inline-flex items-center gap-1">
+              {config.can_export ? <Check className="h-3 w-3" /> : <X className="h-3 w-3" />}
+              Export
+            </span>
+          </NeonBadge>
+          <NeonBadge
+            color={config.can_change_filters ? "blue" : "slate"}
+            tooltip={config.can_change_filters ? "Filtros editáveis" : "Filtros fixos"}
+          >
+            <span className="inline-flex items-center gap-1">
+              {config.can_change_filters ? <Check className="h-3 w-3" /> : <X className="h-3 w-3" />}
+              Filtros
+            </span>
+          </NeonBadge>
         </div>
-      </TableCell>
-
-      {/* Ações */}
-      <TableCell className="py-3 text-right">
-        <div className="flex justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-          <TooltipProvider delayDuration={200}>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button variant="ghost" size="sm" className="h-7 w-7 p-0 hover:bg-slate-100" onClick={() => onEdit(config)}>
-                  <Settings2 className="h-3.5 w-3.5 text-slate-500" />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent className="text-xs">Editar permissões</TooltipContent>
-            </Tooltip>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button variant="ghost" size="sm" className="h-7 w-7 p-0 hover:bg-red-50 text-red-400 hover:text-red-600" onClick={() => onDelete(config.report_key)}>
-                  <Trash2 className="h-3.5 w-3.5" />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent className="text-xs">Remover configuração</TooltipContent>
-            </Tooltip>
-          </TooltipProvider>
-        </div>
-      </TableCell>
-    </TableRow>
+      </td>
+    </tr>
   );
 }
 
@@ -242,6 +320,17 @@ export function ReportConfigsTable({
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<"all" | "active" | "inactive">("all");
   const [scopeFilter, setScopeFilter] = useState("all");
+  const [filterPanelOpen, setFilterPanelOpen] = useState(false);
+
+  const {
+    tableScrollRef,
+    topScrollRef,
+    bottomScrollRef,
+    handleTopBarScroll,
+    handleTableScroll,
+    handleBottomBarScroll,
+    hasHorizontalOverflow,
+  } = useTableScrollSync([loading]);
 
   async function handleSeed() {
     if (!onSeedDefaults) return;
@@ -293,11 +382,18 @@ export function ReportConfigsTable({
 
   const hasFilters = search || statusFilter !== "all" || scopeFilter !== "all";
 
+  // ── Estatísticas reais agregadas ─────────────────────────────────────────
+
+  const totalCount = configs.length;
+  const activeCount = configs.filter((c) => c.is_active).length;
+  const inactiveCount = totalCount - activeCount;
+  const exportCount = configs.filter((c) => c.can_export).length;
+
   // ── Estados especiais ────────────────────────────────────────────────────
 
   if (loading) {
     return (
-      <div className="rounded-xl border border-slate-200 bg-white">
+      <div className="bg-white dark:bg-slate-900 border border-[#e8edf5] dark:border-slate-700 rounded-xl shadow-sm overflow-hidden">
         <div className="flex flex-col items-center gap-3 py-16 text-slate-400">
           <RefreshCw className="h-6 w-6 animate-spin opacity-40" />
           <p className="text-sm">Carregando configurações…</p>
@@ -308,8 +404,8 @@ export function ReportConfigsTable({
 
   if (error) {
     return (
-      <div className="rounded-xl border border-red-200 bg-red-50 py-10 text-center">
-        <p className="text-sm text-red-600 mb-3">{error}</p>
+      <div className="rounded-xl border border-red-200 dark:border-red-900/50 bg-red-50 dark:bg-red-950/20 py-10 text-center">
+        <p className="text-sm text-red-600 dark:text-red-400 mb-3">{error}</p>
         <Button variant="outline" size="sm" onClick={onRefresh}>
           <RefreshCw className="h-3.5 w-3.5 mr-1.5" /> Tentar novamente
         </Button>
@@ -319,12 +415,12 @@ export function ReportConfigsTable({
 
   if (configs.length === 0) {
     return (
-      <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50/60 py-16 flex flex-col items-center gap-4 text-center">
-        <div className="p-4 rounded-2xl bg-white border border-slate-200 shadow-sm">
-          <Settings2 className="h-8 w-8 text-slate-300" />
+      <div className="rounded-xl border border-dashed border-slate-200 dark:border-slate-700 bg-slate-50/60 dark:bg-slate-900/40 py-16 flex flex-col items-center gap-4 text-center">
+        <div className="p-4 rounded-2xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-sm">
+          <Settings2 className="h-8 w-8 text-slate-300 dark:text-slate-600" />
         </div>
         <div className="space-y-1">
-          <p className="text-sm font-medium text-slate-700">Nenhuma configuração cadastrada</p>
+          <p className="text-sm font-medium text-slate-700 dark:text-slate-200">Nenhuma configuração cadastrada</p>
           <p className="text-xs text-slate-400 max-w-xs">Crie configurações individuais ou importe todos os relatórios do catálogo de uma vez.</p>
         </div>
         <div className="flex gap-2 flex-wrap justify-center">
@@ -347,90 +443,234 @@ export function ReportConfigsTable({
   return (
     <div className="space-y-3">
 
-      {/* Barra de filtros */}
-      <div className="flex items-center gap-2 flex-wrap">
-        <div className="relative flex-1 min-w-50 max-w-xs">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
-          <Input
-            placeholder="Buscar relatório…"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="pl-9 h-9 text-sm bg-white border-slate-200 rounded-lg"
-          />
+      {/* Cards de estatística — gradiente, contagens reais */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        <StatCard label="Configurações" value={totalCount} icon={Settings2} color="blue" />
+        <StatCard label="Ativas" value={activeCount} icon={CheckSquare} color="emerald" />
+        <StatCard label="Inativas" value={inactiveCount} icon={X} color="orange" />
+        <StatCard label="Exportação liberada" value={exportCount} icon={Download} color="violet" />
+      </div>
+
+      {/* Card externo — toolbar + tabela */}
+      <div className="bg-white dark:bg-slate-900 border border-[#e8edf5] dark:border-slate-700 rounded-xl shadow-sm overflow-hidden">
+        {/* Linha 1 — busca + botões de ícone */}
+        <div className="flex items-center gap-2 flex-wrap px-[18px] py-3">
+          <div className="relative flex-1 min-w-[220px] max-w-sm">
+            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input
+              className="pl-8 h-9 text-sm"
+              placeholder="Nome do relatório ou categoria..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+            />
+          </div>
+
+          <div className="ml-auto flex items-center gap-2">
+            {hasFilters && (
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-9 text-xs text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800"
+                onClick={() => { setSearch(""); setStatusFilter("all"); setScopeFilter("all"); }}
+              >
+                <X className="h-3.5 w-3.5 mr-1" /> Limpar
+              </Button>
+            )}
+            <IconToolbarButton icon={Filter} tooltip="Filtros" onClick={() => setFilterPanelOpen(true)} />
+            <IconToolbarButton icon={RefreshCw} tooltip="Atualizar" onClick={onRefresh} />
+          </div>
         </div>
 
-        <Select value={statusFilter} onValueChange={(v) => setStatusFilter(v as any)}>
-          <SelectTrigger className="h-9 w-36 text-sm border-slate-200 bg-white rounded-lg">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">Todos os status</SelectItem>
-            <SelectItem value="active">Somente ativos</SelectItem>
-            <SelectItem value="inactive">Somente inativos</SelectItem>
-          </SelectContent>
-        </Select>
+        {/* Linha 2 (topo) — contagem + espelho de rolagem */}
+        <div className="flex flex-wrap items-center justify-between gap-3 px-[18px] py-2 border-y border-[#e8edf5] dark:border-slate-800 bg-white dark:bg-slate-900/30">
+          <TooltipProvider delayDuration={400}>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <span className="text-xs text-slate-500 dark:text-slate-400 whitespace-nowrap cursor-default">
+                  <span className="font-semibold text-slate-600 dark:text-slate-300">{filtered.length}</span> de {configs.length} relatório{configs.length !== 1 ? "s" : ""}
+                </span>
+              </TooltipTrigger>
+              <TooltipContent side="bottom" sideOffset={6}>
+                Configurações exibidas com os filtros aplicados, do total cadastrado
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
 
-        <Select value={scopeFilter} onValueChange={setScopeFilter}>
-          <SelectTrigger className="h-9 w-44 text-sm border-slate-200 bg-white rounded-lg">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">Todos os escopos</SelectItem>
-            {Object.entries(SCOPE_LABELS).map(([k, v]) => (
-              <SelectItem key={k} value={k}>{v}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+          {hasHorizontalOverflow && (
+            <div
+              ref={topScrollRef}
+              onScroll={handleTopBarScroll}
+              title="Arraste para rolar a tabela na horizontal e ver as colunas que não couberem na tela"
+              className="hidden md:block flex-1 min-w-[80px] overflow-x-scroll allka-table-scroll self-center"
+              style={{ height: 12 }}
+            >
+              <div style={{ minWidth: 780, height: 1 }} />
+            </div>
+          )}
+        </div>
 
-        {hasFilters && (
-          <Button variant="ghost" size="sm" className="h-9 text-xs text-slate-500 hover:bg-slate-100"
-            onClick={() => { setSearch(""); setStatusFilter("all"); setScopeFilter("all"); }}>
-            <X className="h-3.5 w-3.5 mr-1" /> Limpar
-          </Button>
+        {/* Tabela */}
+        {filtered.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-16 gap-2 text-muted-foreground">
+            <Settings2 className="h-8 w-8 opacity-40" />
+            <span className="text-sm">Nenhum relatório encontrado com os filtros aplicados.</span>
+          </div>
+        ) : (
+          <div ref={tableScrollRef} onScroll={handleTableScroll} className="overflow-x-auto allka-table-scroll-body">
+            <table className="w-full text-xs min-w-[780px]">
+              <thead>
+                <tr className="border-b border-slate-200/60 dark:border-slate-700/60">
+                  <th
+                    className="py-3.5 px-2 text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-[0.04em] text-center"
+                    style={{ position: "sticky", left: 0, top: 0, zIndex: 3, minWidth: 76, background: "var(--table-head)", boxShadow: "0 1px 0 rgba(148,163,184,0.22)", borderRight: "1px solid rgba(100,116,139,0.18)" }}
+                  >
+                    Ações
+                  </th>
+                  {[
+                    { label: "Relatório", info: "Nome do relatório e categoria a que pertence no catálogo." },
+                    { label: "Status", info: "Se a configuração está ativa e acessível aos perfis autorizados." },
+                    { label: "Escopo", info: "Abrangência dos dados exibidos: global ou restrito ao próprio contexto do usuário." },
+                    { label: "Perfis com acesso", info: "Tipos de conta autorizados a visualizar este relatório." },
+                    { label: "Permissões", info: "Se exportação e alteração de filtros são permitidas para este relatório." },
+                  ].map((col) => (
+                    <th
+                      key={col.label}
+                      className="py-3.5 px-4 text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-[0.04em] select-none text-left"
+                      style={{
+                        position: "sticky",
+                        top: 0,
+                        zIndex: 2,
+                        background: "var(--table-head)",
+                        boxShadow: "0 1px 0 rgba(148,163,184,0.22)",
+                        borderRight: "1px solid rgba(148,163,184,0.16)",
+                      }}
+                    >
+                      <div className="inline-flex items-center gap-1">
+                        {col.label}
+                        <TooltipProvider>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <span className="text-slate-300 dark:text-slate-600 cursor-help text-[10px]">ⓘ</span>
+                            </TooltipTrigger>
+                            <TooltipContent className="text-xs max-w-[200px]">{col.info}</TooltipContent>
+                          </Tooltip>
+                        </TooltipProvider>
+                      </div>
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {filtered.map((cfg, i) => (
+                  <ConfigRow
+                    key={cfg.report_key}
+                    config={cfg}
+                    index={i}
+                    onEdit={onEdit}
+                    onDelete={handleDelete}
+                    onToggle={handleToggle}
+                  />
+                ))}
+              </tbody>
+            </table>
+          </div>
         )}
 
-        <div className="ml-auto flex items-center gap-2">
-          <span className="text-xs text-slate-400">{filtered.length} de {configs.length}</span>
-          <Button variant="outline" size="sm" className="h-9 gap-1.5 text-xs border-slate-200" onClick={onRefresh}>
-            <RefreshCw className="h-3.5 w-3.5" /> Atualizar
-          </Button>
-        </div>
+        {/* Linha 3 (rodapé) — espelho da linha 2 */}
+        {filtered.length > 0 && (
+          <div className="flex flex-wrap items-center justify-between gap-3 px-[18px] py-2 border-t border-[#e8edf5] dark:border-slate-800 bg-white dark:bg-slate-900/20">
+            <TooltipProvider delayDuration={400}>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <span className="text-xs text-slate-500 dark:text-slate-400 whitespace-nowrap cursor-default">
+                    <span className="font-semibold text-slate-600 dark:text-slate-300">{filtered.length}</span> de {configs.length} relatório{configs.length !== 1 ? "s" : ""}
+                  </span>
+                </TooltipTrigger>
+                <TooltipContent side="top" sideOffset={6}>
+                  Configurações exibidas com os filtros aplicados, do total cadastrado
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+
+            {hasHorizontalOverflow && (
+              <div
+                ref={bottomScrollRef}
+                onScroll={handleBottomBarScroll}
+                title="Arraste para rolar a tabela na horizontal e ver as colunas que não couberem na tela"
+                className="hidden md:block flex-1 min-w-[80px] overflow-x-scroll allka-table-scroll self-center"
+                style={{ height: 12 }}
+              >
+                <div style={{ minWidth: 780, height: 1 }} />
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
-      {/* Tabela */}
-      <div className="rounded-xl border border-slate-200 bg-white overflow-hidden shadow-sm">
-        <Table>
-          <TableHeader>
-            <TableRow className="bg-slate-50/80 hover:bg-slate-50/80">
-              <TableHead className="text-xs font-semibold text-slate-600 py-3 w-70">Relatório</TableHead>
-              <TableHead className="text-xs font-semibold text-slate-600 py-3 w-27.5">Status</TableHead>
-              <TableHead className="text-xs font-semibold text-slate-600 py-3 w-35">Escopo</TableHead>
-              <TableHead className="text-xs font-semibold text-slate-600 py-3">Perfis com acesso</TableHead>
-              <TableHead className="text-xs font-semibold text-slate-600 py-3 w-35">Permissões</TableHead>
-              <TableHead className="text-xs font-semibold text-slate-600 py-3 w-20 text-right">Ações</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {filtered.length === 0 ? (
-              <TableRow>
-                <TableCell colSpan={6} className="py-12 text-center text-slate-400 text-sm">
-                  Nenhum relatório encontrado com os filtros aplicados.
-                </TableCell>
-              </TableRow>
-            ) : (
-              filtered.map((cfg) => (
-                <ConfigRow
-                  key={cfg.report_key}
-                  config={cfg}
-                  onEdit={onEdit}
-                  onDelete={handleDelete}
-                  onToggle={handleToggle}
-                />
-              ))
-            )}
-          </TableBody>
-        </Table>
-      </div>
+      {/* Painel de filtros */}
+      <SlidePanel
+        open={filterPanelOpen}
+        onClose={() => setFilterPanelOpen(false)}
+        title="Filtros"
+        subtitle="Filtre as configurações por status e escopo de dados"
+        widthMode="compact"
+        compactWidth={360}
+      >
+        <div className="p-5 flex-1 overflow-y-auto space-y-5">
+          <div className="space-y-2">
+            <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">Status</p>
+            <div className="flex flex-wrap gap-2">
+              {(
+                [
+                  { key: "all", label: "Todos" },
+                  { key: "active", label: "Somente ativos" },
+                  { key: "inactive", label: "Somente inativos" },
+                ] as const
+              ).map((opt) => (
+                <button
+                  key={opt.key}
+                  onClick={() => setStatusFilter(opt.key)}
+                  className={`px-3 py-1.5 rounded-full text-xs font-medium border transition-colors ${
+                    statusFilter === opt.key
+                      ? "border-transparent text-white"
+                      : "border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800"
+                  }`}
+                  style={statusFilter === opt.key ? { background: "linear-gradient(135deg, #111A4D 0%, #6E2C96 55%, #D92293 100%)" } : undefined}
+                >
+                  {opt.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="space-y-2">
+            <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">Escopo</p>
+            <div className="flex flex-wrap gap-2">
+              <button
+                onClick={() => setScopeFilter("all")}
+                className={`px-3 py-1.5 rounded-full text-xs font-medium border transition-colors ${
+                  scopeFilter === "all"
+                    ? "border-transparent text-white"
+                    : "border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800"
+                }`}
+                style={scopeFilter === "all" ? { background: "linear-gradient(135deg, #111A4D 0%, #6E2C96 55%, #D92293 100%)" } : undefined}
+              >
+                Todos os escopos
+              </button>
+              {Object.entries(SCOPE_LABELS).map(([key, label]) => (
+                <button key={key} onClick={() => setScopeFilter(key)} className="cursor-pointer">
+                  <NeonBadge
+                    color={SCOPE_COLORS[key] ?? "slate"}
+                    className={scopeFilter === key ? "ring-2 ring-offset-1 ring-slate-400 dark:ring-slate-500" : ""}
+                  >
+                    {label}
+                  </NeonBadge>
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      </SlidePanel>
     </div>
   );
 }

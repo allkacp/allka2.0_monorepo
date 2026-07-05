@@ -48,15 +48,16 @@ import {
   GraduationCap,
   AlertOctagon,
   SendHorizonal,
-  Cog,
+  Settings2,
   Pencil,
   RotateCcw,
   Hash,
+  Check,
 } from "lucide-react";
 import { apiClient } from "@/lib/api-client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Card } from "@/components/ui/card";
+import { IconToolbarButton } from "@/components/icon-toolbar-button";
 import { Badge } from "@/components/ui/badge";
 import {
   Select,
@@ -402,6 +403,13 @@ const PRIORITY_CFG: Record<
   },
 };
 
+const PRIORITY_INFO: Record<Priority, string> = {
+  urgent: "Prioridade urgente — tratar assim que possível.",
+  high: "Prioridade alta — atenção prioritária.",
+  medium: "Prioridade média — fluxo normal.",
+  low: "Prioridade baixa — pode aguardar.",
+};
+
 // ─── Column config ────────────────────────────────────────────────────────────
 
 type ColKey =
@@ -424,36 +432,39 @@ type ColKey =
 const ALL_COLUMNS: {
   key: ColKey;
   label: string;
+  info: string;
   required?: boolean;
   defaultW: number;
   minW: number;
 }[] = [
   {
     key: "acoes",
-    label: "A\u00e7\u00f5es",
+    label: "Ações",
+    info: "Ver detalhes e demais ações da tarefa.",
     required: true,
     defaultW: 99,
     minW: 90,
   },
-  { key: "id", label: "ID", defaultW: 80, minW: 60 },
-  { key: "codigo", label: "C\u00f3digo", defaultW: 110, minW: 80 },
-  { key: "tarefa", label: "Tarefa", required: true, defaultW: 260, minW: 160 },
-  { key: "projeto", label: "Projeto", defaultW: 200, minW: 120 },
-  { key: "cliente", label: "Cliente", defaultW: 180, minW: 120 },
-  { key: "agencia", label: "Resp. Ag\u00eancia", defaultW: 160, minW: 100 },
-  { key: "produto", label: "Produto", defaultW: 180, minW: 120 },
-  { key: "status", label: "Status", required: true, defaultW: 185, minW: 130 },
-  { key: "nomade", label: "N\u00f4made", defaultW: 160, minW: 100 },
-  { key: "lider", label: "L\u00edder", defaultW: 150, minW: 100 },
-  { key: "prazo", label: "Prazo entrega", defaultW: 130, minW: 100 },
+  { key: "id", label: "ID", info: "Identificador interno da tarefa.", defaultW: 80, minW: 60 },
+  { key: "codigo", label: "Código", info: "Código sequencial da tarefa.", defaultW: 110, minW: 80 },
+  { key: "tarefa", label: "Tarefa", info: "Título/nome da tarefa operacional.", required: true, defaultW: 260, minW: 160 },
+  { key: "projeto", label: "Projeto", info: "Projeto ao qual a tarefa pertence.", defaultW: 200, minW: 120 },
+  { key: "cliente", label: "Cliente", info: "Empresa cliente vinculada ao projeto.", defaultW: 180, minW: 120 },
+  { key: "agencia", label: "Resp. Agência", info: "Agência responsável pelo projeto, quando houver.", defaultW: 160, minW: 100 },
+  { key: "produto", label: "Produto", info: "Produto que originou esta tarefa.", defaultW: 180, minW: 120 },
+  { key: "status", label: "Status", info: "Etapa atual da tarefa no fluxo operacional.", required: true, defaultW: 185, minW: 130 },
+  { key: "nomade", label: "Nômade", info: "Nômade atribuído à execução da tarefa.", defaultW: 160, minW: 100 },
+  { key: "lider", label: "Líder", info: "Líder responsável por acompanhar a tarefa.", defaultW: 150, minW: 100 },
+  { key: "prazo", label: "Prazo entrega", info: "Data limite para entrega da tarefa.", defaultW: 130, minW: 100 },
   {
     key: "execucao",
-    label: "Prazo execu\u00e7\u00e3o",
+    label: "Prazo execução",
+    info: "Data prevista para início da execução.",
     defaultW: 130,
     minW: 100,
   },
-  { key: "atraso", label: "Atraso", defaultW: 100, minW: 70 },
-  { key: "prioridade", label: "Prioridade", defaultW: 110, minW: 80 },
+  { key: "atraso", label: "Atraso", info: "Tempo em atraso em relação ao prazo de entrega.", defaultW: 100, minW: 70 },
+  { key: "prioridade", label: "Prioridade", info: "Nível de prioridade da tarefa.", defaultW: 110, minW: 80 },
 ];
 
 const DEFAULT_VISIBLE: ColKey[] = [
@@ -491,6 +502,77 @@ function fmtDate(iso?: string | null, compact = false) {
 function daysUntil(iso?: string | null) {
   if (!iso) return null;
   return Math.ceil((new Date(iso).getTime() - Date.now()) / 86400000);
+}
+
+// Smaller = more urgent. Overdue tasks always rank ahead of upcoming ones;
+// among overdue tasks, the most overdue (most negative days-until) ranks first.
+function urgencyRank(t: TarefaOperacional): number {
+  const d = daysUntil(t.due_date);
+  if (d === null) return Infinity;
+  if (isOverdue(t)) return d;
+  return 100000 + d;
+}
+
+// Escalating color/urgency treatment for the days-to-deadline indicator —
+// used by the "Atraso" column so tasks read progressively more alarming as
+// the due date approaches, then flip to the overdue treatment past it.
+function urgencyTone(dias: number | null, overdue: boolean) {
+  if (overdue)
+    return {
+      text: "text-red-700 dark:text-red-300",
+      bg: "bg-red-100 dark:bg-red-900/30",
+      border: "border-red-200 dark:border-red-800",
+      pulse: true,
+    };
+  if (dias === null)
+    return {
+      text: "text-slate-400 dark:text-slate-500",
+      bg: "",
+      border: "",
+      pulse: false,
+    };
+  if (dias === 0)
+    return {
+      text: "text-red-700 dark:text-red-300",
+      bg: "bg-red-100 dark:bg-red-900/30",
+      border: "border-red-200 dark:border-red-800",
+      pulse: true,
+    };
+  if (dias <= 2)
+    return {
+      text: "text-orange-700 dark:text-orange-300",
+      bg: "bg-orange-100 dark:bg-orange-900/30",
+      border: "border-orange-200 dark:border-orange-800",
+      pulse: false,
+    };
+  if (dias <= 5)
+    return {
+      text: "text-amber-700 dark:text-amber-300",
+      bg: "bg-amber-100 dark:bg-amber-900/30",
+      border: "border-amber-200 dark:border-amber-800",
+      pulse: false,
+    };
+  if (dias <= 10)
+    return {
+      text: "text-yellow-700 dark:text-yellow-300",
+      bg: "bg-yellow-50 dark:bg-yellow-950/20",
+      border: "border-yellow-100 dark:border-yellow-900",
+      pulse: false,
+    };
+  return {
+    text: "text-slate-500 dark:text-slate-400",
+    bg: "bg-slate-50 dark:bg-slate-800/40",
+    border: "border-slate-200 dark:border-slate-700",
+    pulse: false,
+  };
+}
+
+// "T000001" (backend) → "tar00001" (platform-wide sequence-code style)
+function formatTaskCode(raw?: string | null): string | null {
+  if (!raw) return null;
+  const digits = raw.replace(/\D/g, "");
+  if (!digits) return raw;
+  return `tar${String(parseInt(digits, 10)).padStart(5, "0")}`;
 }
 
 function parseStrings(data: any): string[] {
@@ -604,6 +686,7 @@ function StatCard({
   value,
   icon: Icon,
   gradient,
+  border,
   active,
   onClick,
 }: {
@@ -611,6 +694,7 @@ function StatCard({
   value: number;
   icon: any;
   gradient: string;
+  border: string;
   active?: boolean;
   onClick?: () => void;
 }) {
@@ -618,8 +702,9 @@ function StatCard({
     <button
       onClick={onClick}
       className={cn(
-        "relative rounded-xl bg-linear-to-br text-white shadow-sm text-left px-3 pt-2 pb-1.5 transition-all duration-200 overflow-hidden w-full",
+        "relative rounded-xl bg-linear-to-br text-white shadow-lg text-left px-3 pt-2 pb-1.5 transition-all duration-200 overflow-hidden w-full border-2",
         gradient,
+        border,
         active
           ? "ring-2 ring-white/60 ring-offset-1 ring-offset-slate-100 scale-[1.02] shadow-xl"
           : "hover:scale-[1.02] hover:shadow-xl",
@@ -1282,6 +1367,10 @@ export default function AdminTarefasPage({
             bv = o[b.priority] ?? 99;
             break;
           }
+          case "atraso":
+            av = urgencyRank(a);
+            bv = urgencyRank(b);
+            break;
           default:
             av = a.created_at;
             bv = b.created_at;
@@ -1334,6 +1423,107 @@ export default function AdminTarefasPage({
       ];
     return [1, "...", p - 1, p, p + 1, "...", totalPages];
   };
+
+  const [pageJumpValue, setPageJumpValue] = useState("");
+  const commitPageJump = () => {
+    const n = parseInt(pageJumpValue, 10);
+    if (!isNaN(n) && n >= 1 && n <= totalPages) setCurrentPage(n);
+    setPageJumpValue("");
+  };
+
+  const PaginationControls = () => (
+    <div className="flex items-center gap-0.5 flex-shrink-0">
+      <button
+        onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+        disabled={currentPage === 1}
+        title="Página anterior"
+        className="h-7 w-7 flex items-center justify-center rounded-full text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-30 disabled:pointer-events-none transition-colors"
+      >
+        <ChevronLeft className="h-3.5 w-3.5" />
+      </button>
+      {getPageNumbers().map((pg, i) =>
+        pg === "..." ? (
+          <span key={i} className="text-xs text-slate-300 px-0.5">·</span>
+        ) : (
+          <button
+            key={i}
+            onClick={() => setCurrentPage(Number(pg))}
+            title={pg === currentPage ? "Página atual" : `Ir para a página ${pg}`}
+            className={cn(
+              "h-7 w-7 flex items-center justify-center rounded-full text-xs font-bold transition-colors",
+              pg === currentPage
+                ? "text-white shadow-[0_6px_14px_rgba(110,44,150,0.25)]"
+                : "text-slate-500 hover:text-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 dark:text-slate-400",
+            )}
+            style={pg === currentPage ? { background: "linear-gradient(135deg, #111A4D 0%, #6E2C96 55%, #D92293 100%)" } : undefined}
+          >
+            {pg}
+          </button>
+        ),
+      )}
+      <button
+        onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+        disabled={currentPage === totalPages}
+        title="Próxima página"
+        className="h-7 w-7 flex items-center justify-center rounded-full text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-30 disabled:pointer-events-none transition-colors"
+      >
+        <ChevronRight className="h-3.5 w-3.5" />
+      </button>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <div className="flex items-center gap-1 flex-shrink-0 ml-1.5 pl-1.5 border-l border-slate-200 dark:border-slate-700">
+            <input
+              type="number"
+              min={1}
+              max={totalPages}
+              value={pageJumpValue}
+              onChange={(e) => setPageJumpValue(e.target.value)}
+              onKeyDown={(e) => { if (e.key === "Enter") commitPageJump(); }}
+              placeholder="Pág."
+              aria-label="Ir para a página"
+              className="h-7 w-14 text-xs text-center rounded-[8px] border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+            />
+            <button
+              onClick={commitPageJump}
+              disabled={!pageJumpValue}
+              className="group relative h-7 px-2.5 rounded-[8px] text-xs font-medium border border-slate-200 dark:border-slate-700 hover:border-transparent overflow-hidden disabled:opacity-40 disabled:pointer-events-none transition-all"
+            >
+              <span
+                className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none"
+                style={{ background: "linear-gradient(135deg,#000000 0%,#1a2a6f 45%,#c81a7f 100%)" }}
+              />
+              <span className="relative z-10 text-[#7d1b6a] dark:text-[#c07ab0] group-hover:text-white transition-colors">Ir</span>
+            </button>
+          </div>
+        </TooltipTrigger>
+        <TooltipContent side="bottom">Ir diretamente para uma página</TooltipContent>
+      </Tooltip>
+    </div>
+  );
+
+  const CountText = ({ side = "bottom" as "top" | "bottom" }) => (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <span className="text-xs text-slate-400 whitespace-nowrap cursor-default">
+          {(() => {
+            if (sorted.length === 0) return <span className="text-slate-400">0 tarefas</span>;
+            const start = Math.min((currentPage - 1) * pageSize + 1, sorted.length);
+            const end = Math.min(currentPage * pageSize, sorted.length);
+            return (
+              <>
+                {start}-{end} de{" "}
+                <span className="font-semibold text-slate-600 dark:text-slate-300">{sorted.length}</span>{" "}
+                tarefa{sorted.length !== 1 ? "s" : ""}
+              </>
+            );
+          })()}
+        </span>
+      </TooltipTrigger>
+      <TooltipContent side={side} sideOffset={6}>
+        Intervalo de tarefas exibido nesta página, do total encontrado
+      </TooltipContent>
+    </Tooltip>
+  );
 
   const activeFilterCount = countActiveFilters(appliedFilters);
   const hasFilters = !!(search || activeFilterCount > 0);
@@ -1456,34 +1646,39 @@ export default function AdminTarefasPage({
               label: "Total",
               value: stats.total,
               grad: "from-slate-600 to-slate-800",
+              border: "border-slate-400/60 dark:border-slate-700/70",
               icon: CheckSquare2,
             },
             {
               key: "PARA_LANCAMENTO",
-              label: "Para lan\u00e7amento",
+              label: "Para lançamento",
               value: stats.paraLancamento,
               grad: "from-indigo-500 to-indigo-700",
+              border: "border-indigo-300/70 dark:border-indigo-800/70",
               icon: Clock,
             },
             {
               key: "EM_LANCAMENTO",
-              label: "Em lan\u00e7amento",
+              label: "Em lançamento",
               value: stats.emLancamento,
               grad: "from-violet-500 to-indigo-700",
+              border: "border-violet-300/70 dark:border-violet-800/70",
               icon: SendHorizonal,
             },
             {
               key: "EM_EXECUCAO",
-              label: "Em execu\u00e7\u00e3o",
+              label: "Em execução",
               value: stats.emExecucao,
               grad: "from-blue-500 to-blue-700",
+              border: "border-blue-300/70 dark:border-blue-800/70",
               icon: PlayCircle,
             },
             {
               key: "aprovacao",
-              label: "Em aprova\u00e7\u00e3o",
+              label: "Em aprovação",
               value: stats.emAprovacao,
               grad: "from-violet-500 to-purple-700",
+              border: "border-violet-300/70 dark:border-violet-800/70",
               icon: CheckCircle2,
             },
             {
@@ -1491,20 +1686,23 @@ export default function AdminTarefasPage({
               label: "Atrasadas",
               value: stats.atrasadas,
               grad: "from-red-500 to-rose-700",
+              border: "border-red-300/70 dark:border-red-800/70",
               icon: AlertCircle,
             },
             {
               key: "concluido",
-              label: "Conclu\u00eddas",
+              label: "Concluídas",
               value: stats.concluidas,
               grad: "from-emerald-500 to-emerald-700",
+              border: "border-emerald-300/70 dark:border-emerald-800/70",
               icon: ThumbsUp,
             },
             {
               key: "AGUARDANDO_NOMADE",
-              label: "Aguard. n\u00f4made",
+              label: "Aguard. nômade",
               value: stats.aguardandoNomade,
               grad: "from-purple-500 to-purple-700",
+              border: "border-purple-300/70 dark:border-purple-800/70",
               icon: UserSearch,
             },
           ].map((c) => {
@@ -1525,6 +1723,7 @@ export default function AdminTarefasPage({
                 value={c.value}
                 icon={c.icon}
                 gradient={c.grad}
+                border={c.border}
                 active={isActive}
                 onClick={() => {
                   setSearch("");
@@ -1545,104 +1744,58 @@ export default function AdminTarefasPage({
           })}
         </div>
 
-        {/* ── Main Card ──────────────────────────────────────────── */}
-        <Card className="border border-slate-200/70 dark:border-slate-700/60 shadow-sm overflow-hidden">
-          {/* Top Bar */}
-          <div className="flex flex-wrap items-center gap-3 px-5 py-3.5 border-b border-slate-200/70 dark:border-slate-700/60 bg-slate-50/60 dark:bg-slate-900/30">
-            {/* Search */}
-            <div className="relative flex-1 min-w-50">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400 pointer-events-none" />
+        {/* ── Main Card ─────────────────────────────────── */}
+        <div className="bg-white dark:bg-slate-900 border border-[#e8edf5] dark:border-slate-700 rounded-xl shadow-sm overflow-hidden">
+          {/* Row 1 — search + icon toolbar buttons */}
+          <div className="flex items-center gap-2 flex-wrap px-[18px] py-3">
+            <div className="relative flex-1 min-w-[220px] max-w-sm">
+              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input
-                placeholder="Buscar tarefa, projeto, cliente, n\u00f4made..."
+                placeholder="Buscar tarefa, projeto, cliente, nômade..."
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                className="pl-9 h-9 text-sm bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 rounded-lg w-full"
+                className="pl-8 h-9 text-sm w-full"
               />
               {search && (
                 <button
                   onClick={() => setSearch("")}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
                 >
                   <X className="h-3.5 w-3.5" />
                 </button>
               )}
             </div>
 
-            {/* Items per page + count */}
-            <div className="flex items-center gap-2 shrink-0">
+            <div className="ml-auto flex items-center gap-2">
+              <IconToolbarButton
+                icon={Filter}
+                tooltip={activeFilterCount > 0 ? `Filtros (${activeFilterCount} ativos)` : "Filtros"}
+                onClick={() => setFilterDrawerOpen(true)}
+              />
+              <IconToolbarButton
+                icon={Settings2}
+                tooltip="Configurar colunas"
+                onClick={() => setColConfigOpen(true)}
+              />
+            </div>
+          </div>
+
+          {/* Row 2 — items-per-page + count + scrollbar mirror + numbered pagination */}
+          <div className="flex flex-wrap items-center justify-between gap-3 px-[18px] py-2 border-y border-[#e8edf5] dark:border-slate-800 bg-white dark:bg-slate-900/30">
+            <div className="flex items-center gap-3">
               <ItemsPerPageSelect
                 value={pageSize.toString()}
                 onValueChange={(v) => setPageSize(Number(v))}
                 variant="top"
               />
-              <span className="text-xs text-slate-400 whitespace-nowrap">
-                {(() => {
-                  const start = Math.min(
-                    (currentPage - 1) * pageSize + 1,
-                    sorted.length,
-                  );
-                  const end = Math.min(currentPage * pageSize, sorted.length);
-                  const total = sorted.length;
-                  if (total === 0)
-                    return <span className="text-slate-400">0 tarefas</span>;
-                  return (
-                    <>
-                      Mostrando{" "}
-                      <span className="font-semibold text-slate-600 dark:text-slate-300">
-                        {start}\u–{end}
-                      </span>{" "}
-                      de{" "}
-                      <span className="font-semibold text-slate-600 dark:text-slate-300">
-                        {total}
-                      </span>{" "}
-                      tarefa{total !== 1 ? "s" : ""}
-                    </>
-                  );
-                })()}
-              </span>
+              <CountText side="bottom" />
             </div>
 
-            {/* Filter button — opens full drawer */}
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setFilterDrawerOpen(true)}
-              className={cn(
-                "h-9 gap-2 px-3.5 text-xs border-slate-200 dark:border-slate-700 shrink-0",
-                hasFilters &&
-                  "border-blue-400 text-blue-600 bg-blue-50 dark:bg-blue-900/20 dark:text-blue-400 dark:border-blue-700",
-              )}
-            >
-              <Filter className="h-3.5 w-3.5" />
-              Filtros
-              {activeFilterCount > 0 && (
-                <span className="inline-flex items-center justify-center h-4 min-w-4 px-1 rounded-full bg-blue-600 text-white text-[10px] font-bold leading-none">
-                  {activeFilterCount}
-                </span>
-              )}
-            </Button>
-
-            {/* Column config \u2014 opens the SlidePanel rendered near the other panels below */}
-            <button
-              onClick={() => setColConfigOpen(true)}
-              className={cn(
-                "flex items-center justify-center h-9 w-9 rounded-md border transition-colors shrink-0",
-                colConfigOpen
-                  ? "bg-blue-100 text-blue-600 border-blue-200 dark:bg-blue-900/40 dark:text-blue-400 dark:border-blue-700"
-                  : "text-slate-400 border-slate-200 dark:border-slate-700 hover:text-slate-600 hover:bg-slate-100 dark:hover:bg-slate-800",
-              )}
-              title="Configurar colunas"
-            >
-              <Cog className="h-4 w-4" />
-            </button>
-
-            {/* Top horizontal scrollbar mirror \u2014 only rendered when the table
-                actually overflows its container. */}
             {hasHorizontalOverflow && (
               <div
                 ref={topScrollRef}
                 onScroll={handleTopBarScroll}
-                title="Arraste para rolar a tabela na horizontal e ver as colunas que n\u00e3o couberem na tela"
+                title="Arraste para rolar a tabela na horizontal e ver as colunas que não couberem na tela"
                 className="hidden md:block flex-1 min-w-[80px] overflow-x-scroll allka-table-scroll self-center"
                 style={{ height: 12 }}
               >
@@ -1650,45 +1803,7 @@ export default function AdminTarefasPage({
               </div>
             )}
 
-            {/* Pagination */}
-            <div className="flex items-center gap-0.5 shrink-0">
-              <button
-                onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
-                disabled={currentPage === 1}
-                className="h-7 w-7 flex items-center justify-center rounded-full text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-30 disabled:pointer-events-none transition-colors"
-              >
-                <ChevronLeft className="h-3.5 w-3.5" />
-              </button>
-              {getPageNumbers().map((pg, i) =>
-                pg === "..." ? (
-                  <span key={i} className="text-xs text-slate-300 px-0.5">
-                    \u·
-                  </span>
-                ) : (
-                  <button
-                    key={i}
-                    onClick={() => setCurrentPage(Number(pg))}
-                    className={cn(
-                      "h-7 w-7 flex items-center justify-center rounded-full text-xs font-semibold transition-colors",
-                      pg === currentPage
-                        ? "btn-brand text-white shadow-sm"
-                        : "text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800 dark:text-slate-400",
-                    )}
-                  >
-                    {pg}
-                  </button>
-                ),
-              )}
-              <button
-                onClick={() =>
-                  setCurrentPage((p) => Math.min(totalPages, p + 1))
-                }
-                disabled={currentPage === totalPages}
-                className="h-7 w-7 flex items-center justify-center rounded-full text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-30 disabled:pointer-events-none transition-colors"
-              >
-                <ChevronRight className="h-3.5 w-3.5" />
-              </button>
-            </div>
+            {totalPages > 1 && <PaginationControls />}
           </div>
 
           {/* Empty state */}
@@ -1730,13 +1845,12 @@ export default function AdminTarefasPage({
             <div
               ref={tableScrollRef}
               onScroll={handleTableScroll}
-              className="overflow-x-auto allka-table-scroll"
+              className="overflow-x-auto allka-table-scroll-body"
             >
               <table
                 className="text-sm"
                 style={{
                   tableLayout: "fixed",
-                  width: "100%",
                   minWidth: colWidths.reduce((a, b) => a + b, 0),
                 }}
               >
@@ -1760,6 +1874,7 @@ export default function AdminTarefasPage({
                         prazo: "due_date",
                         execucao: "start_date",
                         prioridade: "priority",
+                        atraso: "atraso",
                       }[col.key];
                       const isAcoes = col.key === "acoes";
                       return (
@@ -1782,19 +1897,27 @@ export default function AdminTarefasPage({
                               : "0 1px 0 rgba(148,163,184,0.3)",
                           }}
                         >
-                          {sortField ? (
-                            <SortableHeader
-                              label={col.label}
-                              field={sortField}
-                              sortKey={sortKey as string | null}
-                              sortDir={sortDir}
-                              onSort={(f, d) => handleSort(f as any, d)}
-                            />
-                          ) : (
-                            <span className={isAcoes ? "flex justify-center" : ""}>
-                              {col.label}
-                            </span>
-                          )}
+                          <div className={isAcoes ? "flex justify-center" : "inline-flex items-center gap-1"}>
+                            {sortField ? (
+                              <SortableHeader
+                                label={col.label}
+                                field={sortField}
+                                sortKey={sortKey as string | null}
+                                sortDir={sortDir}
+                                onSort={(f, d) => handleSort(f as any, d)}
+                              />
+                            ) : (
+                              <span>{col.label}</span>
+                            )}
+                            {!isAcoes && (
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <span className="text-slate-300 dark:text-slate-600 cursor-help text-[10px]">ⓘ</span>
+                                </TooltipTrigger>
+                                <TooltipContent className="text-xs max-w-[200px]">{col.info}</TooltipContent>
+                              </Tooltip>
+                            )}
+                          </div>
                           {i < colWidths.length - 1 && (
                             <div
                               onMouseDown={(e) => onResizeMouseDown(e, i)}
@@ -1830,8 +1953,8 @@ export default function AdminTarefasPage({
                         className={cn(
                           "border-b border-slate-100 dark:border-slate-700/50 transition-colors group",
                           rowIdx % 2 === 0
-                            ? "bg-table-row hover:bg-table-row-hover"
-                            : "bg-table-row-alt hover:bg-table-row-hover",
+                            ? "bg-[#F1F4F9] dark:bg-[oklch(0.14_0.026_258)] hover:bg-[#D9E1ED] dark:hover:bg-[oklch(0.21_0.024_258)]"
+                            : "bg-[#DCE3EE] dark:bg-[oklch(0.185_0.024_258)] hover:bg-[#C7D2E3] dark:hover:bg-[oklch(0.21_0.024_258)]",
                           overdue && "bg-red-50/50 dark:bg-red-950/10",
                         )}
                       >
@@ -1874,16 +1997,16 @@ export default function AdminTarefasPage({
                               </Tooltip>
                               <DropdownMenu>
                                 <DropdownMenuTrigger asChild>
-                                  <button className="h-[26px] w-[26px] flex items-center justify-center rounded-[8px] text-slate-400 hover:text-slate-700 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors">
+                                  <button className="h-[26px] w-[26px] flex items-center justify-center rounded-[8px] bg-white dark:bg-slate-800 border border-[#e8edf5] dark:border-slate-700 text-slate-400 dark:text-slate-500 shadow-[0_4px_10px_rgba(15,23,42,0.06)] hover:bg-gradient-to-br hover:from-[#2558FF] hover:via-[#6E2C96] hover:to-[#D92293] hover:text-white dark:hover:text-[#0a1628] hover:border-transparent hover:shadow-[0_8px_18px_rgba(15,23,42,0.18)] hover:-translate-y-px transition-all duration-150">
                                     <MoreHorizontal className="h-3.5 w-3.5" />
                                   </button>
                                 </DropdownMenuTrigger>
                                 <DropdownMenuContent
-                                  align="end"
-                                  className="w-52"
+                                  align="start"
+                                  className="w-56 rounded-xl p-1.5 shadow-lg border-slate-200/70 dark:border-slate-700/60"
                                 >
                                   <DropdownMenuItem
-                                    className="text-xs gap-2"
+                                    className="gap-2.5 rounded-lg py-2 px-2.5 text-sm cursor-pointer"
                                     onClick={() => {
                                       setSelectedTarefa(tarefa);
                                       setDrawerOpen(true);
@@ -1892,46 +2015,46 @@ export default function AdminTarefasPage({
                                       });
                                     }}
                                   >
-                                    <Eye className="h-3.5 w-3.5 text-slate-500" />
+                                    <span className="flex h-6 w-6 items-center justify-center rounded-md bg-blue-100 dark:bg-blue-900/30 shrink-0"><Eye className="h-3.5 w-3.5 text-blue-600 dark:text-blue-400" /></span>
                                     Ver detalhes
                                   </DropdownMenuItem>
-                                  <DropdownMenuSeparator />
+                                  <DropdownMenuSeparator className="my-1" />
                                   {canLaunch && (
                                     <DropdownMenuItem
-                                      className="text-xs gap-2"
+                                      className="gap-2.5 rounded-lg py-2 px-2.5 text-sm cursor-pointer"
                                       onClick={() => {
                                         setLaunchTask(tarefa);
                                         setLaunchDrawerOpen(true);
                                       }}
                                     >
-                                      <Rocket className="h-3.5 w-3.5 text-indigo-600" />
-                                      Lan\u00e7ar tarefa
+                                      <span className="flex h-6 w-6 items-center justify-center rounded-md bg-indigo-100 dark:bg-indigo-900/30 shrink-0"><Rocket className="h-3.5 w-3.5 text-indigo-600 dark:text-indigo-400" /></span>
+                                      Lançar tarefa
                                     </DropdownMenuItem>
                                   )}
                                   <DropdownMenuItem
-                                    className="text-xs gap-2"
+                                    className="gap-2.5 rounded-lg py-2 px-2.5 text-sm cursor-pointer"
                                     onClick={() => {
                                       setAssignTask(tarefa);
                                       setAssignOpen(true);
                                     }}
                                   >
-                                    <UserSearch className="h-3.5 w-3.5 text-purple-600" />
-                                    Atribuir n\u00f4made
+                                    <span className="flex h-6 w-6 items-center justify-center rounded-md bg-purple-100 dark:bg-purple-900/30 shrink-0"><UserSearch className="h-3.5 w-3.5 text-purple-600 dark:text-purple-400" /></span>
+                                    Atribuir nômade
                                   </DropdownMenuItem>
                                   {tarefa.status !== "PAUSADA" && (
                                     <DropdownMenuItem
-                                      className="text-xs gap-2"
+                                      className="gap-2.5 rounded-lg py-2 px-2.5 text-sm cursor-pointer"
                                       onClick={() =>
                                         handleStatusChange(tarefa, "PAUSADA")
                                       }
                                     >
-                                      <PauseCircle className="h-3.5 w-3.5 text-amber-600" />
+                                      <span className="flex h-6 w-6 items-center justify-center rounded-md bg-amber-100 dark:bg-amber-900/30 shrink-0"><PauseCircle className="h-3.5 w-3.5 text-amber-600 dark:text-amber-400" /></span>
                                       Pausar tarefa
                                     </DropdownMenuItem>
                                   )}
                                   {tarefa.status === "PAUSADA" && (
                                     <DropdownMenuItem
-                                      className="text-xs gap-2"
+                                      className="gap-2.5 rounded-lg py-2 px-2.5 text-sm cursor-pointer"
                                       onClick={() =>
                                         handleStatusChange(
                                           tarefa,
@@ -1939,12 +2062,12 @@ export default function AdminTarefasPage({
                                         )
                                       }
                                     >
-                                      <PlayCircle className="h-3.5 w-3.5 text-blue-600" />
+                                      <span className="flex h-6 w-6 items-center justify-center rounded-md bg-blue-100 dark:bg-blue-900/30 shrink-0"><PlayCircle className="h-3.5 w-3.5 text-blue-600 dark:text-blue-400" /></span>
                                       Retomar tarefa
                                     </DropdownMenuItem>
                                   )}
                                   <DropdownMenuItem
-                                    className="text-xs gap-2"
+                                    className="gap-2.5 rounded-lg py-2 px-2.5 text-sm cursor-pointer"
                                     onClick={() =>
                                       handleStatusChange(
                                         tarefa,
@@ -1952,46 +2075,53 @@ export default function AdminTarefasPage({
                                       )
                                     }
                                   >
-                                    <RotateCcw className="h-3.5 w-3.5 text-slate-500" />
+                                    <span className="flex h-6 w-6 items-center justify-center rounded-md bg-slate-100 dark:bg-slate-900/30 shrink-0"><RotateCcw className="h-3.5 w-3.5 text-slate-600 dark:text-slate-400" /></span>
                                     Devolver tarefa
                                   </DropdownMenuItem>
                                   <DropdownMenuSub>
-                                    <DropdownMenuSubTrigger className="text-xs gap-2">
-                                      <CheckSquare2 className="h-3.5 w-3.5 text-blue-500" />
+                                    <DropdownMenuSubTrigger className="gap-2.5 rounded-lg py-2 px-2.5 text-sm cursor-pointer">
+                                      <span className="flex h-6 w-6 items-center justify-center rounded-md bg-blue-100 dark:bg-blue-900/30 shrink-0"><CheckSquare2 className="h-3.5 w-3.5 text-blue-600 dark:text-blue-400" /></span>
                                       Alterar status
                                     </DropdownMenuSubTrigger>
-                                    <DropdownMenuSubContent className="w-52 max-h-72 overflow-y-auto">
-                                      {ALL_STATUSES.filter(
-                                        (s) => s !== tarefa.status,
-                                      ).map((s) => {
+                                    <DropdownMenuSubContent className="w-72 max-h-80 overflow-y-auto rounded-xl p-1.5 shadow-lg">
+                                      {ALL_STATUSES.map((s) => {
                                         const c = STATUS_CFG[s];
                                         const Icon = c.icon;
+                                        const isCurrent = s === tarefa.status;
                                         return (
                                           <DropdownMenuItem
                                             key={s}
-                                            className="text-xs gap-2"
+                                            className={cn(
+                                              "gap-2.5 rounded-lg py-2 px-2.5 text-sm cursor-pointer whitespace-nowrap",
+                                              isCurrent &&
+                                                "bg-blue-50 dark:bg-blue-950/30 font-semibold",
+                                            )}
                                             onClick={() =>
+                                              !isCurrent &&
                                               handleStatusChange(tarefa, s)
                                             }
                                           >
                                             <Icon
                                               className={cn(
-                                                "h-3.5 w-3.5",
+                                                "h-3.5 w-3.5 shrink-0",
                                                 c.color,
                                               )}
                                             />
-                                            {c.label}
+                                            <span className="flex-1">{c.label}</span>
+                                            {isCurrent && (
+                                              <Check className="h-3.5 w-3.5 text-blue-600 dark:text-blue-400 shrink-0" />
+                                            )}
                                           </DropdownMenuItem>
                                         );
                                       })}
                                     </DropdownMenuSubContent>
                                   </DropdownMenuSub>
-                                  <DropdownMenuSeparator />
+                                  <DropdownMenuSeparator className="my-1" />
                                   <DropdownMenuItem
-                                    className="text-xs gap-2"
+                                    className="gap-2.5 rounded-lg py-2 px-2.5 text-sm cursor-pointer"
                                     onClick={() => handleOpenProject(tarefa)}
                                   >
-                                    <ExternalLink className="h-3.5 w-3.5 text-slate-500" />
+                                    <span className="flex h-6 w-6 items-center justify-center rounded-md bg-slate-100 dark:bg-slate-900/30 shrink-0"><ExternalLink className="h-3.5 w-3.5 text-slate-600 dark:text-slate-400" /></span>
                                     Abrir projeto
                                   </DropdownMenuItem>
                                 </DropdownMenuContent>
@@ -2025,13 +2155,18 @@ export default function AdminTarefasPage({
                             }}
                           >
                             {tarefa.task_code || tarefa.code_snapshot ? (
-                              <span className="text-[11px] font-mono font-bold bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-300 border border-blue-100 dark:border-blue-800 px-1.5 py-0.5 rounded">
-                                {tarefa.task_code ?? tarefa.code_snapshot}
-                              </span>
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <span className="text-xs font-mono font-semibold text-slate-500 dark:text-slate-400 cursor-help">
+                                    {tarefa.task_code ? formatTaskCode(tarefa.task_code) : tarefa.code_snapshot}
+                                  </span>
+                                </TooltipTrigger>
+                                <TooltipContent side="top" className="text-xs">
+                                  Código único da tarefa{tarefa.task_code ? ` (original: ${tarefa.task_code})` : ""}
+                                </TooltipContent>
+                              </Tooltip>
                             ) : (
-                              <span className="text-slate-300 dark:text-slate-600">
-                                —
-                              </span>
+                              <span className="text-slate-300 dark:text-slate-600">—</span>
                             )}
                           </td>
                         )}
@@ -2045,25 +2180,32 @@ export default function AdminTarefasPage({
                               overflow: "hidden",
                             }}
                           >
-                            <button
-                              className="text-left w-full"
-                              onClick={() => {
-                                setSelectedTarefa(tarefa);
-                                setDrawerOpen(true);
-                                navigate(`${routeBase}/${tarefa.id}`, {
-                                  replace: true,
-                                });
-                              }}
-                            >
-                              <p className="text-sm font-semibold text-slate-800 dark:text-slate-200 truncate hover:text-blue-600 dark:hover:text-blue-400 transition-colors leading-snug">
-                                {tarefa.title}
-                              </p>
-                              {tarefa.fase && (
-                                <span className="text-[10px] bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 px-1.5 py-0.5 rounded mt-0.5 inline-block">
-                                  {tarefa.fase}
-                                </span>
-                              )}
-                            </button>
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <button
+                                  className="text-left w-full"
+                                  onClick={() => {
+                                    setSelectedTarefa(tarefa);
+                                    setDrawerOpen(true);
+                                    navigate(`${routeBase}/${tarefa.id}`, {
+                                      replace: true,
+                                    });
+                                  }}
+                                >
+                                  <p className="text-sm font-semibold text-slate-800 dark:text-slate-200 truncate hover:text-blue-600 dark:hover:text-blue-400 transition-colors leading-snug">
+                                    {tarefa.title}
+                                  </p>
+                                  {tarefa.fase && (
+                                    <span className="text-[10px] bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 px-1.5 py-0.5 rounded mt-0.5 inline-block">
+                                      {tarefa.fase}
+                                    </span>
+                                  )}
+                                </button>
+                              </TooltipTrigger>
+                              <TooltipContent side="top" className="text-xs max-w-[280px]">
+                                {tarefa.title}{tarefa.fase ? ` · Fase: ${tarefa.fase}` : ""}
+                              </TooltipContent>
+                            </Tooltip>
                           </td>
                         )}
 
@@ -2076,12 +2218,19 @@ export default function AdminTarefasPage({
                               overflow: "hidden",
                             }}
                           >
-                            <div className="flex items-center gap-1.5 min-w-0">
-                              <FolderOpen className="h-3.5 w-3.5 text-slate-400 shrink-0" />
-                              <span className="text-sm text-slate-700 dark:text-slate-300 truncate">
-                                {tarefa.project.title}
-                              </span>
-                            </div>
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <div className="flex items-center gap-1.5 min-w-0 cursor-help">
+                                  <FolderOpen className="h-3.5 w-3.5 text-slate-400 shrink-0" />
+                                  <span className="text-sm text-slate-700 dark:text-slate-300 truncate">
+                                    {tarefa.project.title}
+                                  </span>
+                                </div>
+                              </TooltipTrigger>
+                              <TooltipContent side="top" className="text-xs">
+                                Projeto: {tarefa.project.title}
+                              </TooltipContent>
+                            </Tooltip>
                           </td>
                         )}
 
@@ -2095,21 +2244,26 @@ export default function AdminTarefasPage({
                             }}
                           >
                             {tarefa.project.client ? (
-                              <div className="flex items-center gap-1.5 min-w-0">
-                                <Building2 className="h-3.5 w-3.5 text-slate-400 shrink-0" />
-                                <span className="text-sm text-slate-700 dark:text-slate-300 truncate">
-                                  {tarefa.project.client.name}
-                                </span>
-                              </div>
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <div className="flex items-center gap-1.5 min-w-0 cursor-help">
+                                    <Building2 className="h-3.5 w-3.5 text-slate-400 shrink-0" />
+                                    <span className="text-sm text-slate-700 dark:text-slate-300 truncate">
+                                      {tarefa.project.client.name}
+                                    </span>
+                                  </div>
+                                </TooltipTrigger>
+                                <TooltipContent side="top" className="text-xs">
+                                  {tarefa.project.client.name}{tarefa.project.client.cnpj ? ` · CNPJ: ${tarefa.project.client.cnpj}` : ""}
+                                </TooltipContent>
+                              </Tooltip>
                             ) : (
-                              <span className="text-slate-300 dark:text-slate-600">
-                                \u2014
-                              </span>
+                              <span className="text-slate-300 dark:text-slate-600">—</span>
                             )}
                           </td>
                         )}
 
-                        {/* Ag\u00eancia */}
+                        {/* Agência */}
                         {visibleCols.has("agencia") && (
                           <td
                             className="px-5 py-3.5"
@@ -2119,19 +2273,24 @@ export default function AdminTarefasPage({
                             }}
                           >
                             {tarefa.responsavel_agencia ? (
-                              <div className="flex items-center gap-1.5 min-w-0">
-                                <AvatarBubble
-                                  name={tarefa.responsavel_agencia.name}
-                                  colorClass="bg-blue-500"
-                                />
-                                <span className="text-xs text-slate-700 dark:text-slate-300 truncate">
-                                  {tarefa.responsavel_agencia.name}
-                                </span>
-                              </div>
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <div className="flex items-center gap-1.5 min-w-0 cursor-help">
+                                    <AvatarBubble
+                                      name={tarefa.responsavel_agencia.name}
+                                      colorClass="bg-blue-500"
+                                    />
+                                    <span className="text-xs text-slate-700 dark:text-slate-300 truncate">
+                                      {tarefa.responsavel_agencia.name}
+                                    </span>
+                                  </div>
+                                </TooltipTrigger>
+                                <TooltipContent side="top" className="text-xs">
+                                  {tarefa.responsavel_agencia.name}{tarefa.responsavel_agencia.email ? ` · ${tarefa.responsavel_agencia.email}` : ""}
+                                </TooltipContent>
+                              </Tooltip>
                             ) : (
-                              <span className="text-slate-300 dark:text-slate-600">
-                                \u2014
-                              </span>
+                              <span className="text-slate-300 dark:text-slate-600">—</span>
                             )}
                           </td>
                         )}
@@ -2145,12 +2304,19 @@ export default function AdminTarefasPage({
                               overflow: "hidden",
                             }}
                           >
-                            <div className="flex items-center gap-1.5 min-w-0">
-                              <Package className="h-3.5 w-3.5 text-purple-400 shrink-0" />
-                              <span className="text-sm text-slate-700 dark:text-slate-300 truncate">
-                                {tarefa.project_product.product_name_snapshot}
-                              </span>
-                            </div>
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <div className="flex items-center gap-1.5 min-w-0 cursor-help">
+                                  <Package className="h-3.5 w-3.5 text-purple-400 shrink-0" />
+                                  <span className="text-sm text-slate-700 dark:text-slate-300 truncate">
+                                    {tarefa.project_product.product_name_snapshot}
+                                  </span>
+                                </div>
+                              </TooltipTrigger>
+                              <TooltipContent side="top" className="text-xs">
+                                {tarefa.project_product.product_name_snapshot}{tarefa.project_product.product_category_snapshot ? ` · ${tarefa.project_product.product_category_snapshot}` : ""}
+                              </TooltipContent>
+                            </Tooltip>
                           </td>
                         )}
 
@@ -2163,11 +2329,21 @@ export default function AdminTarefasPage({
                               overflow: "hidden",
                             }}
                           >
-                            <StatusBadge status={tarefa.status} />
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <span className="cursor-help inline-block">
+                                  <StatusBadge status={tarefa.status} />
+                                </span>
+                              </TooltipTrigger>
+                              <TooltipContent side="top" className="text-xs">
+                                Etapa atual: {STATUS_CFG[tarefa.status]?.label ?? tarefa.status}
+                                {tarefa.updated_at ? ` · Atualizado em ${fmtDate(tarefa.updated_at)}` : ""}
+                              </TooltipContent>
+                            </Tooltip>
                           </td>
                         )}
 
-                        {/* N\u00f4made */}
+                        {/* Nômade */}
                         {visibleCols.has("nomade") && (
                           <td
                             className="px-5 py-3.5"
@@ -2177,15 +2353,22 @@ export default function AdminTarefasPage({
                             }}
                           >
                             {tarefa.nomade_responsavel ? (
-                              <div className="flex items-center gap-1.5 min-w-0">
-                                <AvatarBubble
-                                  name={tarefa.nomade_responsavel.name}
-                                  colorClass="bg-purple-500"
-                                />
-                                <span className="text-xs text-slate-700 dark:text-slate-300 truncate">
-                                  {tarefa.nomade_responsavel.name}
-                                </span>
-                              </div>
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <div className="flex items-center gap-1.5 min-w-0 cursor-help">
+                                    <AvatarBubble
+                                      name={tarefa.nomade_responsavel.name}
+                                      colorClass="bg-purple-500"
+                                    />
+                                    <span className="text-xs text-slate-700 dark:text-slate-300 truncate">
+                                      {tarefa.nomade_responsavel.name}
+                                    </span>
+                                  </div>
+                                </TooltipTrigger>
+                                <TooltipContent side="top" className="text-xs">
+                                  {tarefa.nomade_responsavel.name}{tarefa.nomade_responsavel.email ? ` · ${tarefa.nomade_responsavel.email}` : ""}
+                                </TooltipContent>
+                              </Tooltip>
                             ) : (
                               <button
                                 onClick={() => {
@@ -2200,7 +2383,7 @@ export default function AdminTarefasPage({
                           </td>
                         )}
 
-                        {/* L\u00edder */}
+                        {/* Líder */}
                         {visibleCols.has("lider") && (
                           <td
                             className="px-5 py-3.5"
@@ -2210,13 +2393,18 @@ export default function AdminTarefasPage({
                             }}
                           >
                             {tarefa.project.consultant ? (
-                              <span className="text-xs text-slate-600 dark:text-slate-400 truncate block">
-                                {tarefa.project.consultant}
-                              </span>
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <span className="text-xs text-slate-600 dark:text-slate-400 truncate block cursor-help">
+                                    {tarefa.project.consultant}
+                                  </span>
+                                </TooltipTrigger>
+                                <TooltipContent side="top" className="text-xs">
+                                  Líder responsável: {tarefa.project.consultant}
+                                </TooltipContent>
+                              </Tooltip>
                             ) : (
-                              <span className="text-slate-300 dark:text-slate-600">
-                                \u2014
-                              </span>
+                              <span className="text-slate-300 dark:text-slate-600">—</span>
                             )}
                           </td>
                         )}
@@ -2231,45 +2419,57 @@ export default function AdminTarefasPage({
                             }}
                           >
                             {tarefa.due_date ? (
-                              <div>
-                                <span
-                                  className={cn(
-                                    "text-sm font-medium",
-                                    overdue
-                                      ? "text-red-600 dark:text-red-400"
-                                      : "text-slate-600 dark:text-slate-400",
-                                  )}
-                                >
-                                  {fmtDate(tarefa.due_date, true)}
-                                </span>
-                                {dias !== null && (
-                                  <p
-                                    className={cn(
-                                      "text-[10px] mt-0.5 leading-none",
-                                      overdue
-                                        ? "text-red-500"
-                                        : dias <= 3
-                                          ? "text-amber-500"
-                                          : "text-slate-400",
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <div className="cursor-help">
+                                    <span
+                                      className={cn(
+                                        "text-sm font-medium",
+                                        overdue
+                                          ? "text-red-600 dark:text-red-400"
+                                          : "text-slate-600 dark:text-slate-400",
+                                      )}
+                                    >
+                                      {fmtDate(tarefa.due_date, true)}
+                                    </span>
+                                    {dias !== null && (
+                                      <p
+                                        className={cn(
+                                          "text-[10px] mt-0.5 leading-none",
+                                          overdue
+                                            ? "text-red-500"
+                                            : dias <= 3
+                                              ? "text-amber-500"
+                                              : "text-slate-400",
+                                        )}
+                                      >
+                                        {dias < 0
+                                          ? `${Math.abs(dias)}d atraso`
+                                          : dias === 0
+                                            ? "hoje"
+                                            : `${dias}d`}
+                                      </p>
                                     )}
-                                  >
-                                    {dias < 0
-                                      ? `${Math.abs(dias)}d atraso`
+                                  </div>
+                                </TooltipTrigger>
+                                <TooltipContent side="top" className="text-xs">
+                                  Prazo: {fmtDate(tarefa.due_date)}
+                                  {dias !== null
+                                    ? dias < 0
+                                      ? ` · Atrasada há ${Math.abs(dias)} dia${Math.abs(dias) === 1 ? "" : "s"}`
                                       : dias === 0
-                                        ? "hoje"
-                                        : `${dias}d`}
-                                  </p>
-                                )}
-                              </div>
+                                        ? " · Vence hoje"
+                                        : ` · Faltam ${dias} dia${dias === 1 ? "" : "s"}`
+                                    : ""}
+                                </TooltipContent>
+                              </Tooltip>
                             ) : (
-                              <span className="text-slate-300 dark:text-slate-600">
-                                \u2014
-                              </span>
+                              <span className="text-slate-300 dark:text-slate-600">—</span>
                             )}
                           </td>
                         )}
 
-                        {/* Prazo execu\u00e7\u00e3o */}
+                        {/* Prazo execução */}
                         {visibleCols.has("execucao") && (
                           <td
                             className="px-5 py-3.5"
@@ -2279,13 +2479,18 @@ export default function AdminTarefasPage({
                             }}
                           >
                             {tarefa.start_date ? (
-                              <span className="text-sm text-slate-600 dark:text-slate-400">
-                                {fmtDate(tarefa.start_date, true)}
-                              </span>
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <span className="text-sm text-slate-600 dark:text-slate-400 cursor-help">
+                                    {fmtDate(tarefa.start_date, true)}
+                                  </span>
+                                </TooltipTrigger>
+                                <TooltipContent side="top" className="text-xs">
+                                  Início da execução: {fmtDate(tarefa.start_date)}
+                                </TooltipContent>
+                              </Tooltip>
                             ) : (
-                              <span className="text-slate-300 dark:text-slate-600">
-                                \u2014
-                              </span>
+                              <span className="text-slate-300 dark:text-slate-600">—</span>
                             )}
                           </td>
                         )}
@@ -2299,16 +2504,50 @@ export default function AdminTarefasPage({
                               overflow: "hidden",
                             }}
                           >
-                            {overdue && dias !== null ? (
-                              <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-red-700 bg-red-100 border border-red-200 rounded-full px-2 py-0.5">
-                                <AlertCircle className="h-3 w-3" />
-                                {Math.abs(dias)}d
-                              </span>
-                            ) : (
-                              <span className="text-slate-300 dark:text-slate-600">
-                                \u2014
-                              </span>
-                            )}
+                            {(() => {
+                              const isTerminal = ["CONCLUIDA", "CANCELADA", "APROVADA"].includes(tarefa.status);
+                              if (!tarefa.due_date || isTerminal) {
+                                return <span className="text-slate-300 dark:text-slate-600">—</span>;
+                              }
+                              const tone = urgencyTone(dias, overdue);
+                              const label = overdue
+                                ? `${Math.abs(dias ?? 0)}d atraso`
+                                : dias === 0
+                                  ? "Hoje"
+                                  : `${dias}d`;
+                              const explanation = overdue
+                                ? `Atrasada há ${Math.abs(dias ?? 0)} dia${Math.abs(dias ?? 0) === 1 ? "" : "s"} (prazo era ${fmtDate(tarefa.due_date)})`
+                                : dias === 0
+                                  ? "Vence hoje — última chance antes de atrasar"
+                                  : `Faltam ${dias} dia${dias === 1 ? "" : "s"} para o prazo (${fmtDate(tarefa.due_date)})`;
+                              return (
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <span
+                                      className={cn(
+                                        "inline-flex items-center gap-1 text-[10px] font-semibold rounded-full px-2 py-0.5 border cursor-help",
+                                        tone.text,
+                                        tone.bg,
+                                        tone.border,
+                                      )}
+                                    >
+                                      {tone.pulse ? (
+                                        <span className="relative flex h-2 w-2 shrink-0">
+                                          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-500 opacity-75" />
+                                          <span className="relative inline-flex rounded-full h-2 w-2 bg-red-600" />
+                                        </span>
+                                      ) : (
+                                        <AlertCircle className="h-3 w-3" />
+                                      )}
+                                      {label}
+                                    </span>
+                                  </TooltipTrigger>
+                                  <TooltipContent side="top" className="text-xs">
+                                    {explanation}
+                                  </TooltipContent>
+                                </Tooltip>
+                              );
+                            })()}
                           </td>
                         )}
 
@@ -2321,9 +2560,18 @@ export default function AdminTarefasPage({
                               overflow: "hidden",
                             }}
                           >
-                            <PriorityBadge
-                              priority={tarefa.priority as Priority}
-                            />
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <span className="cursor-help inline-block">
+                                  <PriorityBadge
+                                    priority={tarefa.priority as Priority}
+                                  />
+                                </span>
+                              </TooltipTrigger>
+                              <TooltipContent side="top" className="text-xs">
+                                {PRIORITY_INFO[tarefa.priority as Priority] ?? "Prioridade da tarefa."}
+                              </TooltipContent>
+                            </Tooltip>
                           </td>
                         )}
                       </tr>
@@ -2334,38 +2582,18 @@ export default function AdminTarefasPage({
             </div>
           )}
 
-          {/* Bottom pagination */}
+          {/* Row 3 — bottom mirror of row 2 */}
           {sorted.length > 0 && (
-            <div className="flex flex-wrap items-center justify-between gap-3 px-5 py-3.5 border-t border-slate-200/70 dark:border-slate-700/60 bg-slate-50/40 dark:bg-slate-900/20">
-              <p className="text-xs text-slate-500 dark:text-slate-400">
-                {(() => {
-                  const start = Math.min(
-                    (currentPage - 1) * pageSize + 1,
-                    sorted.length,
-                  );
-                  const end = Math.min(currentPage * pageSize, sorted.length);
-                  return (
-                    <>
-                      Mostrando{" "}
-                      <span className="font-semibold text-slate-700 dark:text-slate-300">
-                        {start}
-                      </span>{" "}
-                      at\u00e9{" "}
-                      <span className="font-semibold text-slate-700 dark:text-slate-300">
-                        {end}
-                      </span>{" "}
-                      de{" "}
-                      <span className="font-semibold text-slate-700 dark:text-slate-300">
-                        {sorted.length}
-                      </span>{" "}
-                      registros
-                    </>
-                  );
-                })()}
-              </p>
+            <div className="flex flex-wrap items-center justify-between gap-3 px-[18px] py-2 border-t border-[#e8edf5] dark:border-slate-800 bg-white dark:bg-slate-900/20">
+              <div className="flex items-center gap-3">
+                <ItemsPerPageSelect
+                  value={pageSize.toString()}
+                  onValueChange={(v) => setPageSize(Number(v))}
+                  variant="bottom"
+                />
+                <CountText side="top" />
+              </div>
 
-              {/* Bottom horizontal scrollbar mirror — only rendered when the
-                  table actually overflows its container. */}
               {hasHorizontalOverflow && (
                 <div
                   ref={bottomScrollRef}
@@ -2378,61 +2606,10 @@ export default function AdminTarefasPage({
                 </div>
               )}
 
-              <div className="flex items-center gap-1">
-                <button
-                  onClick={() => setCurrentPage(1)}
-                  disabled={currentPage === 1}
-                  className="h-7 px-2 text-xs rounded-md border border-slate-200 dark:border-slate-700 text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-30 disabled:pointer-events-none transition-colors"
-                >
-                  Primeiro
-                </button>
-                <button
-                  onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
-                  disabled={currentPage === 1}
-                  className="h-7 w-7 flex items-center justify-center rounded-full text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-30 disabled:pointer-events-none transition-colors"
-                >
-                  <ChevronLeft className="h-3.5 w-3.5" />
-                </button>
-                {getPageNumbers().map((pg, i) =>
-                  pg === "..." ? (
-                    <span key={i} className="text-xs text-slate-300 px-0.5">
-                      \u·\u·\u·
-                    </span>
-                  ) : (
-                    <button
-                      key={i}
-                      onClick={() => setCurrentPage(Number(pg))}
-                      className={cn(
-                        "h-7 w-7 flex items-center justify-center rounded-full text-xs font-semibold transition-colors",
-                        pg === currentPage
-                          ? "btn-brand text-white shadow-sm"
-                          : "text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800 dark:text-slate-400",
-                      )}
-                    >
-                      {pg}
-                    </button>
-                  ),
-                )}
-                <button
-                  onClick={() =>
-                    setCurrentPage((p) => Math.min(totalPages, p + 1))
-                  }
-                  disabled={currentPage === totalPages}
-                  className="h-7 w-7 flex items-center justify-center rounded-full text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-30 disabled:pointer-events-none transition-colors"
-                >
-                  <ChevronRight className="h-3.5 w-3.5" />
-                </button>
-                <button
-                  onClick={() => setCurrentPage(totalPages)}
-                  disabled={currentPage === totalPages}
-                  className="h-7 px-2 text-xs rounded-md border border-slate-200 dark:border-slate-700 text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-30 disabled:pointer-events-none transition-colors"
-                >
-                  \u00daltimo
-                </button>
-              </div>
+              {totalPages > 1 && <PaginationControls />}
             </div>
           )}
-        </Card>
+        </div>
       </div>
 
       {/* Advanced Filters Drawer */}

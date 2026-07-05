@@ -468,21 +468,25 @@ class ApiClient {
     return this.del(`/campaigns/${id}`);
   }
 
-  // Coupons are campaigns of type "coupon"
+  // ─── Coupons (real entity — apps/backend/src/routes/coupons.ts) ───────────
   async getCoupons(filters?: Record<string, any>) {
-    return this.getCampaigns({ ...filters, type: "coupon" });
+    return this.get("/coupons", filters);
+  }
+
+  async getCoupon(id: string | number) {
+    return this.get(`/coupons/${id}`);
   }
 
   async createCoupon(data: Record<string, any>) {
-    return this.createCampaign({ ...data, type: "coupon" });
+    return this.post("/coupons", data);
   }
 
   async updateCoupon(id: string | number, data: Record<string, any>) {
-    return this.updateCampaign(id, data);
+    return this.put(`/coupons/${id}`, data);
   }
 
   async deleteCoupon(id: string | number) {
-    return this.deleteCampaign(id);
+    return this.del(`/coupons/${id}`);
   }
 
   // ─── Financial / Invoices ─────────────────────────────────────────────────

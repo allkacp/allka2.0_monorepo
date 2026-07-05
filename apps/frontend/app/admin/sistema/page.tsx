@@ -26,9 +26,16 @@ import {
   Trash2, TestTube2, Globe, Lock, MessageSquare, Bot,
   CreditCard, Mail, ChevronDown, ChevronUp, EyeOff,
   AlertCircle, CheckCircle, FileText, Search,
+  Eye, Filter, ChevronLeft, ChevronRight,
 } from "lucide-react";
 import { PageHeader } from "@/components/page-header";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { SlidePanel } from "@/components/slide-panel";
+import { IconToolbarButton } from "@/components/icon-toolbar-button";
+import { NeonBadge } from "@/components/neon-badge";
+import { ItemsPerPageSelect } from "@/components/items-per-page-select";
+import { useSorting, SortableHeader } from "@/hooks/useSorting";
+import { useTableScrollSync } from "@/hooks/useTableScrollSync";
 
 function GaugeBar({ value, thresholds = [60, 80] }) {
   const [low, high] = thresholds;
@@ -209,15 +216,39 @@ const MOCK_CONNECTOR_LOGS = [
 ];
 
 const ACTION_LABELS = {
-  conectado:           { label: "Conectado",     cls: "bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/30 dark:text-emerald-400" },
-  desconectado:        { label: "Desconectado",  cls: "bg-slate-100 text-slate-500 border-slate-200 dark:bg-slate-800 dark:text-slate-400" },
-  editado:             { label: "Editado",        cls: "bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-950/30 dark:text-blue-400" },
-  testado:             { label: "Testado",        cls: "bg-violet-50 text-violet-700 border-violet-200 dark:bg-violet-950/30 dark:text-violet-400" },
-  requisição_enviada:  { label: "Requisição",     cls: "bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-950/30 dark:text-blue-400" },
-  mensagem_enviada:    { label: "Mensagem WA",    cls: "bg-green-50 text-green-700 border-green-200 dark:bg-green-950/30 dark:text-green-400" },
-  tag_adicionada:      { label: "Tag adicionada", cls: "bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/30 dark:text-amber-400" },
-  webhook_recebido:    { label: "Webhook",        cls: "bg-indigo-50 text-indigo-700 border-indigo-200 dark:bg-indigo-950/30 dark:text-indigo-400" },
+  conectado:           { label: "Conectado",     cls: "bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/30 dark:text-emerald-400", color: "emerald" },
+  desconectado:        { label: "Desconectado",  cls: "bg-slate-100 text-slate-500 border-slate-200 dark:bg-slate-800 dark:text-slate-400",             color: "slate" },
+  editado:             { label: "Editado",        cls: "bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-950/30 dark:text-blue-400",               color: "blue" },
+  testado:             { label: "Testado",        cls: "bg-violet-50 text-violet-700 border-violet-200 dark:bg-violet-950/30 dark:text-violet-400",     color: "violet" },
+  requisição_enviada:  { label: "Requisição",     cls: "bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-950/30 dark:text-blue-400",               color: "blue" },
+  mensagem_enviada:    { label: "Mensagem WA",    cls: "bg-green-50 text-green-700 border-green-200 dark:bg-green-950/30 dark:text-green-400",          color: "green" },
+  tag_adicionada:      { label: "Tag adicionada", cls: "bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/30 dark:text-amber-400",          color: "amber" },
+  webhook_recebido:    { label: "Webhook",        cls: "bg-indigo-50 text-indigo-700 border-indigo-200 dark:bg-indigo-950/30 dark:text-indigo-400",     color: "indigo" },
 };
+
+// ─── Registro de atividade — stat cards (gradient recipe from admin/clientes) ─
+
+const LOG_STAT_COLOR_MAP = {
+  blue:    { gradient: "from-blue-500 to-blue-700",       darkGradient: "dark:from-blue-800 dark:to-blue-950",       borderClass: "border-2 border-blue-300/70 dark:border-blue-800/70" },
+  emerald: { gradient: "from-emerald-500 to-teal-600",    darkGradient: "dark:from-emerald-800 dark:to-teal-900",    borderClass: "border-2 border-emerald-300/70 dark:border-emerald-800/70" },
+  violet:  { gradient: "from-violet-500 to-purple-700",   darkGradient: "dark:from-violet-800 dark:to-purple-950",  borderClass: "border-2 border-violet-300/70 dark:border-violet-800/70" },
+  orange:  { gradient: "from-orange-500 to-rose-600",     darkGradient: "dark:from-orange-800 dark:to-rose-900",    borderClass: "border-2 border-orange-300/70 dark:border-orange-800/70" },
+};
+
+function LogStatCard({ label, value, icon: Icon, color }) {
+  const colors = LOG_STAT_COLOR_MAP[color];
+  return (
+    <div className={`relative rounded-xl overflow-hidden bg-gradient-to-br ${colors.gradient} ${colors.darkGradient} ${colors.borderClass} shadow-lg`}>
+      <div className="px-4 py-3.5">
+        <div className="flex items-center justify-between mb-1">
+          <span className="text-[11px] font-semibold text-white/80 uppercase tracking-wide">{label}</span>
+          <div className="bg-white/20 rounded-md p-1"><Icon className="h-3.5 w-3.5 text-white" /></div>
+        </div>
+        <div className="text-2xl font-bold text-white">{value}</div>
+      </div>
+    </div>
+  );
+}
 
 // ─── ConnectorCard ────────────────────────────────────────────────────────────
 
@@ -528,11 +559,50 @@ export default function AdminSistemaPage() {
   const [editTarget, setEditTarget] = useState(null);
   const [disconnectTarget, setDisconnectTarget] = useState(null);
   const [deleteTarget, setDeleteTarget] = useState(null);
-  const [logFilterConnector, setLogFilterConnector] = useState("all");
-  const [logFilterAction, setLogFilterAction] = useState("all");
   const [connectorSearch, setConnectorSearch] = useState("");
   const [connectorFilter, setConnectorFilter] = useState("all");
   const [logLevelFilter, setLogLevelFilter] = useState("all");
+
+  // ─── Registro de atividade — table state (empresas/clientes standard) ─────
+  const [logSearchInput, setLogSearchInput] = useState("");
+  const [logFilterPanelOpen, setLogFilterPanelOpen] = useState(false);
+  const [logConnectorFilter, setLogConnectorFilter] = useState(new Set());
+  const [logActionFilter, setLogActionFilter] = useState(new Set());
+  const [logPage, setLogPage] = useState(1);
+  const [logPageSize, setLogPageSize] = useState(10);
+  const [logPageJumpValue, setLogPageJumpValue] = useState("");
+  const [logDetailTarget, setLogDetailTarget] = useState(null);
+
+  const {
+    sortKey: logSortKey,
+    sortDir: logSortDir,
+    handleSort: handleLogSort,
+    sortData: sortLogData,
+  } = useSorting();
+
+  const {
+    sortKey: svcSortKey,
+    sortDir: svcSortDir,
+    handleSort: handleSvcSort,
+    sortData: sortServices,
+  } = useSorting();
+
+  const {
+    sortKey: sysLogSortKey,
+    sortDir: sysLogSortDir,
+    handleSort: handleSysLogSort,
+    sortData: sortSysLogs,
+  } = useSorting();
+
+  const {
+    tableScrollRef: logTableScrollRef,
+    topScrollRef: logTopScrollRef,
+    bottomScrollRef: logBottomScrollRef,
+    handleTopBarScroll: handleLogTopBarScroll,
+    handleTableScroll: handleLogTableScroll,
+    handleBottomBarScroll: handleLogBottomBarScroll,
+    hasHorizontalOverflow: logHasHorizontalOverflow,
+  } = useTableScrollSync([logPage, logPageSize]);
 
   const load = useCallback(async () => {
     try {
@@ -589,11 +659,79 @@ export default function AdminSistemaPage() {
     }, 1500);
   }
 
-  const filteredLogs = MOCK_CONNECTOR_LOGS.filter(l => {
-    const matchC = logFilterConnector === "all" || l.connector === logFilterConnector;
-    const matchA = logFilterAction === "all" || l.action === logFilterAction;
-    return matchC && matchA;
-  });
+  const connectorNames = useMemo(() => [...new Set(MOCK_CONNECTOR_LOGS.map(l => l.connector))], []);
+  const actionKeys = useMemo(() => [...new Set(MOCK_CONNECTOR_LOGS.map(l => l.action))], []);
+
+  const logSearch = logSearchInput.trim().toLowerCase();
+
+  const filteredLogsRaw = useMemo(() => {
+    let arr = MOCK_CONNECTOR_LOGS;
+    if (logConnectorFilter.size > 0) arr = arr.filter(l => logConnectorFilter.has(l.connector));
+    if (logActionFilter.size > 0) arr = arr.filter(l => logActionFilter.has(l.action));
+    if (logSearch) {
+      arr = arr.filter(l =>
+        l.connector.toLowerCase().includes(logSearch) ||
+        l.user.toLowerCase().includes(logSearch) ||
+        l.result.toLowerCase().includes(logSearch) ||
+        (ACTION_LABELS[l.action]?.label ?? l.action).toLowerCase().includes(logSearch)
+      );
+    }
+    return arr;
+  }, [logConnectorFilter, logActionFilter, logSearch]);
+
+  const sortedLogs = useMemo(() => sortLogData(filteredLogsRaw), [filteredLogsRaw, sortLogData]);
+  const logTotal = sortedLogs.length;
+  const logTotalPages = Math.max(1, Math.ceil(logTotal / logPageSize));
+  const pagedLogs = useMemo(() => {
+    const start = (logPage - 1) * logPageSize;
+    return sortedLogs.slice(start, start + logPageSize);
+  }, [sortedLogs, logPage, logPageSize]);
+
+  const getLogPageNumbers = () => {
+    const pages = [];
+    const maxVisible = 5;
+    const halfVisible = Math.floor(maxVisible / 2);
+    if (logTotalPages <= maxVisible) {
+      for (let i = 1; i <= logTotalPages; i++) pages.push(i);
+    } else if (logPage <= halfVisible + 1) {
+      for (let i = 1; i <= maxVisible; i++) pages.push(i);
+      pages.push("...");
+    } else if (logPage >= logTotalPages - halfVisible) {
+      pages.push("...");
+      for (let i = logTotalPages - maxVisible + 1; i <= logTotalPages; i++) pages.push(i);
+    } else {
+      pages.push("...");
+      for (let i = logPage - halfVisible; i <= logPage + halfVisible; i++) pages.push(i);
+      pages.push("...");
+    }
+    return pages;
+  };
+
+  const commitLogPageJump = () => {
+    const n = parseInt(logPageJumpValue, 10);
+    if (!isNaN(n) && n >= 1 && n <= logTotalPages) setLogPage(n);
+    setLogPageJumpValue("");
+  };
+
+  const toggleLogConnectorFilter = (name) => {
+    setLogConnectorFilter(prev => {
+      const next = new Set(prev);
+      if (next.has(name)) next.delete(name); else next.add(name);
+      return next;
+    });
+    setLogPage(1);
+  };
+  const toggleLogActionFilter = (key) => {
+    setLogActionFilter(prev => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key); else next.add(key);
+      return next;
+    });
+    setLogPage(1);
+  };
+
+  const logStatSuccess = MOCK_CONNECTOR_LOGS.filter(l => !l.result.startsWith("erro")).length;
+  const logStatErrors = MOCK_CONNECTOR_LOGS.filter(l => l.result.startsWith("erro")).length;
 
   const filteredConnectors = useMemo(() => {
     let arr = connectors;
@@ -613,9 +751,6 @@ export default function AdminSistemaPage() {
     if (logLevelFilter === "all") return MOCK_LOGS;
     return MOCK_LOGS.filter(l => l.level === logLevelFilter);
   }, [logLevelFilter]);
-
-  const connectorNames = [...new Set(MOCK_CONNECTOR_LOGS.map(l => l.connector))];
-  const actionKeys = [...new Set(MOCK_CONNECTOR_LOGS.map(l => l.action))];
 
   const services = MOCK_SERVICES;
   const operationalCount = services.filter(s => s.status === "operational").length;
@@ -700,7 +835,7 @@ export default function AdminSistemaPage() {
         </TabsContent>
 
         <TabsContent value="services">
-          <Card className="overflow-hidden">
+          <div className="bg-white dark:bg-slate-900 border border-[#e8edf5] dark:border-slate-700 rounded-xl shadow-sm overflow-hidden">
             <div className="px-4 py-3 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
               <h3 className="text-sm font-semibold text-slate-700 dark:text-slate-200">Status dos Serviços</h3>
               <Badge variant="outline" className={`text-[10px] font-semibold ${overallOk
@@ -709,28 +844,55 @@ export default function AdminSistemaPage() {
                 {operationalCount}/{services.length} operacional
               </Badge>
             </div>
-            <div className="divide-y divide-slate-100 dark:divide-slate-800">
-              {services.map((svc, i) => (
-                <div key={i} className={`px-4 py-3.5 flex items-center gap-3 ${i % 2 === 0 ? "bg-table-row" : "bg-table-row-alt"} hover:bg-table-row-hover transition-colors`}>
-                  <ServiceDot status={svc.status} />
-                  <span className="text-sm font-medium text-slate-700 dark:text-slate-200 flex-1">{svc.name}</span>
-                  <span className="text-xs text-slate-400 hidden sm:block">Reiniciado {svc.restart}</span>
-                  <span className="text-xs font-semibold text-slate-600 dark:text-slate-400 tabular-nums w-14 text-right">{svc.uptime}</span>
-                  <Badge variant="outline" className={`text-[10px] font-semibold w-24 justify-center ${
-                    svc.status === "operational" ? "bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/30 dark:text-emerald-400"
-                    : svc.status === "degraded"  ? "bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/30 dark:text-amber-400"
-                    : "bg-red-50 text-red-700 border-red-200 dark:bg-red-950/30 dark:text-red-400"
-                  }`}>
-                    {svc.status === "operational" ? "Operacional" : svc.status === "degraded" ? "Degradado" : "Offline"}
-                  </Badge>
-                </div>
-              ))}
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-slate-200/60 dark:border-slate-700/60">
+                    <th className="text-left py-3 px-4 text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wide">
+                      <SortableHeader label="Serviço" field="name" type="text" sortKey={svcSortKey ? String(svcSortKey) : null} sortDir={svcSortDir} onSort={handleSvcSort} />
+                    </th>
+                    <th className="text-left py-3 px-4 text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wide hidden sm:table-cell">
+                      <SortableHeader label="Reiniciado" field="restart" type="text" sortKey={svcSortKey ? String(svcSortKey) : null} sortDir={svcSortDir} onSort={handleSvcSort} />
+                    </th>
+                    <th className="text-right py-3 px-4 text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wide">
+                      <SortableHeader label="Uptime" field="uptime" type="text" sortKey={svcSortKey ? String(svcSortKey) : null} sortDir={svcSortDir} onSort={handleSvcSort} />
+                    </th>
+                    <th className="text-center py-3 px-4 text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wide">
+                      <SortableHeader label="Status" field="status" type="text" sortKey={svcSortKey ? String(svcSortKey) : null} sortDir={svcSortDir} onSort={handleSvcSort} />
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {sortServices(services).map((svc, i) => (
+                    <tr
+                      key={svc.name}
+                      className={i % 2 === 0
+                        ? "bg-[#F1F4F9] dark:bg-[oklch(0.14_0.026_258)] hover:bg-[#D9E1ED] dark:hover:bg-[oklch(0.21_0.024_258)]"
+                        : "bg-[#DCE3EE] dark:bg-[oklch(0.185_0.024_258)] hover:bg-[#C7D2E3] dark:hover:bg-[oklch(0.21_0.024_258)]"}
+                    >
+                      <td className="py-3 px-4">
+                        <span className="flex items-center gap-2 font-medium text-slate-700 dark:text-slate-200">
+                          <ServiceDot status={svc.status} />
+                          {svc.name}
+                        </span>
+                      </td>
+                      <td className="py-3 px-4 text-xs text-slate-400 hidden sm:table-cell">Reiniciado {svc.restart}</td>
+                      <td className="py-3 px-4 text-right text-xs font-semibold text-slate-600 dark:text-slate-400 tabular-nums">{svc.uptime}</td>
+                      <td className="py-3 px-4 text-center">
+                        <NeonBadge color={svc.status === "operational" ? "emerald" : svc.status === "degraded" ? "amber" : "red"}>
+                          {svc.status === "operational" ? "Operacional" : svc.status === "degraded" ? "Degradado" : "Offline"}
+                        </NeonBadge>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
-          </Card>
+          </div>
         </TabsContent>
 
         <TabsContent value="logs">
-          <Card className="border border-slate-200/70 dark:border-slate-700/60 shadow-sm overflow-hidden">
+          <div className="bg-white dark:bg-slate-900 border border-[#e8edf5] dark:border-slate-700 rounded-xl shadow-sm overflow-hidden">
             <div className="flex items-center gap-3 px-5 py-3 border-b border-slate-200/70 dark:border-slate-700/60 bg-slate-50/60 dark:bg-slate-900/30 flex-wrap">
               <h3 className="text-sm font-semibold text-slate-700 dark:text-slate-200 mr-auto">Logs do Sistema</h3>
               <span className="text-xs text-slate-400 whitespace-nowrap shrink-0">
@@ -761,21 +923,47 @@ export default function AdminSistemaPage() {
                 })}
               </div>
             </div>
-            <div className="divide-y divide-slate-100 dark:divide-slate-800">
-              {filteredSysLogs.map((log, i) => {
-                const lv = LOG_LEVELS[log.level] || LOG_LEVELS.info;
-                const Ico = log.level === "error" ? XCircle : log.level === "warning" ? AlertTriangle : Info;
-                return (
-                  <div key={log.id} className={`px-4 py-3 flex items-start gap-3 ${i % 2 === 0 ? "bg-table-row" : "bg-table-row-alt"}`}>
-                    <Ico className={`h-3.5 w-3.5 mt-0.5 shrink-0 ${log.level === "error" ? "text-red-500" : log.level === "warning" ? "text-amber-500" : "text-blue-400"}`} />
-                    <Badge variant="outline" className={`text-[9px] font-bold px-1.5 py-0 h-4 shrink-0 ${lv.cls}`}>{lv.label}</Badge>
-                    <p className="text-xs text-slate-600 dark:text-slate-400 flex-1 leading-relaxed">{log.msg}</p>
-                    <span className="text-[10px] text-slate-400 shrink-0 tabular-nums">{log.ts}</span>
-                  </div>
-                );
-              })}
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-slate-200/60 dark:border-slate-700/60">
+                    <th className="text-left py-3 px-4 text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wide">
+                      <SortableHeader label="Nível" field="level" type="text" sortKey={sysLogSortKey ? String(sysLogSortKey) : null} sortDir={sysLogSortDir} onSort={handleSysLogSort} />
+                    </th>
+                    <th className="text-left py-3 px-4 text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wide">
+                      <SortableHeader label="Mensagem" field="msg" type="text" sortKey={sysLogSortKey ? String(sysLogSortKey) : null} sortDir={sysLogSortDir} onSort={handleSysLogSort} />
+                    </th>
+                    <th className="text-right py-3 px-4 text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wide whitespace-nowrap">
+                      <SortableHeader label="Quando" field="ts" type="text" sortKey={sysLogSortKey ? String(sysLogSortKey) : null} sortDir={sysLogSortDir} onSort={handleSysLogSort} />
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {sortSysLogs(filteredSysLogs).map((log, i) => {
+                    const lv = LOG_LEVELS[log.level] || LOG_LEVELS.info;
+                    const Ico = log.level === "error" ? XCircle : log.level === "warning" ? AlertTriangle : Info;
+                    return (
+                      <tr
+                        key={log.id}
+                        className={i % 2 === 0
+                          ? "bg-[#F1F4F9] dark:bg-[oklch(0.14_0.026_258)] hover:bg-[#D9E1ED] dark:hover:bg-[oklch(0.21_0.024_258)]"
+                          : "bg-[#DCE3EE] dark:bg-[oklch(0.185_0.024_258)] hover:bg-[#C7D2E3] dark:hover:bg-[oklch(0.21_0.024_258)]"}
+                      >
+                        <td className="py-3 px-4">
+                          <NeonBadge color={log.level === "error" ? "red" : log.level === "warning" ? "amber" : "blue"} className="inline-flex items-center gap-1">
+                            <Ico className="h-3 w-3" />
+                            {lv.label}
+                          </NeonBadge>
+                        </td>
+                        <td className="py-3 px-4 text-xs text-slate-600 dark:text-slate-400 leading-relaxed">{log.msg}</td>
+                        <td className="py-3 px-4 text-right text-[11px] text-slate-400 tabular-nums whitespace-nowrap">{log.ts}</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
             </div>
-          </Card>
+          </div>
         </TabsContent>
 
         <TabsContent value="conectores" className="space-y-6">
@@ -846,60 +1034,369 @@ export default function AdminSistemaPage() {
             <h3 className="text-sm font-semibold text-slate-700 dark:text-slate-200 mb-3 flex items-center gap-2">
               <ClipboardList className="h-4 w-4 text-slate-400" /> Registro de atividade
             </h3>
-            <Card className="border border-slate-200/70 dark:border-slate-700/60 shadow-sm overflow-hidden">
-              <div className="flex items-center gap-3 px-5 py-3 border-b border-slate-200/70 dark:border-slate-700/60 bg-slate-50/60 dark:bg-slate-900/30 flex-wrap">
-                <span className="text-xs text-slate-400 whitespace-nowrap">
-                  {filteredLogs.length} de{" "}
-                  <span className="font-semibold text-slate-600 dark:text-slate-300">{MOCK_CONNECTOR_LOGS.length}</span>{" "}registros
-                </span>
-                <div className="flex items-center gap-2 ml-auto">
-                  <Select value={logFilterConnector} onValueChange={setLogFilterConnector}>
-                    <SelectTrigger size="sm" className="h-7 text-xs w-40">
-                      <SelectValue placeholder="Conector..." />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">Todos conectores</SelectItem>
-                      {connectorNames.map(n => <SelectItem key={n} value={n}>{n}</SelectItem>)}
-                    </SelectContent>
-                  </Select>
-                  <Select value={logFilterAction} onValueChange={setLogFilterAction}>
-                    <SelectTrigger size="sm" className="h-7 text-xs w-36">
-                      <SelectValue placeholder="Ação..." />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">Todas ações</SelectItem>
-                      {actionKeys.map(a => <SelectItem key={a} value={a}>{ACTION_LABELS[a]?.label ?? a}</SelectItem>)}
-                    </SelectContent>
-                  </Select>
+
+            {/* Stats — gradient cards matching admin/empresas/clientes */}
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-4">
+              <LogStatCard label="Total de Registros" value={MOCK_CONNECTOR_LOGS.length} icon={ClipboardList} color="blue" />
+              <LogStatCard label="Sucesso" value={logStatSuccess} icon={CheckCircle} color="emerald" />
+              <LogStatCard label="Erros" value={logStatErrors} icon={XCircle} color="orange" />
+              <LogStatCard label="Conectores Únicos" value={connectorNames.length} icon={Link2} color="violet" />
+            </div>
+
+            <div className="bg-white dark:bg-slate-900 border border-[#e8edf5] dark:border-slate-700 rounded-xl shadow-sm overflow-hidden">
+              {/* Row 1 — search + icon toolbar buttons */}
+              <div className="flex items-center gap-2 flex-wrap px-[18px] py-3">
+                <div className="relative flex-1 min-w-[220px] max-w-sm">
+                  <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                  <Input
+                    className="pl-8 h-9 text-sm"
+                    placeholder="Conector, usuário ou resultado..."
+                    value={logSearchInput}
+                    onChange={(e) => { setLogSearchInput(e.target.value); setLogPage(1); }}
+                  />
+                </div>
+                <div className="ml-auto flex items-center gap-2">
+                  <IconToolbarButton icon={Filter} tooltip="Filtros" onClick={() => setLogFilterPanelOpen(true)} />
                 </div>
               </div>
-              <div className="divide-y divide-slate-100 dark:divide-slate-800">
-                {filteredLogs.length === 0 && (
-                  <p className="px-4 py-6 text-xs text-slate-400 text-center">Nenhum registro encontrado.</p>
+
+              {/* Row 2 — items-per-page + count + scrollbar mirror + pagination */}
+              <div className="flex flex-wrap items-center justify-between gap-3 px-[18px] py-2 border-y border-[#e8edf5] dark:border-slate-800 bg-white dark:bg-slate-900/30">
+                <div className="flex items-center gap-3">
+                  <ItemsPerPageSelect
+                    value={logPageSize.toString()}
+                    onValueChange={(value) => { setLogPageSize(Number(value)); setLogPage(1); }}
+                    variant="top"
+                  />
+                  <TooltipProvider delayDuration={400}>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <span className="text-xs text-slate-500 dark:text-slate-400 whitespace-nowrap cursor-default">
+                          {logTotal === 0 ? 0 : Math.min((logPage - 1) * logPageSize + 1, logTotal)}-{Math.min(logPage * logPageSize, logTotal)} de{" "}
+                          <span className="font-semibold text-slate-600 dark:text-slate-300">{logTotal}</span>{" "}
+                          registro{logTotal !== 1 ? "s" : ""}
+                        </span>
+                      </TooltipTrigger>
+                      <TooltipContent side="bottom" sideOffset={6}>Intervalo de registros exibido nesta página, do total encontrado</TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
+                </div>
+
+                {logHasHorizontalOverflow && (
+                  <div
+                    ref={logTopScrollRef}
+                    onScroll={handleLogTopBarScroll}
+                    title="Arraste para rolar a tabela na horizontal e ver as colunas que não couberem na tela"
+                    className="hidden md:block flex-1 min-w-[80px] overflow-x-scroll allka-table-scroll self-center"
+                    style={{ height: 12 }}
+                  >
+                    <div style={{ minWidth: 760, height: 1 }} />
+                  </div>
                 )}
-                {filteredLogs.map((log, i) => {
-                  const act = ACTION_LABELS[log.action];
-                  const isError = log.result.startsWith("erro");
-                  return (
-                    <div key={log.id} className={`px-4 py-2.5 flex items-center gap-3 text-xs ${i % 2 === 0 ? "bg-table-row" : "bg-table-row-alt"}`}>
-                      <span className="text-[10px] text-slate-400 shrink-0 tabular-nums w-24">{log.ts}</span>
-                      <span className="font-medium text-slate-700 dark:text-slate-200 w-36 shrink-0 truncate">{log.connector}</span>
-                      {act && (
-                        <Badge variant="outline" className={`text-[9px] font-semibold h-4 px-1.5 shrink-0 ${act.cls}`}>{act.label}</Badge>
-                      )}
-                      <span className="text-slate-400 flex-1 truncate hidden sm:block">{log.user}</span>
-                      <span className={`text-[10px] shrink-0 ${isError ? "text-red-500" : "text-emerald-600 dark:text-emerald-400"}`}>
-                        {isError ? log.result : "✓ sucesso"}
-                      </span>
+
+                {logTotalPages > 1 && (
+                  <div className="flex items-center gap-1 flex-shrink-0">
+                    <button
+                      onClick={() => setLogPage(p => Math.max(1, p - 1))}
+                      disabled={logPage === 1}
+                      title="Página anterior"
+                      className="h-7 w-7 flex items-center justify-center rounded-[8px] text-slate-500 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-30 disabled:pointer-events-none transition-colors"
+                    >
+                      <ChevronLeft className="h-3.5 w-3.5" />
+                    </button>
+                    {getLogPageNumbers().map((p, index) =>
+                      p === "..." ? (
+                        <span key={index} className="text-xs text-slate-300 px-0.5">·</span>
+                      ) : (
+                        <button
+                          key={index}
+                          onClick={() => setLogPage(Number(p))}
+                          title={p === logPage ? "Página atual" : `Ir para a página ${p}`}
+                          className={`h-7 w-7 flex items-center justify-center rounded-[8px] text-xs font-bold transition-colors ${
+                            p === logPage
+                              ? "text-white shadow-[0_6px_14px_rgba(110,44,150,0.25)]"
+                              : "text-slate-500 hover:text-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 dark:text-slate-400"
+                          }`}
+                          style={p === logPage ? { background: "linear-gradient(135deg, #111A4D 0%, #6E2C96 55%, #D92293 100%)" } : undefined}
+                        >
+                          {p}
+                        </button>
+                      ),
+                    )}
+                    <button
+                      onClick={() => setLogPage(p => Math.min(logTotalPages, p + 1))}
+                      disabled={logPage === logTotalPages}
+                      title="Próxima página"
+                      className="h-7 w-7 flex items-center justify-center rounded-[8px] text-slate-500 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-30 disabled:pointer-events-none transition-colors"
+                    >
+                      <ChevronRight className="h-3.5 w-3.5" />
+                    </button>
+                    <div className="flex items-center gap-1 flex-shrink-0 ml-1.5 pl-1.5 border-l border-slate-200 dark:border-slate-700">
+                      <input
+                        type="number"
+                        min={1}
+                        max={logTotalPages}
+                        value={logPageJumpValue}
+                        onChange={(e) => setLogPageJumpValue(e.target.value)}
+                        onKeyDown={(e) => { if (e.key === "Enter") commitLogPageJump(); }}
+                        placeholder="Pág."
+                        aria-label="Ir para a página"
+                        className="h-7 w-14 text-xs text-center rounded-[8px] border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                      />
+                      <button
+                        onClick={commitLogPageJump}
+                        disabled={!logPageJumpValue}
+                        className="group relative h-7 px-2.5 rounded-[8px] text-xs font-medium border border-slate-200 dark:border-slate-700 hover:border-transparent overflow-hidden disabled:opacity-40 disabled:pointer-events-none transition-all"
+                      >
+                        <span className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none" style={{ background: "linear-gradient(135deg,#000000 0%,#1a2a6f 45%,#c81a7f 100%)" }} />
+                        <span className="relative z-10 text-[#7d1b6a] dark:text-[#c07ab0] group-hover:text-white transition-colors">Ir</span>
+                      </button>
                     </div>
-                  );
-                })}
+                  </div>
+                )}
               </div>
-            </Card>
+
+              {/* Table */}
+              {pagedLogs.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-16 gap-2 text-muted-foreground">
+                  <ClipboardList className="h-8 w-8 opacity-40" />
+                  <span className="text-sm">Nenhum registro encontrado</span>
+                </div>
+              ) : (
+                <div ref={logTableScrollRef} onScroll={handleLogTableScroll} className="overflow-x-auto allka-table-scroll">
+                  <table className="w-full text-xs min-w-[760px]">
+                    <thead>
+                      <tr className="border-b border-slate-200/60 dark:border-slate-700/60">
+                        <th
+                          className="py-3.5 px-2 text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-[0.04em] text-center"
+                          style={{ position: "sticky", left: 0, top: 0, zIndex: 3, minWidth: 60, background: "var(--table-head)", boxShadow: "0 1px 0 rgba(148,163,184,0.22)", borderRight: "1px solid rgba(100,116,139,0.18)" }}
+                        >
+                          Ações
+                        </th>
+                        {[
+                          { key: "ts", label: "Data/Hora" },
+                          { key: "connector", label: "Conector" },
+                          { key: "action", label: "Ação" },
+                          { key: "user", label: "Usuário" },
+                          { key: "result", label: "Resultado" },
+                        ].map((col) => (
+                          <th
+                            key={col.key}
+                            className="py-3.5 px-4 text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-[0.04em] select-none text-left [&_button]:!text-[11px]"
+                            style={{ position: "sticky", top: 0, zIndex: 2, background: "var(--table-head)", boxShadow: "0 1px 0 rgba(148,163,184,0.22)", borderRight: "1px solid rgba(148,163,184,0.16)" }}
+                          >
+                            <SortableHeader
+                              label={col.label}
+                              field={col.key}
+                              type="text"
+                              sortKey={logSortKey}
+                              sortDir={logSortDir}
+                              onSort={handleLogSort}
+                            />
+                          </th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {pagedLogs.map((log, i) => {
+                        const act = ACTION_LABELS[log.action];
+                        const isError = log.result.startsWith("erro");
+                        return (
+                          <tr
+                            key={log.id}
+                            className={`group transition-colors ${
+                              i % 2 === 0
+                                ? "bg-[#F1F4F9] dark:bg-[oklch(0.14_0.026_258)] hover:bg-[#D9E1ED] dark:hover:bg-[oklch(0.21_0.024_258)]"
+                                : "bg-[#DCE3EE] dark:bg-[oklch(0.185_0.024_258)] hover:bg-[#C7D2E3] dark:hover:bg-[oklch(0.21_0.024_258)]"
+                            }`}
+                          >
+                            <td
+                              className={`px-1 py-2 transition-colors ${
+                                i % 2 === 0
+                                  ? "bg-[#ECEFF4] group-hover:bg-[#D9E1ED] dark:bg-[oklch(0.14_0.026_258)] dark:group-hover:bg-[oklch(0.21_0.024_258)]"
+                                  : "bg-[#D6DCE8] group-hover:bg-[#C7D2E3] dark:bg-[oklch(0.185_0.024_258)] dark:group-hover:bg-[oklch(0.21_0.024_258)]"
+                              }`}
+                              style={{ position: "sticky", left: 0, zIndex: 1, minWidth: 60, borderRight: "1px solid rgba(100,116,139,0.18)" }}
+                            >
+                              <div className="flex items-center justify-center">
+                                <TooltipProvider delayDuration={400}>
+                                  <Tooltip>
+                                    <TooltipTrigger asChild>
+                                      <button
+                                        onClick={() => setLogDetailTarget(log)}
+                                        className="h-[26px] w-[26px] flex items-center justify-center rounded-[8px] bg-white dark:bg-slate-800 border border-[#e8edf5] dark:border-slate-700 text-[#2558FF] dark:text-slate-500 shadow-[0_4px_10px_rgba(15,23,42,0.06)] hover:bg-gradient-to-br hover:from-[#2558FF] hover:via-[#6E2C96] hover:to-[#D92293] hover:text-white dark:hover:text-[#0a1628] hover:border-transparent hover:shadow-[0_8px_18px_rgba(15,23,42,0.18)] hover:-translate-y-px transition-all duration-150"
+                                      >
+                                        <Eye className="h-3.5 w-3.5" />
+                                      </button>
+                                    </TooltipTrigger>
+                                    <TooltipContent className="text-xs font-medium">Ver detalhes</TooltipContent>
+                                  </Tooltip>
+                                </TooltipProvider>
+                              </div>
+                            </td>
+                            <td className="py-3 px-4 text-[11px] text-slate-400 tabular-nums whitespace-nowrap" style={{ borderRight: "1px solid rgba(148,163,184,0.15)" }}>
+                              {log.ts}
+                            </td>
+                            <td className="py-3 px-4 font-medium text-slate-700 dark:text-slate-200" style={{ borderRight: "1px solid rgba(148,163,184,0.15)" }}>
+                              {log.connector}
+                            </td>
+                            <td className="py-3 px-4" style={{ borderRight: "1px solid rgba(148,163,184,0.15)" }}>
+                              {act && <NeonBadge color={act.color}>{act.label}</NeonBadge>}
+                            </td>
+                            <td className="py-3 px-4 text-slate-500 dark:text-slate-400" style={{ borderRight: "1px solid rgba(148,163,184,0.15)" }}>
+                              {log.user}
+                            </td>
+                            <td className="py-3 px-4">
+                              <NeonBadge color={isError ? "red" : "emerald"}>{isError ? log.result : "✓ sucesso"}</NeonBadge>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+
+              {/* Row 3 — bottom mirror of row 2 */}
+              {pagedLogs.length > 0 && (
+                <div className="flex flex-wrap items-center justify-between gap-3 px-[18px] py-2 border-t border-[#e8edf5] dark:border-slate-800 bg-white dark:bg-slate-900/20">
+                  <div className="flex items-center gap-3">
+                    <ItemsPerPageSelect
+                      value={logPageSize.toString()}
+                      onValueChange={(value) => { setLogPageSize(Number(value)); setLogPage(1); }}
+                      variant="bottom"
+                    />
+                    <span className="text-xs text-slate-500 dark:text-slate-400 whitespace-nowrap">
+                      {logTotal === 0 ? 0 : Math.min((logPage - 1) * logPageSize + 1, logTotal)}-{Math.min(logPage * logPageSize, logTotal)} de{" "}
+                      <span className="font-semibold text-slate-600 dark:text-slate-300">{logTotal}</span>{" "}
+                      registro{logTotal !== 1 ? "s" : ""}
+                    </span>
+                  </div>
+
+                  {logHasHorizontalOverflow && (
+                    <div
+                      ref={logBottomScrollRef}
+                      onScroll={handleLogBottomBarScroll}
+                      title="Arraste para rolar a tabela na horizontal e ver as colunas que não couberem na tela"
+                      className="hidden md:block flex-1 min-w-[80px] overflow-x-scroll allka-table-scroll self-center"
+                      style={{ height: 12 }}
+                    >
+                      <div style={{ minWidth: 760, height: 1 }} />
+                    </div>
+                  )}
+
+                  {logTotalPages > 1 && (
+                    <div className="flex items-center gap-1 flex-shrink-0">
+                      <button
+                        onClick={() => setLogPage(p => Math.max(1, p - 1))}
+                        disabled={logPage === 1}
+                        title="Página anterior"
+                        className="h-7 w-7 flex items-center justify-center rounded-[8px] text-slate-500 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-30 disabled:pointer-events-none transition-colors"
+                      >
+                        <ChevronLeft className="h-3.5 w-3.5" />
+                      </button>
+                      {getLogPageNumbers().map((p, index) =>
+                        p === "..." ? (
+                          <span key={index} className="text-xs text-slate-300 px-0.5">·</span>
+                        ) : (
+                          <button
+                            key={index}
+                            onClick={() => setLogPage(Number(p))}
+                            title={p === logPage ? "Página atual" : `Ir para a página ${p}`}
+                            className={`h-7 w-7 flex items-center justify-center rounded-[8px] text-xs font-bold transition-colors ${
+                              p === logPage
+                                ? "text-white shadow-[0_6px_14px_rgba(110,44,150,0.25)]"
+                                : "text-slate-500 hover:text-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 dark:text-slate-400"
+                            }`}
+                            style={p === logPage ? { background: "linear-gradient(135deg, #111A4D 0%, #6E2C96 55%, #D92293 100%)" } : undefined}
+                          >
+                            {p}
+                          </button>
+                        ),
+                      )}
+                      <button
+                        onClick={() => setLogPage(p => Math.min(logTotalPages, p + 1))}
+                        disabled={logPage === logTotalPages}
+                        title="Próxima página"
+                        className="h-7 w-7 flex items-center justify-center rounded-[8px] text-slate-500 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-30 disabled:pointer-events-none transition-colors"
+                      >
+                        <ChevronRight className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
             <p className="text-[10px] text-slate-400 italic mt-1.5">
               * Registro mock. Em produção, logs são persistidos no banco — obrigatório para conformidade LGPD (Art. 37).
             </p>
           </div>
+
+          {/* Filtros panel — connector + action checkboxes */}
+          <SlidePanel
+            open={logFilterPanelOpen}
+            onClose={() => setLogFilterPanelOpen(false)}
+            title="Filtros"
+            subtitle="Filtre o registro de atividade por conector e ação"
+            widthMode="compact"
+            compactWidth={360}
+          >
+            <div className="p-5 flex-1 overflow-y-auto space-y-5">
+              <div className="space-y-2">
+                <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Conector</p>
+                {connectorNames.map((name) => (
+                  <label key={name} className="flex items-center gap-2 text-sm cursor-pointer py-0.5">
+                    <input type="checkbox" checked={logConnectorFilter.has(name)} onChange={() => toggleLogConnectorFilter(name)} />
+                    {name}
+                  </label>
+                ))}
+              </div>
+              <div className="space-y-2">
+                <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Ação</p>
+                {actionKeys.map((key) => (
+                  <label key={key} className="flex items-center gap-2 text-sm cursor-pointer py-0.5">
+                    <input type="checkbox" checked={logActionFilter.has(key)} onChange={() => toggleLogActionFilter(key)} />
+                    <NeonBadge color={ACTION_LABELS[key]?.color ?? "slate"}>{ACTION_LABELS[key]?.label ?? key}</NeonBadge>
+                  </label>
+                ))}
+              </div>
+            </div>
+          </SlidePanel>
+
+          {/* Detalhes do registro panel */}
+          <SlidePanel
+            open={!!logDetailTarget}
+            onClose={() => setLogDetailTarget(null)}
+            title="Detalhes do registro"
+            subtitle={logDetailTarget?.ts}
+            widthMode="compact"
+            compactWidth={380}
+          >
+            {logDetailTarget && (
+              <div className="p-5 flex-1 overflow-y-auto space-y-4">
+                <div className="rounded-xl border border-slate-200 dark:border-slate-700 p-3.5">
+                  <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide mb-1.5">Conector</p>
+                  <p className="text-sm font-medium text-slate-700 dark:text-slate-200">{logDetailTarget.connector}</p>
+                </div>
+                <div className="rounded-xl border border-slate-200 dark:border-slate-700 p-3.5">
+                  <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide mb-1.5">Ação</p>
+                  {ACTION_LABELS[logDetailTarget.action] && (
+                    <NeonBadge color={ACTION_LABELS[logDetailTarget.action].color}>{ACTION_LABELS[logDetailTarget.action].label}</NeonBadge>
+                  )}
+                </div>
+                <div className="rounded-xl border border-slate-200 dark:border-slate-700 p-3.5">
+                  <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide mb-1.5">Usuário</p>
+                  <p className="text-sm text-slate-700 dark:text-slate-200">{logDetailTarget.user}</p>
+                </div>
+                <div className="rounded-xl border border-slate-200 dark:border-slate-700 p-3.5">
+                  <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide mb-1.5">Resultado</p>
+                  <NeonBadge color={logDetailTarget.result.startsWith("erro") ? "red" : "emerald"}>
+                    {logDetailTarget.result.startsWith("erro") ? logDetailTarget.result : "✓ sucesso"}
+                  </NeonBadge>
+                </div>
+              </div>
+            )}
+          </SlidePanel>
 
           <div>
             <h3 className="text-sm font-semibold text-slate-700 dark:text-slate-200 mb-3 flex items-center gap-2">

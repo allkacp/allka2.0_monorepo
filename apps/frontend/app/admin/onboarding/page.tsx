@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
+import { NeonBadge } from "@/components/neon-badge";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -36,6 +37,7 @@ const ACCOUNT_TYPE_COLORS = {
   agency:  "bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/30 dark:text-amber-400",
   nomad:   "bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/30 dark:text-emerald-400",
 };
+const ACCOUNT_TYPE_BADGE_COLOR = { admin: "violet", company: "blue", agency: "amber", nomad: "emerald" };
 const ACCOUNT_TYPE_PILL_ACTIVE = {
   admin:   "bg-violet-100 text-violet-700 border-violet-300 dark:bg-violet-950/60 dark:text-violet-300 dark:border-violet-700",
   company: "bg-blue-100 text-blue-700 border-blue-300 dark:bg-blue-950/60 dark:text-blue-300 dark:border-blue-700",
@@ -57,6 +59,27 @@ const CONTENT_COLORS = {
   text:  "bg-slate-100 text-slate-600 border-slate-200 dark:bg-slate-800/50 dark:text-slate-400",
   quiz:  "bg-purple-50 text-purple-600 border-purple-200 dark:bg-purple-950/30 dark:text-purple-400",
 };
+const CONTENT_BADGE_COLOR = { slide: "blue", video: "rose", text: "slate", quiz: "purple" };
+
+// ─── shared icon-button recipe (docs/padrao-tabela-empresas.md) ────────────
+// Square, only-icon action button: thin border at rest, brand-gradient fill
+// + white icon + slight lift on hover.
+const ICON_BTN =
+  "flex items-center justify-center rounded-[8px] bg-white dark:bg-slate-800 border border-[#e8edf5] dark:border-slate-700 shadow-[0_4px_10px_rgba(15,23,42,0.06)] hover:bg-gradient-to-br hover:from-[#2558FF] hover:via-[#6E2C96] hover:to-[#D92293] hover:text-white dark:hover:text-[#0a1628] hover:border-transparent hover:shadow-[0_8px_18px_rgba(15,23,42,0.18)] hover:-translate-y-px transition-all duration-150";
+
+function IconActionButton({ icon: Icon, tooltip, onClick, tone = "text-slate-400", size = 26, iconSize = "h-3.5 w-3.5", disabled = false }) {
+  return (
+    <button
+      onClick={onClick}
+      title={tooltip}
+      disabled={disabled}
+      style={{ height: size, width: size }}
+      className={`${ICON_BTN} ${tone} dark:text-slate-500 disabled:opacity-30 disabled:pointer-events-none disabled:hover:translate-y-0`}
+    >
+      <Icon className={iconSize} />
+    </button>
+  );
+}
 
 const OPTION_LETTERS = ["A", "B", "C", "D"];
 
@@ -190,11 +213,7 @@ function CircuitAnalyticsSheet({ open, circuit, analytics, onClose }) {
 
   // "dropped" = pct < 30; "completed" = pct >= 100; otherwise "in-progress"
   const STATUS_LABEL  = { completed: "Completo", "in-progress": "Em andamento", dropped: "Desistiu" };
-  const STATUS_COLOR  = {
-    completed:    "bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/20 dark:text-emerald-400 dark:border-emerald-800",
-    "in-progress":"bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-950/20 dark:text-blue-400 dark:border-blue-800",
-    dropped:      "bg-red-50 text-red-600 border-red-200 dark:bg-red-950/20 dark:text-red-400 dark:border-red-800",
-  };
+  const STATUS_BADGE_COLOR = { completed: "emerald", "in-progress": "blue", dropped: "red" };
 
   if (!circuit || !analytics) return null;
 
@@ -335,9 +354,9 @@ function CircuitAnalyticsSheet({ open, circuit, analytics, onClose }) {
                     </div>
                     {/* Status badge */}
                     <div className="flex justify-end">
-                      <Badge variant="outline" className={`text-[8px] font-semibold h-4 px-1.5 ${STATUS_COLOR[u.status]}`}>
+                      <NeonBadge color={STATUS_BADGE_COLOR[u.status] ?? "slate"} className="text-[8px] h-4 px-1.5 py-0">
                         {STATUS_LABEL[u.status]}
-                      </Badge>
+                      </NeonBadge>
                     </div>
                   </div>
                 );
@@ -503,10 +522,9 @@ function QuizBuilder({ open, onClose, onSave }) {
                   <div className="flex items-start gap-2.5 px-3 py-2.5 bg-slate-50 dark:bg-slate-800/40">
                     <span className="w-5 h-5 rounded-full bg-purple-100 dark:bg-purple-950/50 text-purple-700 dark:text-purple-400 text-[10px] font-bold flex items-center justify-center shrink-0 mt-0.5">{qi + 1}</span>
                     <p className="text-xs font-medium text-slate-700 dark:text-slate-200 flex-1 leading-snug">{q.text}</p>
-                    <button onClick={() => removeQuestion(q.id)}
-                      className="h-5 w-5 rounded flex items-center justify-center text-slate-400 hover:bg-red-50 dark:hover:bg-red-950/30 hover:text-red-500 transition-colors shrink-0">
-                      <X className="h-3 w-3" />
-                    </button>
+                    <div className="shrink-0">
+                      <IconActionButton icon={X} tooltip="Remover pergunta" onClick={() => removeQuestion(q.id)} tone="text-red-500" size={22} iconSize="h-3 w-3" />
+                    </div>
                   </div>
                   <div className="grid grid-cols-2 gap-1 p-2">
                     {q.options.map((opt, oi) => (
@@ -595,20 +613,20 @@ function CircuitCard({ circuit, analytics, onEdit, onPreview, onToggle, onDelete
           <div className="flex items-center gap-1.5 flex-wrap">
             <span className="text-sm font-semibold text-slate-800 dark:text-slate-100 leading-tight">{circuit.name}</span>
             {allTypes ? (
-              <Badge variant="outline" className="text-[9px] font-semibold h-4 px-1.5 bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-950/30 dark:text-blue-400">
+              <NeonBadge color="blue" className="text-[9px] h-4 px-1.5 py-0">
                 Todos os tipos
-              </Badge>
+              </NeonBadge>
             ) : (
               circuit.accountTypes.map(t => (
-                <Badge key={t} variant="outline" className={`text-[9px] font-semibold h-4 px-1.5 ${ACCOUNT_TYPE_COLORS[t]}`}>
+                <NeonBadge key={t} color={ACCOUNT_TYPE_BADGE_COLOR[t]} className="text-[9px] h-4 px-1.5 py-0">
                   {ACCOUNT_TYPE_LABELS[t]}
-                </Badge>
+                </NeonBadge>
               ))
             )}
             {circuit.isActive ? (
-              <Badge variant="outline" className="text-[9px] font-semibold h-4 px-1.5 bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/30 dark:text-emerald-400">Ativo</Badge>
+              <NeonBadge color="emerald" className="text-[9px] h-4 px-1.5 py-0">Ativo</NeonBadge>
             ) : (
-              <Badge variant="outline" className="text-[9px] font-semibold h-4 px-1.5 bg-slate-100 text-slate-400 border-slate-200 dark:bg-slate-800/50">Inativo</Badge>
+              <NeonBadge color="slate" className="text-[9px] h-4 px-1.5 py-0">Inativo</NeonBadge>
             )}
           </div>
           <p className="text-[11px] text-slate-400 mt-0.5 leading-tight truncate">{circuit.description}</p>
@@ -629,29 +647,17 @@ function CircuitCard({ circuit, analytics, onEdit, onPreview, onToggle, onDelete
           </div>
         </div>
 
-        <div className="flex items-center gap-0.5 shrink-0">
-          <button onClick={() => onAnalytics(circuit)} title="Analytics"
-            className="h-7 w-7 rounded-md flex items-center justify-center text-slate-400 hover:bg-blue-50 dark:hover:bg-blue-950/30 hover:text-blue-500 transition-colors">
-            <BarChart2 className="h-3.5 w-3.5" />
-          </button>
-          <button onClick={() => onPreview(circuit)} title="Preview"
-            className="h-7 w-7 rounded-md flex items-center justify-center text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors">
-            <Eye className="h-3.5 w-3.5" />
-          </button>
-          <button onClick={() => onEdit(circuit)} title="Editar"
-            className="h-7 w-7 rounded-md flex items-center justify-center text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors">
-            <Pencil className="h-3.5 w-3.5" />
-          </button>
-          <button onClick={() => onToggle(circuit.id)} title={circuit.isActive ? "Desativar" : "Ativar"}
-            className={`h-7 w-7 rounded-md flex items-center justify-center transition-colors ${circuit.isActive
-              ? "text-emerald-500 hover:bg-emerald-50 dark:hover:bg-emerald-950/30"
-              : "text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700"}`}>
-            {circuit.isActive ? <ToggleRight className="h-3.5 w-3.5" /> : <ToggleLeft className="h-3.5 w-3.5" />}
-          </button>
-          <button onClick={() => onDelete(circuit.id)} title="Excluir"
-            className="h-7 w-7 rounded-md flex items-center justify-center text-slate-400 hover:bg-red-50 dark:hover:bg-red-950/30 hover:text-red-500 transition-colors">
-            <Trash2 className="h-3.5 w-3.5" />
-          </button>
+        <div className="flex items-center gap-1 shrink-0">
+          <IconActionButton icon={BarChart2} tooltip="Analytics" onClick={() => onAnalytics(circuit)} tone="text-blue-500" />
+          <IconActionButton icon={Eye} tooltip="Preview" onClick={() => onPreview(circuit)} tone="text-[#6E2C96]" />
+          <IconActionButton icon={Pencil} tooltip="Editar" onClick={() => onEdit(circuit)} tone="text-[#6E2C96]" />
+          <IconActionButton
+            icon={circuit.isActive ? ToggleRight : ToggleLeft}
+            tooltip={circuit.isActive ? "Desativar" : "Ativar"}
+            onClick={() => onToggle(circuit.id)}
+            tone={circuit.isActive ? "text-emerald-500" : "text-slate-300"}
+          />
+          <IconActionButton icon={Trash2} tooltip="Excluir" onClick={() => onDelete(circuit.id)} tone="text-red-500" />
         </div>
       </div>
 
@@ -759,9 +765,9 @@ function CircuitCard({ circuit, analytics, onEdit, onPreview, onToggle, onDelete
                 ${idx % 2 === 0 ? "bg-slate-50 dark:bg-slate-800/30" : "bg-white dark:bg-slate-800/10"}
                 hover:bg-slate-100 dark:hover:bg-slate-700/30`}>
               <GripVertical className="h-3 w-3 text-slate-300 cursor-move shrink-0" />
-              <Badge variant="outline" className={`text-[9px] font-semibold h-4 px-1.5 shrink-0 ${CONTENT_COLORS[el.type] ?? CONTENT_COLORS.text}`}>
+              <NeonBadge color={CONTENT_BADGE_COLOR[el.type] ?? "slate"} className="text-[9px] h-4 px-1.5 py-0 shrink-0">
                 {CONTENT_LABELS[el.type] ?? el.type}
-              </Badge>
+              </NeonBadge>
               <div className="flex-1 min-w-0 flex items-center gap-2">
                 <span className="font-medium text-slate-700 dark:text-slate-200 truncate">{el.title}</span>
                 {el.type === "video" && el.duration && (
@@ -775,19 +781,10 @@ function CircuitCard({ circuit, analytics, onEdit, onPreview, onToggle, onDelete
                   </span>
                 )}
               </div>
-              <div className="flex items-center gap-0.5 shrink-0">
-                <button disabled={idx === 0} onClick={() => onMoveElement(circuit.id, el.id, "up")}
-                  className="h-5 w-5 rounded flex items-center justify-center text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700 disabled:opacity-20 transition-colors">
-                  <ArrowUp className="h-2.5 w-2.5" />
-                </button>
-                <button disabled={idx === arr.length - 1} onClick={() => onMoveElement(circuit.id, el.id, "down")}
-                  className="h-5 w-5 rounded flex items-center justify-center text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700 disabled:opacity-20 transition-colors">
-                  <ArrowDown className="h-2.5 w-2.5" />
-                </button>
-                <button onClick={() => onRemoveElement(circuit.id, el.id)}
-                  className="h-5 w-5 rounded flex items-center justify-center text-slate-400 hover:bg-red-50 dark:hover:bg-red-950/30 hover:text-red-500 transition-colors">
-                  <Trash2 className="h-2.5 w-2.5" />
-                </button>
+              <div className="flex items-center gap-1 shrink-0">
+                <IconActionButton icon={ArrowUp} tooltip="Mover para cima" onClick={() => onMoveElement(circuit.id, el.id, "up")} disabled={idx === 0} size={22} iconSize="h-2.5 w-2.5" />
+                <IconActionButton icon={ArrowDown} tooltip="Mover para baixo" onClick={() => onMoveElement(circuit.id, el.id, "down")} disabled={idx === arr.length - 1} size={22} iconSize="h-2.5 w-2.5" />
+                <IconActionButton icon={Trash2} tooltip="Remover" onClick={() => onRemoveElement(circuit.id, el.id)} tone="text-red-500" size={22} iconSize="h-2.5 w-2.5" />
               </div>
             </div>
           ))
@@ -1013,16 +1010,18 @@ export default function AdminOnboardingPage() {
       {/* KPI Cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         {[
-          { label: "Total Circuitos",     value: totalCircuits,       icon: Rocket,       color: "text-blue-500",    bg: "bg-blue-50 dark:bg-blue-950/30" },
-          { label: "Ativos",              value: activeCircuits,      icon: CheckCircle2, color: "text-emerald-500", bg: "bg-emerald-50 dark:bg-emerald-950/30" },
-          { label: "Taxa de Conclusao",   value: `${avgCompletion}%`, icon: Play,         color: "text-violet-500",  bg: "bg-violet-50 dark:bg-violet-950/30" },
-          { label: "Usuarios Impactados", value: totalUsers,          icon: Users,        color: "text-amber-500",   bg: "bg-amber-50 dark:bg-amber-950/30" },
-        ].map(({ label, value, icon: Icon, color, bg }) => (
-          <div key={label} className="bg-white dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-3 flex items-center gap-2.5">
-            <div className={`p-1.5 rounded-lg ${bg} shrink-0`}><Icon className={`h-3.5 w-3.5 ${color}`} /></div>
-            <div>
-              <p className="text-[10px] text-slate-400 uppercase tracking-wide font-medium leading-none mb-0.5">{label}</p>
-              <p className="text-sm font-bold text-slate-800 dark:text-slate-100 tabular-nums">{value}</p>
+          { label: "Total Circuitos",     value: totalCircuits,       icon: Rocket,       grad: "from-blue-500 to-blue-700 dark:from-blue-800 dark:to-blue-950 border-blue-300/70 dark:border-blue-800/70" },
+          { label: "Ativos",              value: activeCircuits,      icon: CheckCircle2, grad: "from-emerald-500 to-teal-600 dark:from-emerald-800 dark:to-teal-900 border-emerald-300/70 dark:border-emerald-800/70" },
+          { label: "Taxa de Conclusao",   value: `${avgCompletion}%`, icon: Play,         grad: "from-violet-500 to-purple-700 dark:from-violet-800 dark:to-purple-950 border-violet-300/70 dark:border-violet-800/70" },
+          { label: "Usuarios Impactados", value: totalUsers,          icon: Users,        grad: "from-amber-500 to-orange-600 dark:from-amber-800 dark:to-orange-950 border-amber-300/70 dark:border-amber-800/70" },
+        ].map(({ label, value, icon: Icon, grad }) => (
+          <div key={label} className={`relative rounded-xl overflow-hidden bg-gradient-to-br ${grad} border-2 shadow-lg`}>
+            <div className="px-4 py-3">
+              <div className="flex items-center justify-between mb-1">
+                <span className="text-[10px] font-semibold text-white/80 uppercase tracking-wide">{label}</span>
+                <div className="bg-white/20 rounded-md p-1"><Icon className="h-3 w-3 text-white" /></div>
+              </div>
+              <div className="text-xl font-bold text-white">{value}</div>
             </div>
           </div>
         ))}
@@ -1222,9 +1221,9 @@ export default function AdminOnboardingPage() {
                           border-slate-100 dark:border-slate-700/50`}>
                         <GripVertical className="h-3 w-3 text-slate-300 cursor-move shrink-0" />
                         <span className="h-5 w-5 rounded-full bg-slate-200 dark:bg-slate-700 text-slate-500 dark:text-slate-400 text-[9px] font-bold flex items-center justify-center shrink-0">{idx + 1}</span>
-                        <Badge variant="outline" className={`text-[9px] font-semibold h-4 px-1.5 shrink-0 ${CONTENT_COLORS[el.type] ?? CONTENT_COLORS.text}`}>
+                        <NeonBadge color={CONTENT_BADGE_COLOR[el.type] ?? "slate"} className="text-[9px] h-4 px-1.5 py-0 shrink-0">
                           {CONTENT_LABELS[el.type] ?? el.type}
-                        </Badge>
+                        </NeonBadge>
                         <div className="flex-1 min-w-0 flex items-center gap-2">
                           <span className="font-medium text-slate-700 dark:text-slate-200 truncate">{el.title}</span>
                           {el.type === "video" && el.duration && (
@@ -1238,19 +1237,10 @@ export default function AdminOnboardingPage() {
                             </span>
                           )}
                         </div>
-                        <div className="flex items-center gap-0.5 shrink-0">
-                          <button disabled={idx === 0} onClick={() => formMoveElement(el.id, "up")}
-                            className="h-5 w-5 rounded flex items-center justify-center text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700 disabled:opacity-20 transition-colors">
-                            <ArrowUp className="h-2.5 w-2.5" />
-                          </button>
-                          <button disabled={idx === arr.length - 1} onClick={() => formMoveElement(el.id, "down")}
-                            className="h-5 w-5 rounded flex items-center justify-center text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700 disabled:opacity-20 transition-colors">
-                            <ArrowDown className="h-2.5 w-2.5" />
-                          </button>
-                          <button onClick={() => formRemoveElement(el.id)}
-                            className="h-5 w-5 rounded flex items-center justify-center text-slate-400 hover:bg-red-50 dark:hover:bg-red-950/30 hover:text-red-500 transition-colors">
-                            <Trash2 className="h-2.5 w-2.5" />
-                          </button>
+                        <div className="flex items-center gap-1 shrink-0">
+                          <IconActionButton icon={ArrowUp} tooltip="Mover para cima" onClick={() => formMoveElement(el.id, "up")} disabled={idx === 0} size={22} iconSize="h-2.5 w-2.5" />
+                          <IconActionButton icon={ArrowDown} tooltip="Mover para baixo" onClick={() => formMoveElement(el.id, "down")} disabled={idx === arr.length - 1} size={22} iconSize="h-2.5 w-2.5" />
+                          <IconActionButton icon={Trash2} tooltip="Remover" onClick={() => formRemoveElement(el.id)} tone="text-red-500" size={22} iconSize="h-2.5 w-2.5" />
                         </div>
                       </div>
                     ))}
@@ -1440,9 +1430,9 @@ export default function AdminOnboardingPage() {
                                 <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wide">
                                   Etapa {i + 1}
                                 </span>
-                                <Badge variant="outline" className={`text-[9px] font-semibold h-4 px-1.5 ${CONTENT_COLORS[el.type] ?? CONTENT_COLORS.text}`}>
+                                <NeonBadge color={CONTENT_BADGE_COLOR[el.type] ?? "slate"} className="text-[9px] h-4 px-1.5 py-0">
                                   {CONTENT_LABELS[el.type] ?? el.type}
-                                </Badge>
+                                </NeonBadge>
                               </div>
                               <p className="text-sm font-semibold text-slate-800 dark:text-slate-100 leading-snug">{el.title}</p>
                             </div>
@@ -1533,13 +1523,13 @@ export default function AdminOnboardingPage() {
               {/* Footer */}
               <div className="shrink-0 px-7 py-4 bg-white dark:bg-slate-800 border-t border-slate-200 dark:border-slate-700 flex items-center justify-between">
                 <div className="flex items-center gap-2">
-                  <Badge variant="outline" className="text-[10px] font-semibold h-5 px-2">
+                  <NeonBadge color="slate" className="text-[10px] h-5 px-2 py-0">
                     {sorted.length} etapa{sorted.length !== 1 ? "s" : ""}
-                  </Badge>
+                  </NeonBadge>
                   {sorted.filter(e => e.type === "quiz").length > 0 && (
-                    <Badge variant="outline" className="text-[10px] font-semibold h-5 px-2 bg-purple-50 text-purple-700 border-purple-200 dark:bg-purple-950/30 dark:text-purple-400">
+                    <NeonBadge color="purple" className="text-[10px] h-5 px-2 py-0">
                       {sorted.filter(e => e.type === "quiz").length} teste{sorted.filter(e => e.type === "quiz").length > 1 ? "s" : ""}
-                    </Badge>
+                    </NeonBadge>
                   )}
                 </div>
                 <Button variant="outline" className="h-9 px-5 text-sm" onClick={() => setPreviewCircuit(null)}>

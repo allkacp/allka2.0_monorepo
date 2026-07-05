@@ -40,6 +40,7 @@ model User {
   course_enrollments  CourseEnrollment[]
   lider_areas         LiderArea[]
   tasks_como_lider    ProjectTask[]      @relation("TaskLiderResponsavel")
+  linked_coupons      Coupon[]
 
   @@map("users")
 }
@@ -108,6 +109,7 @@ model Company {
   users           User[]
   payment_methods CompanyPaymentMethod[]
   squad_config    SquadConfig?
+  coupon_usages   CouponUsage[]
 
   @@map("companies")
 }
@@ -1079,6 +1081,56 @@ model Campaign {
   commissions PartnerCommission[]
 
   @@map("campaigns")
+}
+
+model Coupon {
+  id                       String    @id @default(cuid())
+  code                     String    @unique
+  coupon_type              String    @default("discount")
+  // discount | credit-bonus | referral
+  discount_type            String    @default("percentage")
+  // percentage | fixed
+  discount_value           Float     @default(0)
+  credit_bonus             Float     @default(0)
+  usage_limit              Int       @default(0)
+  // 0 = unlimited total uses
+  usage_limit_per_company  String    @default("unlimited")
+  // unlimited | once | custom
+  max_uses_per_company     Int       @default(0)
+  valid_from               DateTime?
+  valid_until              DateTime?
+  applicable_products      String?   @db.LongText
+  // JSON: string[]
+  allowed_account_types    String?   @db.LongText
+  // JSON: ("empresas" | "agencias" | "nomades")[]
+  allowed_company_ids      String?   @db.LongText
+  // JSON: string[]
+  allowed_user_ids         String?   @db.LongText
+  // JSON: string[]
+  linked_user_id           String?
+  linked_user              User?     @relation(fields: [linked_user_id], references: [id])
+  linked_user_commission_type  String?
+  // percentage | fixed
+  linked_user_commission_value Float?
+  status                   String    @default("active")
+  // active | disabled | expired
+  created_at               DateTime  @default(now())
+  updated_at                DateTime @updatedAt
+
+  usages CouponUsage[]
+
+  @@map("coupons")
+}
+
+model CouponUsage {
+  id         String   @id @default(cuid())
+  coupon_id  String
+  coupon     Coupon   @relation(fields: [coupon_id], references: [id], onDelete: Cascade)
+  company_id String?
+  company    Company? @relation(fields: [company_id], references: [id])
+  used_at    DateTime @default(now())
+
+  @@map("coupon_usages")
 }
 
 model PartnerCommission {

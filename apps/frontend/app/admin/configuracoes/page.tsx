@@ -8,7 +8,6 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
-import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Select,
@@ -18,6 +17,8 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useToast } from "@/components/ui/use-toast";
+import { NeonBadge } from "@/components/neon-badge";
+import { useSorting, SortableHeader } from "@/hooks/useSorting";
 import {
   Globe,
   Mail,
@@ -122,20 +123,62 @@ function ToggleRow({ label, description, checked, onCheckedChange }) {
 }
 
 function StatusPill({ connected }) {
-  return connected ? (
-    <Badge
-      variant="outline"
-      className="text-[9px] font-semibold h-4 px-1.5 bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/30 dark:text-emerald-400"
+  return (
+    <NeonBadge
+      color={connected ? "emerald" : "slate"}
+      className="text-[9px] h-4 px-1.5 py-0"
     >
-      Conectado
-    </Badge>
-  ) : (
-    <Badge
-      variant="outline"
-      className="text-[9px] font-semibold h-4 px-1.5 bg-slate-100 text-slate-400 border-slate-200 dark:bg-slate-800/50 dark:text-slate-500"
+      {connected ? "Conectado" : "Desconectado"}
+    </NeonBadge>
+  );
+}
+
+// ─── shared icon-button recipe (docs/padrao-tabela-empresas.md) ────────────
+// Square, only-icon action button: thin border at rest, brand-gradient fill
+// + white icon + slight lift on hover. Text color below sets the resting
+// icon tint per action (view/edit = brand blue/violet, destructive = red,
+// neutral test/disconnect = slate/amber).
+const ICON_BTN =
+  "h-[26px] w-[26px] flex items-center justify-center rounded-[8px] bg-white dark:bg-slate-800 border border-[#e8edf5] dark:border-slate-700 shadow-[0_4px_10px_rgba(15,23,42,0.06)] hover:bg-gradient-to-br hover:from-[#2558FF] hover:via-[#6E2C96] hover:to-[#D92293] hover:text-white dark:hover:text-[#0a1628] hover:border-transparent hover:shadow-[0_8px_18px_rgba(15,23,42,0.18)] hover:-translate-y-px transition-all duration-150";
+
+function IconActionButton({ icon: Icon, tooltip, onClick, tone = "text-slate-400" }) {
+  return (
+    <button onClick={onClick} title={tooltip} className={`${ICON_BTN} ${tone} dark:text-slate-500`}>
+      <Icon className="h-3.5 w-3.5" />
+    </button>
+  );
+}
+
+// ─── gradient stat cards (docs/padrao-tabela-empresas.md) ──────────────────
+const STAT_GRADIENTS = {
+  blue: "from-blue-500 to-blue-700 dark:from-blue-800 dark:to-blue-950 border-blue-300/70 dark:border-blue-800/70",
+  emerald:
+    "from-emerald-500 to-teal-600 dark:from-emerald-800 dark:to-teal-900 border-emerald-300/70 dark:border-emerald-800/70",
+  violet:
+    "from-violet-500 to-purple-700 dark:from-violet-800 dark:to-purple-950 border-violet-300/70 dark:border-violet-800/70",
+  orange:
+    "from-orange-500 to-rose-600 dark:from-orange-800 dark:to-rose-900 border-orange-300/70 dark:border-orange-800/70",
+  slate:
+    "from-slate-500 to-slate-700 dark:from-slate-800 dark:to-slate-950 border-slate-300/70 dark:border-slate-800/70",
+};
+
+function GradientStat({ label, value, icon: Icon, color }) {
+  return (
+    <div
+      className={`relative rounded-xl overflow-hidden bg-gradient-to-br ${STAT_GRADIENTS[color]} border-2 shadow-lg`}
     >
-      Desconectado
-    </Badge>
+      <div className="px-4 py-3">
+        <div className="flex items-center justify-between mb-1">
+          <span className="text-[10px] font-semibold text-white/80 uppercase tracking-wide">
+            {label}
+          </span>
+          <div className="bg-white/20 rounded-md p-1">
+            <Icon className="h-3 w-3 text-white" />
+          </div>
+        </div>
+        <div className="text-xl font-bold text-white">{value}</div>
+      </div>
+    </div>
   );
 }
 
@@ -362,6 +405,7 @@ export default function AdminConfiguracoesPage() {
     password: "",
   });
   const [showSmtpPass, setShowSmtpPass] = useState(false);
+  const { sortKey: boxSortKey, sortDir: boxSortDir, handleSort: handleBoxSort, sortData: sortBoxes } = useSorting();
   const [emailBoxes, setEmailBoxes] = useState(INITIAL_EMAIL_BOXES);
   const [editingBox, setEditingBox] = useState(null); // null | "new" | id
   const [boxForm, setBoxForm] = useState({
@@ -372,6 +416,7 @@ export default function AdminConfiguracoesPage() {
   });
 
   // ── WhatsApp ──
+  const { sortKey: waSortKey, sortDir: waSortDir, handleSort: handleWaSort, sortData: sortWa } = useSorting();
   const [waNumbers, setWaNumbers] = useState(INITIAL_WA_NUMBERS);
   const [waSearch, setWaSearch] = useState("");
   const [waFilter, setWaFilter] = useState("all");
@@ -388,6 +433,8 @@ export default function AdminConfiguracoesPage() {
   const [newUserForm, setNewUserForm] = useState({ name: "", email: "" });
 
   // ── Integrações ──
+  const { sortKey: socialSortKey, sortDir: socialSortDir, handleSort: handleSocialSort, sortData: sortSocials } = useSorting();
+  const { sortKey: whSortKey, sortDir: whSortDir, handleSort: handleWhSort, sortData: sortWh } = useSorting();
   const [socials, setSocials] = useState(INITIAL_SOCIALS);
   const [webhooks, setWebhooks] = useState(INITIAL_WEBHOOKS);
   const [whSearch, setWhSearch] = useState("");
@@ -725,6 +772,12 @@ export default function AdminConfiguracoesPage() {
 
         {/* ─── EMAILS ────────────────────────────────────────────────────────── */}
         <TabsContent value="emails" className="space-y-4">
+          {/* Stats — gradient cards (docs/padrao-tabela-empresas.md) */}
+          <div className="grid grid-cols-2 gap-3">
+            <GradientStat label="Caixas Ativas" value={emailBoxes.filter((b) => b.active).length} icon={CheckCircle2} color="emerald" />
+            <GradientStat label="Total de Caixas" value={emailBoxes.length} icon={Mail} color="blue" />
+          </div>
+
           {/* Caixas de e-mail */}
           <Card className="border border-slate-200/70 dark:border-slate-700/60 shadow-sm overflow-hidden">
             <div className="flex items-center gap-3 px-5 py-3 border-b border-slate-200/70 dark:border-slate-700/60 bg-slate-50/60 dark:bg-slate-900/30">
@@ -815,49 +868,52 @@ export default function AdminConfiguracoesPage() {
               </div>
             )}
 
-            <div className="divide-y divide-slate-100 dark:divide-slate-800">
-              {emailBoxes.map((b, i) => (
-                <div
-                  key={b.id}
-                  className={`flex items-center gap-3 px-5 py-3 text-xs ${i % 2 === 0 ? "bg-table-row" : "bg-table-row-alt"} hover:bg-table-row-hover transition-colors`}
-                >
-                  <div className="h-7 w-7 rounded-lg bg-blue-50 dark:bg-blue-950/30 flex items-center justify-center shrink-0">
-                    <Mail className="h-3.5 w-3.5 text-blue-500" />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <span className="font-semibold text-slate-700 dark:text-slate-200">
-                        {b.label}
-                      </span>
-                      <span className="text-slate-400">{b.email}</span>
-                    </div>
-                    {b.description && (
-                      <p className="text-[10px] text-slate-400 mt-0.5 truncate">
-                        {b.description}
-                      </p>
-                    )}
-                  </div>
-                  <Switch
-                    checked={b.active}
-                    onCheckedChange={() => toggleBox(b.id)}
-                    className="shrink-0"
-                  />
-                  <div className="flex items-center gap-0.5 shrink-0">
-                    <button
-                      onClick={() => openEditBox(b)}
-                      className="h-7 w-7 rounded flex items-center justify-center text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700 hover:text-blue-500 transition-colors"
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-slate-200/60 dark:border-slate-700/60">
+                    <th className="text-center py-3 px-4 text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wide">Ações</th>
+                    <th className="text-left py-3 px-4 text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wide">
+                      <SortableHeader label="Label" field="label" type="text" sortKey={boxSortKey ? String(boxSortKey) : null} sortDir={boxSortDir} onSort={handleBoxSort} />
+                    </th>
+                    <th className="text-left py-3 px-4 text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wide">
+                      <SortableHeader label="E-mail" field="email" type="text" sortKey={boxSortKey ? String(boxSortKey) : null} sortDir={boxSortDir} onSort={handleBoxSort} />
+                    </th>
+                    <th className="text-left py-3 px-4 text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wide">Descrição</th>
+                    <th className="text-center py-3 px-4 text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wide">Ativa</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {sortBoxes(emailBoxes).map((b, i) => (
+                    <tr
+                      key={b.id}
+                      className={i % 2 === 0
+                        ? "bg-[#F1F4F9] dark:bg-[oklch(0.14_0.026_258)] hover:bg-[#D9E1ED] dark:hover:bg-[oklch(0.21_0.024_258)]"
+                        : "bg-[#DCE3EE] dark:bg-[oklch(0.185_0.024_258)] hover:bg-[#C7D2E3] dark:hover:bg-[oklch(0.21_0.024_258)]"}
                     >
-                      <Pencil className="h-3 w-3" />
-                    </button>
-                    <button
-                      onClick={() => deleteBox(b.id)}
-                      className="h-7 w-7 rounded flex items-center justify-center text-slate-400 hover:bg-red-50 dark:hover:bg-red-950/30 hover:text-red-500 transition-colors"
-                    >
-                      <Trash2 className="h-3 w-3" />
-                    </button>
-                  </div>
-                </div>
-              ))}
+                      <td className="py-2 px-4">
+                        <div className="flex items-center justify-center gap-1">
+                          <IconActionButton icon={Pencil} tooltip="Editar" onClick={() => openEditBox(b)} tone="text-blue-500" />
+                          <IconActionButton icon={Trash2} tooltip="Excluir" onClick={() => deleteBox(b.id)} tone="text-red-400" />
+                        </div>
+                      </td>
+                      <td className="py-3 px-4">
+                        <span className="flex items-center gap-2 font-semibold text-slate-700 dark:text-slate-200">
+                          <span className="h-7 w-7 rounded-lg bg-blue-50 dark:bg-blue-950/30 flex items-center justify-center shrink-0">
+                            <Mail className="h-3.5 w-3.5 text-blue-500" />
+                          </span>
+                          {b.label}
+                        </span>
+                      </td>
+                      <td className="py-3 px-4 text-slate-500 dark:text-slate-400">{b.email}</td>
+                      <td className="py-3 px-4 text-xs text-slate-400 max-w-[280px] truncate">{b.description || "—"}</td>
+                      <td className="py-3 px-4 text-center">
+                        <Switch checked={b.active} onCheckedChange={() => toggleBox(b.id)} />
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
             <div className="px-5 py-2.5 border-t border-slate-100 dark:border-slate-800 bg-slate-50/40 dark:bg-slate-900/20">
               <p className="text-[10px] text-slate-400">
@@ -950,6 +1006,22 @@ export default function AdminConfiguracoesPage() {
 
         {/* ─── WHATSAPP ──────────────────────────────────────────────────────── */}
         <TabsContent value="whatsapp" className="space-y-4">
+          {/* Stats — gradient cards (docs/padrao-tabela-empresas.md) */}
+          <div className="grid grid-cols-2 gap-3">
+            <GradientStat
+              label="Conectados"
+              value={waNumbers.filter((n) => n.status === "connected").length}
+              icon={Phone}
+              color="emerald"
+            />
+            <GradientStat
+              label="Desconectados"
+              value={waNumbers.filter((n) => n.status === "disconnected").length}
+              icon={PhoneOff}
+              color="slate"
+            />
+          </div>
+
           {/* info banner */}
           <Card className="border border-green-200 dark:border-green-800 bg-green-50/50 dark:bg-green-950/20 p-4">
             <div className="flex items-start gap-3">
@@ -1114,101 +1186,86 @@ export default function AdminConfiguracoesPage() {
               </div>
             )}
 
-            <div className="divide-y divide-slate-100 dark:divide-slate-800">
-              {filteredWa.length === 0 && (
-                <p className="px-5 py-8 text-xs text-slate-400 text-center">
-                  Nenhum número encontrado.
-                </p>
-              )}
-              {filteredWa.map((n, i) => (
-                <div
-                  key={n.id}
-                  className={`flex items-center gap-3 px-5 py-3 text-xs ${i % 2 === 0 ? "bg-table-row" : "bg-table-row-alt"} hover:bg-table-row-hover transition-colors`}
-                >
-                  <div className="h-7 w-7 rounded-lg bg-green-50 dark:bg-green-950/30 flex items-center justify-center shrink-0">
-                    <MessageSquare className="h-3.5 w-3.5 text-green-600" />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <span className="font-semibold text-slate-700 dark:text-slate-200">
-                        {n.label}
-                      </span>
-                      <span className="text-slate-400 font-mono">
-                        {n.phone}
-                      </span>
-                      <Badge
-                        variant="outline"
-                        className="text-[9px] h-4 px-1.5 text-slate-400 border-slate-200 dark:border-slate-700"
+            {filteredWa.length === 0 ? (
+              <p className="px-5 py-8 text-xs text-slate-400 text-center">
+                Nenhum número encontrado.
+              </p>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b border-slate-200/60 dark:border-slate-700/60">
+                      <th className="text-center py-3 px-4 text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wide">Ações</th>
+                      <th className="text-left py-3 px-4 text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wide">
+                        <SortableHeader label="Label" field="label" type="text" sortKey={waSortKey ? String(waSortKey) : null} sortDir={waSortDir} onSort={handleWaSort} />
+                      </th>
+                      <th className="text-left py-3 px-4 text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wide">
+                        <SortableHeader label="Número" field="phone" type="text" sortKey={waSortKey ? String(waSortKey) : null} sortDir={waSortDir} onSort={handleWaSort} />
+                      </th>
+                      <th className="text-left py-3 px-4 text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wide">Tipo</th>
+                      <th className="text-left py-3 px-4 text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wide">Status</th>
+                      <th className="text-left py-3 px-4 text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wide">Última atividade</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {sortWa(filteredWa).map((n, i) => (
+                      <tr
+                        key={n.id}
+                        className={i % 2 === 0
+                          ? "bg-[#F1F4F9] dark:bg-[oklch(0.14_0.026_258)] hover:bg-[#D9E1ED] dark:hover:bg-[oklch(0.21_0.024_258)]"
+                          : "bg-[#DCE3EE] dark:bg-[oklch(0.185_0.024_258)] hover:bg-[#C7D2E3] dark:hover:bg-[oklch(0.21_0.024_258)]"}
                       >
-                        {n.type}
-                      </Badge>
-                      <StatusPill connected={n.status === "connected"} />
-                    </div>
-                    <p className="text-[10px] text-slate-400 mt-0.5">
-                      Última atividade: {n.lastActivity}
-                    </p>
-                  </div>
-                  <div className="flex items-center gap-0.5 shrink-0">
-                    <button
-                      onClick={() => testWa(n)}
-                      className="h-7 w-7 rounded flex items-center justify-center text-slate-400 hover:bg-blue-50 dark:hover:bg-blue-950/30 hover:text-blue-500 transition-colors"
-                      title="Testar"
-                    >
-                      <TestTube2 className="h-3 w-3" />
-                    </button>
-                    {n.status === "connected" && (
-                      <button
-                        onClick={() => disconnectWa(n.id)}
-                        className="h-7 w-7 rounded flex items-center justify-center text-slate-400 hover:bg-amber-50 dark:hover:bg-amber-950/30 hover:text-amber-600 transition-colors"
-                        title="Desconectar"
-                      >
-                        <PhoneOff className="h-3 w-3" />
-                      </button>
-                    )}
-                    <button
-                      onClick={() => deleteWa(n.id)}
-                      className="h-7 w-7 rounded flex items-center justify-center text-slate-400 hover:bg-red-50 dark:hover:bg-red-950/30 hover:text-red-500 transition-colors"
-                      title="Excluir"
-                    >
-                      <Trash2 className="h-3 w-3" />
-                    </button>
-                  </div>
-                </div>
-              ))}
-            </div>
-            <div className="px-5 py-2.5 border-t border-slate-100 dark:border-slate-800 bg-slate-50/40 dark:bg-slate-900/20 flex items-center gap-4">
-              <span className="flex items-center gap-1 text-[10px] text-slate-400">
-                <span
-                  style={{
-                    width: 8,
-                    height: 8,
-                    borderRadius: "50%",
-                    display: "inline-block",
-                    background: "#10b981",
-                  }}
-                />
-                {waNumbers.filter((n) => n.status === "connected").length}{" "}
-                Conectados
-              </span>
-              <span className="flex items-center gap-1 text-[10px] text-slate-400">
-                <span
-                  style={{
-                    width: 8,
-                    height: 8,
-                    borderRadius: "50%",
-                    display: "inline-block",
-                    background: "#94a3b8",
-                  }}
-                />
-                {waNumbers.filter((n) => n.status === "disconnected").length}{" "}
-                Desconectados
-              </span>
-            </div>
+                        <td className="py-2 px-4">
+                          <div className="flex items-center justify-center gap-1">
+                            <IconActionButton icon={TestTube2} tooltip="Testar" onClick={() => testWa(n)} tone="text-blue-500" />
+                            {n.status === "connected" && (
+                              <IconActionButton icon={PhoneOff} tooltip="Desconectar" onClick={() => disconnectWa(n.id)} tone="text-amber-500" />
+                            )}
+                            <IconActionButton icon={Trash2} tooltip="Excluir" onClick={() => deleteWa(n.id)} tone="text-red-400" />
+                          </div>
+                        </td>
+                        <td className="py-3 px-4">
+                          <span className="flex items-center gap-2 font-semibold text-slate-700 dark:text-slate-200">
+                            <span className="h-7 w-7 rounded-lg bg-green-50 dark:bg-green-950/30 flex items-center justify-center shrink-0">
+                              <MessageSquare className="h-3.5 w-3.5 text-green-600" />
+                            </span>
+                            {n.label}
+                          </span>
+                        </td>
+                        <td className="py-3 px-4 text-slate-500 dark:text-slate-400 font-mono">{n.phone}</td>
+                        <td className="py-3 px-4">
+                          <NeonBadge color="blue" className="text-[9px] h-4 px-1.5 py-0">{n.type}</NeonBadge>
+                        </td>
+                        <td className="py-3 px-4"><StatusPill connected={n.status === "connected"} /></td>
+                        <td className="py-3 px-4 text-xs text-slate-400">{n.lastActivity}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
           </Card>
         </TabsContent>
 
         {/* ─── EQUIPE ────────────────────────────────────────────────────────── */}
         <TabsContent value="equipe" className="space-y-4">
+          {/* Stats — gradient cards (docs/padrao-tabela-empresas.md) */}
+          <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
+            <GradientStat label="Áreas" value={adminAreas.length} icon={LayoutGrid} color="blue" />
+            <GradientStat
+              label="Usuários Atribuídos"
+              value={adminAreas.reduce((s, a) => s + a.users.length, 0)}
+              icon={Users}
+              color="emerald"
+            />
+            <GradientStat
+              label="Áreas Sem Responsável"
+              value={adminAreas.filter((a) => a.users.length === 0).length}
+              icon={AlertCircle}
+              color="orange"
+            />
+          </div>
+
           <p className="text-xs text-slate-400">
             Defina quais administradores são responsáveis por cada área da
             plataforma.
@@ -1340,52 +1397,63 @@ export default function AdminConfiguracoesPage() {
             title="Redes Sociais"
             description="Conecte as contas oficiais da ALLKA para publicação e analytics"
           >
-            <div className="space-y-2">
-              {socials.map((s) => {
-                const SIcon = s.icon;
-                return (
-                  <div
-                    key={s.id}
-                    className="flex items-center gap-3 p-3 rounded-xl border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800/40 transition-colors"
-                  >
-                    <div
-                      className="h-8 w-8 rounded-xl flex items-center justify-center shrink-0"
-                      style={{ background: s.color }}
-                    >
-                      <SIcon className="h-4 w-4 text-white" />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2">
-                        <span className="text-sm font-semibold text-slate-700 dark:text-slate-200">
-                          {s.name}
-                        </span>
-                        <StatusPill connected={s.connected} />
-                      </div>
-                      {s.connected && s.handle && (
-                        <p className="text-[10px] text-slate-400 mt-0.5">
-                          {s.handle}
-                        </p>
-                      )}
-                    </div>
-                    <Button
-                      size="sm"
-                      variant={s.connected ? "outline" : "default"}
-                      className="h-7 text-xs gap-1.5 shrink-0"
-                      onClick={() => toggleSocial(s.id)}
-                    >
-                      {s.connected ? (
-                        <>
-                          <Link2Off className="h-3 w-3" /> Desconectar
-                        </>
-                      ) : (
-                        <>
-                          <Link2 className="h-3 w-3" /> Conectar
-                        </>
-                      )}
-                    </Button>
-                  </div>
-                );
-              })}
+            <div className="rounded-xl border border-slate-200 dark:border-slate-700 overflow-hidden">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-slate-200/60 dark:border-slate-700/60">
+                    <th className="text-center py-3 px-4 text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wide">Ações</th>
+                    <th className="text-left py-3 px-4 text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wide">
+                      <SortableHeader label="Rede" field="name" type="text" sortKey={socialSortKey ? String(socialSortKey) : null} sortDir={socialSortDir} onSort={handleSocialSort} />
+                    </th>
+                    <th className="text-left py-3 px-4 text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wide">Conta</th>
+                    <th className="text-left py-3 px-4 text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wide">Status</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {sortSocials(socials).map((s, i) => {
+                    const SIcon = s.icon;
+                    return (
+                      <tr
+                        key={s.id}
+                        className={i % 2 === 0
+                          ? "bg-[#F1F4F9] dark:bg-[oklch(0.14_0.026_258)] hover:bg-[#D9E1ED] dark:hover:bg-[oklch(0.21_0.024_258)]"
+                          : "bg-[#DCE3EE] dark:bg-[oklch(0.185_0.024_258)] hover:bg-[#C7D2E3] dark:hover:bg-[oklch(0.21_0.024_258)]"}
+                      >
+                        <td className="py-2 px-4">
+                          <div className="flex items-center justify-center">
+                            <Button
+                              size="sm"
+                              variant={s.connected ? "outline" : "default"}
+                              className="h-7 text-xs gap-1.5"
+                              onClick={() => toggleSocial(s.id)}
+                            >
+                              {s.connected ? (
+                                <>
+                                  <Link2Off className="h-3 w-3" /> Desconectar
+                                </>
+                              ) : (
+                                <>
+                                  <Link2 className="h-3 w-3" /> Conectar
+                                </>
+                              )}
+                            </Button>
+                          </div>
+                        </td>
+                        <td className="py-3 px-4">
+                          <span className="flex items-center gap-2 font-semibold text-slate-700 dark:text-slate-200">
+                            <span className="h-7 w-7 rounded-lg flex items-center justify-center shrink-0" style={{ background: s.color }}>
+                              <SIcon className="h-3.5 w-3.5 text-white" />
+                            </span>
+                            {s.name}
+                          </span>
+                        </td>
+                        <td className="py-3 px-4 text-xs text-slate-400">{s.connected && s.handle ? s.handle : "—"}</td>
+                        <td className="py-3 px-4"><StatusPill connected={s.connected} /></td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
             </div>
             <p className="text-[10px] text-slate-400 italic">
               * Integração OAuth em desenvolvimento. Conectar/desconectar
@@ -1394,6 +1462,10 @@ export default function AdminConfiguracoesPage() {
           </SectionCard>
 
           {/* Webhooks */}
+          <div className="grid grid-cols-2 gap-3">
+            <GradientStat label="Webhooks Ativos" value={webhooks.filter((w) => w.active).length} icon={Zap} color="violet" />
+            <GradientStat label="Webhooks Inativos" value={webhooks.filter((w) => !w.active).length} icon={Webhook} color="slate" />
+          </div>
           <Card className="border border-slate-200/70 dark:border-slate-700/60 shadow-sm overflow-hidden">
             <div className="flex items-center gap-3 px-5 py-3 border-b border-slate-200/70 dark:border-slate-700/60 bg-slate-50/60 dark:bg-slate-900/30 flex-wrap">
               <div className="p-1.5 rounded-lg bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shrink-0">
@@ -1529,107 +1601,71 @@ export default function AdminConfiguracoesPage() {
               </div>
             )}
 
-            <div className="divide-y divide-slate-100 dark:divide-slate-800">
-              {filteredWh.length === 0 && (
-                <p className="px-5 py-8 text-xs text-slate-400 text-center">
-                  Nenhum webhook encontrado.
-                </p>
-              )}
-              {filteredWh.map((w, i) => {
-                const ev = WEBHOOK_EVENTS.find((e) => e.value === w.event);
-                return (
-                  <div
-                    key={w.id}
-                    className={`flex items-center gap-3 px-5 py-3 text-xs ${i % 2 === 0 ? "bg-table-row" : "bg-table-row-alt"} hover:bg-table-row-hover transition-colors`}
-                  >
-                    <div className="h-7 w-7 rounded-lg bg-violet-50 dark:bg-violet-950/30 flex items-center justify-center shrink-0">
-                      <Zap className="h-3.5 w-3.5 text-violet-500" />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <span className="font-semibold text-slate-700 dark:text-slate-200">
-                          {w.name}
-                        </span>
-                        <Badge
-                          variant="outline"
-                          className="text-[9px] h-4 px-1.5 text-slate-400 border-slate-200 font-mono"
+            {filteredWh.length === 0 ? (
+              <p className="px-5 py-8 text-xs text-slate-400 text-center">
+                Nenhum webhook encontrado.
+              </p>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b border-slate-200/60 dark:border-slate-700/60">
+                      <th className="text-center py-3 px-4 text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wide">Ações</th>
+                      <th className="text-left py-3 px-4 text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wide">
+                        <SortableHeader label="Nome" field="name" type="text" sortKey={whSortKey ? String(whSortKey) : null} sortDir={whSortDir} onSort={handleWhSort} />
+                      </th>
+                      <th className="text-left py-3 px-4 text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wide">Método</th>
+                      <th className="text-left py-3 px-4 text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wide">Evento</th>
+                      <th className="text-left py-3 px-4 text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wide">URL</th>
+                      <th className="text-left py-3 px-4 text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wide">Último disparo</th>
+                      <th className="text-center py-3 px-4 text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wide">Ativo</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {sortWh(filteredWh).map((w, i) => {
+                      const ev = WEBHOOK_EVENTS.find((e) => e.value === w.event);
+                      return (
+                        <tr
+                          key={w.id}
+                          className={i % 2 === 0
+                            ? "bg-[#F1F4F9] dark:bg-[oklch(0.14_0.026_258)] hover:bg-[#D9E1ED] dark:hover:bg-[oklch(0.21_0.024_258)]"
+                            : "bg-[#DCE3EE] dark:bg-[oklch(0.185_0.024_258)] hover:bg-[#C7D2E3] dark:hover:bg-[oklch(0.21_0.024_258)]"}
                         >
-                          {w.method}
-                        </Badge>
-                        {ev && (
-                          <Badge
-                            variant="outline"
-                            className="text-[9px] h-4 px-1.5 bg-violet-50 text-violet-600 border-violet-200 dark:bg-violet-950/20 dark:text-violet-400"
-                          >
-                            {ev.label}
-                          </Badge>
-                        )}
-                      </div>
-                      <p className="text-[10px] text-slate-400 mt-0.5 font-mono truncate">
-                        {w.url}
-                      </p>
-                      <p className="text-[10px] text-slate-400">
-                        Último disparo: {w.lastTriggered}
-                      </p>
-                    </div>
-                    <Switch
-                      checked={w.active}
-                      onCheckedChange={() => toggleWh(w.id)}
-                      className="shrink-0"
-                    />
-                    <div className="flex items-center gap-0.5 shrink-0">
-                      <button
-                        onClick={() => testWh(w)}
-                        className="h-7 w-7 rounded flex items-center justify-center text-slate-400 hover:bg-blue-50 dark:hover:bg-blue-950/30 hover:text-blue-500 transition-colors"
-                        title="Testar"
-                      >
-                        <TestTube2 className="h-3 w-3" />
-                      </button>
-                      <button
-                        onClick={() => openEditWh(w)}
-                        className="h-7 w-7 rounded flex items-center justify-center text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700 hover:text-blue-500 transition-colors"
-                        title="Editar"
-                      >
-                        <Pencil className="h-3 w-3" />
-                      </button>
-                      <button
-                        onClick={() => deleteWh(w.id)}
-                        className="h-7 w-7 rounded flex items-center justify-center text-slate-400 hover:bg-red-50 dark:hover:bg-red-950/30 hover:text-red-500 transition-colors"
-                        title="Excluir"
-                      >
-                        <Trash2 className="h-3 w-3" />
-                      </button>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-            <div className="px-5 py-2.5 border-t border-slate-100 dark:border-slate-800 bg-slate-50/40 dark:bg-slate-900/20 flex items-center gap-4">
-              <span className="flex items-center gap-1 text-[10px] text-slate-400">
-                <span
-                  style={{
-                    width: 8,
-                    height: 8,
-                    borderRadius: "50%",
-                    display: "inline-block",
-                    background: "#8b5cf6",
-                  }}
-                />
-                {webhooks.filter((w) => w.active).length} Ativos
-              </span>
-              <span className="flex items-center gap-1 text-[10px] text-slate-400">
-                <span
-                  style={{
-                    width: 8,
-                    height: 8,
-                    borderRadius: "50%",
-                    display: "inline-block",
-                    background: "#94a3b8",
-                  }}
-                />
-                {webhooks.filter((w) => !w.active).length} Inativos
-              </span>
-              <p className="ml-auto text-[10px] text-slate-400 italic">
+                          <td className="py-2 px-4">
+                            <div className="flex items-center justify-center gap-1">
+                              <IconActionButton icon={TestTube2} tooltip="Testar" onClick={() => testWh(w)} tone="text-blue-500" />
+                              <IconActionButton icon={Pencil} tooltip="Editar" onClick={() => openEditWh(w)} tone="text-violet-500" />
+                              <IconActionButton icon={Trash2} tooltip="Excluir" onClick={() => deleteWh(w.id)} tone="text-red-400" />
+                            </div>
+                          </td>
+                          <td className="py-3 px-4">
+                            <span className="flex items-center gap-2 font-semibold text-slate-700 dark:text-slate-200">
+                              <span className="h-7 w-7 rounded-lg bg-violet-50 dark:bg-violet-950/30 flex items-center justify-center shrink-0">
+                                <Zap className="h-3.5 w-3.5 text-violet-500" />
+                              </span>
+                              {w.name}
+                            </span>
+                          </td>
+                          <td className="py-3 px-4">
+                            <NeonBadge color="slate" className="text-[9px] h-4 px-1.5 py-0 font-mono">{w.method}</NeonBadge>
+                          </td>
+                          <td className="py-3 px-4">
+                            {ev ? <NeonBadge color="violet" className="text-[9px] h-4 px-1.5 py-0">{ev.label}</NeonBadge> : <span className="text-slate-300 dark:text-slate-600">—</span>}
+                          </td>
+                          <td className="py-3 px-4 text-xs text-slate-400 font-mono max-w-[220px] truncate">{w.url}</td>
+                          <td className="py-3 px-4 text-xs text-slate-400">{w.lastTriggered}</td>
+                          <td className="py-3 px-4 text-center">
+                            <Switch checked={w.active} onCheckedChange={() => toggleWh(w.id)} />
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
+            <div className="px-5 py-2.5 border-t border-slate-100 dark:border-slate-800 bg-slate-50/40 dark:bg-slate-900/20">
+              <p className="text-[10px] text-slate-400 italic">
                 * Webhooks disparam automaticamente no evento configurado, sem
                 necessidade de código.
               </p>

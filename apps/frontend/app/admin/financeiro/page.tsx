@@ -34,6 +34,7 @@ import {
   AccordionTrigger,
 } from "@/components/ui/accordion";
 import { GripVertical } from "lucide-react";
+import { NeonBadge } from "@/components/neon-badge";
 import { ConfirmationDialog } from "@/components/confirmation-dialog";
 import { PageLoader } from "@/components/ui/loading";
 import { ExportButton } from "@/components/export-button";
@@ -41,6 +42,9 @@ import { ItemsPerPageSelect } from "@/components/items-per-page-select";
 import { AdvancedDateFilter } from "@/components/advanced-date-filter";
 import { useToast } from "@/components/ui/use-toast";
 import { useSorting, SortableHeader } from "@/hooks/useSorting";
+import { useTableScrollSync } from "@/hooks/useTableScrollSync";
+import { IconToolbarButton } from "@/components/icon-toolbar-button";
+import { SlidePanel } from "@/components/slide-panel";
 import type { DateRange } from "react-day-picker";
 import { PageHeader } from "@/components/page-header";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
@@ -116,6 +120,7 @@ const INVOICE_STATUS_CLASSES = {
   overdue:  "bg-red-50 text-red-700 border-red-200 dark:bg-red-950/30 dark:text-red-400",
   cancelled:"bg-slate-100 text-slate-500 border-slate-200 dark:bg-slate-800/50 dark:text-slate-400",
 };
+const INVOICE_STATUS_COLOR = { pending: "amber", paid: "emerald", overdue: "red", cancelled: "slate" };
 
 const WD_STATUS_LABELS = {
   aguardando_analise: "Aguardando",
@@ -132,6 +137,7 @@ const WD_STATUS_CLASSES = {
   cancelado:         "bg-slate-100 text-slate-500 border-slate-200 dark:bg-slate-800/50 dark:text-slate-400",
   reprovado:         "bg-red-50 text-red-700 border-red-200 dark:bg-red-950/30 dark:text-red-400",
 };
+const WD_STATUS_COLOR = { aguardando_analise: "amber", pagamento_agendado: "blue", pagamento_efetuado: "emerald", cancelado: "slate", reprovado: "red" };
 
 const WALLET_OWNER_LABELS: Record<string, string> = {
   company:  "Empresa",
@@ -148,6 +154,7 @@ const WALLET_OWNER_COLORS: Record<string, string> = {
   partner:  "bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/30 dark:text-emerald-400",
   platform: "bg-slate-100 text-slate-600 border-slate-200 dark:bg-slate-800/50 dark:text-slate-300",
 };
+const WALLET_OWNER_COLOR_TOKEN: Record<string, string> = { company: "blue", agency: "violet", nomad: "amber", partner: "emerald", platform: "slate" };
 
 const WALLET_STATUS_LABELS: Record<string, string> = {
   active:    "Ativa",
@@ -160,6 +167,7 @@ const WALLET_STATUS_CLASSES: Record<string, string> = {
   suspended: "bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/30 dark:text-amber-400",
   closed:    "bg-slate-100 text-slate-400 border-slate-200 dark:bg-slate-700/50 dark:text-slate-500",
 };
+const WALLET_STATUS_COLOR: Record<string, string> = { active: "emerald", suspended: "amber", closed: "slate" };
 
 const LEDGER_TYPE_LABELS: Record<string, string> = {
   credit:     "Crédito",
@@ -197,6 +205,7 @@ const EXP_STATUS_CLASSES = {
   atrasada:  "bg-red-50 text-red-700 border-red-200 dark:bg-red-950/30 dark:text-red-400",
   cancelada: "bg-slate-100 text-slate-400 border-slate-200 dark:bg-slate-700/50 dark:text-slate-500",
 };
+const EXP_STATUS_COLOR = { prevista: "slate", pendente: "amber", paga: "emerald", atrasada: "red", cancelada: "slate" };
 
 // ─── Page ──────────────────────────────────────────────────────────────────────
 
@@ -326,6 +335,18 @@ export default function AdminFinanceiroPage() {
   const [activeTab, setActiveTab] = useState<"faturas" | "saques" | "despesas" | "carteiras" | "squad" | "conciliacao">("faturas");
   const [filterOpen, setFilterOpen] = useState(false);
   const [colConfigOpen, setColConfigOpen] = useState(false);
+  // Shared scroll-mirror sync — only one tab's table is mounted at a time, so
+  // the same refs bind to whichever is active; re-check on tab switch since
+  // switching mounts a brand-new table element.
+  const {
+    tableScrollRef,
+    topScrollRef,
+    bottomScrollRef,
+    handleTopBarScroll,
+    handleTableScroll,
+    handleBottomBarScroll,
+    hasHorizontalOverflow,
+  } = useTableScrollSync([activeTab]);
   // saved filters (session-only, like Projetos)
   const [savedFilters, setSavedFilters] = useState<{ id: string; name: string; status: string; wdStatus: string }[]>([]);
   const [activeFilterId, setActiveFilterId] = useState<string | null>(null);
@@ -533,6 +554,10 @@ export default function AdminFinanceiroPage() {
   // ── sorting ────────────────────────────────────────────────────────────────
   const { sortKey: invSK, sortDir: invSD, handleSort: handleInvSort, sortData: sortInvoices } = useSorting();
   const { sortKey: wSK,  sortDir: wSD,  handleSort: handleWSort,   sortData: sortWithdrawals } = useSorting();
+  const { sortKey: expSK, sortDir: expSD, handleSort: handleExpSort, sortData: sortExpenses } = useSorting();
+  const { sortKey: waSK, sortDir: waSD, handleSort: handleWaSort, sortData: sortWalletsFn } = useSorting();
+  const { sortKey: sqSK, sortDir: sqSD, handleSort: handleSqSort, sortData: sortSquad } = useSorting();
+  const { sortKey: ccSK, sortDir: ccSD, handleSort: handleCcSort, sortData: sortConcil } = useSorting();
 
   const invTotalPages = Math.max(1, Math.ceil(invoiceTotal / invPerPage));
   const activeFilterCount = [invStatusFilter !== "all", periodActive].filter(Boolean).length;
@@ -871,6 +896,53 @@ export default function AdminFinanceiroPage() {
 
   if (invLoading && invoices.length === 0 && wdLoading) return <PageLoader text="Carregando financeiro…" />;
 
+  // Numbered gradient pagination — reused across every tab's bottom footer.
+  const MiniPagination = ({ curPage, totalPages, onChange }) => {
+    if (totalPages <= 1) return null;
+    const getPageNumbers = () => {
+      if (totalPages <= 7) return Array.from({ length: totalPages }, (_, i) => i + 1);
+      if (curPage <= 4) return [1, 2, 3, 4, 5, "...", totalPages];
+      if (curPage >= totalPages - 3) return [1, "...", totalPages - 4, totalPages - 3, totalPages - 2, totalPages - 1, totalPages];
+      return [1, "...", curPage - 1, curPage, curPage + 1, "...", totalPages];
+    };
+    return (
+      <div className="flex items-center gap-0.5 shrink-0">
+        <button
+          onClick={() => onChange(Math.max(1, curPage - 1))}
+          disabled={curPage === 1}
+          className="h-7 w-7 flex items-center justify-center rounded-full text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-30 disabled:pointer-events-none transition-colors"
+        >
+          <ChevronLeft className="h-3.5 w-3.5" />
+        </button>
+        {getPageNumbers().map((pg, i) =>
+          pg === "..." ? (
+            <span key={i} className="text-xs text-slate-300 px-0.5">·</span>
+          ) : (
+            <button
+              key={i}
+              onClick={() => onChange(pg)}
+              className={`h-7 w-7 flex items-center justify-center rounded-full text-xs font-bold transition-colors ${
+                pg === curPage
+                  ? "text-white shadow-[0_6px_14px_rgba(110,44,150,0.25)]"
+                  : "text-slate-500 hover:text-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 dark:text-slate-400"
+              }`}
+              style={pg === curPage ? { background: "linear-gradient(135deg, #111A4D 0%, #6E2C96 55%, #D92293 100%)" } : undefined}
+            >
+              {pg}
+            </button>
+          ),
+        )}
+        <button
+          onClick={() => onChange(Math.min(totalPages, curPage + 1))}
+          disabled={curPage === totalPages}
+          className="h-7 w-7 flex items-center justify-center rounded-full text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-30 disabled:pointer-events-none transition-colors"
+        >
+          <ChevronRight className="h-3.5 w-3.5" />
+        </button>
+      </div>
+    );
+  };
+
   return (
     <div ref={pageRef} className="space-y-4">
 
@@ -921,7 +993,7 @@ export default function AdminFinanceiroPage() {
 
       {/* ── KPI Cards — estilo idêntico a Projetos ─────────────────── */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-        <div className="relative rounded-xl overflow-hidden shadow-sm bg-gradient-to-br from-emerald-500 to-teal-700 px-3 pt-2 pb-1.5">
+        <div className="relative rounded-xl overflow-hidden shadow-sm border-2 border-emerald-300/70 dark:border-emerald-800/70 bg-gradient-to-br from-emerald-500 to-teal-700 px-3 pt-2 pb-1.5">
           <div className="flex items-center justify-between mb-1">
             <p className="text-xs font-medium text-white/70 leading-tight">Receita Recebida</p>
             <div className="bg-white/20 rounded-md p-1"><CheckCircle2 className="h-4 w-4 text-white" /></div>
@@ -930,7 +1002,7 @@ export default function AdminFinanceiroPage() {
           <p className="text-[10px] text-white/60 mt-0.5">{periodActive ? "No período selecionado" : "Faturas pagas"}</p>
         </div>
 
-        <div className="relative rounded-xl overflow-hidden shadow-sm bg-gradient-to-br from-amber-500 to-orange-600 px-3 pt-2 pb-1.5">
+        <div className="relative rounded-xl overflow-hidden shadow-sm border-2 border-amber-300/70 dark:border-amber-800/70 bg-gradient-to-br from-amber-500 to-orange-600 px-3 pt-2 pb-1.5">
           <div className="flex items-center justify-between mb-1">
             <p className="text-xs font-medium text-white/70 leading-tight">A Receber</p>
             <div className="bg-white/20 rounded-md p-1"><Clock className="h-4 w-4 text-white" /></div>
@@ -939,7 +1011,7 @@ export default function AdminFinanceiroPage() {
           <p className="text-[10px] text-white/60 mt-0.5">{periodActive ? "No período selecionado" : "Faturas pendentes"}</p>
         </div>
 
-        <div className="relative rounded-xl overflow-hidden shadow-sm bg-gradient-to-br from-red-500 to-rose-700 px-3 pt-2 pb-1.5">
+        <div className="relative rounded-xl overflow-hidden shadow-sm border-2 border-red-300/70 dark:border-red-800/70 bg-gradient-to-br from-red-500 to-rose-700 px-3 pt-2 pb-1.5">
           <div className="flex items-center justify-between mb-1">
             <p className="text-xs font-medium text-white/70 leading-tight">Em Atraso</p>
             <div className="bg-white/20 rounded-md p-1"><AlertCircle className="h-4 w-4 text-white" /></div>
@@ -948,7 +1020,7 @@ export default function AdminFinanceiroPage() {
           <p className="text-[10px] text-white/60 mt-0.5">{periodActive ? "No período selecionado" : "Faturas vencidas"}</p>
         </div>
 
-        <div className="relative rounded-xl overflow-hidden shadow-sm bg-gradient-to-br from-violet-500 to-purple-700 px-3 pt-2 pb-1.5">
+        <div className="relative rounded-xl overflow-hidden shadow-sm border-2 border-violet-300/70 dark:border-violet-800/70 bg-gradient-to-br from-violet-500 to-purple-700 px-3 pt-2 pb-1.5">
           <div className="flex items-center justify-between mb-1">
             <p className="text-xs font-medium text-white/70 leading-tight">
               {periodActive ? "Ticket Médio" : "Saques Pendentes"}
@@ -1247,29 +1319,50 @@ export default function AdminFinanceiroPage() {
           {(() => {
             const cnt = activeTab === "faturas" ? activeFilterCount : activeTab === "saques" ? wdActiveFilterCount : activeTab === "despesas" ? expActiveFilterCount : walletActiveFilterCount;
             return (
-              <Button onClick={openFilterModal} variant="outline" size="sm"
-                className={cn("h-9 gap-2 px-3.5 text-xs border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 shrink-0",
-                  cnt > 0 && "border-blue-400 bg-blue-50 dark:bg-blue-950/30 text-blue-700 dark:text-blue-300")}>
-                <Filter className="h-3.5 w-3.5" />
-                Filtros
-                {cnt > 0 && <span className="ml-1 bg-blue-600 text-white rounded-full text-[10px] h-4 w-4 flex items-center justify-center font-bold">{cnt}</span>}
-              </Button>
+              <IconToolbarButton
+                icon={Filter}
+                tooltip={cnt > 0 ? `Filtros (${cnt} ativos)` : "Filtros"}
+                onClick={openFilterModal}
+                className={cnt > 0 ? "border-blue-400 bg-blue-50 dark:bg-blue-950/30" : undefined}
+              />
             );
           })()}
+
+          {/* Horizontal scrollbar mirror — shared across tabs, only when the
+              active tab's table actually overflows its container. */}
+          {hasHorizontalOverflow && (
+            <div
+              ref={topScrollRef}
+              onScroll={handleTopBarScroll}
+              title="Arraste para rolar a tabela na horizontal"
+              className="hidden md:block flex-1 min-w-[80px] overflow-x-scroll allka-table-scroll self-center"
+              style={{ height: 12 }}
+            >
+              <div style={{ minWidth: 900, height: 1 }} />
+            </div>
+          )}
 
           {/* Cog */}
           <Popover open={colConfigOpen} onOpenChange={setColConfigOpen}>
             <PopoverTrigger asChild>
               <button
                 className={cn(
-                  "flex items-center justify-center h-9 w-9 rounded-md border transition-colors flex-shrink-0",
-                  colConfigOpen
-                    ? "bg-blue-100 dark:bg-blue-950/40 text-blue-600 border-blue-200 dark:border-blue-700"
-                    : "text-slate-400 border-slate-200 dark:border-slate-700 hover:text-slate-600 hover:bg-slate-100 dark:hover:bg-slate-800"
+                  "group relative flex items-center justify-center h-11 w-11 rounded-[12px] border border-slate-200 dark:border-slate-700 hover:border-transparent overflow-hidden transition-all flex-shrink-0",
+                  colConfigOpen && "border-transparent"
                 )}
                 title="Opções"
               >
-                <Cog className="h-4 w-4" />
+                <span
+                  className={cn(
+                    "absolute inset-0 transition-opacity pointer-events-none",
+                    colConfigOpen ? "opacity-100" : "opacity-0 group-hover:opacity-100"
+                  )}
+                  style={{ background: "linear-gradient(135deg,#000000 0%,#1a2a6f 45%,#c81a7f 100%)" }}
+                />
+                <Cog className={cn(
+                  "relative z-10 h-5 w-5 transition-colors",
+                  colConfigOpen ? "text-white" : "text-[#7d1b6a] dark:text-[#c07ab0] group-hover:text-white"
+                )} />
               </button>
             </PopoverTrigger>
             <PopoverContent align="end" className="w-44 p-2 space-y-0.5">
@@ -1323,32 +1416,22 @@ export default function AdminFinanceiroPage() {
             </PopoverContent>
           </Popover>
 
-          {/* Pagination */}
-          <div className="ml-auto flex items-center gap-0.5 shrink-0">
-            <button
-              onClick={() => { if (activeTab === "faturas") setInvPage(p => Math.max(1, p - 1)); else if (activeTab === "saques") setWdPage(p => Math.max(1, p - 1)); else if (activeTab === "despesas") setExpPage(p => Math.max(1, p - 1)); else setWalletPage(p => Math.max(1, p - 1)); }}
-              disabled={activeTab === "faturas" ? invPage === 1 : activeTab === "saques" ? wdPage === 1 : activeTab === "despesas" ? expPage === 1 : walletPage === 1}
-              className="h-7 w-7 rounded-md flex items-center justify-center disabled:opacity-30 hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 transition-colors"
-            >
-              <ChevronLeft className="h-4 w-4" />
-            </button>
-            <span className="text-xs text-slate-400 tabular-nums px-1.5">
-              {activeTab === "faturas" ? invPage : activeTab === "saques" ? wdPage : activeTab === "despesas" ? expPage : walletPage} / {activeTab === "faturas" ? invTotalPages : activeTab === "saques" ? wdTotalPages : activeTab === "despesas" ? expTotalPages : walletTotalPages}
-            </span>
-            <button
-              onClick={() => { if (activeTab === "faturas") setInvPage(p => Math.min(invTotalPages, p + 1)); else if (activeTab === "saques") setWdPage(p => Math.min(wdTotalPages, p + 1)); else if (activeTab === "despesas") setExpPage(p => Math.min(expTotalPages, p + 1)); else setWalletPage(p => Math.min(walletTotalPages, p + 1)); }}
-              disabled={activeTab === "faturas" ? invPage === invTotalPages : activeTab === "saques" ? wdPage === wdTotalPages : activeTab === "despesas" ? expPage === expTotalPages : walletPage === walletTotalPages}
-              className="h-7 w-7 rounded-md flex items-center justify-center disabled:opacity-30 hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 transition-colors"
-            >
-              <ChevronRight className="h-4 w-4" />
-            </button>
-          </div>
+          {/* Pagination — só as abas com paginação central (squad/conciliação têm paginador próprio embaixo) */}
+          {(activeTab === "faturas" || activeTab === "saques" || activeTab === "despesas" || activeTab === "carteiras") && (
+            <div className="ml-auto">
+              <MiniPagination
+                curPage={activeTab === "faturas" ? invPage : activeTab === "saques" ? wdPage : activeTab === "despesas" ? expPage : walletPage}
+                totalPages={activeTab === "faturas" ? invTotalPages : activeTab === "saques" ? wdTotalPages : activeTab === "despesas" ? expTotalPages : walletTotalPages}
+                onChange={activeTab === "faturas" ? setInvPage : activeTab === "saques" ? setWdPage : activeTab === "despesas" ? setExpPage : setWalletPage}
+              />
+            </div>
+          )}
         </div>
 
         {/* ── Tabela Faturas ──────────────────────────────────────── */}
         {activeTab === "faturas" && (
           <Card className="overflow-hidden">
-            <div className="overflow-x-auto allka-table-scroll">
+            <div ref={tableScrollRef} onScroll={handleTableScroll} className="overflow-x-auto allka-table-scroll-body">
               <table className="w-full text-sm min-w-[600px]">
                 <thead style={{ position: "sticky", top: 0, zIndex: 2, background: "var(--table-head)", boxShadow: "0 1px 0 rgba(148,163,184,0.3)" }}>
                   <tr>
@@ -1364,7 +1447,12 @@ export default function AdminFinanceiroPage() {
                       <SortableHeader label="Vencimento" field="due_date" type="date" sortKey={invSK ? String(invSK) : null} sortDir={invSD} onSort={handleInvSort} />
                     </th>
                     <th className="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide">Status</th>
-                    <th className="text-right px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide">Ações</th>
+                    <th
+                      className="text-right px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide"
+                      style={{ position: "sticky", right: 0, top: 0, zIndex: 3, minWidth: 132, background: "var(--table-head)", boxShadow: "-1px 0 0 rgba(100,116,139,0.18), 0 1px 0 rgba(148,163,184,0.3)" }}
+                    >
+                      Ações
+                    </th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
@@ -1387,8 +1475,8 @@ export default function AdminFinanceiroPage() {
                       const isOverdue = inv.status === "pending" && inv.due_date && new Date(inv.due_date) < new Date();
                       return (
                         <tr key={inv.id} className={idx % 2 === 0
-                          ? "bg-[var(--table-row)] hover:bg-[var(--table-row-hover)]"
-                          : "bg-[var(--table-row-alt)] hover:bg-[var(--table-row-hover)]"}>
+                          ? "group bg-[#F1F4F9] dark:bg-[oklch(0.14_0.026_258)] hover:bg-[#D9E1ED] dark:hover:bg-[oklch(0.21_0.024_258)]"
+                          : "group bg-[#DCE3EE] dark:bg-[oklch(0.185_0.024_258)] hover:bg-[#C7D2E3] dark:hover:bg-[oklch(0.21_0.024_258)]"}>
                           <td className="px-4 py-3">
                             <p className="font-medium text-slate-800 dark:text-slate-200 text-xs">{inv.invoice_number || <span className="text-slate-400">—</span>}</p>
                             {inv.description && <p className="text-[11px] text-slate-400 mt-0.5 max-w-[180px] truncate">{inv.description}</p>}
@@ -1414,36 +1502,41 @@ export default function AdminFinanceiroPage() {
                             {inv.paid_at && <p className="text-[10px] text-emerald-600 mt-0.5">Pago em {fmtDate(inv.paid_at)}</p>}
                           </td>
                           <td className="px-4 py-3">
-                            <Badge variant="outline" className={`text-[10px] font-semibold ${INVOICE_STATUS_CLASSES[inv.status] || ""}`}>
+                            <NeonBadge color={INVOICE_STATUS_COLOR[inv.status] || "slate"}>
                               {INVOICE_STATUS_LABELS[inv.status] || inv.status}
-                            </Badge>
+                            </NeonBadge>
                           </td>
-                          <td className="px-4 py-3">
+                          <td
+                            className={idx % 2 === 0
+                              ? "px-4 py-3 bg-[#ECEFF4] group-hover:bg-[#D9E1ED] dark:bg-[oklch(0.14_0.026_258)] dark:group-hover:bg-[oklch(0.21_0.024_258)]"
+                              : "px-4 py-3 bg-[#D6DCE8] group-hover:bg-[#C7D2E3] dark:bg-[oklch(0.185_0.024_258)] dark:group-hover:bg-[oklch(0.21_0.024_258)]"}
+                            style={{ position: "sticky", right: 0, zIndex: 1, minWidth: 132, boxShadow: "-1px 0 0 rgba(100,116,139,0.18)" }}
+                          >
                             <div className="flex items-center justify-end gap-1">
                               {(inv.status === "pending" || inv.status === "overdue") && (
                                 <button disabled={actionLoading === inv.id} onClick={() => handleMarkPaid(inv.id)} title="Marcar como pago"
-                                  className="h-7 w-7 rounded flex items-center justify-center text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-950/30 transition-colors disabled:opacity-40">
+                                  className="h-[26px] w-[26px] rounded-[8px] bg-white dark:bg-slate-800 border border-[#e8edf5] dark:border-slate-700 text-emerald-600 dark:text-slate-500 shadow-[0_4px_10px_rgba(15,23,42,0.06)] hover:bg-gradient-to-br hover:from-[#2558FF] hover:via-[#6E2C96] hover:to-[#D92293] hover:text-white dark:hover:text-[#0a1628] hover:border-transparent hover:shadow-[0_8px_18px_rgba(15,23,42,0.18)] hover:-translate-y-px transition-all duration-150">
                                   <CheckCircle2 className="h-4 w-4" />
                                 </button>
                               )}
                               {inv.status === "pending" && (
                                 <button disabled={actionLoading === inv.id} onClick={() => handleMarkOverdue(inv.id)} title="Marcar em atraso"
-                                  className="h-7 w-7 rounded flex items-center justify-center text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-950/30 transition-colors disabled:opacity-40">
+                                  className="h-[26px] w-[26px] rounded-[8px] bg-white dark:bg-slate-800 border border-[#e8edf5] dark:border-slate-700 text-amber-600 dark:text-slate-500 shadow-[0_4px_10px_rgba(15,23,42,0.06)] hover:bg-gradient-to-br hover:from-[#2558FF] hover:via-[#6E2C96] hover:to-[#D92293] hover:text-white dark:hover:text-[#0a1628] hover:border-transparent hover:shadow-[0_8px_18px_rgba(15,23,42,0.18)] hover:-translate-y-px transition-all duration-150">
                                   <AlertCircle className="h-4 w-4" />
                                 </button>
                               )}
                               <button onClick={() => openEditSheet(inv)} title="Editar"
-                                className="h-7 w-7 rounded flex items-center justify-center text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors">
+                                className="h-[26px] w-[26px] rounded-[8px] bg-white dark:bg-slate-800 border border-[#e8edf5] dark:border-slate-700 text-slate-500 dark:text-slate-500 shadow-[0_4px_10px_rgba(15,23,42,0.06)] hover:bg-gradient-to-br hover:from-[#2558FF] hover:via-[#6E2C96] hover:to-[#D92293] hover:text-white dark:hover:text-[#0a1628] hover:border-transparent hover:shadow-[0_8px_18px_rgba(15,23,42,0.18)] hover:-translate-y-px transition-all duration-150">
                                 <Pencil className="h-3.5 w-3.5" />
                               </button>
                               {inv.status !== "paid" && inv.status !== "cancelled" ? (
                                 <button disabled={actionLoading === inv.id} onClick={() => handleCancelInvoice(inv.id)} title="Cancelar"
-                                  className="h-7 w-7 rounded flex items-center justify-center text-slate-400 hover:bg-red-50 dark:hover:bg-red-950/30 hover:text-red-600 transition-colors disabled:opacity-40">
+                                  className="h-[26px] w-[26px] rounded-[8px] bg-white dark:bg-slate-800 border border-[#e8edf5] dark:border-slate-700 text-red-500 dark:text-red-400 shadow-[0_4px_10px_rgba(15,23,42,0.06)] hover:bg-gradient-to-br hover:from-[#2558FF] hover:via-[#6E2C96] hover:to-[#D92293] hover:text-white dark:hover:text-[#0a1628] hover:border-transparent hover:shadow-[0_8px_18px_rgba(15,23,42,0.18)] hover:-translate-y-px transition-all duration-150">
                                   <XCircle className="h-4 w-4" />
                                 </button>
                               ) : (
                                 <button disabled={actionLoading === inv.id} onClick={() => setDeleteTarget(inv.id)} title="Excluir"
-                                  className="h-7 w-7 rounded flex items-center justify-center text-slate-400 hover:bg-red-50 dark:hover:bg-red-950/30 hover:text-red-600 transition-colors disabled:opacity-40">
+                                  className="h-[26px] w-[26px] rounded-[8px] bg-white dark:bg-slate-800 border border-[#e8edf5] dark:border-slate-700 text-red-500 dark:text-red-400 shadow-[0_4px_10px_rgba(15,23,42,0.06)] hover:bg-gradient-to-br hover:from-[#2558FF] hover:via-[#6E2C96] hover:to-[#D92293] hover:text-white dark:hover:text-[#0a1628] hover:border-transparent hover:shadow-[0_8px_18px_rgba(15,23,42,0.18)] hover:-translate-y-px transition-all duration-150">
                                   <Trash2 className="h-4 w-4" />
                                 </button>
                               )}
@@ -1456,19 +1549,14 @@ export default function AdminFinanceiroPage() {
                 </tbody>
               </table>
             </div>
-            <div className="px-4 py-2.5 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between">
-              <p className="text-xs text-slate-400">{invoiceTotal} fatura{invoiceTotal !== 1 ? "s" : ""}</p>
-              <div className="flex items-center gap-0.5">
-                <button onClick={() => setInvPage(p => Math.max(1, p - 1))} disabled={invPage === 1}
-                  className="h-7 w-7 rounded flex items-center justify-center disabled:opacity-30 hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-500 transition-colors">
-                  <ChevronLeft className="h-4 w-4" />
-                </button>
-                <span className="text-xs text-slate-400 px-1">{invPage} / {invTotalPages}</span>
-                <button onClick={() => setInvPage(p => Math.min(invTotalPages, p + 1))} disabled={invPage === invTotalPages}
-                  className="h-7 w-7 rounded flex items-center justify-center disabled:opacity-30 hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-500 transition-colors">
-                  <ChevronRight className="h-4 w-4" />
-                </button>
-              </div>
+            <div className="px-4 py-2.5 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between gap-3">
+              <p className="text-xs text-slate-400 shrink-0">{invoiceTotal} fatura{invoiceTotal !== 1 ? "s" : ""}</p>
+              {hasHorizontalOverflow && (
+                <div ref={bottomScrollRef} onScroll={handleBottomBarScroll} title="Arraste para rolar a tabela na horizontal" className="hidden md:block flex-1 min-w-[80px] overflow-x-scroll allka-table-scroll self-center">
+                  <div style={{ minWidth: 900, height: 1 }} />
+                </div>
+              )}
+              <MiniPagination curPage={invPage} totalPages={invTotalPages} onChange={setInvPage} />
             </div>
           </Card>
         )}
@@ -1509,7 +1597,7 @@ export default function AdminFinanceiroPage() {
               )}
             </div>
 
-            <div className="overflow-x-auto allka-table-scroll">
+            <div ref={tableScrollRef} onScroll={handleTableScroll} className="overflow-x-auto allka-table-scroll-body">
               <table className="w-full text-sm min-w-[600px]">
                 <thead style={{ position: "sticky", top: 0, zIndex: 2, background: "var(--table-head)", boxShadow: "0 1px 0 rgba(148,163,184,0.3)" }}>
                   <tr>
@@ -1524,7 +1612,12 @@ export default function AdminFinanceiroPage() {
                       <SortableHeader label="Solicitado em" field="created_at" type="date" sortKey={wSK ? String(wSK) : null} sortDir={wSD} onSort={handleWSort} />
                     </th>
                     <th className="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide">Status</th>
-                    <th className="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide">Ações</th>
+                    <th
+                      className="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide"
+                      style={{ position: "sticky", right: 0, top: 0, zIndex: 3, background: "var(--table-head)", boxShadow: "-1px 0 0 rgba(100,116,139,0.18), 0 1px 0 rgba(148,163,184,0.3)" }}
+                    >
+                      Ações
+                    </th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
@@ -1542,8 +1635,8 @@ export default function AdminFinanceiroPage() {
                   ) : (
                     sortWithdrawals(pagedWithdrawals).map((w, idx) => (
                       <tr key={w.id} className={idx % 2 === 0
-                        ? "bg-[var(--table-row)] hover:bg-[var(--table-row-hover)]"
-                        : "bg-[var(--table-row-alt)] hover:bg-[var(--table-row-hover)]"}>
+                        ? "group bg-[#F1F4F9] dark:bg-[oklch(0.14_0.026_258)] hover:bg-[#D9E1ED] dark:hover:bg-[oklch(0.21_0.024_258)]"
+                        : "group bg-[#DCE3EE] dark:bg-[oklch(0.185_0.024_258)] hover:bg-[#C7D2E3] dark:hover:bg-[oklch(0.21_0.024_258)]"}>
                         <td className="px-5 py-3">
                           <p className="font-medium text-slate-800 dark:text-slate-200 text-xs">{w.nomade?.user?.name || "—"}</p>
                           <p className="text-[11px] text-slate-400">{w.nomade?.user?.email || ""}</p>
@@ -1555,14 +1648,19 @@ export default function AdminFinanceiroPage() {
                         <td className="px-4 py-3 text-right font-bold tabular-nums text-slate-800 dark:text-slate-200">{fmt(w.amount || 0)}</td>
                         <td className="px-4 py-3 text-xs text-slate-500 dark:text-slate-400">{fmtDateTime(w.created_at)}</td>
                         <td className="px-4 py-3">
-                          <Badge variant="outline" className={`text-[10px] font-semibold ${WD_STATUS_CLASSES[w.status] || ""}`}>
+                          <NeonBadge color={WD_STATUS_COLOR[w.status] || "slate"}>
                             {WD_STATUS_LABELS[w.status] || w.status}
-                          </Badge>
+                          </NeonBadge>
                           {w.notes && w.status === "reprovado" && (
                             <p className="text-[10px] text-slate-400 mt-0.5 max-w-[160px] truncate">{w.notes}</p>
                           )}
                         </td>
-                        <td className="px-4 py-3">
+                        <td
+                          className={idx % 2 === 0
+                            ? "px-4 py-3 bg-[#ECEFF4] group-hover:bg-[#D9E1ED] dark:bg-[oklch(0.14_0.026_258)] dark:group-hover:bg-[oklch(0.21_0.024_258)]"
+                            : "px-4 py-3 bg-[#D6DCE8] group-hover:bg-[#C7D2E3] dark:bg-[oklch(0.185_0.024_258)] dark:group-hover:bg-[oklch(0.21_0.024_258)]"}
+                          style={{ position: "sticky", right: 0, zIndex: 1, boxShadow: "-1px 0 0 rgba(100,116,139,0.18)" }}
+                        >
                           {w.status === "aguardando_analise" ? (
                             rejectingId === w.id ? (
                               <div className="flex gap-1.5 items-center">
@@ -1595,19 +1693,14 @@ export default function AdminFinanceiroPage() {
                 </tbody>
               </table>
             </div>
-            <div className="px-4 py-2.5 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between">
-              <p className="text-xs text-slate-400">{filteredWithdrawals.length} solicitação{filteredWithdrawals.length !== 1 ? "ões" : ""}</p>
-              <div className="flex items-center gap-0.5">
-                <button onClick={() => setWdPage(p => Math.max(1, p - 1))} disabled={wdPage === 1}
-                  className="h-7 w-7 rounded flex items-center justify-center disabled:opacity-30 hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-500 transition-colors">
-                  <ChevronLeft className="h-4 w-4" />
-                </button>
-                <span className="text-xs text-slate-400 px-1">{wdPage} / {wdTotalPages}</span>
-                <button onClick={() => setWdPage(p => Math.min(wdTotalPages, p + 1))} disabled={wdPage === wdTotalPages}
-                  className="h-7 w-7 rounded flex items-center justify-center disabled:opacity-30 hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-500 transition-colors">
-                  <ChevronRight className="h-4 w-4" />
-                </button>
-              </div>
+            <div className="px-4 py-2.5 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between gap-3">
+              <p className="text-xs text-slate-400 shrink-0">{filteredWithdrawals.length} solicitação{filteredWithdrawals.length !== 1 ? "ões" : ""}</p>
+              {hasHorizontalOverflow && (
+                <div ref={bottomScrollRef} onScroll={handleBottomBarScroll} title="Arraste para rolar a tabela na horizontal" className="hidden md:block flex-1 min-w-[80px] overflow-x-scroll allka-table-scroll self-center">
+                  <div style={{ minWidth: 900, height: 1 }} />
+                </div>
+              )}
+              <MiniPagination curPage={wdPage} totalPages={wdTotalPages} onChange={setWdPage} />
             </div>
           </Card>
         )}
@@ -1666,18 +1759,29 @@ export default function AdminFinanceiroPage() {
                 )}
               </div>
 
-              <div className="overflow-x-auto allka-table-scroll">
+              <div ref={tableScrollRef} onScroll={handleTableScroll} className="overflow-x-auto allka-table-scroll-body">
                 <table className="w-full text-sm min-w-[600px]">
                   <thead style={{ position: "sticky", top: 0, zIndex: 2, background: "var(--table-head)", boxShadow: "0 1px 0 rgba(148,163,184,0.3)" }}>
                     <tr>
-                      <th className="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide">Nome</th>
+                      <th className="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide">
+                        <SortableHeader label="Nome" field="name" type="text" sortKey={expSK ? String(expSK) : null} sortDir={expSD} onSort={handleExpSort} />
+                      </th>
                       <th className="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide">Categoria</th>
                       <th className="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide">Tipo</th>
                       <th className="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide">Competência</th>
-                      <th className="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide">Vencimento</th>
-                      <th className="text-right px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide">Valor</th>
+                      <th className="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide">
+                        <SortableHeader label="Vencimento" field="due_date" type="date" sortKey={expSK ? String(expSK) : null} sortDir={expSD} onSort={handleExpSort} />
+                      </th>
+                      <th className="text-right px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide">
+                        <SortableHeader label="Valor" field="amount" type="number" sortKey={expSK ? String(expSK) : null} sortDir={expSD} onSort={handleExpSort} />
+                      </th>
                       <th className="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide">Status</th>
-                      <th className="text-right px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide">Ações</th>
+                      <th
+                        className="text-right px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide"
+                        style={{ position: "sticky", right: 0, top: 0, zIndex: 3, minWidth: 108, background: "var(--table-head)", boxShadow: "-1px 0 0 rgba(100,116,139,0.18), 0 1px 0 rgba(148,163,184,0.3)" }}
+                      >
+                        Ações
+                      </th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
@@ -1696,12 +1800,12 @@ export default function AdminFinanceiroPage() {
                         </td>
                       </tr>
                     ) : (
-                      expenses.map((exp, idx) => {
+                      sortExpenses(expenses).map((exp, idx) => {
                         const isOverdue = exp.status === "pendente" && exp.due_date && new Date(exp.due_date) < new Date();
                         return (
                           <tr key={exp.id} className={idx % 2 === 0
-                            ? "bg-[var(--table-row)] hover:bg-[var(--table-row-hover)]"
-                            : "bg-[var(--table-row-alt)] hover:bg-[var(--table-row-hover)]"}>
+                            ? "group bg-[#F1F4F9] dark:bg-[oklch(0.14_0.026_258)] hover:bg-[#D9E1ED] dark:hover:bg-[oklch(0.21_0.024_258)]"
+                            : "group bg-[#DCE3EE] dark:bg-[oklch(0.185_0.024_258)] hover:bg-[#C7D2E3] dark:hover:bg-[oklch(0.21_0.024_258)]"}>
                             <td className="px-4 py-3">
                               <p className="font-medium text-slate-800 dark:text-slate-200 text-xs">{exp.name}</p>
                               {exp.description && <p className="text-[11px] text-slate-400 mt-0.5 max-w-[200px] truncate">{exp.description}</p>}
@@ -1711,9 +1815,9 @@ export default function AdminFinanceiroPage() {
                               <span className="text-xs text-slate-600 dark:text-slate-400">{exp.category}</span>
                             </td>
                             <td className="px-4 py-3">
-                              <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border ${exp.type === "fixa" ? "bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-950/30 dark:text-blue-400" : "bg-violet-50 text-violet-700 border-violet-200 dark:bg-violet-950/30 dark:text-violet-400"}`}>
+                              <NeonBadge color={exp.type === "fixa" ? "blue" : "violet"}>
                                 {exp.type === "fixa" ? "Fixa" : "Variável"}
-                              </span>
+                              </NeonBadge>
                               {exp.recurrence !== "única" && (
                                 <p className="text-[10px] text-slate-400 mt-0.5">{exp.recurrence}</p>
                               )}
@@ -1725,24 +1829,29 @@ export default function AdminFinanceiroPage() {
                             </td>
                             <td className="px-4 py-3 text-right font-bold tabular-nums text-slate-800 dark:text-slate-200">{fmt(exp.amount)}</td>
                             <td className="px-4 py-3">
-                              <Badge variant="outline" className={`text-[10px] font-semibold ${EXP_STATUS_CLASSES[exp.status] || ""}`}>
+                              <NeonBadge color={EXP_STATUS_COLOR[exp.status] || "slate"}>
                                 {EXP_STATUS_LABELS[exp.status] || exp.status}
-                              </Badge>
+                              </NeonBadge>
                             </td>
-                            <td className="px-4 py-3">
+                            <td
+                              className={idx % 2 === 0
+                                ? "px-4 py-3 bg-[#ECEFF4] group-hover:bg-[#D9E1ED] dark:bg-[oklch(0.14_0.026_258)] dark:group-hover:bg-[oklch(0.21_0.024_258)]"
+                                : "px-4 py-3 bg-[#D6DCE8] group-hover:bg-[#C7D2E3] dark:bg-[oklch(0.185_0.024_258)] dark:group-hover:bg-[oklch(0.21_0.024_258)]"}
+                              style={{ position: "sticky", right: 0, zIndex: 1, minWidth: 108, boxShadow: "-1px 0 0 rgba(100,116,139,0.18)" }}
+                            >
                               <div className="flex items-center justify-end gap-1">
                                 {(exp.status === "pendente" || exp.status === "prevista" || exp.status === "atrasada") && (
                                   <button disabled={actionLoading === exp.id} onClick={() => handleMarkExpensePaid(exp.id)} title="Marcar como paga"
-                                    className="h-7 w-7 rounded flex items-center justify-center text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-950/30 transition-colors disabled:opacity-40">
+                                    className="h-[26px] w-[26px] rounded-[8px] bg-white dark:bg-slate-800 border border-[#e8edf5] dark:border-slate-700 text-emerald-600 dark:text-slate-500 shadow-[0_4px_10px_rgba(15,23,42,0.06)] hover:bg-gradient-to-br hover:from-[#2558FF] hover:via-[#6E2C96] hover:to-[#D92293] hover:text-white dark:hover:text-[#0a1628] hover:border-transparent hover:shadow-[0_8px_18px_rgba(15,23,42,0.18)] hover:-translate-y-px transition-all duration-150">
                                     <CheckCircle2 className="h-4 w-4" />
                                   </button>
                                 )}
                                 <button onClick={() => openEditExpenseSheet(exp)} title="Editar"
-                                  className="h-7 w-7 rounded flex items-center justify-center text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors">
+                                  className="h-[26px] w-[26px] rounded-[8px] bg-white dark:bg-slate-800 border border-[#e8edf5] dark:border-slate-700 text-slate-500 dark:text-slate-500 shadow-[0_4px_10px_rgba(15,23,42,0.06)] hover:bg-gradient-to-br hover:from-[#2558FF] hover:via-[#6E2C96] hover:to-[#D92293] hover:text-white dark:hover:text-[#0a1628] hover:border-transparent hover:shadow-[0_8px_18px_rgba(15,23,42,0.18)] hover:-translate-y-px transition-all duration-150">
                                   <Pencil className="h-3.5 w-3.5" />
                                 </button>
                                 <button disabled={actionLoading === exp.id} onClick={() => setExpDeleteTarget(exp.id)} title="Excluir"
-                                  className="h-7 w-7 rounded flex items-center justify-center text-slate-400 hover:bg-red-50 dark:hover:bg-red-950/30 hover:text-red-600 transition-colors disabled:opacity-40">
+                                  className="h-[26px] w-[26px] rounded-[8px] bg-white dark:bg-slate-800 border border-[#e8edf5] dark:border-slate-700 text-red-500 dark:text-red-400 shadow-[0_4px_10px_rgba(15,23,42,0.06)] hover:bg-gradient-to-br hover:from-[#2558FF] hover:via-[#6E2C96] hover:to-[#D92293] hover:text-white dark:hover:text-[#0a1628] hover:border-transparent hover:shadow-[0_8px_18px_rgba(15,23,42,0.18)] hover:-translate-y-px transition-all duration-150">
                                   <Trash2 className="h-4 w-4" />
                                 </button>
                               </div>
@@ -1754,19 +1863,14 @@ export default function AdminFinanceiroPage() {
                   </tbody>
                 </table>
               </div>
-              <div className="px-4 py-2.5 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between">
-                <p className="text-xs text-slate-400">{expenseTotal} despesa{expenseTotal !== 1 ? "s" : ""}</p>
-                <div className="flex items-center gap-0.5">
-                  <button onClick={() => setExpPage(p => Math.max(1, p - 1))} disabled={expPage === 1}
-                    className="h-7 w-7 rounded flex items-center justify-center disabled:opacity-30 hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-500 transition-colors">
-                    <ChevronLeft className="h-4 w-4" />
-                  </button>
-                  <span className="text-xs text-slate-400 px-1">{expPage} / {expTotalPages}</span>
-                  <button onClick={() => setExpPage(p => Math.min(expTotalPages, p + 1))} disabled={expPage === expTotalPages}
-                    className="h-7 w-7 rounded flex items-center justify-center disabled:opacity-30 hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-500 transition-colors">
-                    <ChevronRight className="h-4 w-4" />
-                  </button>
-                </div>
+              <div className="px-4 py-2.5 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between gap-3">
+                <p className="text-xs text-slate-400 shrink-0">{expenseTotal} despesa{expenseTotal !== 1 ? "s" : ""}</p>
+                {hasHorizontalOverflow && (
+                  <div ref={bottomScrollRef} onScroll={handleBottomBarScroll} title="Arraste para rolar a tabela na horizontal" className="hidden md:block flex-1 min-w-[80px] overflow-x-scroll allka-table-scroll self-center">
+                    <div style={{ minWidth: 900, height: 1 }} />
+                  </div>
+                )}
+                <MiniPagination curPage={expPage} totalPages={expTotalPages} onChange={setExpPage} />
               </div>
             </Card>
           </>
@@ -1955,17 +2059,28 @@ export default function AdminFinanceiroPage() {
 
             {/* Wallet table */}
             <Card className="overflow-hidden">
-              <div className="overflow-x-auto allka-table-scroll">
+              <div ref={tableScrollRef} onScroll={handleTableScroll} className="overflow-x-auto allka-table-scroll-body">
                 <table className="w-full text-sm min-w-[600px]">
                   <thead style={{ position: "sticky", top: 0, zIndex: 2, background: "var(--table-head)", boxShadow: "0 1px 0 rgba(148,163,184,0.3)" }}>
                     <tr>
-                      <th className="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide">Titular</th>
+                      <th className="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide">
+                        <SortableHeader label="Titular" field="owner_name" type="text" sortKey={waSK ? String(waSK) : null} sortDir={waSD} onSort={handleWaSort} />
+                      </th>
                       <th className="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide">Perfil</th>
-                      <th className="text-right px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide">Saldo</th>
+                      <th className="text-right px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide">
+                        <SortableHeader label="Saldo" field="balance" type="number" sortKey={waSK ? String(waSK) : null} sortDir={waSD} onSort={handleWaSort} />
+                      </th>
                       <th className="text-right px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide">Bloqueado</th>
                       <th className="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide">Status</th>
-                      <th className="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide">Atualizada</th>
-                      <th className="text-right px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide">Ações</th>
+                      <th className="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide">
+                        <SortableHeader label="Atualizada" field="updated_at" type="date" sortKey={waSK ? String(waSK) : null} sortDir={waSD} onSort={handleWaSort} />
+                      </th>
+                      <th
+                        className="text-right px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide"
+                        style={{ position: "sticky", right: 0, top: 0, zIndex: 3, minWidth: 150, background: "var(--table-head)", boxShadow: "-1px 0 0 rgba(100,116,139,0.18), 0 1px 0 rgba(148,163,184,0.3)" }}
+                      >
+                        Ações
+                      </th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
@@ -1982,19 +2097,19 @@ export default function AdminFinanceiroPage() {
                         </td>
                       </tr>
                     ) : (
-                      wallets.map((w, idx) => (
+                      sortWalletsFn(wallets).map((w, idx) => (
                         <tr key={w.id} className={idx % 2 === 0
-                          ? "bg-[var(--table-row)] hover:bg-[var(--table-row-hover)]"
-                          : "bg-[var(--table-row-alt)] hover:bg-[var(--table-row-hover)]"}>
+                          ? "group bg-[#F1F4F9] dark:bg-[oklch(0.14_0.026_258)] hover:bg-[#D9E1ED] dark:hover:bg-[oklch(0.21_0.024_258)]"
+                          : "group bg-[#DCE3EE] dark:bg-[oklch(0.185_0.024_258)] hover:bg-[#C7D2E3] dark:hover:bg-[oklch(0.21_0.024_258)]"}>
                           <td className="px-4 py-3">
                             <p className="font-medium text-slate-800 dark:text-slate-200 text-xs">{w.owner_name}</p>
                             {w.owner_email && <p className="text-[11px] text-slate-400 mt-0.5">{w.owner_email}</p>}
                             {w.owner_cnpj  && <p className="text-[10px] text-slate-400">{w.owner_cnpj}</p>}
                           </td>
                           <td className="px-4 py-3">
-                            <Badge variant="outline" className={`text-[10px] font-semibold ${WALLET_OWNER_COLORS[w.owner_type] || ""}`}>
+                            <NeonBadge color={WALLET_OWNER_COLOR_TOKEN[w.owner_type] || "slate"}>
                               {WALLET_OWNER_LABELS[w.owner_type] || w.owner_type}
-                            </Badge>
+                            </NeonBadge>
                           </td>
                           <td className="px-4 py-3 text-right">
                             <p className={`font-bold tabular-nums text-sm ${w.balance > 0 ? "text-emerald-600 dark:text-emerald-400" : "text-slate-400"}`}>
@@ -2007,19 +2122,24 @@ export default function AdminFinanceiroPage() {
                             ) : <span className="text-slate-300 dark:text-slate-600 text-xs">—</span>}
                           </td>
                           <td className="px-4 py-3">
-                            <Badge variant="outline" className={`text-[10px] font-semibold ${WALLET_STATUS_CLASSES[w.status] || ""}`}>
+                            <NeonBadge color={WALLET_STATUS_COLOR[w.status] || "slate"}>
                               {WALLET_STATUS_LABELS[w.status] || w.status}
-                            </Badge>
+                            </NeonBadge>
                           </td>
                           <td className="px-4 py-3 text-xs text-slate-400 dark:text-slate-500">{fmtDate(w.updated_at)}</td>
-                          <td className="px-4 py-3">
+                          <td
+                            className={idx % 2 === 0
+                              ? "px-4 py-3 bg-[#ECEFF4] group-hover:bg-[#D9E1ED] dark:bg-[oklch(0.14_0.026_258)] dark:group-hover:bg-[oklch(0.21_0.024_258)]"
+                              : "px-4 py-3 bg-[#D6DCE8] group-hover:bg-[#C7D2E3] dark:bg-[oklch(0.185_0.024_258)] dark:group-hover:bg-[oklch(0.21_0.024_258)]"}
+                            style={{ position: "sticky", right: 0, zIndex: 1, minWidth: 150, boxShadow: "-1px 0 0 rgba(100,116,139,0.18)" }}
+                          >
                             <div className="flex items-center justify-end gap-1">
                               <button onClick={() => openExtrato(w)} title="Ver extrato"
                                 className="h-7 px-2 rounded-md flex items-center gap-1 text-[11px] font-medium text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-950/30 transition-colors">
                                 <ExternalLink className="h-3.5 w-3.5" /> Extrato
                               </button>
                               <button onClick={() => { setAdjustWallet(w); setAdjustForm({ direction: "credit", amount: "", description: "", notes: "" }); setAdjustOpen(true); }} title="Lançar ajuste"
-                                className="h-7 w-7 rounded flex items-center justify-center text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors">
+                                className="h-[26px] w-[26px] rounded-[8px] bg-white dark:bg-slate-800 border border-[#e8edf5] dark:border-slate-700 text-slate-500 dark:text-slate-500 shadow-[0_4px_10px_rgba(15,23,42,0.06)] hover:bg-gradient-to-br hover:from-[#2558FF] hover:via-[#6E2C96] hover:to-[#D92293] hover:text-white dark:hover:text-[#0a1628] hover:border-transparent hover:shadow-[0_8px_18px_rgba(15,23,42,0.18)] hover:-translate-y-px transition-all duration-150">
                                 <DollarSign className="h-3.5 w-3.5" />
                               </button>
                             </div>
@@ -2030,19 +2150,14 @@ export default function AdminFinanceiroPage() {
                   </tbody>
                 </table>
               </div>
-              <div className="px-4 py-2.5 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between">
-                <p className="text-xs text-slate-400">{walletTotal} carteira{walletTotal !== 1 ? "s" : ""}</p>
-                <div className="flex items-center gap-0.5">
-                  <button onClick={() => setWalletPage(p => Math.max(1, p - 1))} disabled={walletPage === 1}
-                    className="h-7 w-7 rounded flex items-center justify-center disabled:opacity-30 hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-500 transition-colors">
-                    <ChevronLeft className="h-4 w-4" />
-                  </button>
-                  <span className="text-xs text-slate-400 px-1">{walletPage} / {walletTotalPages}</span>
-                  <button onClick={() => setWalletPage(p => Math.min(walletTotalPages, p + 1))} disabled={walletPage === walletTotalPages}
-                    className="h-7 w-7 rounded flex items-center justify-center disabled:opacity-30 hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-500 transition-colors">
-                    <ChevronRight className="h-4 w-4" />
-                  </button>
-                </div>
+              <div className="px-4 py-2.5 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between gap-3">
+                <p className="text-xs text-slate-400 shrink-0">{walletTotal} carteira{walletTotal !== 1 ? "s" : ""}</p>
+                {hasHorizontalOverflow && (
+                  <div ref={bottomScrollRef} onScroll={handleBottomBarScroll} title="Arraste para rolar a tabela na horizontal" className="hidden md:block flex-1 min-w-[80px] overflow-x-scroll allka-table-scroll self-center">
+                    <div style={{ minWidth: 900, height: 1 }} />
+                  </div>
+                )}
+                <MiniPagination curPage={walletPage} totalPages={walletTotalPages} onChange={setWalletPage} />
               </div>
             </Card>
           </>
@@ -2093,19 +2208,28 @@ export default function AdminFinanceiroPage() {
 
             {/* Squad table */}
             <Card className="overflow-hidden">
-              <div className="overflow-x-auto allka-table-scroll">
+              <div ref={tableScrollRef} onScroll={handleTableScroll} className="overflow-x-auto allka-table-scroll-body">
                 <table className="w-full text-sm min-w-[600px]">
                   <thead style={{ position: "sticky", top: 0, zIndex: 2, background: "var(--table-head)", boxShadow: "0 1px 0 rgba(148,163,184,0.3)" }}>
                     <tr>
                       <th className="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide">Empresa</th>
-                      <th className="text-right px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide">Limite</th>
-                      <th className="text-right px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide">Mínimo/mês</th>
+                      <th className="text-right px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide">
+                        <SortableHeader label="Limite" field="credit_limit" type="number" sortKey={sqSK ? String(sqSK) : null} sortDir={sqSD} onSort={handleSqSort} />
+                      </th>
+                      <th className="text-right px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide">
+                        <SortableHeader label="Mínimo/mês" field="monthly_minimum" type="number" sortKey={sqSK ? String(sqSK) : null} sortDir={sqSD} onSort={handleSqSort} />
+                      </th>
                       <th className="text-right px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide">Saldo carteira</th>
                       <th className="text-right px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide">Disponível</th>
                       <th className="text-center px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide">Fechamento</th>
                       <th className="text-center px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide">Prazo</th>
                       <th className="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide">Status</th>
-                      <th className="text-right px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide">Ações</th>
+                      <th
+                        className="text-right px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide"
+                        style={{ position: "sticky", right: 0, top: 0, zIndex: 3, minWidth: 130, background: "var(--table-head)", boxShadow: "-1px 0 0 rgba(100,116,139,0.18), 0 1px 0 rgba(148,163,184,0.3)" }}
+                      >
+                        Ações
+                      </th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
@@ -2122,16 +2246,17 @@ export default function AdminFinanceiroPage() {
                         </td>
                       </tr>
                     ) : (
-                      squadList
-                        .filter(s => !squadSearch.trim() || s.company?.name?.toLowerCase().includes(squadSearch.toLowerCase()))
+                      sortSquad(
+                        squadList.filter(s => !squadSearch.trim() || s.company?.name?.toLowerCase().includes(squadSearch.toLowerCase())),
+                      )
                         .slice(0, squadPerPage)
                         .map((sq, idx) => {
                           const walletBalance = sq.wallet?.balance ?? 0;
                           const available = (sq.credit_limit ?? 0) + walletBalance;
-                          const statusMap = { active: { label: "Ativo", cls: "bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/30 dark:text-emerald-400" }, suspended: { label: "Suspenso", cls: "bg-amber-50 text-amber-700 border-amber-200" }, cancelled: { label: "Cancelado", cls: "bg-slate-100 text-slate-400 border-slate-200" } };
-                          const st = statusMap[sq.status] || { label: sq.status, cls: "" };
+                          const statusMap = { active: { label: "Ativo", color: "emerald" }, suspended: { label: "Suspenso", color: "amber" }, cancelled: { label: "Cancelado", color: "slate" } };
+                          const st = statusMap[sq.status] || { label: sq.status, color: "slate" };
                           return (
-                            <tr key={sq.id} className={idx % 2 === 0 ? "bg-[var(--table-row)] hover:bg-[var(--table-row-hover)]" : "bg-[var(--table-row-alt)] hover:bg-[var(--table-row-hover)]"}>
+                            <tr key={sq.id} className={idx % 2 === 0 ? "group bg-[#F1F4F9] dark:bg-[oklch(0.14_0.026_258)] hover:bg-[#D9E1ED] dark:hover:bg-[oklch(0.21_0.024_258)]" : "group bg-[#DCE3EE] dark:bg-[oklch(0.185_0.024_258)] hover:bg-[#C7D2E3] dark:hover:bg-[oklch(0.21_0.024_258)]"}>
                               <td className="px-4 py-3">
                                 <p className="font-medium text-slate-800 dark:text-slate-200 text-xs">{sq.company?.name ?? "—"}</p>
                                 {sq.company?.cnpj && <p className="text-[10px] text-slate-400">{sq.company.cnpj}</p>}
@@ -2155,9 +2280,14 @@ export default function AdminFinanceiroPage() {
                                 <span className="text-xs text-slate-500">{sq.payment_terms}d</span>
                               </td>
                               <td className="px-4 py-3">
-                                <Badge variant="outline" className={`text-[10px] font-semibold ${st.cls}`}>{st.label}</Badge>
+                                <NeonBadge color={st.color}>{st.label}</NeonBadge>
                               </td>
-                              <td className="px-4 py-3">
+                              <td
+                                className={idx % 2 === 0
+                                  ? "px-4 py-3 bg-[#ECEFF4] group-hover:bg-[#D9E1ED] dark:bg-[oklch(0.14_0.026_258)] dark:group-hover:bg-[oklch(0.21_0.024_258)]"
+                                  : "px-4 py-3 bg-[#D6DCE8] group-hover:bg-[#C7D2E3] dark:bg-[oklch(0.185_0.024_258)] dark:group-hover:bg-[oklch(0.21_0.024_258)]"}
+                                style={{ position: "sticky", right: 0, zIndex: 1, minWidth: 130, boxShadow: "-1px 0 0 rgba(100,116,139,0.18)" }}
+                              >
                                 <div className="flex items-center justify-end gap-1">
                                   <button
                                     onClick={async () => {
@@ -2173,7 +2303,7 @@ export default function AdminFinanceiroPage() {
                                   </button>
                                   <button
                                     onClick={() => { setSquadEditTarget(sq); setSquadForm({ company_id: sq.company_id, credit_limit: String(sq.credit_limit), monthly_minimum: String(sq.monthly_minimum), billing_day: String(sq.billing_day), payment_terms: String(sq.payment_terms), notes: sq.notes ?? "" }); setSquadAddOpen(true); }}
-                                    className="h-7 w-7 rounded flex items-center justify-center text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors"
+                                    className="h-[26px] w-[26px] rounded-[8px] bg-white dark:bg-slate-800 border border-[#e8edf5] dark:border-slate-700 text-slate-500 dark:text-slate-500 shadow-[0_4px_10px_rgba(15,23,42,0.06)] hover:bg-gradient-to-br hover:from-[#2558FF] hover:via-[#6E2C96] hover:to-[#D92293] hover:text-white dark:hover:text-[#0a1628] hover:border-transparent hover:shadow-[0_8px_18px_rgba(15,23,42,0.18)] hover:-translate-y-px transition-all duration-150"
                                     title="Editar Squad"
                                   >
                                     <Pencil className="h-3.5 w-3.5" />
@@ -2303,19 +2433,28 @@ export default function AdminFinanceiroPage() {
 
             {/* Tabela de conciliação */}
             <Card className="overflow-hidden">
-              <div className="overflow-x-auto allka-table-scroll">
+              <div ref={tableScrollRef} onScroll={handleTableScroll} className="overflow-x-auto allka-table-scroll-body">
                 <table className="w-full text-sm min-w-[600px]">
                   <thead style={{ position: "sticky", top: 0, zIndex: 2, background: "var(--table-head)", boxShadow: "0 1px 0 rgba(148,163,184,0.3)" }}>
                     <tr>
-                      <th className="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide whitespace-nowrap">Data/Hora</th>
+                      <th className="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide whitespace-nowrap">
+                        <SortableHeader label="Data/Hora" field="created_at" type="date" sortKey={ccSK ? String(ccSK) : null} sortDir={ccSD} onSort={handleCcSort} />
+                      </th>
                       <th className="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide">Titular</th>
                       <th className="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide">Perfil</th>
                       <th className="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide">Tipo</th>
                       <th className="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide">Origem</th>
                       <th className="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide">Descrição</th>
-                      <th className="text-right px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide">Valor</th>
+                      <th className="text-right px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide">
+                        <SortableHeader label="Valor" field="amount" type="number" sortKey={ccSK ? String(ccSK) : null} sortDir={ccSD} onSort={handleCcSort} />
+                      </th>
                       <th className="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide">Referência</th>
-                      <th className="text-right px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide">Ações</th>
+                      <th
+                        className="text-right px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide"
+                        style={{ position: "sticky", right: 0, top: 0, zIndex: 3, minWidth: 108, background: "var(--table-head)", boxShadow: "-1px 0 0 rgba(100,116,139,0.18), 0 1px 0 rgba(148,163,184,0.3)" }}
+                      >
+                        Ações
+                      </th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
@@ -2332,28 +2471,28 @@ export default function AdminFinanceiroPage() {
                         </td>
                       </tr>
                     ) : (
-                      concilData.map((entry, idx) => {
+                      sortConcil(concilData).map((entry, idx) => {
                         const isBankIn = entry.bank_impact === "bank_in";
                         const ownerLabels = { company: "Empresa", agency: "Agência", nomad: "Nômade", partner: "Parceiro", platform: "Plataforma" };
-                        const ownerColors = { company: "bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-950/30 dark:text-blue-400", agency: "bg-violet-50 text-violet-700 border-violet-200 dark:bg-violet-950/30 dark:text-violet-400", nomad: "bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/30 dark:text-emerald-400", partner: "bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/30 dark:text-amber-400", platform: "bg-slate-100 text-slate-600 border-slate-200 dark:bg-slate-800 dark:text-slate-400" };
+                        const ownerColors = { company: "blue", agency: "violet", nomad: "emerald", partner: "amber", platform: "slate" };
                         const originLabels = { payment: "Pagamento", pix: "PIX", boleto: "Boleto", card: "Cartão", plan: "Plano", recharge: "Recarga", additional_credit: "Créd. Adicional", invoice_payment: "Fatura", invoice: "Fatura", squad_payment: "Squad", withdrawal: "Saque", transfer: "Transferência", refund: "Reembolso", chargeback: "Estorno", bank_fee: "Taxa Bancária", external_payment: "Pag. Externo" };
                         return (
-                          <tr key={entry.id} className={idx % 2 === 0 ? "bg-[var(--table-row)] hover:bg-[var(--table-row-hover)]" : "bg-[var(--table-row-alt)] hover:bg-[var(--table-row-hover)]"}>
+                          <tr key={entry.id} className={idx % 2 === 0 ? "group bg-[#F1F4F9] dark:bg-[oklch(0.14_0.026_258)] hover:bg-[#D9E1ED] dark:hover:bg-[oklch(0.21_0.024_258)]" : "group bg-[#DCE3EE] dark:bg-[oklch(0.185_0.024_258)] hover:bg-[#C7D2E3] dark:hover:bg-[oklch(0.21_0.024_258)]"}>
                             <td className="px-4 py-3 text-xs text-slate-500 whitespace-nowrap">{fmtDateTime(entry.created_at)}</td>
                             <td className="px-4 py-3">
                               <p className="font-medium text-slate-800 dark:text-slate-200 text-xs leading-tight">{entry.wallet?.owner_name ?? "—"}</p>
                               {entry.wallet?.owner_email && <p className="text-[10px] text-slate-400">{entry.wallet.owner_email}</p>}
                             </td>
                             <td className="px-4 py-3">
-                              <Badge variant="outline" className={`text-[10px] font-semibold ${ownerColors[entry.wallet?.owner_type] || ""}`}>
+                              <NeonBadge color={ownerColors[entry.wallet?.owner_type] || "slate"}>
                                 {ownerLabels[entry.wallet?.owner_type] || entry.wallet?.owner_type || "—"}
-                              </Badge>
+                              </NeonBadge>
                             </td>
                             <td className="px-4 py-3">
-                              <span className={`inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full ${isBankIn ? "bg-emerald-100 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-400" : "bg-red-100 dark:bg-red-950/40 text-red-700 dark:text-red-400"}`}>
+                              <NeonBadge color={isBankIn ? "emerald" : "red"} className="inline-flex items-center gap-1">
                                 {isBankIn ? <ArrowUpCircle className="h-2.5 w-2.5" /> : <ArrowDownCircle className="h-2.5 w-2.5" />}
                                 {isBankIn ? "Entrada real" : "Saída real"}
-                              </span>
+                              </NeonBadge>
                             </td>
                             <td className="px-4 py-3">
                               <span className="text-[11px] text-slate-600 dark:text-slate-400 font-medium">{originLabels[entry.type] || entry.type}</span>
@@ -2374,7 +2513,12 @@ export default function AdminFinanceiroPage() {
                                 </div>
                               ) : <span className="text-slate-300 dark:text-slate-600 text-xs">—</span>}
                             </td>
-                            <td className="px-4 py-3">
+                            <td
+                              className={idx % 2 === 0
+                                ? "px-4 py-3 bg-[#ECEFF4] group-hover:bg-[#D9E1ED] dark:bg-[oklch(0.14_0.026_258)] dark:group-hover:bg-[oklch(0.21_0.024_258)]"
+                                : "px-4 py-3 bg-[#D6DCE8] group-hover:bg-[#C7D2E3] dark:bg-[oklch(0.185_0.024_258)] dark:group-hover:bg-[oklch(0.21_0.024_258)]"}
+                              style={{ position: "sticky", right: 0, zIndex: 1, minWidth: 108, boxShadow: "-1px 0 0 rgba(100,116,139,0.18)" }}
+                            >
                               <div className="flex items-center justify-end gap-1">
                                 <button
                                   onClick={() => openExtrato(entry.wallet)}
@@ -2394,26 +2538,14 @@ export default function AdminFinanceiroPage() {
               </div>
               {/* Paginação */}
               {concilTotal > 0 && (
-                <div className="px-4 py-2.5 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between">
-                  <p className="text-xs text-slate-400">{concilTotal} transaç{concilTotal !== 1 ? "ões" : "ão"} conciliável{concilTotal !== 1 ? "is" : ""}</p>
-                  <div className="flex items-center gap-0.5">
-                    {(() => {
-                      const totalPages = Math.max(1, Math.ceil(concilTotal / concilPerPage));
-                      return (
-                        <>
-                          <button onClick={() => setConcilPage(p => Math.max(1, p - 1))} disabled={concilPage === 1}
-                            className="h-7 w-7 rounded flex items-center justify-center disabled:opacity-30 hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-500 transition-colors">
-                            <ChevronLeft className="h-4 w-4" />
-                          </button>
-                          <span className="text-xs text-slate-400 px-1">{concilPage} / {totalPages}</span>
-                          <button onClick={() => setConcilPage(p => Math.min(totalPages, p + 1))} disabled={concilPage === totalPages}
-                            className="h-7 w-7 rounded flex items-center justify-center disabled:opacity-30 hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-500 transition-colors">
-                            <ChevronRight className="h-4 w-4" />
-                          </button>
-                        </>
-                      );
-                    })()}
-                  </div>
+                <div className="px-4 py-2.5 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between gap-3">
+                  <p className="text-xs text-slate-400 shrink-0">{concilTotal} transaç{concilTotal !== 1 ? "ões" : "ão"} conciliável{concilTotal !== 1 ? "is" : ""}</p>
+                  {hasHorizontalOverflow && (
+                    <div ref={bottomScrollRef} onScroll={handleBottomBarScroll} title="Arraste para rolar a tabela na horizontal" className="hidden md:block flex-1 min-w-[80px] overflow-x-scroll allka-table-scroll self-center">
+                      <div style={{ minWidth: 900, height: 1 }} />
+                    </div>
+                  )}
+                  <MiniPagination curPage={concilPage} totalPages={Math.max(1, Math.ceil(concilTotal / concilPerPage))} onChange={setConcilPage} />
                 </div>
               )}
             </Card>

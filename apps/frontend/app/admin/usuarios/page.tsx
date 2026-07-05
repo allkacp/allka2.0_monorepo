@@ -1,12 +1,11 @@
 // @ts-nocheck
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import { useItemsPerPage } from "@/lib/use-items-per-page";
 import { useNavigate, useParams } from "react-router-dom";
 import { ButtonLoader, PageLoader } from "@/components/ui/loading";
 import { ExportButton } from "@/components/export-button";
 import { IconToolbarButton } from "@/components/icon-toolbar-button";
 import { NeonBadge } from "@/components/neon-badge";
-import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -43,11 +42,13 @@ import {
   GripVertical,
   Pencil,
   AlertTriangle,
+  Mail,
 } from "lucide-react";
 import { useSorting, SortableHeader } from "@/hooks/useSorting";
 import { useTableScrollSync } from "@/hooks/useTableScrollSync";
 import type { User } from "@/types/user";
 import { UserViewSlidePanel } from "@/components/user-view-slide-panel";
+import { SlidePanel } from "@/components/slide-panel";
 import {
   Accordion,
   AccordionContent,
@@ -101,6 +102,16 @@ import { useToast } from "@/components/ui/use-toast";
 import { useSidebar } from "@/contexts/sidebar-context";
 import { PageHeader } from "@/components/page-header";
 
+type ColKey = "usuario" | "contato" | "tipo_funcao" | "status" | "ultimo_acesso";
+const ALL_COLUMNS: { key: ColKey; label: string; info: string }[] = [
+  { key: "usuario", label: "Usuário", info: "Nome, e-mail e status de presença do usuário." },
+  { key: "contato", label: "Contato", info: "Atalhos para ligar ou chamar no WhatsApp." },
+  { key: "tipo_funcao", label: "Tipo / Função", info: "Tipo de conta, função na plataforma e sinalizações de LGPD." },
+  { key: "status", label: "Status", info: "Situação da conta: ativo, bloqueado ou pausado automaticamente." },
+  { key: "ultimo_acesso", label: "Último Acesso", info: "Data do último login e tempo de inatividade." },
+];
+const DEFAULT_VISIBLE: ColKey[] = ["usuario", "contato", "tipo_funcao", "status", "ultimo_acesso"];
+
 // ── Inactivity bucket helper ───────────────────────────────────────────────
 function computeInactivityBucket(lastLogin?: string | null): string {
   if (!lastLogin) return "never";
@@ -129,6 +140,7 @@ export default function UsuariosPage() {
   } = useUsers();
   const { toast } = useToast();
   const { sidebarWidth, sidebarSettings, previewTheme } = useSidebar();
+  const [visibleCols, setVisibleCols] = useState<Set<ColKey>>(new Set(DEFAULT_VISIBLE));
   const {
     tableScrollRef,
     topScrollRef,
@@ -137,7 +149,7 @@ export default function UsuariosPage() {
     handleTableScroll,
     handleBottomBarScroll,
     hasHorizontalOverflow,
-  } = useTableScrollSync([usersLoading]);
+  } = useTableScrollSync([usersLoading, visibleCols.size]);
   const getHeaderStyle = () => {
     const theme = previewTheme || sidebarSettings;
     const bg = theme?.backgroundColor;
@@ -225,6 +237,11 @@ export default function UsuariosPage() {
   const [dismissedInactivityAlert, setDismissedInactivityAlert] =
     useState(false);
   const [showCreateUser, setShowCreateUser] = useState(false);
+  const [colConfigOpen, setColConfigOpen] = useState(false);
+  const [searchFocused, setSearchFocused] = useState(false);
+  const searchBoxRef = useRef<HTMLDivElement>(null);
+  const [infoPanelOpen, setInfoPanelOpen] = useState(false);
+  const [infoPanelUser, setInfoPanelUser] = useState<any>(null);
   const [advancedFilters, setAdvancedFilters] = useState({
     // Identificação
     name: "",
@@ -532,6 +549,44 @@ export default function UsuariosPage() {
     return () => window.removeEventListener("resize", measure);
   }, []);
 
+  useEffect(() => {
+    const onClickOutside = (e: MouseEvent) => {
+      if (searchBoxRef.current && !searchBoxRef.current.contains(e.target as Node)) {
+        setSearchFocused(false);
+      }
+    };
+    document.addEventListener("mousedown", onClickOutside);
+    return () => document.removeEventListener("mousedown", onClickOutside);
+  }, []);
+
+  const searchSuggestions = useMemo(() => {
+    const q = searchTerm.trim().toLowerCase();
+    if (!q) return [];
+    return users
+      .filter(
+        (u) =>
+          (u.name || "").toLowerCase().includes(q) ||
+          (u.email || "").toLowerCase().includes(q) ||
+          (u.phone || "").replace(/\D/g, "").includes(q.replace(/\D/g, "")),
+      )
+      .slice(0, 6);
+  }, [users, searchTerm]);
+
+  const toggleCol = (key: ColKey) => {
+    setVisibleCols((prev) => {
+      const next = new Set(prev);
+      if (key === "usuario") return next; // required column, always visible
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  };
+
+  const openInfoPanel = (user: User) => {
+    setInfoPanelUser(user);
+    setInfoPanelOpen(true);
+  };
+
   const totalPages = Math.ceil(filteredUsers.length / pageSize);
 
   const [pageJumpValue, setPageJumpValue] = useState("");
@@ -575,6 +630,105 @@ export default function UsuariosPage() {
     }
     return pages;
   };
+
+  const PaginationControls = () => (
+    <div className="flex items-center gap-0.5 flex-shrink-0">
+      <button
+        onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
+        disabled={currentPage === 1}
+        title="Página anterior"
+        className="h-7 w-7 flex items-center justify-center rounded-full text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-30 disabled:pointer-events-none transition-colors"
+      >
+        <ChevronLeft className="h-3.5 w-3.5" />
+      </button>
+      {getPageNumbers().map((page, index) =>
+        page === "..." ? (
+          <span key={index} className="text-xs text-slate-300 px-0.5">
+            ·
+          </span>
+        ) : (
+          <button
+            key={index}
+            onClick={() => setCurrentPage(Number(page))}
+            title={page === currentPage ? "Página atual" : `Ir para a página ${page}`}
+            className={`h-7 w-7 flex items-center justify-center rounded-full text-xs font-bold transition-colors ${
+              page === currentPage
+                ? "text-white shadow-[0_6px_14px_rgba(110,44,150,0.25)]"
+                : "text-slate-500 hover:text-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 dark:text-slate-400"
+            }`}
+            style={page === currentPage ? { background: "linear-gradient(135deg, #111A4D 0%, #6E2C96 55%, #D92293 100%)" } : undefined}
+          >
+            {page}
+          </button>
+        ),
+      )}
+      <button
+        onClick={() => setCurrentPage(Math.min(totalPages, currentPage + 1))}
+        disabled={currentPage === totalPages}
+        title="Próxima página"
+        className="h-7 w-7 flex items-center justify-center rounded-full text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-30 disabled:pointer-events-none transition-colors"
+      >
+        <ChevronRight className="h-3.5 w-3.5" />
+      </button>
+      <TooltipProvider delayDuration={400}>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <div className="flex items-center gap-1 flex-shrink-0 ml-1.5 pl-1.5 border-l border-slate-200 dark:border-slate-700">
+              <input
+                type="number"
+                min={1}
+                max={totalPages}
+                value={pageJumpValue}
+                onChange={(e) => setPageJumpValue(e.target.value)}
+                onKeyDown={(e) => { if (e.key === "Enter") commitPageJump(); }}
+                placeholder="Pág."
+                aria-label="Ir para a página"
+                className="h-7 w-14 text-xs text-center rounded-[8px] border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+              />
+              <button
+                onClick={commitPageJump}
+                disabled={!pageJumpValue}
+                className="group relative h-7 px-2.5 rounded-[8px] text-xs font-medium border border-slate-200 dark:border-slate-700 hover:border-transparent overflow-hidden disabled:opacity-40 disabled:pointer-events-none transition-all"
+              >
+                <span
+                  className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none"
+                  style={{ background: "linear-gradient(135deg,#000000 0%,#1a2a6f 45%,#c81a7f 100%)" }}
+                />
+                <span className="relative z-10 text-[#7d1b6a] dark:text-[#c07ab0] group-hover:text-white transition-colors">Ir</span>
+              </button>
+            </div>
+          </TooltipTrigger>
+          <TooltipContent side="bottom">Ir diretamente para uma página</TooltipContent>
+        </Tooltip>
+      </TooltipProvider>
+    </div>
+  );
+
+  const CountText = ({ side = "bottom" as "top" | "bottom" }) => (
+    <TooltipProvider delayDuration={400}>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <span className="text-xs text-slate-400 whitespace-nowrap cursor-default">
+            {(() => {
+              const start = filteredUsers.length === 0 ? 0 : (currentPage - 1) * pageSize + 1;
+              const end = Math.min(currentPage * pageSize, filteredUsers.length);
+              return (
+                <>
+                  {start}-{end} de{" "}
+                  <span className="font-semibold text-slate-600 dark:text-slate-300">{filteredUsers.length}</span>{" "}
+                  usuário{filteredUsers.length !== 1 ? "s" : ""}
+                  {filteredUsers.length !== users.length && <> (de {users.length} no total)</>}
+                </>
+              );
+            })()}
+          </span>
+        </TooltipTrigger>
+        <TooltipContent side={side} sideOffset={6}>
+          Intervalo de usuários exibido nesta página, do total encontrado
+        </TooltipContent>
+      </Tooltip>
+    </TooltipProvider>
+  );
 
   const clearFilters = () => {
     setSearchTerm("");
@@ -1192,23 +1346,58 @@ export default function UsuariosPage() {
         />
       </div>
 
-      {/* Main Table Card */}
-      <Card className="border border-slate-200/70 dark:border-slate-700/60 shadow-sm overflow-hidden">
-        {/* Card Top Bar */}
-        <div className="flex items-center gap-3 px-5 py-3.5 border-b border-slate-200/70 dark:border-slate-700/60 bg-slate-50/60 dark:bg-slate-900/30">
-          {/* Search */}
-          <div className="flex-1 relative min-w-0">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+      {/* Main Table Card — bg-white/border/rounded-xl matching admin/empresas */}
+      <div className="bg-white dark:bg-slate-900 border border-[#e8edf5] dark:border-slate-700 rounded-xl shadow-sm overflow-hidden">
+        {/* Row 1 — search + icon toolbar buttons */}
+        <div className="flex items-center gap-2 flex-wrap px-[18px] py-3">
+          <div ref={searchBoxRef} className="relative flex-1 min-w-[220px] max-w-sm">
+            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <Input
-              placeholder="Nome, e-mail, telefone..."
+              placeholder="Nome, e-mail ou telefone..."
               value={searchTerm}
+              onFocus={() => setSearchFocused(true)}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="pl-9 h-9 text-sm bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 rounded-lg focus-visible:ring-blue-500 w-full"
+              className="pl-8 h-9 text-sm w-full"
             />
+            {searchFocused && searchTerm && (
+              <div className="absolute z-20 mt-1 w-full rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 shadow-lg max-h-64 overflow-y-auto">
+                {searchSuggestions.length === 0 ? (
+                  <p className="text-xs text-slate-400 px-3 py-2">Nenhum resultado</p>
+                ) : (
+                  searchSuggestions.map((u) => (
+                    <button
+                      key={u.id}
+                      onClick={() => {
+                        setSearchTerm(u.name);
+                        setSearchFocused(false);
+                      }}
+                      className="w-full flex items-center gap-2.5 px-3 py-2 text-left hover:bg-slate-50 dark:hover:bg-slate-700/60 transition-colors"
+                    >
+                      <Avatar className="h-7 w-7 flex-shrink-0">
+                        <AvatarFallback className="text-[10px] font-bold text-white bg-gradient-to-br from-blue-500 to-blue-700">
+                          {u.name.split(" ").map((n) => n[0]).join("").toUpperCase().slice(0, 2)}
+                        </AvatarFallback>
+                      </Avatar>
+                      <div className="min-w-0 flex-1">
+                        <p className="text-sm font-medium text-slate-700 dark:text-slate-200 truncate">{u.name}</p>
+                        <p className="text-[11px] text-slate-400 truncate">{u.email}</p>
+                      </div>
+                    </button>
+                  ))
+                )}
+              </div>
+            )}
           </div>
 
-          {/* Items per page + result count */}
-          <div className="flex items-center gap-2 flex-shrink-0">
+          <div className="ml-auto flex items-center gap-2">
+            <IconToolbarButton icon={Filter} tooltip="Filtros" onClick={() => setIsFilterModalOpen(true)} />
+            <IconToolbarButton icon={Settings2} tooltip="Configurar colunas" onClick={() => setColConfigOpen(true)} />
+          </div>
+        </div>
+
+        {/* Row 2 — items-per-page + count + scrollbar mirror + numbered pagination (mirrors admin/empresas) */}
+        <div className="flex flex-wrap items-center justify-between gap-3 px-[18px] py-2 border-y border-[#e8edf5] dark:border-slate-800 bg-white dark:bg-slate-900/30">
+          <div className="flex items-center gap-3">
             <ItemsPerPageSelect
               value={pageSize.toString()}
               onValueChange={(value) => {
@@ -1217,28 +1406,10 @@ export default function UsuariosPage() {
               }}
               variant="top"
             />
-            <span className="text-xs text-slate-400 whitespace-nowrap">
-              {filteredUsers.length !== users.length ? (
-                <>
-                  de{" "}
-                  <span className="font-semibold text-blue-500">
-                    {filteredUsers.length}
-                  </span>{" "}
-                  de {users.length}
-                </>
-              ) : (
-                <>
-                  de{" "}
-                  <span className="font-semibold text-slate-600 dark:text-slate-300">
-                    {users.length}
-                  </span>{" "}
-                  usuário{users.length !== 1 ? "s" : ""}
-                </>
-              )}
-            </span>
+            <CountText side="bottom" />
           </div>
 
-          {/* Horizontal scrollbar mirror — only rendered when the table
+          {/* Top horizontal scrollbar mirror — only rendered when the table
               actually overflows its container. */}
           {hasHorizontalOverflow && (
             <div
@@ -1248,91 +1419,14 @@ export default function UsuariosPage() {
               className="hidden md:block flex-1 min-w-[80px] overflow-x-scroll allka-table-scroll self-center"
               style={{ height: 12 }}
             >
-              <div style={{ minWidth: 1200, height: 1 }} />
+              <div style={{ minWidth: 960, height: 1 }} />
             </div>
           )}
 
-          {/* Filter Button */}
-          <IconToolbarButton
-            icon={Filter}
-            tooltip="Filtros"
-            onClick={() => setIsFilterModalOpen(true)}
-            className="h-9 w-9"
-          />
-
-          {/* Pagination */}
-          <div className="flex items-center gap-0.5 flex-shrink-0">
-            <button
-              onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
-              disabled={currentPage === 1}
-              className="h-7 w-7 flex items-center justify-center rounded-full text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-30 disabled:pointer-events-none transition-colors"
-            >
-              <ChevronLeft className="h-3.5 w-3.5" />
-            </button>
-            {getPageNumbers().map((page, index) =>
-              page === "..." ? (
-                <span key={index} className="text-xs text-slate-300 px-0.5">
-                  ·
-                </span>
-              ) : (
-                <button
-                  key={index}
-                  onClick={() => setCurrentPage(Number(page))}
-                  className={`h-7 w-7 flex items-center justify-center rounded-full text-xs font-semibold transition-colors ${
-                    page === currentPage
-                      ? "bg-blue-500 text-white shadow-sm shadow-blue-200 dark:shadow-blue-900/40"
-                      : "text-slate-500 hover:text-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 dark:text-slate-400"
-                  }`}
-                >
-                  {page}
-                </button>
-              ),
-            )}
-            <button
-              onClick={() =>
-                setCurrentPage(Math.min(totalPages, currentPage + 1))
-              }
-              disabled={currentPage === totalPages}
-              className="h-7 w-7 flex items-center justify-center rounded-full text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-30 disabled:pointer-events-none transition-colors"
-            >
-              <ChevronRight className="h-3.5 w-3.5" />
-            </button>
-            <TooltipProvider delayDuration={400}>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <div className="flex items-center gap-1 flex-shrink-0 ml-1.5 pl-1.5 border-l border-slate-200 dark:border-slate-700">
-                    <input
-                      type="number"
-                      min={1}
-                      max={totalPages}
-                      value={pageJumpValue}
-                      onChange={(e) => setPageJumpValue(e.target.value)}
-                      onKeyDown={(e) => { if (e.key === "Enter") commitPageJump(); }}
-                      placeholder="Pág."
-                      aria-label="Ir para a página"
-                      className="h-7 w-14 text-xs text-center rounded-[8px] border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-                    />
-                    <button
-                      onClick={commitPageJump}
-                      disabled={!pageJumpValue}
-                      className="group relative h-7 px-2.5 rounded-[8px] text-xs font-medium border border-slate-200 dark:border-slate-700 hover:border-transparent overflow-hidden disabled:opacity-40 disabled:pointer-events-none transition-all"
-                    >
-                      <span
-                        className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none"
-                        style={{ background: "linear-gradient(135deg,#000000 0%,#1a2a6f 45%,#c81a7f 100%)" }}
-                      />
-                      <span className="relative z-10 text-[#7d1b6a] dark:text-[#c07ab0] group-hover:text-white transition-colors">Ir</span>
-                    </button>
-                  </div>
-                </TooltipTrigger>
-                <TooltipContent side="bottom">Ir diretamente para uma página</TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
-          </div>
+          {totalPages > 1 && <PaginationControls />}
         </div>
 
-        <CardContent className="p-0">
-          <div>
+        <div>
             {/* Filter Modal — empresas layout */}
             {isFilterModalOpen &&
               (() => {
@@ -2354,143 +2448,109 @@ export default function UsuariosPage() {
             <div
               ref={tableScrollRef}
               onScroll={handleTableScroll}
-              className="overflow-x-auto allka-table-scroll"
+              className="overflow-x-auto allka-table-scroll-body"
             >
-              <table className="w-full text-xs">
+              <table className="w-full text-xs min-w-[960px]">
                 <thead>
                   <tr className="border-b border-slate-200/60 dark:border-slate-700/60">
                     <th
-                      className="text-left px-5 py-3 text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider"
-                      style={{
-                        borderRight: "1px solid rgba(148,163,184,0.25)",
-                        position: "sticky",
-                        top: 0,
-                        zIndex: 2,
-                        background: "var(--table-head)",
-                        boxShadow: "0 1px 0 rgba(148,163,184,0.3)",
-                      }}
-                    >
-                      <SortableHeader
-                        label="Usuário"
-                        field="name"
-                        type="text"
-                        sortKey={userSortKey ? String(userSortKey) : null}
-                        sortDir={userSortDir}
-                        onSort={handleUserSort}
-                      />
-                    </th>
-                    <th
-                      className="text-left px-5 py-3 text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider"
-                      style={{
-                        borderRight: "1px solid rgba(148,163,184,0.25)",
-                        position: "sticky",
-                        top: 0,
-                        zIndex: 2,
-                        background: "var(--table-head)",
-                        boxShadow: "0 1px 0 rgba(148,163,184,0.3)",
-                      }}
-                    >
-                      Contato
-                    </th>
-                    <th
-                      className="text-left px-5 py-3 text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider"
-                      style={{
-                        borderRight: "1px solid rgba(148,163,184,0.25)",
-                        position: "sticky",
-                        top: 0,
-                        zIndex: 2,
-                        background: "var(--table-head)",
-                        boxShadow: "0 1px 0 rgba(148,163,184,0.3)",
-                      }}
-                    >
-                      <SortableHeader
-                        label="Tipo / Função"
-                        field="account_type"
-                        type="status"
-                        sortKey={userSortKey ? String(userSortKey) : null}
-                        sortDir={userSortDir}
-                        onSort={handleUserSort}
-                        columnFilters={columnFilters}
-                        onFilter={toggleColumnFilter}
-                        onClearFilter={clearColumnFilter}
-                        filterValues={["company", "nomad", "agency"]}
-                      />
-                    </th>
-                    <th
-                      className="text-left px-5 py-3 text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider"
-                      style={{
-                        borderRight: "1px solid rgba(148,163,184,0.25)",
-                        position: "sticky",
-                        top: 0,
-                        zIndex: 2,
-                        background: "var(--table-head)",
-                        boxShadow: "0 1px 0 rgba(148,163,184,0.3)",
-                      }}
-                    >
-                      <SortableHeader
-                        label="Status"
-                        field="is_active"
-                        type="status"
-                        sortKey={userSortKey ? String(userSortKey) : null}
-                        sortDir={userSortDir}
-                        onSort={handleUserSort}
-                        columnFilters={columnFilters}
-                        onFilter={toggleColumnFilter}
-                        onClearFilter={clearColumnFilter}
-                        filterValues={["true", "false"]}
-                      />
-                    </th>
-                    <th
-                      className="text-left px-5 py-3 text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider"
-                      style={{
-                        borderRight: "1px solid rgba(148,163,184,0.25)",
-                        position: "sticky",
-                        top: 0,
-                        zIndex: 2,
-                        background: "var(--table-head)",
-                        boxShadow: "0 1px 0 rgba(148,163,184,0.3)",
-                      }}
-                    >
-                      <SortableHeader
-                        label="Último Acesso"
-                        field="inactivity_bucket"
-                        type="status"
-                        sortKey={userSortKey ? String(userSortKey) : null}
-                        sortDir={userSortDir}
-                        onSort={handleUserSort}
-                        columnFilters={columnFilters}
-                        onFilter={toggleColumnFilter}
-                        onClearFilter={clearColumnFilter}
-                        filterValues={[
-                          "never",
-                          "today",
-                          "7days",
-                          "30days",
-                          "inactive_30",
-                          "inactive_60",
-                          "inactive_90",
-                        ]}
-                      />
-                    </th>
-                    <th
-                      className="text-right px-5 py-3 text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider"
-                      style={{
-                        position: "sticky",
-                        right: 0,
-                        top: 0,
-                        zIndex: 3,
-                        borderLeft: "1px solid rgba(148,163,184,0.25)",
-                        background: "var(--table-head)",
-                        boxShadow:
-                          "-2px 0 6px rgba(0,0,0,0.06), 0 1px 0 rgba(148,163,184,0.3)",
-                      }}
+                      className="py-3.5 px-2 text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-[0.04em] text-center"
+                      style={{ position: "sticky", left: 0, top: 0, zIndex: 3, minWidth: 128, background: "var(--table-head)", boxShadow: "0 1px 0 rgba(148,163,184,0.22)", borderRight: "1px solid rgba(100,116,139,0.18)" }}
                     >
                       Ações
                     </th>
+                    {ALL_COLUMNS.filter((c) => visibleCols.has(c.key)).map((col) => (
+                      <th
+                        key={col.key}
+                        className="py-3.5 px-4 text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-[0.04em] select-none [&_button]:!text-[11px]"
+                        style={{
+                          position: "sticky",
+                          top: 0,
+                          zIndex: 2,
+                          background: "var(--table-head)",
+                          boxShadow: "0 1px 0 rgba(148,163,184,0.22)",
+                          borderRight: "1px solid rgba(148,163,184,0.16)",
+                        }}
+                      >
+                        <div className="inline-flex items-center gap-1">
+                          {col.key === "usuario" && (
+                            <SortableHeader
+                              label={col.label}
+                              field="name"
+                              type="text"
+                              sortKey={userSortKey ? String(userSortKey) : null}
+                              sortDir={userSortDir}
+                              onSort={handleUserSort}
+                            />
+                          )}
+                          {col.key === "contato" && (
+                            <span className="text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-[0.04em]">{col.label}</span>
+                          )}
+                          {col.key === "tipo_funcao" && (
+                            <SortableHeader
+                              label={col.label}
+                              field="account_type"
+                              type="status"
+                              sortKey={userSortKey ? String(userSortKey) : null}
+                              sortDir={userSortDir}
+                              onSort={handleUserSort}
+                              columnFilters={columnFilters}
+                              onFilter={toggleColumnFilter}
+                              onClearFilter={clearColumnFilter}
+                              filterValues={["company", "nomad", "agency"]}
+                            />
+                          )}
+                          {col.key === "status" && (
+                            <SortableHeader
+                              label={col.label}
+                              field="is_active"
+                              type="status"
+                              sortKey={userSortKey ? String(userSortKey) : null}
+                              sortDir={userSortDir}
+                              onSort={handleUserSort}
+                              columnFilters={columnFilters}
+                              onFilter={toggleColumnFilter}
+                              onClearFilter={clearColumnFilter}
+                              filterValues={["true", "false"]}
+                            />
+                          )}
+                          {col.key === "ultimo_acesso" && (
+                            <SortableHeader
+                              label={col.label}
+                              field="inactivity_bucket"
+                              type="status"
+                              sortKey={userSortKey ? String(userSortKey) : null}
+                              sortDir={userSortDir}
+                              onSort={handleUserSort}
+                              columnFilters={columnFilters}
+                              onFilter={toggleColumnFilter}
+                              onClearFilter={clearColumnFilter}
+                              filterValues={[
+                                "never",
+                                "today",
+                                "7days",
+                                "30days",
+                                "inactive_30",
+                                "inactive_60",
+                                "inactive_90",
+                              ]}
+                            />
+                          )}
+                          <TooltipProvider>
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <span className="text-slate-300 dark:text-slate-600 cursor-help text-[10px]">ⓘ</span>
+                              </TooltipTrigger>
+                              <TooltipContent className="text-xs max-w-[200px]">{col.info}</TooltipContent>
+                            </Tooltip>
+                          </TooltipProvider>
+                        </div>
+                      </th>
+                    ))}
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-                  {paginatedUsers.map((user) => {
+                  {paginatedUsers.map((user, i) => {
                     const accountBadge = getAccountTypeBadge(
                       user.account_type,
                       user.role,
@@ -2502,223 +2562,38 @@ export default function UsuariosPage() {
                     return (
                       <tr
                         key={user.id}
-                        className={`group transition-colors cursor-pointer ${
-                          paginatedUsers.indexOf(user) % 2 === 0
-                            ? "bg-[var(--table-row)] hover:bg-[var(--table-row-hover)]"
-                            : "bg-[var(--table-row-alt)] hover:bg-[var(--table-row-hover)]"
+                        className={`group transition-colors ${
+                          i % 2 === 0
+                            ? "bg-[#F1F4F9] dark:bg-[oklch(0.14_0.026_258)] hover:bg-[#D9E1ED] dark:hover:bg-[oklch(0.21_0.024_258)]"
+                            : "bg-[#DCE3EE] dark:bg-[oklch(0.185_0.024_258)] hover:bg-[#C7D2E3] dark:hover:bg-[oklch(0.21_0.024_258)]"
                         }`}
                       >
-                        <td
-                          className="px-5 py-3.5"
-                          style={{
-                            borderRight: "1px solid rgba(148,163,184,0.15)",
-                          }}
-                        >
-                          <div className="flex items-center gap-2.5">
-                            <div className="relative">
-                              <Avatar className="h-10 w-10 shadow-sm">
-                                <AvatarFallback
-                                  className={`text-xs font-bold text-white bg-gradient-to-br ${
-                                    user.account_type === "company" ||
-                                    user.account_type === "empresas"
-                                      ? "from-violet-500 to-purple-700"
-                                      : user.account_type === "agency" ||
-                                          user.account_type === "agencias"
-                                        ? "from-orange-500 to-rose-600"
-                                        : "from-blue-500 to-blue-700"
-                                  }`}
-                                >
-                                  {user.name
-                                    .split(" ")
-                                    .map((n) => n[0])
-                                    .join("")
-                                    .toUpperCase()
-                                    .slice(0, 2)}
-                                </AvatarFallback>
-                              </Avatar>
-                              <TooltipProvider>
-                                <Tooltip>
-                                  <TooltipTrigger asChild>
-                                    <div className="absolute -bottom-0.5 -right-0.5 scale-75">
-                                      {getOnlineStatusIndicator(
-                                        user.online_status,
-                                      )}
-                                    </div>
-                                  </TooltipTrigger>
-                                  <TooltipContent className="text-xs">
-                                    {user.online_status === "online" &&
-                                      "Online agora"}
-                                    {user.online_status === "offline" &&
-                                      "Offline"}
-                                    {user.online_status === "busy" && "Ocupado"}
-                                    {user.online_status === "away" && "Ausente"}
-                                    {user.last_login && (
-                                      <div>
-                                        Última atividade:{" "}
-                                        {new Date(
-                                          user.last_login,
-                                        ).toLocaleDateString("pt-BR")}{" "}
-                                        às{" "}
-                                        {new Date(
-                                          user.last_login,
-                                        ).toLocaleTimeString("pt-BR", {
-                                          hour: "2-digit",
-                                          minute: "2-digit",
-                                        })}
-                                      </div>
-                                    )}
-                                  </TooltipContent>
-                                </Tooltip>
-                              </TooltipProvider>
-                            </div>
-                            <div className="min-w-0">
-                              <p className="font-medium text-xs text-slate-900 dark:text-slate-100 truncate">
-                                {user.name}
-                              </p>
-                              <p className="text-xs text-slate-500 dark:text-slate-400 truncate">
-                                {user.email}
-                              </p>
-                            </div>
-                          </div>
-                        </td>
-                        <td
-                          className="px-5 py-3.5"
-                          style={{
-                            borderRight: "1px solid rgba(148,163,184,0.15)",
-                          }}
-                        >
-                          <div className="flex items-center gap-1">
-                            <TooltipProvider>
-                              <Tooltip>
-                                <TooltipTrigger asChild>
-                                  <Button
-                                    variant="ghost"
-                                    size="sm"
-                                    onClick={() => handlePhoneCall(user.phone)}
-                                    className="h-5 w-5 p-0 text-blue-500 hover:text-blue-700 hover:bg-blue-50 dark:text-blue-400 dark:hover:bg-blue-900/30 rounded"
-                                  >
-                                    <Phone className="h-2.5 w-2.5" />
-                                  </Button>
-                                </TooltipTrigger>
-                                <TooltipContent className="text-xs">
-                                  Ligar
-                                </TooltipContent>
-                              </Tooltip>
-                            </TooltipProvider>
-                            <TooltipProvider>
-                              <Tooltip>
-                                <TooltipTrigger asChild>
-                                  <Button
-                                    variant="ghost"
-                                    size="sm"
-                                    onClick={() => handleWhatsApp(user.phone)}
-                                    className="h-5 w-5 p-0 text-emerald-500 hover:text-emerald-700 hover:bg-emerald-50 dark:text-emerald-400 dark:hover:bg-emerald-900/30 rounded"
-                                  >
-                                    <MessageCircle className="h-2.5 w-2.5" />
-                                  </Button>
-                                </TooltipTrigger>
-                                <TooltipContent className="text-xs">
-                                  WhatsApp
-                                </TooltipContent>
-                              </Tooltip>
-                            </TooltipProvider>
-                          </div>
-                        </td>
-                        <td
-                          className="px-5 py-3.5"
-                          style={{
-                            borderRight: "1px solid rgba(148,163,184,0.15)",
-                          }}
-                        >
-                          <div className="space-y-0.5">
-                            <NeonBadge color={accountBadge.badgeColor}>
-                              {accountBadge.label}
-                            </NeonBadge>
-                            <p className="text-xs text-slate-600 dark:text-slate-400">
-                              {getRoleLabel(user.role)}
-                            </p>
-                            {!user.lgpd?.consent_given && (
-                              <NeonBadge color="orange" tooltip="Usuário ainda não aceitou os termos de consentimento LGPD.">
-                                Sem consentimento LGPD
-                              </NeonBadge>
-                            )}
-                            {user.lgpd?.deletion_requested && (
-                              <NeonBadge color="red" tooltip="Usuário solicitou a exclusão dos seus dados pessoais.">
-                                Exclusão solicitada
-                              </NeonBadge>
-                            )}
-                          </div>
-                        </td>
-                        <td
-                          className="px-5 py-3.5"
-                          style={{
-                            borderRight: "1px solid rgba(148,163,184,0.15)",
-                          }}
-                        >
-                          {user.auto_paused ? (
-                            <span className="allka-badge allka-badge-status-pausado">
-                              ⏸ Pausado
-                            </span>
-                          ) : (
-                            <span
-                              className={
-                                user.is_active
-                                  ? "allka-badge allka-badge-status-ativo"
-                                  : "allka-badge allka-badge-status-bloqueado"
-                              }
-                            >
-                              {user.is_active ? "Ativo" : "Bloqueado"}
-                            </span>
-                          )}
-                        </td>
-                        <td
-                          className="px-5 py-3.5"
-                          style={{
-                            borderRight: "1px solid rgba(148,163,184,0.15)",
-                          }}
-                        >
-                          <div className="space-y-0.5">
-                            <p className="text-xs font-medium text-slate-900 dark:text-slate-100">
-                              {user.last_login
-                                ? new Date(user.last_login).toLocaleDateString(
-                                    "pt-BR",
-                                  )
-                                : "Nunca"}
-                            </p>
-                            <p className="text-xs text-slate-500 dark:text-slate-400">
-                              {user.last_login
-                                ? new Date(user.last_login).toLocaleTimeString(
-                                    "pt-BR",
-                                    { hour: "2-digit", minute: "2-digit" },
-                                  )
-                                : ""}
-                            </p>
-                            {user.inactivity_bucket === "inactive_30" && (
-                              <NeonBadge color="amber" tooltip="Sem acesso há mais de 30 dias.">30d+</NeonBadge>
-                            )}
-                            {user.inactivity_bucket === "inactive_60" && (
-                              <NeonBadge color="orange" tooltip="Sem acesso há mais de 60 dias.">60d+</NeonBadge>
-                            )}
-                            {user.inactivity_bucket === "inactive_90" && (
-                              <NeonBadge color="red" tooltip="Sem acesso há mais de 90 dias — usuário pausado automaticamente.">⚠ 90d+</NeonBadge>
-                            )}
-                          </div>
-                        </td>
+                        {/* Actions — pinned left: +, ver, bloquear/desbloquear, excluir */}
                         <td
                           className={`px-1 py-2 transition-colors ${
-                            paginatedUsers.indexOf(user) % 2 === 0
+                            i % 2 === 0
                               ? "bg-[#ECEFF4] group-hover:bg-[#D9E1ED] dark:bg-[oklch(0.14_0.026_258)] dark:group-hover:bg-[oklch(0.21_0.024_258)]"
                               : "bg-[#D6DCE8] group-hover:bg-[#C7D2E3] dark:bg-[oklch(0.185_0.024_258)] dark:group-hover:bg-[oklch(0.21_0.024_258)]"
                           }`}
-                          style={{
-                            position: "sticky",
-                            right: 0,
-                            zIndex: 1,
-                            minWidth: 99,
-                            borderLeft: "1px solid rgba(100,116,139,0.18)",
-                          }}
+                          style={{ position: "sticky", left: 0, zIndex: 1, minWidth: 128, borderRight: "1px solid rgba(100,116,139,0.18)" }}
                         >
                           <div className="flex items-center justify-center gap-1">
+                            <TooltipProvider delayDuration={400}>
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      openInfoPanel(user);
+                                    }}
+                                    className="h-[21px] w-[21px] flex items-center justify-center rounded-full bg-[#2558FF] text-white shadow-[0_2px_6px_rgba(37,88,255,0.35)] hover:bg-gradient-to-br hover:from-[#2558FF] hover:via-[#6E2C96] hover:to-[#D92293] hover:text-white dark:hover:text-[#0a1628] hover:shadow-[0_2px_10px_rgba(110,44,150,0.5)] transition-all"
+                                  >
+                                    <Plus className="h-3 w-3" />
+                                  </button>
+                                </TooltipTrigger>
+                                <TooltipContent className="text-xs font-medium">Mais informações</TooltipContent>
+                              </Tooltip>
+                            </TooltipProvider>
                             <TooltipProvider delayDuration={400}>
                               <Tooltip>
                                 <TooltipTrigger asChild>
@@ -2779,6 +2654,194 @@ export default function UsuariosPage() {
                             </TooltipProvider>
                           </div>
                         </td>
+
+                        {visibleCols.has("usuario") && (
+                          <td className="py-3 px-4" style={{ borderRight: "1px solid rgba(148,163,184,0.15)" }}>
+                            <div className="flex items-center gap-2.5">
+                              <div className="relative">
+                                <Avatar className="h-10 w-10 shadow-sm">
+                                  <AvatarFallback
+                                    className={`text-xs font-bold text-white bg-gradient-to-br ${
+                                      user.account_type === "company" ||
+                                      user.account_type === "empresas"
+                                        ? "from-violet-500 to-purple-700"
+                                        : user.account_type === "agency" ||
+                                            user.account_type === "agencias"
+                                          ? "from-orange-500 to-rose-600"
+                                          : "from-blue-500 to-blue-700"
+                                    }`}
+                                  >
+                                    {user.name
+                                      .split(" ")
+                                      .map((n) => n[0])
+                                      .join("")
+                                      .toUpperCase()
+                                      .slice(0, 2)}
+                                  </AvatarFallback>
+                                </Avatar>
+                                <TooltipProvider>
+                                  <Tooltip>
+                                    <TooltipTrigger asChild>
+                                      <div className="absolute -bottom-0.5 -right-0.5 scale-75">
+                                        {getOnlineStatusIndicator(
+                                          user.online_status,
+                                        )}
+                                      </div>
+                                    </TooltipTrigger>
+                                    <TooltipContent className="text-xs">
+                                      {user.online_status === "online" &&
+                                        "Online agora"}
+                                      {user.online_status === "offline" &&
+                                        "Offline"}
+                                      {user.online_status === "busy" && "Ocupado"}
+                                      {user.online_status === "away" && "Ausente"}
+                                      {user.last_login && (
+                                        <div>
+                                          Última atividade:{" "}
+                                          {new Date(
+                                            user.last_login,
+                                          ).toLocaleDateString("pt-BR")}{" "}
+                                          às{" "}
+                                          {new Date(
+                                            user.last_login,
+                                          ).toLocaleTimeString("pt-BR", {
+                                            hour: "2-digit",
+                                            minute: "2-digit",
+                                          })}
+                                        </div>
+                                      )}
+                                    </TooltipContent>
+                                  </Tooltip>
+                                </TooltipProvider>
+                              </div>
+                              <div className="min-w-0">
+                                <p className="font-bold text-sm text-slate-800 dark:text-slate-100 truncate">
+                                  {user.name}
+                                </p>
+                                <p className="text-xs text-slate-500 dark:text-slate-400 truncate">
+                                  {user.email}
+                                </p>
+                              </div>
+                            </div>
+                          </td>
+                        )}
+
+                        {visibleCols.has("contato") && (
+                          <td className="py-3 px-4" style={{ borderRight: "1px solid rgba(148,163,184,0.15)" }}>
+                            <div className="flex items-center gap-1">
+                              <TooltipProvider>
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <Button
+                                      variant="ghost"
+                                      size="sm"
+                                      onClick={() => handlePhoneCall(user.phone)}
+                                      className="h-5 w-5 p-0 text-blue-500 hover:text-blue-700 hover:bg-blue-50 dark:text-blue-400 dark:hover:bg-blue-900/30 rounded"
+                                    >
+                                      <Phone className="h-2.5 w-2.5" />
+                                    </Button>
+                                  </TooltipTrigger>
+                                  <TooltipContent className="text-xs">
+                                    Ligar
+                                  </TooltipContent>
+                                </Tooltip>
+                              </TooltipProvider>
+                              <TooltipProvider>
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <Button
+                                      variant="ghost"
+                                      size="sm"
+                                      onClick={() => handleWhatsApp(user.phone)}
+                                      className="h-5 w-5 p-0 text-emerald-500 hover:text-emerald-700 hover:bg-emerald-50 dark:text-emerald-400 dark:hover:bg-emerald-900/30 rounded"
+                                    >
+                                      <MessageCircle className="h-2.5 w-2.5" />
+                                    </Button>
+                                  </TooltipTrigger>
+                                  <TooltipContent className="text-xs">
+                                    WhatsApp
+                                  </TooltipContent>
+                                </Tooltip>
+                              </TooltipProvider>
+                            </div>
+                          </td>
+                        )}
+
+                        {visibleCols.has("tipo_funcao") && (
+                          <td className="py-3 px-4" style={{ borderRight: "1px solid rgba(148,163,184,0.15)" }}>
+                            <div className="space-y-0.5">
+                              <NeonBadge color={accountBadge.badgeColor}>
+                                {accountBadge.label}
+                              </NeonBadge>
+                              <p className="text-xs text-slate-600 dark:text-slate-400">
+                                {getRoleLabel(user.role)}
+                              </p>
+                              {!user.lgpd?.consent_given && (
+                                <NeonBadge color="orange" tooltip="Usuário ainda não aceitou os termos de consentimento LGPD.">
+                                  Sem consentimento LGPD
+                                </NeonBadge>
+                              )}
+                              {user.lgpd?.deletion_requested && (
+                                <NeonBadge color="red" tooltip="Usuário solicitou a exclusão dos seus dados pessoais.">
+                                  Exclusão solicitada
+                                </NeonBadge>
+                              )}
+                            </div>
+                          </td>
+                        )}
+
+                        {visibleCols.has("status") && (
+                          <td className="py-3 px-4" style={{ borderRight: "1px solid rgba(148,163,184,0.15)" }}>
+                            {user.auto_paused ? (
+                              <span className="allka-badge allka-badge-status-pausado">
+                                <span className="w-1.5 h-1.5 rounded-full flex-shrink-0 bg-amber-500" />
+                                Pausado
+                              </span>
+                            ) : (
+                              <span
+                                className={
+                                  user.is_active
+                                    ? "allka-badge allka-badge-status-ativo"
+                                    : "allka-badge allka-badge-status-bloqueado"
+                                }
+                              >
+                                <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${user.is_active ? "bg-emerald-500" : "bg-red-500"}`} />
+                                {user.is_active ? "Ativo" : "Bloqueado"}
+                              </span>
+                            )}
+                          </td>
+                        )}
+
+                        {visibleCols.has("ultimo_acesso") && (
+                          <td className="py-3 px-4">
+                            <div className="space-y-0.5">
+                              <p className="text-xs font-medium text-slate-900 dark:text-slate-100">
+                                {user.last_login
+                                  ? new Date(user.last_login).toLocaleDateString(
+                                      "pt-BR",
+                                    )
+                                  : "Nunca"}
+                              </p>
+                              <p className="text-xs text-slate-500 dark:text-slate-400">
+                                {user.last_login
+                                  ? new Date(user.last_login).toLocaleTimeString(
+                                      "pt-BR",
+                                      { hour: "2-digit", minute: "2-digit" },
+                                    )
+                                  : ""}
+                              </p>
+                              {user.inactivity_bucket === "inactive_30" && (
+                                <NeonBadge color="amber" tooltip="Sem acesso há mais de 30 dias.">30d+</NeonBadge>
+                              )}
+                              {user.inactivity_bucket === "inactive_60" && (
+                                <NeonBadge color="orange" tooltip="Sem acesso há mais de 60 dias.">60d+</NeonBadge>
+                              )}
+                              {user.inactivity_bucket === "inactive_90" && (
+                                <NeonBadge color="red" tooltip="Sem acesso há mais de 90 dias — usuário pausado automaticamente.">⚠ 90d+</NeonBadge>
+                              )}
+                            </div>
+                          </td>
+                        )}
                       </tr>
                     );
                   })}
@@ -2801,81 +2864,158 @@ export default function UsuariosPage() {
               </div>
             )}
 
-            {/* Bottom Pagination */}
-            {filteredUsers.length > 0 && (
-              <div className="flex items-center justify-between px-5 py-3 border-t border-slate-100 dark:border-slate-800 bg-slate-50/40 dark:bg-slate-900/20">
-                <div className="flex items-center gap-2">
-                  <ItemsPerPageSelect
-                    value={pageSize.toString()}
-                    onValueChange={(value) => {
-                      setPageSize(Number(value));
-                      setCurrentPage(1);
-                    }}
-                    variant="bottom"
-                  />
-                  <span className="text-xs text-slate-400">
-                    de {filteredUsers.length} usuário
-                    {filteredUsers.length !== 1 ? "s" : ""}
-                  </span>
+          </div>
+
+          {/* Row 3 — bottom mirror of row 2 (items-per-page + count + scrollbar + pagination) */}
+          {filteredUsers.length > 0 && (
+            <div className="flex flex-wrap items-center justify-between gap-3 px-[18px] py-2 border-t border-[#e8edf5] dark:border-slate-800 bg-white dark:bg-slate-900/20">
+              <div className="flex items-center gap-3">
+                <ItemsPerPageSelect
+                  value={pageSize.toString()}
+                  onValueChange={(value) => {
+                    setPageSize(Number(value));
+                    setCurrentPage(1);
+                  }}
+                  variant="bottom"
+                />
+                <CountText side="top" />
+              </div>
+
+              {hasHorizontalOverflow && (
+                <div
+                  ref={bottomScrollRef}
+                  onScroll={handleBottomBarScroll}
+                  title="Arraste para rolar a tabela na horizontal e ver as colunas que não couberem na tela"
+                  className="hidden md:block flex-1 min-w-[80px] overflow-x-scroll allka-table-scroll self-center"
+                  style={{ height: 12 }}
+                >
+                  <div style={{ minWidth: 960, height: 1 }} />
                 </div>
+              )}
 
-                {hasHorizontalOverflow && (
-                  <div
-                    ref={bottomScrollRef}
-                    onScroll={handleBottomBarScroll}
-                    title="Arraste para rolar a tabela na horizontal e ver as colunas que não couberem na tela"
-                    className="hidden md:block flex-1 min-w-[80px] overflow-x-scroll allka-table-scroll self-center mx-3"
-                    style={{ height: 12 }}
-                  >
-                    <div style={{ minWidth: 1200, height: 1 }} />
+              {totalPages > 1 && <PaginationControls />}
+            </div>
+          )}
+      </div>
+
+      {/* Column config panel */}
+      <SlidePanel
+        open={colConfigOpen}
+        onClose={() => setColConfigOpen(false)}
+        title="Configurar colunas"
+        subtitle="Escolha quais colunas aparecem na tabela"
+        widthMode="compact"
+        compactWidth={360}
+      >
+        <div className="p-5 flex-1 overflow-y-auto space-y-2">
+          {ALL_COLUMNS.map((col) => (
+            <label key={col.key} className={`flex items-center gap-2 text-sm py-1 ${col.key === "usuario" ? "opacity-60 cursor-not-allowed" : "cursor-pointer"}`}>
+              <input
+                type="checkbox"
+                checked={visibleCols.has(col.key)}
+                disabled={col.key === "usuario"}
+                onChange={() => toggleCol(col.key)}
+              />
+              {col.label}
+            </label>
+          ))}
+        </div>
+      </SlidePanel>
+
+      {/* "+" info panel — real user data already loaded in the table, no extra fetch needed */}
+      <SlidePanel
+        open={infoPanelOpen}
+        onClose={() => setInfoPanelOpen(false)}
+        title={
+          infoPanelUser && (
+            <div className="flex items-center gap-3">
+              <Avatar className="h-10 w-10 shadow-sm">
+                <AvatarFallback className="text-xs font-bold text-white bg-gradient-to-br from-blue-500 to-blue-700">
+                  {infoPanelUser.name.split(" ").map((n: string) => n[0]).join("").toUpperCase().slice(0, 2)}
+                </AvatarFallback>
+              </Avatar>
+              <div className="min-w-0">
+                <p className="truncate">{infoPanelUser.name}</p>
+              </div>
+            </div>
+          )
+        }
+        subtitle={infoPanelUser && infoPanelUser.email}
+      >
+        {infoPanelUser && (
+          <div className="flex-1 overflow-y-auto p-5">
+            <div className="max-w-3xl mx-auto space-y-6">
+              <div>
+                <h3 className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-3">
+                  Dados do usuário
+                </h3>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div className="rounded-xl border border-slate-200 dark:border-slate-700 p-3.5">
+                    <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide mb-1.5">Contato</p>
+                    <p className="flex items-center gap-1.5 text-sm text-slate-700 dark:text-slate-300">
+                      <Mail className="h-3.5 w-3.5 text-slate-400 flex-shrink-0" />
+                      {infoPanelUser.email || "—"}
+                    </p>
+                    <p className="flex items-center gap-1.5 text-sm text-slate-700 dark:text-slate-300 mt-1">
+                      <Phone className="h-3.5 w-3.5 text-slate-400 flex-shrink-0" />
+                      {infoPanelUser.phone || "—"}
+                    </p>
                   </div>
-                )}
-
-                <div className="flex items-center gap-0.5">
-                  <button
-                    onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
-                    disabled={currentPage === 1}
-                    className="h-7 w-7 flex items-center justify-center rounded-full text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-30 disabled:pointer-events-none transition-colors"
-                  >
-                    <ChevronLeft className="h-3.5 w-3.5" />
-                  </button>
-                  {getPageNumbers().map((page, index) =>
-                    page === "..." ? (
-                      <span
-                        key={index}
-                        className="text-xs text-slate-300 px-0.5"
-                      >
-                        ·
-                      </span>
-                    ) : (
-                      <button
-                        key={index}
-                        onClick={() => setCurrentPage(Number(page))}
-                        className={`h-7 w-7 flex items-center justify-center rounded-full text-xs font-semibold transition-colors ${
-                          page === currentPage
-                            ? "bg-blue-500 text-white shadow-sm shadow-blue-200 dark:shadow-blue-900/40"
-                            : "text-slate-500 hover:text-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 dark:text-slate-400"
-                        }`}
-                      >
-                        {page}
-                      </button>
-                    ),
-                  )}
-                  <button
-                    onClick={() =>
-                      setCurrentPage(Math.min(totalPages, currentPage + 1))
-                    }
-                    disabled={currentPage === totalPages}
-                    className="h-7 w-7 flex items-center justify-center rounded-full text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-30 disabled:pointer-events-none transition-colors"
-                  >
-                    <ChevronRight className="h-3.5 w-3.5" />
-                  </button>
+                  <div className="rounded-xl border border-slate-200 dark:border-slate-700 p-3.5">
+                    <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide mb-1.5">Tipo · Função</p>
+                    <p className="text-sm text-slate-700 dark:text-slate-300">
+                      {getAccountTypeBadge(infoPanelUser.account_type, infoPanelUser.role).label} · {getRoleLabel(infoPanelUser.role)}
+                    </p>
+                  </div>
+                  <div className="rounded-xl border border-slate-200 dark:border-slate-700 p-3.5">
+                    <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide mb-1.5">Status</p>
+                    <span
+                      className={
+                        infoPanelUser.auto_paused
+                          ? "allka-badge allka-badge-status-pausado"
+                          : infoPanelUser.is_active
+                            ? "allka-badge allka-badge-status-ativo"
+                            : "allka-badge allka-badge-status-bloqueado"
+                      }
+                    >
+                      {infoPanelUser.auto_paused ? "Pausado" : infoPanelUser.is_active ? "Ativo" : "Bloqueado"}
+                    </span>
+                  </div>
+                  <div className="rounded-xl border border-slate-200 dark:border-slate-700 p-3.5">
+                    <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide mb-1.5">Último acesso</p>
+                    <p className="text-sm text-slate-700 dark:text-slate-300">
+                      {infoPanelUser.last_login ? new Date(infoPanelUser.last_login).toLocaleString("pt-BR") : "Nunca acessou"}
+                    </p>
+                  </div>
+                  <div className="rounded-xl border border-slate-200 dark:border-slate-700 p-3.5 sm:col-span-2">
+                    <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide mb-1.5">Membro desde</p>
+                    <p className="text-sm text-slate-700 dark:text-slate-300">
+                      {infoPanelUser.created_at ? new Date(infoPanelUser.created_at).toLocaleDateString("pt-BR") : "—"}
+                    </p>
+                  </div>
                 </div>
               </div>
-            )}
+
+              <div>
+                <h3 className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-3">LGPD</h3>
+                <div className="flex flex-wrap gap-2">
+                  {infoPanelUser.lgpd?.consent_given ? (
+                    <NeonBadge color="emerald">Consentimento dado</NeonBadge>
+                  ) : (
+                    <NeonBadge color="orange">Sem consentimento LGPD</NeonBadge>
+                  )}
+                  {infoPanelUser.lgpd?.deletion_requested && (
+                    <NeonBadge color="red">Exclusão solicitada</NeonBadge>
+                  )}
+                  {infoPanelUser.lgpd?.communication_opt_in && (
+                    <NeonBadge color="blue">Opt-in de comunicação</NeonBadge>
+                  )}
+                </div>
+              </div>
+            </div>
           </div>
-        </CardContent>
-      </Card>
+        )}
+      </SlidePanel>
 
       {isViewDialogOpen && (
         <UserViewSlidePanel

@@ -604,13 +604,13 @@ export default function AdminClientesPage() {
             <span className="text-sm">Nenhum cliente encontrado</span>
           </div>
         ) : (
-          <div ref={tableScrollRef} onScroll={handleTableScroll} className="overflow-x-auto allka-table-scroll">
+          <div ref={tableScrollRef} onScroll={handleTableScroll} className="overflow-x-auto allka-table-scroll-body">
             <table className="w-full text-xs min-w-[960px]">
               <thead>
                 <tr className="border-b border-slate-200/60 dark:border-slate-700/60">
                   <th
                     className="py-3.5 px-2 text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-[0.04em] text-center"
-                    style={{ position: "sticky", left: 0, top: 0, zIndex: 3, minWidth: 90, background: "var(--table-head)", boxShadow: "0 1px 0 rgba(148,163,184,0.22)", borderRight: "1px solid rgba(100,116,139,0.18)" }}
+                    style={{ position: "sticky", left: 0, top: 0, zIndex: 3, minWidth: 99, background: "var(--table-head)", boxShadow: "0 1px 0 rgba(148,163,184,0.22)", borderRight: "1px solid rgba(100,116,139,0.18)" }}
                   >
                     Ações
                   </th>
@@ -671,7 +671,7 @@ export default function AdminClientesPage() {
                           ? "bg-[#ECEFF4] group-hover:bg-[#D9E1ED] dark:bg-[oklch(0.14_0.026_258)] dark:group-hover:bg-[oklch(0.21_0.024_258)]"
                           : "bg-[#D6DCE8] group-hover:bg-[#C7D2E3] dark:bg-[oklch(0.185_0.024_258)] dark:group-hover:bg-[oklch(0.21_0.024_258)]"
                       }`}
-                      style={{ position: "sticky", left: 0, zIndex: 1, minWidth: 90, borderRight: "1px solid rgba(100,116,139,0.18)" }}
+                      style={{ position: "sticky", left: 0, zIndex: 1, minWidth: 99, borderRight: "1px solid rgba(100,116,139,0.18)" }}
                     >
                       <div className="flex items-center justify-center gap-1">
                         <TooltipProvider delayDuration={400}>

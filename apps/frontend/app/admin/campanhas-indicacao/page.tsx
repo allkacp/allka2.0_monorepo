@@ -2,7 +2,6 @@
 import { useState, useRef, useEffect } from "react";
 import { useItemsPerPage } from "@/lib/use-items-per-page";
 import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
@@ -23,7 +22,6 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
-import { GripVertical } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useSidebar } from "@/contexts/sidebar-context";
 import { apiClient } from "@/lib/api-client";
@@ -74,6 +72,12 @@ import {
 } from "lucide-react";
 import { PageHeader } from "@/components/page-header";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { useSorting, SortableHeader } from "@/hooks/useSorting";
+import { useTableScrollSync } from "@/hooks/useTableScrollSync";
+import { IconToolbarButton } from "@/components/icon-toolbar-button";
+import { SlidePanel } from "@/components/slide-panel";
+import { NeonBadge } from "@/components/neon-badge";
+import { Settings2 } from "lucide-react";
 
 // Types
 type AccountTypeRestriction = "empresas" | "agencias" | "nomades";
@@ -152,8 +156,16 @@ const getCommissionTypeLabel = (type: string) => {
     "fixed-first": "Fixo na 1ª compra",
     "per-referral": "Por indicação ativa",
     percentage: "% sobre vendas",
+    fixed: "Valor fixo",
   };
   return labels[type] ?? type;
+};
+
+const CAMPAIGN_TYPE_LABELS: Record<string, string> = {
+  coupon: "Cupom",
+  link: "Link direto",
+  referral: "Indicação",
+  influencer: "Influencer",
 };
 
 const getCouponTypeConfig = (type: string) => {
@@ -177,18 +189,202 @@ const getCouponTypeConfig = (type: string) => {
   return configs[type] || configs.discount;
 };
 
+type ItemColKey = "nome" | "tipo" | "status" | "valor" | "vinculado" | "uso" | "total_pago" | "validade";
+const ITEM_COLUMNS: { key: ItemColKey; label: string; info: string; sortField?: string; sortType?: "text" | "number" | "date" | "status" }[] = [
+  { key: "nome", label: "Nome / Código", info: "Nome da campanha ou código do cupom.", sortField: "name", sortType: "text" },
+  { key: "tipo", label: "Tipo", info: "Campanha (indicação/link) ou cupom (desconto/bônus/afiliado)." },
+  { key: "status", label: "Status", info: "Situação atual do item.", sortField: "status", sortType: "status" },
+  { key: "valor", label: "Comissão / Desconto", info: "Valor de comissão (campanha) ou desconto/bônus (cupom).", sortField: "value", sortType: "number" },
+  { key: "vinculado", label: "Vinculado a", info: "Usuário vinculado a este item, se houver." },
+  { key: "uso", label: "Uso / Indicações", info: "Indicações ativas (campanha) ou usos realizados (cupom).", sortField: "usage", sortType: "number" },
+  { key: "total_pago", label: "Total pago", info: "Total pago em comissões — aplica-se só a campanhas.", sortField: "totalPaid", sortType: "number" },
+  { key: "validade", label: "Validade", info: "Período de vigência.", sortField: "validUntil", sortType: "date" },
+];
+
+type UnifiedRow = {
+  kind: "campaign" | "coupon";
+  id: string;
+  name: string;
+  type: string;
+  status: string;
+  value: number;
+  valueLabel: string;
+  linkedUserName: string;
+  usage: number;
+  usageLabel: string;
+  totalPaid: number | null;
+  validFrom: string;
+  validUntil: string;
+  campaign?: Campaign;
+  coupon?: Coupon;
+};
+
+function campaignToUnifiedRow(c: Campaign): UnifiedRow {
+  return {
+    kind: "campaign",
+    id: c.id,
+    name: c.name,
+    type: c.campaignType,
+    status: c.status,
+    value: c.commissionValue,
+    valueLabel: c.commissionType === "percentage" ? `${c.commissionValue}%` : `R$ ${c.commissionValue}`,
+    linkedUserName: c.linkedUserName ?? "",
+    usage: c.activeReferrals,
+    usageLabel: `${c.activeReferrals} indicações`,
+    totalPaid: c.totalEarned,
+    validFrom: c.startDate,
+    validUntil: c.endDate,
+    campaign: c,
+  };
+}
+
+function couponToUnifiedRow(c: Coupon): UnifiedRow {
+  return {
+    kind: "coupon",
+    id: c.id,
+    name: c.code,
+    type: c.couponType,
+    status: c.status,
+    value: c.couponType === "credit-bonus" ? c.creditBonus ?? 0 : c.discountValue,
+    valueLabel:
+      c.couponType === "credit-bonus"
+        ? `${c.creditBonus} créditos`
+        : c.discountType === "percentage"
+          ? `${c.discountValue}% OFF`
+          : `R$ ${c.discountValue} OFF`,
+    linkedUserName: c.linkedUserName ?? "",
+    usage: c.usedCount,
+    usageLabel: c.usageLimit > 0 ? `${c.usedCount} / ${c.usageLimit}` : `${c.usedCount} usos`,
+    totalPaid: null,
+    validFrom: c.validFrom,
+    validUntil: c.validUntil,
+    coupon: c,
+  };
+}
+
+// Backend returns snake_case (real Campaign/Coupon Prisma models) — map to
+// the camelCase shape this page already renders. Numbers/links below are
+// real, derived server-side from actual PartnerCommission/CouponUsage rows,
+// not fabricated client-side.
+function mapCampaignFromApi(c: any): Campaign {
+  return {
+    id: c.id,
+    name: c.name,
+    campaignType: c.type,
+    commissionType: c.commission_type,
+    commissionValue: c.commission_value,
+    minReferrals: c.min_referrals ?? 1,
+    maxReferrals: c.max_referrals ?? 0,
+    activeReferrals: c.active_referrals ?? 0,
+    totalEarned: c.total_earned ?? 0,
+    status: c.status,
+    startDate: c.start_date,
+    endDate: c.end_date,
+    linkedCouponId: undefined,
+    linkedCouponCode: c.coupon_code ?? "",
+    linkedUserId: c.linked_user_id ?? "",
+    linkedUserName: c.linked_user_name ?? "",
+  } as Campaign;
+}
+
+// Inverse of mapCampaignFromApi/mapCouponFromApi — the create/edit forms
+// still work in this page's original camelCase shape, but the real backend
+// (Zod schema in routes/campaigns.ts and routes/coupons.ts) expects the
+// actual DB column names and a narrower set of real enum values.
+function mapCampaignToApi(form: any) {
+  return {
+    name: form.name,
+    type: form.campaignType === "influencer" ? "referral" : form.campaignType,
+    status: form.status,
+    commission_type: form.commissionType === "percentage" ? "percentage" : "fixed",
+    commission_value: form.commissionValue,
+    coupon_code: form.linkedCouponCode || undefined,
+    start_date: form.startDate ? new Date(form.startDate).toISOString() : undefined,
+    end_date: form.endDate ? new Date(form.endDate).toISOString() : undefined,
+  };
+}
+
+function mapCouponToApi(form: any) {
+  return {
+    code: form.code,
+    coupon_type: form.couponType,
+    discount_type: form.discountType,
+    discount_value: form.discountValue,
+    credit_bonus: form.creditBonus,
+    usage_limit: form.usageLimit,
+    usage_limit_per_company: form.usageLimitPerCompany,
+    max_uses_per_company: form.maxUsesPerCompany,
+    valid_from: form.validFrom ? new Date(form.validFrom).toISOString() : undefined,
+    valid_until: form.validUntil ? new Date(form.validUntil).toISOString() : undefined,
+    applicable_products: form.applicableProducts,
+    allowed_account_types: form.allowedAccountTypes,
+    allowed_company_ids: form.allowedCompanyIds,
+    allowed_user_ids: form.allowedUserIds,
+    linked_user_id: form.linkedUserId || undefined,
+    linked_user_commission_type: form.linkedUserCommissionType,
+    linked_user_commission_value: form.linkedUserCommissionValue,
+  };
+}
+
+function mapCouponFromApi(c: any): Coupon {
+  return {
+    id: c.id,
+    code: c.code,
+    couponType: c.coupon_type,
+    discountType: c.discount_type,
+    discountValue: c.discount_value,
+    creditBonus: c.credit_bonus,
+    usageLimit: c.usage_limit,
+    usageLimitPerCompany: c.usage_limit_per_company,
+    maxUsesPerCompany: c.max_uses_per_company,
+    usedCount: c.used_count ?? 0,
+    validFrom: c.valid_from,
+    validUntil: c.valid_until,
+    applicableProducts: Array.isArray(c.applicable_products) && c.applicable_products.length > 0
+      ? c.applicable_products
+      : ["Todos os produtos"],
+    allowedAccountTypes: c.allowed_account_types ?? [],
+    allowedCompanyIds: c.allowed_company_ids ?? [],
+    allowedUserIds: c.allowed_user_ids ?? [],
+    linkedUserId: c.linked_user_id ?? "",
+    linkedUserName: c.linked_user_name ?? "",
+    linkedUserCommissionType: c.linked_user_commission_type ?? "percentage",
+    linkedUserCommissionValue: c.linked_user_commission_value ?? 0,
+    status: c.status,
+  } as Coupon;
+}
+
 export default function CampanhasPage() {
   const { toast } = useToast();
   const { sidebarSettings, sidebarWidth } = useSidebar();
   const { users: platformUsers } = usePlatformUsers();
   const pageRef = useRef<HTMLDivElement>(null);
 
-  const [listFilter, setListFilter] = useState<
-    "all" | "campaigns" | "coupons" | "influencers"
-  >("all");
-  const [searchQuery, setSearchQuery] = useState("");
-  const [pageSize, setPageSize] = useItemsPerPage("admin-campanhas-indicacao", 10);
-  const [currentPage, setCurrentPage] = useState(1);
+  const {
+    sortKey: itemSortKey,
+    sortDir: itemSortDir,
+    handleSort: handleItemSort,
+    sortData: sortItemData,
+  } = useSorting<UnifiedRow>();
+
+  const [itemVisibleCols, setItemVisibleCols] = useState<Set<ItemColKey>>(
+    new Set(["nome", "tipo", "status", "valor", "vinculado", "uso", "total_pago", "validade"]),
+  );
+
+  const {
+    tableScrollRef: itemTableScrollRef,
+    topScrollRef: itemTopScrollRef,
+    bottomScrollRef: itemBottomScrollRef,
+    handleTopBarScroll: handleItemTopBarScroll,
+    handleTableScroll: handleItemTableScroll,
+    handleBottomBarScroll: handleItemBottomBarScroll,
+    hasHorizontalOverflow: itemHasHorizontalOverflow,
+  } = useTableScrollSync([itemVisibleCols.size]);
+
+  // Unified Campanhas + Cupons table state
+  const [itemSearch, setItemSearch] = useState("");
+  const [itemPage, setItemPage] = useState(1);
+  const [itemPageSize, setItemPageSize] = useItemsPerPage("admin-campanhas-indicacao", 10);
 
   // Report modal state
   const [reportOpen, setReportOpen] = useState(false);
@@ -202,33 +398,13 @@ export default function CampanhasPage() {
     metricFocus: "all" as "all" | "clicks" | "conversions" | "abandonment",
   });
   const reportPageRef = useRef<HTMLDivElement>(null);
-  const [isFilterModalOpen, setIsFilterModalOpen] = useState(false);
-  const emptyAdvFilters = {
-    statuses: [] as string[],
-    types: [] as string[],
-    commissionTypes: [] as string[],
-    dateFrom: "",
-    dateTo: "",
-  };
-  const [advancedFilters, setAdvancedFilters] = useState(emptyAdvFilters);
-  const [appliedFilters, setAppliedFilters] = useState(emptyAdvFilters);
-  const [savedFilters, setSavedFilters] = useState<
-    { id: string; name: string; filters: typeof emptyAdvFilters }[]
-  >([]);
-  const [selectedFilterId, setSelectedFilterId] = useState<string | null>(null);
-  const [unsavedChanges, setUnsavedChanges] = useState(false);
-  const [showSaveInput, setShowSaveInput] = useState(false);
-  const [filterNameInput, setFilterNameInput] = useState("");
-  const [editingFilterId, setEditingFilterId] = useState<string | null>(null);
-  const [editingFilterName, setEditingFilterName] = useState("");
-  const [draggingFilterId, setDraggingFilterId] = useState<string | null>(null);
-  const [dragOverFilterId, setDragOverFilterId] = useState<string | null>(null);
-  const activeFilterCount = [
-    appliedFilters.statuses.length > 0,
-    appliedFilters.types.length > 0,
-    appliedFilters.commissionTypes.length > 0,
-    !!appliedFilters.dateFrom || !!appliedFilters.dateTo,
-  ].filter(Boolean).length;
+
+  // Unified column config + filters (Tipo: campanha/cupom, Status)
+  const [itemColConfigOpen, setItemColConfigOpen] = useState(false);
+  const [itemFiltersOpen, setItemFiltersOpen] = useState(false);
+  const [itemKindFilter, setItemKindFilter] = useState<Set<"campaign" | "coupon">>(new Set());
+  const [itemStatusFilter, setItemStatusFilter] = useState<Set<string>>(new Set());
+  const itemActiveFilterCount = itemKindFilter.size + itemStatusFilter.size;
 
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
   const [campaignDialogOpen, setCampaignDialogOpen] = useState(false);
@@ -267,7 +443,7 @@ export default function CampanhasPage() {
       .getCampaigns()
       .then((data: any) => {
         const list = Array.isArray(data) ? data : data?.data || [];
-        setCampaigns(list);
+        setCampaigns(list.map(mapCampaignFromApi));
       })
       .catch(() => {})
       .finally(checkDone);
@@ -275,7 +451,7 @@ export default function CampanhasPage() {
       .getCoupons()
       .then((data: any) => {
         const list = Array.isArray(data) ? data : data?.data || [];
-        setCoupons(list);
+        setCoupons(list.map(mapCouponFromApi));
       })
       .catch(() => {})
       .finally(checkDone);
@@ -359,68 +535,16 @@ export default function CampanhasPage() {
   const totalCouponUses = coupons.reduce((s, c) => s + c.usedCount, 0);
   const totalInvested = campaigns.reduce((s, c) => s + c.totalEarned, 0);
 
-  // Filtered lists
-  const filteredCampaigns = campaigns.filter((c) => {
-    if (
-      searchQuery &&
-      !c.name.toLowerCase().includes(searchQuery.toLowerCase())
-    )
+  // Unified Campanhas + Cupons list — one searchable/filterable/sortable table
+  const allItems: UnifiedRow[] = [
+    ...campaigns.map(campaignToUnifiedRow),
+    ...coupons.map(couponToUnifiedRow),
+  ];
+  const filteredItems = allItems.filter((row) => {
+    if (itemSearch && !row.name.toLowerCase().includes(itemSearch.toLowerCase()))
       return false;
-    if (
-      appliedFilters.statuses.length > 0 &&
-      !appliedFilters.statuses.includes(c.status)
-    )
-      return false;
-    if (appliedFilters.types.length > 0) {
-      const typeMatch =
-        (appliedFilters.types.includes("referral") &&
-          c.campaignType === "referral") ||
-        (appliedFilters.types.includes("influencer") &&
-          c.campaignType === "influencer");
-      if (!typeMatch) return false;
-    }
-    if (
-      appliedFilters.commissionTypes.length > 0 &&
-      !appliedFilters.commissionTypes.includes(c.commissionType)
-    )
-      return false;
-    if (appliedFilters.dateFrom && c.endDate < appliedFilters.dateFrom)
-      return false;
-    if (appliedFilters.dateTo && c.startDate > appliedFilters.dateTo)
-      return false;
-    if (listFilter === "campaigns") return true;
-    if (listFilter === "influencers") return c.campaignType === "influencer";
-    if (listFilter === "coupons") return false;
-    return true;
-  });
-  const filteredCoupons = coupons.filter((c) => {
-    if (
-      searchQuery &&
-      !c.code.toLowerCase().includes(searchQuery.toLowerCase())
-    )
-      return false;
-    if (
-      appliedFilters.statuses.length > 0 &&
-      !appliedFilters.statuses.includes(c.status)
-    )
-      return false;
-    if (appliedFilters.types.length > 0) {
-      const typeMatch =
-        (appliedFilters.types.includes("discount") &&
-          c.couponType === "discount") ||
-        (appliedFilters.types.includes("referral-coupon") &&
-          c.couponType === "referral") ||
-        (appliedFilters.types.includes("credit-bonus") &&
-          c.couponType === "credit-bonus");
-      if (!typeMatch) return false;
-    }
-    if (appliedFilters.dateFrom && c.validUntil < appliedFilters.dateFrom)
-      return false;
-    if (appliedFilters.dateTo && c.validFrom > appliedFilters.dateTo)
-      return false;
-    if (listFilter === "coupons") return true;
-    if (listFilter === "influencers") return c.couponType === "referral";
-    if (listFilter === "campaigns") return false;
+    if (itemKindFilter.size > 0 && !itemKindFilter.has(row.kind)) return false;
+    if (itemStatusFilter.size > 0 && !itemStatusFilter.has(row.status)) return false;
     return true;
   });
 
@@ -482,11 +606,11 @@ export default function CampanhasPage() {
       if (editingCampaign) {
         const updated = await apiClient.updateCampaign(
           editingCampaign.id,
-          data,
+          mapCampaignToApi(data),
         );
         setCampaigns((prev) =>
           prev.map((c) =>
-            c.id === editingCampaign.id ? { ...c, ...data, ...updated } : c,
+            c.id === editingCampaign.id ? { ...c, ...data, ...mapCampaignFromApi(updated) } : c,
           ),
         );
         toast({
@@ -495,9 +619,7 @@ export default function CampanhasPage() {
         });
       } else {
         const created = await apiClient.createCampaign({
-          ...data,
-          activeReferrals: 0,
-          totalEarned: 0,
+          ...mapCampaignToApi(data),
           status: "active",
         });
         setCampaigns((prev) => [
@@ -508,7 +630,7 @@ export default function CampanhasPage() {
             totalEarned: 0,
             status: "active" as const,
             id: created?.id || String(Date.now()),
-            ...created,
+            ...mapCampaignFromApi(created),
           },
         ]);
         toast({ title: "Sucesso", description: "Campanha criada com sucesso" });
@@ -621,10 +743,10 @@ export default function CampanhasPage() {
     };
     try {
       if (editingCoupon) {
-        const updated = await apiClient.updateCoupon(editingCoupon.id, data);
+        const updated = await apiClient.updateCoupon(editingCoupon.id, mapCouponToApi(data));
         setCoupons((prev) =>
           prev.map((c) =>
-            c.id === editingCoupon.id ? { ...c, ...data, ...updated } : c,
+            c.id === editingCoupon.id ? { ...c, ...data, ...mapCouponFromApi(updated) } : c,
           ),
         );
         toast({
@@ -633,8 +755,7 @@ export default function CampanhasPage() {
         });
       } else {
         const created = await apiClient.createCoupon({
-          ...data,
-          usedCount: 0,
+          ...mapCouponToApi(data),
           status: "active",
         });
         setCoupons((prev) => [
@@ -644,7 +765,7 @@ export default function CampanhasPage() {
             usedCount: 0,
             status: "active" as const,
             id: created?.id || String(Date.now()),
-            ...created,
+            ...mapCouponFromApi(created),
           },
         ]);
         toast({ title: "Sucesso", description: "Cupom criado com sucesso" });
@@ -725,55 +846,20 @@ export default function CampanhasPage() {
   };
   const headerGradient = getSidebarGradient();
 
-  const influencerCount =
-    campaigns.filter((c) => c.campaignType === "influencer").length +
-    coupons.filter((c) => c.couponType === "referral").length;
-  const filterButtons = [
-    { key: "all", label: "Tudo", count: campaigns.length + coupons.length },
-    { key: "campaigns", label: "Campanhas", count: campaigns.length },
-    { key: "coupons", label: "Cupons", count: coupons.length },
-    { key: "influencers", label: "Influencers", count: influencerCount },
-  ];
-
-  const allFilteredItems = [
-    ...filteredCampaigns.map((c) => ({ type: "campaign" as const, item: c })),
-    ...filteredCoupons.map((c) => ({ type: "coupon" as const, item: c })),
-  ];
-  const totalFilteredItems = allFilteredItems.length;
-  const totalPages = Math.max(1, Math.ceil(totalFilteredItems / pageSize));
-  const pagedItems = allFilteredItems.slice(
-    (currentPage - 1) * pageSize,
-    currentPage * pageSize,
+  const sortedItems = sortItemData(filteredItems);
+  const totalItemPages = Math.max(1, Math.ceil(sortedItems.length / itemPageSize));
+  const pagedItems = sortedItems.slice(
+    (itemPage - 1) * itemPageSize,
+    itemPage * itemPageSize,
   );
-  const pagedCampaigns = pagedItems
-    .filter((x) => x.type === "campaign")
-    .map((x) => x.item as Campaign);
-  const pagedCoupons = pagedItems
-    .filter((x) => x.type === "coupon")
-    .map((x) => x.item as Coupon);
-  const getPageNumbers = (): (number | "...")[] => {
-    if (totalPages <= 7)
-      return Array.from({ length: totalPages }, (_, i) => i + 1);
-    if (currentPage <= 4) return [1, 2, 3, 4, 5, "...", totalPages];
-    if (currentPage >= totalPages - 3)
-      return [
-        1,
-        "...",
-        totalPages - 4,
-        totalPages - 3,
-        totalPages - 2,
-        totalPages - 1,
-        totalPages,
-      ];
-    return [
-      1,
-      "...",
-      currentPage - 1,
-      currentPage,
-      currentPage + 1,
-      "...",
-      totalPages,
-    ];
+  const getItemPageNumbers = (): (number | "...")[] => {
+    const total = totalItemPages;
+    const cur = itemPage;
+    if (total <= 7) return Array.from({ length: total }, (_, i) => i + 1);
+    if (cur <= 4) return [1, 2, 3, 4, 5, "...", total];
+    if (cur >= total - 3)
+      return [1, "...", total - 4, total - 3, total - 2, total - 1, total];
+    return [1, "...", cur - 1, cur, cur + 1, "...", total];
   };
 
   // ── Report helpers ────────────────────────────────────────────────
@@ -1085,7 +1171,7 @@ export default function CampanhasPage() {
 
       {/* Stat Cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        <div className="relative rounded-xl overflow-hidden shadow-sm bg-linear-to-br from-blue-500 to-blue-700 px-3 pt-2 pb-1.5">
+        <div className="relative rounded-xl overflow-hidden shadow-lg hover:shadow-xl transition-all duration-200 bg-linear-to-br from-blue-500 to-blue-700 dark:from-blue-800 dark:to-blue-950 border-2 border-blue-300/70 dark:border-blue-800/70 px-3 pt-2 pb-1.5">
           <div className="flex items-center justify-between mb-1">
             <p className="text-xs font-medium text-white/70 leading-tight">
               Campanhas Ativas
@@ -1098,7 +1184,7 @@ export default function CampanhasPage() {
             {activeCampaigns + activeCoupons}
           </p>
         </div>
-        <div className="relative rounded-xl overflow-hidden shadow-sm bg-linear-to-br from-emerald-500 to-teal-600 px-3 pt-2 pb-1.5">
+        <div className="relative rounded-xl overflow-hidden shadow-lg hover:shadow-xl transition-all duration-200 bg-linear-to-br from-emerald-500 to-teal-600 dark:from-emerald-800 dark:to-teal-900 border-2 border-emerald-300/70 dark:border-emerald-800/70 px-3 pt-2 pb-1.5">
           <div className="flex items-center justify-between mb-1">
             <p className="text-xs font-medium text-white/70 leading-tight">
               Indicações Ativas
@@ -1111,7 +1197,7 @@ export default function CampanhasPage() {
             {totalReferrals}
           </p>
         </div>
-        <div className="relative rounded-xl overflow-hidden shadow-sm bg-linear-to-br from-violet-500 to-purple-700 px-3 pt-2 pb-1.5">
+        <div className="relative rounded-xl overflow-hidden shadow-lg hover:shadow-xl transition-all duration-200 bg-linear-to-br from-violet-500 to-purple-700 dark:from-violet-800 dark:to-purple-950 border-2 border-violet-300/70 dark:border-violet-800/70 px-3 pt-2 pb-1.5">
           <div className="flex items-center justify-between mb-1">
             <p className="text-xs font-medium text-white/70 leading-tight">
               Usos de Cupons
@@ -1124,7 +1210,7 @@ export default function CampanhasPage() {
             {totalCouponUses}
           </p>
         </div>
-        <div className="relative rounded-xl overflow-hidden shadow-sm bg-linear-to-br from-orange-500 to-rose-600 px-3 pt-2 pb-1.5">
+        <div className="relative rounded-xl overflow-hidden shadow-lg hover:shadow-xl transition-all duration-200 bg-linear-to-br from-orange-500 to-rose-600 dark:from-orange-800 dark:to-rose-900 border-2 border-orange-300/70 dark:border-orange-800/70 px-3 pt-2 pb-1.5">
           <div className="flex items-center justify-between mb-1">
             <p className="text-xs font-medium text-white/70 leading-tight">
               Total Investido
@@ -1139,504 +1225,401 @@ export default function CampanhasPage() {
         </div>
       </div>
 
-      {/* Unified list */}
-      <Card className="border border-slate-200/70 dark:border-slate-700/60 shadow-sm overflow-hidden">
-        {/* Top bar */}
-        <div className="flex items-center gap-3 px-5 py-3.5 border-b border-slate-200/70 dark:border-slate-700/60 bg-slate-50/60 dark:bg-slate-900/30">
-          {/* Search */}
-          <div className="relative w-52 shrink-0">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400" />
+      {/* Campanhas + Cupons — uma única tabela padrão admin/empresas, com filtro por tipo */}
+      <div className="bg-white dark:bg-slate-900 border border-[#e8edf5] dark:border-slate-700 rounded-xl shadow-sm overflow-hidden">
+        <div className="flex items-center gap-2 flex-wrap px-[18px] py-3">
+          <div className="relative flex-1 min-w-[220px] max-w-sm">
+            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <Input
-              placeholder="Buscar..."
-              value={searchQuery}
+              placeholder="Buscar campanha ou cupom..."
+              value={itemSearch}
               onChange={(e) => {
-                setSearchQuery(e.target.value);
-                setCurrentPage(1);
+                setItemSearch(e.target.value);
+                setItemPage(1);
               }}
-              className="pl-8 h-8 text-xs bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 rounded-lg focus-visible:ring-blue-500 w-full"
+              className="pl-8 h-9 text-sm w-full"
             />
           </div>
-          {/* Filter Tabs */}
-          <div className="flex items-center gap-1 flex-1 min-w-0 overflow-x-auto">
-            {filterButtons.map((f) => (
-              <button
-                key={f.key}
-                onClick={() => {
-                  setListFilter(f.key as any);
-                  setCurrentPage(1);
-                }}
-                className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-[11px] font-semibold whitespace-nowrap transition-all ${
-                  listFilter === f.key
-                    ? "bg-blue-600 text-white shadow-sm"
-                    : "bg-white dark:bg-slate-800 text-slate-500 dark:text-slate-400 hover:text-slate-700 border border-slate-200 dark:border-slate-700"
-                }`}
-              >
-                {f.label}
-                <span
-                  className={`text-[9px] px-1 py-0 rounded-full font-bold ${listFilter === f.key ? "bg-white/20 text-white" : "bg-slate-100 dark:bg-slate-700 text-slate-500"}`}
-                >
-                  {f.count}
-                </span>
-              </button>
-            ))}
-          </div>
-          {/* Items per page + count */}
-          <div className="flex items-center gap-2 flex-shrink-0">
-            <ItemsPerPageSelect
-              value={pageSize.toString()}
-              onValueChange={(value) => {
-                setPageSize(Number(value));
-                setCurrentPage(1);
-              }}
-              variant="top"
+          <div className="ml-auto flex items-center gap-2">
+            <IconToolbarButton
+              icon={Filter}
+              tooltip={itemActiveFilterCount > 0 ? `Filtros (${itemActiveFilterCount} ativos)` : "Filtros"}
+              onClick={() => setItemFiltersOpen(true)}
             />
-            <span className="text-xs text-slate-400 whitespace-nowrap">
-              de{" "}
-              <span className="font-semibold text-slate-600 dark:text-slate-300">
-                {totalFilteredItems}
-              </span>{" "}
-              {totalFilteredItems === 1 ? "item" : "itens"}
-            </span>
-          </div>
-          {/* Filter Button */}
-          <Button
-            onClick={() => {
-              setAdvancedFilters(appliedFilters);
-              setIsFilterModalOpen(true);
-            }}
-            variant="outline"
-            size="sm"
-            className={`h-9 gap-2 px-3.5 text-xs border-slate-200 dark:border-slate-700 flex-shrink-0 ${
-              activeFilterCount > 0
-                ? "bg-blue-50 text-blue-600 border-blue-200 dark:bg-blue-900/20 dark:text-blue-400 dark:border-blue-800"
-                : "text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800"
-            }`}
-          >
-            <Filter className="h-3.5 w-3.5" />
-            Filtros
-            {activeFilterCount > 0 && (
-              <span className="ml-0.5 bg-blue-600 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full">
-                {activeFilterCount}
-              </span>
-            )}
-          </Button>
-
-          {/* Pagination */}
-          <div className="flex items-center gap-0.5 flex-shrink-0">
-            <button
-              onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
-              disabled={currentPage === 1}
-              className="h-7 w-7 flex items-center justify-center rounded-full text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-30 disabled:pointer-events-none transition-colors"
-            >
-              <ChevronLeft className="h-3.5 w-3.5" />
-            </button>
-            {getPageNumbers().map((page, index) =>
-              page === "..." ? (
-                <span key={index} className="text-xs text-slate-300 px-0.5">
-                  ·
-                </span>
-              ) : (
-                <button
-                  key={index}
-                  onClick={() => setCurrentPage(Number(page))}
-                  className={`h-7 w-7 flex items-center justify-center rounded-full text-xs font-semibold transition-colors ${
-                    page === currentPage
-                      ? "bg-blue-500 text-white shadow-sm shadow-blue-200 dark:shadow-blue-900/40"
-                      : "text-slate-500 hover:text-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 dark:text-slate-400"
-                  }`}
-                >
-                  {page}
-                </button>
-              ),
-            )}
-            <button
-              onClick={() =>
-                setCurrentPage(Math.min(totalPages, currentPage + 1))
-              }
-              disabled={currentPage === totalPages}
-              className="h-7 w-7 flex items-center justify-center rounded-full text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-30 disabled:pointer-events-none transition-colors"
-            >
-              <ChevronRight className="h-3.5 w-3.5" />
-            </button>
+            <IconToolbarButton
+              icon={Settings2}
+              tooltip="Configurar colunas"
+              onClick={() => setItemColConfigOpen(true)}
+            />
           </div>
         </div>
 
-        {/* Campaigns section */}
-        {pagedCampaigns.length > 0 && (
-          <>
-            {listFilter === "all" && (
-              <div className="px-5 py-2 bg-slate-50/40 dark:bg-slate-900/20 border-b border-slate-100 dark:border-slate-800/50">
-                <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
-                  <Share2 className="h-3 w-3" />
-                  Campanhas
-                </span>
-              </div>
-            )}
-            <div className="divide-y divide-slate-100 dark:divide-slate-800">
-              {pagedCampaigns.map((campaign, idx) => (
-                <div
-                  key={campaign.id}
-                  className={`flex items-center gap-4 px-5 py-3.5 hover:bg-blue-50/40 dark:hover:bg-slate-800/50 transition-colors group ${idx % 2 === 0 ? "bg-white dark:bg-transparent" : "bg-slate-100 dark:bg-slate-800/20"}`}
-                >
-                  <div
-                    className={`w-1.5 h-10 rounded-full shrink-0 ${campaign.status === "active" ? "bg-emerald-500" : campaign.status === "ended" ? "bg-slate-300" : "bg-amber-400"}`}
-                  />
-                  <div className="w-6 h-6 rounded-lg flex items-center justify-center shrink-0 bg-blue-100 dark:bg-blue-900/30">
-                    {campaign.campaignType === "influencer" ? (
-                      <Star className="h-3.5 w-3.5 text-blue-600" />
-                    ) : (
-                      <Share2 className="h-3.5 w-3.5 text-blue-600" />
-                    )}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 mb-0.5 flex-wrap">
-                      <p className="text-sm font-semibold text-slate-900 dark:text-slate-100 truncate">
-                        {campaign.name}
-                      </p>
-                      {campaign.campaignType === "influencer" && (
-                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold bg-violet-50 text-violet-700 border border-violet-200 shrink-0">
-                          <Star className="h-3 w-3" />
-                          Influencer
-                        </span>
-                      )}
-                      {campaign.status === "active" ? (
-                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200 shrink-0">
-                          <CheckCircle2 className="h-3 w-3" />
-                          Ativa
-                        </span>
-                      ) : campaign.status === "ended" ? (
-                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold bg-slate-100 text-slate-500 border border-slate-200 shrink-0">
-                          <XCircle className="h-3 w-3" />
-                          Encerrada
-                        </span>
-                      ) : (
-                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold bg-amber-50 text-amber-600 border border-amber-200 shrink-0">
-                          <XCircle className="h-3 w-3" />
-                          Pausada
-                        </span>
-                      )}
-                      {campaign.linkedCouponCode && (
-                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold bg-slate-100 text-slate-600 border border-slate-200 shrink-0 font-mono">
-                          <Tag className="h-3 w-3" />
-                          {campaign.linkedCouponCode}
-                        </span>
-                      )}
-                    </div>
-                    <div className="flex flex-wrap items-center gap-x-4 gap-y-0.5 text-xs text-slate-400 dark:text-slate-500">
-                      <span className="flex items-center gap-1">
-                        <Target className="h-3 w-3" />
-                        {getCommissionTypeLabel(campaign.commissionType)}
-                      </span>
-                      <span className="flex items-center gap-1">
-                        <DollarSign className="h-3 w-3" />
-                        {campaign.commissionType === "percentage"
-                          ? `${campaign.commissionValue}%`
-                          : `R$ ${campaign.commissionValue}`}{" "}
-                        comissão
-                      </span>
-                      {campaign.linkedUserName && (
-                        <span className="flex items-center gap-1">
-                          <User className="h-3 w-3" />
-                          {campaign.linkedUserName}
-                        </span>
-                      )}
-                      <span className="flex items-center gap-1">
-                        <Users className="h-3 w-3" />
-                        {campaign.activeReferrals} indicações
-                      </span>
-                      <span className="flex items-center gap-1">
-                        <TrendingUp className="h-3 w-3" />
-                        R$ {(campaign.totalEarned ?? 0).toLocaleString()} pagos
-                      </span>
-                      <span className="flex items-center gap-1">
-                        <Calendar className="h-3 w-3" />
-                        até {formatDate(campaign.endDate)}
-                      </span>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-2 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
-                    <Switch
-                      checked={campaign.status === "active"}
-                      onCheckedChange={(checked) =>
-                        setCampaignToggle({ campaign, newStatus: checked })
-                      }
-                      disabled={campaign.status === "ended"}
-                      className="data-[state=checked]:bg-emerald-500 scale-75"
-                    />
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => openEditCampaign(campaign)}
-                      className="h-7 w-7 p-0 text-slate-400 hover:text-blue-600 hover:bg-blue-50"
-                    >
-                      <Pencil className="h-3.5 w-3.5" />
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => deleteCampaign(campaign.id)}
-                      className="h-7 w-7 p-0 text-slate-400 hover:text-red-600 hover:bg-red-50"
-                    >
-                      <Trash2 className="h-3.5 w-3.5" />
-                    </Button>
-                    {campaign.campaignType === "influencer" && (
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => {
-                          setAccessDrawerCampaign(campaign);
-                          setAccessForm({
-                            name: campaign.linkedUserName ?? "",
-                            email: "",
-                            password: "",
-                            pixKey: "",
-                            pixKeyType: "cpf",
-                          });
-                          setAccessDrawerOpen(true);
-                        }}
-                        className="h-7 w-7 p-0 text-slate-400 hover:text-violet-600 hover:bg-violet-50"
-                        title="Criar acesso parceiro"
-                      >
-                        <UserPlus className="h-3.5 w-3.5" />
-                      </Button>
-                    )}
-                  </div>
-                </div>
-              ))}
-            </div>
-          </>
-        )}
-
-        {/* Coupons section */}
-        {pagedCoupons.length > 0 && (
-          <>
-            {listFilter === "all" && (
-              <div className="px-5 py-2 bg-slate-50/40 dark:bg-slate-900/20 border-y border-slate-100 dark:border-slate-800/50">
-                <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
-                  <Tag className="h-3 w-3" />
-                  Cupons e Promoções
-                </span>
-              </div>
-            )}
-            <div className="divide-y divide-slate-100 dark:divide-slate-800">
-              {pagedCoupons.map((coupon, idx) => {
-                const typeConfig = getCouponTypeConfig(coupon.couponType);
-                const TypeIcon = typeConfig.icon;
+        <div className="flex flex-wrap items-center justify-between gap-3 px-[18px] py-2 border-y border-[#e8edf5] dark:border-slate-800 bg-white dark:bg-slate-900/30">
+          <div className="flex items-center gap-3">
+            <ItemsPerPageSelect
+              value={itemPageSize.toString()}
+              onValueChange={(v) => { setItemPageSize(Number(v)); setItemPage(1); }}
+              variant="top"
+            />
+            <span className="text-xs text-slate-400 whitespace-nowrap">
+              {(() => {
+                const start = sortedItems.length === 0 ? 0 : (itemPage - 1) * itemPageSize + 1;
+                const end = Math.min(itemPage * itemPageSize, sortedItems.length);
                 return (
-                  <div
-                    key={coupon.id}
-                    className={`flex items-center gap-4 px-5 py-3.5 hover:bg-blue-50/40 dark:hover:bg-slate-800/50 transition-colors group ${idx % 2 === 0 ? "bg-white dark:bg-transparent" : "bg-slate-100 dark:bg-slate-800/20"}`}
-                  >
-                    <div
-                      className={`w-1.5 h-10 rounded-full shrink-0 ${coupon.status === "active" ? "bg-emerald-500" : coupon.status === "expired" ? "bg-slate-300" : "bg-rose-400"}`}
-                    />
-                    <div className="w-6 h-6 rounded-lg flex items-center justify-center shrink-0 bg-violet-100 dark:bg-violet-900/30">
-                      <TypeIcon className="h-3.5 w-3.5 text-violet-600" />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 mb-0.5 flex-wrap">
-                        <p className="text-sm font-semibold text-slate-900 dark:text-slate-100 font-mono">
-                          {coupon.code}
-                        </p>
-                        <span
-                          className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold border shrink-0 ${typeConfig.color}`}
-                        >
-                          <TypeIcon className="h-3 w-3" />
-                          {typeConfig.label}
-                        </span>
-                        {coupon.couponType === "credit-bonus" ? (
-                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold bg-amber-50 text-amber-700 border border-amber-200 shrink-0">
-                            <Gift className="h-3 w-3" />
-                            {coupon.creditBonus} créditos
-                          </span>
-                        ) : (
-                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200 shrink-0">
-                            {coupon.discountType === "percentage" ? (
-                              <>
-                                <Percent className="h-3 w-3" />
-                                {coupon.discountValue}% OFF
-                              </>
-                            ) : (
-                              <>
-                                <DollarSign className="h-3 w-3" />
-                                R$ {coupon.discountValue} OFF
-                              </>
-                            )}
-                          </span>
-                        )}
-                        {coupon.status === "active" ? (
-                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold bg-blue-50 text-blue-700 border border-blue-200 shrink-0">
-                            <CheckCircle2 className="h-3 w-3" />
-                            Ativo
-                          </span>
-                        ) : coupon.status === "expired" ? (
-                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold bg-slate-100 text-slate-500 border border-slate-200 shrink-0">
-                            <Clock className="h-3 w-3" />
-                            Expirado
-                          </span>
-                        ) : (
-                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold bg-rose-50 text-rose-600 border border-rose-200 shrink-0">
-                            <XCircle className="h-3 w-3" />
-                            Desativado
-                          </span>
-                        )}
-                        {coupon.allowedAccountTypes.length > 0 && (
-                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold bg-orange-50 text-orange-700 border border-orange-200 shrink-0">
-                            <Building2 className="h-3 w-3" />
-                            {coupon.allowedAccountTypes
-                              .map((t) => ACCOUNT_TYPE_LABELS[t])
-                              .join(", ")}
-                          </span>
-                        )}
-                      </div>
-                      <div className="flex flex-wrap items-center gap-x-4 gap-y-0.5 text-xs text-slate-400 dark:text-slate-500">
-                        <span className="flex items-center gap-1">
-                          <Calendar className="h-3 w-3" />
-                          {new Date(coupon.validFrom).toLocaleDateString(
-                            "pt-BR",
-                          )}{" "}
-                          —{" "}
-                          {new Date(coupon.validUntil).toLocaleDateString(
-                            "pt-BR",
-                          )}
-                        </span>
-                        {coupon.usageLimit > 0 && (
-                          <span className="flex items-center gap-1">
-                            <Users className="h-3 w-3" />
-                            {coupon.usedCount} / {coupon.usageLimit} usos
-                          </span>
-                        )}
-                        <span className="flex items-center gap-1">
-                          <Target className="h-3 w-3" />
-                          {coupon.usageLimitPerCompany === "once"
-                            ? "1x por empresa"
-                            : coupon.usageLimitPerCompany === "custom"
-                              ? `${coupon.maxUsesPerCompany}x por empresa`
-                              : "Ilimitado por empresa"}
-                        </span>
-                        {coupon.linkedUserName && (
-                          <span className="flex items-center gap-1">
-                            <UserCheck className="h-3 w-3" />
-                            {coupon.linkedUserName} ·{" "}
-                            {coupon.linkedUserCommissionType === "percentage"
-                              ? `${coupon.linkedUserCommissionValue}%`
-                              : `R$ ${coupon.linkedUserCommissionValue}`}{" "}
-                            comissão
-                          </span>
-                        )}
-                        <span className="flex items-center gap-1">
-                          <Tag className="h-3 w-3" />
-                          {coupon.applicableProducts.join(", ")}
-                        </span>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-2 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
-                      <Switch
-                        checked={coupon.status === "active"}
-                        onCheckedChange={(checked) =>
-                          setCouponToggle({ coupon, newStatus: checked })
-                        }
-                        className="data-[state=checked]:bg-emerald-500 scale-75"
-                      />
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => openEditCoupon(coupon)}
-                        className="h-7 w-7 p-0 text-slate-400 hover:text-blue-600 hover:bg-blue-50"
-                      >
-                        <Pencil className="h-3.5 w-3.5" />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => deleteCoupon(coupon.id)}
-                        className="h-7 w-7 p-0 text-slate-400 hover:text-red-600 hover:bg-red-50"
-                      >
-                        <Trash2 className="h-3.5 w-3.5" />
-                      </Button>
-                    </div>
-                  </div>
+                  <>
+                    {start}-{end} de{" "}
+                    <span className="font-semibold text-slate-600 dark:text-slate-300">{sortedItems.length}</span>{" "}
+                    item{sortedItems.length !== 1 ? "s" : ""}
+                  </>
                 );
-              })}
-            </div>
-          </>
-        )}
-
-        {/* Empty state */}
-        {totalFilteredItems === 0 && (
-          <div className="flex flex-col items-center justify-center py-16 text-slate-400">
-            <div className="w-14 h-14 rounded-2xl bg-slate-100 dark:bg-slate-800 flex items-center justify-center mb-3">
-              <Search className="h-7 w-7 opacity-40" />
-            </div>
-            <p className="text-sm font-medium text-slate-500">
-              Nenhum item encontrado
-            </p>
-            <p className="text-xs text-slate-400 mt-1">
-              Ajuste os filtros ou crie um novo item
-            </p>
+              })()}
+            </span>
           </div>
-        )}
-
-        {/* Bottom pagination */}
-        {totalFilteredItems > 0 && (
-          <div className="flex items-center justify-between px-5 py-3 border-t border-slate-100 dark:border-slate-800 bg-slate-50/40 dark:bg-slate-900/20">
-            <div className="flex items-center gap-2">
-              <ItemsPerPageSelect
-                value={pageSize.toString()}
-                onValueChange={(value) => {
-                  setPageSize(Number(value));
-                  setCurrentPage(1);
-                }}
-                variant="bottom"
-              />
-              <span className="text-xs text-slate-400 whitespace-nowrap">
-                de{" "}
-                <span className="font-semibold text-slate-600 dark:text-slate-300">
-                  {totalFilteredItems}
-                </span>{" "}
-                {totalFilteredItems === 1 ? "item" : "itens"}
-              </span>
+          {itemHasHorizontalOverflow && (
+            <div
+              ref={itemTopScrollRef}
+              onScroll={handleItemTopBarScroll}
+              title="Arraste para rolar a tabela na horizontal e ver as colunas que não couberem na tela"
+              className="hidden md:block flex-1 min-w-[80px] overflow-x-scroll allka-table-scroll self-center"
+              style={{ height: 12 }}
+            >
+              <div style={{ minWidth: 960, height: 1 }} />
             </div>
-            <div className="flex items-center gap-0.5">
+          )}
+          {totalItemPages > 1 && (
+            <div className="flex items-center gap-0.5 flex-shrink-0">
               <button
-                onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
-                disabled={currentPage === 1}
+                onClick={() => setItemPage((v) => Math.max(1, v - 1))}
+                disabled={itemPage === 1}
                 className="h-7 w-7 flex items-center justify-center rounded-full text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-30 disabled:pointer-events-none transition-colors"
               >
                 <ChevronLeft className="h-3.5 w-3.5" />
               </button>
-              {getPageNumbers().map((page, index) =>
-                page === "..." ? (
-                  <span key={index} className="text-xs text-slate-300 px-0.5">
-                    ·
-                  </span>
+              {getItemPageNumbers().map((pg, i) =>
+                pg === "..." ? (
+                  <span key={i} className="text-xs text-slate-300 px-0.5">·</span>
                 ) : (
                   <button
-                    key={index}
-                    onClick={() => setCurrentPage(Number(page))}
-                    className={`h-7 w-7 flex items-center justify-center rounded-full text-xs font-semibold transition-colors ${
-                      page === currentPage
-                        ? "bg-blue-500 text-white shadow-sm shadow-blue-200 dark:shadow-blue-900/40"
+                    key={i}
+                    onClick={() => setItemPage(Number(pg))}
+                    className={`h-7 w-7 flex items-center justify-center rounded-full text-xs font-bold transition-colors ${
+                      pg === itemPage
+                        ? "text-white shadow-[0_6px_14px_rgba(110,44,150,0.25)]"
                         : "text-slate-500 hover:text-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 dark:text-slate-400"
                     }`}
+                    style={pg === itemPage ? { background: "linear-gradient(135deg, #111A4D 0%, #6E2C96 55%, #D92293 100%)" } : undefined}
                   >
-                    {page}
+                    {pg}
                   </button>
                 ),
               )}
               <button
-                onClick={() =>
-                  setCurrentPage(Math.min(totalPages, currentPage + 1))
-                }
-                disabled={currentPage === totalPages}
+                onClick={() => setItemPage((v) => Math.min(totalItemPages, v + 1))}
+                disabled={itemPage === totalItemPages}
                 className="h-7 w-7 flex items-center justify-center rounded-full text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-30 disabled:pointer-events-none transition-colors"
               >
                 <ChevronRight className="h-3.5 w-3.5" />
               </button>
             </div>
+          )}
+        </div>
+
+        {sortedItems.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-16 text-slate-400">
+            <div className="w-14 h-14 rounded-2xl bg-slate-100 dark:bg-slate-800 flex items-center justify-center mb-3">
+              <Search className="h-7 w-7 opacity-40" />
+            </div>
+            <p className="text-sm font-medium text-slate-500 dark:text-slate-400">Nenhum item encontrado</p>
+          </div>
+        ) : (
+          <div ref={itemTableScrollRef} onScroll={handleItemTableScroll} className="overflow-x-auto allka-table-scroll-body">
+            <table className="w-full text-xs min-w-[960px]">
+              <thead>
+                <tr className="border-b border-slate-200/60 dark:border-slate-700/60">
+                  <th
+                    className="py-3.5 px-2 text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-[0.04em] text-center"
+                    style={{ position: "sticky", left: 0, top: 0, zIndex: 3, minWidth: 108, background: "var(--table-head)", boxShadow: "0 1px 0 rgba(148,163,184,0.22)", borderRight: "1px solid rgba(100,116,139,0.18)" }}
+                  >
+                    Ações
+                  </th>
+                  {ITEM_COLUMNS.filter((c) => itemVisibleCols.has(c.key)).map((col) => (
+                    <th
+                      key={col.key}
+                      className="py-3.5 px-4 text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-[0.04em] select-none"
+                      style={{ position: "sticky", top: 0, zIndex: 2, background: "var(--table-head)", boxShadow: "0 1px 0 rgba(148,163,184,0.22)", borderRight: "1px solid rgba(148,163,184,0.16)" }}
+                    >
+                      <div className="inline-flex items-center gap-1">
+                        {col.sortField ? (
+                          <SortableHeader
+                            label={col.label}
+                            field={col.sortField}
+                            type={col.sortType ?? "text"}
+                            sortKey={itemSortKey as string | null}
+                            sortDir={itemSortDir}
+                            onSort={handleItemSort}
+                          />
+                        ) : (
+                          <span>{col.label}</span>
+                        )}
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <span className="text-slate-300 dark:text-slate-600 cursor-help text-[10px]">ⓘ</span>
+                          </TooltipTrigger>
+                          <TooltipContent className="text-xs max-w-[200px]">{col.info}</TooltipContent>
+                        </Tooltip>
+                      </div>
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {pagedItems.map((row, i) => {
+                  const statusTone: Record<string, string> = {
+                    active: "border-emerald-500 bg-emerald-200 text-emerald-900 shadow-[0_0_12px_rgba(16,185,129,0.65)] dark:bg-emerald-800/70 dark:text-emerald-100",
+                    paused: "border-amber-500 bg-amber-200 text-amber-900 shadow-[0_0_12px_rgba(245,158,11,0.65)] dark:bg-amber-800/70 dark:text-amber-100",
+                    ended: "border-slate-400 bg-slate-300 text-slate-800 shadow-[0_0_8px_rgba(100,116,139,0.4)] dark:bg-slate-800 dark:text-slate-300",
+                    disabled: "border-rose-500 bg-rose-200 text-rose-900 shadow-[0_0_12px_rgba(244,63,94,0.65)] dark:bg-rose-800/70 dark:text-rose-100",
+                    expired: "border-slate-400 bg-slate-300 text-slate-800 shadow-[0_0_8px_rgba(100,116,139,0.4)] dark:bg-slate-800 dark:text-slate-300",
+                  };
+                  const statusDot: Record<string, string> = {
+                    active: "bg-emerald-500",
+                    paused: "bg-amber-500",
+                    ended: "bg-slate-400",
+                    disabled: "bg-rose-500",
+                    expired: "bg-slate-400",
+                  };
+                  const statusLabel: Record<string, string> = {
+                    active: row.kind === "campaign" ? "Ativa" : "Ativo",
+                    paused: "Pausada",
+                    ended: "Encerrada",
+                    disabled: "Desativado",
+                    expired: "Expirado",
+                  };
+                  return (
+                  <tr
+                    key={`${row.kind}-${row.id}`}
+                    className={`group transition-colors ${
+                      i % 2 === 0
+                        ? "bg-[#F1F4F9] dark:bg-[oklch(0.14_0.026_258)] hover:bg-[#D9E1ED] dark:hover:bg-[oklch(0.21_0.024_258)]"
+                        : "bg-[#DCE3EE] dark:bg-[oklch(0.185_0.024_258)] hover:bg-[#C7D2E3] dark:hover:bg-[oklch(0.21_0.024_258)]"
+                    }`}
+                  >
+                    <td
+                      className={`px-1 py-2 transition-colors ${
+                        i % 2 === 0
+                          ? "bg-[#ECEFF4] group-hover:bg-[#D9E1ED] dark:bg-[oklch(0.14_0.026_258)] dark:group-hover:bg-[oklch(0.21_0.024_258)]"
+                          : "bg-[#D6DCE8] group-hover:bg-[#C7D2E3] dark:bg-[oklch(0.185_0.024_258)] dark:group-hover:bg-[oklch(0.21_0.024_258)]"
+                      }`}
+                      style={{ position: "sticky", left: 0, zIndex: 1, minWidth: 108, borderRight: "1px solid rgba(100,116,139,0.18)" }}
+                    >
+                      <div className="flex items-center justify-center gap-1">
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <span>
+                              <Switch
+                                checked={row.status === "active"}
+                                onCheckedChange={(checked) =>
+                                  row.kind === "campaign"
+                                    ? setCampaignToggle({ campaign: row.campaign!, newStatus: checked })
+                                    : setCouponToggle({ coupon: row.coupon!, newStatus: checked })
+                                }
+                                disabled={row.kind === "campaign" && row.status === "ended"}
+                                className="data-[state=checked]:bg-emerald-500 scale-75"
+                              />
+                            </span>
+                          </TooltipTrigger>
+                          <TooltipContent className="text-xs font-medium">{row.status === "active" ? "Desativar" : "Ativar"}</TooltipContent>
+                        </Tooltip>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <button
+                              onClick={() => (row.kind === "campaign" ? openEditCampaign(row.campaign!) : openEditCoupon(row.coupon!))}
+                              className="h-[26px] w-[26px] flex items-center justify-center rounded-[8px] bg-white dark:bg-slate-800 border border-[#e8edf5] dark:border-slate-700 text-[#6E2C96] dark:text-slate-500 shadow-[0_4px_10px_rgba(15,23,42,0.06)] hover:bg-gradient-to-br hover:from-[#2558FF] hover:via-[#6E2C96] hover:to-[#D92293] hover:text-white dark:hover:text-[#0a1628] hover:border-transparent hover:shadow-[0_8px_18px_rgba(15,23,42,0.18)] hover:-translate-y-px transition-all duration-150"
+                            >
+                              <Pencil className="h-3.5 w-3.5" />
+                            </button>
+                          </TooltipTrigger>
+                          <TooltipContent className="text-xs font-medium">{row.kind === "campaign" ? "Editar campanha" : "Editar cupom"}</TooltipContent>
+                        </Tooltip>
+                        {row.kind === "campaign" && row.campaign!.campaignType === "influencer" && (
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <button
+                                onClick={() => {
+                                  setAccessDrawerCampaign(row.campaign!);
+                                  setAccessForm({ name: row.campaign!.linkedUserName ?? "", email: "", password: "", pixKey: "", pixKeyType: "cpf" });
+                                  setAccessDrawerOpen(true);
+                                }}
+                                className="h-[26px] w-[26px] flex items-center justify-center rounded-[8px] bg-white dark:bg-slate-800 border border-[#e8edf5] dark:border-slate-700 text-blue-500 dark:text-slate-500 shadow-[0_4px_10px_rgba(15,23,42,0.06)] hover:bg-gradient-to-br hover:from-[#2558FF] hover:via-[#6E2C96] hover:to-[#D92293] hover:text-white dark:hover:text-[#0a1628] hover:border-transparent hover:shadow-[0_8px_18px_rgba(15,23,42,0.18)] hover:-translate-y-px transition-all duration-150"
+                              >
+                                <UserPlus className="h-3.5 w-3.5" />
+                              </button>
+                            </TooltipTrigger>
+                            <TooltipContent className="text-xs font-medium">Criar acesso do influencer</TooltipContent>
+                          </Tooltip>
+                        )}
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <button
+                              onClick={() => (row.kind === "campaign" ? deleteCampaign(row.id) : deleteCoupon(row.id))}
+                              className="h-[26px] w-[26px] flex items-center justify-center rounded-[8px] bg-white dark:bg-slate-800 border border-[#e8edf5] dark:border-slate-700 text-red-500 dark:text-slate-500 shadow-[0_4px_10px_rgba(15,23,42,0.06)] hover:bg-gradient-to-br hover:from-[#2558FF] hover:via-[#6E2C96] hover:to-[#D92293] hover:text-white dark:hover:text-[#0a1628] hover:border-transparent hover:shadow-[0_8px_18px_rgba(15,23,42,0.18)] hover:-translate-y-px transition-all duration-150"
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </button>
+                          </TooltipTrigger>
+                          <TooltipContent className="text-xs font-medium">{row.kind === "campaign" ? "Excluir campanha" : "Excluir cupom"}</TooltipContent>
+                        </Tooltip>
+                      </div>
+                    </td>
+
+                    {itemVisibleCols.has("nome") && (
+                      <td className="py-3 px-4" style={{ borderRight: "1px solid rgba(148,163,184,0.15)" }}>
+                        <div className="flex items-center gap-2.5">
+                          <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${row.kind === "campaign" ? "bg-blue-100 dark:bg-blue-900/30" : "bg-violet-100 dark:bg-violet-900/30"}`}>
+                            {row.kind === "campaign" ? (
+                              row.campaign!.campaignType === "influencer" ? <Star className="h-4 w-4 text-blue-600" /> : <Share2 className="h-4 w-4 text-blue-600" />
+                            ) : (
+                              (() => { const TypeIcon = getCouponTypeConfig(row.coupon!.couponType).icon; return <TypeIcon className="h-4 w-4 text-violet-600" />; })()
+                            )}
+                          </div>
+                          <div className="min-w-0">
+                            <p className={`font-bold text-sm text-slate-800 dark:text-slate-100 ${row.kind === "coupon" ? "font-mono" : ""} truncate`}>{row.name}</p>
+                            <NeonBadge color={row.kind === "campaign" ? (row.type === "referral" ? "emerald" : row.type === "link" ? "blue" : "purple") : "violet"}>
+                              {row.kind === "campaign" ? (CAMPAIGN_TYPE_LABELS[row.type] ?? row.type) : getCouponTypeConfig(row.type).label}
+                            </NeonBadge>
+                          </div>
+                        </div>
+                      </td>
+                    )}
+                    {itemVisibleCols.has("tipo") && (
+                      <td className="py-3 px-4" style={{ borderRight: "1px solid rgba(148,163,184,0.15)" }}>
+                        <NeonBadge color={row.kind === "campaign" ? "blue" : "purple"}>
+                          {row.kind === "campaign" ? "Campanha" : "Cupom"}
+                        </NeonBadge>
+                      </td>
+                    )}
+                    {itemVisibleCols.has("status") && (
+                      <td className="py-3 px-4" style={{ borderRight: "1px solid rgba(148,163,184,0.15)" }}>
+                        <span className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-[11px] font-bold w-fit border ${statusTone[row.status] ?? statusTone.ended}`}>
+                          <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${statusDot[row.status] ?? statusDot.ended}`} />
+                          {statusLabel[row.status] ?? row.status}
+                        </span>
+                      </td>
+                    )}
+                    {itemVisibleCols.has("valor") && (
+                      <td className="py-3 px-4" style={{ borderRight: "1px solid rgba(148,163,184,0.15)" }}>
+                        <p className="text-sm font-semibold text-slate-700 dark:text-slate-300">{row.valueLabel}</p>
+                        {row.kind === "campaign" && (
+                          <p className="text-[11px] text-slate-400">{getCommissionTypeLabel(row.campaign!.commissionType)}</p>
+                        )}
+                      </td>
+                    )}
+                    {itemVisibleCols.has("vinculado") && (
+                      <td className="py-3 px-4" style={{ borderRight: "1px solid rgba(148,163,184,0.15)" }}>
+                        {row.linkedUserName ? (
+                          <span className="inline-flex items-center gap-1.5 text-sm text-slate-700 dark:text-slate-300">
+                            <User className="h-3.5 w-3.5 text-slate-400" />
+                            {row.linkedUserName}
+                          </span>
+                        ) : (
+                          <span className="text-slate-300 dark:text-slate-600">—</span>
+                        )}
+                      </td>
+                    )}
+                    {itemVisibleCols.has("uso") && (
+                      <td className="py-3 px-4 text-center" style={{ borderRight: "1px solid rgba(148,163,184,0.15)" }}>
+                        <span className="inline-flex items-center gap-1 font-semibold text-sm text-slate-700 dark:text-slate-300">
+                          <Users className="h-3.5 w-3.5 text-emerald-500" />
+                          {row.usageLabel}
+                        </span>
+                      </td>
+                    )}
+                    {itemVisibleCols.has("total_pago") && (
+                      <td className="py-3 px-4" style={{ borderRight: "1px solid rgba(148,163,184,0.15)" }}>
+                        {row.totalPaid !== null ? (
+                          <span className="text-sm font-semibold text-slate-700 dark:text-slate-300">R$ {row.totalPaid.toLocaleString()}</span>
+                        ) : (
+                          <span className="text-slate-300 dark:text-slate-600">—</span>
+                        )}
+                      </td>
+                    )}
+                    {itemVisibleCols.has("validade") && (
+                      <td className="py-3 px-4 text-xs text-slate-500 dark:text-slate-400">
+                        {row.validFrom ? new Date(row.validFrom).toLocaleDateString("pt-BR") : "—"}
+                        {" — "}
+                        {row.validUntil ? new Date(row.validUntil).toLocaleDateString("pt-BR") : "—"}
+                      </td>
+                    )}
+                  </tr>
+                  );
+                })}
+              </tbody>
+            </table>
           </div>
         )}
-      </Card>
+
+        {sortedItems.length > 0 && (
+          <div className="flex flex-wrap items-center justify-between gap-3 px-[18px] py-2 border-t border-[#e8edf5] dark:border-slate-800 bg-white dark:bg-slate-900/20">
+            <div className="flex items-center gap-3">
+              <ItemsPerPageSelect
+                value={itemPageSize.toString()}
+                onValueChange={(v) => { setItemPageSize(Number(v)); setItemPage(1); }}
+                variant="bottom"
+              />
+              <span className="text-xs text-slate-400 whitespace-nowrap">
+                {sortedItems.length} item{sortedItems.length !== 1 ? "s" : ""}
+              </span>
+            </div>
+            {itemHasHorizontalOverflow && (
+              <div
+                ref={itemBottomScrollRef}
+                onScroll={handleItemBottomBarScroll}
+                title="Arraste para rolar a tabela na horizontal e ver as colunas que não couberem na tela"
+                className="hidden md:block flex-1 min-w-[80px] overflow-x-scroll allka-table-scroll self-center"
+                style={{ height: 12 }}
+              >
+                <div style={{ minWidth: 960, height: 1 }} />
+              </div>
+            )}
+            {totalItemPages > 1 && (
+              <div className="flex items-center gap-0.5 flex-shrink-0">
+                <button
+                  onClick={() => setItemPage((v) => Math.max(1, v - 1))}
+                  disabled={itemPage === 1}
+                  className="h-7 w-7 flex items-center justify-center rounded-full text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-30 disabled:pointer-events-none transition-colors"
+                >
+                  <ChevronLeft className="h-3.5 w-3.5" />
+                </button>
+                {getItemPageNumbers().map((pg, i) =>
+                  pg === "..." ? (
+                    <span key={i} className="text-xs text-slate-300 px-0.5">·</span>
+                  ) : (
+                    <button
+                      key={i}
+                      onClick={() => setItemPage(Number(pg))}
+                      className={`h-7 w-7 flex items-center justify-center rounded-full text-xs font-bold transition-colors ${
+                        pg === itemPage
+                          ? "text-white shadow-[0_6px_14px_rgba(110,44,150,0.25)]"
+                          : "text-slate-500 hover:text-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 dark:text-slate-400"
+                      }`}
+                      style={pg === itemPage ? { background: "linear-gradient(135deg, #111A4D 0%, #6E2C96 55%, #D92293 100%)" } : undefined}
+                    >
+                      {pg}
+                    </button>
+                  ),
+                )}
+                <button
+                  onClick={() => setItemPage((v) => Math.min(totalItemPages, v + 1))}
+                  disabled={itemPage === totalItemPages}
+                  className="h-7 w-7 flex items-center justify-center rounded-full text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-30 disabled:pointer-events-none transition-colors"
+                >
+                  <ChevronRight className="h-3.5 w-3.5" />
+                </button>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
 
       {/* ── Campaign Drawer ──────────────────────────────────────── */}
       {(campaignDialogOpen || campaignClosing) && (
@@ -3654,516 +3637,112 @@ export default function CampanhasPage() {
         </>
       )}
 
-      {/* ── Advanced Filter Modal ─────────────────────────────────── */}
-      {isFilterModalOpen && (
-        <div
-          data-slot="sheet-content"
-          data-state="open"
-          style={{
-            left: `${sidebarWidth}px`,
-            width: `calc(100vw - ${sidebarWidth}px)`,
-          }}
-          className="fixed top-0 right-0 z-70 h-[calc(100vh-24px)] bg-white dark:bg-slate-900 shadow-2xl border-l border-slate-200 dark:border-slate-700 flex flex-col overflow-hidden data-[state=open]:animate-in data-[state=open]:slide-in-from-right data-[state=open]:fade-in-0 duration-300"
-        >
-          <div className="relative bg-white dark:bg-slate-900 w-full h-full flex flex-col overflow-hidden">
-            {/* Header */}
-            <div
-              className="flex items-center justify-between px-5 py-3 flex-shrink-0"
-              style={{ background: headerGradient }}
+      {/* Filtros — Tipo (Campanha/Cupom) + Status */}
+      <SlidePanel
+        open={itemFiltersOpen}
+        onClose={() => setItemFiltersOpen(false)}
+        title="Filtros"
+        subtitle="Filtre campanhas e cupons por tipo e status."
+        widthMode="compact"
+        compactWidth={360}
+        footer={
+          itemActiveFilterCount > 0 ? (
+            <button
+              onClick={() => {
+                setItemKindFilter(new Set());
+                setItemStatusFilter(new Set());
+              }}
+              className="text-xs text-blue-600 hover:text-blue-700 font-medium"
             >
-              <div>
-                <h2 className="text-sm font-bold text-white">
-                  Filtros Avançados
-                </h2>
-                <p className="text-[11px] text-white/60 mt-0.5">
-                  Configure e aplique filtros
-                </p>
-              </div>
-              <button
-                onClick={() => setIsFilterModalOpen(false)}
-                className="text-white/70 hover:text-white hover:bg-white/20 rounded-lg p-1.5 transition-colors"
-              >
-                <X className="h-4 w-4" />
-              </button>
-            </div>
-
-            {/* Body */}
-            <div className="flex flex-1 overflow-hidden min-h-0">
-              {/* Left — Saved Filters */}
-              <div className="w-44 border-r border-slate-200 dark:border-slate-700 flex-shrink-0 bg-slate-50 dark:bg-slate-800/50 flex flex-col overflow-hidden">
-                <p className="text-[10px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider px-3 pt-3 pb-2 flex items-center gap-1 flex-shrink-0">
-                  <Filter className="h-3 w-3" /> Filtros Salvos
-                </p>
-                <div className="flex-1 overflow-y-auto px-2 pb-3 space-y-1">
-                  {savedFilters.length === 0 ? (
-                    <div className="text-center py-8">
-                      <Filter className="h-6 w-6 mx-auto text-slate-300 dark:text-slate-600 mb-1.5" />
-                      <p className="text-[10px] text-slate-400 dark:text-slate-500">
-                        Nenhum filtro salvo
-                      </p>
-                    </div>
-                  ) : (
-                    savedFilters.map((filter) => (
-                      <div
-                        key={filter.id}
-                        draggable
-                        onDragStart={() => setDraggingFilterId(filter.id)}
-                        onDragOver={(e) => {
-                          e.preventDefault();
-                          setDragOverFilterId(filter.id);
-                        }}
-                        onDrop={() => {
-                          if (
-                            !draggingFilterId ||
-                            draggingFilterId === filter.id
-                          )
-                            return;
-                          const from = savedFilters.findIndex(
-                            (f) => f.id === draggingFilterId,
-                          );
-                          const to = savedFilters.findIndex(
-                            (f) => f.id === filter.id,
-                          );
-                          const next = [...savedFilters];
-                          const [moved] = next.splice(from, 1);
-                          next.splice(to, 0, moved);
-                          setSavedFilters(next);
-                          setDraggingFilterId(null);
-                          setDragOverFilterId(null);
-                        }}
-                        onDragEnd={() => {
-                          setDraggingFilterId(null);
-                          setDragOverFilterId(null);
-                        }}
-                        onClick={() => {
-                          if (editingFilterId) return;
-                          setAdvancedFilters(filter.filters);
-                          setSelectedFilterId(filter.id);
-                          setUnsavedChanges(false);
-                        }}
-                        className={`group relative flex items-center gap-1 p-2 rounded-lg border text-[11px] cursor-pointer transition-all select-none ${
-                          dragOverFilterId === filter.id &&
-                          draggingFilterId !== filter.id
-                            ? "border-blue-400 bg-blue-50"
-                            : draggingFilterId === filter.id
-                              ? "opacity-40"
-                              : selectedFilterId === filter.id
-                                ? "bg-blue-50 dark:bg-blue-950/30 border-blue-300 dark:border-blue-700 text-blue-700 dark:text-blue-300 font-semibold"
-                                : "bg-white dark:bg-slate-700/40 border-slate-200 dark:border-slate-600/50 text-slate-700 dark:text-slate-300 hover:border-blue-300"
-                        }`}
-                      >
-                        <GripVertical className="h-3 w-3 text-slate-300 flex-shrink-0 cursor-grab" />
-                        {editingFilterId === filter.id ? (
-                          <input
-                            autoFocus
-                            type="text"
-                            value={editingFilterName}
-                            onChange={(e) =>
-                              setEditingFilterName(e.target.value)
-                            }
-                            onClick={(e) => e.stopPropagation()}
-                            onKeyDown={(e) => {
-                              e.stopPropagation();
-                              if (
-                                e.key === "Enter" &&
-                                editingFilterName.trim()
-                              ) {
-                                setSavedFilters(
-                                  savedFilters.map((f) =>
-                                    f.id === filter.id
-                                      ? { ...f, name: editingFilterName.trim() }
-                                      : f,
-                                  ),
-                                );
-                                setEditingFilterId(null);
-                              } else if (e.key === "Escape")
-                                setEditingFilterId(null);
-                            }}
-                            onBlur={() => {
-                              if (editingFilterName.trim())
-                                setSavedFilters(
-                                  savedFilters.map((f) =>
-                                    f.id === filter.id
-                                      ? { ...f, name: editingFilterName.trim() }
-                                      : f,
-                                  ),
-                                );
-                              setEditingFilterId(null);
-                            }}
-                            className="flex-1 min-w-0 text-[11px] bg-white dark:bg-slate-700 border border-blue-400 rounded px-1 py-0 outline-none focus:ring-1 focus:ring-blue-400"
-                          />
-                        ) : (
-                          <span className="flex-1 truncate">{filter.name}</span>
-                        )}
-                        {editingFilterId !== filter.id && (
-                          <div className="opacity-0 group-hover:opacity-100 flex items-center gap-0.5 transition-opacity flex-shrink-0">
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setEditingFilterId(filter.id);
-                                setEditingFilterName(filter.name);
-                              }}
-                              className="p-0.5 rounded hover:bg-blue-100 hover:text-blue-500 text-slate-400 transition-all"
-                            >
-                              <Pencil className="h-2.5 w-2.5" />
-                            </button>
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setSavedFilters(
-                                  savedFilters.filter(
-                                    (f) => f.id !== filter.id,
-                                  ),
-                                );
-                                if (selectedFilterId === filter.id)
-                                  setSelectedFilterId(null);
-                              }}
-                              className="p-0.5 rounded hover:bg-red-100 hover:text-red-500 text-slate-400 transition-all"
-                            >
-                              <X className="h-2.5 w-2.5" />
-                            </button>
-                          </div>
-                        )}
-                      </div>
-                    ))
-                  )}
-                </div>
-              </div>
-
-              {/* Right — Filter fields */}
-              <div className="flex-1 min-h-0 flex flex-col">
-                <div className="flex-1 overflow-y-auto p-4 space-y-5">
-                  {/* Identificação */}
-                  <div>
-                    <p className="text-[10px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-2">
-                      Identificação
-                    </p>
-                    <Input
-                      placeholder="Nome da campanha ou código do cupom..."
-                      value={
-                        advancedFilters.statuses.length === 0 &&
-                        advancedFilters.types.length === 0 &&
-                        advancedFilters.commissionTypes.length === 0
-                          ? ""
-                          : ""
-                      }
-                      onChange={() => {}}
-                      className="h-8 text-xs"
-                    />
-                  </div>
-
-                  {/* Tipo */}
-                  <div>
-                    <p className="text-[10px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-2">
-                      Tipo
-                    </p>
-                    <div className="flex flex-wrap gap-1.5">
-                      {[
-                        { v: "referral", l: "Campanha de Indicação" },
-                        { v: "influencer", l: "Campanha Influencer" },
-                        { v: "discount", l: "Cupom Desconto" },
-                        { v: "credit-bonus", l: "Cupom Bônus" },
-                        { v: "referral-coupon", l: "Cupom Afiliado" },
-                      ].map(({ v, l }) => (
-                        <button
-                          key={v}
-                          onClick={() => {
-                            const t = advancedFilters.types.includes(v)
-                              ? advancedFilters.types.filter((x) => x !== v)
-                              : [...advancedFilters.types, v];
-                            setAdvancedFilters({
-                              ...advancedFilters,
-                              types: t,
-                            });
-                            if (selectedFilterId) setUnsavedChanges(true);
-                          }}
-                          className={`px-2.5 py-0.5 rounded-full text-[11px] font-medium border transition-colors ${
-                            advancedFilters.types.includes(v)
-                              ? "bg-blue-500 text-white border-blue-500"
-                              : "bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-600 hover:border-blue-300"
-                          }`}
-                        >
-                          {l}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-
-                  {/* Status */}
-                  <div>
-                    <p className="text-[10px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-2">
-                      Status
-                    </p>
-                    <div className="flex flex-wrap gap-1.5">
-                      {[
-                        {
-                          v: "active",
-                          l: "Ativa / Ativo",
-                          color: "bg-emerald-500 border-emerald-500",
-                        },
-                        {
-                          v: "paused",
-                          l: "Pausada",
-                          color: "bg-amber-500 border-amber-500",
-                        },
-                        {
-                          v: "ended",
-                          l: "Encerrada",
-                          color: "bg-slate-500 border-slate-500",
-                        },
-                        {
-                          v: "expired",
-                          l: "Expirado",
-                          color: "bg-slate-400 border-slate-400",
-                        },
-                        {
-                          v: "disabled",
-                          l: "Desativado",
-                          color: "bg-rose-500 border-rose-500",
-                        },
-                      ].map(({ v, l, color }) => (
-                        <button
-                          key={v}
-                          onClick={() => {
-                            const s = advancedFilters.statuses.includes(v)
-                              ? advancedFilters.statuses.filter((x) => x !== v)
-                              : [...advancedFilters.statuses, v];
-                            setAdvancedFilters({
-                              ...advancedFilters,
-                              statuses: s,
-                            });
-                            if (selectedFilterId) setUnsavedChanges(true);
-                          }}
-                          className={`px-2.5 py-0.5 rounded-full text-[11px] font-medium border transition-colors ${
-                            advancedFilters.statuses.includes(v)
-                              ? `${color} text-white`
-                              : "bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-600 hover:border-blue-300"
-                          }`}
-                        >
-                          {l}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-
-                  {/* Tipo de Comissão */}
-                  <div>
-                    <p className="text-[10px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-2">
-                      Tipo de Comissão
-                    </p>
-                    <div className="flex flex-wrap gap-1.5">
-                      {[
-                        { v: "fixed-first", l: "Fixo 1ª compra" },
-                        { v: "per-referral", l: "Por indicação ativa" },
-                        { v: "percentage", l: "% sobre vendas" },
-                      ].map(({ v, l }) => (
-                        <button
-                          key={v}
-                          onClick={() => {
-                            const ct = advancedFilters.commissionTypes.includes(
-                              v,
-                            )
-                              ? advancedFilters.commissionTypes.filter(
-                                  (x) => x !== v,
-                                )
-                              : [...advancedFilters.commissionTypes, v];
-                            setAdvancedFilters({
-                              ...advancedFilters,
-                              commissionTypes: ct,
-                            });
-                            if (selectedFilterId) setUnsavedChanges(true);
-                          }}
-                          className={`px-2.5 py-0.5 rounded-full text-[11px] font-medium border transition-colors ${
-                            advancedFilters.commissionTypes.includes(v)
-                              ? "bg-violet-500 text-white border-violet-500"
-                              : "bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-600 hover:border-violet-300"
-                          }`}
-                        >
-                          {l}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-
-                  {/* Data de Vigência */}
-                  <div>
-                    <p className="text-[10px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-2">
-                      Data de Vigência
-                    </p>
-                    <div className="flex items-center gap-2">
-                      <Input
-                        type="date"
-                        value={advancedFilters.dateFrom}
-                        onChange={(e) => {
-                          setAdvancedFilters({
-                            ...advancedFilters,
-                            dateFrom: e.target.value,
-                          });
-                          if (selectedFilterId) setUnsavedChanges(true);
-                        }}
-                        className="h-7 text-xs flex-1"
-                      />
-                      <span className="text-slate-300 text-xs flex-shrink-0">
-                        até
-                      </span>
-                      <Input
-                        type="date"
-                        value={advancedFilters.dateTo}
-                        onChange={(e) => {
-                          setAdvancedFilters({
-                            ...advancedFilters,
-                            dateTo: e.target.value,
-                          });
-                          if (selectedFilterId) setUnsavedChanges(true);
-                        }}
-                        className="h-7 text-xs flex-1"
-                      />
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* Footer */}
-            <div className="flex items-center justify-between px-4 py-2.5 border-t border-slate-200 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-900/30 flex-shrink-0">
-              <button
-                onClick={() => {
-                  setAdvancedFilters({
-                    statuses: [],
-                    types: [],
-                    commissionTypes: [],
-                    dateFrom: "",
-                    dateTo: "",
-                  });
-                  setUnsavedChanges(false);
-                }}
-                className="text-[11px] text-slate-400 hover:text-red-500 transition-colors flex items-center gap-1"
-              >
-                <X className="h-3 w-3" /> Limpar filtros
-              </button>
-              <div className="flex items-center gap-2">
-                {showSaveInput ? (
-                  <div className="flex items-center gap-1.5">
-                    <input
-                      autoFocus
-                      type="text"
-                      value={filterNameInput}
-                      onChange={(e) => setFilterNameInput(e.target.value)}
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter" && filterNameInput.trim()) {
-                          const newId = `filter-${Date.now()}`;
-                          setSavedFilters([
-                            ...savedFilters,
-                            {
-                              id: newId,
-                              name: filterNameInput.trim(),
-                              filters: advancedFilters,
-                            },
-                          ]);
-                          setSelectedFilterId(newId);
-                          setUnsavedChanges(false);
-                          setShowSaveInput(false);
-                          setFilterNameInput("");
-                        }
-                        if (e.key === "Escape") {
-                          setShowSaveInput(false);
-                          setFilterNameInput("");
-                        }
-                      }}
-                      placeholder={`Filtro ${savedFilters.length + 1}`}
-                      className="h-7 px-2 rounded-md text-[11px] border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-1 focus:ring-blue-400 w-36"
-                    />
-                    <button
-                      disabled={!filterNameInput.trim()}
-                      onClick={() => {
-                        const newId = `filter-${Date.now()}`;
-                        setSavedFilters([
-                          ...savedFilters,
-                          {
-                            id: newId,
-                            name: filterNameInput.trim(),
-                            filters: advancedFilters,
-                          },
-                        ]);
-                        setSelectedFilterId(newId);
-                        setUnsavedChanges(false);
-                        setShowSaveInput(false);
-                        setFilterNameInput("");
-                      }}
-                      className="h-7 px-3 rounded-md text-[11px] font-medium bg-linear-to-r from-emerald-500 to-emerald-600 hover:from-emerald-600 hover:to-emerald-700 disabled:opacity-40 text-white transition-all shadow-sm"
-                    >
-                      OK
-                    </button>
-                    <button
-                      onClick={() => {
-                        setShowSaveInput(false);
-                        setFilterNameInput("");
-                      }}
-                      className="h-7 w-7 flex items-center justify-center rounded-md text-[11px] border border-slate-200 dark:border-slate-700 text-slate-400 hover:text-red-500 transition-colors"
-                    >
-                      <X className="h-3 w-3" />
-                    </button>
-                  </div>
-                ) : selectedFilterId && unsavedChanges ? (
-                  <div className="flex items-center gap-1.5">
-                    <button
-                      onClick={() => {
-                        setSavedFilters(
-                          savedFilters.map((f) =>
-                            f.id === selectedFilterId
-                              ? { ...f, filters: advancedFilters }
-                              : f,
-                          ),
-                        );
-                        setUnsavedChanges(false);
-                      }}
-                      className="h-7 px-3 rounded-md text-[11px] font-medium bg-linear-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white transition-all shadow-sm"
-                    >
-                      Atualizar filtro
-                    </button>
-                    <button
-                      onClick={() => {
-                        setFilterNameInput(`Filtro ${savedFilters.length + 1}`);
-                        setShowSaveInput(true);
-                      }}
-                      className="h-7 px-3 rounded-md text-[11px] font-medium border border-emerald-400 text-emerald-600 hover:bg-emerald-50 transition-colors"
-                    >
-                      Salvar como novo
-                    </button>
-                  </div>
-                ) : (
-                  <button
-                    onClick={() => {
-                      setFilterNameInput(`Filtro ${savedFilters.length + 1}`);
-                      setShowSaveInput(true);
+              Limpar filtros
+            </button>
+          ) : undefined
+        }
+      >
+        <div className="p-5 flex-1 overflow-y-auto space-y-4">
+          <div>
+            <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">Tipo</p>
+            <div className="space-y-1.5">
+              {(["campaign", "coupon"] as const).map((k) => (
+                <label key={k} className="flex items-center gap-2 text-sm cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={itemKindFilter.has(k)}
+                    onChange={() => {
+                      setItemKindFilter((prev) => {
+                        const next = new Set(prev);
+                        next.has(k) ? next.delete(k) : next.add(k);
+                        return next;
+                      });
+                      setItemPage(1);
                     }}
-                    className="h-7 px-3 rounded-md text-[11px] font-medium bg-linear-to-r from-emerald-500 to-emerald-600 hover:from-emerald-600 hover:to-emerald-700 text-white transition-all shadow-sm"
-                  >
-                    Salvar filtro
-                  </button>
-                )}
-                <div className="w-px h-5 bg-slate-200 dark:bg-slate-700" />
-                <button
-                  onClick={() => setIsFilterModalOpen(false)}
-                  className="h-7 px-3 rounded-md text-[11px] font-medium border border-slate-200 dark:border-slate-600 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
-                >
-                  Cancelar
-                </button>
-                <button
-                  onClick={() => {
-                    setAppliedFilters(advancedFilters);
-                    setCurrentPage(1);
-                    setIsFilterModalOpen(false);
-                  }}
-                  className="h-7 px-4 rounded-md text-[11px] font-semibold btn-brand transition-all shadow-sm"
-                >
-                  Aplicar Filtros
-                </button>
-              </div>
+                  />
+                  {k === "campaign" ? "Campanha" : "Cupom"}
+                </label>
+              ))}
+            </div>
+          </div>
+          <div>
+            <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">Status</p>
+            <div className="space-y-1.5">
+              {(["active", "paused", "ended", "disabled", "expired"] as const).map((s3) => (
+                <label key={s3} className="flex items-center gap-2 text-sm cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={itemStatusFilter.has(s3)}
+                    onChange={() => {
+                      setItemStatusFilter((prev) => {
+                        const next = new Set(prev);
+                        next.has(s3) ? next.delete(s3) : next.add(s3);
+                        return next;
+                      });
+                      setItemPage(1);
+                    }}
+                  />
+                  {s3 === "active"
+                    ? "Ativo(a)"
+                    : s3 === "paused"
+                      ? "Pausada"
+                      : s3 === "ended"
+                        ? "Encerrada"
+                        : s3 === "disabled"
+                          ? "Desativado"
+                          : "Expirado"}
+                </label>
+              ))}
             </div>
           </div>
         </div>
-      )}
+      </SlidePanel>
+
+      {/* Configurar colunas */}
+      <SlidePanel
+        open={itemColConfigOpen}
+        onClose={() => setItemColConfigOpen(false)}
+        title="Configurar colunas"
+        subtitle="Escolha quais colunas aparecem na tabela"
+        widthMode="compact"
+        compactWidth={360}
+      >
+        <div className="p-5 flex-1 overflow-y-auto space-y-2">
+          {ITEM_COLUMNS.map((col) => (
+            <label key={col.key} className="flex items-center gap-2 text-sm cursor-pointer py-1">
+              <input
+                type="checkbox"
+                checked={itemVisibleCols.has(col.key)}
+                onChange={() => {
+                  setItemVisibleCols((prev) => {
+                    const next = new Set(prev);
+                    next.has(col.key) ? next.delete(col.key) : next.add(col.key);
+                    return next;
+                  });
+                }}
+              />
+              {col.label}
+            </label>
+          ))}
+        </div>
+      </SlidePanel>
     </div>
   );
 }

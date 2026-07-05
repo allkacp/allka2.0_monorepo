@@ -35,7 +35,6 @@ import {
   Link2,
   PauseCircle,
   PlayCircle,
-  SlidersHorizontal,
   Cog,
   Calendar,
   Hash,
@@ -47,14 +46,10 @@ import {
   Star,
   Trash2,
   UserCog,
+  MoreHorizontal,
 } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import { ModalBrandHeader } from "@/components/ui/modal-brand-header";
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover";
 import { Checkbox } from "@/components/ui/checkbox";
 import { ItemsPerPageSelect } from "@/components/items-per-page-select";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
@@ -336,6 +331,15 @@ function fmtDate(iso?: string | null): string {
   });
 }
 
+// Stable "mod_tar00001, mod_tar00002, …" display code. The number comes from
+// the model's position in creation order (see `codeOrdinals` in the page
+// component) — the backend `code` field isn't reliably sequential, so it
+// can't be parsed for this.
+function formatModelCode(ordinal?: number | null): string {
+  if (!ordinal) return "—";
+  return `mod_tar${String(ordinal).padStart(5, "0")}`;
+}
+
 // --- Sort header --------------------------------------------------------------
 
 function Th({
@@ -345,6 +349,7 @@ function Th({
   sortDir,
   onSort,
   className,
+  info,
 }: {
   label: string;
   field: string;
@@ -352,26 +357,39 @@ function Th({
   sortDir: "asc" | "desc";
   onSort: (f: string) => void;
   className?: string;
+  info?: string;
 }) {
   const active = sortKey === field;
   return (
     <th
-      onClick={() => onSort(field)}
       className={cn(
-        "px-3 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-slate-500 whitespace-nowrap cursor-pointer select-none hover:text-slate-800 transition-colors",
+        "px-3 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-slate-500 whitespace-nowrap select-none",
         className,
       )}
     >
       <span className="inline-flex items-center gap-1">
-        {label}
-        {active ? (
-          sortDir === "asc" ? (
-            <ChevronUp className="h-3 w-3" />
+        <button
+          onClick={() => onSort(field)}
+          className="inline-flex items-center gap-1 cursor-pointer hover:text-slate-800 dark:hover:text-slate-200 transition-colors"
+        >
+          {label}
+          {active ? (
+            sortDir === "asc" ? (
+              <ChevronUp className="h-3 w-3" />
+            ) : (
+              <ChevronDown className="h-3 w-3" />
+            )
           ) : (
-            <ChevronDown className="h-3 w-3" />
-          )
-        ) : (
-          <ChevronsUpDown className="h-3 w-3 opacity-30" />
+            <ChevronsUpDown className="h-3 w-3 opacity-30" />
+          )}
+        </button>
+        {info && (
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <span className="text-slate-300 dark:text-slate-600 cursor-help text-[10px]">ⓘ</span>
+            </TooltipTrigger>
+            <TooltipContent className="text-xs max-w-[200px]">{info}</TooltipContent>
+          </Tooltip>
         )}
       </span>
     </th>
@@ -411,6 +429,7 @@ function DrawerSection({
 
 function ModelDetailDrawer({
   model: initialModel,
+  codeOrdinal,
   open,
   onClose,
   onStatusChange,
@@ -418,6 +437,7 @@ function ModelDetailDrawer({
   updatingId,
 }: {
   model: CatalogTask | null;
+  codeOrdinal?: number;
   open: boolean;
   onClose: () => void;
   onStatusChange: (model: CatalogTask, status: ModelStatus) => void;
@@ -482,7 +502,7 @@ function ModelDetailDrawer({
             <div className="flex-1 min-w-0">
               <div className="flex flex-wrap items-center gap-2 mb-1">
                 <span className="text-[10px] font-mono font-bold bg-white/20 text-white px-2 py-0.5 rounded-md tracking-wider">
-                  {model.code}
+                  {formatModelCode(codeOrdinal)}
                 </span>
                 <NeonBadge color={STATUS_BADGE_COLOR[model.status] ?? "emerald"}>
                   {sc.label}
@@ -1155,8 +1175,8 @@ export default function AdminModelosTarefasPage() {
     complexity: "all",
   };
   const [advanced, setAdvanced] = useState<AdvancedFilters>(EMPTY_ADV);
-  const [advancedOpen, setAdvancedOpen] = useState(false);
   const [colConfigOpen, setColConfigOpen] = useState(false);
+  const [filtersPanelOpen, setFiltersPanelOpen] = useState(false);
 
   // Sort
   const [sortKey, setSortKey] = useState<string | null>("updated_at");
@@ -1371,6 +1391,18 @@ export default function AdminModelosTarefasPage() {
     [models],
   );
 
+  // Stable "mod_tarNNNNN" numbering — the backend `code` field isn't a clean
+  // sequence (seed data uses product/task-index strings like "PA0001-T01"),
+  // so we derive a stable ordinal from creation order instead of parsing it.
+  const codeOrdinals = useMemo(() => {
+    const byCreation = [...models].sort(
+      (a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime(),
+    );
+    const map = new Map<string, number>();
+    byCreation.forEach((m, i) => map.set(m.id, i + 1));
+    return map;
+  }, [models]);
+
   // Stats
   const stats = useMemo(
     () => ({
@@ -1549,6 +1581,13 @@ export default function AdminModelosTarefasPage() {
     (advanced.minLinks ? 1 : 0) +
     (advanced.subcategory !== "all" ? 1 : 0) +
     (advanced.complexity !== "all" ? 1 : 0);
+
+  const filterActiveCount =
+    (filterStatus !== "all" ? 1 : 0) +
+    (filterType !== "all" ? 1 : 0) +
+    (filterCategory !== "all" ? 1 : 0) +
+    (filterLinkedMode !== "all" ? 1 : 0) +
+    advancedActiveCount;
 
   const getPageNumbers = (): (number | string)[] => {
     const pages: (number | string)[] = [];
@@ -1915,13 +1954,13 @@ export default function AdminModelosTarefasPage() {
           </div>
         )}
 
-        {/* Filters */}
+        {/* Main Card — search + filters/config icons + pagination + table, all in one card matching admin/empresas */}
         {!loading && !error && (
-          <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm p-4 space-y-3">
-            <div className="flex flex-wrap items-center gap-2">
-              {/* Search */}
-              <div className="relative flex-1 min-w-[260px]">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400 pointer-events-none" />
+          <div className="bg-white dark:bg-slate-900 border border-[#e8edf5] dark:border-slate-700 rounded-xl shadow-sm overflow-hidden">
+            {/* Row 1 — search + icon toolbar buttons */}
+            <div className="flex items-center gap-2 flex-wrap px-[18px] py-3">
+              <div className="relative flex-1 min-w-[220px] max-w-sm">
+                <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                 <Input
                   placeholder="Buscar por código, nome, categoria ou produto..."
                   value={search}
@@ -1929,7 +1968,7 @@ export default function AdminModelosTarefasPage() {
                     setSearch(e.target.value);
                     setPage(1);
                   }}
-                  className="h-9 pl-9 pr-9 text-sm"
+                  className="pl-8 h-9 text-sm w-full"
                 />
                 {search && (
                   <button
@@ -1937,340 +1976,29 @@ export default function AdminModelosTarefasPage() {
                       setSearch("");
                       setPage(1);
                     }}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
                   >
                     <X className="h-3.5 w-3.5" />
                   </button>
                 )}
               </div>
 
-              {/* Status */}
-              <Select
-                value={filterStatus}
-                onValueChange={(v) => {
-                  setFilterStatus(v);
-                  setPage(1);
-                }}
-              >
-                <SelectTrigger className="h-9 w-[140px] text-xs">
-                  <SelectValue placeholder="Status" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Todos os status</SelectItem>
-                  <SelectItem value="ativa" className="text-xs">
-                    Ativo
-                  </SelectItem>
-                  <SelectItem value="inativa" className="text-xs">
-                    Inativo
-                  </SelectItem>
-                  <SelectItem value="em_revisao" className="text-xs">
-                    Em Revisão
-                  </SelectItem>
-                </SelectContent>
-              </Select>
-
-              {/* Type */}
-              <Select
-                value={filterType}
-                onValueChange={(v) => {
-                  setFilterType(v);
-                  setPage(1);
-                }}
-              >
-                <SelectTrigger className="h-9 w-[150px] text-xs">
-                  <SelectValue placeholder="Tipo" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Todos os tipos</SelectItem>
-                  {(
-                    [
-                      "execution",
-                      "review",
-                      "approval",
-                      "qualification",
-                      "support",
-                    ] as TaskType[]
-                  ).map((t) => (
-                    <SelectItem key={t} value={t} className="text-xs">
-                      {TYPE_CONFIG[t].label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-
-              {/* Category */}
-              {uniqueCategories.length > 0 && (
-                <Select
-                  value={filterCategory}
-                  onValueChange={(v) => {
-                    setFilterCategory(v);
-                    setPage(1);
-                  }}
-                >
-                  <SelectTrigger className="h-9 w-[180px] text-xs">
-                    <SelectValue placeholder="Categoria" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">Todas as categorias</SelectItem>
-                    {uniqueCategories.map((c) => (
-                      <SelectItem key={c} value={c} className="text-xs">
-                        {c}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              )}
-
-              {/* Vinculação */}
-              <Select
-                value={filterLinkedMode}
-                onValueChange={(v) => {
-                  setFilterLinkedMode(v as any);
-                  setPage(1);
-                }}
-              >
-                <SelectTrigger className="h-9 w-[160px] text-xs">
-                  <SelectValue placeholder="Vinculação" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Todas as vinculações</SelectItem>
-                  <SelectItem value="linked" className="text-xs">
-                    Vinculados a produtos
-                  </SelectItem>
-                  <SelectItem value="unlinked" className="text-xs">
-                    Sem produto vinculado
-                  </SelectItem>
-                </SelectContent>
-              </Select>
-
-              {/* Advanced filters */}
-              <Popover open={advancedOpen} onOpenChange={setAdvancedOpen}>
-                <PopoverTrigger asChild>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className={cn(
-                      "h-9 gap-1.5 text-xs",
-                      advancedActiveCount > 0 &&
-                        "border-blue-300 bg-blue-50 text-blue-700 hover:bg-blue-100",
-                    )}
-                  >
-                    <SlidersHorizontal className="h-3.5 w-3.5" /> Avançado
-                    {advancedActiveCount > 0 && (
-                      <span className="inline-flex h-4 min-w-4 px-1 items-center justify-center rounded-full bg-blue-600 text-[10px] font-bold text-white">
-                        {advancedActiveCount}
-                      </span>
-                    )}
-                  </Button>
-                </PopoverTrigger>
-                <PopoverContent
-                  align="end"
-                  sideOffset={8}
-                  className="w-[420px] p-0"
-                >
-                  <div className="px-4 py-3 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
-                    <div>
-                      <p className="text-sm font-semibold text-slate-800 dark:text-slate-100">
-                        Filtros avançados
-                      </p>
-                      <p className="text-[11px] text-slate-400">
-                        Refine os modelos de tarefas exibidos.
-                      </p>
-                    </div>
-                    {advancedActiveCount > 0 && (
-                      <button
-                        onClick={() => {
-                          setAdvanced(EMPTY_ADV);
-                          setPage(1);
-                        }}
-                        className="text-[11px] text-blue-600 hover:text-blue-700 font-medium"
-                      >
-                        Limpar
-                      </button>
-                    )}
-                  </div>
-                  <div className="p-4 space-y-4 max-h-[60vh] overflow-y-auto">
-                    {/* Datas */}
-                    <div className="grid grid-cols-2 gap-3">
-                      <div>
-                        <Label className="text-[11px] font-semibold text-slate-600 mb-1.5 flex items-center gap-1">
-                          <Calendar className="h-3 w-3" /> Criado de
-                        </Label>
-                        <Input
-                          type="date"
-                          value={advanced.createdFrom}
-                          onChange={(e) => {
-                            setAdvanced({
-                              ...advanced,
-                              createdFrom: e.target.value,
-                            });
-                            setPage(1);
-                          }}
-                          className="h-8 text-xs"
-                        />
-                      </div>
-                      <div>
-                        <Label className="text-[11px] font-semibold text-slate-600 mb-1.5 flex items-center gap-1">
-                          <Calendar className="h-3 w-3" /> Criado até
-                        </Label>
-                        <Input
-                          type="date"
-                          value={advanced.createdTo}
-                          onChange={(e) => {
-                            setAdvanced({
-                              ...advanced,
-                              createdTo: e.target.value,
-                            });
-                            setPage(1);
-                          }}
-                          className="h-8 text-xs"
-                        />
-                      </div>
-                      <div>
-                        <Label className="text-[11px] font-semibold text-slate-600 mb-1.5 flex items-center gap-1">
-                          <Calendar className="h-3 w-3" /> Atualizado de
-                        </Label>
-                        <Input
-                          type="date"
-                          value={advanced.updatedFrom}
-                          onChange={(e) => {
-                            setAdvanced({
-                              ...advanced,
-                              updatedFrom: e.target.value,
-                            });
-                            setPage(1);
-                          }}
-                          className="h-8 text-xs"
-                        />
-                      </div>
-                      <div>
-                        <Label className="text-[11px] font-semibold text-slate-600 mb-1.5 flex items-center gap-1">
-                          <Calendar className="h-3 w-3" /> Atualizado até
-                        </Label>
-                        <Input
-                          type="date"
-                          value={advanced.updatedTo}
-                          onChange={(e) => {
-                            setAdvanced({
-                              ...advanced,
-                              updatedTo: e.target.value,
-                            });
-                            setPage(1);
-                          }}
-                          className="h-8 text-xs"
-                        />
-                      </div>
-                    </div>
-
-                    <div>
-                      <Label className="text-[11px] font-semibold text-slate-600 mb-1.5 flex items-center gap-1">
-                        <Hash className="h-3 w-3" /> Quantidade mínima de
-                        produtos vinculados
-                      </Label>
-                      <Input
-                        type="number"
-                        min={0}
-                        value={advanced.minLinks}
-                        onChange={(e) => {
-                          setAdvanced({
-                            ...advanced,
-                            minLinks: e.target.value,
-                          });
-                          setPage(1);
-                        }}
-                        placeholder="0"
-                        className="h-8 text-xs"
-                      />
-                    </div>
-
-                    {uniqueSubcategories.length > 0 && (
-                      <div>
-                        <Label className="text-[11px] font-semibold text-slate-600 mb-1.5 block">
-                          Subcategoria
-                        </Label>
-                        <Select
-                          value={advanced.subcategory}
-                          onValueChange={(v) => {
-                            setAdvanced({ ...advanced, subcategory: v });
-                            setPage(1);
-                          }}
-                        >
-                          <SelectTrigger className="h-8 text-xs">
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="all">Todas</SelectItem>
-                            {uniqueSubcategories.map((s) => (
-                              <SelectItem key={s} value={s} className="text-xs">
-                                {s}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </div>
-                    )}
-
-                    {uniqueComplexities.length > 0 && (
-                      <div>
-                        <Label className="text-[11px] font-semibold text-slate-600 mb-1.5 block">
-                          Complexidade
-                        </Label>
-                        <Select
-                          value={advanced.complexity}
-                          onValueChange={(v) => {
-                            setAdvanced({ ...advanced, complexity: v });
-                            setPage(1);
-                          }}
-                        >
-                          <SelectTrigger className="h-8 text-xs">
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="all">Todas</SelectItem>
-                            {uniqueComplexities.map((s) => (
-                              <SelectItem key={s} value={s} className="text-xs">
-                                {s}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </div>
-                    )}
-                  </div>
-                  <div className="px-4 py-2.5 border-t border-slate-100 dark:border-slate-800 flex justify-end">
-                    <Button
-                      size="sm"
-                      className="h-8 text-xs btn-brand border-0"
-                      onClick={() => setAdvancedOpen(false)}
-                    >
-                      Fechar
-                    </Button>
-                  </div>
-                </PopoverContent>
-              </Popover>
-
-              {/* Column settings — opens the SlidePanel rendered at the end of this component */}
-              <IconToolbarButton
-                icon={Cog}
-                tooltip="Configurar colunas"
-                onClick={() => setColConfigOpen(true)}
-                className="h-9 w-9"
-              />
-
-              {/* Clear */}
-              {hasActiveFilters && (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={clearFilters}
-                  className="h-9 text-xs gap-1.5 text-slate-500"
-                >
-                  <X className="h-3.5 w-3.5" /> Limpar filtros
-                </Button>
-              )}
+              <div className="ml-auto flex items-center gap-2">
+                <IconToolbarButton
+                  icon={Filter}
+                  tooltip={filterActiveCount > 0 ? `Filtros (${filterActiveCount} ativos)` : "Filtros"}
+                  onClick={() => setFiltersPanelOpen(true)}
+                />
+                <IconToolbarButton
+                  icon={Cog}
+                  tooltip="Configurar colunas"
+                  onClick={() => setColConfigOpen(true)}
+                />
+              </div>
             </div>
 
-            <div className="flex flex-wrap items-center justify-between gap-3">
+            {/* Row 2 — items-per-page + count + scrollbar mirror + numbered pagination */}
+            <div className="flex flex-wrap items-center justify-between gap-3 px-[18px] py-2 border-y border-[#e8edf5] dark:border-slate-800 bg-white dark:bg-slate-900/30">
               <div className="flex items-center gap-3">
                 <ItemsPerPageSelect
                   value={String(pageSize)}
@@ -2283,8 +2011,6 @@ export default function AdminModelosTarefasPage() {
                 <CountText side="bottom" />
               </div>
 
-              {/* Top horizontal scrollbar mirror — only rendered when the
-                  table actually overflows its container. */}
               {hasHorizontalOverflow && (
                 <div
                   ref={topScrollRef}
@@ -2299,53 +2025,41 @@ export default function AdminModelosTarefasPage() {
 
               {totalPages > 1 && <PaginationControls />}
             </div>
-          </div>
-        )}
 
-        {/* Loading */}
-        {loading && <PageLoader text="Carregando modelos de tarefas…" />}
-
-        {/* Empty · no models */}
-        {!loading && !error && models.length === 0 && (
-          <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 shadow-sm p-16 flex flex-col items-center text-center gap-4">
-            <div className="h-16 w-16 rounded-2xl bg-slate-100 flex items-center justify-center">
-              <ClipboardList className="h-8 w-8 text-slate-400" />
-            </div>
-            <div>
-              <h2 className="text-base font-semibold text-slate-700 mb-1">
-                Nenhum modelo de tarefa encontrado.
-              </h2>
-              <p className="text-sm text-slate-400 max-w-sm mx-auto">
-                Modelos de tarefas são estruturas reutilizáveis vinculadas a
-                produtos. Crie um modelo para começar.
-              </p>
-            </div>
-          </div>
-        )}
-
-        {/* Empty · no filter results */}
-        {!loading && !error && models.length > 0 && sorted.length === 0 && (
-          <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 shadow-sm p-12 flex flex-col items-center text-center gap-3">
-            <Filter className="h-8 w-8 text-slate-300" />
-            <p className="text-sm font-medium text-slate-600">
-              Nenhum modelo com os filtros aplicados.
-            </p>
-            <button
-              onClick={clearFilters}
-              className="text-xs text-blue-600 underline hover:no-underline"
-            >
-              Limpar filtros
-            </button>
-          </div>
-        )}
-
-        {/* Table */}
-        {!loading && !error && sorted.length > 0 && (
-          <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden">
+            {models.length === 0 ? (
+              <div className="p-16 flex flex-col items-center text-center gap-4">
+                <div className="h-16 w-16 rounded-2xl bg-slate-100 flex items-center justify-center">
+                  <ClipboardList className="h-8 w-8 text-slate-400" />
+                </div>
+                <div>
+                  <h2 className="text-base font-semibold text-slate-700 mb-1">
+                    Nenhum modelo de tarefa encontrado.
+                  </h2>
+                  <p className="text-sm text-slate-400 max-w-sm mx-auto">
+                    Modelos de tarefas são estruturas reutilizáveis vinculadas a
+                    produtos. Crie um modelo para começar.
+                  </p>
+                </div>
+              </div>
+            ) : sorted.length === 0 ? (
+              <div className="p-12 flex flex-col items-center text-center gap-3">
+                <Filter className="h-8 w-8 text-slate-300" />
+                <p className="text-sm font-medium text-slate-600">
+                  Nenhum modelo com os filtros aplicados.
+                </p>
+                <button
+                  onClick={clearFilters}
+                  className="text-xs text-blue-600 underline hover:no-underline"
+                >
+                  Limpar filtros
+                </button>
+              </div>
+            ) : (
+              <>
             <div
               ref={tableScrollRef}
               onScroll={handleTableScroll}
-              className="overflow-x-auto allka-table-scroll"
+              className="overflow-x-auto allka-table-scroll-body"
             >
               <table className="w-full text-sm min-w-[800px]">
                 <thead
@@ -2381,6 +2095,7 @@ export default function AdminModelosTarefasPage() {
                         sortDir={sortDir}
                         onSort={toggleSort}
                         className="pl-4 w-28"
+                        info="Código sequencial do modelo de tarefa."
                       />
                     )}
                     {isCol("name") && (
@@ -2391,6 +2106,7 @@ export default function AdminModelosTarefasPage() {
                         sortDir={sortDir}
                         onSort={toggleSort}
                         className="min-w-[200px]"
+                        info="Nome do modelo de tarefa reutilizável."
                       />
                     )}
                     {isCol("category") && (
@@ -2401,6 +2117,7 @@ export default function AdminModelosTarefasPage() {
                         sortDir={sortDir}
                         onSort={toggleSort}
                         className="min-w-[130px]"
+                        info="Categoria/agrupamento do modelo."
                       />
                     )}
                     {isCol("type") && (
@@ -2411,6 +2128,7 @@ export default function AdminModelosTarefasPage() {
                         sortDir={sortDir}
                         onSort={toggleSort}
                         className="w-36"
+                        info="Tipo de tarefa gerada a partir deste modelo."
                       />
                     )}
                     {isCol("status") && (
@@ -2421,6 +2139,7 @@ export default function AdminModelosTarefasPage() {
                         sortDir={sortDir}
                         onSort={toggleSort}
                         className="w-32"
+                        info="Situação atual do modelo: ativo, inativo ou em revisão."
                       />
                     )}
                     {isCol("links") && (
@@ -2431,6 +2150,7 @@ export default function AdminModelosTarefasPage() {
                         sortDir={sortDir}
                         onSort={toggleSort}
                         className="w-40"
+                        info="Quantidade de produtos do catálogo que usam este modelo."
                       />
                     )}
                     {isCol("updated_at") && (
@@ -2441,6 +2161,7 @@ export default function AdminModelosTarefasPage() {
                         sortDir={sortDir}
                         onSort={toggleSort}
                         className="w-32"
+                        info="Data da última atualização do modelo."
                       />
                     )}
                   </tr>
@@ -2515,45 +2236,49 @@ export default function AdminModelosTarefasPage() {
                               <DropdownMenuTrigger asChild>
                                 <button className="h-[26px] w-[26px] flex items-center justify-center rounded-[8px] bg-white dark:bg-slate-800 border border-[#e8edf5] dark:border-slate-700 text-slate-400 dark:text-slate-500 shadow-[0_4px_10px_rgba(15,23,42,0.06)] hover:bg-gradient-to-br hover:from-[#2558FF] hover:via-[#6E2C96] hover:to-[#D92293] hover:text-white dark:hover:text-[#0a1628] hover:border-transparent hover:shadow-[0_8px_18px_rgba(15,23,42,0.18)] hover:-translate-y-px transition-all duration-150">
                                   <span className="sr-only">Mais ações</span>
-                                  <svg className="h-3.5 w-3.5" fill="currentColor" viewBox="0 0 16 16">
-                                    <circle cx="8" cy="3" r="1.5" />
-                                    <circle cx="8" cy="8" r="1.5" />
-                                    <circle cx="8" cy="13" r="1.5" />
-                                  </svg>
+                                  <MoreHorizontal className="h-3.5 w-3.5" />
                                 </button>
                               </DropdownMenuTrigger>
-                              <DropdownMenuContent align="start" className="w-52">
+                              <DropdownMenuContent align="start" className="w-56 rounded-xl p-1.5 shadow-lg border-slate-200/70 dark:border-slate-700/60">
                                 <DropdownMenuItem
-                                  className="text-sm gap-2"
+                                  className="gap-2.5 rounded-lg py-2 px-2.5 text-sm cursor-pointer"
                                   onClick={() => handleDuplicate(model)}
                                   disabled={updatingThis}
                                 >
-                                  <Copy className="h-3.5 w-3.5 text-blue-600" />{" "}
+                                  <span className="flex h-6 w-6 items-center justify-center rounded-md bg-blue-100 dark:bg-blue-900/30 shrink-0">
+                                    <Copy className="h-3.5 w-3.5 text-blue-600 dark:text-blue-400" />
+                                  </span>
                                   Duplicar modelo
                                 </DropdownMenuItem>
-                                <DropdownMenuSeparator />
+                                <DropdownMenuSeparator className="my-1" />
                                 <DropdownMenuItem
-                                  className="text-sm gap-2"
+                                  className="gap-2.5 rounded-lg py-2 px-2.5 text-sm cursor-pointer"
                                   onClick={() => handleStatusChange(model, "ativa")}
                                   disabled={model.status === "ativa"}
                                 >
-                                  <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600" />{" "}
+                                  <span className="flex h-6 w-6 items-center justify-center rounded-md bg-emerald-100 dark:bg-emerald-900/30 shrink-0">
+                                    <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
+                                  </span>
                                   Marcar como ativo
                                 </DropdownMenuItem>
                                 <DropdownMenuItem
-                                  className="text-sm gap-2"
+                                  className="gap-2.5 rounded-lg py-2 px-2.5 text-sm cursor-pointer"
                                   onClick={() => handleStatusChange(model, "inativa")}
                                   disabled={model.status === "inativa"}
                                 >
-                                  <Circle className="h-3.5 w-3.5 text-slate-400" />{" "}
+                                  <span className="flex h-6 w-6 items-center justify-center rounded-md bg-slate-100 dark:bg-slate-800 shrink-0">
+                                    <Circle className="h-3.5 w-3.5 text-slate-500 dark:text-slate-400" />
+                                  </span>
                                   Marcar como inativo
                                 </DropdownMenuItem>
                                 <DropdownMenuItem
-                                  className="text-sm gap-2"
+                                  className="gap-2.5 rounded-lg py-2 px-2.5 text-sm cursor-pointer"
                                   onClick={() => handleStatusChange(model, "em_revisao")}
                                   disabled={model.status === "em_revisao"}
                                 >
-                                  <Eye className="h-3.5 w-3.5 text-amber-600" />{" "}
+                                  <span className="flex h-6 w-6 items-center justify-center rounded-md bg-amber-100 dark:bg-amber-900/30 shrink-0">
+                                    <Eye className="h-3.5 w-3.5 text-amber-600 dark:text-amber-400" />
+                                  </span>
                                   Enviar p/ revisão
                                 </DropdownMenuItem>
                               </DropdownMenuContent>
@@ -2564,8 +2289,8 @@ export default function AdminModelosTarefasPage() {
                         {/* Código */}
                         {isCol("code") && (
                           <td className="px-3 py-3 pl-4">
-                            <span className="text-[11px] font-mono text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded">
-                              {model.code}
+                            <span className="text-xs font-mono font-semibold text-slate-500 dark:text-slate-400">
+                              {formatModelCode(codeOrdinals.get(model.id))}
                             </span>
                           </td>
                         )}
@@ -2745,40 +2470,319 @@ export default function AdminModelosTarefasPage() {
               </table>
             </div>
 
-            {/* Bottom mirror bar — items-per-page + count + scrollbar mirror
-                + pagination, matching the top toolbar row exactly. */}
-            {sorted.length > 0 && (
-              <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-2 border-t border-slate-100 dark:border-slate-800">
-                <div className="flex items-center gap-3">
-                  <ItemsPerPageSelect
-                    value={String(pageSize)}
-                    onValueChange={(v) => {
-                      setPageSize(Number(v));
-                      setPage(1);
-                    }}
-                    variant="bottom"
-                  />
-                  <CountText side="top" />
-                </div>
-
-                {hasHorizontalOverflow && (
-                  <div
-                    ref={bottomScrollRef}
-                    onScroll={handleBottomBarScroll}
-                    title="Arraste para rolar a tabela na horizontal e ver as colunas que não couberem na tela"
-                    className="hidden md:block flex-1 min-w-[80px] overflow-x-scroll allka-table-scroll self-center"
-                    style={{ height: 12 }}
-                  >
-                    <div style={{ minWidth: 800, height: 1 }} />
-                  </div>
-                )}
-
-                {totalPages > 1 && <PaginationControls />}
+            {/* Row 3 — bottom mirror of row 2 */}
+            <div className="flex flex-wrap items-center justify-between gap-3 px-[18px] py-2 border-t border-[#e8edf5] dark:border-slate-800 bg-white dark:bg-slate-900/20">
+              <div className="flex items-center gap-3">
+                <ItemsPerPageSelect
+                  value={String(pageSize)}
+                  onValueChange={(v) => {
+                    setPageSize(Number(v));
+                    setPage(1);
+                  }}
+                  variant="bottom"
+                />
+                <CountText side="top" />
               </div>
+
+              {hasHorizontalOverflow && (
+                <div
+                  ref={bottomScrollRef}
+                  onScroll={handleBottomBarScroll}
+                  title="Arraste para rolar a tabela na horizontal e ver as colunas que não couberem na tela"
+                  className="hidden md:block flex-1 min-w-[80px] overflow-x-scroll allka-table-scroll self-center"
+                  style={{ height: 12 }}
+                >
+                  <div style={{ minWidth: 800, height: 1 }} />
+                </div>
+              )}
+
+              {totalPages > 1 && <PaginationControls />}
+            </div>
+              </>
             )}
           </div>
         )}
       </div>
+
+      {/* Filtros panel */}
+      <SlidePanel
+        open={filtersPanelOpen}
+        onClose={() => setFiltersPanelOpen(false)}
+        title="Filtros"
+        subtitle="Refine os modelos de tarefas exibidos."
+        widthMode="compact"
+        compactWidth={420}
+        footer={
+          filterActiveCount > 0 ? (
+            <button
+              onClick={clearFilters}
+              className="text-xs text-blue-600 hover:text-blue-700 font-medium"
+            >
+              Limpar todos os filtros
+            </button>
+          ) : undefined
+        }
+      >
+        <div className="p-5 flex-1 overflow-y-auto space-y-4">
+              {/* Status */}
+              <Label className="text-[11px] font-semibold text-slate-600 mb-1.5 block">Status</Label>
+              <Select
+                value={filterStatus}
+                onValueChange={(v) => {
+                  setFilterStatus(v);
+                  setPage(1);
+                }}
+              >
+                <SelectTrigger className="h-9 w-full text-xs">
+                  <SelectValue placeholder="Status" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Todos os status</SelectItem>
+                  <SelectItem value="ativa" className="text-xs">
+                    Ativo
+                  </SelectItem>
+                  <SelectItem value="inativa" className="text-xs">
+                    Inativo
+                  </SelectItem>
+                  <SelectItem value="em_revisao" className="text-xs">
+                    Em Revisão
+                  </SelectItem>
+                </SelectContent>
+              </Select>
+
+              {/* Type */}
+              <Label className="text-[11px] font-semibold text-slate-600 mb-1.5 block">Tipo</Label>
+              <Select
+                value={filterType}
+                onValueChange={(v) => {
+                  setFilterType(v);
+                  setPage(1);
+                }}
+              >
+                <SelectTrigger className="h-9 w-full text-xs">
+                  <SelectValue placeholder="Tipo" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Todos os tipos</SelectItem>
+                  {(
+                    [
+                      "execution",
+                      "review",
+                      "approval",
+                      "qualification",
+                      "support",
+                    ] as TaskType[]
+                  ).map((t) => (
+                    <SelectItem key={t} value={t} className="text-xs">
+                      {TYPE_CONFIG[t].label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+
+              {/* Category */}
+              {uniqueCategories.length > 0 && (
+                <>
+                <Label className="text-[11px] font-semibold text-slate-600 mb-1.5 block">Categoria</Label>
+                <Select
+                  value={filterCategory}
+                  onValueChange={(v) => {
+                    setFilterCategory(v);
+                    setPage(1);
+                  }}
+                >
+                  <SelectTrigger className="h-9 w-full text-xs">
+                    <SelectValue placeholder="Categoria" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Todas as categorias</SelectItem>
+                    {uniqueCategories.map((c) => (
+                      <SelectItem key={c} value={c} className="text-xs">
+                        {c}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                </>
+              )}
+
+              {/* Vinculação */}
+              <Label className="text-[11px] font-semibold text-slate-600 mb-1.5 block">Vinculação</Label>
+              <Select
+                value={filterLinkedMode}
+                onValueChange={(v) => {
+                  setFilterLinkedMode(v as any);
+                  setPage(1);
+                }}
+              >
+                <SelectTrigger className="h-9 w-full text-xs">
+                  <SelectValue placeholder="Vinculação" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Todas as vinculações</SelectItem>
+                  <SelectItem value="linked" className="text-xs">
+                    Vinculados a produtos
+                  </SelectItem>
+                  <SelectItem value="unlinked" className="text-xs">
+                    Sem produto vinculado
+                  </SelectItem>
+                </SelectContent>
+              </Select>
+          <div className="border-t border-slate-100 dark:border-slate-800 pt-4">
+            <p className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide mb-3">
+              Filtros avançados
+            </p>
+                  <div className="p-4 space-y-4 max-h-[60vh] overflow-y-auto">
+                    {/* Datas */}
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <Label className="text-[11px] font-semibold text-slate-600 mb-1.5 flex items-center gap-1">
+                          <Calendar className="h-3 w-3" /> Criado de
+                        </Label>
+                        <Input
+                          type="date"
+                          value={advanced.createdFrom}
+                          onChange={(e) => {
+                            setAdvanced({
+                              ...advanced,
+                              createdFrom: e.target.value,
+                            });
+                            setPage(1);
+                          }}
+                          className="h-8 text-xs"
+                        />
+                      </div>
+                      <div>
+                        <Label className="text-[11px] font-semibold text-slate-600 mb-1.5 flex items-center gap-1">
+                          <Calendar className="h-3 w-3" /> Criado até
+                        </Label>
+                        <Input
+                          type="date"
+                          value={advanced.createdTo}
+                          onChange={(e) => {
+                            setAdvanced({
+                              ...advanced,
+                              createdTo: e.target.value,
+                            });
+                            setPage(1);
+                          }}
+                          className="h-8 text-xs"
+                        />
+                      </div>
+                      <div>
+                        <Label className="text-[11px] font-semibold text-slate-600 mb-1.5 flex items-center gap-1">
+                          <Calendar className="h-3 w-3" /> Atualizado de
+                        </Label>
+                        <Input
+                          type="date"
+                          value={advanced.updatedFrom}
+                          onChange={(e) => {
+                            setAdvanced({
+                              ...advanced,
+                              updatedFrom: e.target.value,
+                            });
+                            setPage(1);
+                          }}
+                          className="h-8 text-xs"
+                        />
+                      </div>
+                      <div>
+                        <Label className="text-[11px] font-semibold text-slate-600 mb-1.5 flex items-center gap-1">
+                          <Calendar className="h-3 w-3" /> Atualizado até
+                        </Label>
+                        <Input
+                          type="date"
+                          value={advanced.updatedTo}
+                          onChange={(e) => {
+                            setAdvanced({
+                              ...advanced,
+                              updatedTo: e.target.value,
+                            });
+                            setPage(1);
+                          }}
+                          className="h-8 text-xs"
+                        />
+                      </div>
+                    </div>
+
+                    <div>
+                      <Label className="text-[11px] font-semibold text-slate-600 mb-1.5 flex items-center gap-1">
+                        <Hash className="h-3 w-3" /> Quantidade mínima de
+                        produtos vinculados
+                      </Label>
+                      <Input
+                        type="number"
+                        min={0}
+                        value={advanced.minLinks}
+                        onChange={(e) => {
+                          setAdvanced({
+                            ...advanced,
+                            minLinks: e.target.value,
+                          });
+                          setPage(1);
+                        }}
+                        placeholder="0"
+                        className="h-8 text-xs"
+                      />
+                    </div>
+
+                    {uniqueSubcategories.length > 0 && (
+                      <div>
+                        <Label className="text-[11px] font-semibold text-slate-600 mb-1.5 block">
+                          Subcategoria
+                        </Label>
+                        <Select
+                          value={advanced.subcategory}
+                          onValueChange={(v) => {
+                            setAdvanced({ ...advanced, subcategory: v });
+                            setPage(1);
+                          }}
+                        >
+                          <SelectTrigger className="h-8 text-xs">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="all">Todas</SelectItem>
+                            {uniqueSubcategories.map((s) => (
+                              <SelectItem key={s} value={s} className="text-xs">
+                                {s}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    )}
+
+                    {uniqueComplexities.length > 0 && (
+                      <div>
+                        <Label className="text-[11px] font-semibold text-slate-600 mb-1.5 block">
+                          Complexidade
+                        </Label>
+                        <Select
+                          value={advanced.complexity}
+                          onValueChange={(v) => {
+                            setAdvanced({ ...advanced, complexity: v });
+                            setPage(1);
+                          }}
+                        >
+                          <SelectTrigger className="h-8 text-xs">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="all">Todas</SelectItem>
+                            {uniqueComplexities.map((s) => (
+                              <SelectItem key={s} value={s} className="text-xs">
+                                {s}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    )}
+                  </div>
+          </div>
+        </div>
+      </SlidePanel>
 
       {/* Column config panel */}
       <SlidePanel
@@ -2837,7 +2841,7 @@ export default function AdminModelosTarefasPage() {
         title={infoPanelModel?.name}
         subtitle={
           infoPanelModel &&
-          `${infoPanelModel.code} · ${infoPanelModel.category}${infoPanelModel.subcategory ? ` · ${infoPanelModel.subcategory}` : ""}`
+          `${formatModelCode(codeOrdinals.get(infoPanelModel.id))} · ${infoPanelModel.category}${infoPanelModel.subcategory ? ` · ${infoPanelModel.subcategory}` : ""}`
         }
         widthMode="compact"
         compactWidth={480}
@@ -2965,6 +2969,7 @@ export default function AdminModelosTarefasPage() {
       {/* Detail Drawer */}
       <ModelDetailDrawer
         model={selectedModel}
+        codeOrdinal={selectedModel ? codeOrdinals.get(selectedModel.id) : undefined}
         open={drawerOpen}
         onClose={() => {
           setDrawerOpen(false);

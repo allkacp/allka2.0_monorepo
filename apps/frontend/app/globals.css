@@ -1178,6 +1178,19 @@
     background: transparent;
   }
 
+  /* Corpo real da tabela: rola horizontalmente mas SEM barra nativa visível —
+     a barra fica só nos espelhos (allka-table-scroll) do topo/rodapé. Sem
+     isso, a barra nativa do body some com a barra do espelho no rodapé,
+     dando a impressão de "duas barras de rolagem" empilhadas. */
+  .allka-table-scroll-body {
+    scrollbar-width: none;
+  }
+  .allka-table-scroll-body::-webkit-scrollbar {
+    display: none;
+    width: 0;
+    height: 0;
+  }
+
 
   /* Hide scrollbar for mobile menu */
   .hide-scrollbar {

@@ -32,14 +32,43 @@ router.get("/", verifyToken, async (req, res, next) => {
       prisma.campaign.count({ where }),
       prisma.campaign.findMany({
         where,
-        include: { _count: { select: { commissions: true } } },
+        include: {
+          _count: { select: { commissions: true } },
+          commissions: { select: { amount: true } },
+        },
         skip,
         take: limit,
         orderBy: { created_at: "desc" },
       }),
     ]);
 
-    res.json({ data, total, page, limit });
+    // Real linked-partner lookup — a campaign can be the referral link a
+    // partner shares (PartnerProfile.linked_campaign_id); surface that
+    // instead of a fabricated "linked user".
+    const campaignIds = data.map((c) => c.id);
+    const linkedPartners = campaignIds.length
+      ? await prisma.partnerProfile.findMany({
+          where: { linked_campaign_id: { in: campaignIds } },
+          include: { user: { select: { id: true, name: true } } },
+        })
+      : [];
+    const linkedByCampaign = new Map(
+      linkedPartners.map((p) => [p.linked_campaign_id as string, p]),
+    );
+
+    const enriched = data.map((c) => {
+      const { commissions, _count, ...rest } = c;
+      const linked = linkedByCampaign.get(c.id);
+      return {
+        ...rest,
+        active_referrals: _count.commissions,
+        total_earned: commissions.reduce((sum, x) => sum + x.amount, 0),
+        linked_user_id: linked?.user_id ?? null,
+        linked_user_name: linked?.user?.name ?? null,
+      };
+    });
+
+    res.json({ data: enriched, total, page, limit });
   } catch (err) {
     next(err);
   }
