@@ -426,6 +426,28 @@ class ApiClient {
     return this.put(`/partners/${id}`, data);
   }
 
+  // Saque do Partner — rota própria (/partners/withdrawals), NÃO
+  // /financial/withdrawals (esse é exclusivo do fluxo de Nômade, payload
+  // diferente: nomade_id em vez de partner_profile_id).
+  async createPartnerWithdrawal(data: Record<string, any>) {
+    return this.post("/partners/withdrawals", data);
+  }
+
+  async getPartnerWithdrawals() {
+    return this.get("/partners/withdrawals");
+  }
+
+  // Admin — aprovar/reprovar/pagar saques de Partner. Rota própria
+  // (/partners/admin/withdrawals), separada de getWithdrawals/updateWithdrawal
+  // (que continuam servindo só o fluxo de Nômade em /financial/withdrawals).
+  async getAdminPartnerWithdrawals(filters?: Record<string, any>) {
+    return this.get("/partners/admin/withdrawals", filters);
+  }
+
+  async updateAdminPartnerWithdrawal(id: string | number, data: Record<string, any>) {
+    return this.put(`/partners/admin/withdrawals/${id}`, data);
+  }
+
   // ─── Products ─────────────────────────────────────────────────────────────
   async getProducts(filters?: Record<string, any>) {
     return this.get("/products", filters);
@@ -702,7 +724,7 @@ class ApiClient {
   }
 
   async getMyEnrollments(userId?: string | number) {
-    return this.get("/allkademy/enrollments/me");
+    return this.get("/allkademy/enrollments");
   }
 
   async enrollCourse(courseId: string | number, _userId?: string | number) {

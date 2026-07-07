@@ -49,6 +49,9 @@ const AdminDashboardPage = React.lazy(
 const DashboardSharePage = React.lazy(
   () => import("@/app/dashboard/share/page"),
 );
+// Allkademy — visão do aluno, compartilhada entre todos os perfis logados
+// (distinta de /admin/allkademy, que é exclusiva de admin para gerenciar cursos)
+const AllkademyStudentPage = React.lazy(() => import("@/app/allkademy/page"));
 const AdminDashboardConfigPage = React.lazy(
   () => import("@/app/admin/dashboard-config/page"),
 );
@@ -56,7 +59,6 @@ const AdminUsuariosPage = React.lazy(() => import("@/app/admin/usuarios/page"));
 const AdminUsuariosInternosPage = React.lazy(
   () => import("@/app/admin/usuarios-internos/page"),
 );
-const AdminUsersPage = React.lazy(() => import("@/app/admin/users/page"));
 const AdminEmpresasPage = React.lazy(() => import("@/app/admin/empresas/page"));
 const AdminNomadesPg = React.lazy(() => import("@/app/admin/nomades/page"));
 const AdminProjetosPage = React.lazy(() => import("@/app/admin/projetos/page"));
@@ -70,9 +72,6 @@ const AdminPrecificacaoPage = React.lazy(
 const AdminTarefasPage = React.lazy(() => import("@/app/admin/tarefas/page"));
 const AdminModelosTarefasPage = React.lazy(
   () => import("@/app/admin/modelos-tarefas/page"),
-);
-const AdminTarefasExecucaoPage = React.lazy(
-  () => import("@/app/admin/tarefas-execucao/page"),
 );
 const AdminNiveisPage = React.lazy(() => import("@/app/admin/niveis/page"));
 const AdminNiveisNomades = React.lazy(
@@ -99,9 +98,6 @@ const AdminDisponibilidadePage = React.lazy(
 const AdminComissionamentosPage = React.lazy(
   () => import("@/app/admin/comissionamentos/page"),
 );
-const AdminCommissionsPage = React.lazy(
-  () => import("@/app/admin/commissions/page"),
-);
 const AdminCampanhasIndicacao = React.lazy(
   () => import("@/app/admin/campanhas-indicacao/page"),
 );
@@ -121,9 +117,6 @@ const AdminNotificationsPage = React.lazy(
 const AdminClientesPage = React.lazy(() => import("@/app/admin/clientes/page"));
 const AdminConfiguracoesPage = React.lazy(
   () => import("@/app/admin/configuracoes/page"),
-);
-const AdminConfiguracionPage = React.lazy(
-  () => import("@/app/admin/configuracion/page"),
 );
 const AdminSistemaPage = React.lazy(() => import("@/app/admin/sistema/page"));
 const AdminAlertasPage = React.lazy(() => import("@/app/admin/alertas/page"));
@@ -648,6 +641,11 @@ export default function App() {
                     element={<Navigate to="/admin/dashboard" replace />}
                   />
 
+                  {/* ─── Allkademy (aluno) — acessível a qualquer perfil logado,
+                      não tem prefixo de portal então RequireAuth já libera para
+                      todos automaticamente. Distinta de /admin/allkademy. ── */}
+                  <Route path="/allkademy" element={<AllkademyStudentPage />} />
+
                   {/* ─── Admin ────────────────────────────────────────────── */}
                   <Route
                     path="/admin/dashboard"
@@ -669,7 +667,6 @@ export default function App() {
                     path="/admin/usuarios-internos"
                     element={<AdminUsuariosInternosPage />}
                   />
-                  <Route path="/admin/users" element={<AdminUsersPage />} />
                   <Route
                     path="/admin/empresas"
                     element={<AdminEmpresasPage />}
@@ -758,10 +755,6 @@ export default function App() {
                     element={<AdminComissionamentosPage />}
                   />
                   <Route
-                    path="/admin/commissions"
-                    element={<AdminCommissionsPage />}
-                  />
-                  <Route
                     path="/admin/campanhas-indicacao"
                     element={<AdminCampanhasIndicacao />}
                   />
@@ -789,10 +782,6 @@ export default function App() {
                   <Route
                     path="/admin/configuracoes"
                     element={<AdminConfiguracoesPage />}
-                  />
-                  <Route
-                    path="/admin/configuracion"
-                    element={<AdminConfiguracionPage />}
                   />
                   <Route path="/admin/sistema" element={<AdminSistemaPage />} />
                   <Route path="/admin/alertas" element={<AdminAlertasPage />} />

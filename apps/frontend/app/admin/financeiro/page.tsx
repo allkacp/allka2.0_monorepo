@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Select,
   SelectContent,
@@ -66,6 +67,7 @@ import {
   Trash2,
   Filter,
   Cog,
+  Columns3,
   ChevronLeft,
   ChevronRight,
   TrendingUp,
@@ -139,6 +141,18 @@ const WD_STATUS_CLASSES = {
 };
 const WD_STATUS_COLOR = { aguardando_analise: "amber", pagamento_agendado: "blue", pagamento_efetuado: "emerald", cancelado: "slate", reprovado: "red" };
 
+// Saques de Partner usam status em inglês (model PartnerWithdrawal), diferente
+// do enum em português do saque de Nômade (WithdrawalRequest) acima — os dois
+// fluxos são independentes, então os rótulos/cores também são independentes.
+const PARTNER_WD_STATUS_LABELS = {
+  pending: "Aguardando",
+  approved: "Aprovado",
+  paid: "Pago",
+  rejected: "Reprovado",
+  cancelled: "Cancelado",
+};
+const PARTNER_WD_STATUS_COLOR = { pending: "amber", approved: "blue", paid: "emerald", rejected: "red", cancelled: "slate" };
+
 const WALLET_OWNER_LABELS: Record<string, string> = {
   company:  "Empresa",
   agency:   "Agência",
@@ -190,6 +204,16 @@ const EXP_CATEGORIES = [
   "Impostos e Taxas", "Outros",
 ];
 
+const INVOICE_COLUMNS = [
+  { key: "numero", label: "Nº / Descrição", required: true },
+  { key: "empresa", label: "Empresa" },
+  { key: "projeto", label: "Projeto" },
+  { key: "valor", label: "Valor" },
+  { key: "vencimento", label: "Vencimento" },
+  { key: "status", label: "Status" },
+];
+const DEFAULT_INVOICE_VISIBLE_COLS = new Set(INVOICE_COLUMNS.map((c) => c.key));
+
 const EXP_STATUS_LABELS = {
   prevista:  "Prevista",
   pendente:  "Pendente",
@@ -224,6 +248,8 @@ export default function AdminFinanceiroPage() {
   const [invSearch, setInvSearch] = useState("");
   const [invStatusFilter, setInvStatusFilter] = useState("all");
   const [invLoading, setInvLoading] = useState(true);
+  const [invVisibleCols, setInvVisibleCols] = useState(new Set(DEFAULT_INVOICE_VISIBLE_COLS));
+  const [columnsPanelOpen, setColumnsPanelOpen] = useState(false);
   const [billingStats, setBillingStats] = useState(null);
   const [dreData, setDreData] = useState<any>(null);
 
@@ -234,6 +260,19 @@ export default function AdminFinanceiroPage() {
   const [wdStatusFilter, setWdStatusFilter] = useState("all");
   const [wdPerPage, setWdPerPage] = useItemsPerPage("admin-fin-wd", 10);
   const [wdPage, setWdPage] = useState(1);
+
+  // ── state: withdrawals — sub-aba Nômades | Partners (fluxos independentes,
+  // /financial/withdrawals para Nômade e /partners/admin/withdrawals p/ Partner) ──
+  const [wdSubTab, setWdSubTab] = useState<"nomades" | "partners">("nomades");
+  const [partnerWithdrawals, setPartnerWithdrawals] = useState([]);
+  const [pwLoading, setPwLoading] = useState(true);
+  const [pwSearch, setPwSearch] = useState("");
+  const [pwStatusFilter, setPwStatusFilter] = useState("all");
+  const [pwPerPage, setPwPerPage] = useItemsPerPage("admin-fin-pw", 10);
+  const [pwPage, setPwPage] = useState(1);
+  const [pwRejectingId, setPwRejectingId] = useState(null);
+  const [pwRejectNote, setPwRejectNote] = useState("");
+  const [pwActionLoading, setPwActionLoading] = useState(null);
 
   // ── state: expenses ────────────────────────────────────────────────────────
   const [expenses, setExpenses] = useState([]);
@@ -421,6 +460,21 @@ export default function AdminFinanceiroPage() {
 
   useEffect(() => { loadWithdrawals(); }, [loadWithdrawals]);
 
+  // ── load partner withdrawals ────────────────────────────────────────────────
+  const loadPartnerWithdrawals = useCallback(async () => {
+    setPwLoading(true);
+    try {
+      const res = await apiClient.getAdminPartnerWithdrawals({ limit: "500" });
+      setPartnerWithdrawals(res.data || []);
+    } catch (err) {
+      console.error("[Financeiro] partner withdrawals:", err);
+    } finally {
+      setPwLoading(false);
+    }
+  }, []);
+
+  useEffect(() => { loadPartnerWithdrawals(); }, [loadPartnerWithdrawals]);
+
   // ── load expenses ──────────────────────────────────────────────────────────
   const loadExpenses = useCallback(async () => {
     setExpLoading(true);
@@ -520,6 +574,11 @@ export default function AdminFinanceiroPage() {
     [withdrawals]
   );
 
+  const pwPending = useMemo(
+    () => partnerWithdrawals.filter((w) => w.status === "pending").length,
+    [partnerWithdrawals]
+  );
+
   // ── filtered data ──────────────────────────────────────────────────────────
   const filteredInvoices = useMemo(() => {
     if (!invSearch.trim()) return invoices;
@@ -548,12 +607,31 @@ export default function AdminFinanceiroPage() {
     return result;
   }, [withdrawals, wdSearch, wdStatusFilter]);
 
+  const filteredPartnerWithdrawals = useMemo(() => {
+    let result = partnerWithdrawals;
+    if (pwSearch.trim()) {
+      const q = pwSearch.toLowerCase();
+      result = result.filter(
+        (w) =>
+          w.partnerName?.toLowerCase().includes(q) ||
+          w.partnerEmail?.toLowerCase().includes(q) ||
+          w.pixKey?.toLowerCase().includes(q)
+      );
+    }
+    if (pwStatusFilter !== "all") result = result.filter((w) => w.status === pwStatusFilter);
+    return result;
+  }, [partnerWithdrawals, pwSearch, pwStatusFilter]);
+
   const wdTotalPages = Math.max(1, Math.ceil(filteredWithdrawals.length / wdPerPage));
   const pagedWithdrawals = filteredWithdrawals.slice((wdPage - 1) * wdPerPage, wdPage * wdPerPage);
+
+  const pwTotalPages = Math.max(1, Math.ceil(filteredPartnerWithdrawals.length / pwPerPage));
+  const pagedPartnerWithdrawals = filteredPartnerWithdrawals.slice((pwPage - 1) * pwPerPage, pwPage * pwPerPage);
 
   // ── sorting ────────────────────────────────────────────────────────────────
   const { sortKey: invSK, sortDir: invSD, handleSort: handleInvSort, sortData: sortInvoices } = useSorting();
   const { sortKey: wSK,  sortDir: wSD,  handleSort: handleWSort,   sortData: sortWithdrawals } = useSorting();
+  const { sortKey: pwSK, sortDir: pwSD, handleSort: handlePwSort, sortData: sortPartnerWithdrawals } = useSorting();
   const { sortKey: expSK, sortDir: expSD, handleSort: handleExpSort, sortData: sortExpenses } = useSorting();
   const { sortKey: waSK, sortDir: waSD, handleSort: handleWaSort, sortData: sortWalletsFn } = useSorting();
   const { sortKey: sqSK, sortDir: sqSD, handleSort: handleSqSort, sortData: sortSquad } = useSorting();
@@ -694,6 +772,31 @@ export default function AdminFinanceiroPage() {
     try { await apiClient.updateWithdrawal(id, { status: "reprovado", notes: rejectNote }); toast({ title: "Saque reprovado" }); setRejectingId(null); setRejectNote(""); loadWithdrawals(); }
     catch { toast({ title: "Erro", variant: "destructive" }); }
     finally { setActionLoading(null); }
+  }
+
+  // ── partner withdrawal actions ──────────────────────────────────────────────
+  // Saldo do Partner só é debitado no backend quando status vira "paid"
+  // (dentro de uma transaction) — aprovar aqui NÃO paga, é só um sinalizador
+  // intermediário antes do pagamento efetivo.
+  async function approvePartnerWithdrawal(id) {
+    setPwActionLoading(id);
+    try { await apiClient.updateAdminPartnerWithdrawal(id, { status: "approved" }); toast({ title: "Saque aprovado" }); loadPartnerWithdrawals(); }
+    catch (err: any) { toast({ title: "Erro ao aprovar", description: err?.message, variant: "destructive" }); }
+    finally { setPwActionLoading(null); }
+  }
+
+  async function markPartnerWithdrawalPaid(id) {
+    setPwActionLoading(id);
+    try { await apiClient.updateAdminPartnerWithdrawal(id, { status: "paid" }); toast({ title: "Saque marcado como pago" }); loadPartnerWithdrawals(); }
+    catch (err: any) { toast({ title: "Erro ao marcar como pago", description: err?.message, variant: "destructive" }); }
+    finally { setPwActionLoading(null); }
+  }
+
+  async function rejectPartnerWithdrawal(id) {
+    setPwActionLoading(id);
+    try { await apiClient.updateAdminPartnerWithdrawal(id, { status: "rejected", notes: pwRejectNote }); toast({ title: "Saque reprovado" }); setPwRejectingId(null); setPwRejectNote(""); loadPartnerWithdrawals(); }
+    catch (err: any) { toast({ title: "Erro ao reprovar", description: err?.message, variant: "destructive" }); }
+    finally { setPwActionLoading(null); }
   }
 
   // ── expense CRUD ───────────────────────────────────────────────────────────
@@ -1274,6 +1377,14 @@ export default function AdminFinanceiroPage() {
             </Button>
           </div>
 
+          {/* Search + Items-per-page + Filtros compartilhados — na sub-aba
+              "Partners" de Saques usamos uma barra própria dentro do card
+              (ver "Tabela Saques" abaixo), então escondemos os controles
+              aqui pra não parecer que eles filtram a tabela de Partners
+              (eles continuam intactos e funcionando normalmente pra
+              Nômades e para as demais abas). */}
+          {!(activeTab === "saques" && wdSubTab === "partners") && (
+            <>
           {/* Search */}
           <div className="flex-1 relative min-w-0 max-w-sm">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
@@ -1315,8 +1426,11 @@ export default function AdminFinanceiroPage() {
             </span>
           </div>
 
-          {/* Filtros */}
-          {(() => {
+          {/* Filtros — só nas abas com filtros próprios no modal compartilhado;
+              Squad não tem filtros e Conciliação já tem sua própria barra de
+              filtros inline (Origem/Impacto/Tipo/Período), então o modal
+              compartilhado não tem seção pra elas. */}
+          {(activeTab === "faturas" || activeTab === "saques" || activeTab === "despesas" || activeTab === "carteiras") && (() => {
             const cnt = activeTab === "faturas" ? activeFilterCount : activeTab === "saques" ? wdActiveFilterCount : activeTab === "despesas" ? expActiveFilterCount : walletActiveFilterCount;
             return (
               <IconToolbarButton
@@ -1327,6 +1441,17 @@ export default function AdminFinanceiroPage() {
               />
             );
           })()}
+            </>
+          )}
+
+          {/* Configurar colunas — Faturas */}
+          {activeTab === "faturas" && (
+            <IconToolbarButton
+              icon={Columns3}
+              tooltip="Configurar colunas"
+              onClick={() => setColumnsPanelOpen(true)}
+            />
+          )}
 
           {/* Horizontal scrollbar mirror — shared across tabs, only when the
               active tab's table actually overflows its container. */}
@@ -1416,8 +1541,8 @@ export default function AdminFinanceiroPage() {
             </PopoverContent>
           </Popover>
 
-          {/* Pagination — só as abas com paginação central (squad/conciliação têm paginador próprio embaixo) */}
-          {(activeTab === "faturas" || activeTab === "saques" || activeTab === "despesas" || activeTab === "carteiras") && (
+          {/* Pagination — só as abas com paginação central (squad/conciliação têm paginador próprio embaixo; Partners também tem o seu, dentro do card) */}
+          {(activeTab === "faturas" || (activeTab === "saques" && wdSubTab === "nomades") || activeTab === "despesas" || activeTab === "carteiras") && (
             <div className="ml-auto">
               <MiniPagination
                 curPage={activeTab === "faturas" ? invPage : activeTab === "saques" ? wdPage : activeTab === "despesas" ? expPage : walletPage}
@@ -1438,15 +1563,25 @@ export default function AdminFinanceiroPage() {
                     <th className="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide whitespace-nowrap">
                       <SortableHeader label="Nº / Descrição" field="invoice_number" type="text" sortKey={invSK ? String(invSK) : null} sortDir={invSD} onSort={handleInvSort} />
                     </th>
-                    <th className="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide">Empresa</th>
-                    <th className="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide">Projeto</th>
-                    <th className="text-right px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide whitespace-nowrap">
-                      <SortableHeader label="Valor" field="amount" type="number" sortKey={invSK ? String(invSK) : null} sortDir={invSD} onSort={handleInvSort} />
-                    </th>
-                    <th className="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide whitespace-nowrap">
-                      <SortableHeader label="Vencimento" field="due_date" type="date" sortKey={invSK ? String(invSK) : null} sortDir={invSD} onSort={handleInvSort} />
-                    </th>
-                    <th className="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide">Status</th>
+                    {invVisibleCols.has("empresa") && (
+                      <th className="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide">Empresa</th>
+                    )}
+                    {invVisibleCols.has("projeto") && (
+                      <th className="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide">Projeto</th>
+                    )}
+                    {invVisibleCols.has("valor") && (
+                      <th className="text-right px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide whitespace-nowrap">
+                        <SortableHeader label="Valor" field="amount" type="number" sortKey={invSK ? String(invSK) : null} sortDir={invSD} onSort={handleInvSort} />
+                      </th>
+                    )}
+                    {invVisibleCols.has("vencimento") && (
+                      <th className="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide whitespace-nowrap">
+                        <SortableHeader label="Vencimento" field="due_date" type="date" sortKey={invSK ? String(invSK) : null} sortDir={invSD} onSort={handleInvSort} />
+                      </th>
+                    )}
+                    {invVisibleCols.has("status") && (
+                      <th className="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide">Status</th>
+                    )}
                     <th
                       className="text-right px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide"
                       style={{ position: "sticky", right: 0, top: 0, zIndex: 3, minWidth: 132, background: "var(--table-head)", boxShadow: "-1px 0 0 rgba(100,116,139,0.18), 0 1px 0 rgba(148,163,184,0.3)" }}
@@ -1457,10 +1592,10 @@ export default function AdminFinanceiroPage() {
                 </thead>
                 <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
                   {invLoading ? (
-                    <tr><td colSpan={7} className="py-12 text-center text-sm text-slate-400">Carregando faturas…</td></tr>
+                    <tr><td colSpan={invVisibleCols.size + 2} className="py-12 text-center text-sm text-slate-400">Carregando faturas…</td></tr>
                   ) : filteredInvoices.length === 0 ? (
                     <tr>
-                      <td colSpan={7} className="py-16 text-center text-sm text-slate-400">
+                      <td colSpan={invVisibleCols.size + 2} className="py-16 text-center text-sm text-slate-400">
                         <div className="flex flex-col items-center gap-2">
                           <ReceiptText className="h-8 w-8 opacity-30" />
                           <p>Nenhuma fatura encontrada</p>
@@ -1481,31 +1616,41 @@ export default function AdminFinanceiroPage() {
                             <p className="font-medium text-slate-800 dark:text-slate-200 text-xs">{inv.invoice_number || <span className="text-slate-400">—</span>}</p>
                             {inv.description && <p className="text-[11px] text-slate-400 mt-0.5 max-w-[180px] truncate">{inv.description}</p>}
                           </td>
-                          <td className="px-4 py-3">
-                            <div className="flex items-center gap-1.5">
-                              <Building2 className="h-3.5 w-3.5 text-slate-400 shrink-0" />
-                              <span className="text-xs font-medium text-slate-700 dark:text-slate-300">{inv.company?.name || "—"}</span>
-                            </div>
-                          </td>
-                          <td className="px-4 py-3">
-                            <div className="flex items-center gap-1.5">
-                              <FolderOpen className="h-3.5 w-3.5 text-slate-400 shrink-0" />
-                              <span className="text-xs text-slate-600 dark:text-slate-400 max-w-[140px] truncate">{inv.project?.title || "—"}</span>
-                            </div>
-                          </td>
-                          <td className="px-4 py-3 text-right font-bold tabular-nums text-slate-800 dark:text-slate-200">{fmt(inv.amount)}</td>
-                          <td className="px-4 py-3">
-                            <div className="flex items-center gap-1">
-                              <Calendar className="h-3.5 w-3.5 text-slate-400 shrink-0" />
-                              <span className={`text-xs ${isOverdue ? "text-red-600 font-semibold" : "text-slate-500 dark:text-slate-400"}`}>{fmtDate(inv.due_date)}</span>
-                            </div>
-                            {inv.paid_at && <p className="text-[10px] text-emerald-600 mt-0.5">Pago em {fmtDate(inv.paid_at)}</p>}
-                          </td>
-                          <td className="px-4 py-3">
-                            <NeonBadge color={INVOICE_STATUS_COLOR[inv.status] || "slate"}>
-                              {INVOICE_STATUS_LABELS[inv.status] || inv.status}
-                            </NeonBadge>
-                          </td>
+                          {invVisibleCols.has("empresa") && (
+                            <td className="px-4 py-3">
+                              <div className="flex items-center gap-1.5">
+                                <Building2 className="h-3.5 w-3.5 text-slate-400 shrink-0" />
+                                <span className="text-xs font-medium text-slate-700 dark:text-slate-300">{inv.company?.name || "—"}</span>
+                              </div>
+                            </td>
+                          )}
+                          {invVisibleCols.has("projeto") && (
+                            <td className="px-4 py-3">
+                              <div className="flex items-center gap-1.5">
+                                <FolderOpen className="h-3.5 w-3.5 text-slate-400 shrink-0" />
+                                <span className="text-xs text-slate-600 dark:text-slate-400 max-w-[140px] truncate">{inv.project?.title || "—"}</span>
+                              </div>
+                            </td>
+                          )}
+                          {invVisibleCols.has("valor") && (
+                            <td className="px-4 py-3 text-right font-bold tabular-nums text-slate-800 dark:text-slate-200">{fmt(inv.amount)}</td>
+                          )}
+                          {invVisibleCols.has("vencimento") && (
+                            <td className="px-4 py-3">
+                              <div className="flex items-center gap-1">
+                                <Calendar className="h-3.5 w-3.5 text-slate-400 shrink-0" />
+                                <span className={`text-xs ${isOverdue ? "text-red-600 font-semibold" : "text-slate-500 dark:text-slate-400"}`}>{fmtDate(inv.due_date)}</span>
+                              </div>
+                              {inv.paid_at && <p className="text-[10px] text-emerald-600 mt-0.5">Pago em {fmtDate(inv.paid_at)}</p>}
+                            </td>
+                          )}
+                          {invVisibleCols.has("status") && (
+                            <td className="px-4 py-3">
+                              <NeonBadge color={INVOICE_STATUS_COLOR[inv.status] || "slate"}>
+                                {INVOICE_STATUS_LABELS[inv.status] || inv.status}
+                              </NeonBadge>
+                            </td>
+                          )}
                           <td
                             className={idx % 2 === 0
                               ? "px-4 py-3 bg-[#ECEFF4] group-hover:bg-[#D9E1ED] dark:bg-[oklch(0.14_0.026_258)] dark:group-hover:bg-[oklch(0.21_0.024_258)]"
@@ -1561,8 +1706,42 @@ export default function AdminFinanceiroPage() {
           </Card>
         )}
 
-        {/* ── Tabela Saques ───────────────────────────────────────── */}
+        {/* ── Sub-abas Saques: Nômades | Partners ──────────────────── */}
+        {/* Fluxos independentes e com endpoints diferentes — Nômades usa
+            /financial/withdrawals (WithdrawalRequest), Partners usa
+            /partners/admin/withdrawals (PartnerWithdrawal). Nunca misturados
+            na mesma tabela pra não confundir qual regra de saldo se aplica. */}
         {activeTab === "saques" && (
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setWdSubTab("nomades")}
+              className={cn(
+                "flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold transition-colors border",
+                wdSubTab === "nomades"
+                  ? "bg-slate-900 dark:bg-white text-white dark:text-slate-900 border-slate-900 dark:border-white"
+                  : "bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-500 hover:border-slate-300"
+              )}
+            >
+              Nômades
+              {wdPending > 0 && <span className="opacity-70">({wdPending})</span>}
+            </button>
+            <button
+              onClick={() => setWdSubTab("partners")}
+              className={cn(
+                "flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold transition-colors border",
+                wdSubTab === "partners"
+                  ? "bg-slate-900 dark:bg-white text-white dark:text-slate-900 border-slate-900 dark:border-white"
+                  : "bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-500 hover:border-slate-300"
+              )}
+            >
+              Partners
+              {pwPending > 0 && <span className="opacity-70">({pwPending})</span>}
+            </button>
+          </div>
+        )}
+
+        {/* ── Tabela Saques (Nômades) ───────────────────────────────── */}
+        {activeTab === "saques" && wdSubTab === "nomades" && (
           <Card className="overflow-hidden">
             {/* Chips de status */}
             <div className="flex items-center gap-2 flex-wrap px-4 py-2.5 border-b border-slate-100 dark:border-slate-800">
@@ -1701,6 +1880,170 @@ export default function AdminFinanceiroPage() {
                 </div>
               )}
               <MiniPagination curPage={wdPage} totalPages={wdTotalPages} onChange={setWdPage} />
+            </div>
+          </Card>
+        )}
+
+        {/* ── Tabela Saques (Partners) ──────────────────────────────── */}
+        {/* Regra de saldo: NUNCA debitado ao solicitar. Só é debitado quando
+            o admin marca como "Pago" (backend faz isso dentro de uma
+            transaction e bloqueia reprocessar um saque já terminal). */}
+        {activeTab === "saques" && wdSubTab === "partners" && (
+          <Card className="overflow-hidden">
+            {/* Busca própria + chips de status */}
+            <div className="flex flex-wrap items-center gap-2 px-4 py-2.5 border-b border-slate-100 dark:border-slate-800">
+              <div className="relative flex-1 min-w-0 max-w-sm">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+                <Input
+                  placeholder="Buscar parceiro, e-mail, PIX..."
+                  value={pwSearch}
+                  onChange={(e) => { setPwSearch(e.target.value); setPwPage(1); }}
+                  className="pl-9 h-9 text-sm bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 rounded-lg focus-visible:ring-blue-500 w-full"
+                />
+              </div>
+              {[
+                { label: "Aguardando", status: "pending" },
+                { label: "Aprovado",   status: "approved" },
+                { label: "Pago",       status: "paid" },
+                { label: "Reprovado",  status: "rejected" },
+                { label: "Cancelado",  status: "cancelled" },
+              ].map(({ label, status }) => {
+                const count = partnerWithdrawals.filter((w) => w.status === status).length;
+                if (count === 0) return null;
+                return (
+                  <button key={status}
+                    onClick={() => { setPwStatusFilter(pwStatusFilter === status ? "all" : status); setPwPage(1); }}
+                    className={cn(
+                      "flex items-center gap-1.5 border rounded-lg px-2.5 py-1 text-xs transition-colors",
+                      pwStatusFilter === status
+                        ? "bg-slate-900 dark:bg-white border-slate-900 dark:border-white text-white dark:text-slate-900"
+                        : "bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 hover:border-slate-300"
+                    )}>
+                    <span className="font-semibold">{count} {label}</span>
+                  </button>
+                );
+              })}
+              {pwStatusFilter !== "all" && (
+                <button onClick={() => setPwStatusFilter("all")}
+                  className="flex items-center gap-1 text-xs text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 transition-colors">
+                  <X className="h-3 w-3" /> Limpar
+                </button>
+              )}
+              <div className="ml-auto flex items-center gap-2">
+                <ItemsPerPageSelect value={pwPerPage.toString()} onValueChange={(v) => { setPwPerPage(Number(v)); setPwPage(1); }} />
+                <span className="text-xs text-slate-400 whitespace-nowrap">
+                  de <span className="font-semibold text-slate-600 dark:text-slate-300">{filteredPartnerWithdrawals.length}</span> saque{filteredPartnerWithdrawals.length !== 1 ? "s" : ""}
+                </span>
+              </div>
+            </div>
+
+            <div className="overflow-x-auto allka-table-scroll-body">
+              <table className="w-full text-sm min-w-[700px]">
+                <thead style={{ position: "sticky", top: 0, zIndex: 2, background: "var(--table-head)", boxShadow: "0 1px 0 rgba(148,163,184,0.3)" }}>
+                  <tr>
+                    <th className="text-left px-5 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide">
+                      <SortableHeader label="Partner" field="partnerName" type="text" sortKey={pwSK ? String(pwSK) : null} sortDir={pwSD} onSort={handlePwSort} />
+                    </th>
+                    <th className="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide">Chave PIX</th>
+                    <th className="text-right px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide">
+                      <SortableHeader label="Valor" field="amount" type="number" sortKey={pwSK ? String(pwSK) : null} sortDir={pwSD} onSort={handlePwSort} />
+                    </th>
+                    <th className="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide">
+                      <SortableHeader label="Solicitado em" field="requestedAt" type="date" sortKey={pwSK ? String(pwSK) : null} sortDir={pwSD} onSort={handlePwSort} />
+                    </th>
+                    <th className="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide">Processado em</th>
+                    <th className="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide">Status</th>
+                    <th
+                      className="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide"
+                      style={{ position: "sticky", right: 0, top: 0, zIndex: 3, background: "var(--table-head)", boxShadow: "-1px 0 0 rgba(100,116,139,0.18), 0 1px 0 rgba(148,163,184,0.3)" }}
+                    >
+                      Ações
+                    </th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                  {pwLoading ? (
+                    <tr><td colSpan={7} className="py-12 text-center text-sm text-slate-400">Carregando saques…</td></tr>
+                  ) : pagedPartnerWithdrawals.length === 0 ? (
+                    <tr>
+                      <td colSpan={7} className="py-16 text-center text-sm text-slate-400">
+                        <div className="flex flex-col items-center gap-2">
+                          <Banknote className="h-8 w-8 opacity-30" />
+                          <p>Nenhuma solicitação de Partner encontrada</p>
+                        </div>
+                      </td>
+                    </tr>
+                  ) : (
+                    sortPartnerWithdrawals(pagedPartnerWithdrawals).map((w, idx) => (
+                      <tr key={w.id} className={idx % 2 === 0
+                        ? "group bg-[#F1F4F9] dark:bg-[oklch(0.14_0.026_258)] hover:bg-[#D9E1ED] dark:hover:bg-[oklch(0.21_0.024_258)]"
+                        : "group bg-[#DCE3EE] dark:bg-[oklch(0.185_0.024_258)] hover:bg-[#C7D2E3] dark:hover:bg-[oklch(0.21_0.024_258)]"}>
+                        <td className="px-5 py-3">
+                          <p className="font-medium text-slate-800 dark:text-slate-200 text-xs">{w.partnerName || "—"}</p>
+                          <p className="text-[11px] text-slate-400">{w.partnerEmail || ""}</p>
+                        </td>
+                        <td className="px-4 py-3">
+                          <p className="text-xs font-medium text-slate-600 dark:text-slate-400">{w.pixKey || "—"}</p>
+                          <p className="text-[10px] text-slate-400 uppercase">{w.pixKeyType || ""}</p>
+                        </td>
+                        <td className="px-4 py-3 text-right font-bold tabular-nums text-slate-800 dark:text-slate-200">{fmt(w.amount || 0)}</td>
+                        <td className="px-4 py-3 text-xs text-slate-500 dark:text-slate-400">{fmtDateTime(w.requestedAt)}</td>
+                        <td className="px-4 py-3 text-xs text-slate-500 dark:text-slate-400">{w.paidAt ? fmtDateTime(w.paidAt) : "—"}</td>
+                        <td className="px-4 py-3">
+                          <NeonBadge color={PARTNER_WD_STATUS_COLOR[w.status] || "slate"}>
+                            {PARTNER_WD_STATUS_LABELS[w.status] || w.status}
+                          </NeonBadge>
+                          {w.notes && w.status === "rejected" && (
+                            <p className="text-[10px] text-slate-400 mt-0.5 max-w-[160px] truncate">{w.notes}</p>
+                          )}
+                        </td>
+                        <td
+                          className={idx % 2 === 0
+                            ? "px-4 py-3 bg-[#ECEFF4] group-hover:bg-[#D9E1ED] dark:bg-[oklch(0.14_0.026_258)] dark:group-hover:bg-[oklch(0.21_0.024_258)]"
+                            : "px-4 py-3 bg-[#D6DCE8] group-hover:bg-[#C7D2E3] dark:bg-[oklch(0.185_0.024_258)] dark:group-hover:bg-[oklch(0.21_0.024_258)]"}
+                          style={{ position: "sticky", right: 0, zIndex: 1, boxShadow: "-1px 0 0 rgba(100,116,139,0.18)" }}
+                        >
+                          {(w.status === "pending" || w.status === "approved") ? (
+                            pwRejectingId === w.id ? (
+                              <div className="flex gap-1.5 items-center">
+                                <input autoFocus
+                                  className="h-7 text-xs rounded border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 px-2 w-32 focus:outline-none"
+                                  placeholder="Motivo…" value={pwRejectNote}
+                                  onChange={(e) => setPwRejectNote(e.target.value)} />
+                                <button onClick={() => rejectPartnerWithdrawal(w.id)} className="h-7 px-2 rounded bg-red-600 text-white text-xs font-semibold hover:bg-red-700">OK</button>
+                                <button onClick={() => { setPwRejectingId(null); setPwRejectNote(""); }} className="h-7 px-2 rounded border border-slate-200 dark:border-slate-600 text-slate-500 text-xs">X</button>
+                              </div>
+                            ) : (
+                              <div className="flex gap-1.5">
+                                {w.status === "pending" && (
+                                  <button disabled={pwActionLoading === w.id} onClick={() => approvePartnerWithdrawal(w.id)}
+                                    className="h-7 px-2.5 rounded-md border border-blue-300 dark:border-blue-700 text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-950/30 text-[11px] font-semibold flex items-center gap-1 transition-colors disabled:opacity-40">
+                                    <UserCheck className="h-3 w-3" /> Aprovar
+                                  </button>
+                                )}
+                                <button disabled={pwActionLoading === w.id} onClick={() => markPartnerWithdrawalPaid(w.id)}
+                                  className="h-7 px-2.5 rounded-md bg-emerald-600 hover:bg-emerald-700 text-white text-[11px] font-semibold flex items-center gap-1 transition-colors disabled:opacity-40">
+                                  <Banknote className="h-3 w-3" /> Marcar pago
+                                </button>
+                                <button onClick={() => setPwRejectingId(w.id)}
+                                  className="h-7 px-2.5 rounded-md border border-red-300 dark:border-red-700 text-red-600 hover:bg-red-50 dark:hover:bg-red-950/30 text-[11px] font-semibold flex items-center gap-1 transition-colors">
+                                  <XCircle className="h-3 w-3" /> Reprovar
+                                </button>
+                              </div>
+                            )
+                          ) : (
+                            <span className="text-xs text-slate-400">—</span>
+                          )}
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+            <div className="px-4 py-2.5 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between gap-3">
+              <p className="text-xs text-slate-400 shrink-0">{filteredPartnerWithdrawals.length} solicitação{filteredPartnerWithdrawals.length !== 1 ? "ões" : ""}</p>
+              <MiniPagination curPage={pwPage} totalPages={pwTotalPages} onChange={setPwPage} />
             </div>
           </Card>
         )}
@@ -2567,16 +2910,23 @@ export default function AdminFinanceiroPage() {
           }}
         >
           <div className="bg-white dark:bg-slate-900 w-full h-full flex flex-col overflow-hidden">
-            <div className="app-brand-header relative shrink-0 px-5 min-h-[64px] flex items-center">
-              <div className="flex-1">
-                <h2 className="text-white font-bold text-base">{squadEditTarget ? "Editar Squad" : "Adicionar ao Squad"}</h2>
-                <p className="text-blue-200 text-xs mt-0.5">Plano pós-pago com limite de crédito</p>
+            <div
+              className="flex items-center justify-between px-5 py-3 flex-shrink-0"
+              style={{
+                background:
+                  "var(--brand-gradient, linear-gradient(to right, #0a1628, #1e3a8a, #0a1628))",
+              }}
+            >
+              <div className="min-w-0 flex-1 text-sm font-bold text-white truncate">
+                {squadEditTarget ? "Editar Squad" : "Adicionar ao Squad"}
+                <p className="text-[11px] font-normal text-white/60 mt-0.5 truncate">Plano pós-pago com limite de crédito</p>
               </div>
-              <button onClick={() => { setSquadAddOpen(false); setSquadEditTarget(null); }} className="absolute right-4 top-4 rounded-lg p-1.5 hover:bg-white/20 transition-colors">
-                <X className="h-5 w-5 text-white" />
+              <button onClick={() => { setSquadAddOpen(false); setSquadEditTarget(null); }} className="text-white/70 hover:text-white hover:bg-white/20 rounded-lg p-1.5 transition-colors flex-shrink-0">
+                <X className="h-4 w-4" />
               </button>
             </div>
-            <div className="p-5 space-y-4 overflow-y-auto">
+            <div className="flex-1 overflow-y-auto p-6">
+            <div className="max-w-3xl mx-auto space-y-4">
               {!squadEditTarget && (
                 <div>
                   <Label className="text-xs font-semibold text-slate-600 dark:text-slate-300 mb-1.5 block">Empresa *</Label>
@@ -2614,6 +2964,7 @@ export default function AdminFinanceiroPage() {
                 <Label className="text-xs font-semibold text-slate-600 dark:text-slate-300 mb-1.5 block">Observações</Label>
                 <Input placeholder="Anotações internas..." value={squadForm.notes} onChange={(e) => setSquadForm(f => ({ ...f, notes: e.target.value }))} className="h-9 text-sm" />
               </div>
+            </div>
             </div>
             <div className="px-5 py-3 border-t border-slate-100 dark:border-slate-800 flex justify-end gap-2">
               <Button variant="outline" size="sm" onClick={() => { setSquadAddOpen(false); setSquadEditTarget(null); }}>Cancelar</Button>
@@ -2729,17 +3080,23 @@ export default function AdminFinanceiroPage() {
         >
           <div className="bg-white dark:bg-slate-900 w-full h-full flex flex-col overflow-hidden">
 
-            {/* Gradient header */}
-            <div className="app-brand-header relative shrink-0 px-5 min-h-[72px] flex items-center">
-              <div className="flex-1">
-                <h2 className="text-white font-bold text-base">Filtros Avançados</h2>
-                <p className="text-blue-200 text-xs mt-0.5">Configure os filtros para refinar os resultados</p>
+            {/* Header */}
+            <div
+              className="flex items-center justify-between px-5 py-3 flex-shrink-0"
+              style={{
+                background:
+                  "var(--brand-gradient, linear-gradient(to right, #0a1628, #1e3a8a, #0a1628))",
+              }}
+            >
+              <div className="min-w-0 flex-1 text-sm font-bold text-white truncate">
+                Filtros Avançados
+                <p className="text-[11px] font-normal text-white/60 mt-0.5 truncate">Configure os filtros para refinar os resultados</p>
               </div>
               <button
                 onClick={() => setFilterOpen(false)}
-                className="absolute right-4 top-4 rounded-lg p-1.5 hover:bg-white/20 transition-colors"
+                className="text-white/70 hover:text-white hover:bg-white/20 rounded-lg p-1.5 transition-colors flex-shrink-0"
               >
-                <X className="h-5 w-5 text-white" />
+                <X className="h-4 w-4" />
               </button>
             </div>
 
@@ -3056,13 +3413,84 @@ export default function AdminFinanceiroPage() {
         </div>
       )}
 
+      {/* ── Configurar colunas — Faturas ────────────────────────────── */}
+      <SlidePanel
+        open={columnsPanelOpen}
+        onClose={() => setColumnsPanelOpen(false)}
+        title="Configurar colunas"
+        subtitle={`${invVisibleCols.size} de ${INVOICE_COLUMNS.length} visíveis`}
+        widthMode="full"
+        footer={
+          <div className="flex items-center justify-end gap-3">
+            <button
+              onClick={() => setInvVisibleCols(new Set(DEFAULT_INVOICE_VISIBLE_COLS))}
+              className="h-9 px-4 rounded-lg text-xs font-medium border border-slate-200 dark:border-slate-700 text-slate-500 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"
+            >
+              Restaurar padrão
+            </button>
+            <button
+              onClick={() => setInvVisibleCols(new Set(INVOICE_COLUMNS.map((c) => c.key)))}
+              className="h-9 px-4 rounded-lg text-xs font-semibold btn-brand transition-all"
+            >
+              Mostrar todas
+            </button>
+          </div>
+        }
+      >
+        <div className="flex-1 overflow-y-auto p-6">
+          <div className="max-w-3xl mx-auto grid grid-cols-1 sm:grid-cols-2 gap-2">
+            {INVOICE_COLUMNS.map((col) => (
+              <label
+                key={col.key}
+                className={cn(
+                  "flex items-center gap-3 px-4 py-3 rounded-xl border cursor-pointer transition-colors",
+                  invVisibleCols.has(col.key)
+                    ? "bg-blue-50 border-blue-200 dark:bg-blue-900/20 dark:border-blue-800"
+                    : "border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800",
+                  col.required && "opacity-60 pointer-events-none",
+                )}
+              >
+                <Checkbox
+                  checked={invVisibleCols.has(col.key)}
+                  onCheckedChange={() => {
+                    setInvVisibleCols((prev) => {
+                      const next = new Set(prev);
+                      next.has(col.key) ? next.delete(col.key) : next.add(col.key);
+                      return next;
+                    });
+                  }}
+                  disabled={col.required}
+                  className="h-4 w-4"
+                />
+                <span className="text-sm font-medium text-slate-700 dark:text-slate-300 flex-1">
+                  {col.label}
+                </span>
+                {col.required && (
+                  <span className="text-[9px] text-slate-400 flex-shrink-0">obrigatória</span>
+                )}
+              </label>
+            ))}
+          </div>
+        </div>
+      </SlidePanel>
+
       {/* ── Sheet Nova / Editar Fatura ─────────────────────────────── */}
-      <Sheet open={sheetOpen} onOpenChange={setSheetOpen}>
-        <SheetContent className="w-full sm:max-w-md overflow-y-auto">
-          <SheetHeader className="mb-6">
-            <SheetTitle>{editingInvoice ? "Editar Fatura" : "Nova Fatura"}</SheetTitle>
-          </SheetHeader>
-          <div className="space-y-4">
+      <SlidePanel
+        open={sheetOpen}
+        onClose={() => setSheetOpen(false)}
+        title={editingInvoice ? "Editar Fatura" : "Nova Fatura"}
+        widthMode="full"
+        footer={
+          <div className="flex justify-end gap-2">
+            <Button variant="outline" onClick={() => setSheetOpen(false)}>Cancelar</Button>
+            <Button disabled={actionLoading === "save"} onClick={handleSaveInvoice}>
+              {actionLoading === "save" ? "Salvando…" : editingInvoice ? "Salvar" : "Criar Fatura"}
+            </Button>
+          </div>
+        }
+      >
+        <div className="flex-1 overflow-y-auto p-6">
+        <div className="max-w-3xl mx-auto space-y-4">
             <div className="space-y-1.5">
               <Label className="text-xs">Nº da Fatura</Label>
               <Input placeholder="Ex: FAT-2026-001" className="h-9 text-sm" value={form.invoice_number}
@@ -3075,10 +3503,10 @@ export default function AdminFinanceiroPage() {
             </div>
             <div className="space-y-1.5">
               <Label className="text-xs">Empresa</Label>
-              <Select value={form.company_id} onValueChange={(v) => setForm((f) => ({ ...f, company_id: v }))}>
+              <Select value={form.company_id || "none"} onValueChange={(v) => setForm((f) => ({ ...f, company_id: v === "none" ? "" : v }))}>
                 <SelectTrigger className="h-9 text-sm"><SelectValue placeholder="Selecionar empresa" /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">— Nenhuma —</SelectItem>
+                  <SelectItem value="none">— Nenhuma —</SelectItem>
                   {companies.map((c) => (
                     <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
                   ))}
@@ -3107,15 +3535,9 @@ export default function AdminFinanceiroPage() {
               <Input placeholder="Descrição da fatura…" className="h-9 text-sm" value={form.description}
                 onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))} />
             </div>
-            <div className="flex gap-2 pt-2">
-              <Button variant="outline" className="flex-1" onClick={() => setSheetOpen(false)}>Cancelar</Button>
-              <Button className="flex-1" disabled={actionLoading === "save"} onClick={handleSaveInvoice}>
-                {actionLoading === "save" ? "Salvando…" : editingInvoice ? "Salvar" : "Criar Fatura"}
-              </Button>
-            </div>
-          </div>
-        </SheetContent>
-      </Sheet>
+        </div>
+        </div>
+      </SlidePanel>
 
       {/* ── Confirmar exclusão fatura ──────────────────────────────── */}
       <ConfirmationDialog
@@ -3129,12 +3551,22 @@ export default function AdminFinanceiroPage() {
       />
 
       {/* ── Sheet Nova / Editar Despesa ────────────────────────────── */}
-      <Sheet open={expSheetOpen} onOpenChange={setExpSheetOpen}>
-        <SheetContent className="w-full sm:max-w-lg overflow-y-auto">
-          <SheetHeader className="mb-6">
-            <SheetTitle>{editingExpense ? "Editar Despesa" : "Nova Despesa"}</SheetTitle>
-          </SheetHeader>
-          <div className="space-y-4">
+      <SlidePanel
+        open={expSheetOpen}
+        onClose={() => setExpSheetOpen(false)}
+        title={editingExpense ? "Editar Despesa" : "Nova Despesa"}
+        widthMode="full"
+        footer={
+          <div className="flex justify-end gap-2">
+            <Button variant="outline" onClick={() => setExpSheetOpen(false)}>Cancelar</Button>
+            <Button className="btn-brand border-0" disabled={actionLoading === "exp-save"} onClick={handleSaveExpense}>
+              {actionLoading === "exp-save" ? "Salvando…" : editingExpense ? "Salvar" : "Criar Despesa"}
+            </Button>
+          </div>
+        }
+      >
+        <div className="flex-1 overflow-y-auto p-6">
+        <div className="max-w-3xl mx-auto space-y-4">
             <div className="space-y-1.5">
               <Label className="text-xs">Nome <span className="text-red-500">*</span></Label>
               <Input placeholder="Ex: Plano Vercel Pro" className="h-9 text-sm" value={expForm.name}
@@ -3237,15 +3669,9 @@ export default function AdminFinanceiroPage() {
               <Input placeholder="Observações internas…" className="h-9 text-sm" value={expForm.notes}
                 onChange={(e) => setExpForm((f) => ({ ...f, notes: e.target.value }))} />
             </div>
-            <div className="flex gap-2 pt-2">
-              <Button variant="outline" className="flex-1" onClick={() => setExpSheetOpen(false)}>Cancelar</Button>
-              <Button className="flex-1 btn-brand border-0" disabled={actionLoading === "exp-save"} onClick={handleSaveExpense}>
-                {actionLoading === "exp-save" ? "Salvando…" : editingExpense ? "Salvar" : "Criar Despesa"}
-              </Button>
-            </div>
-          </div>
-        </SheetContent>
-      </Sheet>
+        </div>
+        </div>
+      </SlidePanel>
 
       {/* ── Confirmar exclusão despesa ─────────────────────────────── */}
       <ConfirmationDialog
@@ -3603,18 +4029,28 @@ export default function AdminFinanceiroPage() {
       </Sheet>
 
       {/* ── Sheet Lançar Ajuste Manual ─────────────────────────────── */}
-      <Sheet open={adjustOpen} onOpenChange={setAdjustOpen}>
-        <SheetContent className="w-full sm:max-w-md overflow-y-auto">
-          <SheetHeader className="mb-6">
-            <SheetTitle>Ajuste Manual de Saldo</SheetTitle>
-          </SheetHeader>
+      <SlidePanel
+        open={adjustOpen}
+        onClose={() => setAdjustOpen(false)}
+        title="Ajuste Manual de Saldo"
+        widthMode="full"
+        footer={
+          <div className="flex justify-end gap-2">
+            <Button variant="outline" onClick={() => setAdjustOpen(false)}>Cancelar</Button>
+            <Button className="btn-brand border-0" disabled={actionLoading === "adj"} onClick={handleAdjustment}>
+              {actionLoading === "adj" ? "Salvando…" : "Confirmar Ajuste"}
+            </Button>
+          </div>
+        }
+      >
+        <div className="flex-1 overflow-y-auto p-6">
+        <div className="max-w-3xl mx-auto space-y-4">
           {adjustWallet && (
-            <div className="mb-4 p-3 bg-slate-50 dark:bg-slate-800/50 rounded-lg border border-slate-200 dark:border-slate-700">
+            <div className="p-3 bg-slate-50 dark:bg-slate-800/50 rounded-lg border border-slate-200 dark:border-slate-700">
               <p className="text-xs font-semibold text-slate-700 dark:text-slate-300">{adjustWallet.owner_name}</p>
               <p className="text-[11px] text-slate-400">{WALLET_OWNER_LABELS[adjustWallet.owner_type]} · Saldo atual: <span className="font-bold text-slate-700 dark:text-slate-300">{fmt(adjustWallet.balance)}</span></p>
             </div>
           )}
-          <div className="space-y-4">
             <div className="space-y-1.5">
               <Label className="text-xs">Tipo de Ajuste</Label>
               <div className="grid grid-cols-2 gap-2">
@@ -3645,15 +4081,9 @@ export default function AdminFinanceiroPage() {
               <Input placeholder="Motivo, referência, contexto…" className="h-9 text-sm" value={adjustForm.notes}
                 onChange={(e) => setAdjustForm(f => ({ ...f, notes: e.target.value }))} />
             </div>
-            <div className="flex gap-2 pt-2">
-              <Button variant="outline" className="flex-1" onClick={() => setAdjustOpen(false)}>Cancelar</Button>
-              <Button className="flex-1 btn-brand border-0" disabled={actionLoading === "adj"} onClick={handleAdjustment}>
-                {actionLoading === "adj" ? "Salvando…" : "Confirmar Ajuste"}
-              </Button>
-            </div>
-          </div>
-        </SheetContent>
-      </Sheet>
+        </div>
+        </div>
+      </SlidePanel>
     </div>
   );
 }

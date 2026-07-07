@@ -945,16 +945,21 @@ model ChatMessage {
 // ─── Allkademy ────────────────────────────────────────────────────────────────
 
 model Course {
-  id           String   @id @default(cuid())
-  title        String
-  description  String?  @db.LongText
-  category     String
-  thumbnail    String?  @db.LongText
-  duration     Int?
-  is_published Boolean  @default(false)
-  is_free      Boolean  @default(true)
-  created_at   DateTime @default(now())
-  updated_at   DateTime @updatedAt
+  id                String   @id @default(cuid())
+  title             String
+  description       String?  @db.LongText
+  category          String
+  thumbnail         String?  @db.LongText
+  duration          Int?
+  is_published      Boolean  @default(false)
+  is_free           Boolean  @default(true)
+  // Público-alvo do curso: lista separada por vírgula de valores dentre
+  // "all" | "company" | "agency" | "nomades" | "leader" | "partner".
+  // "all" libera o curso para qualquer perfil. Default "all" preserva o
+  // comportamento atual (visível a todos) para cursos já existentes.
+  audience_profiles String   @default("all")
+  created_at        DateTime @default(now())
+  updated_at        DateTime @updatedAt
 
   modules     CourseModule[]
   enrollments CourseEnrollment[]
@@ -1058,8 +1063,39 @@ model PartnerProfile {
   led_agencies   AgencyLeadership[]
   agency_reports AgencyReport[]
   referred_companies Company[]
+  withdrawals    PartnerWithdrawal[]
 
   @@map("partner_profiles")
+}
+
+// Solicitação de saque do Partner — separado de WithdrawalRequest, que é
+// exclusivo do fluxo de Nômade (payload/model diferentes: nomade_id vs
+// partner_profile_id). Saldo (PartnerProfile.balance) só é debitado quando
+// a solicitação é efetivamente processada (status="paid"); ainda não existe
+// endpoint/tela admin para aprovar, então toda solicitação fica "pending".
+model PartnerWithdrawal {
+  id                 String    @id @default(cuid())
+  partner_profile_id String
+  partner            PartnerProfile @relation(fields: [partner_profile_id], references: [id])
+  amount             Float
+  pix_key            String
+  pix_key_type       String
+  // cpf | email | phone | random
+  status             String    @default("pending")
+  // pending | approved | rejected | paid | cancelled
+  notes              String?   @db.LongText
+  reviewed_by        String?
+  reviewed_at        DateTime?
+  requested_at       DateTime  @default(now())
+  // processed_at é preenchido especificamente quando status="paid" (momento
+  // em que o saldo do Partner é debitado). reviewed_at cobre qualquer
+  // decisão do admin (aprovar/reprovar/pagar/cancelar).
+  processed_at       DateTime?
+  created_at         DateTime  @default(now())
+  updated_at         DateTime  @updatedAt
+
+  @@index([partner_profile_id])
+  @@map("partner_withdrawals")
 }
 
 model Campaign {

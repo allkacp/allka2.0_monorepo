@@ -366,7 +366,7 @@ export default function AdminAllkademyPage() {
 
   const [form, setForm] = useState({
     title: "", description: "", category: "", duration: "",
-    is_published: false, is_free: true, thumbnail: "",
+    is_published: false, is_free: true, thumbnail: "", audience: ["all"],
   });
 
   const {
@@ -496,12 +496,15 @@ export default function AdminAllkademyPage() {
   // ── sheet helpers ──────────────────────────────────────────────────────────
   function openCreate() {
     setEditingCourse(null);
-    setForm({ title: "", description: "", category: "", duration: "", is_published: false, is_free: true, thumbnail: "" });
+    setForm({ title: "", description: "", category: "", duration: "", is_published: false, is_free: true, thumbnail: "", audience: ["all"] });
     setSheetOpen(true);
   }
 
   function openEdit(c) {
     setEditingCourse(c);
+    const audience = c.audience_profiles
+      ? c.audience_profiles.split(",").map((s) => s.trim()).filter(Boolean)
+      : ["all"];
     setForm({
       title: c.title || "",
       description: c.description || "",
@@ -510,8 +513,22 @@ export default function AdminAllkademyPage() {
       is_published: !!c.is_published,
       is_free: !!c.is_free,
       thumbnail: c.thumbnail || "",
+      audience: audience.length ? audience : ["all"],
     });
     setSheetOpen(true);
+  }
+
+  // "Todos" é exclusivo: marcar limpa o resto; marcar um perfil específico
+  // desmarca "Todos". Nunca deixa a lista vazia (cai de volta pra "all").
+  function toggleAudience(value) {
+    setForm((f) => {
+      if (value === "all") return { ...f, audience: ["all"] };
+      const withoutAll = f.audience.filter((v) => v !== "all");
+      const next = withoutAll.includes(value)
+        ? withoutAll.filter((v) => v !== value)
+        : [...withoutAll, value];
+      return { ...f, audience: next.length ? next : ["all"] };
+    });
   }
 
   async function handleSave() {
@@ -525,6 +542,7 @@ export default function AdminAllkademyPage() {
       is_published: form.is_published,
       is_free: form.is_free,
       thumbnail: form.thumbnail.trim() || undefined,
+      audience_profiles: form.audience.join(","),
     };
     setActionLoading("save");
     try {
@@ -1138,6 +1156,26 @@ export default function AdminAllkademyPage() {
               <Label className="text-xs">URL da Thumbnail</Label>
               <Input placeholder="https://…" className="h-9 text-sm"
                 value={form.thumbnail} onChange={(e) => setForm((f) => ({ ...f, thumbnail: e.target.value }))} />
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs">Público-alvo</Label>
+              <div className="grid grid-cols-2 gap-2">
+                {[
+                  { value: "all", label: "Todos" },
+                  { value: "company", label: "Company" },
+                  { value: "agency", label: "Agency" },
+                  { value: "nomades", label: "Nômade" },
+                  { value: "leader", label: "Leader" },
+                  { value: "partner", label: "Partner" },
+                ].map((opt) => (
+                  <label key={opt.value} className="flex items-center gap-2 cursor-pointer select-none">
+                    <input type="checkbox" checked={form.audience.includes(opt.value)}
+                      onChange={() => toggleAudience(opt.value)}
+                      className="rounded border-slate-300 text-blue-600 focus:ring-blue-500 h-4 w-4" />
+                    <span className="text-xs text-slate-600 dark:text-slate-400">{opt.label}</span>
+                  </label>
+                ))}
+              </div>
             </div>
             <div className="flex items-center gap-6 pt-1">
               <label className="flex items-center gap-2 cursor-pointer select-none">

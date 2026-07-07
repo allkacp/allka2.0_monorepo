@@ -29,11 +29,12 @@ interface PartnerContextType {
   projects: PartnerProject[];
   ledAgencies: LedAgency[];
   loading: boolean;
+  /** Lança em caso de erro real da API — a tela decide como exibir. */
   requestWithdrawal: (
     amount: number,
     pixKey: string,
     pixKeyType: PartnerWithdrawal["pixKeyType"],
-  ) => void;
+  ) => Promise<void>;
 }
 
 const PartnerContext = createContext<PartnerContextType | undefined>(undefined);
@@ -51,22 +52,28 @@ export function PartnerProvider({ children }: { children: React.ReactNode }) {
     let cancelled = false;
     async function load() {
       try {
-        const [meRes, commissionsRes] = await Promise.allSettled([
+        const [meRes, commissionsRes, withdrawalsRes] = await Promise.allSettled([
           apiClient.getPartnerMe(),
           apiClient.getPartnerCommissions("me"),
+          apiClient.getPartnerWithdrawals(),
         ]);
         if (cancelled) return;
         if (meRes.status === "fulfilled") {
           const me: any = meRes.value;
           if (me.profile) setProfile(me.profile);
           if (me.stats) setStats(me.stats);
-          if (me.withdrawals) setWithdrawals(me.withdrawals);
           if (me.projects) setProjects(me.projects);
           if (me.ledAgencies) setLedAgencies(me.ledAgencies);
         }
         if (commissionsRes.status === "fulfilled") {
           const data: any = commissionsRes.value;
           setCommissions(Array.isArray(data) ? data : data.data || []);
+        }
+        if (withdrawalsRes.status === "fulfilled") {
+          const data: any = withdrawalsRes.value;
+          setWithdrawals(Array.isArray(data) ? data : data.data || []);
+        } else {
+          console.error("[PartnerProvider] Failed to load withdrawals:", withdrawalsRes.reason);
         }
       } catch (err) {
         console.error("[PartnerProvider] Failed to load data:", err);
@@ -86,29 +93,17 @@ export function PartnerProvider({ children }: { children: React.ReactNode }) {
       pixKey: string,
       pixKeyType: PartnerWithdrawal["pixKeyType"],
     ) => {
-      try {
-        const res: any = await apiClient.createWithdrawal({
-          amount,
-          pixKey,
-          pixKeyType,
-        });
-        setWithdrawals((prev) => [res, ...prev]);
-      } catch (err) {
-        console.error("[PartnerProvider] Failed to request withdrawal:", err);
-        // Fallback local add
-        const newWithdrawal: PartnerWithdrawal = {
-          id: `w${Date.now()}`,
-          partnerId: profile?.id || "",
-          amount,
-          pixKey,
-          pixKeyType,
-          status: "pending",
-          requestedAt: new Date().toISOString().split("T")[0],
-        };
-        setWithdrawals((prev) => [newWithdrawal, ...prev]);
-      }
+      // Sem fallback local: se a API falhar, o erro real sobe para quem
+      // chamou (a tela decide como exibir) — nunca criamos um saque fake
+      // aqui só para a UI parecer bem-sucedida.
+      const res: any = await apiClient.createPartnerWithdrawal({
+        amount,
+        pix_key: pixKey,
+        pix_key_type: pixKeyType,
+      });
+      setWithdrawals((prev) => [res, ...prev]);
     },
-    [profile],
+    [],
   );
 
   return (

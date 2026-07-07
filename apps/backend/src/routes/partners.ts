@@ -1,10 +1,96 @@
+import type { Request, Response, NextFunction } from "express";
 import { Router } from "express";
 import { z } from "zod";
 import { prisma } from "../lib/prisma";
-import { verifyToken } from "../middleware/auth";
+import { verifyToken, requireRole } from "../middleware/auth";
 import { validate, parsePagination } from "../middleware/validate";
 
 const router = Router();
+
+// Valor mínimo de saque — mesmo limite já comunicado na tela do parceiro
+// (apps/frontend/app/parceiro/saques/page.tsx: "Valor mínimo: R$ 50,00").
+const MIN_WITHDRAWAL_AMOUNT = 50;
+
+function isPartnerUser(user?: { role?: string; account_type?: string }): boolean {
+  return user?.account_type === "parceiro" || user?.role === "partner";
+}
+
+// Mesmo usado em requireRole("admin") no restante do backend: aqui checamos
+// account_type OU role porque é assim que o resto do sistema identifica
+// parceiro (ver auth.ts:32, allkademy.ts:31, clients.ts:122, users.ts:184).
+function requirePartner(req: Request, res: Response, next: NextFunction): void {
+  if (!req.user) {
+    res.status(401).json({ error: "Não autenticado" });
+    return;
+  }
+  if (!isPartnerUser(req.user)) {
+    res.status(403).json({ error: "Permissão insuficiente" });
+    return;
+  }
+  next();
+}
+
+function toWithdrawalDTO(w: {
+  id: string;
+  partner_profile_id: string;
+  amount: number;
+  pix_key: string;
+  pix_key_type: string;
+  status: string;
+  requested_at: Date;
+  processed_at: Date | null;
+}) {
+  return {
+    id: w.id,
+    partnerId: w.partner_profile_id,
+    amount: w.amount,
+    pixKey: w.pix_key,
+    pixKeyType: w.pix_key_type,
+    status: w.status,
+    requestedAt: w.requested_at.toISOString(),
+    reviewedAt: w.processed_at ? w.processed_at.toISOString() : undefined,
+  };
+}
+
+// Status "terminais": uma vez alcançados, o saque não pode ser reprocessado
+// (evita pagar duas vezes ou reverter uma reprovação/cancelamento por engano).
+const WITHDRAWAL_TERMINAL_STATUSES = ["paid", "rejected", "cancelled"];
+const WITHDRAWAL_STATUS_VALUES = ["pending", "approved", "rejected", "paid", "cancelled"] as const;
+
+function toAdminWithdrawalDTO(w: {
+  id: string;
+  partner_profile_id: string;
+  amount: number;
+  pix_key: string;
+  pix_key_type: string;
+  status: string;
+  notes: string | null;
+  reviewed_by: string | null;
+  reviewed_at: Date | null;
+  requested_at: Date;
+  processed_at: Date | null;
+  partner: {
+    balance: number;
+    user: { name: string | null; email: string } | null;
+  };
+}) {
+  return {
+    id: w.id,
+    partnerId: w.partner_profile_id,
+    partnerName: w.partner.user?.name ?? "",
+    partnerEmail: w.partner.user?.email ?? "",
+    partnerBalance: w.partner.balance,
+    amount: w.amount,
+    pixKey: w.pix_key,
+    pixKeyType: w.pix_key_type,
+    status: w.status,
+    notes: w.notes ?? undefined,
+    reviewedBy: w.reviewed_by ?? undefined,
+    reviewedAt: w.reviewed_at ? w.reviewed_at.toISOString() : undefined,
+    requestedAt: w.requested_at.toISOString(),
+    paidAt: w.status === "paid" && w.processed_at ? w.processed_at.toISOString() : undefined,
+  };
+}
 
 // GET /api/partners
 router.get("/", verifyToken, async (req, res, next) => {
@@ -47,6 +133,7 @@ router.get("/me", verifyToken, async (req, res, next) => {
     const partner = await prisma.partnerProfile.findUnique({
       where: { user_id: req.user!.id },
       include: {
+        user: { select: { name: true, email: true } },
         commissions: {
           orderBy: { created_at: "desc" },
           take: 20,
@@ -136,12 +223,312 @@ router.get("/me", verifyToken, async (req, res, next) => {
       };
     });
 
-    const { referred_companies, ...partnerData } = partner as any;
-    res.json({ ...partnerData, projects });
+    // Formato esperado pelo frontend (contexts/partner-context.tsx lê
+    // me.profile/me.projects — ver dev-mocks/mock-api-client.ts para o
+    // contrato original). Antes desta correção, o endpoint devolvia os
+    // campos soltos na raiz (snake_case) e "profile" nunca era populado.
+    const profile = {
+      id: partner.id,
+      userId: partner.user_id,
+      name: (partner as any).user?.name ?? "",
+      email: (partner as any).user?.email ?? "",
+      avatarInitials: ((partner as any).user?.name ?? "P")
+        .split(" ")
+        .filter(Boolean)
+        .slice(0, 2)
+        .map((s: string) => s[0]?.toUpperCase())
+        .join(""),
+      linkedCampaignId: partner.linked_campaign_id ?? undefined,
+      balance: partner.balance,
+      totalEarned: partner.total_earned,
+      totalWithdrawn: partner.total_withdrawn,
+      referralLink: partner.referral_link ?? undefined,
+      referralCode: partner.referral_code ?? undefined,
+      status: partner.status,
+      createdAt: partner.created_at.toISOString(),
+      pixKey: partner.pix_key ?? undefined,
+      pixKeyType: partner.pix_key_type ?? undefined,
+    };
+
+    res.json({ profile, projects });
   } catch (err) {
     next(err);
   }
 });
+
+// POST /api/partners/withdrawals — Partner solicita saque do próprio saldo.
+// Registrado ANTES de "/:id" de propósito: rotas com parâmetro capturam
+// qualquer segmento (inclusive "withdrawals") se vierem primeiro no router.
+// Não debita o saldo agora: PartnerProfile.balance só é ajustado quando a
+// solicitação for de fato processada (mesma regra do saque de Nômade em
+// financial.ts, que só debita a carteira na transição para "pagamento_efetuado").
+// Como ainda não existe tela/endpoint admin de aprovação para saque de
+// Partner, toda solicitação fica em status "pending" até esse fluxo existir.
+router.post(
+  "/withdrawals",
+  verifyToken,
+  requirePartner,
+  validate(
+    z.object({
+      amount: z.number().positive(),
+      pix_key: z.string().min(1),
+      pix_key_type: z.enum(["cpf", "email", "phone", "random"]),
+    }),
+  ),
+  async (req, res, next) => {
+    try {
+      const { amount, pix_key, pix_key_type } = req.body as {
+        amount: number;
+        pix_key: string;
+        pix_key_type: string;
+      };
+
+      const partner = await prisma.partnerProfile.findUnique({
+        where: { user_id: req.user!.id },
+      });
+      if (!partner) {
+        res.status(404).json({ error: "Perfil de parceiro não encontrado" });
+        return;
+      }
+
+      if (amount < MIN_WITHDRAWAL_AMOUNT) {
+        res
+          .status(400)
+          .json({ error: `Valor mínimo para saque é R$ ${MIN_WITHDRAWAL_AMOUNT.toFixed(2).replace(".", ",")}` });
+        return;
+      }
+
+      if (amount > partner.balance) {
+        res.status(400).json({ error: "Valor maior que o saldo disponível" });
+        return;
+      }
+
+      const pending = await prisma.partnerWithdrawal.findFirst({
+        where: { partner_profile_id: partner.id, status: "pending" },
+      });
+      if (pending) {
+        res.status(400).json({ error: "Já existe uma solicitação de saque pendente" });
+        return;
+      }
+
+      const withdrawal = await prisma.partnerWithdrawal.create({
+        data: { partner_profile_id: partner.id, amount, pix_key, pix_key_type },
+      });
+
+      res.status(201).json(toWithdrawalDTO(withdrawal));
+    } catch (err) {
+      next(err);
+    }
+  },
+);
+
+// GET /api/partners/withdrawals — histórico de saques do próprio Partner logado.
+router.get("/withdrawals", verifyToken, requirePartner, async (req, res, next) => {
+  try {
+    const partner = await prisma.partnerProfile.findUnique({
+      where: { user_id: req.user!.id },
+    });
+    if (!partner) {
+      res.status(404).json({ error: "Perfil de parceiro não encontrado" });
+      return;
+    }
+
+    const withdrawals = await prisma.partnerWithdrawal.findMany({
+      where: { partner_profile_id: partner.id },
+      orderBy: { requested_at: "desc" },
+    });
+
+    res.json(withdrawals.map(toWithdrawalDTO));
+  } catch (err) {
+    next(err);
+  }
+});
+
+// GET /api/partners/admin/withdrawals — admin-only, lista TODOS os saques de
+// Partner (qualquer perfil), com dados do partner/usuário para a tela de
+// aprovação. Registrado antes de "/:id" pelo mesmo motivo do "/withdrawals"
+// acima (senão "admin" seria capturado como :id).
+router.get(
+  "/admin/withdrawals",
+  verifyToken,
+  requireRole("admin"),
+  async (req, res, next) => {
+    try {
+      const { page, limit, skip } = parsePagination(req.query);
+      const status = req.query.status as string | undefined;
+
+      const where: Record<string, unknown> = {};
+      if (status) where["status"] = status;
+
+      const [total, data] = await Promise.all([
+        prisma.partnerWithdrawal.count({ where }),
+        prisma.partnerWithdrawal.findMany({
+          where,
+          include: { partner: { include: { user: { select: { name: true, email: true } } } } },
+          skip,
+          take: limit,
+          orderBy: { requested_at: "desc" },
+        }),
+      ]);
+
+      res.json({ data: data.map(toAdminWithdrawalDTO), total, page, limit });
+    } catch (err) {
+      next(err);
+    }
+  },
+);
+
+// PUT /api/partners/admin/withdrawals/:id — admin-only, aprova/reprova/marca
+// como pago um saque de Partner.
+// Regra de saldo: NUNCA debitado na solicitação — só quando status vira
+// "paid", dentro de uma transaction (checa saldo atual + debita + credita
+// total_withdrawn de forma atômica). "rejected"/"cancelled" não tocam saldo.
+// Uma vez em status terminal (paid|rejected|cancelled), não pode ser
+// reprocessado — isso é o que impede pagar duas vezes.
+router.put(
+  "/admin/withdrawals/:id",
+  verifyToken,
+  requireRole("admin"),
+  validate(
+    z.object({
+      status: z.enum(WITHDRAWAL_STATUS_VALUES),
+      notes: z.string().optional(),
+    }),
+  ),
+  async (req, res, next) => {
+    try {
+      const { status, notes } = req.body as { status: string; notes?: string };
+      const id = req.params.id as string;
+
+      const existing = await prisma.partnerWithdrawal.findUnique({
+        where: { id },
+        include: { partner: { include: { user: { select: { name: true, email: true } } } } },
+      });
+      if (!existing) {
+        res.status(404).json({ error: "Solicitação de saque não encontrada" });
+        return;
+      }
+
+      if (WITHDRAWAL_TERMINAL_STATUSES.includes(existing.status)) {
+        // Checagem rápida fora da transaction — só um atalho de UX (evita abrir
+        // transaction pro caso comum). NÃO é isso que impede o débito duplo em
+        // corrida real; a proteção de fato é o updateMany condicional abaixo.
+        res.status(400).json({
+          error: `Este saque já foi processado (status atual: ${existing.status}) e não pode ser alterado novamente.`,
+        });
+        return;
+      }
+
+      if (status === "paid") {
+        const updated = await prisma.$transaction(async (tx) => {
+          // Update condicional: só transiciona pra "paid" se o status ainda
+          // NÃO for terminal no momento exato do UPDATE (não o que foi lido
+          // antes da transaction). Isso é uma operação atômica no MySQL — se
+          // duas requisições concorrentes chegarem aqui quase juntas, o
+          // InnoDB serializa via row lock: a primeira UPDATE que pegar o lock
+          // vê status="pending"/"approved" e afeta 1 linha; a segunda, ao
+          // adquirir o lock em seguida, já vê status="paid" (commitado pela
+          // primeira) e o WHERE não bate mais → count=0. Isso é o que
+          // realmente impede pagar o mesmo saque duas vezes, não a checagem
+          // de status feita fora da transaction acima.
+          const claim = await tx.partnerWithdrawal.updateMany({
+            where: { id, status: { notIn: WITHDRAWAL_TERMINAL_STATUSES } },
+            data: {
+              status: "paid",
+              notes: notes ?? existing.notes,
+              reviewed_by: req.user!.id,
+              reviewed_at: new Date(),
+              processed_at: new Date(),
+            },
+          });
+          if (claim.count === 0) {
+            throw new Error("ALREADY_PROCESSED");
+          }
+
+          // Relê o saldo dentro da MESMA transaction, depois de já ter
+          // garantido a posse exclusiva do saque acima.
+          const partner = await tx.partnerProfile.findUnique({
+            where: { id: existing.partner_profile_id },
+            select: { balance: true },
+          });
+          if (!partner || partner.balance < existing.amount) {
+            // Lança e derruba a transaction inteira — o updateMany acima
+            // também é revertido (rollback), o saque volta a ficar não-terminal.
+            throw new Error("INSUFFICIENT_BALANCE");
+          }
+
+          await tx.partnerProfile.update({
+            where: { id: existing.partner_profile_id },
+            data: {
+              balance: { decrement: existing.amount },
+              total_withdrawn: { increment: existing.amount },
+            },
+          });
+
+          return tx.partnerWithdrawal.findUnique({
+            where: { id },
+            include: { partner: { include: { user: { select: { name: true, email: true } } } } },
+          });
+        }).catch((err) => {
+          if (err instanceof Error && (err.message === "INSUFFICIENT_BALANCE" || err.message === "ALREADY_PROCESSED")) {
+            return err.message;
+          }
+          throw err;
+        });
+
+        if (updated === "INSUFFICIENT_BALANCE") {
+          res.status(400).json({ error: "Saldo atual do parceiro é insuficiente para pagar este saque." });
+          return;
+        }
+        if (updated === "ALREADY_PROCESSED") {
+          res.status(400).json({ error: "Este saque já foi processado por outra requisição." });
+          return;
+        }
+        if (!updated) {
+          res.status(404).json({ error: "Solicitação de saque não encontrada" });
+          return;
+        }
+
+        res.json(toAdminWithdrawalDTO(updated));
+        return;
+      }
+
+      // approved | rejected | cancelled | pending — não mexe em saldo, mas
+      // usa o mesmo guard atômico do fluxo "paid": updateMany condicionado a
+      // status ainda não-terminal. Isso é o que impede, por exemplo, uma
+      // requisição "rejected" sobrescrever um saque que outra requisição
+      // acabou de marcar "paid" (ou vice-versa) — sem isso, as duas ações
+      // corriam por fora uma da outra e o saque podia terminar rejected com
+      // o saldo já debitado.
+      const claim = await prisma.partnerWithdrawal.updateMany({
+        where: { id, status: { notIn: WITHDRAWAL_TERMINAL_STATUSES } },
+        data: {
+          status,
+          notes: notes ?? existing.notes,
+          reviewed_by: req.user!.id,
+          reviewed_at: new Date(),
+        },
+      });
+      if (claim.count === 0) {
+        res.status(400).json({ error: "Este saque já foi processado por outra requisição." });
+        return;
+      }
+
+      const withdrawal = await prisma.partnerWithdrawal.findUnique({
+        where: { id },
+        include: { partner: { include: { user: { select: { name: true, email: true } } } } },
+      });
+      if (!withdrawal) {
+        res.status(404).json({ error: "Solicitação de saque não encontrada" });
+        return;
+      }
+
+      res.json(toAdminWithdrawalDTO(withdrawal));
+    } catch (err) {
+      next(err);
+    }
+  },
+);
 
 // GET /api/partners/:id
 router.get("/:id", verifyToken, async (req, res, next) => {

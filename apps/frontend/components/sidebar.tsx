@@ -101,58 +101,7 @@ const navigationConfig = {
         current: false,
       },
     ],
-    "in-house": [
-      {
-        name: "Dashboard",
-        href: "/in-house/dashboard",
-        icon: LayoutDashboard,
-        current: true,
-      },
-      {
-        name: "Catálogo",
-        href: "/in-house/catalogo",
-        icon: Briefcase,
-        current: false,
-      },
-      {
-        name: "Projetos",
-        href: "/in-house/projetos",
-        icon: FolderOpen,
-        current: false,
-        badge: "12",
-      },
-      {
-        name: "Equipe",
-        href: "/in-house/equipe",
-        icon: Users,
-        current: false,
-        badge: "8",
-      },
-      {
-        name: "Financeiro",
-        href: "/in-house/financeiro",
-        icon: Wallet,
-        current: false,
-      },
-      {
-        name: "Relatórios",
-        href: "/in-house/relatorios",
-        icon: BarChart3,
-        current: false,
-      },
-      {
-        name: "Allkademy",
-        href: "/admin/allkademy",
-        icon: BookOpen,
-        current: false,
-      },
-      {
-        name: "Configurações",
-        href: "/in-house/configuracoes",
-        icon: Settings,
-        current: false,
-      },
-    ],
+    "in-house": [],
   },
   agencias: [
     {
@@ -275,7 +224,7 @@ const navigationConfig = {
     },
     {
       name: "Allkademy",
-      href: "/admin/allkademy",
+      href: "/allkademy",
       icon: BookOpen,
       current: false,
     },

@@ -1,4 +1,3 @@
-// @ts-nocheck
 "use client";
 
 import { useState } from "react";
@@ -70,13 +69,17 @@ export default function PartnerSaques() {
       return;
     }
     setSubmitting(true);
-    await new Promise((r) => setTimeout(r, 600));
-    requestWithdrawal(numAmount, profile?.pixKey, profile?.pixKeyType);
-    setAmount("");
-    setPixConfirm("");
-    setSuccess(true);
-    setSubmitting(false);
-    setTimeout(() => setSuccess(false), 4000);
+    try {
+      await requestWithdrawal(numAmount, profile?.pixKey ?? "", profile?.pixKeyType ?? "cpf");
+      setAmount("");
+      setPixConfirm("");
+      setSuccess(true);
+      setTimeout(() => setSuccess(false), 4000);
+    } catch (err: any) {
+      setError(err?.message || "Não foi possível solicitar o saque. Tente novamente.");
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   const statusConfig = {
