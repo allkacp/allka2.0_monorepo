@@ -7,6 +7,7 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
 import { Checkbox } from "@/components/ui/checkbox";
+import { cn } from "@/lib/utils";
 import {
   Select,
   SelectContent,
@@ -497,10 +498,7 @@ export default function CampanhasPage() {
   const [accessSubmitting, setAccessSubmitting] = useState(false);
 
   // isClosing states for unmount-on-close animated drawers
-  const [campaignClosing, setCampaignClosing] = useState(false);
-  const [couponClosing, setCouponClosing] = useState(false);
   const [accessClosing, setAccessClosing] = useState(false);
-  const [reportClosing, setReportClosing] = useState(false);
 
   const [companySearchQuery, setCompanySearchQuery] = useState("");
   const [userSearchQuery, setUserSearchQuery] = useState("");
@@ -586,13 +584,8 @@ export default function CampanhasPage() {
     setCampaignDialogOpen(true);
   };
   const closeCampaignDialog = () => {
-    if (campaignClosing) return;
-    setCampaignClosing(true);
-    setTimeout(() => {
-      setCampaignDialogOpen(false);
-      setEditingCampaign(null);
-      setCampaignClosing(false);
-    }, 420);
+    setCampaignDialogOpen(false);
+    setEditingCampaign(null);
   };
   const saveCampaign = async () => {
     const linkedCoupon = coupons.find(
@@ -723,17 +716,12 @@ export default function CampanhasPage() {
     setCouponDialogOpen(true);
   };
   const closeCouponDrawer = () => {
-    if (couponClosing) return;
-    setCouponClosing(true);
-    setTimeout(() => {
-      setCouponDialogOpen(false);
-      setEditingCoupon(null);
-      setCompanySearchQuery("");
-      setUserSearchQuery("");
-      setCompanyPickerOpen(false);
-      setUserPickerOpen(false);
-      setCouponClosing(false);
-    }, 420);
+    setCouponDialogOpen(false);
+    setEditingCoupon(null);
+    setCompanySearchQuery("");
+    setUserSearchQuery("");
+    setCompanyPickerOpen(false);
+    setUserPickerOpen(false);
   };
   const saveCoupon = async () => {
     const user = MOCK_USERS.find((u) => u.id === couponForm.linkedUserId);
@@ -809,12 +797,7 @@ export default function CampanhasPage() {
     }, 420);
   };
   const closeReportDrawer = () => {
-    if (reportClosing) return;
-    setReportClosing(true);
-    setTimeout(() => {
-      setReportOpen(false);
-      setReportClosing(false);
-    }, 420);
+    setReportOpen(false);
   };
 
   // Sidebar gradient
@@ -1622,47 +1605,35 @@ export default function CampanhasPage() {
       </div>
 
       {/* ── Campaign Drawer ──────────────────────────────────────── */}
-      {(campaignDialogOpen || campaignClosing) && (
-        <>
-          <div
-            data-slot="sheet-content"
-            data-state={campaignClosing ? "closed" : "open"}
-            style={{
-              left: `${sidebarWidth}px`,
-              width: `calc(100vw - ${sidebarWidth}px)`,
-            }}
-            className="fixed top-0 z-50 h-[calc(100vh-24px)] bg-background shadow-2xl flex flex-col border-l border-border overflow-hidden data-[state=open]:animate-in data-[state=open]:slide-in-from-right data-[state=open]:fade-in-0 data-[state=closed]:animate-out data-[state=closed]:slide-out-to-right data-[state=closed]:fade-out-0"
-          >
-            <div
-              className="px-6 pt-5 pb-6 relative"
-              style={{ background: headerGradient }}
-            >
-              <button
+        <SlidePanel
+          open={campaignDialogOpen}
+          onClose={closeCampaignDialog}
+          title={editingCampaign ? "Editar Campanha" : "Nova Campanha"}
+          subtitle="Configure os parâmetros, comissões e vínculos da campanha"
+          widthMode="full"
+          footer={
+            <div className="flex justify-end gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-9"
                 onClick={closeCampaignDialog}
-                className="absolute top-3.5 right-3.5 text-white/60 hover:text-white hover:bg-white/15 rounded-md p-1 transition-colors"
               >
-                <X className="h-4 w-4" />
-              </button>
-              <div className="flex items-center gap-3.5">
-                <div className="bg-white/20 rounded-xl p-2.5 shrink-0">
-                  {campaignForm.campaignType === "influencer" ? (
-                    <Star className="h-5 w-5 text-white" />
-                  ) : (
-                    <Share2 className="h-5 w-5 text-white" />
-                  )}
-                </div>
-                <div>
-                  <h2 className="text-white text-base font-semibold leading-tight">
-                    {editingCampaign ? "Editar Campanha" : "Nova Campanha"}
-                  </h2>
-                  <p className="text-white/60 text-xs mt-0.5">
-                    Configure os parâmetros, comissões e vínculos da campanha
-                  </p>
-                </div>
-              </div>
+                Cancelar
+              </Button>
+              <Button
+                size="sm"
+                className="h-9 btn-brand gap-1.5"
+                onClick={saveCampaign}
+              >
+                <CheckCircle2 className="h-3.5 w-3.5" />
+                {editingCampaign ? "Salvar Alterações" : "Criar Campanha"}
+              </Button>
             </div>
-
-            <div className="px-6 py-5 space-y-4 flex-1 overflow-y-auto">
+          }
+        >
+            <div className="flex-1 overflow-y-auto">
+            <div className="max-w-3xl mx-auto px-6 py-5 space-y-4">
               {/* Type selector */}
               <div className="grid grid-cols-2 gap-2">
                 {[
@@ -1933,73 +1904,39 @@ export default function CampanhasPage() {
                 )}
               </div>
             </div>
+            </div>
+        </SlidePanel>
 
-            <div className="shrink-0 border-t border-slate-100 dark:border-slate-800 px-6 py-4 bg-slate-50/60 dark:bg-slate-900/40 flex justify-end gap-2">
+      {/* ── Coupon Drawer ────────────────────────────────────────── */}
+        <SlidePanel
+          open={couponDialogOpen}
+          onClose={closeCouponDrawer}
+          title={editingCoupon ? "Editar Cupom" : "Novo Cupom"}
+          subtitle="Configure o tipo, código, restrições e regras de uso"
+          widthMode="full"
+          footer={
+            <div className="flex justify-end gap-2">
               <Button
                 variant="outline"
                 size="sm"
                 className="h-9"
-                onClick={closeCampaignDialog}
+                onClick={closeCouponDrawer}
               >
                 Cancelar
               </Button>
               <Button
                 size="sm"
                 className="h-9 btn-brand gap-1.5"
-                onClick={saveCampaign}
+                onClick={saveCoupon}
               >
                 <CheckCircle2 className="h-3.5 w-3.5" />
-                {editingCampaign ? "Salvar Alterações" : "Criar Campanha"}
+                {editingCoupon ? "Salvar Alterações" : "Criar Cupom"}
               </Button>
             </div>
-          </div>
-        </>
-      )}
-
-      {/* ── Coupon Drawer ────────────────────────────────────────── */}
-      {(couponDialogOpen || couponClosing) && (
-        <>
-          <div
-            data-slot="sheet-content"
-            data-state={couponClosing ? "closed" : "open"}
-            style={{
-              left: `${sidebarWidth}px`,
-              width: `calc(100vw - ${sidebarWidth}px)`,
-            }}
-            className="fixed top-0 z-50 h-[calc(100vh-24px)] bg-background shadow-2xl flex flex-col border-l border-border overflow-hidden data-[state=open]:animate-in data-[state=open]:slide-in-from-right data-[state=open]:fade-in-0 data-[state=closed]:animate-out data-[state=closed]:slide-out-to-right data-[state=closed]:fade-out-0"
-          >
-            <div
-              className="px-6 pt-5 pb-6 relative"
-              style={{ background: headerGradient }}
-            >
-              <button
-                onClick={closeCouponDrawer}
-                className="absolute top-3.5 right-3.5 text-white/60 hover:text-white hover:bg-white/15 rounded-md p-1 transition-colors"
-              >
-                <X className="h-4 w-4" />
-              </button>
-              <div className="flex items-center gap-3.5">
-                <div className="bg-white/20 rounded-xl p-2.5 shrink-0">
-                  {couponForm.couponType === "credit-bonus" ? (
-                    <Gift className="h-5 w-5 text-white" />
-                  ) : couponForm.couponType === "referral" ? (
-                    <UserCheck className="h-5 w-5 text-white" />
-                  ) : (
-                    <Tag className="h-5 w-5 text-white" />
-                  )}
-                </div>
-                <div>
-                  <h2 className="text-white text-base font-semibold leading-tight">
-                    {editingCoupon ? "Editar Cupom" : "Novo Cupom"}
-                  </h2>
-                  <p className="text-white/60 text-xs mt-0.5">
-                    Configure o tipo, código, restrições e regras de uso
-                  </p>
-                </div>
-              </div>
-            </div>
-
-            <div className="px-6 py-5 space-y-4 flex-1 overflow-y-auto">
+          }
+        >
+            <div className="flex-1 overflow-y-auto">
+            <div className="max-w-3xl mx-auto px-6 py-5 space-y-4">
               {/* Coupon type selector */}
               <div className="grid grid-cols-3 gap-2">
                 {[
@@ -2970,28 +2907,8 @@ export default function CampanhasPage() {
                 </div>
               )}
             </div>
-
-            <div className="shrink-0 border-t border-slate-100 dark:border-slate-800 px-6 py-4 bg-slate-50/60 dark:bg-slate-900/40 flex justify-end gap-2">
-              <Button
-                variant="outline"
-                size="sm"
-                className="h-9"
-                onClick={closeCouponDrawer}
-              >
-                Cancelar
-              </Button>
-              <Button
-                size="sm"
-                className="h-9 btn-brand gap-1.5"
-                onClick={saveCoupon}
-              >
-                <CheckCircle2 className="h-3.5 w-3.5" />
-                {editingCoupon ? "Salvar Alterações" : "Criar Cupom"}
-              </Button>
             </div>
-          </div>
-        </>
-      )}
+        </SlidePanel>
 
       <ConfirmationDialog
         open={campaignToggle.campaign !== null}
@@ -3197,41 +3114,60 @@ export default function CampanhasPage() {
       )}
 
       {/* ── Report Drawer ────────────────────────────────────────── */}
-      {(reportOpen || reportClosing) && (
-        <>
-          <div
-            data-slot="sheet-content"
-            data-state={reportClosing ? "closed" : "open"}
-            style={{
-              left: `${sidebarWidth}px`,
-              width: `calc(100vw - ${sidebarWidth}px)`,
-            }}
-            className="fixed top-0 z-50 h-[calc(100vh-24px)] bg-background shadow-2xl flex flex-col border-l border-border overflow-hidden data-[state=open]:animate-in data-[state=open]:slide-in-from-right data-[state=open]:fade-in-0 data-[state=closed]:animate-out data-[state=closed]:slide-out-to-right data-[state=closed]:fade-out-0"
-          >
-            {/* Header */}
-            <div
-              className="flex items-center justify-between px-5 py-3.5 shrink-0"
-              style={{ background: headerGradient }}
-            >
-              <div className="flex items-center gap-2.5">
-                <BarChart2 className="h-4 w-4 text-white/80" />
-                <div>
-                  <h2 className="text-sm font-bold text-white">
-                    Relatório de Campanhas e Promoções
-                  </h2>
-                  <p className="text-[11px] text-white/60 mt-0.5">
-                    Análise detalhada de cliques, conversões e abandono
-                  </p>
-                </div>
+        <SlidePanel
+          open={reportOpen}
+          onClose={closeReportDrawer}
+          title="Relatório de Campanhas e Promoções"
+          subtitle="Análise detalhada de cliques, conversões e abandono"
+          widthMode="full"
+          footer={
+            <div className="flex items-center justify-between w-full">
+              <span className="text-xs text-slate-400">
+                {reportItems.length}{" "}
+                {reportItems.length === 1 ? "item" : "itens"} no relatório
+              </span>
+              <div className="flex gap-1.5">
+                <Button
+                  onClick={exportReportAsCsv}
+                  variant="outline"
+                  size="sm"
+                  className="h-7 text-[11px] gap-1.5 px-2.5 border-slate-200 hover:border-emerald-300 hover:text-emerald-600"
+                >
+                  <FileSpreadsheet className="h-3 w-3 text-emerald-600" />
+                  CSV
+                </Button>
+                <Button
+                  onClick={exportReportAsDoc}
+                  variant="outline"
+                  size="sm"
+                  className="h-7 text-[11px] gap-1.5 px-2.5 border-slate-200 hover:border-blue-300 hover:text-blue-600"
+                >
+                  <FileDown className="h-3 w-3 text-blue-600" />
+                  DOC
+                </Button>
+                <Button
+                  onClick={exportReportAsPdf}
+                  variant="outline"
+                  size="sm"
+                  className="h-7 text-[11px] gap-1.5 px-2.5 border-slate-200 hover:border-red-300 hover:text-red-500"
+                >
+                  <FileText className="h-3 w-3 text-red-500" />
+                  PDF
+                </Button>
+                <Button
+                  onClick={exportReportAsPng}
+                  variant="outline"
+                  size="sm"
+                  className="h-7 text-[11px] gap-1.5 px-2.5 border-slate-200 hover:border-sky-300 hover:text-sky-600"
+                >
+                  <Image className="h-3 w-3 text-sky-500" />
+                  PNG
+                </Button>
               </div>
-              <button
-                onClick={closeReportDrawer}
-                className="rounded-md p-1 text-white/70 hover:text-white hover:bg-white/10 transition-colors"
-              >
-                <X className="h-4 w-4" />
-              </button>
             </div>
-
+          }
+        >
+          <div className="flex flex-col flex-1 min-h-0 overflow-hidden w-full">
             {/* Filters bar */}
             <div className="px-5 py-3 border-b border-slate-100 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-900/40 flex-shrink-0 flex flex-wrap gap-x-4 gap-y-2.5 items-end">
               {/* Period */}
@@ -3587,55 +3523,8 @@ export default function CampanhasPage() {
                 )}
               </div>
             </div>
-
-            {/* Footer — export buttons */}
-            <div className="px-5 py-2.5 border-t border-slate-200 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-900/30 flex-shrink-0 flex items-center justify-between">
-              <span className="text-xs text-slate-400">
-                {reportItems.length}{" "}
-                {reportItems.length === 1 ? "item" : "itens"} no relatório
-              </span>
-              <div className="flex gap-1.5">
-                <Button
-                  onClick={exportReportAsCsv}
-                  variant="outline"
-                  size="sm"
-                  className="h-7 text-[11px] gap-1.5 px-2.5 border-slate-200 hover:border-emerald-300 hover:text-emerald-600"
-                >
-                  <FileSpreadsheet className="h-3 w-3 text-emerald-600" />
-                  CSV
-                </Button>
-                <Button
-                  onClick={exportReportAsDoc}
-                  variant="outline"
-                  size="sm"
-                  className="h-7 text-[11px] gap-1.5 px-2.5 border-slate-200 hover:border-blue-300 hover:text-blue-600"
-                >
-                  <FileDown className="h-3 w-3 text-blue-600" />
-                  DOC
-                </Button>
-                <Button
-                  onClick={exportReportAsPdf}
-                  variant="outline"
-                  size="sm"
-                  className="h-7 text-[11px] gap-1.5 px-2.5 border-slate-200 hover:border-red-300 hover:text-red-500"
-                >
-                  <FileText className="h-3 w-3 text-red-500" />
-                  PDF
-                </Button>
-                <Button
-                  onClick={exportReportAsPng}
-                  variant="outline"
-                  size="sm"
-                  className="h-7 text-[11px] gap-1.5 px-2.5 border-slate-200 hover:border-sky-300 hover:text-sky-600"
-                >
-                  <Image className="h-3 w-3 text-sky-500" />
-                  PNG
-                </Button>
-              </div>
-            </div>
           </div>
-        </>
-      )}
+        </SlidePanel>
 
       {/* Filtros — Tipo (Campanha/Cupom) + Status */}
       <SlidePanel
@@ -3643,8 +3532,7 @@ export default function CampanhasPage() {
         onClose={() => setItemFiltersOpen(false)}
         title="Filtros"
         subtitle="Filtre campanhas e cupons por tipo e status."
-        widthMode="compact"
-        compactWidth={360}
+        widthMode="full"
         footer={
           itemActiveFilterCount > 0 ? (
             <button
@@ -3659,7 +3547,8 @@ export default function CampanhasPage() {
           ) : undefined
         }
       >
-        <div className="p-5 flex-1 overflow-y-auto space-y-4">
+        <div className="flex-1 overflow-y-auto p-6">
+        <div className="max-w-3xl mx-auto grid grid-cols-1 sm:grid-cols-2 gap-6">
           <div>
             <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">Tipo</p>
             <div className="space-y-1.5">
@@ -3713,6 +3602,7 @@ export default function CampanhasPage() {
             </div>
           </div>
         </div>
+        </div>
       </SlidePanel>
 
       {/* Configurar colunas */}
@@ -3720,27 +3610,74 @@ export default function CampanhasPage() {
         open={itemColConfigOpen}
         onClose={() => setItemColConfigOpen(false)}
         title="Configurar colunas"
-        subtitle="Escolha quais colunas aparecem na tabela"
-        widthMode="compact"
-        compactWidth={360}
+        subtitle={`${itemVisibleCols.size} de ${ITEM_COLUMNS.length} visíveis`}
+        widthMode="full"
+        footer={
+          <div className="flex items-center justify-end gap-3">
+            <button
+              onClick={() =>
+                setItemVisibleCols(
+                  new Set([
+                    "nome",
+                    "tipo",
+                    "status",
+                    "valor",
+                    "vinculado",
+                    "uso",
+                    "total_pago",
+                    "validade",
+                  ]),
+                )
+              }
+              className="h-9 px-4 rounded-lg text-xs font-medium border border-slate-200 dark:border-slate-700 text-slate-500 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"
+            >
+              Restaurar padrão
+            </button>
+            <button
+              onClick={() =>
+                setItemVisibleCols(new Set(ITEM_COLUMNS.map((c) => c.key)))
+              }
+              className="h-9 px-4 rounded-lg text-xs font-semibold btn-brand transition-all"
+            >
+              Mostrar todas
+            </button>
+          </div>
+        }
       >
-        <div className="p-5 flex-1 overflow-y-auto space-y-2">
-          {ITEM_COLUMNS.map((col) => (
-            <label key={col.key} className="flex items-center gap-2 text-sm cursor-pointer py-1">
-              <input
-                type="checkbox"
-                checked={itemVisibleCols.has(col.key)}
-                onChange={() => {
-                  setItemVisibleCols((prev) => {
-                    const next = new Set(prev);
-                    next.has(col.key) ? next.delete(col.key) : next.add(col.key);
-                    return next;
-                  });
-                }}
-              />
-              {col.label}
-            </label>
-          ))}
+        <div className="flex-1 overflow-y-auto p-6">
+          <div className="max-w-3xl mx-auto grid grid-cols-1 sm:grid-cols-2 gap-2">
+            {ITEM_COLUMNS.map((col) => (
+              <label
+                key={col.key}
+                className={cn(
+                  "flex items-center gap-3 px-4 py-3 rounded-xl border cursor-pointer transition-colors",
+                  itemVisibleCols.has(col.key)
+                    ? "bg-blue-50 border-blue-200 dark:bg-blue-900/20 dark:border-blue-800"
+                    : "border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800",
+                )}
+              >
+                <Checkbox
+                  checked={itemVisibleCols.has(col.key)}
+                  onCheckedChange={() => {
+                    setItemVisibleCols((prev) => {
+                      const next = new Set(prev);
+                      next.has(col.key) ? next.delete(col.key) : next.add(col.key);
+                      return next;
+                    });
+                  }}
+                  className="h-4 w-4"
+                />
+                <div className="flex-1 min-w-0">
+                  <span className="text-sm font-medium text-slate-700 dark:text-slate-300">
+                    {col.label}
+                  </span>
+                  {col.info && (
+                    <p className="text-[11px] text-slate-400 mt-0.5">{col.info}</p>
+                  )}
+                </div>
+              </label>
+            ))}
+          </div>
         </div>
       </SlidePanel>
     </div>

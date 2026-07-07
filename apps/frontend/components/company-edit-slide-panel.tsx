@@ -66,8 +66,8 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { useSidebar } from "@/contexts/sidebar-context";
-import { ModalBrandHeader } from "@/components/ui/modal-brand-header";
+import { SlidePanel } from "@/components/slide-panel";
+import { NeonBadge } from "@/components/neon-badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
@@ -145,18 +145,7 @@ export function CompanyEditSlidePanel({
   company,
   onSave,
 }: CompanyEditSlidePanelProps) {
-  const { sidebarWidth } = useSidebar();
   const { toast } = useToast();
-
-  const [isClosing, setIsClosing] = useState(false);
-  const [isMounted, setIsMounted] = useState(false);
-  useEffect(() => {
-    if (open) {
-      const id = requestAnimationFrame(() => setIsMounted(true));
-      return () => cancelAnimationFrame(id);
-    }
-    if (!isClosing) setIsMounted(false);
-  }, [open, isClosing]);
   const [activeTab, setActiveTab] = useState("company-data");
   const [confirmDialog, setConfirmDialog] = useState<{
     open: boolean;
@@ -476,11 +465,7 @@ export function CompanyEditSlidePanel({
   };
 
   const handleClose = () => {
-    setIsClosing(true);
-    setTimeout(() => {
-      setIsClosing(false);
-      onClose();
-    }, 420);
+    onClose();
   };
 
   const handlePlanChange = (newPlan: string) => {
@@ -494,7 +479,7 @@ export function CompanyEditSlidePanel({
     }
   };
 
-  if (!open && !isClosing) {
+  if (!open) {
     return null;
   }
   if (!company) {
@@ -503,15 +488,7 @@ export function CompanyEditSlidePanel({
 
   if (!editedCompany) {
     return (
-      <div
-        data-slot="sheet-content"
-        data-state={isClosing ? "closed" : "open"}
-        style={{
-          left: `${sidebarWidth}px`,
-          width: `calc(100vw - ${sidebarWidth}px)`,
-        }}
-        className="fixed right-0 top-0 h-[calc(100vh-24px)] bg-background shadow-2xl z-50 flex flex-col overflow-hidden border-l border-border data-[state=open]:animate-in data-[state=open]:slide-in-from-right data-[state=open]:fade-in-0 data-[state=closed]:animate-out data-[state=closed]:slide-out-to-right data-[state=closed]:fade-out-0"
-      >
+      <SlidePanel open={open} onClose={handleClose} title="Editar Empresa" widthMode="full">
         <div className="flex-1 p-6 space-y-4">
           <div className="flex items-center gap-4">
             <Skeleton className="h-16 w-16 rounded-full" />
@@ -527,103 +504,80 @@ export function CompanyEditSlidePanel({
             <Skeleton className="h-4 w-1/2 rounded" />
           </div>
         </div>
-      </div>
+      </SlidePanel>
     );
   }
 
   return (
     <>
-      <div
-        data-slot="sheet-content"
-        data-state={isClosing ? "closed" : "open"}
-        style={{
-          left: `${sidebarWidth}px`,
-          width: `calc(100vw - ${sidebarWidth}px)`,
-        }}
-        className="fixed right-0 top-0 h-[calc(100vh-24px)] bg-background shadow-2xl z-50 flex flex-col overflow-hidden border-l border-border data-[state=open]:animate-in data-[state=open]:slide-in-from-right data-[state=open]:fade-in-0 data-[state=closed]:animate-out data-[state=closed]:slide-out-to-right data-[state=closed]:fade-out-0"
-      >
-        <ModalBrandHeader
-          title="Editar Empresa"
-          left={
-            <div className="flex items-start space-x-3 flex-1">
-              <Avatar className="h-12 w-12 ring-2 ring-white/20">
-                <AvatarFallback className="bg-white/20 backdrop-blur-sm text-white text-sm font-bold">
-                  {company.name.substring(0, 2).toUpperCase()}
-                </AvatarFallback>
-              </Avatar>
-              <div className="flex-1">
-                <p className="text-xs text-white/80 mt-0.5">{company.name}</p>
-                <div className="flex items-center gap-2 mt-1">
-                  <Badge
-                    variant="secondary"
-                    className="text-xs bg-white/20 text-white border-0"
-                  >
-                    {company.type === "company"
-                      ? "Company"
-                      : company.type === "agency"
-                        ? "Agency"
-                        : "Nomad"}
-                  </Badge>
-                  <Badge
-                    variant="secondary"
-                    className={`text-xs border-0 ${
-                      company.status === "active"
-                        ? "bg-green-500/20 text-green-100"
-                        : company.status === "inactive"
-                          ? "bg-red-500/20 text-red-100"
-                          : "bg-yellow-500/20 text-yellow-100"
-                    }`}
-                  >
-                    {company.status === "active"
-                      ? "Ativo"
-                      : company.status === "inactive"
-                        ? "Inativo"
-                        : "Pendente"}
-                  </Badge>
-                </div>
-              </div>
-            </div>
-          }
-          right={
-            <div className="flex items-center space-x-2">
-              {/* Export dropdown in header */}
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    className="h-9 px-3 text-white hover:bg-white/10"
-                  >
-                    <Download className="h-3.5 w-3.5 mr-1.5" />
-                    Exportar
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="w-56">
-                  <DropdownMenuLabel>Exportar Dados</DropdownMenuLabel>
-                  <DropdownMenuSeparator />
-                  <DropdownMenuItem onClick={handleExportCompanyData}>
-                    <FileText className="h-4 w-4 mr-2" />
-                    Relatório Completo
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onClick={handleExportUsersCSV}>
-                    <FileSpreadsheet className="h-4 w-4 mr-2" />
-                    Exportar Usuários (CSV)
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
-              <Button
-                onClick={handleClickSave}
-                type="button"
-                size="sm"
-                className="h-9 px-4 bg-white text-blue-600 hover:bg-white/90 font-medium"
-              >
+      <SlidePanel
+        open={open}
+        onClose={handleClickCancel}
+        title="Editar Empresa"
+        subtitle={company.name}
+        widthMode="full"
+        footer={
+          <div className="flex items-center justify-between gap-3 w-full">
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button size="sm" variant="outline">
+                  <Download className="h-3.5 w-3.5 mr-1.5" />
+                  Exportar
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="start" className="w-56">
+                <DropdownMenuLabel>Exportar Dados</DropdownMenuLabel>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onClick={handleExportCompanyData}>
+                  <FileText className="h-4 w-4 mr-2" />
+                  Relatório Completo
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={handleExportUsersCSV}>
+                  <FileSpreadsheet className="h-4 w-4 mr-2" />
+                  Exportar Usuários (CSV)
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+            <div className="flex items-center gap-3">
+              <Button variant="outline" onClick={handleClickCancel}>
+                Cancelar
+              </Button>
+              <Button className="btn-brand" onClick={handleClickSave}>
                 <Save className="h-3.5 w-3.5 mr-1.5" />
                 Salvar Alterações
               </Button>
             </div>
-          }
-          onClose={handleClickCancel}
-        />
+          </div>
+        }
+      >
+      <div className="flex flex-col flex-1 min-h-0 overflow-hidden">
+        {/* Company identity — moved from header per the global modal standard (plain text-only header) */}
+        <div className="flex items-center gap-3 px-6 py-4 border-b border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/40 flex-shrink-0">
+          <Avatar className="h-12 w-12">
+            <AvatarFallback className="bg-blue-600 text-white text-sm font-bold">
+              {company.name.substring(0, 2).toUpperCase()}
+            </AvatarFallback>
+          </Avatar>
+          <div className="flex-1">
+            <p className="text-sm font-semibold text-slate-700 dark:text-slate-200">{company.name}</p>
+            <div className="flex items-center gap-2 mt-1">
+              <NeonBadge color={company.type === "company" ? "blue" : company.type === "agency" ? "violet" : "emerald"}>
+                {company.type === "company"
+                  ? "Company"
+                  : company.type === "agency"
+                    ? "Agency"
+                    : "Nomad"}
+              </NeonBadge>
+              <NeonBadge color={company.status === "active" ? "emerald" : company.status === "inactive" ? "red" : "amber"}>
+                {company.status === "active"
+                  ? "Ativo"
+                  : company.status === "inactive"
+                    ? "Inativo"
+                    : "Pendente"}
+              </NeonBadge>
+            </div>
+          </div>
+        </div>
 
         <Tabs
           value={activeTab}
@@ -1953,6 +1907,7 @@ export function CompanyEditSlidePanel({
           </div>
         </Tabs>
       </div>
+      </SlidePanel>
 
       {/* Dialogs de Confirmação */}
       <ConfirmationDialog

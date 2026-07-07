@@ -26,7 +26,6 @@ import {
   Info,
   AlertCircle,
   Building2,
-  X,
   FileText,
   Target,
   Scale,
@@ -36,7 +35,6 @@ import {
   Sheet,
   SheetContent,
   SheetTitle,
-  SheetClose,
 } from "@/components/ui/sheet";
 import {
   AlertDialog,
@@ -56,11 +54,11 @@ import {
   type ProductCategory,
 } from "@/hooks/use-pricing";
 import { useSpecialties } from "@/lib/contexts/specialty-context";
-import { useSidebar } from "@/contexts/sidebar-context";
+import { useAppFrameMetrics } from "@/hooks/useAppFrameMetrics";
 import PageHeader from "@/components/page-header";
 
 const PrecificacaoPage = () => {
-  const { sidebarWidth } = useSidebar();
+  const { sidebarWidth, headerHeight, footerHeight } = useAppFrameMetrics();
   const {
     pricingComponents,
     addComponent,
@@ -811,29 +809,37 @@ const PrecificacaoPage = () => {
         <SheetContent
           side="right"
           hideOverlay={true}
-          className="p-0 border-l-0 shadow-2xl max-w-none w-full"
+          className="p-0 border-l-0 shadow-2xl max-w-none w-full z-[70] [&>button:last-child]:top-3 [&>button:last-child]:right-3 [&>button:last-child]:p-1.5 [&>button:last-child]:hover:bg-white/20 [&>button:last-child_svg]:size-4"
           style={{
-            width: `calc(100vw - ${sidebarWidth}px)`,
-            minWidth: "850px",
+            left: `${sidebarWidth - 2}px`,
+            top: `${headerHeight - 1}px`,
+            bottom: `${footerHeight - 1}px`,
+            height: "auto",
+            width: `calc(100vw - ${sidebarWidth - 2}px)`,
           }}
         >
           <div className="h-full flex flex-col">
-            {/* Header com gradiente */}
-            <div className="relative px-6 py-4 bg-gradient-to-r from-blue-600 via-purple-600 to-pink-600">
-              <SheetTitle className="text-xl font-bold text-white">
-                {editingItem ? "Editar" : "Adicionar"}{" "}
-                {selectedType === "commission"
-                  ? "Comissão"
-                  : selectedType === "fee"
-                    ? "Taxa"
-                    : "Imposto"}
-              </SheetTitle>
-              <p className="text-xs text-blue-100 mt-1">
-                Preencha as informações do componente de precificação
-              </p>
-              <SheetClose className="absolute right-4 top-4 rounded-full bg-white/10 hover:bg-white/20 p-1.5 transition-colors">
-                <X className="h-4 w-4 text-white" />
-              </SheetClose>
+            {/* Header */}
+            <div
+              className="flex items-center justify-between px-5 py-3 flex-shrink-0"
+              style={{
+                background:
+                  "var(--brand-gradient, linear-gradient(to right, #0a1628, #1e3a8a, #0a1628))",
+              }}
+            >
+              <div className="min-w-0 flex-1 text-sm font-bold text-white truncate">
+                <SheetTitle className="text-sm font-bold text-white truncate">
+                  {editingItem ? "Editar" : "Adicionar"}{" "}
+                  {selectedType === "commission"
+                    ? "Comissão"
+                    : selectedType === "fee"
+                      ? "Taxa"
+                      : "Imposto"}
+                </SheetTitle>
+                <p className="text-[11px] font-normal text-white/60 mt-0.5 truncate">
+                  Preencha as informações do componente de precificação
+                </p>
+              </div>
             </div>
 
             {/* Formulário com cards */}

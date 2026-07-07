@@ -2871,7 +2871,7 @@ export default function AdminProjetosPage({
                                           onClick={() =>
                                             handleStartCancelProject(project)
                                           }
-                                          className="h-[26px] w-[26px] rounded-[8px] bg-white dark:bg-slate-800 border border-[#e8edf5] dark:border-slate-700 text-red-400 dark:text-slate-500 shadow-[0_4px_10px_rgba(15,23,42,0.06)] hover:bg-gradient-to-br hover:from-[#2558FF] hover:via-[#6E2C96] hover:to-[#D92293] hover:text-white dark:hover:text-[#0a1628] hover:border-transparent hover:shadow-[0_8px_18px_rgba(15,23,42,0.18)] hover:-translate-y-px transition-all duration-150"
+                                          className="h-[26px] w-[26px] rounded-[8px] bg-white dark:bg-slate-800 border border-[#e8edf5] dark:border-slate-700 text-red-500 dark:text-red-400 shadow-[0_4px_10px_rgba(15,23,42,0.06)] hover:bg-red-600 hover:text-white hover:border-transparent hover:shadow-[0_8px_18px_rgba(220,38,38,0.25)] hover:-translate-y-px transition-all duration-150"
                                         >
                                           <Trash2 className="h-3.5 w-3.5" />
                                         </Button>
@@ -2925,7 +2925,7 @@ export default function AdminProjetosPage({
                                           onClick={() =>
                                             handleStartCancelProject(project)
                                           }
-                                          className="h-[26px] w-[26px] rounded-[8px] bg-white dark:bg-slate-800 border border-[#e8edf5] dark:border-slate-700 text-red-400 dark:text-slate-500 shadow-[0_4px_10px_rgba(15,23,42,0.06)] hover:bg-gradient-to-br hover:from-[#2558FF] hover:via-[#6E2C96] hover:to-[#D92293] hover:text-white dark:hover:text-[#0a1628] hover:border-transparent hover:shadow-[0_8px_18px_rgba(15,23,42,0.18)] hover:-translate-y-px transition-all duration-150"
+                                          className="h-[26px] w-[26px] rounded-[8px] bg-white dark:bg-slate-800 border border-[#e8edf5] dark:border-slate-700 text-red-500 dark:text-red-400 shadow-[0_4px_10px_rgba(15,23,42,0.06)] hover:bg-red-600 hover:text-white hover:border-transparent hover:shadow-[0_8px_18px_rgba(220,38,38,0.25)] hover:-translate-y-px transition-all duration-150"
                                         >
                                           <Trash2 className="h-3.5 w-3.5" />
                                         </Button>
@@ -2979,7 +2979,7 @@ export default function AdminProjetosPage({
                                           onClick={() =>
                                             handleStartCancelProject(project)
                                           }
-                                          className="h-[26px] w-[26px] rounded-[8px] bg-white dark:bg-slate-800 border border-[#e8edf5] dark:border-slate-700 text-red-400 dark:text-slate-500 shadow-[0_4px_10px_rgba(15,23,42,0.06)] hover:bg-gradient-to-br hover:from-[#2558FF] hover:via-[#6E2C96] hover:to-[#D92293] hover:text-white dark:hover:text-[#0a1628] hover:border-transparent hover:shadow-[0_8px_18px_rgba(15,23,42,0.18)] hover:-translate-y-px transition-all duration-150"
+                                          className="h-[26px] w-[26px] rounded-[8px] bg-white dark:bg-slate-800 border border-[#e8edf5] dark:border-slate-700 text-red-500 dark:text-red-400 shadow-[0_4px_10px_rgba(15,23,42,0.06)] hover:bg-red-600 hover:text-white hover:border-transparent hover:shadow-[0_8px_18px_rgba(220,38,38,0.25)] hover:-translate-y-px transition-all duration-150"
                                         >
                                           <Trash2 className="h-3.5 w-3.5" />
                                         </Button>
@@ -4656,26 +4656,44 @@ export default function AdminProjetosPage({
           </div>
         )}
 
-        <Dialog open={showCloneDialog} onOpenChange={setShowCloneDialog}>
-          <DialogContent className="sm:max-w-lg p-0 overflow-hidden flex flex-col max-h-[90vh]">
-            {/* Brand header */}
-            <div className="app-brand-header px-6 py-4 shrink-0">
-              <div className="flex items-center gap-3">
-                <div className="h-9 w-9 rounded-full bg-white/20 flex items-center justify-center">
-                  <Copy className="h-4 w-4 text-white" />
-                </div>
-                <div>
-                  <h2 className="text-base font-semibold text-white">
-                    Duplicar Projeto
-                  </h2>
-                  <p className="text-xs text-white/60 mt-0.5">
-                    Selecione o que deseja incluir na cópia
-                  </p>
-                </div>
-              </div>
+        <SlidePanel
+          open={showCloneDialog}
+          onClose={() => {
+            setShowCloneDialog(false);
+            setProjectToClone(null);
+            setCloneProjectName("");
+          }}
+          title="Duplicar Projeto"
+          subtitle="Selecione o que deseja incluir na cópia"
+          widthMode="compact"
+          compactWidth={520}
+          footer={
+            <div className="flex items-center justify-end gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  setShowCloneDialog(false);
+                  setProjectToClone(null);
+                  setCloneProjectName("");
+                }}
+                className="h-8 px-4 text-xs"
+              >
+                Cancelar
+              </Button>
+              <Button
+                size="sm"
+                onClick={handleConfirmCloneAndOpen}
+                disabled={!cloneProjectName.trim()}
+                className="h-8 px-4 text-xs btn-brand"
+              >
+                <Copy className="h-3.5 w-3.5 mr-1.5" />
+                Abrir para Editar
+              </Button>
             </div>
-
-            <div className="px-6 py-5 space-y-5">
+          }
+        >
+            <div className="px-6 py-5 space-y-5 overflow-y-auto flex-1">
               {/* Name field */}
               <div>
                 <Label
@@ -4805,32 +4823,7 @@ export default function AdminProjetosPage({
                 </p>
               </div>
             </div>
-
-            <div className="flex items-center justify-end gap-2 px-6 py-4 bg-slate-50 border-t border-slate-100">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => {
-                  setShowCloneDialog(false);
-                  setProjectToClone(null);
-                  setCloneProjectName("");
-                }}
-                className="h-8 px-4 text-xs"
-              >
-                Cancelar
-              </Button>
-              <Button
-                size="sm"
-                onClick={handleConfirmCloneAndOpen}
-                disabled={!cloneProjectName.trim()}
-                className="h-8 px-4 text-xs btn-brand"
-              >
-                <Copy className="h-3.5 w-3.5 mr-1.5" />
-                Abrir para Editar
-              </Button>
-            </div>
-          </DialogContent>
-        </Dialog>
+        </SlidePanel>
 
         {/* Cancel Project Wizard */}
         <Dialog open={showCancelWizard} onOpenChange={setShowCancelWizard}>

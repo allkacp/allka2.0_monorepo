@@ -51,7 +51,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { ModalBrandHeader } from "@/components/ui/modal-brand-header";
+import { SlidePanel } from "@/components/slide-panel";
 import { CopyLinkButton } from "@/components/copy-link-button";
 import {
   Tooltip,
@@ -1681,8 +1681,7 @@ export function ProductCatalogView({
       />
 
       {/* ── Advanced Filters Modal ───────────────────────────── */}
-      {isFilterModalOpen &&
-        (() => {
+      {(() => {
           const allFilterFields = [
             { id: "categoria", label: "Categoria", section: "produto" },
             { id: "recorrencia", label: "Recorrência", section: "produto" },
@@ -1715,343 +1714,18 @@ export function ProductCatalogView({
             setShowFieldPicker(false);
           };
           return (
-            <div
-              data-slot="sheet-content"
-              data-state="open"
-              className="fixed right-0 z-70 bg-white dark:bg-slate-900 shadow-2xl border-l border-slate-200 dark:border-slate-700 flex flex-col overflow-hidden data-[state=open]:animate-in data-[state=open]:slide-in-from-right data-[state=open]:fade-in-0 duration-300"
-              style={{
-                left: sidebarWidth - 2,
-                top: headerHeight - 1,
-                bottom: footerHeight - 1,
-                width: `calc(100vw - ${sidebarWidth - 2}px)`,
+            <SlidePanel
+              open={isFilterModalOpen}
+              onClose={() => {
+                setIsFilterModalOpen(false);
+                setSelectedFilterId(null);
+                setShowFieldPicker(false);
               }}
-            >
-              <div className="relative bg-white dark:bg-slate-900 w-full h-full flex flex-col overflow-hidden">
-                {/* Header */}
-                <ModalBrandHeader
-                  title="Filtros Avançados"
-                  subtitle="Configure e aplique filtros no catálogo"
-                  icon={<Filter />}
-                  onClose={() => {
-                    setIsFilterModalOpen(false);
-                    setSelectedFilterId(null);
-                    setShowFieldPicker(false);
-                  }}
-                />
-
-                {/* Body */}
-                <div className="flex flex-1 overflow-hidden min-h-0">
-                  {/* Left — Saved Filters */}
-                  <div className="w-44 border-r border-slate-200 dark:border-slate-700 flex-shrink-0 bg-slate-50 dark:bg-slate-800/50 flex flex-col overflow-hidden">
-                    <p className="text-[10px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider px-3 pt-3 pb-2 flex items-center gap-1 flex-shrink-0">
-                      <Filter className="h-3 w-3" /> Filtros Salvos
-                    </p>
-                    <div className="flex-1 overflow-y-auto px-2 pb-3 space-y-1">
-                      {savedFilters.length === 0 ? (
-                        <div className="text-center py-8">
-                          <Filter className="h-6 w-6 mx-auto text-slate-300 dark:text-slate-600 mb-1.5" />
-                          <p className="text-[10px] text-slate-400 dark:text-slate-500">
-                            Nenhum filtro salvo
-                          </p>
-                        </div>
-                      ) : (
-                        savedFilters.map((filter) => (
-                          <div
-                            key={filter.id}
-                            draggable
-                            onDragStart={() => setDraggingFilterId(filter.id)}
-                            onDragOver={(e) => {
-                              e.preventDefault();
-                              setDragOverFilterId(filter.id);
-                            }}
-                            onDrop={() => handleDrop(filter.id)}
-                            onDragEnd={() => {
-                              setDraggingFilterId(null);
-                              setDragOverFilterId(null);
-                            }}
-                            onClick={() => {
-                              if (editingFilterId) return;
-                              setCategory(filter.filters.category || "Todos");
-                              setRecurrenceFilter(
-                                filter.filters.recurrenceFilter || "all",
-                              );
-                              setVariationsFilter(
-                                filter.filters.variationsFilter || "all",
-                              );
-                              setSort(filter.filters.sort || "name_asc");
-                              setSelectedFilterId(filter.id);
-                            }}
-                            className={cn(
-                              "group relative flex items-center gap-1 p-2 rounded-lg border text-[11px] cursor-pointer transition-all select-none",
-                              dragOverFilterId === filter.id &&
-                                draggingFilterId !== filter.id
-                                ? "border-blue-400 bg-blue-50 dark:bg-blue-950/30"
-                                : draggingFilterId === filter.id
-                                  ? "opacity-40"
-                                  : selectedFilterId === filter.id
-                                    ? "bg-blue-50 dark:bg-blue-950/30 border-blue-300 dark:border-blue-700 text-blue-700 dark:text-blue-300 font-semibold"
-                                    : "bg-white dark:bg-slate-700/40 border-slate-200 dark:border-slate-600/50 text-slate-700 dark:text-slate-300 hover:border-blue-300",
-                            )}
-                          >
-                            <GripVertical className="h-3 w-3 text-slate-300 dark:text-slate-600 flex-shrink-0 cursor-grab" />
-                            {editingFilterId === filter.id ? (
-                              <input
-                                autoFocus
-                                type="text"
-                                value={editingFilterName}
-                                onChange={(e) =>
-                                  setEditingFilterName(e.target.value)
-                                }
-                                onClick={(e) => e.stopPropagation()}
-                                onKeyDown={(e) => {
-                                  e.stopPropagation();
-                                  if (
-                                    e.key === "Enter" &&
-                                    editingFilterName.trim()
-                                  ) {
-                                    setSavedFilters(
-                                      savedFilters.map((f) =>
-                                        f.id === filter.id
-                                          ? {
-                                              ...f,
-                                              name: editingFilterName.trim(),
-                                            }
-                                          : f,
-                                      ),
-                                    );
-                                    setEditingFilterId(null);
-                                  } else if (e.key === "Escape")
-                                    setEditingFilterId(null);
-                                }}
-                                onBlur={() => {
-                                  if (editingFilterName.trim())
-                                    setSavedFilters(
-                                      savedFilters.map((f) =>
-                                        f.id === filter.id
-                                          ? {
-                                              ...f,
-                                              name: editingFilterName.trim(),
-                                            }
-                                          : f,
-                                      ),
-                                    );
-                                  setEditingFilterId(null);
-                                }}
-                                className="flex-1 min-w-0 text-[11px] bg-white dark:bg-slate-700 border border-blue-400 rounded px-1 py-0 outline-none focus:ring-1 focus:ring-blue-400"
-                              />
-                            ) : (
-                              <span className="flex-1 truncate">
-                                {filter.name}
-                              </span>
-                            )}
-                            {editingFilterId !== filter.id && (
-                              <div className="opacity-0 group-hover:opacity-100 flex items-center gap-0.5 transition-opacity flex-shrink-0">
-                                <button
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    setEditingFilterId(filter.id);
-                                    setEditingFilterName(filter.name);
-                                  }}
-                                  className="p-0.5 rounded hover:bg-blue-100 hover:text-blue-500 text-slate-400"
-                                >
-                                  <Pencil className="h-2.5 w-2.5" />
-                                </button>
-                                <button
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    setSavedFilters(
-                                      savedFilters.filter(
-                                        (f) => f.id !== filter.id,
-                                      ),
-                                    );
-                                    if (selectedFilterId === filter.id)
-                                      setSelectedFilterId(null);
-                                  }}
-                                  className="p-0.5 rounded hover:bg-red-100 hover:text-red-500 text-slate-400"
-                                >
-                                  <X className="h-2.5 w-2.5" />
-                                </button>
-                              </div>
-                            )}
-                          </div>
-                        ))
-                      )}
-                    </div>
-                  </div>
-
-                  {/* Right — Filter Fields */}
-                  <div className="flex-1 overflow-y-auto p-4 space-y-5">
-                    {/* Add field button */}
-                    <div className="flex items-center justify-between">
-                      <div className="relative">
-                        <button
-                          onClick={() => setShowFieldPicker(!showFieldPicker)}
-                          className="text-[11px] font-medium text-blue-500 hover:text-blue-700 flex items-center gap-1 transition-colors"
-                        >
-                          <Plus className="h-3 w-3" /> Adicionar campo
-                          <span className="ml-1 text-slate-400">
-                            {visibleFields.length} campos ativos
-                          </span>
-                        </button>
-                        {showFieldPicker && (
-                          <div className="absolute top-6 left-0 z-10 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg shadow-lg p-2 w-44 space-y-0.5">
-                            {allFilterFields.map((f) => (
-                              <label
-                                key={f.id}
-                                className={cn(
-                                  "flex items-center gap-2 px-2 py-1.5 rounded cursor-pointer text-[11px] transition-colors",
-                                  visibleFields.includes(f.id)
-                                    ? "bg-blue-50 dark:bg-blue-900/20"
-                                    : "hover:bg-slate-50 dark:hover:bg-slate-700/40",
-                                )}
-                              >
-                                <input
-                                  type="checkbox"
-                                  checked={visibleFields.includes(f.id)}
-                                  onChange={() =>
-                                    setVisibleFields((v) =>
-                                      v.includes(f.id)
-                                        ? v.filter((x) => x !== f.id)
-                                        : [...v, f.id],
-                                    )
-                                  }
-                                  className="accent-blue-500"
-                                />
-                                <span className="text-slate-700 dark:text-slate-300">
-                                  {f.label}
-                                </span>
-                              </label>
-                            ))}
-                          </div>
-                        )}
-                      </div>
-                    </div>
-
-                    {/* CATEGORIA */}
-                    {has("categoria") && (
-                      <div>
-                        <p className="text-[10px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-2">
-                          Categoria
-                        </p>
-                        <div className="flex flex-wrap gap-1.5">
-                          {["Todos", ...allCategories].map((cat) => (
-                            <button
-                              key={cat}
-                              onClick={() => setCategory(cat)}
-                              className={cn(
-                                "px-2.5 py-0.5 rounded-full text-[11px] font-medium border transition-colors",
-                                category === cat
-                                  ? "bg-blue-500 text-white border-blue-500"
-                                  : "bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-600 hover:border-blue-300",
-                              )}
-                            >
-                              {cat}
-                            </button>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-
-                    {/* RECORRÊNCIA */}
-                    {has("recorrencia") && (
-                      <div>
-                        <p className="text-[10px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-2">
-                          Recorrência / Tipo
-                        </p>
-                        <div className="flex flex-wrap gap-1.5">
-                          {RECURRENCE_OPTIONS.map(({ value, label }) => (
-                            <button
-                              key={value}
-                              onClick={() => setRecurrenceFilter(value)}
-                              className={cn(
-                                "px-2.5 py-0.5 rounded-full text-[11px] font-medium border transition-colors",
-                                recurrenceFilter === value
-                                  ? "bg-blue-500 text-white border-blue-500"
-                                  : "bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-600 hover:border-blue-300",
-                              )}
-                            >
-                              {label}
-                            </button>
-                          ))}
-                          {allRecurrences
-                            .filter(
-                              (r) =>
-                                !RECURRENCE_OPTIONS.map(
-                                  (o) => o.value,
-                                ).includes(r),
-                            )
-                            .map((r) => (
-                              <button
-                                key={r}
-                                onClick={() => setRecurrenceFilter(r)}
-                                className={cn(
-                                  "px-2.5 py-0.5 rounded-full text-[11px] font-medium border transition-colors",
-                                  recurrenceFilter === r
-                                    ? "bg-blue-500 text-white border-blue-500"
-                                    : "bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-600 hover:border-blue-300",
-                                )}
-                              >
-                                {r}
-                              </button>
-                            ))}
-                        </div>
-                      </div>
-                    )}
-
-                    {/* VARIAÇÕES */}
-                    {has("variacoes") && (
-                      <div>
-                        <p className="text-[10px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-2">
-                          Variações
-                        </p>
-                        <div className="flex flex-wrap gap-1.5">
-                          {VARIATIONS_OPTIONS.map(({ value, label }) => (
-                            <button
-                              key={value}
-                              onClick={() => setVariationsFilter(value)}
-                              className={cn(
-                                "px-2.5 py-0.5 rounded-full text-[11px] font-medium border transition-colors",
-                                variationsFilter === value
-                                  ? "bg-violet-500 text-white border-violet-500"
-                                  : "bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-600 hover:border-violet-300",
-                              )}
-                            >
-                              {label}
-                            </button>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-
-                    {/* ORDENAR POR */}
-                    {has("ordenar") && (
-                      <div>
-                        <p className="text-[10px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-2">
-                          Ordenar por
-                        </p>
-                        <div className="flex flex-wrap gap-1.5">
-                          {SORT_OPTIONS.map(({ value, label }) => (
-                            <button
-                              key={value}
-                              onClick={() => setSort(value)}
-                              className={cn(
-                                "px-2.5 py-0.5 rounded-full text-[11px] font-medium border transition-colors",
-                                sort === value
-                                  ? "bg-slate-700 text-white border-slate-700"
-                                  : "bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-600 hover:border-slate-400",
-                              )}
-                            >
-                              {label}
-                            </button>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                </div>
-
-                {/* Footer */}
-                <div className="flex items-center justify-between px-4 py-2.5 border-t border-slate-200 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-900/30 flex-shrink-0">
+              title="Filtros Avançados"
+              subtitle="Configure e aplique filtros no catálogo"
+              widthMode="full"
+              footer={
+                <div className="flex items-center justify-between w-full">
                   <button
                     onClick={clearAdvancedFilters}
                     className="text-[11px] text-slate-400 hover:text-red-500 transition-colors flex items-center gap-1"
@@ -2160,8 +1834,316 @@ export function ProductCatalogView({
                     </button>
                   </div>
                 </div>
+              }
+            >
+              {/* Left — Saved Filters */}
+              <div className="w-44 border-r border-slate-200 dark:border-slate-700 flex-shrink-0 bg-slate-50 dark:bg-slate-800/50 flex flex-col overflow-hidden">
+                <p className="text-[10px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider px-3 pt-3 pb-2 flex items-center gap-1 flex-shrink-0">
+                  <Filter className="h-3 w-3" /> Filtros Salvos
+                </p>
+                <div className="flex-1 overflow-y-auto px-2 pb-3 space-y-1">
+                  {savedFilters.length === 0 ? (
+                    <div className="text-center py-8">
+                      <Filter className="h-6 w-6 mx-auto text-slate-300 dark:text-slate-600 mb-1.5" />
+                      <p className="text-[10px] text-slate-400 dark:text-slate-500">
+                        Nenhum filtro salvo
+                      </p>
+                    </div>
+                  ) : (
+                    savedFilters.map((filter) => (
+                      <div
+                        key={filter.id}
+                        draggable
+                        onDragStart={() => setDraggingFilterId(filter.id)}
+                        onDragOver={(e) => {
+                          e.preventDefault();
+                          setDragOverFilterId(filter.id);
+                        }}
+                        onDrop={() => handleDrop(filter.id)}
+                        onDragEnd={() => {
+                          setDraggingFilterId(null);
+                          setDragOverFilterId(null);
+                        }}
+                        onClick={() => {
+                          if (editingFilterId) return;
+                          setCategory(filter.filters.category || "Todos");
+                          setRecurrenceFilter(
+                            filter.filters.recurrenceFilter || "all",
+                          );
+                          setVariationsFilter(
+                            filter.filters.variationsFilter || "all",
+                          );
+                          setSort(filter.filters.sort || "name_asc");
+                          setSelectedFilterId(filter.id);
+                        }}
+                        className={cn(
+                          "group relative flex items-center gap-1 p-2 rounded-lg border text-[11px] cursor-pointer transition-all select-none",
+                          dragOverFilterId === filter.id &&
+                            draggingFilterId !== filter.id
+                            ? "border-blue-400 bg-blue-50 dark:bg-blue-950/30"
+                            : draggingFilterId === filter.id
+                              ? "opacity-40"
+                              : selectedFilterId === filter.id
+                                ? "bg-blue-50 dark:bg-blue-950/30 border-blue-300 dark:border-blue-700 text-blue-700 dark:text-blue-300 font-semibold"
+                                : "bg-white dark:bg-slate-700/40 border-slate-200 dark:border-slate-600/50 text-slate-700 dark:text-slate-300 hover:border-blue-300",
+                        )}
+                      >
+                        <GripVertical className="h-3 w-3 text-slate-300 dark:text-slate-600 flex-shrink-0 cursor-grab" />
+                        {editingFilterId === filter.id ? (
+                          <input
+                            autoFocus
+                            type="text"
+                            value={editingFilterName}
+                            onChange={(e) =>
+                              setEditingFilterName(e.target.value)
+                            }
+                            onClick={(e) => e.stopPropagation()}
+                            onKeyDown={(e) => {
+                              e.stopPropagation();
+                              if (
+                                e.key === "Enter" &&
+                                editingFilterName.trim()
+                              ) {
+                                setSavedFilters(
+                                  savedFilters.map((f) =>
+                                    f.id === filter.id
+                                      ? {
+                                          ...f,
+                                          name: editingFilterName.trim(),
+                                        }
+                                      : f,
+                                  ),
+                                );
+                                setEditingFilterId(null);
+                              } else if (e.key === "Escape")
+                                setEditingFilterId(null);
+                            }}
+                            onBlur={() => {
+                              if (editingFilterName.trim())
+                                setSavedFilters(
+                                  savedFilters.map((f) =>
+                                    f.id === filter.id
+                                      ? {
+                                          ...f,
+                                          name: editingFilterName.trim(),
+                                        }
+                                      : f,
+                                  ),
+                                );
+                              setEditingFilterId(null);
+                            }}
+                            className="flex-1 min-w-0 text-[11px] bg-white dark:bg-slate-700 border border-blue-400 rounded px-1 py-0 outline-none focus:ring-1 focus:ring-blue-400"
+                          />
+                        ) : (
+                          <span className="flex-1 truncate">
+                            {filter.name}
+                          </span>
+                        )}
+                        {editingFilterId !== filter.id && (
+                          <div className="opacity-0 group-hover:opacity-100 flex items-center gap-0.5 transition-opacity flex-shrink-0">
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setEditingFilterId(filter.id);
+                                setEditingFilterName(filter.name);
+                              }}
+                              className="p-0.5 rounded hover:bg-blue-100 hover:text-blue-500 text-slate-400"
+                            >
+                              <Pencil className="h-2.5 w-2.5" />
+                            </button>
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setSavedFilters(
+                                  savedFilters.filter(
+                                    (f) => f.id !== filter.id,
+                                  ),
+                                );
+                                if (selectedFilterId === filter.id)
+                                  setSelectedFilterId(null);
+                              }}
+                              className="p-0.5 rounded hover:bg-red-100 hover:text-red-500 text-slate-400"
+                            >
+                              <X className="h-2.5 w-2.5" />
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    ))
+                  )}
+                </div>
               </div>
-            </div>
+
+              {/* Right — Filter Fields */}
+              <div className="flex-1 overflow-y-auto p-4 space-y-5">
+                {/* Add field button */}
+                <div className="flex items-center justify-between">
+                  <div className="relative">
+                    <button
+                      onClick={() => setShowFieldPicker(!showFieldPicker)}
+                      className="text-[11px] font-medium text-blue-500 hover:text-blue-700 flex items-center gap-1 transition-colors"
+                    >
+                      <Plus className="h-3 w-3" /> Adicionar campo
+                      <span className="ml-1 text-slate-400">
+                        {visibleFields.length} campos ativos
+                      </span>
+                    </button>
+                    {showFieldPicker && (
+                      <div className="absolute top-6 left-0 z-10 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg shadow-lg p-2 w-44 space-y-0.5">
+                        {allFilterFields.map((f) => (
+                          <label
+                            key={f.id}
+                            className={cn(
+                              "flex items-center gap-2 px-2 py-1.5 rounded cursor-pointer text-[11px] transition-colors",
+                              visibleFields.includes(f.id)
+                                ? "bg-blue-50 dark:bg-blue-900/20"
+                                : "hover:bg-slate-50 dark:hover:bg-slate-700/40",
+                            )}
+                          >
+                            <input
+                              type="checkbox"
+                              checked={visibleFields.includes(f.id)}
+                              onChange={() =>
+                                setVisibleFields((v) =>
+                                  v.includes(f.id)
+                                    ? v.filter((x) => x !== f.id)
+                                    : [...v, f.id],
+                                )
+                              }
+                              className="accent-blue-500"
+                            />
+                            <span className="text-slate-700 dark:text-slate-300">
+                              {f.label}
+                            </span>
+                          </label>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* CATEGORIA */}
+                {has("categoria") && (
+                  <div>
+                    <p className="text-[10px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-2">
+                      Categoria
+                    </p>
+                    <div className="flex flex-wrap gap-1.5">
+                      {["Todos", ...allCategories].map((cat) => (
+                        <button
+                          key={cat}
+                          onClick={() => setCategory(cat)}
+                          className={cn(
+                            "px-2.5 py-0.5 rounded-full text-[11px] font-medium border transition-colors",
+                            category === cat
+                              ? "bg-blue-500 text-white border-blue-500"
+                              : "bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-600 hover:border-blue-300",
+                          )}
+                        >
+                          {cat}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* RECORRÊNCIA */}
+                {has("recorrencia") && (
+                  <div>
+                    <p className="text-[10px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-2">
+                      Recorrência / Tipo
+                    </p>
+                    <div className="flex flex-wrap gap-1.5">
+                      {RECURRENCE_OPTIONS.map(({ value, label }) => (
+                        <button
+                          key={value}
+                          onClick={() => setRecurrenceFilter(value)}
+                          className={cn(
+                            "px-2.5 py-0.5 rounded-full text-[11px] font-medium border transition-colors",
+                            recurrenceFilter === value
+                              ? "bg-blue-500 text-white border-blue-500"
+                              : "bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-600 hover:border-blue-300",
+                          )}
+                        >
+                          {label}
+                        </button>
+                      ))}
+                      {allRecurrences
+                        .filter(
+                          (r) =>
+                            !RECURRENCE_OPTIONS.map(
+                              (o) => o.value,
+                            ).includes(r),
+                        )
+                        .map((r) => (
+                          <button
+                            key={r}
+                            onClick={() => setRecurrenceFilter(r)}
+                            className={cn(
+                              "px-2.5 py-0.5 rounded-full text-[11px] font-medium border transition-colors",
+                              recurrenceFilter === r
+                                ? "bg-blue-500 text-white border-blue-500"
+                                : "bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-600 hover:border-blue-300",
+                            )}
+                          >
+                            {r}
+                          </button>
+                        ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* VARIAÇÕES */}
+                {has("variacoes") && (
+                  <div>
+                    <p className="text-[10px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-2">
+                      Variações
+                    </p>
+                    <div className="flex flex-wrap gap-1.5">
+                      {VARIATIONS_OPTIONS.map(({ value, label }) => (
+                        <button
+                          key={value}
+                          onClick={() => setVariationsFilter(value)}
+                          className={cn(
+                            "px-2.5 py-0.5 rounded-full text-[11px] font-medium border transition-colors",
+                            variationsFilter === value
+                              ? "bg-violet-500 text-white border-violet-500"
+                              : "bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-600 hover:border-violet-300",
+                          )}
+                        >
+                          {label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* ORDENAR POR */}
+                {has("ordenar") && (
+                  <div>
+                    <p className="text-[10px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-2">
+                      Ordenar por
+                    </p>
+                    <div className="flex flex-wrap gap-1.5">
+                      {SORT_OPTIONS.map(({ value, label }) => (
+                        <button
+                          key={value}
+                          onClick={() => setSort(value)}
+                          className={cn(
+                            "px-2.5 py-0.5 rounded-full text-[11px] font-medium border transition-colors",
+                            sort === value
+                              ? "bg-slate-700 text-white border-slate-700"
+                              : "bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-600 hover:border-slate-400",
+                          )}
+                        >
+                          {label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </SlidePanel>
           );
         })()}
 

@@ -69,7 +69,6 @@ import {
   AccordionContent,
 } from "@/components/ui/accordion";
 import { Input } from "@/components/ui/input";
-import { ModalBrandHeader } from "@/components/ui/modal-brand-header";
 import { CopyLinkButton } from "@/components/copy-link-button";
 import { ConfirmationDialog } from "@/components/confirmation-dialog";
 import {
@@ -81,7 +80,8 @@ import {
   Tooltip as RechartsTooltip,
   ResponsiveContainer,
 } from "recharts";
-import { useSidebar } from "@/contexts/sidebar-context";
+import { useAppFrameMetrics } from "@/hooks/useAppFrameMetrics";
+import { NeonBadge } from "@/components/neon-badge";
 import { useToast } from "@/hooks/use-toast";
 import { apiClient } from "@/lib/api-client";
 import { usePlatformUsers } from "@/contexts/platform-users-context";
@@ -277,7 +277,7 @@ export function CompanyViewSlidePanel({
   // Guard: Return null if company is not provided
   if (!company) return null;
 
-  const { sidebarWidth } = useSidebar();
+  const { sidebarWidth, headerHeight, footerHeight } = useAppFrameMetrics();
   const { toast } = useToast();
   const { users: contextUsers } = usePlatformUsers();
   const [activeTab, setActiveTab] = useState("visao-geral");
@@ -1267,11 +1267,14 @@ export function CompanyViewSlidePanel({
             )
               e.preventDefault();
           }}
-          className="p-0 flex flex-col gap-0 !w-auto !max-w-none"
+          className="p-0 flex flex-col gap-0 !w-auto !max-w-none z-[70] [&>button:last-child]:top-3 [&>button:last-child]:right-3 [&>button:last-child]:p-1.5 [&>button:last-child]:hover:bg-white/20 [&>button:last-child_svg]:size-4"
           style={{
-            left: `${sidebarWidth}px`,
-            width: `calc(100vw - ${sidebarWidth}px)`,
-            maxWidth: `calc(100vw - ${sidebarWidth}px)`,
+            left: `${sidebarWidth - 2}px`,
+            top: `${headerHeight - 1}px`,
+            bottom: `${footerHeight - 1}px`,
+            height: "auto",
+            width: `calc(100vw - ${sidebarWidth - 2}px)`,
+            maxWidth: `calc(100vw - ${sidebarWidth - 2}px)`,
           }}
         >
           <div className="relative flex flex-col h-full overflow-hidden">
@@ -1283,180 +1286,31 @@ export function CompanyViewSlidePanel({
               className="hidden"
               onChange={handleFileChange}
             />
-            <ModalBrandHeader
-              right={
-                <div className="flex items-center gap-3 flex-shrink-0">
-                  {company.status === "active" && (
-                    <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-500 text-white">
-                      <CheckCircle className="h-3.5 w-3.5" />
-                      Ativa
-                    </span>
-                  )}
-                  {company.status === "inactive" && (
-                    <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-slate-400 text-white">
-                      <PauseCircle className="h-3.5 w-3.5" />
-                      Inativa
-                    </span>
-                  )}
-                  {company.status === "pending" && (
-                    <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-amber-400 text-amber-900">
-                      <Clock className="h-3.5 w-3.5" />
-                      Pendente
-                    </span>
-                  )}
-                  {/* Credit Plan Badge */}
-                  {company.partner_level &&
-                    (() => {
-                      const planMap: Record<
-                        string,
-                        { name: string; color: string }
-                      > = {
-                        lite: {
-                          name: "Lite",
-                          color:
-                            "bg-slate-100 text-slate-600 border border-slate-200",
-                        },
-                        start: {
-                          name: "Start",
-                          color:
-                            "bg-green-100 text-green-700 border border-green-200",
-                        },
-                        standard: {
-                          name: "Standard",
-                          color:
-                            "bg-blue-100 text-blue-700 border border-blue-200",
-                        },
-                        growth: {
-                          name: "Growth",
-                          color:
-                            "bg-indigo-100 text-indigo-700 border border-indigo-200",
-                        },
-                        scale: {
-                          name: "Scale",
-                          color:
-                            "bg-violet-100 text-violet-700 border border-violet-200",
-                        },
-                        squad: {
-                          name: "Squad",
-                          color:
-                            "bg-orange-100 text-orange-700 border border-orange-200",
-                        },
-                        enterprise: {
-                          name: "Enterprise",
-                          color:
-                            "bg-purple-100 text-purple-700 border border-purple-200",
-                        },
-                        // backwards compat
-                        basic: {
-                          name: "Lite",
-                          color:
-                            "bg-slate-100 text-slate-600 border border-slate-200",
-                        },
-                        starter: {
-                          name: "Start",
-                          color:
-                            "bg-green-100 text-green-700 border border-green-200",
-                        },
-                        pro: {
-                          name: "Standard",
-                          color:
-                            "bg-blue-100 text-blue-700 border border-blue-200",
-                        },
-                        gold: {
-                          name: "Growth",
-                          color:
-                            "bg-indigo-100 text-indigo-700 border border-indigo-200",
-                        },
-                        silver: {
-                          name: "Lite",
-                          color:
-                            "bg-slate-100 text-slate-600 border border-slate-200",
-                        },
-                        platinum: {
-                          name: "Enterprise",
-                          color:
-                            "bg-purple-100 text-purple-700 border border-purple-200",
-                        },
-                      };
-                      const p = planMap[
-                        company.partner_level!.toLowerCase()
-                      ] ?? {
-                        name: company.partner_level,
-                        color:
-                          "bg-slate-100 text-slate-600 border border-slate-200",
-                      };
-                      return (
-                        <span
-                          className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold ${p.color}`}
-                        >
-                          <Crown className="h-3.5 w-3.5" />
-                          {p.name}
-                        </span>
-                      );
-                    })()}
+            <div
+              className="flex items-center justify-between px-5 py-3 flex-shrink-0"
+              style={{ background: "var(--brand-gradient, linear-gradient(to right, #0a1628, #1e3a8a, #0a1628))" }}
+            >
+              <div className="min-w-0 flex-1 text-sm font-bold text-white truncate">
+                {company.name}
+                <p className="text-[11px] font-normal text-white/60 mt-0.5 truncate">
+                  {company.email}
+                </p>
+              </div>
+              <button
+                onClick={onClose}
+                className="text-white/70 hover:text-white hover:bg-white/20 rounded-lg p-1.5 transition-colors flex-shrink-0"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
 
-                  {/* Account Type Badge */}
-                  {(() => {
-                    const label =
-                      company.type === "company" &&
-                      company.account_type === "independent"
-                        ? "Company Independente"
-                        : company.type === "company"
-                          ? "Company Dependente"
-                          : company.type === "agency"
-                            ? "Agency"
-                            : company.type === "nomad"
-                              ? "Partner"
-                              : null;
-                    if (!label) return null;
-                    const typeColor =
-                      label === "Company Independente"
-                        ? "bg-blue-100 text-blue-700 border border-blue-200"
-                        : label === "Company Dependente"
-                          ? "bg-violet-100 text-violet-700 border border-violet-200"
-                          : label === "Agency"
-                            ? "bg-pink-100 text-pink-700 border border-pink-200"
-                            : "bg-emerald-100 text-emerald-700 border border-emerald-200";
-                    const TypeIcon =
-                      label === "Agency"
-                        ? Building2
-                        : label === "Partner"
-                          ? Star
-                          : Building2;
-                    return (
-                      <span
-                        className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold ${typeColor}`}
-                      >
-                        <TypeIcon className="h-3.5 w-3.5" />
-                        {label}
-                      </span>
-                    );
-                  })()}
-
-                  {/* Wallet Balance Card */}
-                  <div
-                    onClick={() => setShowBalance(!showBalance)}
-                    className="flex cursor-pointer items-center gap-2 bg-gradient-to-r from-blue-900/40 to-cyan-900/40 px-4 py-2 rounded-lg border border-blue-700/50 flex-shrink-0 hover:border-blue-600/75 transition-colors"
-                  >
-                    <div className="flex-1">
-                      <p className="text-blue-300 text-xs font-semibold uppercase tracking-wide">
-                        ALLKOIN
-                      </p>
-                      <p className="text-white font-bold text-sm">
-                        {showBalance ? "0.00" : ""}
-                      </p>
-                    </div>
-                    <Eye className="h-4 w-4 text-blue-200" />
-                  </div>
-                  <CopyLinkButton />
-                </div>
-              }
-              left={
-                <div className="flex items-center gap-4 flex-1 min-w-0">
-                  {/* Avatar Section */}
+            {/* Company identity — moved from header per the global modal standard (plain text-only header) */}
+            <div className="flex items-center justify-between gap-4 px-6 py-4 border-b border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/40 flex-shrink-0 flex-wrap">
+              <div className="flex items-center gap-4 min-w-0">
+                <div className="relative flex-shrink-0">
                   <button
                     onClick={handleAvatarClick}
-                    className="relative h-20 w-20 rounded-full bg-white/15 border-2 border-white/30 flex-shrink-0 group overflow-hidden hover:border-white/60 transition-all"
+                    className="relative h-16 w-16 rounded-full bg-slate-200 dark:bg-slate-700 border-2 border-white dark:border-slate-800 shadow group overflow-hidden hover:border-blue-300 transition-all"
                   >
                     {avatar ? (
                       <img
@@ -1466,85 +1320,163 @@ export function CompanyViewSlidePanel({
                       />
                     ) : (
                       <div className="absolute inset-0 flex items-center justify-center bg-gradient-to-br from-blue-600 to-cyan-500">
-                        <span className="text-white font-bold text-2xl">
+                        <span className="text-white font-bold text-xl">
                           {(company.name || "?").charAt(0).toUpperCase()}
                         </span>
                       </div>
                     )}
                     <div className="absolute inset-0 bg-black/50 flex flex-col items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity rounded-full">
-                      <Camera className="h-5 w-5 text-white" />
-                      <span className="text-[9px] text-white/90 font-medium mt-0.5">
+                      <Camera className="h-4 w-4 text-white" />
+                      <span className="text-[8px] text-white/90 font-medium mt-0.5">
                         {avatar ? "Editar" : "Foto"}
                       </span>
                     </div>
                   </button>
 
-                  {/* Main Info Section */}
-                  <div className="flex-1 min-w-0">
-                    <h2 className="text-white font-bold text-lg truncate">
-                      {company.name}
-                    </h2>
-                    <p className="text-blue-300 text-xs truncate">
-                      {company.email}
-                    </p>
-                    <p className="text-blue-200 text-xs mt-1">
-                      {getTypeLabel(company.type)}
-                    </p>
+                  {/* Avatar menu — positioned relative to the avatar itself, not a hardcoded header offset */}
+                  {showAvatarMenu && avatar && (
+                    <>
+                      <div
+                        className="fixed inset-0 z-40"
+                        onClick={() => setShowAvatarMenu(false)}
+                      />
+                      <div className="absolute z-50 top-full left-0 mt-1 bg-white rounded-xl shadow-2xl border border-gray-100 overflow-hidden min-w-[172px]">
+                        <button
+                          onClick={() => {
+                            setShowAvatarMenu(false);
+                            setTimeout(() => fileInputRef.current?.click(), 10);
+                          }}
+                          className="flex items-center gap-2.5 w-full px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
+                        >
+                          <Camera className="h-3.5 w-3.5 text-gray-400" />
+                          Nova foto
+                        </button>
+                        {originalRawSrc && (
+                          <button
+                            onClick={() => {
+                              setShowAvatarMenu(false);
+                              setRawImageSrc(originalRawSrc);
+                              setCropZoom(1);
+                              setCropOffset({ x: 0, y: 0 });
+                              setCropOpen(true);
+                            }}
+                            className="flex items-center gap-2.5 w-full px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 transition-colors border-t border-gray-100"
+                          >
+                            <ZoomIn className="h-3.5 w-3.5 text-gray-400" />
+                            Reposicionar
+                          </button>
+                        )}
+                        <button
+                          onClick={() => {
+                            setShowAvatarMenu(false);
+                            setAvatar(null);
+                            setOriginalRawSrc(null);
+                          }}
+                          className="flex items-center gap-2.5 w-full px-4 py-2.5 text-sm text-red-500 hover:bg-red-50 transition-colors border-t border-gray-100"
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                          Remover foto
+                        </button>
+                      </div>
+                    </>
+                  )}
+                </div>
+
+                <div className="min-w-0">
+                  <h2 className="text-sm font-bold text-slate-800 dark:text-slate-100 truncate">
+                    {company.name}
+                  </h2>
+                  <p className="text-xs text-slate-400 truncate">{getTypeLabel(company.type)}</p>
+                  <div className="flex items-center gap-1.5 mt-1.5 flex-wrap">
+                    {company.status === "active" && (
+                      <NeonBadge color="emerald">Ativa</NeonBadge>
+                    )}
+                    {company.status === "inactive" && (
+                      <NeonBadge color="slate">Inativa</NeonBadge>
+                    )}
+                    {company.status === "pending" && (
+                      <NeonBadge color="amber">Pendente</NeonBadge>
+                    )}
+                    {company.partner_level &&
+                      (() => {
+                        const planMap: Record<string, { name: string; color: string }> = {
+                          lite: { name: "Lite", color: "slate" },
+                          start: { name: "Start", color: "green" },
+                          standard: { name: "Standard", color: "blue" },
+                          growth: { name: "Growth", color: "indigo" },
+                          scale: { name: "Scale", color: "violet" },
+                          squad: { name: "Squad", color: "orange" },
+                          enterprise: { name: "Enterprise", color: "purple" },
+                          basic: { name: "Lite", color: "slate" },
+                          starter: { name: "Start", color: "green" },
+                          pro: { name: "Standard", color: "blue" },
+                          gold: { name: "Growth", color: "indigo" },
+                          silver: { name: "Lite", color: "slate" },
+                          platinum: { name: "Enterprise", color: "purple" },
+                        };
+                        const p = planMap[company.partner_level!.toLowerCase()] ?? {
+                          name: company.partner_level,
+                          color: "slate",
+                        };
+                        return (
+                          <NeonBadge color={p.color as any}>
+                            <Crown className="h-3 w-3 mr-1 inline" />
+                            {p.name}
+                          </NeonBadge>
+                        );
+                      })()}
+                    {(() => {
+                      const label =
+                        company.type === "company" &&
+                        company.account_type === "independent"
+                          ? "Company Independente"
+                          : company.type === "company"
+                            ? "Company Dependente"
+                            : company.type === "agency"
+                              ? "Agency"
+                              : company.type === "nomad"
+                                ? "Partner"
+                                : null;
+                      if (!label) return null;
+                      const typeColor =
+                        label === "Company Independente"
+                          ? "blue"
+                          : label === "Company Dependente"
+                            ? "violet"
+                            : label === "Agency"
+                              ? "pink"
+                              : "emerald";
+                      const TypeIcon =
+                        label === "Agency" ? Building2 : label === "Partner" ? Star : Building2;
+                      return (
+                        <NeonBadge color={typeColor as any}>
+                          <TypeIcon className="h-3 w-3 mr-1 inline" />
+                          {label}
+                        </NeonBadge>
+                      );
+                    })()}
                   </div>
                 </div>
-              }
-            />
-            {/* Avatar menu */}
-            {showAvatarMenu && avatar && (
-              <>
-                <div
-                  className="absolute inset-0 z-40"
-                  onClick={() => setShowAvatarMenu(false)}
-                />
-                <div
-                  className="absolute z-50 bg-white rounded-xl shadow-2xl border border-gray-100 overflow-hidden min-w-[172px]"
-                  style={{ top: 108, left: 22 }}
-                >
-                  <button
-                    onClick={() => {
-                      setShowAvatarMenu(false);
-                      setTimeout(() => fileInputRef.current?.click(), 10);
-                    }}
-                    className="flex items-center gap-2.5 w-full px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
-                  >
-                    <Camera className="h-3.5 w-3.5 text-gray-400" />
-                    Nova foto
-                  </button>
-                  {originalRawSrc && (
-                    <button
-                      onClick={() => {
-                        setShowAvatarMenu(false);
-                        setRawImageSrc(originalRawSrc);
-                        setCropZoom(1);
-                        setCropOffset({ x: 0, y: 0 });
-                        setCropOpen(true);
-                      }}
-                      className="flex items-center gap-2.5 w-full px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 transition-colors border-t border-gray-100"
-                    >
-                      <ZoomIn className="h-3.5 w-3.5 text-gray-400" />
-                      Reposicionar
-                    </button>
-                  )}
-                  <button
-                    onClick={() => {
-                      setShowAvatarMenu(false);
-                      setAvatar(null);
-                      setOriginalRawSrc(null);
-                    }}
-                    className="flex items-center gap-2.5 w-full px-4 py-2.5 text-sm text-red-500 hover:bg-red-50 transition-colors border-t border-gray-100"
-                  >
-                    <Trash2 className="h-3.5 w-3.5" />
-                    Remover foto
-                  </button>
-                </div>
-              </>
-            )}
+              </div>
 
+              <div className="flex items-center gap-3 flex-shrink-0">
+                <div
+                  onClick={() => setShowBalance(!showBalance)}
+                  className="flex cursor-pointer items-center gap-2 bg-gradient-to-r from-blue-50 to-cyan-50 dark:from-blue-900/20 dark:to-cyan-900/20 px-4 py-2 rounded-lg border border-blue-200 dark:border-blue-800 flex-shrink-0 hover:border-blue-300 dark:hover:border-blue-700 transition-colors"
+                >
+                  <div className="flex-1">
+                    <p className="text-blue-600 dark:text-blue-400 text-xs font-semibold uppercase tracking-wide">
+                      ALLKOIN
+                    </p>
+                    <p className="text-slate-800 dark:text-slate-100 font-bold text-sm">
+                      {showBalance ? "0.00" : ""}
+                    </p>
+                  </div>
+                  <Eye className="h-4 w-4 text-blue-500" />
+                </div>
+                <CopyLinkButton />
+              </div>
+            </div>
             {/* Crop overlay */}
             {cropOpen && rawImageSrc && (
               <div className="absolute inset-0 z-50 flex flex-col bg-black/90">

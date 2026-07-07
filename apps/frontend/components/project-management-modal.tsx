@@ -108,9 +108,10 @@ import {
   ChevronDown,
   FolderOpen,
 } from "lucide-react";
-import { ModalBrandHeader } from "@/components/ui/modal-brand-header";
 import { useSidebar } from "@/contexts/sidebar-context";
+import { useAppFrameMetrics } from "@/hooks/useAppFrameMetrics";
 import { useAccountType } from "@/contexts/account-type-context";
+import { NeonBadge } from "@/components/neon-badge";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -220,7 +221,8 @@ export function ProjectManagementModal({
   onGoToPayment,
 }: ProjectManagementModalProps) {
   const { toast } = useToast();
-  const { sidebarWidth, sidebarSettings, agencyProfile } = useSidebar();
+  const { sidebarSettings, agencyProfile } = useSidebar();
+  const { sidebarWidth, headerHeight, footerHeight } = useAppFrameMetrics();
   const { accountType } = useAccountType();
   const canSeeNomadNames = accountType === "admin";
 
@@ -1274,11 +1276,14 @@ export function ProjectManagementModal({
         <SheetContent
           side="right"
           hideOverlay={true}
-          className="p-0 flex flex-col gap-0 !w-auto !max-w-none overflow-hidden"
+          className="p-0 flex flex-col gap-0 !w-auto !max-w-none overflow-hidden z-[70] [&>button:last-child]:top-3 [&>button:last-child]:right-3 [&>button:last-child]:p-1.5 [&>button:last-child]:hover:bg-white/20 [&>button:last-child_svg]:size-4"
           style={{
-            left: `${sidebarWidth}px`,
-            width: `calc(100vw - ${sidebarWidth}px)`,
-            maxWidth: `calc(100vw - ${sidebarWidth}px)`,
+            left: `${sidebarWidth - 2}px`,
+            top: `${headerHeight - 1}px`,
+            bottom: `${footerHeight - 1}px`,
+            height: "auto",
+            width: `calc(100vw - ${sidebarWidth - 2}px)`,
+            maxWidth: `calc(100vw - ${sidebarWidth - 2}px)`,
           }}
           onInteractOutside={(e) => e.preventDefault()}
         >
@@ -1292,337 +1297,62 @@ export function ProjectManagementModal({
               onChange={handleFileChange}
             />
 
-            {/* Brand Header */}
-            <ModalBrandHeader
-              onClose={() => onOpenChange(false)}
-              headerStyle={getHeaderStyle()}
-              right={
-                <div className="flex items-center gap-2 flex-shrink-0">
-                  {getProjectStatusBadge(
-                    project?.status ?? dadosProjForm.situacao,
-                  )}
-                  {/* Palette button */}
-                  <button
-                    onClick={() => setShowColorPicker((p) => !p)}
-                    className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-white text-[10px] font-medium transition-colors border ${
-                      showColorPicker
-                        ? "bg-white/30 border-white/50"
-                        : "bg-white/15 hover:bg-white/25 border-white/20"
-                    }`}
-                    title="Cor do cabeçalho"
-                  >
-                    <Palette className="h-3 w-3" />
-                    Tema
-                  </button>
-                  {isDadosProjEditMode ? (
-                    <>
-                      <button
-                        onClick={() => setShowDadosProjSaveConfirm(true)}
-                        disabled={isSavingDados}
-                        className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-green-500/30 hover:bg-green-500/40 text-white text-[10px] font-medium transition-colors border border-green-400/40 disabled:opacity-50"
-                      >
-                        {isSavingDados ? (
-                          <Loader2 className="h-3 w-3 animate-spin" />
-                        ) : (
-                          <Save className="h-3 w-3" />
-                        )}
-                        {isSavingDados ? "Salvando..." : "Salvar"}
-                      </button>
-                      <button
-                        onClick={() => setShowDadosProjCancelConfirm(true)}
-                        className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-white/15 hover:bg-white/25 text-white text-[10px] font-medium transition-colors border border-white/20"
-                      >
-                        <XCircle className="h-3 w-3" />
-                        Cancelar
-                      </button>
-                    </>
-                  ) : (
-                    project && (
-                      <>
-                        <CopyLinkButton />
-                        <button
-                          onClick={onClone}
-                          className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-white/15 hover:bg-white/25 text-white text-[10px] font-medium transition-colors border border-white/20"
-                        >
-                          <Copy className="h-3 w-3" />
-                          Clonar
-                        </button>
-                        <DropdownMenu>
-                          <DropdownMenuTrigger asChild>
-                            <button className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-white/15 hover:bg-white/25 text-white text-[10px] font-medium transition-colors border border-white/20">
-                              <FileText className="h-3 w-3" />
-                              Exportar Proposta
-                              <ChevronDown className="h-2.5 w-2.5 ml-0.5" />
-                            </button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end" className="w-52">
-                            <DropdownMenuItem
-                              onClick={async () => {
-                                if (!project) return;
-                                setIsExportingPdf(true);
-                                try {
-                                  const brandCfg = {
-                                    gradient: parseBrandGradient(
-                                      sidebarSettings.backgroundColor,
-                                    ),
-                                    logoUrl:
-                                      sidebarSettings.sidebarLogo ||
-                                      agencyProfile.logo ||
-                                      "/images/logob.png",
-                                    agencyName:
-                                      agencyProfile.name || "Lamego Teste Agency",
-                                  };
-                                  const proposalData = buildProposalData(
-                                    mockData,
-                                    dadosProjForm,
-                                    project,
-                                  );
-                                  await exportProposalPDF(
-                                    proposalData,
-                                    brandCfg,
-                                    `proposta_${(dadosProjForm.agencia || project?.name || "projeto").replace(/\s+/g, "_")}.pdf`,
-                                  );
-                                } finally {
-                                  setIsExportingPdf(false);
-                                }
-                              }}
-                              disabled={isExportingPdf}
-                            >
-                              <FileText className="h-3.5 w-3.5 mr-2" />
-                              {isExportingPdf
-                                ? "Gerando PDF..."
-                                : "Documento Padrão (PDF)"}
-                            </DropdownMenuItem>
-                            <DropdownMenuSeparator />
-                            <DropdownMenuItem
-                              onClick={() => {
-                                setCustomDocFile(null);
-                                setShowCustomDocDialog(true);
-                              }}
-                            >
-                              <Upload className="h-3.5 w-3.5 mr-2" />
-                              Documento Personalizado
-                            </DropdownMenuItem>
-                          </DropdownMenuContent>
-                        </DropdownMenu>
-                        {project.status !== "cancelled" &&
-                          project.status !== "canceled" && (
-                            <button
-                              onClick={onCancel}
-                              className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-red-500/20 hover:bg-red-500/30 text-red-300 text-[10px] font-medium transition-colors border border-red-400/30"
-                            >
-                              <Ban className="h-3 w-3" />
-                              Cancelar
-                            </button>
-                          )}
-                      </>
-                    )
-                  )}
-                </div>
-              }
-              left={
-                <div className="flex items-center gap-4 flex-1 min-w-0">
+            {/* Header — plain text-only, matches the global modal standard */}
+            <div
+              className="flex items-center justify-between px-5 py-3 flex-shrink-0"
+              style={{ background: "var(--brand-gradient, linear-gradient(to right, #0a1628, #1e3a8a, #0a1628))" }}
+            >
+              <div className="min-w-0 flex-1 text-sm font-bold text-white truncate">
+                {dadosProjForm.nomeProjeto}
+                <p className="text-[11px] font-normal text-white/60 mt-0.5 truncate">
+                  {dadosProjForm.agencia} · {dadosProjForm.cliente}
+                </p>
+              </div>
+              <button
+                onClick={() => onOpenChange(false)}
+                className="text-white/70 hover:text-white hover:bg-white/20 rounded-lg p-1.5 transition-colors flex-shrink-0"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            {/* Project identity — moved from header per the global modal standard */}
+            <div className="flex flex-col gap-3 px-6 py-4 border-b border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/40 flex-shrink-0">
+              <div className="flex items-center justify-between gap-4 flex-wrap">
+                <div className="flex items-center gap-4 min-w-0">
                   {/* Avatar Section */}
-                  <button
-                    onClick={handleAvatarClick}
-                    className="relative h-16 w-16 rounded-full bg-white/15 border-2 border-white/30 flex-shrink-0 group overflow-hidden hover:border-white/60 transition-all"
-                  >
-                    {avatar ? (
-                      <img
-                        src={avatar}
-                        alt="projeto"
-                        className="absolute inset-0 w-full h-full object-cover"
-                      />
-                    ) : (
-                      <div className="absolute inset-0 flex items-center justify-center bg-gradient-to-br from-blue-600 to-purple-500">
-                        <FolderKanban className="h-7 w-7 text-white" />
-                      </div>
-                    )}
-                    <div className="absolute inset-0 bg-black/50 flex flex-col items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity rounded-full">
-                      <Camera className="h-4 w-4 text-white" />
-                      <span className="text-[9px] text-white/90 font-medium mt-0.5">
-                        {avatar ? "Editar" : "Foto"}
-                      </span>
-                    </div>
-                  </button>
-
-                  {/* Project Info */}
-                  <div className="flex-1 min-w-0">
-                    {isDadosProjEditMode ? (
-                      <input
-                        value={dadosProjForm.nomeProjeto}
-                        onChange={(e) =>
-                          setDadosProjForm((f) => ({
-                            ...f,
-                            nomeProjeto: e.target.value,
-                          }))
-                        }
-                        className="w-full bg-white/15 border border-white/40 rounded-md px-2 py-1 text-white font-bold text-base placeholder-white/50 focus:outline-none focus:border-white/70"
-                        placeholder="Nome do projeto"
-                      />
-                    ) : (
-                      <h2 className="text-white font-bold text-base truncate">
-                        {dadosProjForm.nomeProjeto}
-                      </h2>
-                    )}
-                    <div className="flex items-center gap-3 mt-1">
-                      <span className="text-white/70 text-xs flex items-center gap-1">
-                        <Building2 className="h-3 w-3" />
-                        {dadosProjForm.agencia}
-                      </span>
-                      <span className="text-white/70 text-xs flex items-center gap-1">
-                        <User className="h-3 w-3" />
-                        {dadosProjForm.cliente}
-                      </span>
-                      <span className="text-white/70 text-xs flex items-center gap-1">
-                        <Calendar className="h-3 w-3" />
-                        {dadosProjForm.dataCriacao}
-                      </span>
-                    </div>
-                    {/* Ativo/Inativo + Lifecycle badges */}
-                    <div className="flex items-center gap-1.5 mt-1.5">
-                      {isDadosProjEditMode &&
-                      dadosProjForm.situacao !== "Cancelado" ? (
-                        <button
-                          type="button"
-                          onClick={() =>
-                            setDadosProjForm((f) => ({
-                              ...f,
-                              isAtivo: !f.isAtivo,
-                            }))
-                          }
-                          className={`flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold transition-colors border ${
-                            dadosProjForm.isAtivo
-                              ? "bg-emerald-500/30 border-emerald-400/50 text-white"
-                              : "bg-white/10 border-white/20 text-white/60"
-                          }`}
-                        >
-                          <div
-                            className={`h-1.5 w-1.5 rounded-full ${dadosProjForm.isAtivo ? "bg-emerald-300" : "bg-white/40"}`}
-                          />
-                          {dadosProjForm.isAtivo ? "Ativo" : "Inativo"}
-                        </button>
-                      ) : (
-                        <span
-                          className={`flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold border ${
-                            dadosProjForm.situacao === "Cancelado" ||
-                            !dadosProjForm.isAtivo
-                              ? "bg-white/10 border-white/20 text-white/60"
-                              : "bg-emerald-500/30 border-emerald-400/50 text-white"
-                          }`}
-                        >
-                          <div
-                            className={`h-1.5 w-1.5 rounded-full ${dadosProjForm.situacao === "Cancelado" || !dadosProjForm.isAtivo ? "bg-white/40" : "bg-emerald-300"}`}
-                          />
-                          {dadosProjForm.situacao === "Cancelado"
-                            ? "Cancelado"
-                            : dadosProjForm.isAtivo
-                              ? "Ativo"
-                              : "Inativo"}
-                        </span>
-                      )}
-                      <span
-                        className={`flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold border ${
-                          dadosProjForm.lifecycle === "Mensal"
-                            ? "bg-violet-500/30 border-violet-400/40 text-white"
-                            : "bg-white/10 border-white/20 text-white/70"
-                        }`}
-                      >
-                        {dadosProjForm.lifecycle === "Mensal" && (
-                          <RefreshCw className="h-2.5 w-2.5" />
-                        )}
-                        {dadosProjForm.lifecycle}
-                      </span>
-                    </div>
-                  </div>
-                </div>
-              }
-            />
-
-            {/* Header color picker */}
-            {showColorPicker && (
-              <>
-                <div
-                  className="absolute inset-0 z-40"
-                  onClick={() => setShowColorPicker(false)}
-                />
-                <div
-                  className="absolute z-50 bg-white rounded-2xl shadow-2xl border border-gray-100 p-4"
-                  style={{ top: 108, right: 16, width: 300 }}
-                >
-                  <p className="text-xs font-semibold text-gray-700 mb-3">
-                    Cor do cabeçalho
-                  </p>
-                  <div className="grid grid-cols-4 gap-2 mb-3">
-                    {HEADER_PRESETS.map((preset) => (
-                      <button
-                        key={preset.label}
-                        title={preset.label}
-                        onClick={() => {
-                          setHeaderBg(preset.value);
-                          setShowColorPicker(false);
-                        }}
-                        className={`relative h-10 rounded-lg overflow-hidden border-2 transition-all hover:scale-105 ${
-                          headerBg === preset.value
-                            ? "border-blue-500 ring-2 ring-blue-300"
-                            : "border-transparent"
-                        }`}
-                        style={{ background: preset.preview }}
-                      >
-                        {!preset.value && (
-                          <span className="absolute inset-0 flex items-center justify-center text-[9px] font-bold text-white drop-shadow">
-                            Padrão
-                          </span>
-                        )}
-                      </button>
-                    ))}
-                  </div>
-                  <div className="border-t border-gray-100 pt-3 flex items-center gap-2">
-                    <label className="text-xs text-gray-500 flex-shrink-0">
-                      Cor sólida:
-                    </label>
-                    <input
-                      type="color"
-                      value={customHeaderColor}
-                      onChange={(e) => setCustomHeaderColor(e.target.value)}
-                      className="h-7 w-10 rounded border border-gray-200 cursor-pointer"
-                    />
+                  <div className="relative flex-shrink-0">
                     <button
-                      onClick={() => {
-                        setHeaderBg(customHeaderColor);
-                        setShowColorPicker(false);
-                      }}
-                      className="flex-1 px-2 py-1 rounded-lg bg-gray-100 hover:bg-gray-200 text-xs text-gray-700 font-medium transition-colors"
+                      onClick={handleAvatarClick}
+                      className="relative h-16 w-16 rounded-full bg-slate-200 dark:bg-slate-700 border-2 border-white dark:border-slate-800 shadow group overflow-hidden hover:border-blue-300 transition-all"
                     >
-                      Aplicar
+                      {avatar ? (
+                        <img
+                          src={avatar}
+                          alt="projeto"
+                          className="absolute inset-0 w-full h-full object-cover"
+                        />
+                      ) : (
+                        <div className="absolute inset-0 flex items-center justify-center bg-gradient-to-br from-blue-600 to-purple-500">
+                          <FolderKanban className="h-6 w-6 text-white" />
+                        </div>
+                      )}
+                      <div className="absolute inset-0 bg-black/50 flex flex-col items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity rounded-full">
+                        <Camera className="h-4 w-4 text-white" />
+                        <span className="text-[8px] text-white/90 font-medium mt-0.5">
+                          {avatar ? "Editar" : "Foto"}
+                        </span>
+                      </div>
                     </button>
-                    {headerBg && (
-                      <button
-                        onClick={() => {
-                          setHeaderBg(null);
-                          setShowColorPicker(false);
-                        }}
-                        className="px-2 py-1 rounded-lg bg-red-50 hover:bg-red-100 text-xs text-red-600 font-medium transition-colors"
-                      >
-                        Resetar
-                      </button>
-                    )}
-                  </div>
-                </div>
-              </>
-            )}
 
-            {/* Avatar menu */}
-            {showAvatarMenu && avatar && (
-              <>
-                <div
-                  className="absolute inset-0 z-40"
-                  onClick={() => setShowAvatarMenu(false)}
-                />
-                <div
-                  className="absolute z-50 bg-white rounded-xl shadow-2xl border border-gray-100 overflow-hidden min-w-[172px]"
-                  style={{ top: 108, left: 22 }}
-                >
+                    {/* Avatar menu — positioned relative to the avatar itself */}
+                    {showAvatarMenu && avatar && (
+                      <>
+                        <div
+                          className="fixed inset-0 z-40"
+                          onClick={() => setShowAvatarMenu(false)}
+                        />
+                        <div className="absolute z-50 top-full left-0 mt-1 bg-white rounded-xl shadow-2xl border border-gray-100 overflow-hidden min-w-[172px]">
                   <button
                     onClick={() => {
                       setShowAvatarMenu(false);
@@ -1660,8 +1390,301 @@ export function ProjectManagementModal({
                     Remover foto
                   </button>
                 </div>
-              </>
-            )}
+                      </>
+                    )}
+                  </div>
+
+                  {/* Project Info */}
+                  <div className="min-w-0">
+                    {isDadosProjEditMode ? (
+                      <input
+                        value={dadosProjForm.nomeProjeto}
+                        onChange={(e) =>
+                          setDadosProjForm((f) => ({
+                            ...f,
+                            nomeProjeto: e.target.value,
+                          }))
+                        }
+                        className="w-full bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded-md px-2 py-1 text-slate-800 dark:text-slate-100 font-bold text-base placeholder-slate-400 focus:outline-none focus:border-blue-400"
+                        placeholder="Nome do projeto"
+                      />
+                    ) : (
+                      <h2 className="text-sm font-bold text-slate-800 dark:text-slate-100 truncate">
+                        {dadosProjForm.nomeProjeto}
+                      </h2>
+                    )}
+                    <div className="flex items-center gap-3 mt-1 flex-wrap">
+                      <span className="text-slate-500 dark:text-slate-400 text-xs flex items-center gap-1">
+                        <Building2 className="h-3 w-3" />
+                        {dadosProjForm.agencia}
+                      </span>
+                      <span className="text-slate-500 dark:text-slate-400 text-xs flex items-center gap-1">
+                        <User className="h-3 w-3" />
+                        {dadosProjForm.cliente}
+                      </span>
+                      <span className="text-slate-500 dark:text-slate-400 text-xs flex items-center gap-1">
+                        <Calendar className="h-3 w-3" />
+                        {dadosProjForm.dataCriacao}
+                      </span>
+                    </div>
+                    {/* Ativo/Inativo + Lifecycle badges */}
+                    <div className="flex items-center gap-1.5 mt-1.5">
+                      {isDadosProjEditMode &&
+                      dadosProjForm.situacao !== "Cancelado" ? (
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setDadosProjForm((f) => ({
+                              ...f,
+                              isAtivo: !f.isAtivo,
+                            }))
+                          }
+                          className={`flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold transition-colors border ${
+                            dadosProjForm.isAtivo
+                              ? "bg-emerald-100 border-emerald-300 text-emerald-700 dark:bg-emerald-900/40 dark:border-emerald-700 dark:text-emerald-300"
+                              : "bg-slate-100 border-slate-300 text-slate-500 dark:bg-slate-800 dark:border-slate-600 dark:text-slate-400"
+                          }`}
+                        >
+                          <div
+                            className={`h-1.5 w-1.5 rounded-full ${dadosProjForm.isAtivo ? "bg-emerald-500" : "bg-slate-400"}`}
+                          />
+                          {dadosProjForm.isAtivo ? "Ativo" : "Inativo"}
+                        </button>
+                      ) : (
+                        <span
+                          className={`flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold border ${
+                            dadosProjForm.situacao === "Cancelado" ||
+                            !dadosProjForm.isAtivo
+                              ? "bg-slate-100 border-slate-300 text-slate-500 dark:bg-slate-800 dark:border-slate-600 dark:text-slate-400"
+                              : "bg-emerald-100 border-emerald-300 text-emerald-700 dark:bg-emerald-900/40 dark:border-emerald-700 dark:text-emerald-300"
+                          }`}
+                        >
+                          <div
+                            className={`h-1.5 w-1.5 rounded-full ${dadosProjForm.situacao === "Cancelado" || !dadosProjForm.isAtivo ? "bg-slate-400" : "bg-emerald-500"}`}
+                          />
+                          {dadosProjForm.situacao === "Cancelado"
+                            ? "Cancelado"
+                            : dadosProjForm.isAtivo
+                              ? "Ativo"
+                              : "Inativo"}
+                        </span>
+                      )}
+                      <span
+                        className={`flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold border ${
+                          dadosProjForm.lifecycle === "Mensal"
+                            ? "bg-violet-100 border-violet-300 text-violet-700 dark:bg-violet-900/40 dark:border-violet-700 dark:text-violet-300"
+                            : "bg-slate-100 border-slate-300 text-slate-500 dark:bg-slate-800 dark:border-slate-600 dark:text-slate-400"
+                        }`}
+                      >
+                        {dadosProjForm.lifecycle === "Mensal" && (
+                          <RefreshCw className="h-2.5 w-2.5" />
+                        )}
+                        {dadosProjForm.lifecycle}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                {getProjectStatusBadge(project?.status ?? dadosProjForm.situacao)}
+              </div>
+
+              {/* Action row */}
+              <div className="flex items-center gap-2 flex-wrap">
+                {/* Palette button */}
+                <div className="relative">
+                  <button
+                    onClick={() => setShowColorPicker((p) => !p)}
+                    className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[10px] font-medium transition-colors border ${
+                      showColorPicker
+                        ? "bg-slate-200 border-slate-400 text-slate-700 dark:bg-slate-700 dark:border-slate-500 dark:text-slate-200"
+                        : "bg-white border-slate-200 text-slate-600 hover:bg-slate-100 dark:bg-slate-800 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-700"
+                    }`}
+                    title="Cor do cabeçalho"
+                  >
+                    <Palette className="h-3 w-3" />
+                    Tema
+                  </button>
+
+                  {/* Header color picker — positioned relative to the Tema button */}
+                  {showColorPicker && (
+                    <>
+                      <div
+                        className="fixed inset-0 z-40"
+                        onClick={() => setShowColorPicker(false)}
+                      />
+                      <div
+                        className="absolute z-50 top-full left-0 mt-1 bg-white rounded-2xl shadow-2xl border border-gray-100 p-4"
+                        style={{ width: 300 }}
+                      >
+                        <p className="text-xs font-semibold text-gray-700 mb-3">
+                          Cor do cabeçalho
+                        </p>
+                        <div className="grid grid-cols-4 gap-2 mb-3">
+                          {HEADER_PRESETS.map((preset) => (
+                            <button
+                              key={preset.label}
+                              title={preset.label}
+                              onClick={() => {
+                                setHeaderBg(preset.value);
+                                setShowColorPicker(false);
+                              }}
+                              className={`relative h-10 rounded-lg overflow-hidden border-2 transition-all hover:scale-105 ${
+                                headerBg === preset.value
+                                  ? "border-blue-500 ring-2 ring-blue-300"
+                                  : "border-transparent"
+                              }`}
+                              style={{ background: preset.preview }}
+                            >
+                              {!preset.value && (
+                                <span className="absolute inset-0 flex items-center justify-center text-[9px] font-bold text-white drop-shadow">
+                                  Padrão
+                                </span>
+                              )}
+                            </button>
+                          ))}
+                        </div>
+                        <div className="border-t border-gray-100 pt-3 flex items-center gap-2">
+                          <label className="text-xs text-gray-500 flex-shrink-0">
+                            Cor sólida:
+                          </label>
+                          <input
+                            type="color"
+                            value={customHeaderColor}
+                            onChange={(e) => setCustomHeaderColor(e.target.value)}
+                            className="h-7 w-10 rounded border border-gray-200 cursor-pointer"
+                          />
+                          <button
+                            onClick={() => {
+                              setHeaderBg(customHeaderColor);
+                              setShowColorPicker(false);
+                            }}
+                            className="flex-1 px-2 py-1 rounded-lg bg-gray-100 hover:bg-gray-200 text-xs text-gray-700 font-medium transition-colors"
+                          >
+                            Aplicar
+                          </button>
+                          {headerBg && (
+                            <button
+                              onClick={() => {
+                                setHeaderBg(null);
+                                setShowColorPicker(false);
+                              }}
+                              className="px-2 py-1 rounded-lg bg-red-50 hover:bg-red-100 text-xs text-red-600 font-medium transition-colors"
+                            >
+                              Resetar
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    </>
+                  )}
+                </div>
+
+                {isDadosProjEditMode ? (
+                  <>
+                    <button
+                      onClick={() => setShowDadosProjSaveConfirm(true)}
+                      disabled={isSavingDados}
+                      className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-emerald-500 hover:bg-emerald-600 text-white text-[10px] font-medium transition-colors disabled:opacity-50"
+                    >
+                      {isSavingDados ? (
+                        <Loader2 className="h-3 w-3 animate-spin" />
+                      ) : (
+                        <Save className="h-3 w-3" />
+                      )}
+                      {isSavingDados ? "Salvando..." : "Salvar"}
+                    </button>
+                    <button
+                      onClick={() => setShowDadosProjCancelConfirm(true)}
+                      className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-white border border-slate-200 hover:bg-slate-100 text-slate-600 text-[10px] font-medium transition-colors dark:bg-slate-800 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-700"
+                    >
+                      <XCircle className="h-3 w-3" />
+                      Cancelar
+                    </button>
+                  </>
+                ) : (
+                  project && (
+                    <>
+                      <CopyLinkButton />
+                      <button
+                        onClick={onClone}
+                        className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-white border border-slate-200 hover:bg-slate-100 text-slate-600 text-[10px] font-medium transition-colors dark:bg-slate-800 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-700"
+                      >
+                        <Copy className="h-3 w-3" />
+                        Clonar
+                      </button>
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <button className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-white border border-slate-200 hover:bg-slate-100 text-slate-600 text-[10px] font-medium transition-colors dark:bg-slate-800 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-700">
+                            <FileText className="h-3 w-3" />
+                            Exportar Proposta
+                            <ChevronDown className="h-2.5 w-2.5 ml-0.5" />
+                          </button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="start" className="w-52">
+                          <DropdownMenuItem
+                            onClick={async () => {
+                              if (!project) return;
+                              setIsExportingPdf(true);
+                              try {
+                                const brandCfg = {
+                                  gradient: parseBrandGradient(
+                                    sidebarSettings.backgroundColor,
+                                  ),
+                                  logoUrl:
+                                    sidebarSettings.sidebarLogo ||
+                                    agencyProfile.logo ||
+                                    "/images/logob.png",
+                                  agencyName:
+                                    agencyProfile.name || "Lamego Teste Agency",
+                                };
+                                const proposalData = buildProposalData(
+                                  mockData,
+                                  dadosProjForm,
+                                  project,
+                                );
+                                await exportProposalPDF(
+                                  proposalData,
+                                  brandCfg,
+                                  `proposta_${(dadosProjForm.agencia || project?.name || "projeto").replace(/\s+/g, "_")}.pdf`,
+                                );
+                              } finally {
+                                setIsExportingPdf(false);
+                              }
+                            }}
+                            disabled={isExportingPdf}
+                          >
+                            <FileText className="h-3.5 w-3.5 mr-2" />
+                            {isExportingPdf
+                              ? "Gerando PDF..."
+                              : "Documento Padrão (PDF)"}
+                          </DropdownMenuItem>
+                          <DropdownMenuSeparator />
+                          <DropdownMenuItem
+                            onClick={() => {
+                              setCustomDocFile(null);
+                              setShowCustomDocDialog(true);
+                            }}
+                          >
+                            <Upload className="h-3.5 w-3.5 mr-2" />
+                            Documento Personalizado
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                      {project.status !== "cancelled" &&
+                        project.status !== "canceled" && (
+                          <button
+                            onClick={onCancel}
+                            className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-white border border-red-200 hover:bg-red-50 text-red-500 text-[10px] font-medium transition-colors dark:bg-slate-800 dark:border-red-900/50 dark:hover:bg-red-950/30"
+                          >
+                            <Ban className="h-3 w-3" />
+                            Cancelar
+                          </button>
+                        )}
+                    </>
+                  )
+                )}
+              </div>
+            </div>
 
             {/* Crop overlay */}
             {cropOpen && rawImageSrc && (

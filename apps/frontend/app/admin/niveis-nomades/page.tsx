@@ -1,6 +1,6 @@
 ﻿// @ts-nocheck
 import { useState, useEffect } from "react";
-import { useSidebar } from "@/contexts/sidebar-context";
+import { useAppFrameMetrics } from "@/hooks/useAppFrameMetrics";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -635,7 +635,7 @@ function RevisionTab() {
 }
 
 export default function NiveisNomadesPage() {
-  const { sidebarWidth } = useSidebar();
+  const { sidebarWidth, headerHeight, footerHeight } = useAppFrameMetrics();
   const {
     levels: apiLevels,
     loading: levelsLoading,
@@ -1041,37 +1041,33 @@ export default function NiveisNomadesPage() {
         <SheetContent
           side="right"
           hideOverlay={true}
-          className="p-0 border-0"
+          className="p-0 flex flex-col gap-0 z-[70] [&>button:last-child]:top-3 [&>button:last-child]:right-3 [&>button:last-child]:p-1.5 [&>button:last-child]:hover:bg-white/20 [&>button:last-child_svg]:size-4"
           style={{
-            left: `${sidebarWidth}px`,
-            width: `calc(100vw - ${sidebarWidth}px)`,
+            left: `${sidebarWidth - 2}px`,
+            top: `${headerHeight - 1}px`,
+            bottom: `${footerHeight - 1}px`,
+            height: "auto",
+            width: `calc(100vw - ${sidebarWidth - 2}px)`,
           }}
         >
-          <div className="h-full bg-white dark:bg-slate-900 shadow-2xl flex flex-col border-l border-gray-200 dark:border-gray-800">
-            <div className="flex items-center justify-between p-4 border-b border-gray-200 dark:border-gray-800 bg-linear-to-r from-violet-50/50 via-purple-50/30 to-indigo-50/50 dark:from-violet-950/20 dark:via-purple-950/10 dark:to-indigo-950/20">
-              <div className="flex items-center gap-2">
-                <div className="p-1.5 bg-linear-to-br from-violet-600 to-indigo-600 rounded-lg shadow-lg">
-                  <Award className="h-4 w-4 text-white" />
-                </div>
-                <div>
-                  <SheetTitle className="text-lg font-bold text-gray-900 dark:text-white">
-                    {editingLevel?.id ? "Editar Nível" : "Novo Nível de Nômade"}
-                  </SheetTitle>
-                  <p className="text-xs text-gray-600 dark:text-gray-400">
-                    Configure critérios de performance e benefícios
-                  </p>
-                </div>
-              </div>
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={() => setIsDialogOpen(false)}
-                className="shrink-0 h-8 w-8 hover:bg-white/50 dark:hover:bg-gray-800"
-              >
-                <X className="h-4 w-4" />
-              </Button>
+          <div
+            className="flex items-center justify-between px-5 py-3 flex-shrink-0"
+            style={{
+              background:
+                "var(--brand-gradient, linear-gradient(to right, #0a1628, #1e3a8a, #0a1628))",
+            }}
+          >
+            <div className="min-w-0 flex-1 text-sm font-bold text-white truncate">
+              <SheetTitle className="text-sm font-bold text-white truncate">
+                {editingLevel?.id ? "Editar Nível" : "Novo Nível de Nômade"}
+              </SheetTitle>
+              <p className="text-[11px] font-normal text-white/60 mt-0.5 truncate">
+                Configure critérios de performance e benefícios
+              </p>
             </div>
-            <div className="flex-1 overflow-y-auto p-6 bg-slate-50 dark:bg-slate-950">
+          </div>
+          <div className="flex-1 overflow-y-auto p-6 bg-slate-50 dark:bg-slate-950">
+            <div className="max-w-3xl mx-auto">
               {editingLevel && (
                 <LevelForm
                   level={editingLevel}

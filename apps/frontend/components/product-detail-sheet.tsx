@@ -33,7 +33,7 @@ import {
   PlusCircle,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { useSidebar } from "@/contexts/sidebar-context";
+import { SlidePanel } from "@/components/slide-panel";
 import { useAccountType } from "@/contexts/account-type-context";
 import { useProducts } from "@/lib/contexts/product-context";
 import { ProductNomadsTab } from "@/components/admin/product-nomads-tab";
@@ -302,14 +302,12 @@ export function ProductDetailSheet({
   isSelected = false,
 }: ProductDetailSheetProps) {
   const [selectedVariation, setSelectedVariation] = useState<any | null>(null);
-  const [isClosing, setIsClosing] = useState(false);
   const [activeTab, setActiveTab] = useState<
     "detalhes" | "portfolio" | "nomades"
   >("detalhes");
   const [nestedDetailProduct, setNestedDetailProduct] = useState<any | null>(
     null,
   );
-  const { sidebarWidth } = useSidebar();
   const { accountType } = useAccountType();
   const isAdmin = accountType === "admin";
   const { products: allProducts } = useProducts();
@@ -323,7 +321,6 @@ export function ProductDetailSheet({
   useEffect(() => {
     if (!open) {
       setSelectedVariation(null);
-      setIsClosing(false);
       setActiveTab("detalhes");
       setNestedDetailProduct(null);
     }
@@ -357,14 +354,9 @@ export function ProductDetailSheet({
   }, [isDragging]);
 
   if (!product) return null;
-  if (!open && !isClosing) return null;
 
   const handleClose = () => {
-    setIsClosing(true);
-    setTimeout(() => {
-      setIsClosing(false);
-      onOpenChange(false);
-    }, 420);
+    onOpenChange(false);
   };
 
   const pres = product.presentation;
@@ -390,159 +382,108 @@ export function ProductDetailSheet({
 
   const canAdd = !hasVariations || !!selectedVariation;
 
-  const panelWidth = `calc(100vw - ${sidebarWidth}px)`;
-
   return (
     <>
-      {/* Backdrop — começa ao lado da sidebar, para antes do footer (24px) */}
-      <div
-        className={cn(
-          "fixed top-0 right-0 z-40 bg-black/20 backdrop-blur-[2px] transition-opacity duration-420",
-          isClosing ? "opacity-0" : "opacity-100",
-        )}
-        style={{ left: `${sidebarWidth}px`, height: "calc(100vh - 24px)" }}
-        onClick={handleClose}
-      />
-
-      {/* Drawer — alinhado a partir da sidebar, deixando o rodapé visível */}
-      <div
-        ref={drawerRef}
-        data-slot="sheet-content"
-        data-state={isClosing ? "closed" : "open"}
-        className="fixed top-0 right-0 h-[calc(100vh-24px)] bg-background flex flex-col border-l border-white/40 z-50 shadow-[0_30px_90px_rgba(15,23,42,0.28)] overflow-hidden data-[state=open]:animate-in data-[state=open]:slide-in-from-right data-[state=open]:fade-in-0 data-[state=closed]:animate-out data-[state=closed]:slide-out-to-right data-[state=closed]:fade-out-0"
-        style={{ left: `${sidebarWidth}px`, width: panelWidth }}
+      <SlidePanel
+        open={open}
+        onClose={handleClose}
+        title={product.name}
+        subtitle={product.category || undefined}
+        widthMode="full"
       >
-        {/* Botão fechar absoluto — fica branco sobre o header escuro */}
-        <div className="absolute top-3.5 right-3.5 z-20 flex items-center gap-1.5">
-          <CopyLinkButton />
-          <button
-            onClick={handleClose}
-            className="rounded-full h-8 w-8 flex items-center justify-center bg-white/10 hover:bg-white/20 text-white/90 hover:text-white transition-all backdrop-blur-sm focus:outline-none focus:ring-2 focus:ring-white/40"
-            aria-label="Fechar"
-          >
-            <X className="h-4 w-4" />
-          </button>
-        </div>
+        <div className="flex flex-col flex-1 min-h-0 overflow-hidden w-full">
+          {/* ══════════════════════════════════════════════════════════════
+              IDENTITY BAR — categoria, variações, descrição, chips, destaques
+          ══════════════════════════════════════════════════════════════ */}
+          <div className="shrink-0 px-6 pt-4 pb-4 border-b border-border/50 bg-muted/20">
+            <div className="flex items-start justify-between gap-4">
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center gap-2 mb-1.5 flex-wrap">
+                  <Badge className="bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300 border-blue-200 dark:border-blue-800 text-[10px] font-semibold tracking-wider uppercase">
+                    {product.category || "Serviço"}
+                  </Badge>
+                  {hasVariations && (
+                    <span className="inline-flex items-center gap-1 text-[10px] bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 rounded-full px-2 py-0.5 border border-purple-200 dark:border-purple-700 font-semibold">
+                      <Layers className="h-2.5 w-2.5" />
+                      {activeVariations.length}{" "}
+                      {activeVariations.length === 1 ? "opção" : "opções"}
+                    </span>
+                  )}
+                </div>
 
-        {/* ══════════════════════════════════════════════════════════════
-            HEADER — compacto: info (esq) | highlights (dir)
-        ══════════════════════════════════════════════════════════════ */}
-        <div
-          className="shrink-0 text-white px-6 pt-5 pb-5 relative overflow-hidden"
-          style={{
-            background:
-              "var(--app-brand-header, linear-gradient(135deg, #050816 0%, #1a2a6f 42%, #c81a7f 100%))",
-          }}
-        >
-          <div className="absolute inset-0 pointer-events-none">
-            <div className="absolute -top-20 -right-16 h-48 w-48 rounded-full bg-white/10 blur-3xl" />
-            <div className="absolute -bottom-24 left-1/3 h-56 w-56 rounded-full bg-fuchsia-400/15 blur-3xl" />
-            <div className="absolute inset-x-0 bottom-0 h-px bg-white/15" />
-          </div>
-          <div className="flex flex-col lg:flex-row lg:items-center lg:gap-6">
-            {/* ── Coluna esquerda: identificação + chips ── */}
-            <div className="flex-1 min-w-0 pr-10 lg:pr-0">
-              <div className="mb-2 inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/10 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.22em] text-blue-100/90 backdrop-blur-md">
-                <Sparkles className="h-3 w-3 text-fuchsia-200" />
-                Detalhes premium
-              </div>
-
-              {/* Linha 1: categoria + chip de variações */}
-              <div className="flex items-center gap-2 mb-1">
-                <Badge className="bg-white/10 text-white/90 border-white/20 text-[10px] font-semibold tracking-wider uppercase backdrop-blur-sm shrink-0">
-                  {product.category || "Serviço"}
-                </Badge>
-                {hasVariations && (
-                  <span className="inline-flex items-center gap-1 text-[10px] bg-purple-500/30 backdrop-blur-sm rounded-full px-2 py-0.5 border border-purple-400/40 font-semibold">
-                    <Layers className="h-2.5 w-2.5" />
-                    {activeVariations.length}{" "}
-                    {activeVariations.length === 1 ? "opção" : "opções"}
-                  </span>
-                )}
-              </div>
-
-              {/* Nome */}
-              <h2 className="text-xl sm:text-2xl font-extrabold leading-tight max-w-2xl drop-shadow-sm">
-                {product.name}
-              </h2>
-
-              {/* Tagline */}
-              {pres?.tagline && (
-                <p className="text-xs text-blue-100/85 leading-snug max-w-2xl mt-0.5">
-                  {pres.tagline}
-                </p>
-              )}
-
-              {/* Descrição curta quando não tem presentation */}
-              {!hasPresentation &&
-                (product.summaryDescription || product.description) && (
-                  <p className="text-xs text-blue-100/80 leading-snug max-w-2xl mt-0.5 line-clamp-2">
-                    {product.summaryDescription || product.description}
+                {pres?.tagline && (
+                  <p className="text-xs text-muted-foreground leading-snug max-w-2xl">
+                    {pres.tagline}
                   </p>
                 )}
+                {!hasPresentation &&
+                  (product.summaryDescription || product.description) && (
+                    <p className="text-xs text-muted-foreground leading-snug max-w-2xl line-clamp-2">
+                      {product.summaryDescription || product.description}
+                    </p>
+                  )}
 
-              {/* Metadata chips */}
-              <div className="flex flex-wrap gap-1 mt-2">
-                {/* ID do produto */}
-                <span className="inline-flex items-center text-[11px] font-mono font-extrabold bg-white/20 backdrop-blur-sm rounded-md px-2.5 py-1 border border-white/40 text-white tracking-widest shadow-sm">
-                  {product.id}
-                </span>
-                {product.recurrence && (
-                  <span className="inline-flex items-center gap-1 text-[10px] bg-white/12 backdrop-blur-sm rounded-full px-2 py-0.5 font-medium border border-white/15">
-                    <Repeat2 className="h-2.5 w-2.5 text-blue-200" />
-                    {product.recurrence}
+                <div className="flex flex-wrap gap-1.5 mt-2">
+                  <span className="inline-flex items-center text-[11px] font-mono font-bold bg-slate-100 dark:bg-slate-800 rounded-md px-2 py-0.5 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 tracking-widest">
+                    {product.id}
                   </span>
-                )}
-                {product.deliveryDays && (
-                  <span className="inline-flex items-center gap-1 text-[10px] bg-white/12 backdrop-blur-sm rounded-full px-2 py-0.5 border border-white/15">
-                    <CalendarClock className="h-2.5 w-2.5 text-blue-200" />
-                    {product.deliveryDays} dias
-                  </span>
-                )}
-                {product.itemLimit && (
-                  <span className="inline-flex items-center gap-1 text-[10px] bg-white/12 backdrop-blur-sm rounded-full px-2 py-0.5 border border-white/15">
-                    <Users className="h-2.5 w-2.5 text-blue-200" />
-                    {product.itemLimit} contrato
-                    {product.itemLimit !== 1 ? "s" : ""}
-                  </span>
-                )}
-                {/* Nota média do produto — calculada a partir dos nômades habilitados */}
-                <ProductRatingDisplay
-                  productId={product.id}
-                  size="xs"
-                  showCount={true}
-                  variant="white"
-                  className="bg-white/10 backdrop-blur-sm rounded-full px-2 py-0.5 border border-white/15"
-                />
+                  {product.recurrence && (
+                    <span className="inline-flex items-center gap-1 text-[10px] bg-slate-100 dark:bg-slate-800 rounded-full px-2 py-0.5 font-medium border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300">
+                      <Repeat2 className="h-2.5 w-2.5" />
+                      {product.recurrence}
+                    </span>
+                  )}
+                  {product.deliveryDays && (
+                    <span className="inline-flex items-center gap-1 text-[10px] bg-slate-100 dark:bg-slate-800 rounded-full px-2 py-0.5 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300">
+                      <CalendarClock className="h-2.5 w-2.5" />
+                      {product.deliveryDays} dias
+                    </span>
+                  )}
+                  {product.itemLimit && (
+                    <span className="inline-flex items-center gap-1 text-[10px] bg-slate-100 dark:bg-slate-800 rounded-full px-2 py-0.5 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300">
+                      <Users className="h-2.5 w-2.5" />
+                      {product.itemLimit} contrato
+                      {product.itemLimit !== 1 ? "s" : ""}
+                    </span>
+                  )}
+                  <ProductRatingDisplay
+                    productId={product.id}
+                    size="xs"
+                    showCount={true}
+                    className="bg-slate-100 dark:bg-slate-800 rounded-full px-2 py-0.5 border border-slate-200 dark:border-slate-700"
+                  />
+                </div>
+              </div>
+
+              <div className="flex items-center gap-1.5 shrink-0">
+                <CopyLinkButton />
               </div>
             </div>
 
-            {/* ── Coluna direita: highlights ── */}
             {pres?.highlights?.length > 0 && (
-              <div className="lg:w-[44%] xl:w-[42%] shrink-0 mt-3 lg:mt-0 lg:pl-5 lg:border-l lg:border-white/15">
-                <p className="text-[9px] font-bold uppercase tracking-widest text-blue-200/80 mb-1">
+              <div className="mt-3 pt-3 border-t border-border/40">
+                <p className="text-[9px] font-bold uppercase tracking-widest text-muted-foreground mb-1.5">
                   Destaques
                 </p>
-                <div className="grid grid-cols-1 gap-y-1">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-1">
                   {pres.highlights.map((h: string, i: number) => (
-                    <div
-                      key={i}
-                      className="flex items-start gap-1.5 text-[12px]"
-                    >
-                      <CheckCircle2 className="h-3 w-3 text-emerald-300 shrink-0 mt-0.5" />
-                      <span className="text-blue-50/95 leading-snug">{h}</span>
+                    <div key={i} className="flex items-start gap-1.5 text-[12px]">
+                      <CheckCircle2 className="h-3 w-3 text-emerald-500 shrink-0 mt-0.5" />
+                      <span className="text-foreground/90 leading-snug">{h}</span>
                     </div>
                   ))}
                 </div>
               </div>
             )}
           </div>
-        </div>
 
         {/* ══════════════════════════════════════════════════════════════
             BODY — duas colunas com handle de resize entre elas
         ══════════════════════════════════════════════════════════════ */}
-        <div className="flex flex-1 min-h-0 overflow-hidden flex-col sm:flex-row">
+        <div
+          ref={drawerRef}
+          className="flex flex-1 min-h-0 overflow-hidden flex-col sm:flex-row"
+        >
           {/* ── COLUNA ESQUERDA: conteúdo descritivo ─────────────── */}
           <div
             className="flex flex-col min-h-0 order-2 sm:order-1"
@@ -1583,7 +1524,8 @@ export function ProductDetailSheet({
             </div>
           </div>
         </div>
-      </div>
+        </div>
+      </SlidePanel>
       {/* ── Nested detail sheet for complementary products with variations ── */}
       {nestedDetailProduct && (
         <ProductDetailSheet

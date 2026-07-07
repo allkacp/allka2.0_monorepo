@@ -33,8 +33,7 @@ import {
   Layers,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { useSidebar } from "@/contexts/sidebar-context";
-import { ModalBrandHeader } from "@/components/ui/modal-brand-header";
+import { SlidePanel } from "@/components/slide-panel";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
 import {
@@ -122,7 +121,6 @@ export function CompanyCreateSlidePanel({
   onCreate,
 }: CompanyCreateSlidePanelProps) {
   const { toast } = useToast();
-  const { sidebarWidth } = useSidebar();
   const [loading, setLoading] = useState(false);
   const [errors, setErrors] = useState<FormErrors>({});
   const [submitAttempted, setSubmitAttempted] = useState(false);
@@ -140,8 +138,6 @@ export function CompanyCreateSlidePanel({
     [],
   );
   const [showConfirmDialog, setShowConfirmDialog] = useState(false);
-  const [isClosing, setIsClosing] = useState(false);
-  const [isMounted, setIsMounted] = useState(false);
 
   // Avatar / crop states
   const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
@@ -191,13 +187,11 @@ export function CompanyCreateSlidePanel({
   useEffect(() => {
     if (open) {
       const id = requestAnimationFrame(() => {
-        setIsMounted(true);
         if (bodyScrollRef.current) bodyScrollRef.current.scrollTop = 0;
       });
       return () => cancelAnimationFrame(id);
     }
-    if (!isClosing) setIsMounted(false);
-  }, [open, isClosing]);
+  }, [open]);
 
   useEffect(() => {
     if (!open) {
@@ -231,15 +225,11 @@ export function CompanyCreateSlidePanel({
       setRawImageSrc(null);
       setCropOpen(false);
       setShowAvatarMenu(false);
-      setIsClosing(false);
     }
   }, [open]);
 
   const handleClose = () => {
-    setIsClosing(true);
-    setTimeout(() => {
-      onOpenChange(false);
-    }, 420);
+    onOpenChange(false);
   };
 
   const validateForm = (): boolean => {
@@ -423,125 +413,45 @@ export function CompanyCreateSlidePanel({
   };
   const totalErrors = Object.values(sectionErrors).reduce((a, b) => a + b, 0);
 
-  const panelWidth = `calc(100vw - ${sidebarWidth}px)`;
-
-  if (!open && !isClosing) return null;
+  if (!open) return null;
 
   return (
     <>
-      {/* Backdrop */}
-      <div
-        className={cn(
-          "fixed top-0 bottom-0 right-0 z-75 bg-black/20 backdrop-blur-[2px] transition-opacity duration-[420ms]",
-          isClosing ? "opacity-0" : "opacity-100",
-        )}
-        style={{ left: `${sidebarWidth}px` }}
-        onClick={() => {
-          setIsClosing(true);
-          setTimeout(() => {
-            setIsClosing(false);
-            onOpenChange(false);
-          }, 420);
-        }}
-      />
-      <div
-        data-slot="sheet-content"
-        data-state={isClosing ? "closed" : "open"}
-        className="fixed top-0 right-0 h-[calc(100vh-24px)] bg-background flex flex-col border-l border-border z-80 shadow-2xl overflow-hidden data-[state=open]:animate-in data-[state=open]:slide-in-from-right data-[state=open]:fade-in-0 data-[state=closed]:animate-out data-[state=closed]:slide-out-to-right data-[state=closed]:fade-out-0"
-        style={{ left: `${sidebarWidth}px`, width: panelWidth }}
+      <SlidePanel
+        open={open}
+        onClose={handleClose}
+        title={formData.nomeFantasia || "Nova Empresa"}
+        subtitle="Configure os dados da empresa"
+        widthMode="full"
+        footer={
+          <div className="flex items-center gap-3">
+            <Button
+              variant="outline"
+              onClick={() => handleClose()}
+              disabled={loading}
+            >
+              Cancelar
+            </Button>
+            <Button
+              className="btn-brand"
+              onClick={handleSubmit}
+              disabled={loading}
+            >
+              {loading ? "Criando..." : "Criar Empresa"}
+            </Button>
+          </div>
+        }
       >
-        <div className="relative h-full flex flex-col overflow-hidden">
-          {/* Hidden file input */}
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept="image/*"
-            className="hidden"
-            onChange={handleFileChange}
-          />
+        {/* Hidden file input */}
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="image/*"
+          className="hidden"
+          onChange={handleFileChange}
+        />
 
-          {/* Header with Brand Theme */}
-          <ModalBrandHeader
-            title={formData.nomeFantasia || "Nova Empresa"}
-            subtitle="Configure os dados da empresa"
-            left={
-              <button
-                onClick={handleAvatarClick}
-                className="relative h-20 w-20 rounded-full bg-white/15 border-2 border-white/30 flex-shrink-0 group overflow-hidden hover:border-white/60 transition-all"
-              >
-                <div className="absolute inset-0 flex items-center justify-center bg-gradient-to-br from-blue-600 to-violet-600">
-                  <Camera className="h-7 w-7 text-white/70" />
-                </div>
-                {avatarPreview && (
-                  <img
-                    src={avatarPreview}
-                    alt="logo"
-                    className="absolute inset-0 w-full h-full object-cover"
-                  />
-                )}
-                <div className="absolute inset-0 bg-black/50 flex flex-col items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity rounded-full">
-                  <Camera className="h-5 w-5 text-white" />
-                  <span className="text-[9px] text-white/90 font-medium mt-0.5">
-                    {avatarPreview ? "Editar" : "Foto"}
-                  </span>
-                </div>
-              </button>
-            }
-            onClose={() => handleClose()}
-          />
-
-          {/* Avatar menu */}
-          {showAvatarMenu && avatarPreview && (
-            <>
-              <div
-                className="absolute inset-0 z-40"
-                onClick={() => setShowAvatarMenu(false)}
-              />
-              <div
-                className="absolute z-50 bg-white rounded-xl shadow-2xl border border-gray-100 overflow-hidden min-w-[172px]"
-                style={{ top: 108, left: 22 }}
-              >
-                <button
-                  onClick={() => {
-                    setShowAvatarMenu(false);
-                    setTimeout(() => fileInputRef.current?.click(), 10);
-                  }}
-                  className="flex items-center gap-2.5 w-full px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
-                >
-                  <Camera className="h-3.5 w-3.5 text-gray-400" />
-                  Nova foto
-                </button>
-                {originalRawSrc && (
-                  <button
-                    onClick={() => {
-                      setShowAvatarMenu(false);
-                      setRawImageSrc(originalRawSrc);
-                      setCropZoom(1);
-                      setCropOffset({ x: 0, y: 0 });
-                      setCropOpen(true);
-                    }}
-                    className="flex items-center gap-2.5 w-full px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 transition-colors border-t border-gray-100"
-                  >
-                    <ZoomIn className="h-3.5 w-3.5 text-gray-400" />
-                    Reposicionar
-                  </button>
-                )}
-                <button
-                  onClick={() => {
-                    setShowAvatarMenu(false);
-                    setAvatarPreview(null);
-                    setOriginalRawSrc(null);
-                  }}
-                  className="flex items-center gap-2.5 w-full px-4 py-2.5 text-sm text-red-500 hover:bg-red-50 transition-colors border-t border-gray-100"
-                >
-                  <Trash2 className="h-3.5 w-3.5" />
-                  Remover foto
-                </button>
-              </div>
-            </>
-          )}
-
-          {/* Crop overlay */}
+        {/* Crop overlay */}
           {cropOpen && rawImageSrc && (
             <div className="absolute inset-0 z-50 flex flex-col bg-black/90">
               <div className="flex-shrink-0 px-6 pt-5 pb-2 text-center">
@@ -1650,26 +1560,7 @@ export function CompanyCreateSlidePanel({
               </p>
             </div>
           </div>
-
-          {/* Rodapé Fixo */}
-          <div className="flex items-center gap-3 px-[25px] py-[15px] border-t bg-slate-50 flex-shrink-0">
-            <Button
-              variant="outline"
-              onClick={() => handleClose()}
-              disabled={loading}
-            >
-              Cancelar
-            </Button>
-            <Button
-              className="btn-brand"
-              onClick={handleSubmit}
-              disabled={loading}
-            >
-              {loading ? "Criando..." : "Criar Empresa"}
-            </Button>
-          </div>
-        </div>
-      </div>
+      </SlidePanel>
 
       {/* Diálogo de Confirmação */}
       <AlertDialog open={showConfirmDialog} onOpenChange={setShowConfirmDialog}>

@@ -49,7 +49,6 @@ import {
   MoreHorizontal,
 } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
-import { ModalBrandHeader } from "@/components/ui/modal-brand-header";
 import { Checkbox } from "@/components/ui/checkbox";
 import { ItemsPerPageSelect } from "@/components/items-per-page-select";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
@@ -90,7 +89,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
-import { useSidebar } from "@/contexts/sidebar-context";
+import { useAppFrameMetrics } from "@/hooks/useAppFrameMetrics";
 import {
   PageLoader,
   ButtonLoader,
@@ -444,6 +443,7 @@ function ModelDetailDrawer({
   onDuplicate: (model: CatalogTask) => void;
   updatingId: string | null;
 }) {
+  const { sidebarWidth, headerHeight, footerHeight } = useAppFrameMetrics();
   const [activeTab, setActiveTab] = useState("overview");
   const [detail, setDetail] = useState<CatalogTask | null>(null);
   const [loadingDetail, setLoadingDetail] = useState(false);
@@ -491,17 +491,41 @@ function ModelDetailDrawer({
       <SheetContent
         side="right"
         hideOverlay
-        className="w-full sm:max-w-3xl p-0 flex flex-col h-full gap-0"
+        className="p-0 flex flex-col gap-0 z-[70] [&>button:last-child]:top-3 [&>button:last-child]:right-3 [&>button:last-child]:p-1.5 [&>button:last-child]:hover:bg-white/20 [&>button:last-child_svg]:size-4"
+        style={{
+          left: `${sidebarWidth - 2}px`,
+          top: `${headerHeight - 1}px`,
+          bottom: `${footerHeight - 1}px`,
+          height: "auto",
+          width: `calc(100vw - ${sidebarWidth - 2}px)`,
+        }}
       >
-        {/* -- HEADER --------------------------------------------------------- */}
-        <div className="bg-gradient-to-br from-indigo-700 via-purple-700 to-fuchsia-700 px-6 pt-5 pb-0 shrink-0">
-          <div className="flex items-start gap-4 mb-4">
-            <div className="h-12 w-12 rounded-2xl bg-white/15 backdrop-blur-sm flex items-center justify-center shrink-0 ring-1 ring-white/20">
-              <ClipboardList className="h-6 w-6 text-white" />
-            </div>
-            <div className="flex-1 min-w-0">
-              <div className="flex flex-wrap items-center gap-2 mb-1">
-                <span className="text-[10px] font-mono font-bold bg-white/20 text-white px-2 py-0.5 rounded-md tracking-wider">
+        {/* Header */}
+        <div
+          className="flex items-center justify-between px-5 py-3 flex-shrink-0"
+          style={{
+            background:
+              "var(--brand-gradient, linear-gradient(to right, #0a1628, #1e3a8a, #0a1628))",
+          }}
+        >
+          <div className="min-w-0 flex-1 text-sm font-bold text-white truncate">
+            {model.name}
+            <p className="text-[11px] font-normal text-white/60 mt-0.5 truncate">
+              {model.category}
+              {model.subcategory ? ` · ${model.subcategory}` : ""}
+            </p>
+          </div>
+        </div>
+
+        {/* Identity bar */}
+        <div className="shrink-0 px-6 py-3.5 border-b border-slate-100 dark:border-slate-800 bg-slate-50/60 dark:bg-slate-900/30">
+          <div className="flex items-center justify-between gap-4">
+            <div className="flex items-center gap-3 min-w-0">
+              <div className="h-9 w-9 rounded-xl bg-gradient-to-br from-indigo-600 to-fuchsia-600 flex items-center justify-center shrink-0">
+                <ClipboardList className="h-4.5 w-4.5 text-white" />
+              </div>
+              <div className="min-w-0 flex flex-wrap items-center gap-1.5">
+                <span className="text-[10px] font-mono font-bold bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 px-2 py-0.5 rounded-md tracking-wider">
                   {formatModelCode(codeOrdinal)}
                 </span>
                 <NeonBadge color={STATUS_BADGE_COLOR[model.status] ?? "emerald"}>
@@ -511,81 +535,64 @@ function ModelDetailDrawer({
                   {tc.label}
                 </NeonBadge>
               </div>
-              <h2 className="text-lg font-bold text-white leading-snug line-clamp-2">
-                {model.name}
-              </h2>
-              <p className="text-sm text-white/60 mt-0.5 truncate">
-                {model.category}
-                {model.subcategory ? (
-                  <span className="opacity-70"> · {model.subcategory}</span>
-                ) : null}
-              </p>
             </div>
-            <div className="flex items-center gap-1.5 shrink-0">
-              <CopyLinkButton />
-              <button
-                onClick={onClose}
-                className="shrink-0 h-8 w-8 flex items-center justify-center rounded-lg bg-white/10 hover:bg-white/20 text-white/70 hover:text-white transition-colors"
-              >
-                <X className="h-4 w-4" />
-              </button>
-            </div>
+            <CopyLinkButton />
           </div>
+        </div>
 
-          {/* Tab strip */}
-          <div className="flex">
-            {[
-              {
-                value: "overview",
-                label: "Visão Geral",
-                icon: <Info className="h-3.5 w-3.5" />,
-              },
-              {
-                value: "steps",
-                label: "Etapas & Checklist",
-                icon: <Layers className="h-3.5 w-3.5" />,
-                badge: steps.length + checklist.length || undefined,
-              },
-              {
-                value: "briefing",
-                label: "Briefing",
-                icon: <BookOpen className="h-3.5 w-3.5" />,
-                badge: briefingCount || undefined,
-              },
-              {
-                value: "products",
-                label: "Produtos",
-                icon: <Package className="h-3.5 w-3.5" />,
-                badge: productCount || undefined,
-              },
-            ].map((t) => (
-              <button
-                key={t.value}
-                onClick={() => setActiveTab(t.value)}
-                className={cn(
-                  "flex items-center gap-1.5 px-4 py-2.5 text-xs font-semibold border-b-2 transition-colors",
-                  activeTab === t.value
-                    ? "border-white text-white"
-                    : "border-transparent text-white/50 hover:text-white/80 hover:border-white/30",
-                )}
-              >
-                {t.icon}
-                {t.label}
-                {t.badge != null && (
-                  <span className="inline-flex h-4 min-w-4 px-1 items-center justify-center rounded-full bg-white/20 text-[9px] font-bold">
-                    {t.badge}
-                  </span>
-                )}
-              </button>
-            ))}
-          </div>
+        {/* Tab strip */}
+        <div className="flex border-b border-slate-100 dark:border-slate-800 bg-background shrink-0">
+          {[
+            {
+              value: "overview",
+              label: "Visão Geral",
+              icon: <Info className="h-3.5 w-3.5" />,
+            },
+            {
+              value: "steps",
+              label: "Etapas & Checklist",
+              icon: <Layers className="h-3.5 w-3.5" />,
+              badge: steps.length + checklist.length || undefined,
+            },
+            {
+              value: "briefing",
+              label: "Briefing",
+              icon: <BookOpen className="h-3.5 w-3.5" />,
+              badge: briefingCount || undefined,
+            },
+            {
+              value: "products",
+              label: "Produtos",
+              icon: <Package className="h-3.5 w-3.5" />,
+              badge: productCount || undefined,
+            },
+          ].map((t) => (
+            <button
+              key={t.value}
+              onClick={() => setActiveTab(t.value)}
+              className={cn(
+                "flex items-center gap-1.5 px-4 py-2.5 text-xs font-semibold border-b-2 -mb-px transition-colors",
+                activeTab === t.value
+                  ? "border-blue-500 text-blue-600 dark:text-blue-400"
+                  : "border-transparent text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 hover:border-slate-200 dark:hover:border-slate-700",
+              )}
+            >
+              {t.icon}
+              {t.label}
+              {t.badge != null && (
+                <span className="inline-flex h-4 min-w-4 px-1 items-center justify-center rounded-full bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300 text-[9px] font-bold">
+                  {t.badge}
+                </span>
+              )}
+            </button>
+          ))}
         </div>
 
         {/* -- BODY ----------------------------------------------------------- */}
         <div className="flex-1 overflow-y-auto">
           {/* Loading skeleton */}
           {loadingDetail && (
-            <div className="p-6 space-y-4">
+            <div className="max-w-3xl mx-auto p-6 space-y-4">
               <Skeleton className="h-4 w-48" />
               <Skeleton className="h-20 w-full" />
               <Skeleton className="h-4 w-32" />
@@ -611,7 +618,7 @@ function ModelDetailDrawer({
             <>
               {/* -- TAB: VISÃO GERAL --------------------------------------- */}
               {activeTab === "overview" && (
-                <div className="p-6 space-y-6">
+                <div className="max-w-3xl mx-auto p-6 space-y-6">
                   <div className="flex items-start gap-3 bg-amber-50 border border-amber-200 rounded-xl p-4">
                     <AlertCircle className="h-4 w-4 text-amber-500 shrink-0 mt-0.5" />
                     <p className="text-xs text-amber-700 leading-relaxed">
@@ -800,7 +807,7 @@ function ModelDetailDrawer({
 
               {/* -- TAB: ETAPAS & CHECKLIST -------------------------------- */}
               {activeTab === "steps" && (
-                <div className="p-6 space-y-8">
+                <div className="max-w-3xl mx-auto p-6 space-y-8">
                   {steps.length > 0 ? (
                     <DrawerSection
                       icon={<Layers className="h-3.5 w-3.5" />}
@@ -868,7 +875,7 @@ function ModelDetailDrawer({
 
               {/* -- TAB: BRIEFING ------------------------------------------ */}
               {activeTab === "briefing" && (
-                <div className="p-6 space-y-8">
+                <div className="max-w-3xl mx-auto p-6 space-y-8">
                   {briefing.length > 0 ? (
                     <DrawerSection
                       icon={<HelpCircle className="h-3.5 w-3.5" />}
@@ -967,7 +974,7 @@ function ModelDetailDrawer({
 
               {/* -- TAB: PRODUTOS ------------------------------------------ */}
               {activeTab === "products" && (
-                <div className="p-6 space-y-6">
+                <div className="max-w-3xl mx-auto p-6 space-y-6">
                   {productLinks.length > 0 && (
                     <div className="flex items-start gap-3 bg-amber-50 border border-amber-200 rounded-xl p-4">
                       <AlertCircle className="h-4 w-4 text-amber-500 shrink-0 mt-0.5" />
@@ -1124,7 +1131,7 @@ function ModelDetailDrawer({
 }
 
 export default function AdminModelosTarefasPage() {
-  const { sidebarWidth } = useSidebar();
+  const { sidebarWidth, headerHeight, footerHeight } = useAppFrameMetrics();
   const [models, setModels] = useState<CatalogTask[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -2510,8 +2517,7 @@ export default function AdminModelosTarefasPage() {
         onClose={() => setFiltersPanelOpen(false)}
         title="Filtros"
         subtitle="Refine os modelos de tarefas exibidos."
-        widthMode="compact"
-        compactWidth={420}
+        widthMode="full"
         footer={
           filterActiveCount > 0 ? (
             <button
@@ -2523,8 +2529,11 @@ export default function AdminModelosTarefasPage() {
           ) : undefined
         }
       >
-        <div className="p-5 flex-1 overflow-y-auto space-y-4">
-              {/* Status */}
+        <div className="flex-1 overflow-y-auto">
+        <div className="max-w-3xl mx-auto p-6 space-y-5">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            {/* Status */}
+            <div>
               <Label className="text-[11px] font-semibold text-slate-600 mb-1.5 block">Status</Label>
               <Select
                 value={filterStatus}
@@ -2549,8 +2558,10 @@ export default function AdminModelosTarefasPage() {
                   </SelectItem>
                 </SelectContent>
               </Select>
+            </div>
 
-              {/* Type */}
+            {/* Type */}
+            <div>
               <Label className="text-[11px] font-semibold text-slate-600 mb-1.5 block">Tipo</Label>
               <Select
                 value={filterType}
@@ -2579,10 +2590,11 @@ export default function AdminModelosTarefasPage() {
                   ))}
                 </SelectContent>
               </Select>
+            </div>
 
-              {/* Category */}
-              {uniqueCategories.length > 0 && (
-                <>
+            {/* Category */}
+            {uniqueCategories.length > 0 && (
+              <div>
                 <Label className="text-[11px] font-semibold text-slate-600 mb-1.5 block">Categoria</Label>
                 <Select
                   value={filterCategory}
@@ -2603,10 +2615,11 @@ export default function AdminModelosTarefasPage() {
                     ))}
                   </SelectContent>
                 </Select>
-                </>
-              )}
+              </div>
+            )}
 
-              {/* Vinculação */}
+            {/* Vinculação */}
+            <div>
               <Label className="text-[11px] font-semibold text-slate-600 mb-1.5 block">Vinculação</Label>
               <Select
                 value={filterLinkedMode}
@@ -2628,11 +2641,13 @@ export default function AdminModelosTarefasPage() {
                   </SelectItem>
                 </SelectContent>
               </Select>
+            </div>
+          </div>
           <div className="border-t border-slate-100 dark:border-slate-800 pt-4">
             <p className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide mb-3">
               Filtros avançados
             </p>
-                  <div className="p-4 space-y-4 max-h-[60vh] overflow-y-auto">
+                  <div className="space-y-4">
                     {/* Datas */}
                     <div className="grid grid-cols-2 gap-3">
                       <div>
@@ -2782,6 +2797,7 @@ export default function AdminModelosTarefasPage() {
                   </div>
           </div>
         </div>
+        </div>
       </SlidePanel>
 
       {/* Column config panel */}
@@ -2789,47 +2805,55 @@ export default function AdminModelosTarefasPage() {
         open={colConfigOpen}
         onClose={() => setColConfigOpen(false)}
         title="Configurar colunas"
-        subtitle="Escolha quais colunas aparecem na tabela"
-        widthMode="compact"
-        compactWidth={360}
+        subtitle={`${visibleCols.size} de ${ALL_COLUMNS.length} visíveis`}
+        widthMode="full"
         footer={
-          <div className="flex justify-between items-center">
+          <div className="flex items-center justify-end gap-3">
             <button
               onClick={() => setVisibleCols(new Set(DEFAULT_VISIBLE))}
-              className="text-[11px] text-slate-500 hover:text-slate-700 dark:hover:text-slate-300"
+              className="h-9 px-4 rounded-lg text-xs font-medium border border-slate-200 dark:border-slate-700 text-slate-500 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"
             >
               Restaurar padrão
             </button>
-            <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => setColConfigOpen(false)}>
-              Fechar
-            </Button>
+            <button
+              onClick={() => setVisibleCols(new Set(ALL_COLUMNS.map((c) => c.key)))}
+              className="h-9 px-4 rounded-lg text-xs font-semibold btn-brand transition-all"
+            >
+              Mostrar todas
+            </button>
           </div>
         }
       >
-        <div className="p-4 flex-1 overflow-y-auto space-y-0.5">
-          <p className="text-[11px] text-slate-400 px-1 pb-2">
-            Sua preferência é salva automaticamente.
-          </p>
-          {ALL_COLUMNS.map((col) => (
-            <label
-              key={col.key}
-              className="flex items-center gap-3 px-3 py-2 rounded-lg cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800"
-            >
-              <Checkbox
-                checked={visibleCols.has(col.key)}
-                onCheckedChange={() => toggleCol(col.key)}
-                disabled={col.required}
-              />
-              <span className="text-xs font-medium text-slate-700 dark:text-slate-200 flex-1">
-                {col.label}
-              </span>
-              {col.required && (
-                <span className="text-[9px] uppercase tracking-wider text-slate-400">
-                  obrigatória
+        <div className="flex-1 overflow-y-auto p-6">
+          <div className="max-w-3xl mx-auto grid grid-cols-1 sm:grid-cols-2 gap-2">
+            {ALL_COLUMNS.map((col) => (
+              <label
+                key={col.key}
+                className={cn(
+                  "flex items-center gap-3 px-4 py-3 rounded-xl border cursor-pointer transition-colors",
+                  visibleCols.has(col.key)
+                    ? "bg-blue-50 border-blue-200 dark:bg-blue-900/20 dark:border-blue-800"
+                    : "border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800",
+                  col.required && "opacity-60 pointer-events-none",
+                )}
+              >
+                <Checkbox
+                  checked={visibleCols.has(col.key)}
+                  onCheckedChange={() => toggleCol(col.key)}
+                  disabled={col.required}
+                  className="h-4 w-4"
+                />
+                <span className="text-sm font-medium text-slate-700 dark:text-slate-300 flex-1">
+                  {col.label}
                 </span>
-              )}
-            </label>
-          ))}
+                {col.required && (
+                  <span className="text-[9px] text-slate-400 flex-shrink-0">
+                    obrigatória
+                  </span>
+                )}
+              </label>
+            ))}
+          </div>
         </div>
       </SlidePanel>
 
@@ -2843,11 +2867,11 @@ export default function AdminModelosTarefasPage() {
           infoPanelModel &&
           `${formatModelCode(codeOrdinals.get(infoPanelModel.id))} · ${infoPanelModel.category}${infoPanelModel.subcategory ? ` · ${infoPanelModel.subcategory}` : ""}`
         }
-        widthMode="compact"
-        compactWidth={480}
+        widthMode="full"
       >
         {infoPanelModel && (
-          <div className="flex-1 overflow-y-auto p-5 space-y-6">
+          <div className="flex-1 overflow-y-auto p-6">
+          <div className="max-w-3xl mx-auto space-y-6">
             <div className="flex flex-wrap gap-2">
               <NeonBadge color={STATUS_BADGE_COLOR[infoPanelModel.status] ?? "emerald"}>
                 {(STATUS_CONFIG[infoPanelModel.status] ?? STATUS_CONFIG.ativa).label}
@@ -2963,6 +2987,7 @@ export default function AdminModelosTarefasPage() {
               )}
             </div>
           </div>
+          </div>
         )}
       </SlidePanel>
 
@@ -2991,18 +3016,29 @@ export default function AdminModelosTarefasPage() {
         <SheetContent
           side="right"
           hideOverlay
-          className="p-0 flex flex-col h-full gap-0"
+          className="p-0 flex flex-col gap-0 z-[70] [&>button:last-child]:top-3 [&>button:last-child]:right-3 [&>button:last-child]:p-1.5 [&>button:last-child]:hover:bg-white/20 [&>button:last-child_svg]:size-4"
           style={{
-            left: `${sidebarWidth}px`,
-            width: `calc(100vw - ${sidebarWidth}px)`,
+            left: `${sidebarWidth - 2}px`,
+            top: `${headerHeight - 1}px`,
+            bottom: `${footerHeight - 1}px`,
+            height: "auto",
+            width: `calc(100vw - ${sidebarWidth - 2}px)`,
           }}
         >
-          <ModalBrandHeader
-            title={createForm.name || "Novo Modelo de Tarefa"}
-            subtitle="Criando modelo de tarefa reutilizável · código gerado automaticamente"
-            icon={<ClipboardList />}
-            onClose={() => { setCreateOpen(false); resetCreateForm(); }}
-          />
+          <div
+            className="flex items-center justify-between px-5 py-3 flex-shrink-0"
+            style={{
+              background:
+                "var(--brand-gradient, linear-gradient(to right, #0a1628, #1e3a8a, #0a1628))",
+            }}
+          >
+            <div className="min-w-0 flex-1 text-sm font-bold text-white truncate">
+              {createForm.name || "Novo Modelo de Tarefa"}
+              <p className="text-[11px] font-normal text-white/60 mt-0.5 truncate">
+                Criando modelo de tarefa reutilizável · código gerado automaticamente
+              </p>
+            </div>
+          </div>
 
           <div className="flex-1 overflow-auto">
             <Tabs defaultValue="info" className="space-y-0">

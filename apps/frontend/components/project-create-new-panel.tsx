@@ -52,7 +52,7 @@ import { apiClient } from "@/lib/api-client";
 import { ButtonLoader } from "@/components/ui/loading";
 import { useSidebar } from "@/contexts/sidebar-context";
 import { useAccountType } from "@/contexts/account-type-context";
-import { ModalBrandHeader } from "@/components/ui/modal-brand-header";
+import { SlidePanel } from "@/components/slide-panel";
 import { Badge } from "@/components/ui/badge";
 import {
   Accordion,
@@ -323,7 +323,6 @@ export function ProjectCreateNewPanel({
     "config",
   ];
   const [openAccordions, setOpenAccordions] = useState<string[]>(["dados"]);
-  const [isClosing, setIsClosing] = useState(false);
 
   // Company-scoping state (string | null — Company.id is a CUID string)
   const [resolvedCompanyId, setResolvedCompanyId] = useState<string | null>(
@@ -441,17 +440,8 @@ export function ProjectCreateNewPanel({
       : COMPANY_TYPE_TO_ACCOUNT_TYPE[formData.companyType as "company" | "agency" | "nomad"];
 
   const handleClose = () => {
-    if (isClosing) return;
-    setIsClosing(true);
-    setTimeout(() => {
-      onOpenChange(false);
-    }, 420);
+    onOpenChange(false);
   };
-
-  // Reset closing flag once the parent confirms close
-  useEffect(() => {
-    if (!open) setIsClosing(false);
-  }, [open]);
 
   // Sync when panel opens / initialData changes
   useEffect(() => {
@@ -1665,19 +1655,60 @@ export function ProjectCreateNewPanel({
   };
   const totalErrors = Object.values(sectionErrors).reduce((a, b) => a + b, 0);
 
-  const panelWidth = `calc(100vw - ${sidebarWidth}px)`;
-
-  if (!open && !isClosing) return null;
+  if (!open) return null;
 
   return (
     <>
-      <div
-        data-slot="sheet-content"
-        data-state={isClosing ? "closed" : "open"}
-        className="fixed top-0 z-50 h-[calc(100vh-24px)] bg-background shadow-2xl flex flex-col border-l border-border overflow-hidden data-[state=open]:animate-in data-[state=open]:slide-in-from-right data-[state=open]:fade-in-0 data-[state=closed]:animate-out data-[state=closed]:slide-out-to-right data-[state=closed]:fade-out-0"
-        style={{ left: `${sidebarWidth}px`, width: panelWidth }}
+      <SlidePanel
+        open={open}
+        onClose={handleClose}
+        title={formData.nome || (cloneMode ? "Clonar Projeto" : "Novo Projeto")}
+        subtitle={cloneMode ? "Clonar projeto existente" : "Configure os dados do projeto"}
+        widthMode="full"
+        footer={
+          <div className="flex flex-col-reverse sm:flex-row sm:items-center sm:justify-start gap-2 sm:gap-3 w-full">
+            <Button
+              variant="outline"
+              onClick={handleClose}
+              disabled={loading}
+              className="w-full sm:w-auto"
+            >
+              Cancelar
+            </Button>
+            <div className="flex flex-col items-end gap-1">
+              <Button
+                variant="outline"
+                onClick={handleSaveDraftNow}
+                disabled={loading}
+                className="gap-1.5 w-full sm:w-auto"
+              >
+                {loadingAction === "draft" ? (
+                  <ButtonLoader text="Salvando..." />
+                ) : (
+                  <>
+                    <Save className="h-4 w-4" />
+                    Salvar Rascunho
+                  </>
+                )}
+              </Button>
+              {draftBlockReason && (
+                <p className="flex items-center gap-1 text-[11px] text-amber-600 dark:text-amber-400">
+                  <AlertCircle className="h-3 w-3 shrink-0" />
+                  {draftBlockReason}
+                </p>
+              )}
+            </div>
+            <Button
+              className="btn-brand w-full sm:w-auto"
+              onClick={handleSubmit}
+              disabled={loading}
+            >
+              {cloneMode ? "Clonar Projeto" : "Próximo"}
+            </Button>
+          </div>
+        }
       >
-        <div className="relative h-full flex flex-col overflow-hidden">
+      <div className="flex flex-col flex-1 min-h-0 overflow-hidden">
           {/* Hidden file input */}
           <input
             ref={fileInputRef}
@@ -1687,23 +1718,15 @@ export function ProjectCreateNewPanel({
             onChange={handleFileChange}
           />
 
-          {/* Header */}
-          <ModalBrandHeader
-            title={
-              formData.nome || (cloneMode ? "Clonar Projeto" : "Novo Projeto")
-            }
-            subtitle={
-              cloneMode
-                ? "Clonar projeto existente"
-                : "Configure os dados do projeto"
-            }
-            left={
+          {/* Project identity — moved from header per the global modal standard (plain text-only header) */}
+          <div className="flex items-center gap-3 px-6 py-4 border-b border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/40 flex-shrink-0">
+            <div className="relative flex-shrink-0">
               <button
                 onClick={handleAvatarClick}
-                className="relative h-20 w-20 rounded-full bg-white/15 border-2 border-white/30 flex-shrink-0 group overflow-hidden hover:border-white/60 transition-all"
+                className="relative h-16 w-16 rounded-full bg-slate-200 dark:bg-slate-700 border-2 border-white dark:border-slate-800 shadow group overflow-hidden hover:border-blue-300 transition-all"
               >
                 <div className="absolute inset-0 flex items-center justify-center bg-gradient-to-br from-blue-600 to-violet-600">
-                  <FolderKanban className="h-7 w-7 text-white/70" />
+                  <FolderKanban className="h-6 w-6 text-white/80" />
                 </div>
                 {avatarPreview && (
                   <img
@@ -1713,66 +1736,68 @@ export function ProjectCreateNewPanel({
                   />
                 )}
                 <div className="absolute inset-0 bg-black/50 flex flex-col items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity rounded-full">
-                  <Camera className="h-5 w-5 text-white" />
-                  <span className="text-[9px] text-white/90 font-medium mt-0.5">
+                  <Camera className="h-4 w-4 text-white" />
+                  <span className="text-[8px] text-white/90 font-medium mt-0.5">
                     {avatarPreview ? "Editar" : "Foto"}
                   </span>
                 </div>
               </button>
-            }
-            onClose={handleClose}
-          />
 
-          {/* Avatar menu */}
-          {showAvatarMenu && avatarPreview && (
-            <>
-              <div
-                className="absolute inset-0 z-40"
-                onClick={() => setShowAvatarMenu(false)}
-              />
-              <div
-                className="absolute z-50 bg-white rounded-xl shadow-2xl border border-gray-100 overflow-hidden min-w-[172px]"
-                style={{ top: 108, left: 22 }}
-              >
-                <button
-                  onClick={() => {
-                    setShowAvatarMenu(false);
-                    setTimeout(() => fileInputRef.current?.click(), 10);
-                  }}
-                  className="flex items-center gap-2.5 w-full px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
-                >
-                  <Camera className="h-3.5 w-3.5 text-gray-400" />
-                  Nova foto
-                </button>
-                {originalRawSrc && (
-                  <button
-                    onClick={() => {
-                      setShowAvatarMenu(false);
-                      setRawImageSrc(originalRawSrc);
-                      setCropZoom(1);
-                      setCropOffset({ x: 0, y: 0 });
-                      setCropOpen(true);
-                    }}
-                    className="flex items-center gap-2.5 w-full px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 transition-colors border-t border-gray-100"
-                  >
-                    <ZoomIn className="h-3.5 w-3.5 text-gray-400" />
-                    Reposicionar
-                  </button>
-                )}
-                <button
-                  onClick={() => {
-                    setShowAvatarMenu(false);
-                    setAvatarPreview(null);
-                    setOriginalRawSrc(null);
-                  }}
-                  className="flex items-center gap-2.5 w-full px-4 py-2.5 text-sm text-red-500 hover:bg-red-50 transition-colors border-t border-gray-100"
-                >
-                  <Trash2 className="h-3.5 w-3.5" />
-                  Remover foto
-                </button>
-              </div>
-            </>
-          )}
+              {/* Avatar menu — positioned relative to the avatar itself */}
+              {showAvatarMenu && avatarPreview && (
+                <>
+                  <div
+                    className="fixed inset-0 z-40"
+                    onClick={() => setShowAvatarMenu(false)}
+                  />
+                  <div className="absolute z-50 top-full left-0 mt-1 bg-white rounded-xl shadow-2xl border border-gray-100 overflow-hidden min-w-[172px]">
+                    <button
+                      onClick={() => {
+                        setShowAvatarMenu(false);
+                        setTimeout(() => fileInputRef.current?.click(), 10);
+                      }}
+                      className="flex items-center gap-2.5 w-full px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
+                    >
+                      <Camera className="h-3.5 w-3.5 text-gray-400" />
+                      Nova foto
+                    </button>
+                    {originalRawSrc && (
+                      <button
+                        onClick={() => {
+                          setShowAvatarMenu(false);
+                          setRawImageSrc(originalRawSrc);
+                          setCropZoom(1);
+                          setCropOffset({ x: 0, y: 0 });
+                          setCropOpen(true);
+                        }}
+                        className="flex items-center gap-2.5 w-full px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 transition-colors border-t border-gray-100"
+                      >
+                        <ZoomIn className="h-3.5 w-3.5 text-gray-400" />
+                        Reposicionar
+                      </button>
+                    )}
+                    <button
+                      onClick={() => {
+                        setShowAvatarMenu(false);
+                        setAvatarPreview(null);
+                        setOriginalRawSrc(null);
+                      }}
+                      className="flex items-center gap-2.5 w-full px-4 py-2.5 text-sm text-red-500 hover:bg-red-50 transition-colors border-t border-gray-100"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                      Remover foto
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
+            <div className="min-w-0">
+              <p className="text-sm font-semibold text-slate-700 dark:text-slate-200">
+                {formData.nome || (cloneMode ? "Clonar Projeto" : "Novo Projeto")}
+              </p>
+              <p className="text-xs text-slate-400">Imagem do projeto (opcional)</p>
+            </div>
+          </div>
 
           {/* Crop overlay */}
           {cropOpen && rawImageSrc && (
@@ -2526,49 +2551,8 @@ export function ProjectCreateNewPanel({
             )}
           </div>
 
-          {/* Footer */}
-          <div className="flex flex-col-reverse sm:flex-row sm:items-center sm:justify-start gap-2 sm:gap-3 px-[25px] py-[15px] border-t bg-gray-50 flex-shrink-0">
-            <Button
-              variant="outline"
-              onClick={handleClose}
-              disabled={loading}
-              className="w-full sm:w-auto"
-            >
-              Cancelar
-            </Button>
-            <div className="flex flex-col items-end gap-1">
-              <Button
-                variant="outline"
-                onClick={handleSaveDraftNow}
-                disabled={loading}
-                className="gap-1.5 w-full sm:w-auto"
-              >
-                {loadingAction === "draft" ? (
-                  <ButtonLoader text="Salvando..." />
-                ) : (
-                  <>
-                    <Save className="h-4 w-4" />
-                    Salvar Rascunho
-                  </>
-                )}
-              </Button>
-              {draftBlockReason && (
-                <p className="flex items-center gap-1 text-[11px] text-amber-600 dark:text-amber-400">
-                  <AlertCircle className="h-3 w-3 shrink-0" />
-                  {draftBlockReason}
-                </p>
-              )}
-            </div>
-            <Button
-              className="btn-brand w-full sm:w-auto"
-              onClick={handleSubmit}
-              disabled={loading}
-            >
-              {cloneMode ? "Clonar Projeto" : "Próximo"}
-            </Button>
-          </div>
-        </div>
       </div>
+      </SlidePanel>
 
       {/* Decision Modal after "Próximo" */}
       <AlertDialog

@@ -1,6 +1,6 @@
 ﻿// @ts-nocheck
 import { useState } from "react";
-import { useSidebar } from "@/contexts/sidebar-context";
+import { useAppFrameMetrics } from "@/hooks/useAppFrameMetrics";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -291,7 +291,7 @@ function LevelBadge({ level }: { level: PartnerLevel }) {
 }
 
 export default function ProgramaPartnerPage() {
-  const { sidebarWidth } = useSidebar();
+  const { sidebarWidth, headerHeight, footerHeight } = useAppFrameMetrics();
   const [invites, setInvites] = useState<PartnerInvite[]>(mockInvites);
   const [partners, setPartners] = useState<ActivePartner[]>(mockPartners);
   const [searchInvites, setSearchInvites] = useState("");
@@ -734,38 +734,33 @@ export default function ProgramaPartnerPage() {
         <SheetContent
           side="right"
           hideOverlay={true}
-          className="p-0 border-0"
+          className="p-0 flex flex-col gap-0 z-[70] [&>button:last-child]:top-3 [&>button:last-child]:right-3 [&>button:last-child]:p-1.5 [&>button:last-child]:hover:bg-white/20 [&>button:last-child_svg]:size-4"
           style={{
-            left: `${sidebarWidth}px`,
-            width: `calc(100vw - ${sidebarWidth}px)`,
+            left: `${sidebarWidth - 2}px`,
+            top: `${headerHeight - 1}px`,
+            bottom: `${footerHeight - 1}px`,
+            height: "auto",
+            width: `calc(100vw - ${sidebarWidth - 2}px)`,
           }}
         >
-          <div className="h-full bg-white dark:bg-slate-900 shadow-2xl flex flex-col border-l border-gray-200">
-            <div className="flex items-center justify-between p-4 border-b border-gray-200 bg-linear-to-r from-violet-50/50 to-indigo-50/50">
-              <div className="flex items-center gap-2">
-                <div className="p-1.5 bg-linear-to-br from-violet-600 to-indigo-600 rounded-lg shadow">
-                  <Send className="h-4 w-4 text-white" />
-                </div>
-                <div>
-                  <SheetTitle className="text-lg font-bold text-gray-900">
-                    Novo Convite Partner
-                  </SheetTitle>
-                  <p className="text-xs text-gray-500">
-                    Envie um convite para uma agência ingressar no Programa
-                    Partner
-                  </p>
-                </div>
-              </div>
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={() => setIsInviteSheetOpen(false)}
-                className="h-8 w-8"
-              >
-                <X className="h-4 w-4" />
-              </Button>
+          <div
+            className="flex items-center justify-between px-5 py-3 flex-shrink-0"
+            style={{
+              background:
+                "var(--brand-gradient, linear-gradient(to right, #0a1628, #1e3a8a, #0a1628))",
+            }}
+          >
+            <div className="min-w-0 flex-1 text-sm font-bold text-white truncate">
+              <SheetTitle className="text-sm font-bold text-white truncate">
+                Novo Convite Partner
+              </SheetTitle>
+              <p className="text-[11px] font-normal text-white/60 mt-0.5 truncate">
+                Envie um convite para uma agência ingressar no Programa Partner
+              </p>
             </div>
-            <div className="flex-1 overflow-y-auto p-6 bg-slate-50">
+          </div>
+          <div className="flex-1 overflow-y-auto p-6 bg-slate-50">
+            <div className="max-w-3xl mx-auto">
               <InviteForm
                 availableAgencies={AVAILABLE_AGENCIES}
                 onSend={(data) => {
@@ -799,23 +794,34 @@ export default function ProgramaPartnerPage() {
         open={!!viewingInvite}
         onOpenChange={(open) => !open && setViewingInvite(null)}
       >
-        <SheetContent side="right" className="w-[420px] sm:w-[480px] p-0">
-          <div className="h-full flex flex-col">
-            <div className="flex items-center justify-between p-4 border-b border-slate-200 bg-slate-50">
-              <SheetTitle className="text-base font-bold text-slate-800">
+        <SheetContent
+          side="right"
+          hideOverlay
+          className="p-0 flex flex-col gap-0 z-[70] [&>button:last-child]:top-3 [&>button:last-child]:right-3 [&>button:last-child]:p-1.5 [&>button:last-child]:hover:bg-white/20 [&>button:last-child_svg]:size-4"
+          style={{
+            left: `${sidebarWidth - 2}px`,
+            top: `${headerHeight - 1}px`,
+            bottom: `${footerHeight - 1}px`,
+            height: "auto",
+            width: `calc(100vw - ${sidebarWidth - 2}px)`,
+          }}
+        >
+          <div
+            className="flex items-center justify-between px-5 py-3 flex-shrink-0"
+            style={{
+              background:
+                "var(--brand-gradient, linear-gradient(to right, #0a1628, #1e3a8a, #0a1628))",
+            }}
+          >
+            <div className="min-w-0 flex-1 text-sm font-bold text-white truncate">
+              <SheetTitle className="text-sm font-bold text-white truncate">
                 Detalhes do Convite
               </SheetTitle>
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={() => setViewingInvite(null)}
-                className="h-8 w-8"
-              >
-                <X className="h-4 w-4" />
-              </Button>
             </div>
+          </div>
             {viewingInvite && (
-              <div className="flex-1 overflow-y-auto p-5 space-y-4">
+              <div className="flex-1 overflow-y-auto p-6">
+              <div className="max-w-3xl mx-auto space-y-4">
                 <div className="flex items-center gap-3">
                   <div className="w-12 h-12 rounded-xl bg-linear-to-br from-violet-500 to-purple-700 flex items-center justify-center text-white font-bold shadow">
                     {viewingInvite.agency_name
@@ -930,8 +936,8 @@ export default function ProgramaPartnerPage() {
                   </div>
                 )}
               </div>
+              </div>
             )}
-          </div>
         </SheetContent>
       </Sheet>
 

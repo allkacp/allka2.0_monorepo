@@ -35,13 +35,7 @@ const mobileNavigationConfig = {
       { name: "Faturas", href: "/company/faturas", icon: CreditCard },
       { name: "Mais", href: "#", icon: MoreHorizontal, isMenu: true },
     ],
-    "in-house": [
-      { name: "Início", href: "/in-house/dashboard", icon: Home },
-      { name: "Catálogo", href: "/in-house/catalogo", icon: Briefcase },
-      { name: "Projetos", href: "/in-house/projetos", icon: FolderOpen },
-      { name: "Equipe", href: "/in-house/equipe", icon: Users },
-      { name: "Mais", href: "#", icon: MoreHorizontal, isMenu: true },
-    ],
+    "in-house": [],
   },
   agencias: [
     { name: "Início", href: "/agency/dashboard", icon: Home },

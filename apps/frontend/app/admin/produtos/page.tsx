@@ -117,6 +117,7 @@ import { useToast } from "@/hooks/use-toast";
 import { ItemsPerPageSelect } from "@/components/items-per-page-select";
 import { useProducts } from "@/lib/contexts/product-context";
 import { useSidebar } from "@/contexts/sidebar-context";
+import { useAppFrameMetrics } from "@/hooks/useAppFrameMetrics";
 import { ModalBrandHeader } from "@/components/ui/modal-brand-header";
 import { CopyLinkButton } from "@/components/copy-link-button";
 import { SlidePanel } from "@/components/slide-panel";
@@ -512,6 +513,7 @@ export default function AdminProdutosPage() {
   const { specialties } = useSpecialties();
   const { toast } = useToast();
   const { sidebarWidth } = useSidebar();
+  const { headerHeight: frameHeaderHeight, footerHeight: frameFooterHeight } = useAppFrameMetrics();
 
   // Filters and view mode state
   const [searchTerm, setSearchTerm] = useState("");
@@ -4480,20 +4482,32 @@ export default function AdminProdutosPage() {
         <SheetContent
           side="right"
           hideOverlay
-          className="p-0 flex flex-col"
+          className="p-0 flex flex-col z-[70] [&>button:last-child]:top-3 [&>button:last-child]:right-3 [&>button:last-child]:p-1.5 [&>button:last-child]:hover:bg-white/20 [&>button:last-child_svg]:size-4"
           style={{
-            left: `${sidebarWidth}px`,
-            width: `calc(100vw - ${sidebarWidth}px)`,
+            left: `${sidebarWidth - 2}px`,
+            top: `${frameHeaderHeight - 1}px`,
+            bottom: `${frameFooterHeight - 1}px`,
+            height: "auto",
+            width: `calc(100vw - ${sidebarWidth - 2}px)`,
           }}
         >
           {selectedProduct && (
             <>
-              <ModalBrandHeader
-                title={selectedProduct.name}
-                subtitle={`${selectedProduct.category}${selectedProduct.recurrence ? ` · ${selectedProduct.recurrence}` : ""} · ${formatCurrency(selectedProduct.finalPrice || 0)}`}
-                icon={<Package />}
-                right={<CopyLinkButton />}
-              />
+              <div
+                className="flex items-center justify-between px-5 py-3 flex-shrink-0"
+                style={{ background: "var(--brand-gradient, linear-gradient(to right, #0a1628, #1e3a8a, #0a1628))" }}
+              >
+                <div className="min-w-0 flex-1 text-sm font-bold text-white truncate">
+                  {selectedProduct.name}
+                  <p className="text-[11px] font-normal text-white/60 mt-0.5 truncate">
+                    {selectedProduct.category}
+                    {selectedProduct.recurrence ? ` · ${selectedProduct.recurrence}` : ""} · {formatCurrency(selectedProduct.finalPrice || 0)}
+                  </p>
+                </div>
+                <div className="flex items-center gap-2 flex-shrink-0">
+                  <CopyLinkButton />
+                </div>
+              </div>
 
               <div className="flex-1 overflow-auto">
                 <Tabs defaultValue="overview" className="space-y-0">
@@ -6443,25 +6457,29 @@ export default function AdminProdutosPage() {
         <SheetContent
           side="right"
           hideOverlay
-          className="p-0 flex flex-col"
+          className="p-0 flex flex-col z-[70] [&>button:last-child]:top-3 [&>button:last-child]:right-3 [&>button:last-child]:p-1.5 [&>button:last-child]:hover:bg-white/20 [&>button:last-child_svg]:size-4"
           style={{
-            left: `${sidebarWidth}px`,
-            width: `calc(100vw - ${sidebarWidth}px)`,
+            left: `${sidebarWidth - 2}px`,
+            top: `${frameHeaderHeight - 1}px`,
+            bottom: `${frameFooterHeight - 1}px`,
+            height: "auto",
+            width: `calc(100vw - ${sidebarWidth - 2}px)`,
           }}
         >
-          <ModalBrandHeader
-            title={
-              productFormData.name ||
-              (selectedProduct ? "Editar Produto" : "Novo Produto")
-            }
-            subtitle={
-              selectedProduct
-                ? `Editando • ${(productFormData.categories || []).join(", ") || productFormData.category || (selectedProduct as any)?.category || ""}`
-                : "Cadastro de novo produto"
-            }
-            icon={<Package />}
-            onClose={() => setIsProductSheetOpen(false)}
-          />
+          <div
+            className="flex items-center justify-between px-5 py-3 flex-shrink-0"
+            style={{ background: "var(--brand-gradient, linear-gradient(to right, #0a1628, #1e3a8a, #0a1628))" }}
+          >
+            <div className="min-w-0 flex-1 text-sm font-bold text-white truncate">
+              {productFormData.name ||
+                (selectedProduct ? "Editar Produto" : "Novo Produto")}
+              <p className="text-[11px] font-normal text-white/60 mt-0.5 truncate">
+                {selectedProduct
+                  ? `Editando • ${(productFormData.categories || []).join(", ") || productFormData.category || (selectedProduct as any)?.category || ""}`
+                  : "Cadastro de novo produto"}
+              </p>
+            </div>
+          </div>
 
           <div className="flex-1 overflow-auto">
             <div className="p-6">
