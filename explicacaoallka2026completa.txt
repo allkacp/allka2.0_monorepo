@@ -1,0 +1,1488 @@
+================================================================================
+ALLKA 2026 — EXPLICAÇÃO COMPLETA DA PLATAFORMA (DE PONTA A PONTA)
+================================================================================
+Documento gerado por varredura completa do código-fonte (frontend + backend +
+banco de dados) do repositório em:
+  c:\Users\Teste\Documentos 2.0\Plataforma 2.0\allka-2026
+
+Objetivo deste arquivo: servir de "prompt de contexto" para qualquer agente de
+IA (ou pessoa) que precise entender a plataforma inteira sem precisar ler o
+código — o que existe, o que cada botão faz, como cada perfil de usuário usa o
+sistema hoje, o que é real (ligado à API) e o que ainda é mock/protótipo.
+
+Este documento é fiel ao estado ATUAL do código. Sempre que alguma
+funcionalidade parecer "incompleta", "mockada" ou "duplicada", isso está
+sinalizado explicitamente — não foi embelezado.
+
+ÍNDICE
+------
+1. O QUE É A ALLKA (visão de negócio)
+2. ARQUITETURA TÉCNICA (stack, monorepo, roteamento real)
+3. PERFIS DE USUÁRIO E COMO CADA UM SE LOGA
+4. PORTAL DA EMPRESA (company/empresa)
+5. PORTAL DA AGÊNCIA (agency/agencia)
+6. PORTAL DO LÍDER (leader/lider)
+7. PORTAL DO NÔMADE (nomades/nomad)
+8. PORTAL DO PARCEIRO (partner/parceiro)
+9. PAINEL ADMINISTRATIVO — TODAS AS PÁGINAS (37 rotas)
+10. MODELO DE DADOS (banco de dados / Prisma)
+11. API DO BACKEND (rotas por recurso)
+12. AUTENTICAÇÃO E CONTROLE DE ACESSO
+13. DESIGN SYSTEM E PADRÕES VISUAIS (sidebar, header, tabela, modal, temas)
+14. COMUNICAÇÃO ENTRE USUÁRIOS, CHAT E NOTIFICAÇÕES (o que é real x mock)
+15. PÁGINAS DUPLICADAS, ÓRFÃS E FUNCIONALIDADES INCOMPLETAS (mapa de gaps)
+16. JORNADAS DE PONTA A PONTA (como os perfis se conectam na prática)
+
+
+================================================================================
+1. O QUE É A ALLKA (visão de negócio)
+================================================================================
+A Allka é uma plataforma de marketplace de serviços que conecta três tipos de
+elos numa cadeia de prestação de serviço:
+
+  EMPRESA (cliente final)  →  AGÊNCIA (opera/revende)  →  NÔMADE (executa)
+
+- EMPRESA ("company"/"empresa"): o cliente que contrata serviços/produtos
+  (ex.: tráfego pago, design, desenvolvimento) através de projetos.
+- AGÊNCIA ("agency"/"agencia"): reveste/opera a entrega para o cliente, monta
+  o time, acompanha financeiro e projetos. Agências têm um nível de parceria
+  (Bronze/Silver/Gold/Platinum/Diamond) dentro do "Programa Partner".
+- NÔMADE ("nomades"/"nomad"): o especialista freelancer que efetivamente
+  executa as tarefas (ex.: um designer, um redator, um dev). Também tem
+  níveis de gamificação (Bronze→Diamond/Leader) baseados em performance.
+- LÍDER ("leader"/"lider"): um papel interno de qualidade — cada líder cuida
+  de uma "área" (categoria de especialidade) e aprova/qualifica o trabalho
+  dos nômades antes de liberar para o cliente.
+- PARCEIRO ("partner"/"parceiro"): um afiliado/indicador que traz agências ou
+  empresas para a plataforma e ganha comissão recorrente sobre o MRR gerado
+  (ex.: 5% do MRR das agências que ele "lidera").
+- ADMIN: a equipe interna da Allka, dona da operação — cadastra produtos,
+  define preços/comissões, audita tudo, cuida do financeiro global.
+
+O núcleo operacional é: uma EMPRESA contrata um PROJETO composto por
+PRODUTOS do catálogo; cada produto gera TAREFAS (a partir de "modelos de
+tarefa"); as tarefas são executadas por NÔMADES qualificados automaticamente
+por especialidade; um LÍDER de área revisa/aprova antes da entrega final;
+tudo isso gera FATURAS, COMISSÕES e movimentações de CARTEIRA (wallet) no
+financeiro.
+
+
+================================================================================
+2. ARQUITETURA TÉCNICA
+================================================================================
+
+MONOREPO com duas pastas principais em apps/:
+  apps/backend   → API (Node.js + TypeScript + Express 5 + Prisma ORM)
+  apps/frontend  → SPA (Vite + React + react-router-dom)
+
+⚠️ DETALHE IMPORTANTE (fácil de confundir): apesar da estrutura de pastas
+`apps/frontend/app/<secao>/<pagina>/page.tsx` parecer Next.js App Router,
+o frontend NÃO usa Next.js. É uma SPA Vite com roteamento manual feito em
+`apps/frontend/App.tsx`, que importa cada `page.tsx` via `React.lazy()` e
+registra rotas explícitas com `<Route path="...">` do react-router-dom. Isso
+significa que a URL de uma página e o caminho físico do arquivo no disco
+NEM SEMPRE coincidem (existem pastas cujo conteúdo está "morto"/não roteado,
+e páginas cuja URL usa uma pasta enquanto o código real mora em outra pasta
+com nome parecido em português). Isso está detalhado na seção 15.
+
+BANCO DE DADOS: MySQL, acessado via Prisma ORM. Schema completo em
+  apps/backend/prisma/schema.prisma
+
+AUTENTICAÇÃO: JWT stateless (sem sessão/cookie), token válido por 7 dias.
+Detalhes completos na seção 12.
+
+INTEGRAÇÕES EXTERNAS REAIS: praticamente nenhuma ainda. O gateway de
+pagamento é 100% sandbox/fake (`FAKE_SANDBOX`), sem Stripe/Pagar.me/Asaas
+real. Não há envio de e-mail, WhatsApp ou SMS real. Não há Bitrix real (só
+um campo `bitrix_sync` reservado). Detalhes na seção 11.
+
+
+================================================================================
+3. PERFIS DE USUÁRIO E COMO CADA UM SE LOGA
+================================================================================
+
+Existem 6 portais logados + 1 página pública de compartilhamento:
+
+  /admin/login     → Admin (equipe interna Allka)
+  /company/login   → Empresa/Cliente
+  /agency/login    → Agência
+  /leader/login    → Líder de área
+  /nomad/login     → Nômade (freelancer)
+  /partner/login   → Parceiro/Afiliado
+
+Cada login usa o mesmo template visual (`LoginPageTemplate`, split-screen com
+texto de marketing multilíngue pt/en/es/zh à esquerda e formulário à
+direita), mudando só a tag de marca ("Allka Company", "Allka Agency", "Allka
+Líder", "Nômades Allka", "Allka Partner") e o `accessType` enviado no login
+(ADMIN/COMPANY/AGENCY/LEADER/NOMAD/PARTNER), que o backend valida contra o
+`role`/`account_type` real do usuário.
+
+Depois de logado, TODOS os perfis (menos o link público de compartilhamento)
+caem dentro do MESMO layout global (`AppLayout` em App.tsx): mesmo
+Sidebar, mesmo Header, mesmo Footer, mesmo ChatWidget flutuante — só o
+CONTEÚDO do menu lateral e das páginas muda de acordo com o perfil. Não há
+"shells" visuais separados por papel (existe um `parceiro/layout.tsx` com
+sidebar própria, mas está morto/não usado — ver seção 15).
+
+Guarda de acesso (`RequireAuth` em App.tsx):
+- Sem token em localStorage → redireciona para o /login do prefixo da URL
+  atual (ex.: tentar acessar /agency/* sem estar logado manda para
+  /agency/login).
+- Com token, mas o `role`/`account_type` do usuário não bate com o prefixo
+  da URL que ele está tentando acessar → é jogado de volta para o dashboard
+  do PRÓPRIO perfil (ex.: um nômade tentando abrir /company/dashboard é
+  redirecionado para /nomad/dashboard).
+- Admin (`role==="admin"` ou `account_type==="admin"`) pode acessar
+  qualquer área.
+- Um evento global `allka:unauthorized` (disparado quando qualquer chamada
+  de API retorna 401) redireciona automaticamente para o login certo.
+- Existe também um `TermAcceptanceGate` — uma tela bloqueante que aparece
+  para QUALQUER perfil se houver termos de uso pendentes de aceite.
+
+MODO DEV/PREVIEW: há um mecanismo (`AccountTypeContext` +
+`dev-role-switcher.tsx`) que permite trocar de perfil simulado via
+localStorage (`dev_active_profile`) sem precisar logar de verdade — útil
+para desenvolvimento, mas não é o fluxo de produção real.
+
+
+================================================================================
+4. PORTAL DA EMPRESA (company/empresa)
+================================================================================
+⚠️ Nota de duplicação: existe uma pasta `app/empresa/*` e uma pasta
+`app/company/*` quase idênticas. A pasta REAL/ativa (a que realmente é
+servida nas URLs) é `company/*`. A pasta `empresa/*` está 100% órfã — nenhum
+arquivo dela é importado em lugar nenhum do app. Ignore `empresa/*`.
+
+Contexto de dados: `useEmpresa()` (contexts/empresa-context.tsx) — carrega
+perfil, projetos (com produtos/etapas), tarefas e faturas da empresa logada.
+
+4.1) company/dashboard — "Dashboard da Empresa"
+  Dashboard 100% customizável por widgets (mesmo framework usado por
+  Agency/Leader/Partner — dashboard-presets-by-role.ts).
+  Widgets disponíveis: métricas gerais, projetos ativos, tarefas, visão de
+  status, atividade recente, alertas, ações rápidas. (Empresa NÃO vê
+  widgets financeiros/administrativos de toda a plataforma como MRR/LTV/
+  CMV/CHURN, distribuição de usuários ou matriz de permissões — esses são
+  exclusivos do admin.)
+  Views pré-configuradas (como "abas" de dashboard): Visão Geral da Company,
+  Projetos Contratados, Aprovações, Financeiro e Pagamentos, Entregas e
+  Histórico.
+  Ações: personalizar widgets (adicionar/editar/ocultar/remover), ver
+  detalhes de um widget, exportar widget (PNG), compartilhar widget ou o
+  dashboard inteiro (gera link público — ver seção sobre /dashboard/share),
+  salvar/criar/editar/excluir dashboards salvos, "seguir período global"
+  (segue o filtro de data escolhido), criar métricas manuais por mês/ano.
+
+4.2) company/projetos — "Gestão de Projetos"
+  Board central de projetos contratados. Visualização em Kanban com colunas
+  editáveis (criar/renomear/excluir coluna). "Contratar Projetos" abre o
+  catálogo para montar um novo projeto. Rascunhos de projeto podem ser
+  continuados ("Continuar rascunho") ou pagos ("Ir para pagamento").
+  Cancelar um projeto dispara um fluxo de retenção (telas de "Esperamos que
+  continue conosco!" / "Última chance para reconsiderar" antes de confirmar
+  o cancelamento). Tem exportação (CSV/Excel/PDF) e cartões de estatística
+  (Total de Projetos, Em Andamento, Concluídos).
+
+4.3) company/tarefas
+  Lista de tarefas de todos os projetos da empresa, com filtro por status
+  (Disponível / Em execução / Em revisão / Concluída / Cancelada) e busca
+  por nome de tarefa/projeto/nômade.
+
+4.4) company/faturas
+  Histórico de faturas (número, descrição, valor, emissão, vencimento,
+  status: Pendente/Paga/Vencida/Cancelada), com filtro por status e cartões
+  de resumo (Pendentes, Pagas, Total Geral).
+
+4.5) company/produtos — "Catálogo de Produtos"
+  Vitrine dos produtos/serviços contratáveis (componente compartilhado
+  `ProductCatalogView`, o mesmo usado em Agência/Líder). Carrinho
+  (`useProjectBasket`) com add/remove/aumentar/diminuir quantidade. Botão
+  "Contratar Serviços" abre o painel de criação de projeto para fechar a
+  contratação a partir do carrinho.
+
+4.6) company/relatorios
+  Diferente das outras 4 (agency/leader/partner/nomades), a Empresa tem sua
+  PRÓPRIA página de relatórios (não usa o componente genérico compartilhado
+  `ReportListPage`). Categorias: Financeiro (Minhas Faturas, Investimentos
+  por Projeto, Fluxo de Pagamentos), Projetos e Entregas (Status, Progresso,
+  Timeline/Prazos), Tarefas e Atividades (por status, performance,
+  atividade da equipe). Tem seletor de período (calendário), busca, e
+  ações "visualizar"/"baixar" (PDF/XLSX) por relatório.
+
+4.7) company/login — tela de login (ver seção 3).
+
+
+================================================================================
+5. PORTAL DA AGÊNCIA (agency/agencia)
+================================================================================
+⚠️ Nota de duplicação (padrão que se repete em Leader/Nomades/Partner): a
+URL canônica é `/agency/*`, mas fisicamente só o DASHBOARD e os RELATÓRIOS
+moram de fato na pasta `agency/`; todas as outras páginas (projetos,
+tarefas, financeiro, catálogo, clientes, login) moram fisicamente dentro da
+pasta `agencia/` (com "i") e são servidas sob as URLs `/agency/...`. A
+pasta `agencia/dashboard` é código morto (nunca roteado) — ignore-a. Ou
+seja: para saber o comportamento real de `/agency/projetos`, é preciso
+olhar o arquivo em `agencia/projetos/page.tsx`, não em `agency/projetos`
+(que nem existe).
+
+Contexto de dados: `useAgencia()` (contexts/agencia-context.tsx).
+
+5.1) agency/dashboard — "Dashboard da Agency"
+  Mesmo framework de widgets customizáveis. Widgets: métricas, projetos
+  ativos, tarefas, visão de status, ticket médio, contas a receber, planos/
+  créditos contratados, atividade, alertas, ações rápidas (sem widgets
+  globais de plataforma). Views: Visão Geral da Agency, Projetos e
+  Tarefas, Aprovações Pendentes, Financeiro da Agency, Contratações e
+  Catálogo.
+
+5.2) agency/projetos (fisicamente em agencia/projetos)
+  É um WRAPPER fino que reaproveita a página de projetos do ADMIN
+  (`AdminProjetosPage`) passando `scope="agency"` e o nome da agência — ou
+  seja, a agência usa literalmente o mesmo board/kanban que o admin usa,
+  só que filtrado para os projetos dela.
+
+5.3) agency/tarefas (fisicamente em agencia/tarefas)
+  Também um wrapper — reaproveita `AdminTarefasPage` com
+  `routeBase="/agency/tarefas"`, escopado à agência.
+
+5.4) agency/financeiro (fisicamente em agencia/financeiro)
+  Financeiro PRÓPRIO da agência com a Allka (não é o financeiro dos
+  clientes dela) — plano/assinatura da agência (Freemium, Plano 500/1000/
+  2000/3000/5000, com desconto de 0–30% por faixa), consumo do mês,
+  histórico de faturas com filtro por status.
+
+5.5) agency/catalogo (fisicamente em agencia/catalogo)
+  Catálogo de produtos contratáveis (mesmo `ProductCatalogView`), com
+  carrinho/basket próprio da agência.
+
+5.6) agency/clientes (fisicamente em agencia/clientes)
+  Lista das empresas atendidas pela agência (nome, CNPJ, segmento,
+  contato, nº de projetos, nº de usuários, status: Ativo/Inativo/
+  Prospecto/Inadimplente). Busca, paginação, exportação.
+
+5.7) agency/relatorios — usa o componente genérico compartilhado
+  `ReportListPage` (profileType="agency").
+
+5.8) agency/login — tela de login.
+
+
+================================================================================
+6. PORTAL DO LÍDER (leader/lider)
+================================================================================
+Mesmo padrão de duplicação: a URL canônica é `/leader/*`, mas quase tudo
+mora fisicamente em `lider/*` (com "i"); só dashboard e relatórios moram em
+`leader/`. `lider/dashboard` é código morto.
+
+O Líder é um papel OPERACIONAL INTERNO de qualidade — ele não contrata nada
+nem tem carrinho/catálogo de compra; ele existe para APROVAR o trabalho dos
+nômades de uma ou mais "áreas" (categorias de especialidade) antes de ir
+para o cliente.
+
+6.1) leader/dashboard — "Dashboard do Líder"
+  Mesmo framework de widgets. Widgets: métricas, tarefas, visão de status,
+  indicadores de nômades da área, ranking de nômades da área, atividade,
+  alertas, ações rápidas. Comentário no código explicita que os números
+  deste dashboard vêm sempre da API real (nunca mock). Views: Visão Geral
+  da Área, Tarefas para Qualificação, Tarefas em Execução, Nômades da
+  Área, Histórico de Qualificações.
+
+6.2) leader/qualificacao (fisicamente lider/qualificacao) — "Para Qualificar"
+  Fila de tarefas aguardando revisão de qualidade do líder (status
+  PARA_LANCAMENTO). Ações: "Aprovar" ou "Devolver para a agência" (abre
+  diálogo pedindo motivo obrigatório). Busca, botão "Atualizar".
+
+6.3) leader/tarefas (fisicamente lider/tarefas)
+  Uma única página que muda de comportamento via query param `?filter=`:
+  "Briefings para Revisar", "Entregas Aguardando Análise", "Tarefas
+  Atrasadas", ou (padrão) "Em Execução".
+
+6.4) leader/devolvidas (fisicamente lider/devolvidas)
+  Tarefas que o próprio líder já devolveu para a agência corrigir.
+
+6.5) leader/historico (fisicamente lider/historico)
+  Histórico de tarefas concluídas; com `?filter=aprovacoes` mostra só as
+  aprovações feitas hoje.
+
+6.6) leader/perfil (fisicamente lider/perfil) — "Meu Perfil"
+  Dados pessoais (nome, e-mail, cargo, telefone) e "Áreas de Atuação"
+  (áreas/especialidades atribuídas ao líder, com categorias permitidas ou
+  "Todas as categorias", e status ativo/inativo). Somente leitura nesta
+  tela (não há formulário de edição visível).
+
+6.7) leader/nomades (fisicamente lider/nomades) — "Nômades da Área"
+  Lista dos nômades sob a área do líder (nível, status, score, tarefas
+  concluídas, nota).
+
+6.8) leader/catalogo (fisicamente lider/catalogo)
+  Catálogo de produtos SOMENTE LEITURA — o líder não pode contratar
+  ("Para contratar, entre em contato com a equipe comercial").
+
+6.9) leader/projetos (fisicamente lider/projetos)
+  Visão de TODOS os projetos da plataforma (não só da área do líder) —
+  "Visão geral de todos os projetos da plataforma". Busca, exportação.
+
+6.10) leader/relatorios — usa `ReportListPage` (profileType="lider").
+
+6.11) leader/login — tela de login.
+
+
+================================================================================
+7. PORTAL DO NÔMADE (nomades/nomad)
+================================================================================
+⚠️ Padrão INVERTIDO em relação aos outros pares: aqui é a pasta em
+português, `nomades/`, que tem QUASE TUDO real e roteado — inclusive o
+dashboard. A pasta `nomad/` (inglês) só tem 2 aliases (`/nomad/dashboard` e
+`/nomad/login`, que apenas renderizam os componentes de `nomades/`) — com
+UMA exceção importante: existe um arquivo `nomad/dashboard/page.tsx` de
+~13.700 linhas, mais NOVO e usando o mesmo framework de widgets
+compartilhado das outras roles (WIDGETS_BY_ROLE.NOMAD) — só que esse
+arquivo NÃO está roteado em lugar nenhum (é código morto/trabalho em
+andamento). O dashboard do nômade que está de fato no ar é o mais antigo,
+em `nomades/dashboard/page.tsx` (~1.630 linhas), com sistema de widgets
+PRÓPRIO (não usa o framework compartilhado das outras roles).
+
+Observação geral sobre esta seção do app: várias páginas do nômade usam
+dados mockados fixos no código (arrays como PAYMENTS, MONTHLY,
+HABILITACOES, AVAILABLE_TASKS) em vez de chamadas reais à API — ou seja,
+esta é a área do produto com aparência mais "protótipo"/menos ligada ao
+backend real, comparado com Empresa/Agência/Líder.
+
+7.1) nomades/dashboard — dashboard próprio (sistema de widgets independente,
+  chave de armazenamento `nomade_dashboard_widgets_v1`). Widgets: hero de
+  perfil (nome/nível/nota), KPIs (tarefas concluídas/ativas/disponíveis +
+  ganhos), tarefas disponíveis, tarefas ativas, histórico de tarefas,
+  ganhos, progresso de nível (Bronze→Silver→Gold→Platinum→Diamond),
+  performance (taxa de entrega no prazo, nota média), distribuição de
+  status de tarefas. Pode arrastar para reordenar, alternar largura de 1 ou
+  2 colunas, alternar entre "Widgets ativos" e "Biblioteca" de widgets.
+
+7.2) nomades/programa — "Programa Nômade"
+  Mostra o nível atual (Bronze/Silver/Gold/Platinum/Diamond, com bônus %)
+  e o caminho até o próximo nível, com cartões expansíveis mostrando os
+  critérios de cada nível.
+
+7.3) nomades/habilitacoes — "Habilitações"
+  Certificações por tipo de tarefa/categoria que liberam quais tarefas o
+  nômade pode pegar (status: certificado / em_andamento / pendente /
+  revogado / não habilitado). Filtro por abas: Todos / Certificados / Em
+  andamento / Não habilitados. Link direto para a Allkademy ("Obtenha
+  novas habilitações na Allkademy").
+
+7.4) nomades/ganhos — "Ganhos"
+  Histórico completo de pagamentos (tarefa, cliente, data, valor, bônus,
+  status pago/pendente), gráfico de tendência mensal, tabela de bônus por
+  nível (Bronze 0% → Diamond 20%). Exportação, ordenação, paginação.
+
+7.5) nomades/tarefasdisponiveis — "Tarefas Disponíveis"
+  O "mural de tarefas" onde o nômade se candidata a tarefas em aberto
+  (valor, horas estimadas, nota mínima exigida, urgência, nível mínimo,
+  habilidades, prazo, descrição). Ações: "Ver detalhes" (abre painel
+  lateral), "Candidatar-se"/"Candidatar-se agora" (o botão vira "Enviado ✓"
+  depois de clicado).
+
+7.6) nomades/minhastarefas — "Minhas Tarefas"
+  Tarefas ativas e concluídas do próprio nômade, com abas Ativas/
+  Concluídas. "Detalhes" abre um painel lateral.
+
+7.7) nomades/historico — "Histórico"
+  Todas as tarefas concluídas e seus resultados (ganhos, bônus, nota,
+  pontualidade). Exportação. Cartões resumo (total no período, concluídas,
+  nota média, % no prazo).
+
+7.8) nomades/perfil — "Meu Perfil" (autoatendimento completo)
+  Abas: Dados pessoais / Habilidades / Preferências / Segurança. Dados
+  pessoais (nome, e-mail, telefone, cidade/UF, portfólio, LinkedIn, bio)
+  com modo de edição. Ação "Solicitar exclusão de conta".
+
+7.9) nomades/relatorios — usa `ReportListPage` (profileType="nomades").
+
+7.10) nomades/login (também acessível por /nomad/login) — tela de login.
+
+
+================================================================================
+8. PORTAL DO PARCEIRO (partner/parceiro)
+================================================================================
+Mesmo padrão de duplicação de Agência/Líder: URL canônica `/partner/*`, mas
+só dashboard e relatórios moram em `partner/`; agências lideradas,
+projetos, comissões e saques moram fisicamente em `parceiro/*`.
+`parceiro/dashboard` é código morto, assim como `parceiro/layout.tsx` (uma
+sidebar própria nunca usada — o app usa o shell global único para todos).
+
+8.1) partner/dashboard — "Dashboard do Parceiro"
+  Widgets: métricas, programa parceiro (nível/tier, convites,
+  distribuição), contas a receber (comissões pendentes), atividade,
+  alertas, ações rápidas. Views: Visão Geral Partner, Indicações, Clientes
+  Indicados, Comissões, Relatórios Partner.
+
+8.2) partner/agencias (fisicamente parceiro/agencias) — "Agências Lideradas"
+  Agências indicadas/lideradas pelo parceiro, com acompanhamento de
+  performance. KPIs: Total Lideradas, MRR Total, Comissão Mensal (5% sobre
+  o MRR), Atenção Necessária (agências em risco + em onboarding).
+
+8.3) partner/projetos (fisicamente parceiro/projetos) — "Projetos Indicados"
+  Projetos contratados por empresas que vieram pelo link de indicação do
+  parceiro, com valor/status/comissão gerada. Filtro Todos/Ativos/
+  Concluídos/Cancelados.
+
+8.4) partner/comissoes (fisicamente parceiro/comissoes) — "Comissões"
+  Histórico completo de comissões (status: pendente/confirmado/pago),
+  busca, filtro por status, cartões de resumo.
+
+8.5) partner/saques (fisicamente parceiro/saques) — "Saques"
+  Solicitar saque do saldo disponível via chave PIX (CPF/CNPJ/e-mail/
+  telefone/aleatória). Formulário simples: valor até o saldo disponível +
+  confirmação da chave PIX + envio ("Solicitação enviada com sucesso!").
+
+8.6) partner/relatorios — usa `ReportListPage` (profileType="parceiro").
+
+8.7) partner/login — tela de login.
+
+
+── /dashboard/share/:token (fora de qualquer portal — página pública) ──────
+Não é um "hub" nem um seletor de perfil: é o VISUALIZADOR de links de
+compartilhamento gerados pelo botão "Compartilhar Dashboard"/"Compartilhar
+widget" que existe dentro de cada dashboard (Empresa/Agência/Líder/
+Parceiro/Nômade). É uma rota PÚBLICA (sem autenticação, fora do
+AppLayout/Sidebar/Header). O token codifica: alvo (widget específico ou
+dashboard inteiro), perfil dono, nível de permissão (somente visualizar,
+permitir trocar filtros, ou comentar), PIN opcional e validade opcional.
+Se protegido por PIN, mostra tela de "Acessar relatório"; se expirado ou
+inválido, mostra tela de erro dedicada; se a permissão for "comment",
+mostra uma caixa de comentário. Só é alcançado por link gerado, nunca por
+navegação dentro do app.
+
+
+================================================================================
+9. PAINEL ADMINISTRATIVO — TODAS AS PÁGINAS (37 rotas em apps/frontend/app/admin)
+================================================================================
+Não há admin/page.tsx nem admin/layout.tsx — a home do admin é
+admin/dashboard, que carrega o componente `AdminDashboardPage`
+(features/dashboards/admin/admin-dashboard-page.tsx, ~12.900 linhas, de
+longe o maior arquivo do frontend).
+
+Convenções visuais repetidas em quase toda página admin (documentadas em
+detalhe na seção 13): PageHeader com título/descrição/ações; botões de
+toolbar em ícone com tooltip ("Criar novo X", gradiente de marca no hover);
+painel lateral "Filtros" (SlidePanel); painel lateral "Configurar colunas";
+ItemsPerPageSelect + paginação numerada; ExportButton (CSV/PDF/PNG).
+
+──────────────────────────────────────────────────────────────────────────
+9.1) admin/dashboard (a "home" do admin)
+──────────────────────────────────────────────────────────────────────────
+Dashboard executivo totalmente customizável por widgets — visão de toda a
+plataforma (usuários, empresas, projetos, receita, tarefas, nômades,
+permissões, programa parceiro etc.), com suporte a MÚLTIPLOS dashboards
+salvos por admin.
+Entidades: Widgets, Dashboards salvos, itens da Biblioteca de Widgets
+(Cards de Métricas, À Receber, Atividades da Plataforma, Tarefas Resumo,
+Nômades, Ranking de Nômades/Agências, CMV, LTV, MRR, CHURN, Receita,
+Ticket Médio, Projetos Ativos, Planos de Crédito, Alertas do Sistema,
+Matriz de Permissões, Programa Partner etc.), Alertas do Sistema, entradas
+manuais, configs de compartilhamento.
+Ações: seletor de período global (Hoje/Ontem/7/30/90 dias/Este mês/Mês
+passado/Trimestre/Intervalo personalizado); seletor de dashboard
+("Selecionar dashboard", marcar como padrão com estrela, excluir); "Criar
+novo dashboard"; Exportar PNG/PDF; "Compartilhar"/"Compartilhar Dashboard"
+(Globalmente / com Profissionais / via Link, com abas Permissão/PIN/
+Expiração); Salvar/Editar/Renomear/Remover dashboard; por widget: Ver
+detalhes, Compartilhar, Exportar, Ocultar, Editar, Remover; Central de
+Alertas embutida (`AlertsCenter`).
+
+9.2) admin/agencias
+Cadastro de contas de agência-parceira (separado do fluxo de convite do
+Programa Partner). Entidade: Agency (nome, e-mail, telefone, status, nível
+de parceiro, usuário vinculado). Ações: "Criar nova agência" (+), "Editar
+agência", busca, filtro por status (ativo/inativo/pendente), badges de
+nível (Bronze/Silver/Gold/Platinum/Diamond).
+
+9.3) admin/alertas — "Central de Atenções"
+Caixa de entrada unificada de alertas acionáveis (tarefas, mensagens,
+financeiro, projetos, sistema) para triagem. Entidade: SystemAlert (tipo,
+prioridade 1–5, status: aberto/resolvido/adiado/cancelado/aguardando
+aprovação, anexos). Ações: ordenar alertas; abas de status com contagem
+(Abertos/Todos/Aguardando/Resolvidos/Adiados/Cancelados); legenda de
+prioridade P1 (menos importante) a P5 (crítico); resolver/adiar/cancelar
+com captura de motivo; visualizador de anexos (zoom/girar/download).
+
+9.4) admin/allkademy
+Gestão do conteúdo da Allkademy (academia de treinamento interna/LMS) para
+admin/empresas/agências/nômades. Entidade: Course (título, categoria,
+thumbnail, status publicado/rascunho, conteúdo vídeo/texto/quiz). Ações:
+"Criar novo curso" (+), Editar/Excluir curso, Filtros (status/categoria),
+Configurar colunas, paginação.
+
+9.5) admin/campanhas-indicacao — "Campanhas e Promoções"
+Gestão de campanhas de indicação, cupons de desconto e programas
+promocionais de influencer, com relatório de performance. Entidades:
+Campaign (indicação/influencer, tipo/valor de comissão, min/max
+indicações, cupom/usuário vinculado), Coupon (desconto/crédito/indicação,
+limites de uso, tipos de conta/empresas/usuários permitidos). Ações: "Novo
+Cupom", "Nova Campanha", "Relatório" (cliques/conversões/abandono),
+"Criar acesso do influencer", Exportar, Filtros, Configurar colunas.
+Cartões: Campanhas Ativas, Indicações Ativas, Usos de Cupons, Total
+Investido.
+
+9.6) admin/catalogo-produtos
+Preview do catálogo de produtos "como o cliente vê", usado pelo admin
+(ex.: ao montar um projeto). Ações: adicionar/remover/aumentar/diminuir
+quantidade no carrinho de projeto — não é uma tela de cadastro (isso é
+admin/produtos).
+
+9.7) admin/clientes
+Registro estilo CRM das empresas clientes e seu relacionamento comercial
+(projetos, usuários, faturas vinculados) — recorte mais estreito que
+admin/empresas. Ações: "Cadastrar nova empresa" (+), Ver detalhes, Editar
+empresa, Filtros (status), Configurar colunas, paginação. Cartões: Total
+de Clientes, Projetos Vinculados, Usuários Vinculados, Faturas Emitidas.
+
+9.8) admin/comissionamentos
+Configuração de remuneração/comissão de líderes por categoria de
+especialidade. ⚠️ Aparenta ser protótipo/mock — dados fixos no código, não
+ligado à API. Abas: "Categorias e Líderes" / "Performance e Relatórios".
+
+9.9) admin/commissions — STUB ("Coming soon: commissions"). Não implementado.
+
+9.10) admin/configuracion — STUB ("Coming soon: configuracion"). Duplicata
+abandonada em espanhol de admin/configuracoes.
+
+9.11) admin/configuracoes
+Configurações gerais da plataforma. Abas: Geral, Emails, WhatsApp, Equipe,
+Integrações, Notificações, Segurança, Aparência (8 abas). Ações: "Salvar"
+por seção, toggles de flags (permitir cadastro, desativar acesso
+temporariamente, exigir verificação de e-mail), "Testar" integrações.
+
+9.12) admin/dashboard-config
+Ferramenta legada/mais simples de configuração de widgets por dashboard,
+definindo layouts por tipo de conta (empresas/agências/nômades/admin) e
+nível (básico/partner/premium/líder) — provavelmente superada pelo
+construtor de widgets embutido no Dashboard principal. Ações: "Criar novo
+widget", Editar/Excluir/Mostrar-Ocultar widget.
+
+9.13) admin/disponibilidade
+Monitoramento operacional em tempo real da disponibilidade de nômades e
+saúde da fila de tarefas, com sistema de "farol" (vermelho/amarelo/verde)
+por especialidade e por fila de tarefa. Ações: "Atualizar", Exportar.
+Legenda: Crítico/Atenção/OK/Sem dados (limiares: ≥5 disponíveis = verde,
+2–4 = amarelo, <2 = vermelho). Cartões: Nômades, Disponíveis, Crítico,
+Atenção, OK, Aguardando.
+
+9.14) admin/empresas
+Cadastro MESTRE de todas as empresas/organizações da plataforma (qualquer
+tipo: cliente, agência etc.), com filtros salvos ricos e painéis de
+detalhe — mais amplo que admin/clientes. É a referência visual (padrão de
+tabela) usada para replicar em outras páginas. Ações: "Criar nova empresa"
+(+), Ver/Editar/Criar via painéis laterais dedicados
+(CompanyCreateSlidePanel/CompanyEditSlidePanel/CompanyViewSlidePanel),
+filtros salvos nomeáveis (renomear/excluir), excluir empresa (com aviso de
+alterações não salvas), paginação.
+
+9.15) admin/especialidades
+Catálogo de especialidades/habilidades profissionais (usado para
+classificar nômades e precificar tarefas), com preço por nível e
+configuração opcional de automação por IA. Ações: "Criar nova
+especialidade" (+), Ver detalhes, Editar, Remover (com diálogo de
+confirmação), Filtros (Ativas/Inativas/Com IA), Configurar colunas.
+
+9.16) admin/financeiro
+Hub financeiro completo: faturamento, saques/repasses de parceiros,
+despesas, carteiras/saldos internos, o programa "Squad" (clientes de
+receita recorrente) e conciliação bancária. Abas: Faturas, Saques,
+Despesas, Carteiras, Squad, Conciliação (6 abas, cada uma com contador ao
+vivo). Ações: Criar nova despesa/fatura; por fatura: marcar como
+pago/atrasado, editar, cancelar, excluir; por despesa: marcar como paga,
+editar, excluir; carteira: ver extrato, lançar ajuste manual de saldo,
+abrir carteira; editar Squad; Configurar colunas; Filtros (só nas abas
+Faturas/Saques/Despesas/Carteiras — Squad não tem filtros próprios e
+Conciliação já tem sua própria barra de filtros inline).
+
+9.17) admin/levels
+Gestão de níveis de incentivo tanto de Agências quanto de Parceiros
+(implementação mais antiga/simples, ligada à API via apiClient.getLevels)
+— se sobrepõe a admin/niveis e admin/programa-partner. Abas: Níveis de
+Agência / Níveis de Partner.
+
+9.18) admin/login — tela de login do admin (padrão dev: admin@allka.test /
+123456, redireciona para /admin/dashboard).
+
+9.19) admin/modelos-tarefas — "Modelos de Tarefas"
+Gestão de templates reutilizáveis de tarefa vinculados a produtos, usados
+depois para gerar automaticamente as tarefas reais de execução dentro dos
+projetos (alimenta admin/tarefas e admin/tarefas-execucao). Entidade: Task
+Model (status, descrição, objetivo, orientação/observações internas,
+etapas de execução, checklist padrão, perguntas de briefing, regras de
+execução/conclusão, arquivos obrigatórios, produtos vinculados). Ações:
+"Criar novo modelo de tarefa" (+), Ver detalhes, Filtros, Configurar
+colunas. Abas no detalhe de um modelo: Visão Geral, Etapas (com contador),
+Perguntas de Briefing (com contador), Produtos (com contador).
+(Esta página foi extensivamente ajustada nesta sessão de trabalho — ver
+histórico de conversas para os detalhes de modal/UI aplicados.)
+
+9.20) admin/niveis — "Níveis do Programa Partner"
+Configura os 5 níveis fixos (Bronze/Silver/Gold/Platinum/Diamond) do
+Programa Partner: critérios de progressão, benefícios, regras de
+comissão. Se sobrepõe à aba de níveis de parceiro de admin/levels (esta é
+a versão mais atual/detalhada). Ações: "Criar novo nível" (+), Excluir
+nível, Remover item de benefício.
+
+9.21) admin/niveis-nomades
+Configura níveis de gamificação para nômades com base em critérios de
+performance, bônus e benefícios, além de um fluxo de revisão trimestral
+que move nômades entre níveis. Abas: Configuração de Níveis / Revisão
+Trimestral. Ações: Criar/Excluir nível, ações de revisão (promover/
+rebaixar/manter), duplicar nível.
+
+9.22) admin/nomades
+Gestão de contas de nômades — perfil, nível, status, ações rápidas de
+contato. Ações: Ver/Editar (via NomadViewModal/NomadEditModal), Ligar,
+WhatsApp, Enviar E-mail, avaliação por estrelas.
+
+9.23) admin/notifications — "Central de Notificações"
+⚠️ TODA ESTA PÁGINA É MOCK (dados hardcoded, sem model no banco, sem rota
+no backend) — ver seção 14 para detalhes. Configura padrões automáticos de
+notificação, templates de mensagem, regras de gatilho por tipo de conta,
+com toggles de canal (e-mail/WhatsApp/in-app/push) e analytics. Abas:
+Padrões, Mensagens, Regras, Analytics.
+
+9.24) admin/onboarding
+Cria e gerencia "Circuitos" — sequências configuráveis de passos de
+onboarding (slide/vídeo/texto/quiz) mostradas a contas recém-cadastradas,
+segmentadas por tipo de conta. Ações: "Novo Circuito" (+), Adicionar
+etapa, Excluir Circuito, filtro por status (Todos/Ativos/Inativos). Abas:
+Todos, Admin, Empresas, Agências, Nômades (segmentação por tipo de
+conta-alvo). KPIs: Total Circuitos, Ativos, Taxa de Conclusão, Usuários
+Impactados.
+
+9.25) admin/permissions — "Perfis de Acesso"
+Define perfis de controle de acesso baseado em papel, com matriz granular
+de permissão (visualizar/criar/editar/excluir, escopo nenhum/próprio/
+todos) em todos os módulos da plataforma. Abas: Perfis de Acesso / Matriz
+de Permissões. Ações: Criar/Editar/Excluir perfil.
+
+9.26) admin/permissoes — apenas um REDIRECT/re-export para admin/permissions
+(alias legado em português, sem conteúdo próprio).
+
+9.27) admin/precificacao
+Motor central de regras de preço — configura comissões, taxas, impostos e
+margens aplicados em toda a plataforma, mais tabelas de preço por
+especialidade. Abas: Taxas e Comissões / Especialidades. Ações: Adicionar
+componente (modal de escolha Comissão/Taxa/Imposto/Margem → formulário),
+Editar/Excluir componente e preço de especialidade.
+(Esta página foi ajustada nesta sessão — o modal de Adicionar/Editar
+Comissão e Taxa foi convertido ao padrão visual "modal global"; também foi
+corrigido um bug de crash real: um `<Select.Item value="">` inválido no
+Radix Select.)
+
+9.28) admin/produtos — "Cadastro de Produtos"
+O construtor central do catálogo: define produtos/serviços vendáveis,
+precificação, tarefas vinculadas, imagens e questionários voltados ao
+cliente. Ações: "Novo Produto" (+), Ver detalhes, Editar produto, Filtros
+Avançados, alternância de modo de visualização (grid), Gerenciar imagens,
+mover/remover vínculo de tarefa, modais de "Cálculo Detalhado" (breakdown
+de preço), "Detalhes da Tarefa", "Questionário" (construtor de briefing).
+Cartões: Produtos, Ativos, Tarefas, Categorias.
+
+9.29) admin/programa-partner
+Gestão do funil de convites do Programa Partner e da lista de parceiros
+ativos (nível, MRR, agências lideradas). Abas: Convites (com contador de
+pendentes) / Partners Ativos (com contador de ativos). Ações: "Criar novo
+convite" (+), Revogar status Partner, Cancelar convite.
+(Ajustado nesta sessão: "+ Novo Convite" e "Ver detalhes" do convite
+convertidos ao padrão visual "modal global".)
+
+9.30) admin/projetos — "Gestão de Projetos"
+Hub operacional dos projetos de clientes: criar, acompanhar e gerenciar
+projetos com produtos/tarefas vinculados, em 3 modos de visualização:
+Lista (acordeão), Kanban, Planejador (estilo calendário). Ações: "Novo
+Projeto" (+), "Duplicar Projeto", Configurar colunas, gestão de colunas do
+Kanban (criar/editar/excluir), Planejador (salvar coluna/card), Exportar
+(CSV/Excel/PDF), paginação.
+(Ajustado nesta sessão: Novo Projeto, Visualizar e Duplicar convertidos ao
+"modal global"; ícone Excluir corrigido para as cores certas.)
+
+9.31) admin/promocoes — pasta VAZIA, sem page.tsx. Rota órfã/não utilizada
+(provavelmente superada por admin/campanhas-indicacao, que já cobre
+"Campanhas e Promoções").
+
+9.32) admin/relatorios — "Relatórios"
+Catálogo de relatórios e construtor de relatório customizado, cobrindo
+Financeiro e outras categorias operacionais/comerciais, mais uma
+biblioteca de indicadores reutilizáveis e controle de permissão sobre quem
+acessa cada relatório. Abas: Visão Geral, Indicadores, Configurações.
+Ações: "Nova configuração" (abre ReportBuilderSheet), "Configurar
+permissões" (ReportPermissionsDialog), "Atualizar". KPIs: Empresas,
+Projetos, Nômades, Tarefas, Faturas, Receita Paga.
+
+9.33) admin/sistema — "Sistema"
+Console de monitoramento de infraestrutura e gestão de conectores de
+terceiros (saúde do sistema, status de serviços, logs de integração,
+configuração de conector). Abas: Performance, Serviços, Logs, Conectores,
+Configurações. Entidades: Service (status operacional/degradado/fora do
+ar), Connector (OpenAI, Stripe, WhatsApp Business, SendGrid, Slack, Google
+Workspace, CRM — cada um com chave de API, categoria, status, status de
+DPA — mas nenhum destes conectores tem integração real por trás, ver
+seção 11), Activity Log. Ações: por conector: editar, desconectar,
+excluir, testar conexão; Filtros por conector/ação; barras de medidor de
+CPU/memória/carga (limiares Normal/Moderado/Alto).
+
+9.34) admin/tarefas
+Board completo de acompanhamento operacional de tarefas — o pipeline
+principal de "Tarefas" através de todo o ciclo de vida (atribuição,
+execução, aprovação, entrega) em todos os projetos/nômades. Ações
+inferidas pelos ícones: aprovar/rejeitar, iniciar/pausar, cancelar,
+reatribuir, enviar, avaliar (estrelas), sinalizar treinamento. Configurar
+colunas, paginação.
+
+9.35) admin/tarefas-execucao
+Visão mais estreita/simples de "Tarefas" mostrando tarefas de execução
+reais geradas a partir de produtos vinculados a projetos — se sobrepõe a
+admin/tarefas (variante menor/mais focada). Filtro por status via ícones
+(aguardando/em progresso/concluída), busca, atualizar.
+
+9.36) admin/terms — "Gestão de Termos"
+Gestão de documentos legais (Termos de Uso, Política de Privacidade,
+acordos de serviço) por tipo de conta/nível de aceite, e histórico de
+aceite dos usuários. Ações: "Criar novo termo" (+), Editar/Excluir termo,
+ver histórico de aceite. Cartões: Total de Termos, Nível Empresa, Aceites
+Hoje, Última Atualização.
+
+9.37) admin/users — STUB ("Users page — coming soon"). Superado por
+admin/usuarios.
+
+9.38) admin/usuarios — "Usuários"
+Registro mestre de TODAS as contas de usuário da plataforma, em qualquer
+papel/tipo de conta (admin/empresa/agência/nômade), com ferramentas ricas
+de permissão e segurança. Ações: "Criar novo usuário" (+), filtros salvos
+nomeáveis, Configurar colunas, ações de segurança inferidas pelos ícones
+(redefinir credenciais, permissões, desativar, duplicar/copiar link,
+exportar imagem), paginação.
+
+9.39) admin/usuarios-internos — "Usuários Internos"
+Diretório da equipe/staff interno da própria Allka (não são clientes da
+plataforma), incluindo papel, departamento e flags de permissão interna.
+⚠️ Atualmente só com dados mock. Ações: "Criar novo usuário interno" (+),
+filtro por departamento, busca.
+
+──────────────────────────────────────────────────────────────────────────
+Observações transversais do painel Admin:
+──────────────────────────────────────────────────────────────────────────
+- Pares de funcionalidade sobrepostos que merecem atenção antes de
+  documentar como "a" verdade oficial: admin/levels vs admin/niveis vs
+  admin/programa-partner (mesmo assunto, 3 implementações);
+  admin/tarefas vs admin/tarefas-execucao; admin/empresas vs
+  admin/clientes; admin/comissionamentos (mock) vs a máquina de
+  Squad/comissão dentro de admin/financeiro.
+- Rotas mortas/stub que não devem ser tratadas como funcionalidade real:
+  admin/commissions, admin/configuracion, admin/users, admin/promocoes
+  (sem arquivo), admin/permissoes (só redirect).
+
+
+================================================================================
+10. MODELO DE DADOS (banco de dados / Prisma)
+================================================================================
+Fonte: apps/backend/prisma/schema.prisma — banco MySQL, IDs `cuid()`.
+
+USUÁRIOS E AUTENTICAÇÃO
+- User: identidade/login central. role (company_user | company_admin |
+  company_financial | agency_user | agency_admin | nomad | admin |
+  partner), account_type (empresas | agencias | nomades | admin |
+  parceiro), company_id opcional. Relaciona 1:1 opcional com Nomade,
+  Agency, PartnerProfile; também com TermAcceptance, ChatParticipant,
+  ChatMessage, CourseEnrollment, LiderArea, ProjectTask (como
+  lider_responsavel), Coupon (como linked_user).
+- LiderArea: vincula um User (líder) a um nome de área + categorias/
+  produtos permitidos (JSON), usado para auto-atribuir tarefas de revisão.
+- AdminProfile / AdminPermission: perfis de permissão nomeados (com flag
+  is_master) e permissões por módulo/ação (view/edit/create/delete/
+  not_applicable).
+
+EMPRESAS / AGÊNCIAS / CONTAS
+- Company: empresas/clientes. sequence_number (código de exibição
+  emp_00001), cnpj único, type (empresa/agencia/nomade/parceiro — a
+  classificação comercial real), status (ativo/inativo/prospecto/
+  inadimplente), blocos de contato comercial/financeiro,
+  referred_by_partner_id → PartnerProfile. Tem muitos Project, Invoice,
+  User, CompanyPaymentMethod; 1:1 SquadConfig; muitos CouponUsage.
+- CompanyPaymentMethod: cartões mascarados por empresa (bandeira, últimos
+  4 dígitos, se é cartão do cliente ou da agência).
+- Agency: 1:1 com User. partner_level (bronze/silver/gold/platinum/
+  diamond), wallet_balance. Tem 1:1 MatchQueueEntry, muitos
+  AgencyLeadership, muitos AgencyReport.
+
+ESPECIALIDADES / NÔMADES
+- Nomade: perfil de freelancer, User 1:1 opcional. level (bronze→leader),
+  status (ativo/inativo/aguardando_aprovacao/reprovado/pausado), score,
+  contadores de tarefa, is_leader/leader_id, métricas de performance
+  (nota média, % no prazo, taxa de rejeição). Relaciona Qualification[],
+  WalletTransaction[], BankAccount (1:1), TaskExecution[],
+  WithdrawalRequest[], NomadeHabilidade[].
+- NomadeHabilidade: vínculo estruturado de habilidade (área/categoria de
+  produto/produto/modelo de tarefa) com nota média e disponibilidade —
+  usado pelo algoritmo de auto-atribuição.
+- NomadeLevel: tabela de níveis (slug, score mínimo/máximo, benefícios/
+  requisitos em JSON).
+- Qualification: certificação legada por categoria/tipo de tarefa
+  (habilitado/pausado/teste_pendente/reprovado).
+- WalletTransaction: lançamento legado de carteira do nômade — em grande
+  parte substituído pelos modelos Wallet/WalletLedger mais novos.
+- BankAccount: dados bancários/PIX do nômade para repasse.
+- Specialty: catálogo de categorias de especialista com hourly_rate.
+
+PROGRAMA PARTNER E NÍVEIS
+- PartnerProfile: 1:1 com User; a conta "parceiro" de indicação/afiliado.
+  balance, total_earned, total_withdrawn, referral_code único, status
+  (active/suspended/pending), dados de pix. Relaciona
+  PartnerCommission[], AgencyLeadership[] (agências lideradas),
+  AgencyReport[], Company[] (empresas indicadas).
+- PartnerLevel: tabela de níveis de parceiro (limiares de MRR, taxa de
+  comissão, desconto extra, requisitos de agências lideradas, bônus de
+  subida de nível).
+- AgencyLeadership: vínculo entre um PartnerProfile e uma Agency que ele
+  "lidera" (mentoria/gestão), com status/notas/período.
+- AgencyReport: relatório mensal que um parceiro escreve sobre uma agência
+  liderada (avaliação, destaques/melhorias em JSON, MRR, contagem de
+  projetos/tarefas, rascunho/publicado).
+- MatchQueueEntry: 1:1 com Agency; fila/tier (basic/premium/elite) +
+  pontuação/posição para casamento de leads.
+
+CAMPANHAS, INDICAÇÕES E CUPONS
+- Campaign: campanha de marketing (tipo cupom/link/indicação,
+  tipo/valor de comissão, código de cupom único opcional). Tem muitos
+  PartnerCommission.
+- Coupon: cupom de desconto/crédito/indicação (tipo, tipo/valor de
+  desconto, bônus de crédito, limites de uso, tipos de conta/empresas/
+  usuários permitidos em JSON, usuário vinculado opcional para comissão de
+  indicação). Tem muitos CouponUsage.
+- CouponUsage: registro de resgate ligando um Coupon a uma Company.
+- PartnerCommission: comissão ganha por um parceiro a partir de uma
+  campanha (valor, status pendente/aprovada/paga).
+
+PROJETOS
+- Project: registro central de engajamento. client_id → Company, status
+  (draft→...→paid), lifecycle (avulso/mensal), valor/orçamento/gasto/
+  progresso, flag bitrix_sync (só o campo — sem integração real por
+  trás), billing_day. Relaciona TaskExecution[], Invoice[],
+  ProjectProduct[], ProjectTask[], Payment[], ProjectCredential[].
+
+PRODUTOS / CATÁLOGO
+- Product: serviço/pacote vendável (categoria, preço base, complexidade,
+  visibilidade por tipo de conta em JSON, metadata JSON). Tem
+  ProductVariation[], ProductAddon[], ProductCatalogTask[] (vínculos de
+  tarefa), ProjectProduct[], ProjectTask[].
+- ProductVariation: nível de preço/escopo de um produto (preço, prazo em
+  dias, features em JSON).
+- ProductAddon: item adicional opcional precificado de um produto.
+- CatalogTask: definição mestre de "modelo de tarefa" (código CT-xxx,
+  categoria, tipo de tarefa, etapas/checklist/perguntas de briefing em
+  JSON, regras de execução) — o template a partir do qual tarefas
+  operacionais são geradas.
+- ProductCatalogTask: junção N:N Product↔CatalogTask com overrides por
+  vínculo (ordem, obrigatória, fase).
+
+PROJETOS × PRODUTOS × TAREFAS (camada operacional de execução)
+- ProjectProduct: um Product contratado dentro de um Project; carrega um
+  SNAPSHOT comercial (nome/código/categoria/preço no momento da venda,
+  comissão, tipo de pagador AGENCIA/CLIENTE), status (PENDENTE/
+  EM_EXECUCAO/CONCLUIDO/CANCELADO). Tem ProjectTask[], ProjectCredential[].
+- ProjectTask: a tarefa operacional real gerada a partir de um
+  CatalogTask para um projeto/produto. task_code globalmente único
+  (T000001…), pipeline de status rico (PARA_LANCAMENTO→...→CONCLUIDA/
+  CANCELADA/AGUARDANDO_NOMADE), campos de atribuição
+  (nomade_responsavel_id, lider_responsavel_id, responsavel_agencia_id),
+  lancamento_expires_at (expiração automática de 30 dias — verificada
+  sob demanda, NÃO é um cron job), snapshots em JSON de checklist/etapas/
+  briefing. Tem ProjectTaskStage[], TaskBriefingAnswer[],
+  TaskAttachment[], TaskAssignmentHistory[], ProjectCredential[].
+- ProjectTaskStage: sub-etapas ordenadas de um ProjectTask, cada uma com
+  seu próprio status/checklist e flag de dependência sequencial.
+- TaskBriefingAnswer: respostas do cliente/empresa às perguntas de
+  briefing de uma tarefa (arquivos/links em JSON).
+- TaskAttachment: anexo de arquivo/link/referência/entrega numa tarefa.
+- TaskAssignmentHistory: trilha de auditoria das tentativas de
+  atribuição automática/manual de nômade (critérios, pontuação,
+  resultado).
+- SystemAlert: alerta operacional (ex.: "nenhum nômade encontrado",
+  "tarefa atrasada"), com severidade e estado de leitura, gerado pelos
+  serviços de auto-atribuição.
+
+TAREFAS / MODELOS DE TAREFA (camada legada/paralela mais antiga)
+- TaskTemplate: template ligado a uma Specialty, precificado com
+  complexidade, margem de lucro, multiplicador de urgência. Tem
+  TaskExecution[].
+- TaskExecution: instância de tarefa executada ligando Project +
+  TaskTemplate + Nomade, com pipeline de status, prioridade, avaliação/
+  feedback. (Parece ser um modelo mais antigo/simples de execução de
+  tarefa, distinto do pipeline ProjectTask mais novo.)
+
+FINANCEIRO (Faturas / Carteiras / Saques / Despesas / Pagamentos)
+- Invoice: documento de cobrança ligado a Company/Project (status
+  pendente/pago/atrasado/cancelado).
+- Payment: registro de pagamento sandbox/fake para um Project
+  (payment_method: CARTAO_TESTE/PIX_FAKE/BOLETO_FAKE/CREDITOS/ALLKOINS;
+  gateway: FAKE_SANDBOX/STRIPE/PAGARME/ASAAS — só FAKE_SANDBOX está de
+  fato implementado, os outros são valores de enum reservados para
+  integração futura).
+- WithdrawalRequest: pedido de saque do nômade via PIX
+  (aguardando_analise→pagamento_agendado→pagamento_efetuado/cancelado/
+  reprovado).
+- Expense: despesa operacional da própria Allka (categoria, tipo
+  fixa/variável, recorrência, recurrence_id agrupando série recorrente,
+  flag is_recurring_base — a geração da série parece ser feita em código
+  de aplicação, não em job agendado).
+- Wallet: conta de carteira unificada chaveada por (owner_type,
+  owner_id) onde owner_type ∈ company/agency/nomad/partner/platform. Tem
+  WalletLedger[].
+- WalletLedger: lançamento estilo partida-dobrada (tipo, direção, valor,
+  saldo antes/depois, idempotency_key único, reference_type/
+  reference_id polimórfico para payment/invoice/withdrawal/commission/
+  expense/project). Escrito via lib/wallet-service.ts.
+
+SQUAD (plano de crédito pós-pago)
+- SquadConfig: 1:1 com Company; configuração de plano pós-pago (limite de
+  crédito, mínimo mensal, dia de fechamento, prazo de pagamento, status
+  ativo/pausado/cancelado/inadimplente). Tem SquadCycle[].
+- SquadCycle: instância de ciclo de faturamento mensal para um
+  SquadConfig (total consumido, ajuste de mínimo, total faturado, link
+  soft para invoice_id, status aberto/fechado/faturado/pago/atrasado/
+  cancelado).
+
+COFRE DO PROJETO (credenciais)
+- ProjectCredential: guarda credenciais de demo/serviço de um projeto
+  (nome do serviço, url, usuário, password_demo — explicitamente só demo),
+  categoria, metadados de rotação/expiração/compartilhamento.
+- ProjectCredentialAccessLog: log de auditoria das ações no cofre
+  (criado/visto/copiado/compartilhado/revogado/rotacionado/editado/
+  arquivado/excluído).
+
+TERMOS E COMPLIANCE
+- Term: documento de termos versionado (nível de aceite empresa/usuário,
+  tipos de conta-alvo em JSON). Tem TermAcceptance[].
+- TermAcceptance: registro de um User aceitando um Term (único por
+  termo+usuário), com endereço IP.
+
+CHAT
+- Conversation: thread direta/grupo/suporte; tem ChatParticipant[],
+  ChatMessage[].
+- ChatParticipant: participação de usuário numa conversa (papel,
+  entrou_em).
+- ChatMessage: conteúdo da mensagem + remetente + flag de lida.
+
+ALLKADEMY (LMS / treinamento)
+- Course, CourseModule, Lesson, CourseEnrollment (progresso/conclusão).
+
+RELATÓRIOS / ANALYTICS / CONFIG DE PLATAFORMA
+- ReportConfig: config de controle de acesso por chave de relatório
+  (tipos de conta/papéis permitidos, usuários permitidos/bloqueados,
+  escopo GLOBAL/OWN_*_SCOPE/CUSTOM_USERS, permissões de export/filtro).
+- UsageEvent: evento de analytics opt-in (page_view/login/project_start/
+  checkout_* etc.) para funil de conversão.
+
+
+================================================================================
+11. API DO BACKEND (rotas por recurso)
+================================================================================
+Tudo montado sob /api/* em src/app.ts. Agrupado por recurso:
+
+AUTH E USUÁRIOS
+- /api/auth — login (com checagem opcional de accessType do painel:
+  ADMIN/AGENCY/NOMAD/COMPANY/PARTNER/LEADER), logout, /me.
+- /api/users — CRUD de usuários da plataforma.
+- /api/permissions — CRUD de AdminProfile/AdminPermission (admin-only).
+
+EMPRESAS / AGÊNCIAS / PARCEIROS
+- /api/clients — CRUD de Company, resumo, métodos de pagamento.
+- /api/agencies — CRUD de Agency, liderança (lista "lideradas",
+  liderar/deixar de liderar), relatórios mensais de agência, alertas de
+  agência.
+- /api/partners — listagem/CRUD de PartnerProfile, /me, comissões.
+
+PROJETOS E TAREFAS
+- /api/projects — CRUD, checagem de nome, arquivos, credenciais,
+  dashboard, log de atividade, faturamento, lista de tarefas, geração de
+  tarefas a partir de produtos, transições de status.
+- /api/project-products — anexar/desanexar Products a um Project (com
+  preço snapshot), mais sub-rota aninhada /tasks/:id.
+- /api/project-tasks — CRUD canônico + transições de workflow (lançar,
+  liberar, aprovar/rejeitar/devolver) — o maior arquivo de rotas.
+- /api/tasks — CRUD legado de TaskExecution + atualização de status.
+- /api/task-templates — CRUD de CatalogTask/TaskTemplate, vínculos com
+  produtos, busca "por produto".
+- /api/specialties — CRUD de Specialty.
+- /api/lider — workflow exclusivo do líder: /me, listas+contagens de
+  tarefa, lista de nômades, aprovar/rejeitar/devolver por tarefa ou
+  etapa.
+- /api/habilidades — CRUD admin de habilidades de nômade
+  (NomadeHabilidade) e áreas de líder (LiderArea); endpoint
+  "nomades-por-area" para matching.
+- /api/system-alerts — visualizar/resolver SystemAlert (admin).
+
+PRODUTOS / CATÁLOGO
+- /api/products — CRUD de Product, sub-recurso de variações, sub-recurso
+  de addons.
+
+NÔMADES / NÍVEIS
+- /api/nomades — CRUD de Nomade, /me, visão de carteira, sub-recurso de
+  qualificações.
+- /api/nomade-levels — CRUD de NomadeLevel.
+- /api/levels — CRUD de PartnerLevel (tabela de níveis).
+
+FINANCEIRO
+- /api/financial — pedidos de saque CRUD + workflow de revisão + stats.
+- /api/billing — CRUD de Invoice + stats.
+- /api/expenses — CRUD de Expense + stats (tratamento de recorrência).
+- /api/payments — /fake-checkout (simulação de pagamento sandbox),
+  listagem/detalhe.
+- /api/wallets — stats/ledger/projeções/conciliação da carteira
+  unificada, CRUD de carteira, ajustes manuais, ledger por carteira.
+- /api/squad — CRUD de SquadConfig, ciclos, ciclo atual, fechar ciclo,
+  pagar fatura, contrato (gestão do plano pós-pago).
+
+CAMPANHAS / INDICAÇÕES / CUPONS
+- /api/campaigns — CRUD de Campaign.
+- /api/coupons — CRUD de Coupon.
+
+RELATÓRIOS / ADMIN / PLATAFORMA
+- /api/reports — resumo, relatórios de nômade, relatórios financeiros,
+  endpoints de permissão de relatório (admin), /available, motor de
+  indicadores (run/run-batch), /:reportKey genérico + export,
+  /usage-event (beacon de analytics sem autenticação).
+- /api/admin/reports — CRUD admin-only sobre ReportConfig.
+- /api/admin/seed — endpoints admin-only idempotentes de seed de dados
+  de teste.
+- /api/dashboard — stats, receita, atividades recentes, widgets, DRE
+  (demonstrativo de resultado), "minhas tarefas".
+- /api/terms — CRUD de Term + aceitar + lista de aceites.
+- /api/share — endpoint público (sem auth) para links de dados
+  compartilhados.
+
+OUTROS
+- /api/chat — listar/criar conversas, listar/enviar mensagens.
+- /api/allkademy — CRUD de Course/Module/Lesson, matricular, matrículas,
+  atualizar progresso (LMS).
+
+Também: GET /api/health (liveness pública) e GET /api/admin/health-check
+(contagem de entidades / detecção de perda de dados).
+
+BACKGROUND JOBS: NÃO HÁ scheduler/fila real (sem node-cron/bullmq/agenda).
+O que existe:
+- Manutenção no boot: limpeza de datas inválidas do MySQL
+  (clean-zero-datetimes.ts), roda uma vez ao iniciar o servidor.
+- Lógica "fire-and-forget" disparada por requisições de API (não
+  agendada): seleção automática de nômade (selecionar-nomade.ts),
+  atribuição automática de líder (atribuir-lider.ts), geração de tarefas
+  a partir de produtos (generate-tasks.ts), geração de código de tarefa
+  (task-code.ts), log de atividade de projeto, serviço de carteira
+  (createLedgerEntry idempotente/transacional).
+- Expiração de 30 dias de ProjectTask.lancamento_expires_at é checada
+  SOB DEMANDA (comparação inline ao ler/editar a tarefa) — não existe
+  varredura periódica que expire tarefas automaticamente sozinha.
+- Scripts avulsos em src/scripts/ (auditoria, backfill, seed, reparo) são
+  utilitários de linha de comando rodados manualmente, não jobs
+  agendados.
+
+INTEGRAÇÕES EXTERNAS: quase nenhuma é real hoje —
+- Pagamento: só FAKE_SANDBOX implementado; Stripe/Pagar.me/Asaas são só
+  valores de enum reservados, sem SDK/cliente de API algum no código.
+- CRM (Bitrix): só um campo bitrix_sync reservado, sem client/webhook.
+- Armazenamento de arquivo: sem SDK de S3/Cloudinary/GCS — campos de
+  imagem/anexo são LongText (provavelmente base64 ou URL externa gerida
+  fora deste backend).
+- E-mail/SMS/WhatsApp: nenhuma integração real (sem nodemailer/SendGrid/
+  Twilio/Zenvia/WhatsApp Business API) em lugar nenhum do backend.
+- Variáveis de ambiente realmente consumidas: DATABASE_URL, JWT_SECRET,
+  PORT, NODE_ENV, FRONTEND_URL (CORS), SEED_TEST_USER_PASSWORD,
+  ALLOW_TEST_USERS_SEED_IN_PRODUCTION — nenhuma chave de API de serviço
+  externo está declarada no .env de exemplo.
+
+CONCLUSÃO: o backend é hoje um sistema autocontido/sandbox (gateway de
+pagamento fake, sem CRM/armazenamento/comunicação real ligados); o
+schema/enums já preveem plugar Stripe/Pagar.me/Asaas e Bitrix no futuro,
+mas essa ligação ainda não existe.
+
+
+================================================================================
+12. AUTENTICAÇÃO E CONTROLE DE ACESSO
+================================================================================
+- JWT stateless (sem sessão/cookie). Middleware verifyToken lê
+  `Authorization: Bearer <token>`, verifica com JWT_SECRET, anexa
+  `{ id, email, role, account_type }` em req.user.
+- requireRole(...roles) é o middleware genérico de checagem de papel
+  (usado majoritariamente para "admin").
+- Login (POST /api/auth/login) checa e-mail/senha (hash bcryptjs),
+  is_active, e um accessType opcional (ADMIN/AGENCY/NOMAD/COMPANY/
+  PARTNER/LEADER) contra o role/account_type real do usuário — essa é a
+  trava do seletor de painel na tela de login. Emite um JWT válido por
+  7 DIAS.
+- Modelo de papel: User.role é uma string livre (company_user/
+  company_admin/company_financial/agency_user/agency_admin/nomad/admin/
+  partner — mais "lider" usado em alguns middlewares locais).
+  User.account_type é uma classificação paralela mais grosseira
+  (empresas/agencias/nomades/admin/parceiro).
+- Algumas rotas implementam middleware de papel PRÓPRIO/local em vez de
+  reusar requireRole (ex.: requireLider em lider.ts, requireAdmin em
+  habilidades.ts).
+- Sem OAuth/SSO, sem refresh token (o JWT já é de longa duração, 7 dias).
+- /api/share e /api/reports/usage-event são intencionalmente públicos
+  (sem verifyToken).
+
+No FRONTEND (RequireAuth em App.tsx):
+- Sem token no localStorage → redireciona pro /login do prefixo da URL
+  atual.
+- Com token, mas o role/account_type não bate com o prefixo da URL →
+  redireciona pro dashboard do PRÓPRIO perfil.
+- Admin acessa qualquer coisa.
+- Evento global `allka:unauthorized` (401 de qualquer chamada de API)
+  redireciona pro login certo.
+- TermAcceptanceGate bloqueia a UI inteira se houver termos pendentes,
+  independente do papel.
+- AccountTypeContext resolve "qual portal estou vendo" com esta ordem de
+  prioridade: localStorage["dev_active_profile"] → legado
+  localStorage["simulatedUser"] → inferido pela URL atual — isso é
+  claramente um mecanismo de DEV/PREVIEW de troca de perfil, não o fluxo
+  real de produção.
+- Único ponto público sem autenticação nenhuma: /dashboard/share/:token.
+
+
+================================================================================
+13. DESIGN SYSTEM E PADRÕES VISUAIS
+================================================================================
+
+13.1) Estrutura da shell / layout
+Provedores globais montados uma vez em App.tsx (ordem):
+ChatProvider → PlatformUsersProvider → SettingsProvider → SidebarProvider
+→ CompanyProvider → PartnerProvider → EmpresaProvider → AgenciaProvider →
+SpecialtyProvider → PricingProvider → ProductProvider →
+ProjectBasketProvider → MobileLayoutWrapper → (Sidebar desktop + Sidebar
+mobile + Header desktop + Header mobile + <main> + Footer) →
+TermAcceptanceGate (overlay bloqueante) → ChatWidget (flutuante).
+AccountTypeProvider envolve separadamente as partes que dependem de rota.
+
+SIDEBAR (components/sidebar.tsx, ~2000 linhas):
+- `navigationConfig` define a árvore de menu por papel (empresas.company,
+  empresas["in-house"], agencias, parceiro, nomades, lider, admin — o
+  admin tem subitens aninhados, ex.: "Gestão de Contas" → Clientes/
+  Empresas/Usuários/Permissões).
+- Reordenação por drag-and-drop (persistida em localStorage por
+  accountType).
+- Recolhível (72px colapsada) e redimensionável por arraste (220–400px,
+  colapsa automaticamente abaixo de 180px), tudo persistido.
+- Fundo totalmente customizável (gradiente/sólido/imagem) via
+  SidebarContext.
+- Mostra widgets de gamificação quando expandida (nível do nômade,
+  nível da agência).
+- Modo colapsado mostra popovers flutuantes em vez de acordeões.
+
+HEADER (components/header.tsx):
+- Duas linhas: linha de cima = hambúrguer mobile, saudação ("Bom dia/
+  tarde/noite, {nome}!" + data), busca, sino de alertas, alternância de
+  modo escuro, controle de escala de fonte, botão de cesta de projeto,
+  notificações, menu de usuário. Linha de baixo = "pílulas" de estatística
+  rápida (nível/pontos/tarefas/carteira) com rolagem horizontal,
+  construídas por papel.
+- Busca global com debounce de 300ms em usuários/empresas/projetos
+  (escopo por papel).
+
+FOOTER: fixo embaixo, escondido em telas pequenas (mobile usa navegação
+inferior própria).
+
+PAGEHEADER (components/page-header.tsx): o cabeçalho obrigatório de toda
+página — props title, description/subtitle, actions (botões à direita).
+
+MOBILE: cópias DUPLICADAS de header/sidebar no DOM, alternadas por classe
+Tailwind hidden/lg:block (não por renderização condicional) — por isso
+hooks como useAppFrameMetrics precisam escolher "qual dos dois elementos
+tem offsetHeight > 0".
+
+13.2) Padrão de TABELA (documentado em docs/padrao-tabela-empresas.md)
+Referência visual: admin/empresas/page.tsx. Componentes/hooks
+compartilhados a reusar (não recriar): SlidePanel, IconToolbarButton,
+NeonBadge + getBadgeClasses, SortableHeader, ItemsPerPageSelect,
+useAppFrameMetrics, useTableScrollSync, useSorting, ExportButton.
+
+- Cartões de estatística acima da toolbar: grid 2/4 colunas, SEMPRE
+  gradiente colorido (nunca branco chapado) — azul, esmeralda, violeta,
+  laranja, com borda 2px e sombra.
+- Toolbar em 3 linhas: (1) busca com autocomplete + botões Filtros/
+  Configurar Colunas; (2) linha espelho de topo (itens por página +
+  "X-Y de Z" + barra de rolagem horizontal espelhada, só quando há
+  overflow + paginação numerada); (3) linha espelho de rodapé idêntica.
+- Cartão de tabela: cabeçalho sticky, coluna de Ações fixa à esquerda com
+  fundo mais escuro, coluna do nome com avatar circular + nome + ID
+  sequencial cinza, zebra striping nas linhas, badges de status/tipo/
+  plano com a fórmula NeonBadge.
+- Duas pegadinhas documentadas e importantes: (1) o array de dependência
+  de useTableScrollSync PRECISA incluir o flag de loading da página, ou o
+  ResizeObserver gruda num ref nulo e as barras de rolagem espelhadas
+  nunca mais aparecem; (2) os filterValues passados a um SortableHeader
+  precisam ler exatamente o mesmo campo que a célula renderiza.
+- Existe também um componente mais simples/genérico, DataTable
+  (components/data-table.tsx), para páginas que não precisam do padrão
+  completo estilo empresas.
+
+13.3) Padrão de MODAL/PAINEL LATERAL — "SlidePanel" (components/slide-panel.tsx)
+Props: open, onClose, title, subtitle, widthMode ("full"|"compact", padrão
+"full"), compactWidth (padrão 480px), zIndex (padrão 70), footer, children.
+- "full": ocupa do fim da sidebar até a borda direita da tela, do topo do
+  header ao topo do footer — usado para filtros, configuração de coluna e
+  painéis de criação/edição/detalhe de registro.
+- "compact": largura fixa ancorada à direita — usado para formulários
+  pequenos/confirmações.
+- SEM fundo escurecido (backdrop) — o resto da página continua visível e
+  clicável.
+- Animação: desliza da direita, 300ms, fecha com Escape ou no X do
+  cabeçalho.
+- z-index padrão 70 (abaixo da sidebar z-100 e do header/footer z-90).
+- Renderizado via portal direto no document.body.
+- Cabeçalho usa `var(--brand-gradient, ...)` (gradiente escuro
+  #0a1628→#1e3a8a→#0a1628, da esquerda pra direita).
+⚠️ Esta sessão de trabalho converteu MUITAS páginas do admin para este
+padrão (empresas, projetos, produtos, catálogo-produtos, precificação,
+modelos-tarefas, campanhas-indicação, níveis, níveis-nômades, programa-
+partner, financeiro, e outras) — ver o histórico de conversa para o
+detalhe exato de cada conversão e gotchas encontradas.
+
+13.4) Componentes visuais principais
+- NeonBadge: badge genérico de cor fixa (blue/violet/purple/pink/rose/
+  red/orange/amber/yellow/emerald/green/teal/cyan/indigo/slate/gray).
+- AllkaBadge: segundo sistema de badge (classes CSS .allka-badge-*) para
+  status semânticos de domínio (status de empresa/usuário, DPO/LGPD,
+  plano, tipo de conta, nível de parceiro, status de projeto, status de
+  tarefa — mapa grande TASK_STATUS_VARIANT).
+- TaskStatusBadge: variante ciente do papel do usuário — o mesmo status
+  interno do banco pode aparecer com rótulo/cor diferente conforme quem
+  está vendo.
+- ConfirmationDialog: construído sobre o SlidePanel (modo compact,
+  420px) — apesar do nome "Dialog", é um painel lateral, não um modal
+  centralizado.
+- IconToolbarButton: botão quadrado só com ícone, overlay de gradiente no
+  hover, sempre com tooltip.
+- CopyLinkButton: pílula pequena "Copiar link".
+- SortableHeader: cabeçalho de coluna clicável para ordenar + menu de
+  filtro por checkbox opcional.
+- ItemsPerPageSelect, ExportButton (PNG/PDF sempre; Excel/Word opcional).
+
+13.5) Contexts (contexts/)
+account-type-context (qual portal/papel está ativo), sidebar-context
+(tema/branding/layout da sidebar), settings-context (fontSize legado,
+idioma, TEMA claro/escuro/sistema — este é o dark mode real, densidade de
+layout, alto contraste), company-context (seletor legado de empresa),
+partner-context, empresa-context, agencia-context, platform-users-context
+(gestão de usuários pelo admin), chat-context (widget de chat), cart-
+context (carrinho e-commerce genérico legado), project-basket-context
+(a cesta real de produtos que vira projeto).
+
+13.6) Temas
+- Dark mode real é controlado por SettingsContext.theme
+  (light/dark/system), NÃO pelo ThemeProvider do next-themes (que existe
+  no código mas não está montado em lugar nenhum — resquício de
+  template).
+- Tokens de cor em OKLCH definidos em globals.css (:root e .dark), mais
+  um .dark.high-contrast para acessibilidade.
+- Uma segunda camada de tema (marca/portal, separada de claro/escuro) é
+  escrita como CSS vars pelo SidebarContext: --app-brand-gradient,
+  --app-brand-header, --app-brand-button, --app-brand-active,
+  --app-font-sidebar/heading/body/table, --sidebar-width etc.
+- Cor de destaque por portal (convenção, não CSS var): Admin=rosa,
+  Nômade=âmbar, Empresa=violeta, Agência=índigo, Parceiro=azul.
+- Escala de fonte GLOBAL separada (useFontScale) — 7 níveis, seta
+  document.documentElement.style.fontSize diretamente.
+- Existem overrides de dark mode "hand-written" em globals.css que
+  remapeiam classes utilitárias claras (bg-white, bg-slate-50 etc.)
+  especificamente dentro de [data-slot="sheet-content"] (o próprio
+  SlidePanel) e [data-slot="dialog-content"]/main — porque muito
+  conteúdo foi escrito com classes claras fixas em vez de tokens
+  semânticos.
+
+13.7) Hooks utilitários principais (hooks/)
+useSorting (ordenação/filtro genérico de tabela cliente), useAppFrameMetrics
+(mede sidebar/header/footer ao vivo — usado pelo SlidePanel),
+useHorizontalOverflow, useTableScrollSync (sincroniza as 2 barras de
+rolagem espelhadas), useFontScale, useDeepLink (abrir painel via parâmetro
+de URL, para links compartilháveis), useDashboardWidgets (grid de
+dashboard customizável genérico), useAutoGeocode (Google Maps geocoding),
+use-pricing (motor de preço, ainda não ligado à API real), use-toast
+(sistema de notificação toast). Mais um conjunto grande e uniforme de
+hooks de dados por domínio (useCompanies, useUsers, useClients,
+useProjects, useTasks, useAgencies, usePartners, useNomades,
+useNomadeLevels, useProducts, useCourses, useCampaigns, useSpecialties,
+useTerms, useBilling, useFinancial, useReports, useDashboard,
+usePermissions) — todos seguindo o mesmo formato { data, loading, error,
+refetch, create/update/delete }.
+
+
+================================================================================
+14. COMUNICAÇÃO ENTRE USUÁRIOS, CHAT E NOTIFICAÇÕES — O QUE É REAL X MOCK
+================================================================================
+Esta é provavelmente a área mais importante de entender antes de pedir
+ajustes a outro agente, porque tem bastante coisa "bonita na tela, mas
+sem nada real por trás". Resumo por item:
+
+| Área | Backend real? | Frontend ligado de verdade? | Observação |
+|---|---|---|---|
+| Chat (Conversation/ChatMessage) | Sim (/api/chat/*) | Parcialmente — o widget existe mas o formato de dados não bate com a API (campos `contact`/`unread_count` que a API nunca retorna) | Hoje, na prática, não funciona para conversas reais |
+| SystemAlert (alertas operacionais) | Sim (/api/system-alerts/*) | Sim, sino no header, verificado a cada 60s | Alerta GLOBAL, não por usuário; só é criado quando o matching automático de líder/nômade falha |
+| Alertas de agência (/api/agencies/me/alerts) | Sim, calculado ao vivo | Sim | Real, baseado em status de tarefa/projeto |
+| "Central de Notificações" do admin (templates/regras/histórico) | NÃO existe | Mock (arrays fixos, setTimeout falso) | Maquete pura |
+| Painel de preferências/caixa de notificação por usuário | NÃO existe | Mock | Maquete pura |
+| Modais de notificação/e-mail/WhatsApp rápidos | NÃO existe | Mock (toast local) ou só abre wa.me | "Enviar pela Plataforma" nunca chama API de verdade |
+| Briefing de tarefa (perguntas e respostas) | Sim (/api/project-tasks/:id/briefing, /submit-briefing) | Sim | Funcional de verdade; o "assistente de IA" que preenche o briefing colado é uma heurística LOCAL (separar frases/palavras-chave), NÃO é uma chamada de LLM real |
+| Anexos de tarefa | Sim | Sim | Funcional |
+| Comentários/thread de discussão em tarefa ou projeto | NÃO existe | NÃO existe | Não há model de Comment no banco; qualquer "conversa" além do briefing estruturado teria que ser via campo observations, anexos, ou o chat (que está quebrado) |
+| Infra em tempo real (WebSocket/socket.io/pusher) | NÃO existe | NÃO existe | Tudo é polling (só o sino de alerta, a cada 60s) ou fetch pontual |
+| E-mail transacional | NÃO existe | NÃO existe | Nenhum provedor, nenhum template, nada é realmente enviado |
+| Workflow de aprovação (agência/cliente) | Sim (TaskExecution.status) | Só aparece via sino de alerta | Nenhum e-mail/push acompanha a mudança de status |
+| Log de atividade/auditoria da empresa (aba "Logs") | NÃO existe | Mock (buildMockLogs gera dados fake determinísticos) | Não há model de audit log real |
+
+CONCLUSÃO PRÁTICA: se for pedir a outro agente para "melhorar as
+notificações" ou "consertar o chat", é importante deixar claro que hoje
+NÃO existe infraestrutura real de e-mail/tempo-real por trás — qualquer
+plano de ajuste provavelmente vai precisar CRIAR essa infraestrutura do
+zero (escolher um provedor de e-mail, decidir entre polling mais
+agressivo ou WebSocket, criar um model de Notification por usuário no
+Prisma, e corrigir o mismatch de schema entre o ChatContext do frontend
+e a API real de chat) — não é um ajuste cosmético pequeno.
+
+
+================================================================================
+15. PÁGINAS DUPLICADAS, ÓRFÃS E FUNCIONALIDADES INCOMPLETAS (mapa de gaps)
+================================================================================
+Esta seção existe para evitar que alguém (ou algum agente) tente "corrigir
+um bug" numa pasta morta sem perceber que a versão realmente usada está em
+outro lugar.
+
+15.1) Pares Português/Inglês de rota (todos sob apps/frontend/app/):
+  - agencia/ vs agency/  → URL real: /agency/*. Física: dashboard e
+    relatorios moram em agency/; TUDO o resto (projetos, tarefas,
+    financeiro, catálogo, clientes, login) mora fisicamente em agencia/
+    mas é servido em /agency/... . agencia/dashboard é código morto.
+  - empresa/ vs company/ → URL real: /company/*. company/ é 100%
+    autocontido e real. empresa/ está TOTALMENTE órfã (nenhum import em
+    lugar nenhum) — praticamente um fork congelado quase idêntico.
+  - leader/ vs lider/    → URL real: /leader/*. Mesmo padrão de
+    agencia/agency: só dashboard e relatórios em leader/, resto em
+    lider/. lider/dashboard é código morto.
+  - nomad/ vs nomades/   → URL real: majoritariamente /nomades/*, com
+    /nomad/dashboard e /nomad/login como aliases finos. Quase tudo real
+    está em nomades/. Existe um nomad/dashboard/page.tsx NOVO (~13.700
+    linhas, usa o framework de widgets compartilhado das outras roles)
+    que NÃO está roteado em lugar nenhum — parece um trabalho em
+    andamento para eventualmente substituir o dashboard antigo.
+  - parceiro/ vs partner/ → URL real: /partner/*. Mesmo padrão: só
+    dashboard e relatórios em partner/, resto em parceiro/.
+    parceiro/dashboard é código morto. parceiro/layout.tsx (uma sidebar
+    própria com nav Dashboard/Agências/Projetos/Comissões/Saques/Sair)
+    também está morto — nunca importado; o app usa um único shell
+    global (Sidebar/Header/Footer) para todos os papéis.
+
+15.2) Duplicações de FUNCIONALIDADE (mesmo assunto, implementações
+  paralelas) dentro do admin:
+  - admin/levels (níveis de Agência + Partner, ligado à API) vs
+    admin/niveis (só níveis de Partner, UI mais polida/atual) vs
+    admin/programa-partner (convites + lista de parceiros ativos do
+    mesmo programa).
+  - admin/tarefas (board completo de ciclo de vida) vs
+    admin/tarefas-execucao (visão mais simples, só execução).
+  - admin/empresas (todas as empresas) vs admin/clientes (recorte de
+    relacionamento comercial).
+  - admin/comissionamentos (protótipo/mock) vs a máquina de Squad/
+    comissão de verdade dentro de admin/financeiro.
+
+15.3) Rotas mortas/stub (sem funcionalidade real):
+  - admin/commissions, admin/configuracion, admin/users → só texto
+    "Coming soon".
+  - admin/promocoes → pasta existe mas SEM page.tsx nenhum.
+  - admin/permissoes → só faz `export { default } from
+    "@/app/admin/permissions/page"` (redirect/alias).
+
+15.4) Páginas com dados 100% mockados (sem ligação real ao backend):
+  - admin/notifications (Central de Notificações) — sem model, sem rota.
+  - admin/usuarios-internos — só mock.
+  - admin/comissionamentos — parece mock/protótipo.
+  - Toda a seção "notificação por usuário"/"preferências de notificação"
+    do frontend (ver seção 14).
+  - Aba "Logs" de auditoria da empresa (buildMockLogs).
+  - Boa parte das subpáginas do portal Nômade usam arrays fixos no
+    código em vez de chamar a API real (ver seção 7).
+
+15.5) Bugs reais encontrados e corrigidos NESTA sessão de trabalho (pode
+  já estar resolvido dependendo de quando este arquivo for lido):
+  - admin/financeiro: um `<Select.Item value="">` no formulário de Nova/
+    Editar Fatura derrubava a página inteira com erro do Radix ("A
+    <Select.Item /> must have a value prop that is not an empty
+    string") — corrigido trocando para um valor-sentinela "none".
+  - admin/financeiro: o botão/modal de "Filtros" aparecia em TODAS as 6
+    abas, mas o modal compartilhado só tinha conteúdo programado para
+    4 delas (faturas/saques/despesas/carteiras) — nas abas Squad e
+    Conciliação ele abria vazio/quebrado. Corrigido restringindo o
+    botão às 4 abas que o modal realmente suporta (Conciliação já tem
+    sua própria barra de filtro inline própria; Squad não tem filtros).
+
+
+================================================================================
+16. JORNADAS DE PONTA A PONTA (como os perfis se conectam na prática)
+================================================================================
+Um fluxo típico, juntando as peças documentadas acima:
+
+1. Um ADMIN cadastra o catálogo em admin/produtos (produtos, variações,
+   add-ons) e vincula "modelos de tarefa" (admin/modelos-tarefas) a cada
+   produto. Preços/comissões/impostos são configurados em
+   admin/precificacao; especialidades em admin/especialidades.
+
+2. Uma EMPRESA (ou uma AGÊNCIA em nome de uma empresa) monta um projeto:
+   navega o catálogo (company/produtos ou agency/catalogo — mesmo
+   componente ProductCatalogView), adiciona produtos ao carrinho
+   (project-basket-context), e finaliza a contratação
+   (ProjectCreateNewPanel), gerando um Project + vários ProjectProduct.
+
+3. Ao contratar, o backend gera ProjectTask automaticamente a partir dos
+   CatalogTask vinculados a cada produto (lib/generate-tasks.ts),
+   populando checklist/etapas/perguntas de briefing como snapshot.
+
+4. A AGÊNCIA (ou a própria empresa) preenche o briefing da tarefa
+   (task-launch-drawer.tsx → /api/project-tasks/:id/briefing) e
+   "lança"/libera a tarefa (submit-briefing) — isso dispara
+   atribuir-lider.ts, que tenta achar automaticamente um LÍDER da área
+   certa para revisar (ou cria um SystemAlert se não achar ninguém).
+
+5. Em paralelo/depois, selecionar-nomade.ts tenta encontrar
+   automaticamente um NÔMADE qualificado (por NomadeHabilidade/
+   Qualification) para executar a tarefa — se não achar ninguém, o
+   status vira AGUARDANDO_NOMADE e outro SystemAlert é criado.
+
+6. O NÔMADE vê a tarefa em nomades/tarefasdisponiveis, se candidata, e
+   ao ser designado passa a vê-la em nomades/minhastarefas. Executa,
+   sobe anexos/entregas (TaskAttachment tipo "delivery"), e envia para
+   revisão.
+
+7. O LÍDER da área vê a tarefa em leader/qualificacao (ou
+   leader/tarefas com os filtros de "briefings para revisar"/"entregas
+   aguardando análise"/"atrasadas"), e aprova ou devolve com motivo
+   (leader/devolvidas guarda o que ele já devolveu).
+
+8. Após aprovação, o ciclo financeiro entra em ação: geração de Invoice
+   (fatura) para a empresa, lançamentos em Wallet/WalletLedger para
+   agência/nômade/parceiro conforme a comissão configurada, tudo
+   visível em admin/financeiro (e nas versões "meu financeiro" de
+   agência/nômade/parceiro).
+
+9. Se a empresa/agência veio de uma indicação, o PARCEIRO responsável
+   ganha comissão recorrente sobre o MRR gerado (PartnerCommission),
+   visível em partner/comissoes, com saque disponível em partner/saques.
+
+10. Ao longo de todo o processo, o único mecanismo de "avisar alguém que
+    algo aconteceu" que de fato funciona hoje é o sino de alertas no
+    header (polling a cada 60s, alimentado por SystemAlert + o cálculo
+    ao vivo de alertas de agência) — não há e-mail, WhatsApp ou chat
+    real disparado automaticamente por essas transições de status (ver
+    seção 14 para o detalhe completo do que é mock).
+
+
+================================================================================
+FIM DO DOCUMENTO
+================================================================================
+Este documento foi gerado varrendo o código-fonte real do repositório em
+06/07/2026 (pesquisa feita por 5 agentes de exploração em paralelo: mapa
+das páginas admin, mapa dos portais por perfil, modelo de dados/API do
+backend, design system/padrões de UI, e comunicação/notificações). Se o
+código mudar depois desta data, releia os arquivos citados para confirmar
+que as informações aqui ainda procedem antes de repassar a outro agente
+como verdade absoluta.
