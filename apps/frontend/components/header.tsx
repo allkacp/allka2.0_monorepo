@@ -179,9 +179,10 @@ export function Header() {
     closeMobileSidebar();
   }, [location.pathname, closeMobileSidebar]);
 
-  // Fetch authenticated user to show real name in greeting
+  // Fetch authenticated user to show real name in greeting (also for admin —
+  // previously skipped, which left the header/sidebar stuck on the
+  // sidebar-context placeholder default instead of the real logged-in name).
   useEffect(() => {
-    if (accountType === "admin") return;
     apiClient
       .getCurrentUser()
       .then((u: any) => {

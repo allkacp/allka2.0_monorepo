@@ -102,15 +102,37 @@ import { useToast } from "@/components/ui/use-toast";
 import { useSidebar } from "@/contexts/sidebar-context";
 import { PageHeader } from "@/components/page-header";
 
-type ColKey = "usuario" | "contato" | "tipo_funcao" | "status" | "ultimo_acesso";
+type ColKey = "usuario" | "contato" | "tipo_funcao" | "vinculo" | "status" | "ultimo_acesso";
 const ALL_COLUMNS: { key: ColKey; label: string; info: string }[] = [
   { key: "usuario", label: "Usuário", info: "Nome, e-mail e status de presença do usuário." },
   { key: "contato", label: "Contato", info: "Atalhos para ligar ou chamar no WhatsApp." },
   { key: "tipo_funcao", label: "Tipo / Função", info: "Tipo de conta, função na plataforma e sinalizações de LGPD." },
+  { key: "vinculo", label: "Conta vinculada", info: "Agency, Company, Partner ou Nômade ao qual este usuário está vinculado." },
   { key: "status", label: "Status", info: "Situação da conta: ativo, bloqueado ou pausado automaticamente." },
   { key: "ultimo_acesso", label: "Último Acesso", info: "Data do último login e tempo de inatividade." },
 ];
-const DEFAULT_VISIBLE: ColKey[] = ["usuario", "contato", "tipo_funcao", "status", "ultimo_acesso"];
+const DEFAULT_VISIBLE: ColKey[] = ["usuario", "contato", "tipo_funcao", "vinculo", "status", "ultimo_acesso"];
+
+// ── Conta vinculada (Agency/Company/Partner/Nômade) ────────────────────────
+const LINK_TYPE_LABEL: Record<string, string> = {
+  admin: "Admin",
+  agency: "Agency",
+  company: "Company",
+  partner: "Partner",
+  leader: "Leader",
+  nomad: "Nômade",
+};
+
+// Fonte da verdade: has_profile_link/profile_link_type/profile_link_name,
+// calculados no backend (GET /api/admin/users). "unknown" = account_type
+// sem regra definida — não confundir com "sem vínculo" (tipo conhecido,
+// vínculo não encontrado).
+function getLinkedAccount(user: any): { type: string; name: string } | null | "unknown" {
+  if (user.profile_link_type === "unknown") return "unknown";
+  if (!user.has_profile_link) return null;
+  const type = LINK_TYPE_LABEL[user.profile_link_type as string] ?? user.profile_link_type;
+  return { type, name: user.profile_link_name || type };
+}
 
 // ── Inactivity bucket helper ───────────────────────────────────────────────
 function computeInactivityBucket(lastLogin?: string | null): string {
@@ -129,6 +151,10 @@ function computeInactivityBucket(lastLogin?: string | null): string {
 export default function UsuariosPage() {
   const { addUser: addPlatformUser, updateUser: updatePlatformUser } =
     usePlatformUsers();
+  // Filtro de status é resolvido no backend (is_active=true/false), não só
+  // no array em memória — evita a tela carregar/mostrar os 129 quando o
+  // padrão devia ser só os ativos. "all" = sem parâmetro is_active.
+  const [statusFilter, setStatusFilter] = useState("active");
   const {
     users: apiUsers,
     loading: usersLoading,
@@ -137,7 +163,11 @@ export default function UsuariosPage() {
     createUser,
     updateUser,
     deleteUser: apiDeleteUser,
-  } = useUsers();
+  } = useUsers({
+    admin: true,
+    limit: 1000,
+    is_active: statusFilter === "active" ? true : statusFilter === "inactive" ? false : undefined,
+  });
   const { toast } = useToast();
   const { sidebarWidth, sidebarSettings, previewTheme } = useSidebar();
   const [visibleCols, setVisibleCols] = useState<Set<ColKey>>(new Set(DEFAULT_VISIBLE));
@@ -203,7 +233,6 @@ export default function UsuariosPage() {
   const [deletionReason, setDeletionReason] = useState("");
   const [deletionReasonError, setDeletionReasonError] = useState("");
   const [searchTerm, setSearchTerm] = useState("");
-  const [statusFilter, setStatusFilter] = useState("all");
   const [roleFilter, setRoleFilter] = useState("all");
   const [currentUserId] = useState("1");
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
@@ -253,7 +282,12 @@ export default function UsuariosPage() {
     // Tipo e Função
     accountTypes: [] as string[],
     roles: [] as string[],
+    // Refinamento client-side opcional (ex.: "pausado"). O filtro
+    // Ativos/Inativos/Todos principal agora é o `statusFilter` (server-side,
+    // via is_active na chamada da API) — ver useUsers acima.
     statuses: [] as string[],
+    // Vínculo de perfil — "with" | "without" | "unknown"
+    linkStatus: [] as string[],
     // Datas
     registrationDateFrom: "",
     registrationDateTo: "",
@@ -447,15 +481,27 @@ export default function UsuariosPage() {
       if (advancedFilters.accountTypes.length > 0) {
         const at = (user.account_type || "").toLowerCase();
         const match = advancedFilters.accountTypes.some((type) => {
+          if (type === "admin") return at === "admin";
           if (type === "company")
             return at === "empresas" || at === "empresa" || at === "company";
           if (type === "nomad")
             return at === "nomades" || at === "nomade" || at === "nomad";
           if (type === "agency")
             return at === "agencias" || at === "agencia" || at === "agency";
+          if (type === "partner")
+            return at === "parceiro" || at === "partner";
+          if (type === "lider")
+            return at === "lider" || at === "leader";
           return false;
         });
         if (!match) return false;
+      }
+
+      // Advanced filters — vínculo (com/sem)
+      if (advancedFilters.linkStatus && advancedFilters.linkStatus.length > 0) {
+        const linked = getLinkedAccount(user);
+        const state = linked === "unknown" ? "unknown" : linked ? "with" : "without";
+        if (!advancedFilters.linkStatus.includes(state)) return false;
       }
 
       // Advanced filters — função
@@ -992,12 +1038,18 @@ export default function UsuariosPage() {
     // Normalizar tipo de conta
     const normalizedType = String(accountType).toLowerCase();
 
+    if (normalizedType === "admin")
+      return { label: "Admin", badgeColor: "indigo" as const };
     if (normalizedType === "company" || normalizedType === "empresas")
       return { label: "Company", badgeColor: "purple" as const };
     if (normalizedType === "agency" || normalizedType === "agencias")
       return { label: "Agency", badgeColor: "orange" as const };
     if (normalizedType === "nomad" || normalizedType === "nomades")
       return { label: "Nomad", badgeColor: "blue" as const };
+    if (normalizedType === "parceiro" || normalizedType === "partner")
+      return { label: "Partner", badgeColor: "pink" as const };
+    if (normalizedType === "lider" || normalizedType === "leader" || role === "lider")
+      return { label: "Leader", badgeColor: "amber" as const };
     if (role === "financial")
       return { label: "Financial", badgeColor: "orange" as const };
     if (role === "team_allka")
@@ -1390,6 +1442,26 @@ export default function UsuariosPage() {
           </div>
 
           <div className="ml-auto flex items-center gap-2">
+            <div className="flex items-center rounded-lg border border-slate-200 dark:border-slate-700 overflow-hidden">
+              {[
+                { value: "active", label: "Ativos" },
+                { value: "inactive", label: "Inativos" },
+                { value: "all", label: "Todos" },
+              ].map(({ value, label }) => (
+                <button
+                  key={value}
+                  onClick={() => setStatusFilter(value)}
+                  className={`px-2.5 py-1.5 text-xs font-medium transition-colors ${
+                    statusFilter === value
+                      ? "text-white"
+                      : "text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800"
+                  }`}
+                  style={statusFilter === value ? { background: "linear-gradient(135deg,#000000 0%,#1a2a6f 45%,#c81a7f 100%)" } : undefined}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
             <IconToolbarButton icon={Filter} tooltip="Filtros" onClick={() => setIsFilterModalOpen(true)} />
             <IconToolbarButton icon={Settings2} tooltip="Configurar colunas" onClick={() => setColConfigOpen(true)} />
           </div>
@@ -1761,7 +1833,7 @@ export default function UsuariosPage() {
                                     Tipo de Conta
                                   </label>
                                   <div className="flex flex-wrap gap-2">
-                                    {["company", "nomad", "agency"].map(
+                                    {["admin", "company", "agency", "partner", "lider", "nomad"].map(
                                       (type) => (
                                         <label
                                           key={type}
@@ -1832,6 +1904,41 @@ export default function UsuariosPage() {
                                         />
                                         <span className="text-sm text-slate-700 dark:text-slate-300 capitalize">
                                           {role}
+                                        </span>
+                                      </label>
+                                    ))}
+                                  </div>
+                                </div>
+
+                                <div>
+                                  <label className="text-xs font-semibold text-slate-700 dark:text-slate-300 mb-2 block">
+                                    Vínculo
+                                  </label>
+                                  <div className="flex flex-wrap gap-2">
+                                    {[
+                                      { value: "with", label: "Com vínculo" },
+                                      { value: "without", label: "Sem vínculo" },
+                                    ].map(({ value, label }) => (
+                                      <label
+                                        key={value}
+                                        className="flex items-center gap-2 cursor-pointer"
+                                      >
+                                        <input
+                                          type="checkbox"
+                                          checked={advancedFilters.linkStatus.includes(value)}
+                                          onChange={(e) => {
+                                            setAdvancedFilters({
+                                              ...advancedFilters,
+                                              linkStatus: e.target.checked
+                                                ? [...advancedFilters.linkStatus, value]
+                                                : advancedFilters.linkStatus.filter((v) => v !== value),
+                                            });
+                                            if (selectedFilterId) setUnsavedChanges(true);
+                                          }}
+                                          className="rounded border-slate-300 dark:border-slate-600"
+                                        />
+                                        <span className="text-sm text-slate-700 dark:text-slate-300">
+                                          {label}
                                         </span>
                                       </label>
                                     ))}
@@ -2486,6 +2593,9 @@ export default function UsuariosPage() {
                           {col.key === "contato" && (
                             <span className="text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-[0.04em]">{col.label}</span>
                           )}
+                          {col.key === "vinculo" && (
+                            <span className="text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-[0.04em]">{col.label}</span>
+                          )}
                           {col.key === "tipo_funcao" && (
                             <SortableHeader
                               label={col.label}
@@ -2497,7 +2607,7 @@ export default function UsuariosPage() {
                               columnFilters={columnFilters}
                               onFilter={toggleColumnFilter}
                               onClearFilter={clearColumnFilter}
-                              filterValues={["company", "nomad", "agency"]}
+                              filterValues={["admin", "company", "agency", "parceiro", "lider", "nomad"]}
                             />
                           )}
                           {col.key === "status" && (
@@ -2662,13 +2772,21 @@ export default function UsuariosPage() {
                                 <Avatar className="h-10 w-10 shadow-sm">
                                   <AvatarFallback
                                     className={`text-xs font-bold text-white bg-gradient-to-br ${
-                                      user.account_type === "company" ||
-                                      user.account_type === "empresas"
-                                        ? "from-violet-500 to-purple-700"
-                                        : user.account_type === "agency" ||
-                                            user.account_type === "agencias"
-                                          ? "from-orange-500 to-rose-600"
-                                          : "from-blue-500 to-blue-700"
+                                      user.account_type === "admin"
+                                        ? "from-indigo-500 to-indigo-800"
+                                        : user.account_type === "company" ||
+                                            user.account_type === "empresas"
+                                          ? "from-violet-500 to-purple-700"
+                                          : user.account_type === "agency" ||
+                                              user.account_type === "agencias"
+                                            ? "from-orange-500 to-rose-600"
+                                            : user.account_type === "parceiro" ||
+                                                user.account_type === "partner"
+                                              ? "from-pink-500 to-rose-700"
+                                              : user.account_type === "lider" ||
+                                                  user.account_type === "leader"
+                                                ? "from-amber-500 to-orange-700"
+                                                : "from-blue-500 to-blue-700"
                                     }`}
                                   >
                                     {user.name
@@ -2787,6 +2905,26 @@ export default function UsuariosPage() {
                                 </NeonBadge>
                               )}
                             </div>
+                          </td>
+                        )}
+
+                        {visibleCols.has("vinculo") && (
+                          <td className="py-3 px-4" style={{ borderRight: "1px solid rgba(148,163,184,0.15)" }}>
+                            {(() => {
+                              const linked = getLinkedAccount(user);
+                              if (linked === "unknown")
+                                return <span className="text-xs text-amber-600 dark:text-amber-400">Tipo desconhecido</span>;
+                              if (!linked)
+                                return <span className="text-xs text-slate-300 dark:text-slate-600">Sem vínculo</span>;
+                              return (
+                                <div className="space-y-0.5">
+                                  <p className="text-xs font-medium text-slate-700 dark:text-slate-300 truncate max-w-[160px]">
+                                    {linked.name}
+                                  </p>
+                                  <span className="text-[10px] text-slate-400 uppercase tracking-wide">{linked.type}</span>
+                                </div>
+                              );
+                            })()}
                           </td>
                         )}
 
@@ -2987,11 +3125,40 @@ export default function UsuariosPage() {
                       {infoPanelUser.last_login ? new Date(infoPanelUser.last_login).toLocaleString("pt-BR") : "Nunca acessou"}
                     </p>
                   </div>
-                  <div className="rounded-xl border border-slate-200 dark:border-slate-700 p-3.5 sm:col-span-2">
+                  <div className="rounded-xl border border-slate-200 dark:border-slate-700 p-3.5">
+                    <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide mb-1.5">Conta vinculada</p>
+                    {(() => {
+                      const linked = getLinkedAccount(infoPanelUser);
+                      const text =
+                        linked === "unknown" ? "Tipo desconhecido" : linked ? `${linked.name} (${linked.type})` : "Sem vínculo";
+                      return <p className="text-sm text-slate-700 dark:text-slate-300">{text}</p>;
+                    })()}
+                  </div>
+                  {infoPanelUser.leader_areas && infoPanelUser.leader_areas.length > 0 && (
+                    <div className="rounded-xl border border-slate-200 dark:border-slate-700 p-3.5">
+                      <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide mb-1.5">Áreas de liderança</p>
+                      <div className="flex flex-wrap gap-1.5">
+                        {infoPanelUser.leader_areas.map((area: string) => (
+                          <NeonBadge key={area} color="amber">{area}</NeonBadge>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  <div className="rounded-xl border border-slate-200 dark:border-slate-700 p-3.5">
                     <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide mb-1.5">Membro desde</p>
                     <p className="text-sm text-slate-700 dark:text-slate-300">
                       {infoPanelUser.created_at ? new Date(infoPanelUser.created_at).toLocaleDateString("pt-BR") : "—"}
                     </p>
+                  </div>
+                  <div className="rounded-xl border border-slate-200 dark:border-slate-700 p-3.5">
+                    <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide mb-1.5">Atualizado em</p>
+                    <p className="text-sm text-slate-700 dark:text-slate-300">
+                      {infoPanelUser.updated_at ? new Date(infoPanelUser.updated_at).toLocaleDateString("pt-BR") : "—"}
+                    </p>
+                  </div>
+                  <div className="rounded-xl border border-slate-200 dark:border-slate-700 p-3.5 sm:col-span-2">
+                    <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide mb-1.5">ID</p>
+                    <p className="text-xs font-mono text-slate-500 dark:text-slate-400 truncate">{infoPanelUser.id}</p>
                   </div>
                 </div>
               </div>

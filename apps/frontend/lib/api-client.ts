@@ -134,6 +134,14 @@ class ApiClient {
     return this.get("/users", filters);
   }
 
+  // Admin-only — lista todos os usuários de acesso/login da plataforma, já
+  // enriquecidos com agency_name/company_name/partner_name/nomad_name/
+  // leader_areas. Separado de getUsers() (usado por outros fluxos não-admin,
+  // ex.: picker de consultor em criar-projeto).
+  async getAdminUsers(filters?: Record<string, any>) {
+    return this.get("/admin/users", filters);
+  }
+
   async getUser(id: string | number) {
     return this.get(`/users/${id}`);
   }

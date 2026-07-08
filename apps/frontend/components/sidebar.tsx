@@ -322,6 +322,12 @@ const navigationConfig = {
       current: false,
       subitems: [
         {
+          name: "Usuários",
+          href: "/admin/usuarios",
+          icon: Users,
+          current: false,
+        },
+        {
           name: "Clientes",
           href: "/admin/clientes",
           icon: Building2,
@@ -331,12 +337,6 @@ const navigationConfig = {
           name: "Empresas",
           href: "/admin/empresas",
           icon: Building2,
-          current: false,
-        },
-        {
-          name: "Usuários",
-          href: "/admin/usuarios",
-          icon: Users,
           current: false,
         },
         {
