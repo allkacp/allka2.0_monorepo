@@ -54,7 +54,7 @@ export function PartnerProvider({ children }: { children: React.ReactNode }) {
       try {
         const [meRes, commissionsRes, withdrawalsRes] = await Promise.allSettled([
           apiClient.getPartnerMe(),
-          apiClient.getPartnerCommissions("me"),
+          apiClient.getMyPartnerCommissions(),
           apiClient.getPartnerWithdrawals(),
         ]);
         if (cancelled) return;
@@ -68,6 +68,8 @@ export function PartnerProvider({ children }: { children: React.ReactNode }) {
         if (commissionsRes.status === "fulfilled") {
           const data: any = commissionsRes.value;
           setCommissions(Array.isArray(data) ? data : data.data || []);
+        } else {
+          console.error("[PartnerProvider] Failed to load commissions:", commissionsRes.reason);
         }
         if (withdrawalsRes.status === "fulfilled") {
           const data: any = withdrawalsRes.value;

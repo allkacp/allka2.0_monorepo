@@ -77,6 +77,12 @@ const navigationConfig = {
         current: true,
       },
       {
+        name: "Clientes",
+        href: "/company/clientes",
+        icon: Building2,
+        current: false,
+      },
+      {
         name: "Projetos",
         href: "/company/projetos",
         icon: FolderOpen,
@@ -153,6 +159,12 @@ const navigationConfig = {
       href: "/partner/dashboard",
       icon: LayoutDashboard,
       current: true,
+    },
+    {
+      name: "Clientes",
+      href: "/partner/clientes",
+      icon: Building2,
+      current: false,
     },
     {
       name: "Agências",
@@ -276,6 +288,12 @@ const navigationConfig = {
       name: "Catálogo",
       href: "/leader/catalogo",
       icon: BookOpen,
+      current: false,
+    },
+    {
+      name: "Clientes",
+      href: "/leader/clientes",
+      icon: Building2,
       current: false,
     },
     {

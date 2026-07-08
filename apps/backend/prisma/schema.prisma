@@ -41,6 +41,7 @@ model User {
   lider_areas         LiderArea[]
   tasks_como_lider    ProjectTask[]      @relation("TaskLiderResponsavel")
   linked_coupons      Coupon[]
+  created_clients     Client[]           @relation("ClientCreatedBy")
 
   @@map("users")
 }
@@ -62,47 +63,47 @@ model LiderArea {
 // ─── Companies (Empresas / Clientes) ─────────────────────────────────────────
 
 model Company {
-  id              String @id @default(cuid())
-  sequence_number Int    @unique @default(autoincrement())
+  id                                   String          @id @default(cuid())
+  sequence_number                      Int             @unique @default(autoincrement())
   // Código de exibição sequencial (emp_00001, emp_00002, ...) — gerado a
   // partir de sequence_number. Nunca se repete (AUTO_INCREMENT no MySQL).
-  name        String
-  cnpj        String?  @unique
-  email       String?
-  phone       String?
-  type        String   @default("empresa")
+  name                                 String
+  cnpj                                 String?         @unique
+  email                                String?
+  phone                                String?
+  type                                 String          @default("empresa")
   // empresa | agencia | nomade | parceiro — classificação real do
   // relacionamento comercial (empresa direta, atendida por agência, por
   // nômade, ou trazida por um parceiro via referred_by_partner_id)
-  status      String   @default("ativo")
+  status                               String          @default("ativo")
   // ativo | inativo | prospecto | inadimplente
-  segment     String?
-  address     String?  @db.LongText
-  description String?  @db.LongText
-  logo        String?  @db.LongText
-  website     String?
+  segment                              String?
+  address                              String?         @db.LongText
+  description                          String?         @db.LongText
+  logo                                 String?         @db.LongText
+  website                              String?
   // ── Commercial contact ──────────────────────────────────────────
-  commercial_contact_name             String?  @db.VarChar(255)
-  commercial_contact_role             String?  @db.VarChar(100)
-  commercial_contact_email            String?  @db.VarChar(255)
-  commercial_contact_phone            String?  @db.VarChar(30)
-  commercial_contact_whatsapp         String?  @db.VarChar(30)
-  commercial_contact_preferred_channel String? @db.VarChar(50)
-  commercial_contact_notes            String?  @db.LongText
+  commercial_contact_name              String?         @db.VarChar(255)
+  commercial_contact_role              String?         @db.VarChar(100)
+  commercial_contact_email             String?         @db.VarChar(255)
+  commercial_contact_phone             String?         @db.VarChar(30)
+  commercial_contact_whatsapp          String?         @db.VarChar(30)
+  commercial_contact_preferred_channel String?         @db.VarChar(50)
+  commercial_contact_notes             String?         @db.LongText
   // ── Financial contact ───────────────────────────────────────────
-  financial_contact_name              String?  @db.VarChar(255)
-  financial_contact_role              String?  @db.VarChar(100)
-  financial_contact_email             String?  @db.VarChar(255)
-  financial_contact_phone             String?  @db.VarChar(30)
-  financial_contact_whatsapp          String?  @db.VarChar(30)
-  financial_contact_preferred_channel String?  @db.VarChar(50)
-  financial_contact_notes             String?  @db.LongText
-  financial_contact_user_id           String?  // FK to User (optional link to financial user)
-  use_master_as_financial_fallback    Boolean  @default(true)
-  referred_by_partner_id              String?  // FK to PartnerProfile (who referred this company)
-  referred_by_partner                 PartnerProfile? @relation(fields: [referred_by_partner_id], references: [id], onDelete: SetNull)
-  created_at  DateTime @default(now())
-  updated_at  DateTime @updatedAt
+  financial_contact_name               String?         @db.VarChar(255)
+  financial_contact_role               String?         @db.VarChar(100)
+  financial_contact_email              String?         @db.VarChar(255)
+  financial_contact_phone              String?         @db.VarChar(30)
+  financial_contact_whatsapp           String?         @db.VarChar(30)
+  financial_contact_preferred_channel  String?         @db.VarChar(50)
+  financial_contact_notes              String?         @db.LongText
+  financial_contact_user_id            String? // FK to User (optional link to financial user)
+  use_master_as_financial_fallback     Boolean         @default(true)
+  referred_by_partner_id               String? // FK to PartnerProfile (who referred this company)
+  referred_by_partner                  PartnerProfile? @relation(fields: [referred_by_partner_id], references: [id], onDelete: SetNull)
+  created_at                           DateTime        @default(now())
+  updated_at                           DateTime        @updatedAt
 
   projects        Project[]
   invoices        Invoice[]
@@ -110,27 +111,107 @@ model Company {
   payment_methods CompanyPaymentMethod[]
   squad_config    SquadConfig?
   coupon_usages   CouponUsage[]
+  client_links    ClientLink[]
 
   @@map("companies")
 }
 
 model CompanyPaymentMethod {
-  id           String   @id @default(cuid())
-  company_id   String
-  company      Company  @relation(fields: [company_id], references: [id], onDelete: Cascade)
-  brand        String   @db.VarChar(20)
-  last_four    String   @db.VarChar(4)
-  expiry       String   @db.VarChar(7)
-  holder_name  String   @db.VarChar(255)
-  is_default   Boolean  @default(false)
+  id             String   @id @default(cuid())
+  company_id     String
+  company        Company  @relation(fields: [company_id], references: [id], onDelete: Cascade)
+  brand          String   @db.VarChar(20)
+  last_four      String   @db.VarChar(4)
+  expiry         String   @db.VarChar(7)
+  holder_name    String   @db.VarChar(255)
+  is_default     Boolean  @default(false)
   // is_client_card: true = cartão do cliente externo. Agência vê só last_four, holder_name mascarado
-  is_client_card Boolean @default(false)
-  label        String?  @db.VarChar(100)
-  is_active    Boolean  @default(true)
-  created_at   DateTime @default(now())
-  updated_at   DateTime @updatedAt
+  is_client_card Boolean  @default(false)
+  label          String?  @db.VarChar(100)
+  is_active      Boolean  @default(true)
+  created_at     DateTime @default(now())
+  updated_at     DateTime @updatedAt
 
   @@map("company_payment_methods")
+}
+
+// ─── Clients (entidade própria, separada de Company) ─────────────────────────
+// Client é o cliente final (pessoa física ou jurídica) que uma Agency,
+// Company ou Partner atende/indica. NÃO confundir com Company, que é a
+// empresa contratante da Allka. O vínculo entre um Client e quem o atende
+// é feito via ClientLink (nunca direto por FK aqui), porque o mesmo Client
+// pode precisar estar ligado a mais de um perfil ao mesmo tempo.
+model Client {
+  id              String @id @default(cuid())
+  sequence_number Int    @unique @default(autoincrement())
+
+  name        String
+  type        String  @default("pj")
+  // pj | pf
+  document    String? @unique
+  // CNPJ (pj) ou CPF (pf) — único porque a tabela é nova, sem dado legado.
+  email       String?
+  phone       String?
+  website     String?
+  segment     String?
+  status      String  @default("active")
+  // active | inactive
+  address     String?
+  city        String?
+  state       String?
+  zip_code    String?
+  notes       String? @db.LongText
+  description String? @db.LongText
+
+  created_by_user_id String?
+  created_by_user    User?   @relation("ClientCreatedBy", fields: [created_by_user_id], references: [id], onDelete: SetNull)
+
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  links ClientLink[]
+
+  @@index([name])
+  @@index([email])
+  @@index([status])
+  @@index([created_by_user_id])
+  @@map("clients")
+}
+
+// Vínculo entre um Client e quem o atende (Agency, Company ou Partner).
+// Exatamente um dos três campos (agency_id | company_id | partner_id) deve
+// estar preenchido por linha — Prisma/MySQL não garante isso sozinho (não
+// há CHECK constraint declarável no schema para "XOR" entre colunas); essa
+// validação fica para o backend no próximo bloco (rota de criação/edição
+// de vínculo), não é imposta pelo banco.
+model ClientLink {
+  id String @id @default(cuid())
+
+  client_id String
+  client    Client @relation(fields: [client_id], references: [id], onDelete: Cascade)
+
+  agency_id String?
+  agency    Agency? @relation(fields: [agency_id], references: [id], onDelete: Cascade)
+
+  company_id String?
+  company    Company? @relation(fields: [company_id], references: [id], onDelete: Cascade)
+
+  partner_id String?
+  partner    PartnerProfile? @relation(fields: [partner_id], references: [id], onDelete: Cascade)
+
+  status     String   @default("active")
+  // active | inactive
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  @@unique([client_id, agency_id])
+  @@unique([client_id, company_id])
+  @@unique([client_id, partner_id])
+  @@index([client_id])
+  @@index([agency_id])
+  @@index([company_id])
+  @@index([partner_id])
+  @@map("client_links")
 }
 
 // ─── Agencies ────────────────────────────────────────────────────────────────
@@ -153,6 +234,7 @@ model Agency {
   match_queue_entry MatchQueueEntry?
   leaderships       AgencyLeadership[]
   reports           AgencyReport[]
+  client_links      ClientLink[]
 
   @@map("agencies")
 }
@@ -1059,11 +1141,12 @@ model PartnerProfile {
   created_at         DateTime @default(now())
   updated_at         DateTime @updatedAt
 
-  commissions    PartnerCommission[]
-  led_agencies   AgencyLeadership[]
-  agency_reports AgencyReport[]
+  commissions        PartnerCommission[]
+  led_agencies       AgencyLeadership[]
+  agency_reports     AgencyReport[]
   referred_companies Company[]
-  withdrawals    PartnerWithdrawal[]
+  withdrawals        PartnerWithdrawal[]
+  client_links       ClientLink[]
 
   @@map("partner_profiles")
 }
@@ -1074,25 +1157,25 @@ model PartnerProfile {
 // a solicitação é efetivamente processada (status="paid"); ainda não existe
 // endpoint/tela admin para aprovar, então toda solicitação fica "pending".
 model PartnerWithdrawal {
-  id                 String    @id @default(cuid())
+  id                 String         @id @default(cuid())
   partner_profile_id String
   partner            PartnerProfile @relation(fields: [partner_profile_id], references: [id])
   amount             Float
   pix_key            String
   pix_key_type       String
   // cpf | email | phone | random
-  status             String    @default("pending")
+  status             String         @default("pending")
   // pending | approved | rejected | paid | cancelled
-  notes              String?   @db.LongText
+  notes              String?        @db.LongText
   reviewed_by        String?
   reviewed_at        DateTime?
-  requested_at       DateTime  @default(now())
+  requested_at       DateTime       @default(now())
   // processed_at é preenchido especificamente quando status="paid" (momento
   // em que o saldo do Partner é debitado). reviewed_at cobre qualquer
   // decisão do admin (aprovar/reprovar/pagar/cancelar).
   processed_at       DateTime?
-  created_at         DateTime  @default(now())
-  updated_at         DateTime  @updatedAt
+  created_at         DateTime       @default(now())
+  updated_at         DateTime       @updatedAt
 
   @@index([partner_profile_id])
   @@map("partner_withdrawals")
@@ -1120,38 +1203,38 @@ model Campaign {
 }
 
 model Coupon {
-  id                       String    @id @default(cuid())
-  code                     String    @unique
-  coupon_type              String    @default("discount")
+  id                           String    @id @default(cuid())
+  code                         String    @unique
+  coupon_type                  String    @default("discount")
   // discount | credit-bonus | referral
-  discount_type            String    @default("percentage")
+  discount_type                String    @default("percentage")
   // percentage | fixed
-  discount_value           Float     @default(0)
-  credit_bonus             Float     @default(0)
-  usage_limit              Int       @default(0)
+  discount_value               Float     @default(0)
+  credit_bonus                 Float     @default(0)
+  usage_limit                  Int       @default(0)
   // 0 = unlimited total uses
-  usage_limit_per_company  String    @default("unlimited")
+  usage_limit_per_company      String    @default("unlimited")
   // unlimited | once | custom
-  max_uses_per_company     Int       @default(0)
-  valid_from               DateTime?
-  valid_until              DateTime?
-  applicable_products      String?   @db.LongText
+  max_uses_per_company         Int       @default(0)
+  valid_from                   DateTime?
+  valid_until                  DateTime?
+  applicable_products          String?   @db.LongText
   // JSON: string[]
-  allowed_account_types    String?   @db.LongText
+  allowed_account_types        String?   @db.LongText
   // JSON: ("empresas" | "agencias" | "nomades")[]
-  allowed_company_ids      String?   @db.LongText
+  allowed_company_ids          String?   @db.LongText
   // JSON: string[]
-  allowed_user_ids         String?   @db.LongText
+  allowed_user_ids             String?   @db.LongText
   // JSON: string[]
-  linked_user_id           String?
-  linked_user              User?     @relation(fields: [linked_user_id], references: [id])
+  linked_user_id               String?
+  linked_user                  User?     @relation(fields: [linked_user_id], references: [id])
   linked_user_commission_type  String?
   // percentage | fixed
   linked_user_commission_value Float?
-  status                   String    @default("active")
+  status                       String    @default("active")
   // active | disabled | expired
-  created_at               DateTime  @default(now())
-  updated_at                DateTime @updatedAt
+  created_at                   DateTime  @default(now())
+  updated_at                   DateTime  @updatedAt
 
   usages CouponUsage[]
 
@@ -1189,47 +1272,47 @@ model PartnerCommission {
 // ─── Agency Leadership & Reports ─────────────────────────────────────────────
 
 model AgencyLeadership {
-  id         String   @id @default(cuid())
+  id         String         @id @default(cuid())
   partner_id String
   partner    PartnerProfile @relation(fields: [partner_id], references: [id], onDelete: Cascade)
   agency_id  String
-  agency     Agency   @relation(fields: [agency_id], references: [id], onDelete: Cascade)
-  status     String   @default("active")
+  agency     Agency         @relation(fields: [agency_id], references: [id], onDelete: Cascade)
+  status     String         @default("active")
   // active | paused | ended
-  notes      String?  @db.LongText
-  started_at DateTime @default(now())
+  notes      String?        @db.LongText
+  started_at DateTime       @default(now())
   ended_at   DateTime?
-  created_at DateTime @default(now())
-  updated_at DateTime @updatedAt
+  created_at DateTime       @default(now())
+  updated_at DateTime       @updatedAt
 
   @@unique([partner_id, agency_id])
   @@map("agency_leaderships")
 }
 
 model AgencyReport {
-  id           String   @id @default(cuid())
-  partner_id   String
-  partner      PartnerProfile @relation(fields: [partner_id], references: [id], onDelete: Cascade)
-  agency_id    String
-  agency       Agency   @relation(fields: [agency_id], references: [id], onDelete: Cascade)
-  title        String   @db.VarChar(255)
-  content      String   @db.LongText
-  period_month Int
+  id             String         @id @default(cuid())
+  partner_id     String
+  partner        PartnerProfile @relation(fields: [partner_id], references: [id], onDelete: Cascade)
+  agency_id      String
+  agency         Agency         @relation(fields: [agency_id], references: [id], onDelete: Cascade)
+  title          String         @db.VarChar(255)
+  content        String         @db.LongText
+  period_month   Int
   // 1-12
-  period_year  Int
-  rating       Int?
+  period_year    Int
+  rating         Int?
   // 1-5 stars
-  highlights   String?  @db.LongText
+  highlights     String?        @db.LongText
   // JSON: string[]
-  improvements String?  @db.LongText
+  improvements   String?        @db.LongText
   // JSON: string[]
-  mrr          Float?
+  mrr            Float?
   projects_count Int?
-  tasks_count  Int?
-  status       String   @default("draft")
+  tasks_count    Int?
+  status         String         @default("draft")
   // draft | published
-  created_at   DateTime @default(now())
-  updated_at   DateTime @updatedAt
+  created_at     DateTime       @default(now())
+  updated_at     DateTime       @updatedAt
 
   @@map("agency_reports")
 }
@@ -1282,43 +1365,43 @@ model Payment {
 // Separate from CMV/costs (precificação). These are operating expenses of Allka.
 
 model Expense {
-  id               String    @id @default(cuid())
-  name             String
-  description      String?   @db.LongText
-  category         String    @default("Outros")
+  id                String    @id @default(cuid())
+  name              String
+  description       String?   @db.LongText
+  category          String    @default("Outros")
   // Administrativo | Ferramentas e Sistemas | Marketing | Financeiro |
   // Jurídico/Contábil | Infraestrutura | Pessoas | Operacional | Impostos e Taxas | Outros
-  amount           Float
-  type             String    @default("fixa")
+  amount            Float
+  type              String    @default("fixa")
   // fixa | variável
-  recurrence       String    @default("mensal")
+  recurrence        String    @default("mensal")
   // única | mensal | anual | personalizada
-  status           String    @default("prevista")
+  status            String    @default("prevista")
   // prevista | pendente | paga | atrasada | cancelada
-  due_date         DateTime?
-  paid_at          DateTime?
-  payment_method   String?
+  due_date          DateTime?
+  paid_at           DateTime?
+  payment_method    String?
   // pix | transferência | cartão | boleto | débito | dinheiro | outro
-  department       String?
+  department        String?
   // Administrativo | Financeiro | Marketing | Tecnologia | Jurídico | Pessoas | Operacional | Outros
-  competence_month String?
+  competence_month  String?
   // Format: "YYYY-MM" — competence month reference
-  notes            String?   @db.LongText
-  attachment_url   String?   @db.LongText
+  notes             String?   @db.LongText
+  attachment_url    String?   @db.LongText
   // recurrence control
-  recurrence_id    String?
+  recurrence_id     String?
   // groups recurring instances — same recurrence_id = same recurring expense series
-  is_recurring_base Boolean  @default(false)
+  is_recurring_base Boolean   @default(false)
   // true = this is the base/template of a recurring series
-  created_by       String?
-  created_at       DateTime  @default(now())
-  updated_at       DateTime  @updatedAt
+  created_by        String?
+  created_at        DateTime  @default(now())
+  updated_at        DateTime  @updatedAt
 
-  @@map("expenses")
   @@index([status])
   @@index([category])
   @@index([competence_month])
   @@index([recurrence_id])
+  @@map("expenses")
 }
 
 // ─── Wallets & Ledger ─────────────────────────────────────────────────────────
@@ -1346,29 +1429,29 @@ model Wallet {
 }
 
 model WalletLedger {
-  id               String   @id @default(cuid())
-  wallet_id        String
-  wallet           Wallet   @relation(fields: [wallet_id], references: [id])
-  type             String
+  id              String   @id @default(cuid())
+  wallet_id       String
+  wallet          Wallet   @relation(fields: [wallet_id], references: [id])
+  type            String
   // credit | debit | adjustment | block | unblock | refund | commission | withdrawal | payment | fee | bonus | penalty
-  direction        String
+  direction       String
   // credit | debit
-  amount           Float
-  balance_before   Float
-  balance_after    Float
-  description      String
-  category         String?
-  status           String   @default("confirmed")
+  amount          Float
+  balance_before  Float
+  balance_after   Float
+  description     String
+  category        String?
+  status          String   @default("confirmed")
   // pending | confirmed | failed | reversed
-  reference_type   String?
+  reference_type  String?
   // payment | invoice | withdrawal | commission | expense | project | adjustment
-  reference_id     String?
-  idempotency_key  String?  @unique
-  metadata         Json?
-  created_by       String?
-  notes            String?  @db.LongText
-  created_at       DateTime @default(now())
-  updated_at       DateTime @updatedAt
+  reference_id    String?
+  idempotency_key String?  @unique
+  metadata        Json?
+  created_by      String?
+  notes           String?  @db.LongText
+  created_at      DateTime @default(now())
+  updated_at      DateTime @updatedAt
 
   @@index([wallet_id])
   @@index([type])
@@ -1457,7 +1540,7 @@ model SquadConfig {
   created_at      DateTime  @default(now())
   updated_at      DateTime  @updatedAt
 
-  cycles          SquadCycle[]
+  cycles SquadCycle[]
 
   @@map("squad_configs")
 }
@@ -1493,36 +1576,36 @@ model SquadCycle {
 // ─── ProjectCredential — Cofre do Projeto ────────────────────────────────────
 
 model ProjectCredential {
-  id                 String   @id @default(cuid())
+  id String @id @default(cuid())
 
   project_id         String
   project_task_id    String?
   project_product_id String?
 
   // Identificação
-  title              String
-  service            String?
+  title         String
+  service       String?
   // Ex: "Meta Ads", "Google Analytics", "WordPress Admin"
-  url                String?
-  username           String?
-  password_demo      String?
+  url           String?
+  username      String?
+  password_demo String?
   // DEMO ONLY — never use real passwords here
-  notes              String?  @db.LongText
-  category           String   @default("other")
+  notes         String? @db.LongText
+  category      String  @default("other")
   // social | ads | analytics | hosting | cms | email | ecommerce | design | other
 
   // Status operacional
-  status             String   @default("active")
+  status String @default("active")
   // active | expiring | expired | rotation_required | shared | revoked | archived
 
   // Controle demo
-  is_demo            Boolean  @default(true)
+  is_demo Boolean @default(true)
 
   // Alertas de segurança
-  requires_rotation  Boolean  @default(false)
-  rotation_reason    String?
-  last_rotated_at    DateTime?
-  expires_at         DateTime?
+  requires_rotation Boolean   @default(false)
+  rotation_reason   String?
+  last_rotated_at   DateTime?
+  expires_at        DateTime?
 
   // Compartilhamento (string IDs — sem FK para evitar deleção acidental)
   shared_until         DateTime?
@@ -1530,17 +1613,17 @@ model ProjectCredential {
   shared_with_nomad_id String?
 
   // Auditoria
-  created_by         String?
+  created_by String?
 
-  created_at         DateTime @default(now())
-  updated_at         DateTime @updatedAt
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
 
   // Relações
-  project            Project         @relation(fields: [project_id], references: [id], onDelete: Cascade)
-  project_task       ProjectTask?    @relation(fields: [project_task_id], references: [id], onDelete: SetNull)
-  project_product    ProjectProduct? @relation(fields: [project_product_id], references: [id], onDelete: SetNull)
+  project         Project         @relation(fields: [project_id], references: [id], onDelete: Cascade)
+  project_task    ProjectTask?    @relation(fields: [project_task_id], references: [id], onDelete: SetNull)
+  project_product ProjectProduct? @relation(fields: [project_product_id], references: [id], onDelete: SetNull)
 
-  access_logs        ProjectCredentialAccessLog[]
+  access_logs ProjectCredentialAccessLog[]
 
   @@unique([project_id, title])
   @@index([project_id])
@@ -1556,20 +1639,20 @@ model ProjectCredential {
 // ─── ProjectCredentialAccessLog — Histórico de acesso ao Cofre ───────────────
 
 model ProjectCredentialAccessLog {
-  id            String            @id @default(cuid())
+  id String @id @default(cuid())
 
   credential_id String
   credential    ProjectCredential @relation(fields: [credential_id], references: [id], onDelete: Cascade)
 
-  action        String
+  action         String
   // created | viewed | copied | shared | revoked | rotated | edited | archived | deleted
-  actor_type    String?
+  actor_type     String?
   // user | nomad | system
   actor_user_id  String?
   actor_nomad_id String?
-  details       String?           @db.LongText
+  details        String? @db.LongText
 
-  created_at    DateTime          @default(now())
+  created_at DateTime @default(now())
 
   @@index([credential_id])
   @@index([action])

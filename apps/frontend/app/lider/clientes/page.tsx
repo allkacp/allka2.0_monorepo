@@ -17,18 +17,9 @@ import {
   Settings2,
   Hash,
   MapPin,
+  Link2,
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
-import { Button } from "@/components/ui/button";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { PageHeader } from "@/components/page-header";
 import { ExportButton } from "@/components/export-button";
 import { SlidePanel } from "@/components/slide-panel";
@@ -44,17 +35,12 @@ import {
 } from "@/components/ui/tooltip";
 import { useSorting, SortableHeader } from "@/hooks/useSorting";
 import { useTableScrollSync } from "@/hooks/useTableScrollSync";
-import { useToast } from "@/components/ui/use-toast";
 import { apiClient } from "@/lib/api-client";
 
-// Client é uma entidade real, separada de Company — servida por
-// /api/client-records (NÃO /api/clients, que é o legado sobre Company).
-// Layout desta tela replica o padrão visual de admin/clientes (cards de
-// stat em gradiente, toolbar com busca + ícones, tabela com header/coluna
-// de ações fixos e zebra, paginação espelhada em cima/embaixo, painel de
-// filtros e de configurar colunas) — adaptado aos campos reais do Client
-// (sem cnpj/logo/LGPD/_count de projetos-usuários-faturas, que são coisas
-// de Company e não existem aqui).
+// Tela somente leitura do Leader — mesma base real de clientes de
+// /admin/clientes e /agency/clientes, servida por /api/client-records
+// (NÃO /api/clients, legado de Company). Leader vê todos os clientes,
+// independente do vínculo, mas não pode criar, editar ou alterar vínculo.
 interface ClientLink {
   id: string;
   agency_id: string | null;
@@ -89,13 +75,10 @@ interface ClientRecord {
 function formatClientSequenceId(seq: number): string {
   return `cli_${String(seq).padStart(5, "0")}`;
 }
-
 function fmtDate(d: string) {
   return new Date(d).toLocaleDateString("pt-BR");
 }
 
-// ── Avatar (mesma receita do ClientAvatar de admin/clientes, sem logo —
-// Client não tem campo de logo) ──────────────────────────────────────────
 const clientInitials = (name: string) =>
   (name || "")
     .split(" ")
@@ -139,18 +122,18 @@ const STATUS_DOT_BG: Record<string, string> = {
   prospect: "bg-blue-500",
 };
 
-type ColKey = "cliente" | "segmento" | "contato" | "tipo" | "status" | "cadastro";
+type ColKey = "cliente" | "segmento" | "contato" | "tipo" | "vinculo" | "status" | "cadastro";
 const ALL_COLUMNS: { key: ColKey; label: string; info: string }[] = [
   { key: "cliente", label: "Cliente", info: "Nome, código sequencial e documento do cliente." },
   { key: "segmento", label: "Segmento", info: "Segmento de mercado informado no cadastro." },
   { key: "contato", label: "Contato", info: "E-mail, telefone e site do cliente." },
   { key: "tipo", label: "Tipo", info: "Pessoa Jurídica (PJ) ou Pessoa Física (PF)." },
+  { key: "vinculo", label: "Vínculo", info: "Agency, Company ou Partner responsável por este cliente." },
   { key: "status", label: "Status", info: "Situação comercial do cliente." },
   { key: "cadastro", label: "Cadastro", info: "Data em que o cliente foi cadastrado." },
 ];
-const DEFAULT_VISIBLE: ColKey[] = ["cliente", "segmento", "contato", "tipo", "status", "cadastro"];
+const DEFAULT_VISIBLE: ColKey[] = ["cliente", "segmento", "contato", "tipo", "vinculo", "status", "cadastro"];
 
-// Gradient stat-card treatment matching admin/clientes' STAT_COLOR_MAP
 const STAT_COLOR_MAP = {
   blue: {
     gradient: "from-blue-500 to-blue-700",
@@ -203,26 +186,13 @@ function StatCard({
   );
 }
 
-const EMPTY_FORM = {
-  name: "",
-  type: "pj" as "pj" | "pf",
-  document: "",
-  email: "",
-  phone: "",
-  segment: "",
-  website: "",
-  address: "",
-  city: "",
-  state: "",
-  zip_code: "",
-  notes: "",
-};
+type LinkType = "none" | "agency" | "company" | "partner";
 
-export default function AgenciaClientesPage() {
+export default function LiderClientesPage() {
   const [clients, setClients] = useState<ClientRecord[]>([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
-  const [pageSize, setPageSize] = useItemsPerPage("agencia-clientes", 10);
+  const [pageSize, setPageSize] = useItemsPerPage("lider-clientes", 10);
   const [search, setSearch] = useState("");
   const [searchInput, setSearchInput] = useState("");
   const [searchFocused, setSearchFocused] = useState(false);
@@ -231,7 +201,6 @@ export default function AgenciaClientesPage() {
   const pageRef = useRef<HTMLDivElement>(null);
   const searchBoxRef = useRef<HTMLDivElement>(null);
   const searchTimeout = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
-  const { toast } = useToast();
 
   const [filterPanelOpen, setFilterPanelOpen] = useState(false);
   const [colConfigOpen, setColConfigOpen] = useState(false);
@@ -239,9 +208,6 @@ export default function AgenciaClientesPage() {
   const [visibleCols, setVisibleCols] = useState<Set<ColKey>>(new Set(DEFAULT_VISIBLE));
   const [pageJumpValue, setPageJumpValue] = useState("");
 
-  // "+" info panel — dados já carregados na própria linha (Client não tem
-  // endpoint de summary separado, nem relações de projetos/usuários/faturas
-  // como Company tem).
   const [infoPanelOpen, setInfoPanelOpen] = useState(false);
   const [infoPanelClient, setInfoPanelClient] = useState<ClientRecord | null>(null);
   const openInfoPanel = useCallback((client: ClientRecord) => {
@@ -249,11 +215,37 @@ export default function AgenciaClientesPage() {
     setInfoPanelOpen(true);
   }, []);
 
-  // ── Criar novo cliente ──────────────────────────────────────────────────
-  const [createOpen, setCreateOpen] = useState(false);
-  const [form, setForm] = useState(EMPTY_FORM);
-  const [formError, setFormError] = useState("");
-  const [saving, setSaving] = useState(false);
+  // ── Vínculo: opções carregadas uma vez, só para exibir o nome real na tabela/painel ──
+  const [linkOptions, setLinkOptions] = useState<{
+    agency: { id: string; name: string }[];
+    company: { id: string; name: string }[];
+    partner: { id: string; name: string }[];
+  }>({ agency: [], company: [], partner: [] });
+
+  const loadLinkOptions = useCallback(async () => {
+    try {
+      const [ag, co, pa] = await Promise.all([
+        apiClient.getAgencies({ limit: "200" }),
+        apiClient.getCompanies({ limit: "200" }),
+        apiClient.getPartners({ limit: "200" }),
+      ]);
+      setLinkOptions({
+        agency: ((ag as any).data || []).map((a: any) => ({ id: a.id, name: a.name })),
+        company: ((co as any).data || []).map((c: any) => ({ id: c.id, name: c.name })),
+        partner: ((pa as any).data || []).map((p: any) => ({ id: p.id, name: p.user?.name || p.user?.email || p.id })),
+      });
+    } catch (err) {
+      console.error("[LiderClientes] Failed to load link options:", err);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadLinkOptions();
+  }, [loadLinkOptions]);
+
+  const agencyNameById = useMemo(() => Object.fromEntries(linkOptions.agency.map((a) => [a.id, a.name])), [linkOptions]);
+  const companyNameById = useMemo(() => Object.fromEntries(linkOptions.company.map((c) => [c.id, c.name])), [linkOptions]);
+  const partnerNameById = useMemo(() => Object.fromEntries(linkOptions.partner.map((p) => [p.id, p.name])), [linkOptions]);
 
   const { sortKey, sortDir, handleSort, sortData, columnFilters, toggleColumnFilter, clearColumnFilter } =
     useSorting<ClientRecord>();
@@ -370,49 +362,6 @@ export default function AgenciaClientesPage() {
   const totalPf = clients.filter((c) => c.type === "pf").length;
   const totalActive = clients.filter((c) => c.status === "active").length;
 
-  function openCreate() {
-    setForm(EMPTY_FORM);
-    setFormError("");
-    setCreateOpen(true);
-  }
-  function closeCreate() {
-    if (saving) return;
-    setCreateOpen(false);
-  }
-  async function handleCreate() {
-    if (!form.name.trim()) {
-      setFormError("Nome / Razão social é obrigatório");
-      return;
-    }
-    setSaving(true);
-    setFormError("");
-    try {
-      await apiClient.createClientRecord({
-        name: form.name,
-        type: form.type,
-        document: form.document || undefined,
-        email: form.email || undefined,
-        phone: form.phone || undefined,
-        segment: form.segment || undefined,
-        website: form.website || undefined,
-        address: form.address || undefined,
-        city: form.city || undefined,
-        state: form.state || undefined,
-        zip_code: form.zip_code || undefined,
-        notes: form.notes || undefined,
-      });
-      toast({ title: "Cliente criado com sucesso!" });
-      setCreateOpen(false);
-      setForm(EMPTY_FORM);
-      setPage(1);
-      load();
-    } catch (err: any) {
-      setFormError(err?.message ?? "Erro ao criar cliente");
-    } finally {
-      setSaving(false);
-    }
-  }
-
   const PaginationControls = () => (
     <div className="flex items-center gap-1 flex-shrink-0">
       <button
@@ -513,35 +462,10 @@ export default function AgenciaClientesPage() {
     <div ref={pageRef} className="p-4 sm:p-6 space-y-4">
       <PageHeader
         title="Clientes"
-        description="Clientes vinculados à sua agência"
-        actions={
-          <>
-            <ExportButton pageRef={pageRef} filename="clientes-agencia" />
-            <TooltipProvider delayDuration={400}>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <button
-                    onClick={openCreate}
-                    className="group relative flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-border/60 hover:border-transparent overflow-hidden transition-all"
-                  >
-                    <span
-                      className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none"
-                      style={{ background: "linear-gradient(135deg,#000000 0%,#1a2a6f 45%,#c81a7f 100%)" }}
-                    />
-                    <Plus className="relative z-10 h-3.5 w-3.5 shrink-0 text-[#7d1b6a] group-hover:text-white transition-colors" />
-                    <span className="relative z-10 text-xs font-semibold bg-clip-text text-transparent [background-image:linear-gradient(135deg,#1a2a6f_0%,#7d1b6a_55%,#c81a7f_100%)] group-hover:[background-image:none] group-hover:text-white transition-colors">
-                      Criar novo cliente
-                    </span>
-                  </button>
-                </TooltipTrigger>
-                <TooltipContent side="bottom" sideOffset={6}>Cadastrar novo cliente</TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
-          </>
-        }
+        description="Todos os clientes reais da plataforma — vinculados a Agency, Company, Partner ou sem vínculo (somente leitura)"
+        actions={<ExportButton pageRef={pageRef} filename="clientes" />}
       />
 
-      {/* Stats — gradient cards matching admin/clientes */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         <StatCard label="Total de Clientes" value={total} icon={Tag} color="blue" />
         <StatCard label="Pessoa Jurídica" value={totalPj} icon={Building2} color="violet" />
@@ -549,9 +473,7 @@ export default function AgenciaClientesPage() {
         <StatCard label="Ativos" value={totalActive} icon={Tag} color="orange" />
       </div>
 
-      {/* Card wrapping the whole table, toolbar rows included */}
       <div className="bg-white dark:bg-slate-900 border border-[#e8edf5] dark:border-slate-700 rounded-xl shadow-sm overflow-hidden">
-        {/* Row 1 — search + icon toolbar buttons */}
         <div className="flex items-center gap-2 flex-wrap px-[18px] py-3">
           <div ref={searchBoxRef} className="relative flex-1 min-w-[220px] max-w-sm">
             <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -595,7 +517,6 @@ export default function AgenciaClientesPage() {
           </div>
         </div>
 
-        {/* Row 2 — items-per-page + count + scrollbar mirror + numbered pagination */}
         <div className="flex flex-wrap items-center justify-between gap-3 px-[18px] py-2 border-y border-[#e8edf5] dark:border-slate-800 bg-white dark:bg-slate-900/30">
           <div className="flex items-center gap-3">
             <ItemsPerPageSelect
@@ -614,14 +535,13 @@ export default function AgenciaClientesPage() {
               className="hidden md:block flex-1 min-w-[80px] overflow-x-scroll allka-table-scroll self-center"
               style={{ height: 12 }}
             >
-              <div style={{ minWidth: 900, height: 1 }} />
+              <div style={{ minWidth: 1020, height: 1 }} />
             </div>
           )}
 
           {totalPages > 1 && <PaginationControls />}
         </div>
 
-        {/* Table */}
         {loading ? (
           <div className="flex items-center justify-center py-16 gap-2 text-muted-foreground">
             <Loader2 className="h-5 w-5 animate-spin" />
@@ -636,16 +556,15 @@ export default function AgenciaClientesPage() {
           <div className="flex flex-col items-center justify-center py-16 gap-2 text-muted-foreground">
             <Building2 className="h-8 w-8 opacity-40" />
             <span className="text-sm">Nenhum cliente encontrado</span>
-            <span className="text-xs">Clientes vinculados à sua agência aparecerão aqui. Clique em "Criar novo cliente" para começar.</span>
           </div>
         ) : (
           <div ref={tableScrollRef} onScroll={handleTableScroll} className="overflow-x-auto allka-table-scroll-body">
-            <table className="w-full text-xs min-w-[900px]">
+            <table className="w-full text-xs min-w-[1020px]">
               <thead>
                 <tr className="border-b border-slate-200/60 dark:border-slate-700/60">
                   <th
                     className="py-3.5 px-2 text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-[0.04em] text-center"
-                    style={{ position: "sticky", left: 0, top: 0, zIndex: 3, minWidth: 60, background: "var(--table-head)", boxShadow: "0 1px 0 rgba(148,163,184,0.22)", borderRight: "1px solid rgba(100,116,139,0.18)" }}
+                    style={{ position: "sticky", left: 0, top: 0, zIndex: 3, minWidth: 56, background: "var(--table-head)", boxShadow: "0 1px 0 rgba(148,163,184,0.22)", borderRight: "1px solid rgba(100,116,139,0.18)" }}
                   >
                     Ações
                   </th>
@@ -690,7 +609,14 @@ export default function AgenciaClientesPage() {
                 </tr>
               </thead>
               <tbody>
-                {rows.map((c, i) => (
+                {rows.map((c, i) => {
+                  const link = c.links[0];
+                  const linkType: LinkType = !link ? "none" : link.agency_id ? "agency" : link.company_id ? "company" : "partner";
+                  const linkName =
+                    linkType === "agency" ? agencyNameById[link!.agency_id!] :
+                    linkType === "company" ? companyNameById[link!.company_id!] :
+                    linkType === "partner" ? partnerNameById[link!.partner_id!] : undefined;
+                  return (
                   <tr
                     key={c.id}
                     className={`group transition-colors ${
@@ -699,25 +625,20 @@ export default function AgenciaClientesPage() {
                         : "bg-[#DCE3EE] dark:bg-[oklch(0.185_0.024_258)] hover:bg-[#C7D2E3] dark:hover:bg-[oklch(0.21_0.024_258)]"
                     }`}
                   >
-                    {/* Actions — pinned. Só o "+" de mais informações existe:
-                        não há tela de detalhe/edição de Client ainda. */}
                     <td
                       className={`px-1 py-2 transition-colors ${
                         i % 2 === 0
                           ? "bg-[#ECEFF4] group-hover:bg-[#D9E1ED] dark:bg-[oklch(0.14_0.026_258)] dark:group-hover:bg-[oklch(0.21_0.024_258)]"
                           : "bg-[#D6DCE8] group-hover:bg-[#C7D2E3] dark:bg-[oklch(0.185_0.024_258)] dark:group-hover:bg-[oklch(0.21_0.024_258)]"
                       }`}
-                      style={{ position: "sticky", left: 0, zIndex: 1, minWidth: 60, borderRight: "1px solid rgba(100,116,139,0.18)" }}
+                      style={{ position: "sticky", left: 0, zIndex: 1, minWidth: 56, borderRight: "1px solid rgba(100,116,139,0.18)" }}
                     >
                       <div className="flex items-center justify-center">
                         <TooltipProvider delayDuration={400}>
                           <Tooltip>
                             <TooltipTrigger asChild>
                               <button
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  openInfoPanel(c);
-                                }}
+                                onClick={(e) => { e.stopPropagation(); openInfoPanel(c); }}
                                 className="h-[21px] w-[21px] flex items-center justify-center rounded-full bg-[#2558FF] text-white shadow-[0_2px_6px_rgba(37,88,255,0.35)] hover:bg-gradient-to-br hover:from-[#2558FF] hover:via-[#6E2C96] hover:to-[#D92293] hover:text-white dark:hover:text-[#0a1628] hover:shadow-[0_2px_10px_rgba(110,44,150,0.5)] transition-all"
                               >
                                 <Plus className="h-3 w-3" />
@@ -790,6 +711,22 @@ export default function AgenciaClientesPage() {
                         </NeonBadge>
                       </td>
                     )}
+                    {visibleCols.has("vinculo") && (
+                      <td className="py-3 px-4" style={{ borderRight: "1px solid rgba(148,163,184,0.15)" }}>
+                        <div className="flex flex-col gap-0.5">
+                          {linkType === "none" ? (
+                            <span className="text-slate-300 dark:text-slate-600 text-[13px]">Sem vínculo</span>
+                          ) : (
+                            <>
+                              <NeonBadge color={linkType === "agency" ? "blue" : linkType === "company" ? "violet" : "emerald"}>
+                                {linkType === "agency" ? "Agency" : linkType === "company" ? "Company" : "Partner"}
+                              </NeonBadge>
+                              {linkName && <span className="text-[11px] text-slate-400 truncate max-w-[140px]">{linkName}</span>}
+                            </>
+                          )}
+                        </div>
+                      </td>
+                    )}
                     {visibleCols.has("status") && (
                       <td className="py-3 px-4" style={{ borderRight: "1px solid rgba(148,163,184,0.15)" }}>
                         <span className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-[11px] font-bold w-fit border ${STATUS_DOT_CLASSES[c.status] ?? STATUS_DOT_CLASSES.active}`}>
@@ -804,13 +741,13 @@ export default function AgenciaClientesPage() {
                       </td>
                     )}
                   </tr>
-                ))}
+                  );
+                })}
               </tbody>
             </table>
           </div>
         )}
 
-        {/* Row 3 — bottom mirror of row 2 */}
         {rows.length > 0 && (
           <div className="flex flex-wrap items-center justify-between gap-3 px-[18px] py-2 border-t border-[#e8edf5] dark:border-slate-800 bg-white dark:bg-slate-900/20">
             <div className="flex items-center gap-3">
@@ -830,7 +767,7 @@ export default function AgenciaClientesPage() {
                 className="hidden md:block flex-1 min-w-[80px] overflow-x-scroll allka-table-scroll self-center"
                 style={{ height: 12 }}
               >
-                <div style={{ minWidth: 900, height: 1 }} />
+                <div style={{ minWidth: 1020, height: 1 }} />
               </div>
             )}
 
@@ -890,7 +827,7 @@ export default function AgenciaClientesPage() {
         </div>
       </SlidePanel>
 
-      {/* "+" info panel — dados já carregados na linha, sem chamada extra */}
+      {/* "+" info panel */}
       <SlidePanel
         open={infoPanelOpen}
         onClose={() => setInfoPanelOpen(false)}
@@ -914,7 +851,14 @@ export default function AgenciaClientesPage() {
         widthMode="compact"
         compactWidth={480}
       >
-        {infoPanelClient && (
+        {infoPanelClient && (() => {
+          const link = infoPanelClient.links[0];
+          const linkType: LinkType = !link ? "none" : link.agency_id ? "agency" : link.company_id ? "company" : "partner";
+          const linkName =
+            linkType === "agency" ? agencyNameById[link!.agency_id!] :
+            linkType === "company" ? companyNameById[link!.company_id!] :
+            linkType === "partner" ? partnerNameById[link!.partner_id!] : undefined;
+          return (
           <div className="flex-1 overflow-y-auto p-5">
             <div className="space-y-6">
               <div>
@@ -950,8 +894,11 @@ export default function AgenciaClientesPage() {
                     </span>
                   </div>
                   <div className="rounded-xl border border-slate-200 dark:border-slate-700 p-3.5">
-                    <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide mb-1.5">Segmento</p>
-                    <p className="text-sm text-slate-700 dark:text-slate-300">{infoPanelClient.segment || "—"}</p>
+                    <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide mb-1.5">Vínculo</p>
+                    <p className="flex items-center gap-1.5 text-sm text-slate-700 dark:text-slate-300">
+                      <Link2 className="h-3.5 w-3.5 text-slate-400 flex-shrink-0" />
+                      {linkType === "none" ? "Sem vínculo" : `${linkType === "agency" ? "Agency" : linkType === "company" ? "Company" : "Partner"}${linkName ? " · " + linkName : ""}`}
+                    </p>
                   </div>
                   <div className="rounded-xl border border-slate-200 dark:border-slate-700 p-3.5 sm:col-span-2">
                     <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide mb-1.5">Endereço</p>
@@ -980,136 +927,8 @@ export default function AgenciaClientesPage() {
               </div>
             </div>
           </div>
-        )}
-      </SlidePanel>
-
-      {/* Criar novo cliente */}
-      <SlidePanel
-        open={createOpen}
-        onClose={closeCreate}
-        title="Criar novo cliente"
-        subtitle="O cliente será vinculado automaticamente à sua agência"
-        widthMode="compact"
-        compactWidth={480}
-        footer={
-          <div className="flex items-center justify-end gap-2">
-            <Button variant="outline" onClick={closeCreate} disabled={saving}>
-              Cancelar
-            </Button>
-            <Button onClick={handleCreate} disabled={saving} className="btn-brand">
-              {saving ? "Salvando..." : "Salvar cliente"}
-            </Button>
-          </div>
-        }
-      >
-        <div className="flex-1 overflow-y-auto p-5 space-y-4">
-          <div className="space-y-2">
-            <Label>Nome / Razão social *</Label>
-            <Input
-              placeholder="Ex: Empresa XYZ Ltda ou João Silva"
-              value={form.name}
-              onChange={(e) => setForm({ ...form, name: e.target.value })}
-            />
-          </div>
-
-          <div className="space-y-2">
-            <Label>Tipo</Label>
-            <Select value={form.type} onValueChange={(v: "pj" | "pf") => setForm({ ...form, type: v })}>
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="pj">Pessoa Jurídica (PJ)</SelectItem>
-                <SelectItem value="pf">Pessoa Física (PF)</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-
-          <div className="space-y-2">
-            <Label>Documento {form.type === "pj" ? "(CNPJ)" : "(CPF)"}</Label>
-            <Input
-              placeholder={form.type === "pj" ? "00.000.000/0001-00" : "000.000.000-00"}
-              value={form.document}
-              onChange={(e) => setForm({ ...form, document: e.target.value })}
-            />
-          </div>
-
-          <div className="space-y-2">
-            <Label>E-mail</Label>
-            <Input
-              type="email"
-              placeholder="contato@cliente.com"
-              value={form.email}
-              onChange={(e) => setForm({ ...form, email: e.target.value })}
-            />
-          </div>
-
-          <div className="space-y-2">
-            <Label>Telefone</Label>
-            <Input
-              placeholder="(11) 98765-4321"
-              value={form.phone}
-              onChange={(e) => setForm({ ...form, phone: e.target.value })}
-            />
-          </div>
-
-          <div className="space-y-2">
-            <Label>Segmento</Label>
-            <Input
-              placeholder="Ex: Varejo, Educação, Saúde..."
-              value={form.segment}
-              onChange={(e) => setForm({ ...form, segment: e.target.value })}
-            />
-          </div>
-
-          <div className="space-y-2">
-            <Label>Website</Label>
-            <Input
-              placeholder="https://cliente.com"
-              value={form.website}
-              onChange={(e) => setForm({ ...form, website: e.target.value })}
-            />
-          </div>
-
-          <div className="pt-2 border-t border-slate-100 dark:border-slate-800 space-y-3">
-            <h3 className="text-sm font-semibold text-slate-700 dark:text-slate-300">Endereço</h3>
-            <Input
-              placeholder="Rua / Avenida"
-              value={form.address}
-              onChange={(e) => setForm({ ...form, address: e.target.value })}
-            />
-            <div className="grid grid-cols-2 gap-3">
-              <Input
-                placeholder="Cidade"
-                value={form.city}
-                onChange={(e) => setForm({ ...form, city: e.target.value })}
-              />
-              <Input
-                placeholder="Estado (UF)"
-                maxLength={2}
-                value={form.state}
-                onChange={(e) => setForm({ ...form, state: e.target.value.toUpperCase() })}
-              />
-            </div>
-            <Input
-              placeholder="CEP"
-              value={form.zip_code}
-              onChange={(e) => setForm({ ...form, zip_code: e.target.value })}
-            />
-          </div>
-
-          <div className="pt-2 border-t border-slate-100 dark:border-slate-800 space-y-2">
-            <Label>Observações</Label>
-            <Textarea
-              placeholder="Notas sobre este cliente..."
-              value={form.notes}
-              onChange={(e) => setForm({ ...form, notes: e.target.value })}
-              className="h-24"
-            />
-          </div>
-
-          {formError && <p className="text-xs text-red-600">{formError}</p>}
-        </div>
+          );
+        })()}
       </SlidePanel>
     </div>
   );

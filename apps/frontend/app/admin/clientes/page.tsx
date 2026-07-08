@@ -1,12 +1,10 @@
-// @ts-nocheck
 "use client";
 
-import React, { useState, useCallback, useRef, useEffect, useMemo } from "react";
+import { useState, useCallback, useRef, useEffect, useMemo } from "react";
 import {
   Search,
   Building2,
-  Users,
-  FolderOpen,
+  User,
   Loader2,
   ChevronLeft,
   ChevronRight,
@@ -15,66 +13,86 @@ import {
   Mail,
   Tag,
   Plus,
-  Eye,
   Pencil,
   Filter,
   Settings2,
-  AlertTriangle,
-  ShieldCheck,
   Hash,
+  MapPin,
+  Link2,
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import { Button } from "@/components/ui/button";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { PageHeader } from "@/components/page-header";
 import { ExportButton } from "@/components/export-button";
-import { apiClient } from "@/lib/api-client";
+import { SlidePanel } from "@/components/slide-panel";
+import { IconToolbarButton } from "@/components/icon-toolbar-button";
+import { NeonBadge } from "@/components/neon-badge";
+import { useItemsPerPage } from "@/lib/use-items-per-page";
+import { ItemsPerPageSelect } from "@/components/items-per-page-select";
 import {
   Tooltip,
   TooltipContent,
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-import { SlidePanel } from "@/components/slide-panel";
-import { IconToolbarButton } from "@/components/icon-toolbar-button";
-import { NeonBadge } from "@/components/neon-badge";
-import { ItemsPerPageSelect } from "@/components/items-per-page-select";
 import { useSorting, SortableHeader } from "@/hooks/useSorting";
 import { useTableScrollSync } from "@/hooks/useTableScrollSync";
-import {
-  getCompanyTypeLabel,
-  getCompanyTypeInfo,
-  getCompanyTypeColor,
-  formatCompanySequenceId,
-} from "@/lib/company-type";
+import { useToast } from "@/components/ui/use-toast";
+import { apiClient } from "@/lib/api-client";
 
-const API_BASE =
-  (typeof import.meta !== "undefined" && (import.meta as any).env?.VITE_API_URL) || "/api";
-
-function getToken() {
-  try { return localStorage.getItem("allka_token"); } catch { return null; }
+// Client é uma entidade real, separada de Company — servida por
+// /api/client-records (NÃO /api/clients, que é o legado sobre Company).
+// Mesmo layout de /agency/clientes (que segue o padrão admin/empresas),
+// com duas diferenças de Admin: coluna "Vínculo" (Agency/Company/Partner/
+// Sem vínculo) e formulário com edição + escolha de vínculo.
+interface ClientLink {
+  id: string;
+  agency_id: string | null;
+  company_id: string | null;
+  partner_id: string | null;
+  status: string;
 }
 
-async function apiFetch(path: string, params?: Record<string, string>) {
-  let url = `${API_BASE}${path}`;
-  if (params) {
-    const qs = new URLSearchParams(params).toString();
-    if (qs) url += `?${qs}`;
-  }
-  const token = getToken();
-  const res = await fetch(url, {
-    headers: {
-      "Content-Type": "application/json",
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-    },
-  });
-  if (!res.ok) {
-    const j = await res.json().catch(() => ({}));
-    throw new Error(j.error ?? `HTTP ${res.status}`);
-  }
-  return res.json();
+interface ClientRecord {
+  id: string;
+  sequence_number: number;
+  name: string;
+  type: "pj" | "pf";
+  document: string | null;
+  email: string | null;
+  phone: string | null;
+  website: string | null;
+  segment: string | null;
+  status: string;
+  address: string | null;
+  city: string | null;
+  state: string | null;
+  zip_code: string | null;
+  notes: string | null;
+  description: string | null;
+  created_by_user_id: string | null;
+  created_at: string;
+  updated_at: string;
+  links: ClientLink[];
 }
 
-// ── Avatar (identical recipe to admin/empresas' CompanyAvatar) ──────────────
-const companyInitials = (name: string) =>
+function formatClientSequenceId(seq: number): string {
+  return `cli_${String(seq).padStart(5, "0")}`;
+}
+function fmtDate(d: string) {
+  return new Date(d).toLocaleDateString("pt-BR");
+}
+
+const clientInitials = (name: string) =>
   (name || "")
     .split(" ")
     .slice(0, 2)
@@ -89,107 +107,68 @@ const avatarColors = [
   "from-cyan-500 to-blue-600",
   "from-pink-500 to-rose-700",
 ];
-const avatarColor = (id: number) => avatarColors[Math.abs(id) % avatarColors.length];
+const avatarColor = (index: number) => avatarColors[Math.abs(index) % avatarColors.length];
 
-function ClientAvatar({ client, index }: { client: any; index: number }) {
-  const [err, setErr] = useState(false);
-  if (client.logo && !err) {
-    return (
-      <div className="w-10 h-10 rounded-full flex-shrink-0 shadow-sm overflow-hidden border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800">
-        <img
-          src={client.logo}
-          alt={client.name}
-          className="w-full h-full object-contain p-1"
-          onError={() => setErr(true)}
-        />
-      </div>
-    );
-  }
+function ClientAvatar({ client, index }: { client: ClientRecord; index: number }) {
   return (
     <div
       className={`w-10 h-10 rounded-full bg-gradient-to-br ${avatarColor(index)} flex items-center justify-center flex-shrink-0 shadow-sm`}
     >
-      <span className="text-xs font-bold text-white">{companyInitials(client.name)}</span>
+      <span className="text-xs font-bold text-white">{clientInitials(client.name)}</span>
     </div>
   );
 }
 
-const STATUS_CONFIG: Record<string, { label: string; color: "emerald" | "slate" | "blue" | "red" }> = {
-  ativo:        { label: "Ativo",        color: "emerald" },
-  inativo:      { label: "Inativo",      color: "slate"   },
-  prospecto:    { label: "Prospecto",    color: "blue"    },
-  inadimplente: { label: "Inadimplente", color: "red"     },
+const STATUS_CONFIG: Record<string, { label: string; color: "emerald" | "slate" | "blue" }> = {
+  active: { label: "Ativo", color: "emerald" },
+  inactive: { label: "Inativo", color: "slate" },
+  prospect: { label: "Prospecto", color: "blue" },
 };
-
-// Status pill with a leading dot, matching empresas' exact glow-badge recipe
-// (kept as raw classes here rather than NeonBadge since the dot indicator
-// isn't part of the shared component).
 const STATUS_DOT_CLASSES: Record<string, string> = {
-  ativo:        "border-emerald-500 bg-emerald-200 text-emerald-900 shadow-[0_0_12px_rgba(16,185,129,0.65)] dark:bg-emerald-800/70 dark:text-emerald-100",
-  inativo:      "border-slate-400 bg-slate-300 text-slate-800 shadow-[0_0_8px_rgba(100,116,139,0.4)] dark:bg-slate-800 dark:text-slate-300",
-  prospecto:    "border-blue-500 bg-blue-200 text-blue-900 shadow-[0_0_12px_rgba(59,130,246,0.65)] dark:bg-blue-800/70 dark:text-blue-100",
-  inadimplente: "border-red-500 bg-red-200 text-red-900 shadow-[0_0_12px_rgba(239,68,68,0.65)] dark:bg-red-800/70 dark:text-red-100",
+  active: "border-emerald-500 bg-emerald-200 text-emerald-900 shadow-[0_0_12px_rgba(16,185,129,0.65)] dark:bg-emerald-800/70 dark:text-emerald-100",
+  inactive: "border-slate-400 bg-slate-300 text-slate-800 shadow-[0_0_8px_rgba(100,116,139,0.4)] dark:bg-slate-800 dark:text-slate-300",
+  prospect: "border-blue-500 bg-blue-200 text-blue-900 shadow-[0_0_12px_rgba(59,130,246,0.65)] dark:bg-blue-800/70 dark:text-blue-100",
 };
 const STATUS_DOT_BG: Record<string, string> = {
-  ativo: "bg-emerald-500",
-  inativo: "bg-slate-400",
-  prospecto: "bg-blue-500",
-  inadimplente: "bg-red-500",
+  active: "bg-emerald-500",
+  inactive: "bg-slate-400",
+  prospect: "bg-blue-500",
 };
 
-function fmtDate(d: string) {
-  return new Date(d).toLocaleDateString("pt-BR");
-}
-
-type ColKey = "empresa" | "segmento" | "contato" | "projetos" | "usuarios" | "faturas" | "status" | "tipo" | "cadastro";
+type ColKey = "cliente" | "segmento" | "contato" | "tipo" | "vinculo" | "status" | "cadastro";
 const ALL_COLUMNS: { key: ColKey; label: string; info: string }[] = [
-  { key: "empresa", label: "Empresa", info: "Nome, CNPJ, código sequencial e conformidade LGPD/DPO da empresa." },
+  { key: "cliente", label: "Cliente", info: "Nome, código sequencial e documento do cliente." },
   { key: "segmento", label: "Segmento", info: "Segmento de mercado informado no cadastro." },
-  { key: "contato", label: "Contato", info: "E-mail, telefone e site da empresa." },
-  { key: "projetos", label: "Projetos", info: "Quantidade de projetos vinculados." },
-  { key: "usuarios", label: "Usuários", info: "Quantidade de usuários vinculados." },
-  { key: "faturas", label: "Faturas", info: "Quantidade de faturas emitidas." },
+  { key: "contato", label: "Contato", info: "E-mail, telefone e site do cliente." },
+  { key: "tipo", label: "Tipo", info: "Pessoa Jurídica (PJ) ou Pessoa Física (PF)." },
+  { key: "vinculo", label: "Vínculo", info: "Agency, Company ou Partner responsável por este cliente." },
   { key: "status", label: "Status", info: "Situação comercial do cliente." },
-  { key: "tipo", label: "Tipo", info: "Tipo de conta (Company, Agency, Nomad ou Partner)." },
   { key: "cadastro", label: "Cadastro", info: "Data em que o cliente foi cadastrado." },
 ];
-const DEFAULT_VISIBLE: ColKey[] = ["empresa", "segmento", "contato", "projetos", "usuarios", "status", "tipo"];
+const DEFAULT_VISIBLE: ColKey[] = ["cliente", "segmento", "contato", "tipo", "vinculo", "status", "cadastro"];
 
-const PROJECT_STATUS_LABELS: Record<string, string> = {
-  draft: "Rascunho",
-  negotiation: "Negociação",
-  "awaiting-payment": "Aguardando pagamento",
-  planning: "Planejamento",
-  "in-progress": "Em andamento",
-  paused: "Pausado",
-  completed: "Concluído",
-  cancelled: "Cancelado",
-  paid: "Pago",
-};
-
-// Gradient stat-card treatment matching admin/empresas' statColorMap
-const STAT_COLOR_MAP: Record<string, { gradient: string; darkGradient: string; borderClass: string }> = {
+const STAT_COLOR_MAP = {
   blue: {
     gradient: "from-blue-500 to-blue-700",
     darkGradient: "dark:from-blue-800 dark:to-blue-950",
     borderClass: "border-2 border-blue-300/70 dark:border-blue-800/70",
-  },
-  emerald: {
-    gradient: "from-emerald-500 to-teal-600",
-    darkGradient: "dark:from-emerald-800 dark:to-teal-900",
-    borderClass: "border-2 border-emerald-300/70 dark:border-emerald-800/70",
   },
   violet: {
     gradient: "from-violet-500 to-purple-700",
     darkGradient: "dark:from-violet-800 dark:to-purple-950",
     borderClass: "border-2 border-violet-300/70 dark:border-violet-800/70",
   },
+  emerald: {
+    gradient: "from-emerald-500 to-teal-600",
+    darkGradient: "dark:from-emerald-800 dark:to-teal-900",
+    borderClass: "border-2 border-emerald-300/70 dark:border-emerald-800/70",
+  },
   orange: {
     gradient: "from-orange-500 to-rose-600",
     darkGradient: "dark:from-orange-800 dark:to-rose-900",
     borderClass: "border-2 border-orange-300/70 dark:border-orange-800/70",
   },
-};
+} as const;
 
 function StatCard({
   label,
@@ -220,11 +199,31 @@ function StatCard({
   );
 }
 
+type LinkType = "none" | "agency" | "company" | "partner";
+
+const EMPTY_FORM = {
+  name: "",
+  type: "pj" as "pj" | "pf",
+  document: "",
+  email: "",
+  phone: "",
+  segment: "",
+  website: "",
+  address: "",
+  city: "",
+  state: "",
+  zip_code: "",
+  notes: "",
+  status: "active",
+  linkType: "none" as LinkType,
+  linkId: "",
+};
+
 export default function AdminClientesPage() {
-  const [clients, setClients] = useState<any[]>([]);
+  const [clients, setClients] = useState<ClientRecord[]>([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
-  const [pageSize, setPageSize] = useState(10);
+  const [pageSize, setPageSize] = useItemsPerPage("admin-clientes", 10);
   const [search, setSearch] = useState("");
   const [searchInput, setSearchInput] = useState("");
   const [searchFocused, setSearchFocused] = useState(false);
@@ -232,7 +231,8 @@ export default function AdminClientesPage() {
   const [error, setError] = useState<string | null>(null);
   const pageRef = useRef<HTMLDivElement>(null);
   const searchBoxRef = useRef<HTMLDivElement>(null);
-  const searchTimeout = useRef<ReturnType<typeof setTimeout>>();
+  const searchTimeout = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const { toast } = useToast();
 
   const [filterPanelOpen, setFilterPanelOpen] = useState(false);
   const [colConfigOpen, setColConfigOpen] = useState(false);
@@ -240,32 +240,54 @@ export default function AdminClientesPage() {
   const [visibleCols, setVisibleCols] = useState<Set<ColKey>>(new Set(DEFAULT_VISIBLE));
   const [pageJumpValue, setPageJumpValue] = useState("");
 
-  // "+" info panel — same recipe as admin/empresas, backed by the same
-  // real GET /clients/:id/summary endpoint (same Company entity).
   const [infoPanelOpen, setInfoPanelOpen] = useState(false);
-  const [infoPanelClient, setInfoPanelClient] = useState<any>(null);
-  const [infoPanelSummary, setInfoPanelSummary] = useState<{
-    projects: { total: number; byStatus: Record<string, number> };
-    users: { id: string; name: string; email: string; is_active: boolean }[];
-  } | null>(null);
-  const [infoPanelLoading, setInfoPanelLoading] = useState(false);
-  const openInfoPanel = useCallback(async (client: any) => {
+  const [infoPanelClient, setInfoPanelClient] = useState<ClientRecord | null>(null);
+  const openInfoPanel = useCallback((client: ClientRecord) => {
     setInfoPanelClient(client);
-    setInfoPanelSummary(null);
     setInfoPanelOpen(true);
-    setInfoPanelLoading(true);
+  }, []);
+
+  // ── Vínculo: opções carregadas uma vez (nomes reais pra tabela + formulário) ──
+  const [linkOptions, setLinkOptions] = useState<{
+    agency: { id: string; name: string }[];
+    company: { id: string; name: string }[];
+    partner: { id: string; name: string }[];
+  }>({ agency: [], company: [], partner: [] });
+
+  const loadLinkOptions = useCallback(async () => {
     try {
-      const data = await apiClient.getCompanySummary(client.id);
-      setInfoPanelSummary(data as any);
-    } catch {
-      setInfoPanelSummary(null);
-    } finally {
-      setInfoPanelLoading(false);
+      const [ag, co, pa] = await Promise.all([
+        apiClient.getAgencies({ limit: "200" }),
+        apiClient.getCompanies({ limit: "200" }),
+        apiClient.getPartners({ limit: "200" }),
+      ]);
+      setLinkOptions({
+        agency: ((ag as any).data || []).map((a: any) => ({ id: a.id, name: a.name })),
+        company: ((co as any).data || []).map((c: any) => ({ id: c.id, name: c.name })),
+        partner: ((pa as any).data || []).map((p: any) => ({ id: p.id, name: p.user?.name || p.user?.email || p.id })),
+      });
+    } catch (err) {
+      console.error("[AdminClientes] Failed to load link options:", err);
     }
   }, []);
 
+  useEffect(() => {
+    loadLinkOptions();
+  }, [loadLinkOptions]);
+
+  const agencyNameById = useMemo(() => Object.fromEntries(linkOptions.agency.map((a) => [a.id, a.name])), [linkOptions]);
+  const companyNameById = useMemo(() => Object.fromEntries(linkOptions.company.map((c) => [c.id, c.name])), [linkOptions]);
+  const partnerNameById = useMemo(() => Object.fromEntries(linkOptions.partner.map((p) => [p.id, p.name])), [linkOptions]);
+
+  // ── Criar / editar cliente ──────────────────────────────────────────────
+  const [formOpen, setFormOpen] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [form, setForm] = useState(EMPTY_FORM);
+  const [formError, setFormError] = useState("");
+  const [saving, setSaving] = useState(false);
+
   const { sortKey, sortDir, handleSort, sortData, columnFilters, toggleColumnFilter, clearColumnFilter } =
-    useSorting<any>();
+    useSorting<ClientRecord>();
 
   const {
     tableScrollRef,
@@ -284,10 +306,16 @@ export default function AdminClientesPage() {
       const params: Record<string, string> = {
         page: String(page),
         limit: String(pageSize),
+        // Admin lista a partir de cli_00001 (sequence_number asc) por padrão,
+        // pra deixar claro que nenhum cliente antigo "sumiu" — Agency/Company/
+        // Partner/Leader continuam com o default do backend (created_at desc),
+        // já que não mandam esses params.
+        sortBy: "sequence_number",
+        sortDir: "asc",
       };
       if (search) params.search = search;
       if (statusFilter.size === 1) params.status = Array.from(statusFilter)[0];
-      const data = await apiFetch("/clients", params);
+      const data: any = await apiClient.getClientRecords(params);
       setClients(Array.isArray(data.data) ? data.data : []);
       setTotal(data.total ?? 0);
     } catch (e: any) {
@@ -297,7 +325,9 @@ export default function AdminClientesPage() {
     }
   }, [page, pageSize, search, statusFilter]);
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => {
+    load();
+  }, [load]);
 
   useEffect(() => {
     const onClickOutside = (e: MouseEvent) => {
@@ -323,11 +353,11 @@ export default function AdminClientesPage() {
     if (!q) return [];
     return clients
       .filter((c) => {
-        const idCode = formatCompanySequenceId(c.sequence_number);
+        const idCode = formatClientSequenceId(c.sequence_number);
         return (
           c.name?.toLowerCase().includes(q) ||
           c.email?.toLowerCase().includes(q) ||
-          c.cnpj?.toLowerCase().includes(q) ||
+          c.document?.toLowerCase().includes(q) ||
           idCode.toLowerCase().includes(q)
         );
       })
@@ -373,9 +403,118 @@ export default function AdminClientesPage() {
     });
   };
 
-  const totalProjects = clients.reduce((s, c) => s + (c._count?.projects ?? 0), 0);
-  const totalUsers = clients.reduce((s, c) => s + (c._count?.users ?? 0), 0);
-  const totalInvoices = clients.reduce((s, c) => s + (c._count?.invoices ?? 0), 0);
+  const totalPj = clients.filter((c) => c.type === "pj").length;
+  const totalPf = clients.filter((c) => c.type === "pf").length;
+  const totalActive = clients.filter((c) => c.status === "active").length;
+
+  function openCreate() {
+    setEditingId(null);
+    setForm(EMPTY_FORM);
+    setFormError("");
+    setFormOpen(true);
+  }
+
+  function openEdit(c: ClientRecord) {
+    const link = c.links[0];
+    const linkType: LinkType = !link ? "none" : link.agency_id ? "agency" : link.company_id ? "company" : "partner";
+    const linkId = link ? (link.agency_id || link.company_id || link.partner_id || "") : "";
+    setEditingId(c.id);
+    setForm({
+      name: c.name,
+      type: c.type,
+      document: c.document || "",
+      email: c.email || "",
+      phone: c.phone || "",
+      segment: c.segment || "",
+      website: c.website || "",
+      address: c.address || "",
+      city: c.city || "",
+      state: c.state || "",
+      zip_code: c.zip_code || "",
+      notes: c.notes || "",
+      status: c.status,
+      linkType,
+      linkId,
+    });
+    setFormError("");
+    setFormOpen(true);
+  }
+
+  function closeForm() {
+    if (saving) return;
+    setFormOpen(false);
+  }
+
+  async function handleSave() {
+    if (!form.name.trim()) {
+      setFormError("Nome / Razão social é obrigatório");
+      return;
+    }
+    if (form.linkType !== "none" && !form.linkId) {
+      setFormError("Selecione qual Agency/Company/Partner este cliente pertence, ou marque \"Sem vínculo\"");
+      return;
+    }
+    setSaving(true);
+    setFormError("");
+    try {
+      const basePayload: Record<string, any> = {
+        name: form.name,
+        type: form.type,
+        document: form.document || undefined,
+        email: form.email || undefined,
+        phone: form.phone || undefined,
+        segment: form.segment || undefined,
+        website: form.website || undefined,
+        address: form.address || undefined,
+        city: form.city || undefined,
+        state: form.state || undefined,
+        zip_code: form.zip_code || undefined,
+        notes: form.notes || undefined,
+        status: form.status,
+      };
+
+      if (editingId) {
+        await apiClient.updateClientRecord(editingId, basePayload);
+        const linkPayload: Record<string, any> =
+          form.linkType === "agency"
+            ? { agency_id: form.linkId }
+            : form.linkType === "company"
+              ? { company_id: form.linkId }
+              : form.linkType === "partner"
+                ? { partner_id: form.linkId }
+                : {};
+        await apiClient.updateClientRecordLink(editingId, linkPayload);
+        toast({ title: "Cliente atualizado com sucesso!" });
+        setFormOpen(false);
+        setPage(1);
+        load();
+      } else {
+        const linkFields: Record<string, any> =
+          form.linkType === "agency"
+            ? { agency_id: form.linkId }
+            : form.linkType === "company"
+              ? { company_id: form.linkId }
+              : form.linkType === "partner"
+                ? { partner_id: form.linkId }
+                : {};
+        await apiClient.createClientRecord({ ...basePayload, ...linkFields });
+        toast({ title: "Cliente criado com sucesso!" });
+        setFormOpen(false);
+        // Cliente novo sempre recebe o maior sequence_number — como a
+        // ordenação padrão do Admin é ascendente (cli_00001 primeiro), ele
+        // cai na última página. Pula pra lá direto em vez de voltar pra
+        // página 1, senão o cliente recém-criado fica "escondido".
+        const countResp: any = await apiClient.getClientRecords({ page: "1", limit: "1", sortBy: "sequence_number", sortDir: "asc" });
+        const newTotal = countResp.total ?? 0;
+        setPage(Math.max(1, Math.ceil(newTotal / pageSize)));
+        load();
+      }
+    } catch (err: any) {
+      setFormError(err?.message ?? "Erro ao salvar cliente");
+    } finally {
+      setSaving(false);
+    }
+  }
 
   const PaginationControls = () => (
     <div className="flex items-center gap-1 flex-shrink-0">
@@ -473,20 +612,23 @@ export default function AdminClientesPage() {
     </TooltipProvider>
   );
 
+  const currentLinkOptions =
+    form.linkType === "agency" ? linkOptions.agency : form.linkType === "company" ? linkOptions.company : form.linkType === "partner" ? linkOptions.partner : [];
+
   return (
     <div ref={pageRef} className="p-4 sm:p-6 space-y-4">
       <PageHeader
         title="Clientes"
-        description="Todas as empresas clientes cadastradas na plataforma"
+        description="Todos os clientes reais da plataforma — vinculados a Agency, Company, Partner ou sem vínculo"
         actions={
           <>
             <ExportButton pageRef={pageRef} filename="clientes" />
             <TooltipProvider delayDuration={400}>
               <Tooltip>
                 <TooltipTrigger asChild>
-                  <a
-                    href="/admin/empresas"
-                    className="group relative flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-border/60 hover:border-transparent overflow-hidden transition-all no-underline"
+                  <button
+                    onClick={openCreate}
+                    className="group relative flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-border/60 hover:border-transparent overflow-hidden transition-all"
                   >
                     <span
                       className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none"
@@ -494,34 +636,31 @@ export default function AdminClientesPage() {
                     />
                     <Plus className="relative z-10 h-3.5 w-3.5 shrink-0 text-[#7d1b6a] group-hover:text-white transition-colors" />
                     <span className="relative z-10 text-xs font-semibold bg-clip-text text-transparent [background-image:linear-gradient(135deg,#1a2a6f_0%,#7d1b6a_55%,#c81a7f_100%)] group-hover:[background-image:none] group-hover:text-white transition-colors">
-                      Nova Empresa
+                      Criar novo cliente
                     </span>
-                  </a>
+                  </button>
                 </TooltipTrigger>
-                <TooltipContent side="bottom" sideOffset={6}>Cadastrar nova empresa</TooltipContent>
+                <TooltipContent side="bottom" sideOffset={6}>Cadastrar novo cliente</TooltipContent>
               </Tooltip>
             </TooltipProvider>
           </>
         }
       />
 
-      {/* Stats — gradient cards matching admin/empresas */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        <StatCard label="Total de Clientes" value={total} icon={Building2} color="blue" />
-        <StatCard label="Projetos Vinculados" value={totalProjects} icon={FolderOpen} color="violet" />
-        <StatCard label="Usuários Vinculados" value={totalUsers} icon={Users} color="emerald" />
-        <StatCard label="Faturas Emitidas" value={totalInvoices} icon={Tag} color="orange" />
+        <StatCard label="Total de Clientes" value={total} icon={Tag} color="blue" />
+        <StatCard label="Pessoa Jurídica" value={totalPj} icon={Building2} color="violet" />
+        <StatCard label="Pessoa Física" value={totalPf} icon={User} color="emerald" />
+        <StatCard label="Ativos" value={totalActive} icon={Tag} color="orange" />
       </div>
 
-      {/* Card wrapping the whole table, toolbar rows included */}
       <div className="bg-white dark:bg-slate-900 border border-[#e8edf5] dark:border-slate-700 rounded-xl shadow-sm overflow-hidden">
-        {/* Row 1 — search + icon toolbar buttons */}
         <div className="flex items-center gap-2 flex-wrap px-[18px] py-3">
           <div ref={searchBoxRef} className="relative flex-1 min-w-[220px] max-w-sm">
             <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <Input
               className="pl-8 h-9 text-sm"
-              placeholder="Nome, ID, e-mail ou CNPJ..."
+              placeholder="Nome, ID, e-mail ou documento..."
               value={searchInput}
               onFocus={() => setSearchFocused(true)}
               onChange={(e) => handleSearchChange(e.target.value)}
@@ -544,7 +683,7 @@ export default function AdminClientesPage() {
                       <ClientAvatar client={c} index={i} />
                       <div className="min-w-0 flex-1">
                         <p className="text-sm font-medium text-slate-700 dark:text-slate-200 truncate">{c.name}</p>
-                        <p className="text-[11px] text-slate-400 font-mono">{formatCompanySequenceId(c.sequence_number)}</p>
+                        <p className="text-[11px] text-slate-400 font-mono">{formatClientSequenceId(c.sequence_number)}</p>
                       </div>
                     </button>
                   ))
@@ -559,7 +698,6 @@ export default function AdminClientesPage() {
           </div>
         </div>
 
-        {/* Row 2 — items-per-page + count + scrollbar mirror + numbered pagination (mirrors admin/empresas) */}
         <div className="flex flex-wrap items-center justify-between gap-3 px-[18px] py-2 border-y border-[#e8edf5] dark:border-slate-800 bg-white dark:bg-slate-900/30">
           <div className="flex items-center gap-3">
             <ItemsPerPageSelect
@@ -570,8 +708,6 @@ export default function AdminClientesPage() {
             <CountText side="bottom" />
           </div>
 
-          {/* Top horizontal scrollbar mirror — only rendered when the table
-              actually overflows its container. */}
           {hasHorizontalOverflow && (
             <div
               ref={topScrollRef}
@@ -580,14 +716,13 @@ export default function AdminClientesPage() {
               className="hidden md:block flex-1 min-w-[80px] overflow-x-scroll allka-table-scroll self-center"
               style={{ height: 12 }}
             >
-              <div style={{ minWidth: 960, height: 1 }} />
+              <div style={{ minWidth: 1020, height: 1 }} />
             </div>
           )}
 
           {totalPages > 1 && <PaginationControls />}
         </div>
 
-        {/* Table */}
         {loading ? (
           <div className="flex items-center justify-center py-16 gap-2 text-muted-foreground">
             <Loader2 className="h-5 w-5 animate-spin" />
@@ -605,12 +740,12 @@ export default function AdminClientesPage() {
           </div>
         ) : (
           <div ref={tableScrollRef} onScroll={handleTableScroll} className="overflow-x-auto allka-table-scroll-body">
-            <table className="w-full text-xs min-w-[960px]">
+            <table className="w-full text-xs min-w-[1020px]">
               <thead>
                 <tr className="border-b border-slate-200/60 dark:border-slate-700/60">
                   <th
                     className="py-3.5 px-2 text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-[0.04em] text-center"
-                    style={{ position: "sticky", left: 0, top: 0, zIndex: 3, minWidth: 99, background: "var(--table-head)", boxShadow: "0 1px 0 rgba(148,163,184,0.22)", borderRight: "1px solid rgba(100,116,139,0.18)" }}
+                    style={{ position: "sticky", left: 0, top: 0, zIndex: 3, minWidth: 84, background: "var(--table-head)", boxShadow: "0 1px 0 rgba(148,163,184,0.22)", borderRight: "1px solid rgba(100,116,139,0.18)" }}
                   >
                     Ações
                   </th>
@@ -619,7 +754,7 @@ export default function AdminClientesPage() {
                       key={col.key}
                       className="py-3.5 px-4 text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-[0.04em] select-none [&_button]:!text-[11px]"
                       style={{
-                        textAlign: ["projetos", "usuarios", "faturas"].includes(col.key) ? "center" : "left",
+                        textAlign: "left",
                         position: "sticky",
                         top: 0,
                         zIndex: 2,
@@ -628,11 +763,11 @@ export default function AdminClientesPage() {
                         borderRight: "1px solid rgba(148,163,184,0.16)",
                       }}
                     >
-                      <div className={`inline-flex items-center gap-1 ${["projetos", "usuarios", "faturas"].includes(col.key) ? "justify-center w-full" : ""}`}>
+                      <div className="inline-flex items-center gap-1">
                         <SortableHeader
                           label={col.label}
-                          field={col.key === "empresa" ? "name" : col.key === "cadastro" ? "created_at" : col.key}
-                          type={col.key === "cadastro" ? "date" : ["projetos", "usuarios", "faturas"].includes(col.key) ? "number" : "text"}
+                          field={col.key === "cliente" ? "name" : col.key === "cadastro" ? "created_at" : col.key}
+                          type={col.key === "cadastro" ? "date" : "text"}
                           sortKey={sortKey as string}
                           sortDir={sortDir}
                           onSort={handleSort}
@@ -655,7 +790,14 @@ export default function AdminClientesPage() {
                 </tr>
               </thead>
               <tbody>
-                {rows.map((c, i) => (
+                {rows.map((c, i) => {
+                  const link = c.links[0];
+                  const linkType: LinkType = !link ? "none" : link.agency_id ? "agency" : link.company_id ? "company" : "partner";
+                  const linkName =
+                    linkType === "agency" ? agencyNameById[link!.agency_id!] :
+                    linkType === "company" ? companyNameById[link!.company_id!] :
+                    linkType === "partner" ? partnerNameById[link!.partner_id!] : undefined;
+                  return (
                   <tr
                     key={c.id}
                     className={`group transition-colors ${
@@ -664,24 +806,20 @@ export default function AdminClientesPage() {
                         : "bg-[#DCE3EE] dark:bg-[oklch(0.185_0.024_258)] hover:bg-[#C7D2E3] dark:hover:bg-[oklch(0.21_0.024_258)]"
                     }`}
                   >
-                    {/* Actions — pinned, matching admin/empresas' eye/edit icon pair */}
                     <td
                       className={`px-1 py-2 transition-colors ${
                         i % 2 === 0
                           ? "bg-[#ECEFF4] group-hover:bg-[#D9E1ED] dark:bg-[oklch(0.14_0.026_258)] dark:group-hover:bg-[oklch(0.21_0.024_258)]"
                           : "bg-[#D6DCE8] group-hover:bg-[#C7D2E3] dark:bg-[oklch(0.185_0.024_258)] dark:group-hover:bg-[oklch(0.21_0.024_258)]"
                       }`}
-                      style={{ position: "sticky", left: 0, zIndex: 1, minWidth: 99, borderRight: "1px solid rgba(100,116,139,0.18)" }}
+                      style={{ position: "sticky", left: 0, zIndex: 1, minWidth: 84, borderRight: "1px solid rgba(100,116,139,0.18)" }}
                     >
                       <div className="flex items-center justify-center gap-1">
                         <TooltipProvider delayDuration={400}>
                           <Tooltip>
                             <TooltipTrigger asChild>
                               <button
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  openInfoPanel(c);
-                                }}
+                                onClick={(e) => { e.stopPropagation(); openInfoPanel(c); }}
                                 className="h-[21px] w-[21px] flex items-center justify-center rounded-full bg-[#2558FF] text-white shadow-[0_2px_6px_rgba(37,88,255,0.35)] hover:bg-gradient-to-br hover:from-[#2558FF] hover:via-[#6E2C96] hover:to-[#D92293] hover:text-white dark:hover:text-[#0a1628] hover:shadow-[0_2px_10px_rgba(110,44,150,0.5)] transition-all"
                               >
                                 <Plus className="h-3 w-3" />
@@ -693,81 +831,27 @@ export default function AdminClientesPage() {
                         <TooltipProvider delayDuration={400}>
                           <Tooltip>
                             <TooltipTrigger asChild>
-                              <a
-                                href={`/admin/empresas/${c.id}`}
-                                className="h-[26px] w-[26px] flex items-center justify-center rounded-[8px] bg-white dark:bg-slate-800 border border-[#e8edf5] dark:border-slate-700 text-[#2558FF] dark:text-slate-500 shadow-[0_4px_10px_rgba(15,23,42,0.06)] hover:bg-gradient-to-br hover:from-[#2558FF] hover:via-[#6E2C96] hover:to-[#D92293] hover:text-white dark:hover:text-[#0a1628] hover:border-transparent hover:shadow-[0_8px_18px_rgba(15,23,42,0.18)] hover:-translate-y-px transition-all duration-150"
-                              >
-                                <Eye className="h-3.5 w-3.5" />
-                              </a>
-                            </TooltipTrigger>
-                            <TooltipContent className="text-xs font-medium">Ver detalhes</TooltipContent>
-                          </Tooltip>
-                        </TooltipProvider>
-                        <TooltipProvider delayDuration={400}>
-                          <Tooltip>
-                            <TooltipTrigger asChild>
-                              <a
-                                href={`/admin/empresas/${c.id}?edit=1`}
+                              <button
+                                onClick={(e) => { e.stopPropagation(); openEdit(c); }}
                                 className="h-[26px] w-[26px] flex items-center justify-center rounded-[8px] bg-white dark:bg-slate-800 border border-[#e8edf5] dark:border-slate-700 text-[#6E2C96] dark:text-slate-500 shadow-[0_4px_10px_rgba(15,23,42,0.06)] hover:bg-gradient-to-br hover:from-[#2558FF] hover:via-[#6E2C96] hover:to-[#D92293] hover:text-white dark:hover:text-[#0a1628] hover:border-transparent hover:shadow-[0_8px_18px_rgba(15,23,42,0.18)] hover:-translate-y-px transition-all duration-150"
                               >
                                 <Pencil className="h-3.5 w-3.5" />
-                              </a>
+                              </button>
                             </TooltipTrigger>
-                            <TooltipContent className="text-xs font-medium">Editar empresa</TooltipContent>
+                            <TooltipContent className="text-xs font-medium">Editar cliente</TooltipContent>
                           </Tooltip>
                         </TooltipProvider>
                       </div>
                     </td>
 
-                    {visibleCols.has("empresa") && (
+                    {visibleCols.has("cliente") && (
                       <td className="py-3 px-4" style={{ borderRight: "1px solid rgba(148,163,184,0.15)" }}>
                         <div className="flex items-center gap-3">
                           <ClientAvatar client={c} index={i} />
                           <div className="min-w-0 flex-1">
                             <p className="font-bold text-sm text-slate-800 dark:text-slate-100 truncate">{c.name}</p>
-                            <p className="text-[11px] text-slate-400 font-mono">{formatCompanySequenceId(c.sequence_number)}</p>
-                            {c.cnpj && <p className="text-xs text-slate-400 dark:text-slate-500 truncate">{c.cnpj}</p>}
-                            <div className="flex flex-wrap gap-1 mt-1">
-                              {!c.lgpd?.dpo_name && (
-                                <TooltipProvider delayDuration={200}>
-                                  <Tooltip>
-                                    <TooltipTrigger asChild>
-                                      <span className="inline-flex items-center gap-1 rounded-full px-[7px] py-0.5 text-[9px] font-bold border border-orange-500 bg-orange-200 text-orange-900 shadow-[0_0_10px_rgba(249,115,22,0.6)] dark:bg-orange-800/70 dark:text-orange-100">
-                                        <AlertTriangle className="h-3 w-3" />
-                                        Sem DPO
-                                      </span>
-                                    </TooltipTrigger>
-                                    <TooltipContent side="right" className="max-w-[220px] p-3 space-y-1.5">
-                                      <p className="font-semibold text-sm">DPO não cadastrado</p>
-                                      <p className="text-xs leading-relaxed text-slate-400">
-                                        O DPO (Encarregado de Proteção de Dados) é exigido pela LGPD.
-                                      </p>
-                                    </TooltipContent>
-                                  </Tooltip>
-                                </TooltipProvider>
-                              )}
-                              {c.lgpd?.dpo_name && (
-                                <TooltipProvider delayDuration={200}>
-                                  <Tooltip>
-                                    <TooltipTrigger asChild>
-                                      <span className="inline-flex items-center gap-1 rounded-full px-[7px] py-0.5 text-[9px] font-bold border border-emerald-500 bg-emerald-200 text-emerald-900 shadow-[0_0_10px_rgba(16,185,129,0.6)] dark:bg-emerald-800/70 dark:text-emerald-100 cursor-default">
-                                        <ShieldCheck className="h-3 w-3" />
-                                        DPO cadastrado
-                                      </span>
-                                    </TooltipTrigger>
-                                    <TooltipContent side="right" className="max-w-[220px] p-3 space-y-1">
-                                      <p className="font-semibold text-sm">{c.lgpd.dpo_name}</p>
-                                      {c.lgpd.dpo_email && <p className="text-xs text-slate-400">{c.lgpd.dpo_email}</p>}
-                                    </TooltipContent>
-                                  </Tooltip>
-                                </TooltipProvider>
-                              )}
-                              {c.lgpd && !c.lgpd.privacy_policy_accepted && (
-                                <span className="inline-flex items-center rounded-full px-[7px] py-0.5 text-[9px] font-bold border border-amber-500 bg-amber-200 text-amber-900 shadow-[0_0_10px_rgba(245,158,11,0.6)] dark:bg-amber-800/70 dark:text-amber-100">
-                                  Política pendente
-                                </span>
-                              )}
-                            </div>
+                            <p className="text-[11px] text-slate-400 font-mono">{formatClientSequenceId(c.sequence_number)}</p>
+                            {c.document && <p className="text-xs text-slate-400 dark:text-slate-500 truncate">{c.document}</p>}
                           </div>
                         </div>
                       </td>
@@ -814,40 +898,35 @@ export default function AdminClientesPage() {
                         </div>
                       </td>
                     )}
-                    {visibleCols.has("projetos") && (
-                      <td className="py-3 px-4 text-center" style={{ borderRight: "1px solid rgba(148,163,184,0.15)" }}>
-                        <span className="inline-flex items-center gap-1 font-medium text-sm">
-                          <FolderOpen className="h-3.5 w-3.5 text-violet-500" />
-                          {c._count?.projects ?? 0}
-                        </span>
+                    {visibleCols.has("tipo") && (
+                      <td className="py-3 px-4" style={{ borderRight: "1px solid rgba(148,163,184,0.15)" }}>
+                        <NeonBadge color={c.type === "pj" ? "blue" : "violet"} tooltip={c.type === "pj" ? "Pessoa Jurídica" : "Pessoa Física"}>
+                          {c.type === "pj" ? "PJ" : "PF"}
+                        </NeonBadge>
                       </td>
                     )}
-                    {visibleCols.has("usuarios") && (
-                      <td className="py-3 px-4 text-center" style={{ borderRight: "1px solid rgba(148,163,184,0.15)" }}>
-                        <span className="inline-flex items-center gap-1 font-medium text-sm">
-                          <Users className="h-3.5 w-3.5 text-blue-500" />
-                          {c._count?.users ?? 0}
-                        </span>
-                      </td>
-                    )}
-                    {visibleCols.has("faturas") && (
-                      <td className="py-3 px-4 text-center font-medium text-sm" style={{ borderRight: "1px solid rgba(148,163,184,0.15)" }}>
-                        {c._count?.invoices ?? 0}
+                    {visibleCols.has("vinculo") && (
+                      <td className="py-3 px-4" style={{ borderRight: "1px solid rgba(148,163,184,0.15)" }}>
+                        <div className="flex flex-col gap-0.5">
+                          {linkType === "none" ? (
+                            <span className="text-slate-300 dark:text-slate-600 text-[13px]">Sem vínculo</span>
+                          ) : (
+                            <>
+                              <NeonBadge color={linkType === "agency" ? "blue" : linkType === "company" ? "violet" : "emerald"}>
+                                {linkType === "agency" ? "Agency" : linkType === "company" ? "Company" : "Partner"}
+                              </NeonBadge>
+                              {linkName && <span className="text-[11px] text-slate-400 truncate max-w-[140px]">{linkName}</span>}
+                            </>
+                          )}
+                        </div>
                       </td>
                     )}
                     {visibleCols.has("status") && (
                       <td className="py-3 px-4" style={{ borderRight: "1px solid rgba(148,163,184,0.15)" }}>
-                        <span className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-[11px] font-bold w-fit border ${STATUS_DOT_CLASSES[c.status] ?? STATUS_DOT_CLASSES.ativo}`}>
-                          <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${STATUS_DOT_BG[c.status] ?? STATUS_DOT_BG.ativo}`} />
+                        <span className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-[11px] font-bold w-fit border ${STATUS_DOT_CLASSES[c.status] ?? STATUS_DOT_CLASSES.active}`}>
+                          <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${STATUS_DOT_BG[c.status] ?? STATUS_DOT_BG.active}`} />
                           {STATUS_CONFIG[c.status]?.label ?? c.status ?? "Ativo"}
                         </span>
-                      </td>
-                    )}
-                    {visibleCols.has("tipo") && (
-                      <td className="py-3 px-4" style={{ borderRight: "1px solid rgba(148,163,184,0.15)" }}>
-                        <NeonBadge color={getCompanyTypeColor(c.type)} tooltip={getCompanyTypeInfo(c.type)}>
-                          {getCompanyTypeLabel(c.type)}
-                        </NeonBadge>
                       </td>
                     )}
                     {visibleCols.has("cadastro") && (
@@ -856,13 +935,13 @@ export default function AdminClientesPage() {
                       </td>
                     )}
                   </tr>
-                ))}
+                  );
+                })}
               </tbody>
             </table>
           </div>
         )}
 
-        {/* Row 3 — bottom mirror of row 2 (items-per-page + count + scrollbar + pagination) */}
         {rows.length > 0 && (
           <div className="flex flex-wrap items-center justify-between gap-3 px-[18px] py-2 border-t border-[#e8edf5] dark:border-slate-800 bg-white dark:bg-slate-900/20">
             <div className="flex items-center gap-3">
@@ -882,7 +961,7 @@ export default function AdminClientesPage() {
                 className="hidden md:block flex-1 min-w-[80px] overflow-x-scroll allka-table-scroll self-center"
                 style={{ height: 12 }}
               >
-                <div style={{ minWidth: 960, height: 1 }} />
+                <div style={{ minWidth: 1020, height: 1 }} />
               </div>
             )}
 
@@ -942,31 +1021,43 @@ export default function AdminClientesPage() {
         </div>
       </SlidePanel>
 
-      {/* "+" info panel — real project/user data via GET /clients/:id/summary */}
+      {/* "+" info panel */}
       <SlidePanel
         open={infoPanelOpen}
         onClose={() => setInfoPanelOpen(false)}
         title={
-          infoPanelClient && (
+          infoPanelClient ? (
             <div className="flex items-center gap-3">
               <ClientAvatar client={infoPanelClient} index={0} />
               <div className="min-w-0">
                 <p className="truncate">{infoPanelClient.name}</p>
               </div>
             </div>
+          ) : (
+            "Cliente"
           )
         }
         subtitle={
-          infoPanelClient &&
-          `${formatCompanySequenceId(infoPanelClient.sequence_number)} · ${infoPanelClient.address || "Localização não informada"}`
+          infoPanelClient
+            ? `${formatClientSequenceId(infoPanelClient.sequence_number)} · ${infoPanelClient.address || "Endereço não informado"}`
+            : undefined
         }
+        widthMode="compact"
+        compactWidth={480}
       >
-        {infoPanelClient && (
+        {infoPanelClient && (() => {
+          const link = infoPanelClient.links[0];
+          const linkType: LinkType = !link ? "none" : link.agency_id ? "agency" : link.company_id ? "company" : "partner";
+          const linkName =
+            linkType === "agency" ? agencyNameById[link!.agency_id!] :
+            linkType === "company" ? companyNameById[link!.company_id!] :
+            linkType === "partner" ? partnerNameById[link!.partner_id!] : undefined;
+          return (
           <div className="flex-1 overflow-y-auto p-5">
-            <div className="max-w-3xl mx-auto space-y-6">
+            <div className="space-y-6">
               <div>
                 <h3 className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-3">
-                  Dados da empresa
+                  Dados do cliente
                 </h3>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div className="rounded-xl border border-slate-200 dark:border-slate-700 p-3.5">
@@ -981,103 +1072,242 @@ export default function AdminClientesPage() {
                     </p>
                   </div>
                   <div className="rounded-xl border border-slate-200 dark:border-slate-700 p-3.5">
-                    <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide mb-1.5">CNPJ · Usuários</p>
+                    <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide mb-1.5">Documento · Tipo</p>
                     <p className="flex items-center gap-1.5 text-sm font-mono text-slate-700 dark:text-slate-300">
                       <Hash className="h-3.5 w-3.5 text-slate-400 flex-shrink-0" />
-                      {infoPanelClient.cnpj || "—"}
+                      {infoPanelClient.document || "—"}
                     </p>
-                    <p className="flex items-center gap-1.5 text-sm text-slate-700 dark:text-slate-300 mt-1">
-                      <Users className="h-3.5 w-3.5 text-slate-400 flex-shrink-0" />
-                      {infoPanelClient._count?.users ?? 0} usuário{(infoPanelClient._count?.users ?? 0) !== 1 ? "s" : ""}
+                    <p className="text-sm text-slate-700 dark:text-slate-300 mt-1">
+                      {infoPanelClient.type === "pj" ? "Pessoa Jurídica" : "Pessoa Física"}
                     </p>
                   </div>
                   <div className="rounded-xl border border-slate-200 dark:border-slate-700 p-3.5">
                     <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide mb-1.5">Status</p>
-                    <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-bold border ${STATUS_DOT_CLASSES[infoPanelClient.status] ?? STATUS_DOT_CLASSES.ativo}`}>
+                    <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-bold border ${STATUS_DOT_CLASSES[infoPanelClient.status] ?? STATUS_DOT_CLASSES.active}`}>
                       {STATUS_CONFIG[infoPanelClient.status]?.label ?? infoPanelClient.status ?? "Ativo"}
                     </span>
                   </div>
                   <div className="rounded-xl border border-slate-200 dark:border-slate-700 p-3.5">
-                    <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide mb-1.5">Segmento · Tipo</p>
-                    <p className="text-sm text-slate-700 dark:text-slate-300">
-                      {(infoPanelClient.segment || "—") + " · " + getCompanyTypeLabel(infoPanelClient.type)}
+                    <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide mb-1.5">Vínculo</p>
+                    <p className="flex items-center gap-1.5 text-sm text-slate-700 dark:text-slate-300">
+                      <Link2 className="h-3.5 w-3.5 text-slate-400 flex-shrink-0" />
+                      {linkType === "none" ? "Sem vínculo" : `${linkType === "agency" ? "Agency" : linkType === "company" ? "Company" : "Partner"}${linkName ? " · " + linkName : ""}`}
                     </p>
                   </div>
                   <div className="rounded-xl border border-slate-200 dark:border-slate-700 p-3.5 sm:col-span-2">
-                    <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide mb-1.5">Membro desde</p>
+                    <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide mb-1.5">Endereço</p>
+                    <p className="flex items-start gap-1.5 text-sm text-slate-700 dark:text-slate-300">
+                      <MapPin className="h-3.5 w-3.5 text-slate-400 flex-shrink-0 mt-0.5" />
+                      <span>
+                        {[infoPanelClient.address, infoPanelClient.city, infoPanelClient.state, infoPanelClient.zip_code]
+                          .filter(Boolean)
+                          .join(" · ") || "Não informado"}
+                      </span>
+                    </p>
+                  </div>
+                  <div className="rounded-xl border border-slate-200 dark:border-slate-700 p-3.5 sm:col-span-2">
+                    <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide mb-1.5">Cadastrado em</p>
                     <p className="text-sm text-slate-700 dark:text-slate-300">
                       {infoPanelClient.created_at ? fmtDate(infoPanelClient.created_at) : "—"}
                     </p>
                   </div>
+                  {infoPanelClient.notes && (
+                    <div className="rounded-xl border border-slate-200 dark:border-slate-700 p-3.5 sm:col-span-2">
+                      <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide mb-1.5">Observações</p>
+                      <p className="text-sm text-slate-700 dark:text-slate-300 whitespace-pre-wrap">{infoPanelClient.notes}</p>
+                    </div>
+                  )}
                 </div>
-              </div>
-
-              <div>
-                <h3 className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-3">Projetos</h3>
-                {infoPanelLoading ? (
-                  <p className="text-xs text-slate-400">Carregando...</p>
-                ) : infoPanelSummary ? (
-                  <>
-                    <p className="text-sm text-slate-600 dark:text-slate-300 mb-3">
-                      <span className="text-2xl font-bold text-slate-800 dark:text-slate-100 mr-2">
-                        {infoPanelSummary.projects.total}
-                      </span>
-                      projeto{infoPanelSummary.projects.total !== 1 ? "s" : ""} no total
-                    </p>
-                    {infoPanelSummary.projects.total > 0 ? (
-                      <div className="flex flex-wrap gap-2">
-                        {Object.entries(infoPanelSummary.projects.byStatus).map(([status, count]) => (
-                          <span
-                            key={status}
-                            className="inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold border border-slate-300 bg-slate-100 text-slate-700 dark:bg-slate-800 dark:border-slate-600 dark:text-slate-300"
-                          >
-                            {PROJECT_STATUS_LABELS[status] || status}
-                            <span className="rounded-full bg-slate-700 text-white dark:bg-slate-500 px-1.5 text-[10px] font-bold">
-                              {count}
-                            </span>
-                          </span>
-                        ))}
-                      </div>
-                    ) : (
-                      <p className="text-xs text-slate-400">Nenhum projeto cadastrado para esta empresa.</p>
-                    )}
-                  </>
-                ) : (
-                  <p className="text-xs text-slate-400">Não foi possível carregar os projetos.</p>
-                )}
-              </div>
-
-              <div>
-                <h3 className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-3">Usuários vinculados</h3>
-                {infoPanelLoading ? (
-                  <p className="text-xs text-slate-400">Carregando...</p>
-                ) : infoPanelSummary && infoPanelSummary.users.length > 0 ? (
-                  <div className="space-y-2">
-                    {infoPanelSummary.users.map((u) => (
-                      <div key={u.id} className="flex items-center justify-between rounded-xl border border-slate-200 dark:border-slate-700 px-3.5 py-2.5">
-                        <div className="min-w-0">
-                          <p className="text-sm font-medium text-slate-700 dark:text-slate-300 truncate">{u.name}</p>
-                          <p className="text-xs text-slate-400 truncate">{u.email}</p>
-                        </div>
-                        <span
-                          className={`flex-shrink-0 ml-3 inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-bold border ${
-                            u.is_active
-                              ? "border-emerald-500 bg-emerald-200 text-emerald-900 dark:bg-emerald-800/70 dark:text-emerald-100"
-                              : "border-slate-400 bg-slate-300 text-slate-800 dark:bg-slate-800 dark:text-slate-300"
-                          }`}
-                        >
-                          {u.is_active ? "Ativo" : "Inativo"}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <p className="text-xs text-slate-400">Nenhum usuário cadastrado para esta empresa.</p>
-                )}
               </div>
             </div>
           </div>
-        )}
+          );
+        })()}
+      </SlidePanel>
+
+      {/* Criar / editar cliente */}
+      <SlidePanel
+        open={formOpen}
+        onClose={closeForm}
+        title={editingId ? "Editar cliente" : "Criar novo cliente"}
+        subtitle={editingId ? "Altere os dados e/ou o vínculo deste cliente" : "Defina os dados e o vínculo (opcional) deste cliente"}
+        widthMode="compact"
+        compactWidth={480}
+        footer={
+          <div className="flex items-center justify-end gap-2">
+            <Button variant="outline" onClick={closeForm} disabled={saving}>
+              Cancelar
+            </Button>
+            <Button onClick={handleSave} disabled={saving} className="btn-brand">
+              {saving ? "Salvando..." : editingId ? "Salvar alterações" : "Salvar cliente"}
+            </Button>
+          </div>
+        }
+      >
+        <div className="flex-1 overflow-y-auto p-5 space-y-4">
+          <div className="space-y-2">
+            <Label>Nome / Razão social *</Label>
+            <Input
+              placeholder="Ex: Empresa XYZ Ltda ou João Silva"
+              value={form.name}
+              onChange={(e) => setForm({ ...form, name: e.target.value })}
+            />
+          </div>
+
+          <div className="space-y-2">
+            <Label>Tipo</Label>
+            <Select value={form.type} onValueChange={(v: "pj" | "pf") => setForm({ ...form, type: v })}>
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="pj">Pessoa Jurídica (PJ)</SelectItem>
+                <SelectItem value="pf">Pessoa Física (PF)</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="space-y-2">
+            <Label>Documento {form.type === "pj" ? "(CNPJ)" : "(CPF)"}</Label>
+            <Input
+              placeholder={form.type === "pj" ? "00.000.000/0001-00" : "000.000.000-00"}
+              value={form.document}
+              onChange={(e) => setForm({ ...form, document: e.target.value })}
+            />
+          </div>
+
+          <div className="space-y-2">
+            <Label>E-mail</Label>
+            <Input
+              type="email"
+              placeholder="contato@cliente.com"
+              value={form.email}
+              onChange={(e) => setForm({ ...form, email: e.target.value })}
+            />
+          </div>
+
+          <div className="space-y-2">
+            <Label>Telefone</Label>
+            <Input
+              placeholder="(11) 98765-4321"
+              value={form.phone}
+              onChange={(e) => setForm({ ...form, phone: e.target.value })}
+            />
+          </div>
+
+          <div className="space-y-2">
+            <Label>Segmento</Label>
+            <Input
+              placeholder="Ex: Varejo, Educação, Saúde..."
+              value={form.segment}
+              onChange={(e) => setForm({ ...form, segment: e.target.value })}
+            />
+          </div>
+
+          <div className="space-y-2">
+            <Label>Website</Label>
+            <Input
+              placeholder="https://cliente.com"
+              value={form.website}
+              onChange={(e) => setForm({ ...form, website: e.target.value })}
+            />
+          </div>
+
+          <div className="space-y-2">
+            <Label>Status</Label>
+            <Select value={form.status} onValueChange={(v) => setForm({ ...form, status: v })}>
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="active">Ativo</SelectItem>
+                <SelectItem value="inactive">Inativo</SelectItem>
+                <SelectItem value="prospect">Prospecto</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="pt-2 border-t border-slate-100 dark:border-slate-800 space-y-3">
+            <h3 className="text-sm font-semibold text-slate-700 dark:text-slate-300">Endereço</h3>
+            <Input
+              placeholder="Rua / Avenida"
+              value={form.address}
+              onChange={(e) => setForm({ ...form, address: e.target.value })}
+            />
+            <div className="grid grid-cols-2 gap-3">
+              <Input
+                placeholder="Cidade"
+                value={form.city}
+                onChange={(e) => setForm({ ...form, city: e.target.value })}
+              />
+              <Input
+                placeholder="Estado (UF)"
+                maxLength={2}
+                value={form.state}
+                onChange={(e) => setForm({ ...form, state: e.target.value.toUpperCase() })}
+              />
+            </div>
+            <Input
+              placeholder="CEP"
+              value={form.zip_code}
+              onChange={(e) => setForm({ ...form, zip_code: e.target.value })}
+            />
+          </div>
+
+          <div className="pt-2 border-t border-slate-100 dark:border-slate-800 space-y-2">
+            <Label>Observações</Label>
+            <Textarea
+              placeholder="Notas sobre este cliente..."
+              value={form.notes}
+              onChange={(e) => setForm({ ...form, notes: e.target.value })}
+              className="h-24"
+            />
+          </div>
+
+          {/* Vínculo — exclusivo do Admin */}
+          <div className="pt-2 border-t border-slate-100 dark:border-slate-800 space-y-3">
+            <h3 className="text-sm font-semibold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
+              <Link2 className="h-3.5 w-3.5 text-slate-400" />
+              Vínculo
+            </h3>
+            <div className="space-y-2">
+              <Label>Este cliente pertence a</Label>
+              <Select
+                value={form.linkType}
+                onValueChange={(v: LinkType) => setForm({ ...form, linkType: v, linkId: "" })}
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">Sem vínculo</SelectItem>
+                  <SelectItem value="agency">Agency</SelectItem>
+                  <SelectItem value="company">Company</SelectItem>
+                  <SelectItem value="partner">Partner</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            {form.linkType !== "none" && (
+              <div className="space-y-2">
+                <Label>
+                  {form.linkType === "agency" ? "Qual Agency" : form.linkType === "company" ? "Qual Company" : "Qual Partner"}
+                </Label>
+                <Select value={form.linkId} onValueChange={(v) => setForm({ ...form, linkId: v })}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Selecione..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {currentLinkOptions.map((o) => (
+                      <SelectItem key={o.id} value={o.id}>{o.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+          </div>
+
+          {formError && <p className="text-xs text-red-600">{formError}</p>}
+        </div>
       </SlidePanel>
     </div>
   );

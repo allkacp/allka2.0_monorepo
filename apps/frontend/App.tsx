@@ -165,6 +165,9 @@ const PartnerSaquesPage = React.lazy(
 const PartnerRelatoriosPage = React.lazy(
   () => import("@/app/partner/relatorios/page"),
 );
+const PartnerClientesPage = React.lazy(
+  () => import("@/app/partner/clientes/page"),
+);
 
 // ─── Empresa Pages ──────────────────────────────────────────────────────────
 const CompanyDashboardPage = React.lazy(
@@ -185,6 +188,9 @@ const EmpresaProdutosPage = React.lazy(
 );
 const CompanyRelatoriosPage = React.lazy(
   () => import("@/app/company/relatorios/page"),
+);
+const CompanyClientesPage = React.lazy(
+  () => import("@/app/company/clientes/page"),
 );
 
 // ─── Agência Pages ─────────────────────────────────────────────────────────
@@ -239,6 +245,7 @@ const LiderPerfilPage = React.lazy(() => import("@/app/lider/perfil/page"));
 const LiderNomadesPage = React.lazy(() => import("@/app/lider/nomades/page"));
 const LiderCatalogoPage = React.lazy(() => import("@/app/lider/catalogo/page"));
 const LiderProjetosPage = React.lazy(() => import("@/app/lider/projetos/page"));
+const LiderClientesPage = React.lazy(() => import("@/app/lider/clientes/page"));
 
 // ─── Auth Guard ──────────────────────────────────────────────────────────
 function RequireAuth({ children }: { children: React.ReactNode }) {
@@ -857,6 +864,10 @@ export default function App() {
                     path="/partner/relatorios"
                     element={<PartnerRelatoriosPage />}
                   />
+                  <Route
+                    path="/partner/clientes"
+                    element={<PartnerClientesPage />}
+                  />
 
                   {/* ─── Parceiro ─────────────────────────────────────────── */}
                   <Route
@@ -883,6 +894,10 @@ export default function App() {
                     path="/parceiro/relatorios"
                     element={<Navigate to="/partner/relatorios" replace />}
                   />
+                  <Route
+                    path="/parceiro/clientes"
+                    element={<Navigate to="/partner/clientes" replace />}
+                  />
 
                   {/* ─── Empresa ──────────────────────────────────────────── */}
                   <Route
@@ -908,6 +923,10 @@ export default function App() {
                   <Route
                     path="/company/relatorios"
                     element={<CompanyRelatoriosPage />}
+                  />
+                  <Route
+                    path="/company/clientes"
+                    element={<CompanyClientesPage />}
                   />
 
                   {/* ─── Agency (novo) ────────────────────────────────────── */}
@@ -1031,6 +1050,10 @@ export default function App() {
                     path="/leader/projetos"
                     element={<LiderProjetosPage />}
                   />
+                  <Route
+                    path="/leader/clientes"
+                    element={<LiderClientesPage />}
+                  />
 
                   {/* ─── Líder ─────────────────────────────────────── */}
                   <Route
@@ -1072,6 +1095,10 @@ export default function App() {
                   <Route
                     path="/lider/projetos"
                     element={<Navigate to="/leader/projetos" replace />}
+                  />
+                  <Route
+                    path="/lider/clientes"
+                    element={<Navigate to="/leader/clientes" replace />}
                   />
 
                   {/* Fallback — redireciona para o dashboard do perfil ativo */}

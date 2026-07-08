@@ -5,6 +5,7 @@ import cors from "cors";
 import authRouter from "./routes/auth";
 import usersRouter from "./routes/users";
 import clientsRouter from "./routes/clients";
+import clientRecordsRouter from "./routes/client-records";
 import projectsRouter from "./routes/projects";
 import tasksRouter from "./routes/tasks";
 import dashboardRouter from "./routes/dashboard";
@@ -114,6 +115,9 @@ app.get("/api/admin/health-check", async (_req, res, next) => {
 app.use("/api/auth", authRouter);
 app.use("/api/users", usersRouter);
 app.use("/api/clients", clientsRouter);
+// Rota nova e paralela da entidade real Client (separada de Company).
+// /api/clients continua intocado, servindo o legado (Company).
+app.use("/api/client-records", clientRecordsRouter);
 app.use("/api/projects", projectsRouter);
 app.use("/api/tasks", tasksRouter);
 app.use("/api/dashboard", dashboardRouter);

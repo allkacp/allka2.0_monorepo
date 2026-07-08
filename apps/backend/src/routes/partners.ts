@@ -92,6 +92,45 @@ function toAdminWithdrawalDTO(w: {
   };
 }
 
+// PartnerCommission.status hoje é só documentado como pending|approved|paid
+// (ver schema.prisma) — o frontend (app/parceiro/comissoes/page.tsx, rota
+// real /partner/comissoes) espera pending|confirmed|paid|cancelled. Único
+// remapeamento necessário: approved → confirmed.
+function toCommissionDTO(c: {
+  id: string;
+  partner_id: string;
+  amount: number;
+  status: string;
+  company_name: string | null;
+  project_name: string | null;
+  created_at: Date;
+  campaign: { name: string; type: string } | null;
+}) {
+  // sourceType/sourceName são derivados, não inventados: uma comissão sem
+  // campaign vinculada é uma indicação direta (referral); com campaign, o
+  // tipo vem de Campaign.type (coupon | link | referral) — "link" cai em
+  // "campaign" por ser o rótulo mais próximo que o frontend já reconhece.
+  const sourceType: "campaign" | "coupon" | "referral" = !c.campaign
+    ? "referral"
+    : c.campaign.type === "coupon"
+      ? "coupon"
+      : c.campaign.type === "referral"
+        ? "referral"
+        : "campaign";
+
+  return {
+    id: c.id,
+    partnerId: c.partner_id,
+    sourceType,
+    sourceName: c.campaign?.name ?? "Indicação direta",
+    companyName: c.company_name ?? "—",
+    projectName: c.project_name ?? undefined,
+    commissionAmount: c.amount,
+    status: c.status === "approved" ? "confirmed" : c.status,
+    convertedAt: c.created_at.toISOString(),
+  };
+}
+
 // GET /api/partners
 router.get("/", verifyToken, async (req, res, next) => {
   try {
@@ -251,6 +290,41 @@ router.get("/me", verifyToken, async (req, res, next) => {
     };
 
     res.json({ profile, projects });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// GET /api/partners/me/commissions — comissões do próprio Partner logado.
+// Antes disso o frontend chamava getPartnerCommissions("me"), que montava
+// "/partners/me/commissions" — rota que nunca existiu de verdade: caía em
+// "/:id/commissions" com id="me", retornando sempre uma lista vazia (200,
+// sem erro nenhum). Essa rota "/me/commissions" real substitui isso.
+// Registrada ANTES de "/:id" pelo mesmo motivo do "/me" acima.
+router.get("/me/commissions", verifyToken, requirePartner, async (req, res, next) => {
+  try {
+    const { page, limit, skip } = parsePagination(req.query);
+
+    const partner = await prisma.partnerProfile.findUnique({
+      where: { user_id: req.user!.id },
+    });
+    if (!partner) {
+      res.status(404).json({ error: "Perfil de parceiro não encontrado" });
+      return;
+    }
+
+    const [total, data] = await Promise.all([
+      prisma.partnerCommission.count({ where: { partner_id: partner.id } }),
+      prisma.partnerCommission.findMany({
+        where: { partner_id: partner.id },
+        include: { campaign: { select: { name: true, type: true } } },
+        skip,
+        take: limit,
+        orderBy: { created_at: "desc" },
+      }),
+    ]);
+
+    res.json({ data: data.map(toCommissionDTO), total, page, limit });
   } catch (err) {
     next(err);
   }

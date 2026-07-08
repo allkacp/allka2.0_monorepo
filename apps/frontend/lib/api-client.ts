@@ -236,6 +236,36 @@ class ApiClient {
     return this.del(`/clients/${id}`);
   }
 
+  // ─── Client Records (entidade real Client, separada de Company) ───────────
+  // NÃO confundir com getClients/createClient/getProjectClients/
+  // createProjectClient acima — esses são aliases do legado que operam sobre
+  // Company via /clients. Client é uma entidade própria (tabela `clients`,
+  // vinculada a Agency/Company/Partner via ClientLink), servida por
+  // /api/client-records.
+  async getClientRecords(filters?: Record<string, any>) {
+    return this.get("/client-records", filters);
+  }
+
+  async getClientRecord(id: string) {
+    return this.get(`/client-records/${id}`);
+  }
+
+  async createClientRecord(data: Record<string, any>) {
+    return this.post("/client-records", data);
+  }
+
+  // Admin-only — edita campos principais do Client (não mexe em vínculo).
+  async updateClientRecord(id: string, data: Record<string, any>) {
+    return this.put(`/client-records/${id}`, data);
+  }
+
+  // Admin-only — define/troca/remove o vínculo do Client com Agency/Company/
+  // Partner. Envie { agency_id } ou { company_id } ou { partner_id }, ou
+  // {} / campos null pra desvincular.
+  async updateClientRecordLink(id: string, data: Record<string, any>) {
+    return this.put(`/client-records/${id}/link`, data);
+  }
+
   // ─── Projects ─────────────────────────────────────────────────────────────
   async getProjects(filters?: Record<string, any>) {
     return this.get("/projects", filters);
@@ -411,11 +441,15 @@ class ApiClient {
   }
 
   async getPartnerCommissions(id: string | number) {
-    const path =
-      String(id) === "me"
-        ? "/partners/me/commissions"
-        : `/partners/${id}/commissions`;
-    return this.get(path);
+    return this.get(`/partners/${id}/commissions`);
+  }
+
+  // Comissões do próprio Partner logado — rota real (/partners/me/commissions).
+  // Antes disso o front chamava getPartnerCommissions("me"), que montava
+  // "/partners/me/commissions" mas caía silenciosamente em "/:id/commissions"
+  // com id="me" (200, lista sempre vazia, nenhum erro).
+  async getMyPartnerCommissions() {
+    return this.get("/partners/me/commissions");
   }
 
   async createPartner(data: Record<string, any>) {

@@ -46,21 +46,19 @@ export interface PartnerStats {
 export interface PartnerCommission {
   id: string;
   partnerId: string;
-  /** Campaign or coupon that triggered this commission */
-  sourceType: "campaign" | "coupon";
+  /** Campaign, coupon or direct referral that triggered this commission —
+   *  derived server-side from PartnerCommission.campaign?.type (falls back
+   *  to "referral" when there's no linked campaign). */
+  sourceType: "campaign" | "coupon" | "referral";
   sourceName: string;
   /** Company that converted */
   companyName: string;
-  companyId: string;
   /** Project contracted */
   projectName?: string;
   projectValue?: number;
-  commissionType: "percentage" | "fixed";
-  commissionValue: number;
   commissionAmount: number;
   status: "pending" | "confirmed" | "paid" | "cancelled";
   convertedAt: string;
-  paidAt?: string;
 }
 
 export interface PartnerWithdrawal {

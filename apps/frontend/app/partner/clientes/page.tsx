@@ -49,12 +49,9 @@ import { apiClient } from "@/lib/api-client";
 
 // Client é uma entidade real, separada de Company — servida por
 // /api/client-records (NÃO /api/clients, que é o legado sobre Company).
-// Layout desta tela replica o padrão visual de admin/clientes (cards de
-// stat em gradiente, toolbar com busca + ícones, tabela com header/coluna
-// de ações fixos e zebra, paginação espelhada em cima/embaixo, painel de
-// filtros e de configurar colunas) — adaptado aos campos reais do Client
-// (sem cnpj/logo/LGPD/_count de projetos-usuários-faturas, que são coisas
-// de Company e não existem aqui).
+// Mesmo layout/comportamento de agencia/clientes: o Partner só vê e cria
+// clientes vinculados a ele mesmo, sem picker de vínculo (o backend
+// vincula automaticamente ao PartnerProfile logado).
 interface ClientLink {
   id: string;
   agency_id: string | null;
@@ -94,8 +91,6 @@ function fmtDate(d: string) {
   return new Date(d).toLocaleDateString("pt-BR");
 }
 
-// ── Avatar (mesma receita do ClientAvatar de admin/clientes, sem logo —
-// Client não tem campo de logo) ──────────────────────────────────────────
 const clientInitials = (name: string) =>
   (name || "")
     .split(" ")
@@ -150,7 +145,6 @@ const ALL_COLUMNS: { key: ColKey; label: string; info: string }[] = [
 ];
 const DEFAULT_VISIBLE: ColKey[] = ["cliente", "segmento", "contato", "tipo", "status", "cadastro"];
 
-// Gradient stat-card treatment matching admin/clientes' STAT_COLOR_MAP
 const STAT_COLOR_MAP = {
   blue: {
     gradient: "from-blue-500 to-blue-700",
@@ -218,11 +212,11 @@ const EMPTY_FORM = {
   notes: "",
 };
 
-export default function AgenciaClientesPage() {
+export default function PartnerClientesPage() {
   const [clients, setClients] = useState<ClientRecord[]>([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
-  const [pageSize, setPageSize] = useItemsPerPage("agencia-clientes", 10);
+  const [pageSize, setPageSize] = useItemsPerPage("partner-clientes", 10);
   const [search, setSearch] = useState("");
   const [searchInput, setSearchInput] = useState("");
   const [searchFocused, setSearchFocused] = useState(false);
@@ -239,9 +233,6 @@ export default function AgenciaClientesPage() {
   const [visibleCols, setVisibleCols] = useState<Set<ColKey>>(new Set(DEFAULT_VISIBLE));
   const [pageJumpValue, setPageJumpValue] = useState("");
 
-  // "+" info panel — dados já carregados na própria linha (Client não tem
-  // endpoint de summary separado, nem relações de projetos/usuários/faturas
-  // como Company tem).
   const [infoPanelOpen, setInfoPanelOpen] = useState(false);
   const [infoPanelClient, setInfoPanelClient] = useState<ClientRecord | null>(null);
   const openInfoPanel = useCallback((client: ClientRecord) => {
@@ -249,7 +240,6 @@ export default function AgenciaClientesPage() {
     setInfoPanelOpen(true);
   }, []);
 
-  // ── Criar novo cliente ──────────────────────────────────────────────────
   const [createOpen, setCreateOpen] = useState(false);
   const [form, setForm] = useState(EMPTY_FORM);
   const [formError, setFormError] = useState("");
@@ -513,10 +503,10 @@ export default function AgenciaClientesPage() {
     <div ref={pageRef} className="p-4 sm:p-6 space-y-4">
       <PageHeader
         title="Clientes"
-        description="Clientes vinculados à sua agência"
+        description="Clientes vinculados ao seu perfil de Partner"
         actions={
           <>
-            <ExportButton pageRef={pageRef} filename="clientes-agencia" />
+            <ExportButton pageRef={pageRef} filename="clientes-partner" />
             <TooltipProvider delayDuration={400}>
               <Tooltip>
                 <TooltipTrigger asChild>
@@ -541,7 +531,6 @@ export default function AgenciaClientesPage() {
         }
       />
 
-      {/* Stats — gradient cards matching admin/clientes */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         <StatCard label="Total de Clientes" value={total} icon={Tag} color="blue" />
         <StatCard label="Pessoa Jurídica" value={totalPj} icon={Building2} color="violet" />
@@ -549,9 +538,7 @@ export default function AgenciaClientesPage() {
         <StatCard label="Ativos" value={totalActive} icon={Tag} color="orange" />
       </div>
 
-      {/* Card wrapping the whole table, toolbar rows included */}
       <div className="bg-white dark:bg-slate-900 border border-[#e8edf5] dark:border-slate-700 rounded-xl shadow-sm overflow-hidden">
-        {/* Row 1 — search + icon toolbar buttons */}
         <div className="flex items-center gap-2 flex-wrap px-[18px] py-3">
           <div ref={searchBoxRef} className="relative flex-1 min-w-[220px] max-w-sm">
             <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -595,7 +582,6 @@ export default function AgenciaClientesPage() {
           </div>
         </div>
 
-        {/* Row 2 — items-per-page + count + scrollbar mirror + numbered pagination */}
         <div className="flex flex-wrap items-center justify-between gap-3 px-[18px] py-2 border-y border-[#e8edf5] dark:border-slate-800 bg-white dark:bg-slate-900/30">
           <div className="flex items-center gap-3">
             <ItemsPerPageSelect
@@ -621,7 +607,6 @@ export default function AgenciaClientesPage() {
           {totalPages > 1 && <PaginationControls />}
         </div>
 
-        {/* Table */}
         {loading ? (
           <div className="flex items-center justify-center py-16 gap-2 text-muted-foreground">
             <Loader2 className="h-5 w-5 animate-spin" />
@@ -636,7 +621,7 @@ export default function AgenciaClientesPage() {
           <div className="flex flex-col items-center justify-center py-16 gap-2 text-muted-foreground">
             <Building2 className="h-8 w-8 opacity-40" />
             <span className="text-sm">Nenhum cliente encontrado</span>
-            <span className="text-xs">Clientes vinculados à sua agência aparecerão aqui. Clique em "Criar novo cliente" para começar.</span>
+            <span className="text-xs">Clientes vinculados ao seu perfil de Partner aparecerão aqui. Clique em "Criar novo cliente" para começar.</span>
           </div>
         ) : (
           <div ref={tableScrollRef} onScroll={handleTableScroll} className="overflow-x-auto allka-table-scroll-body">
@@ -699,8 +684,6 @@ export default function AgenciaClientesPage() {
                         : "bg-[#DCE3EE] dark:bg-[oklch(0.185_0.024_258)] hover:bg-[#C7D2E3] dark:hover:bg-[oklch(0.21_0.024_258)]"
                     }`}
                   >
-                    {/* Actions — pinned. Só o "+" de mais informações existe:
-                        não há tela de detalhe/edição de Client ainda. */}
                     <td
                       className={`px-1 py-2 transition-colors ${
                         i % 2 === 0
@@ -810,7 +793,6 @@ export default function AgenciaClientesPage() {
           </div>
         )}
 
-        {/* Row 3 — bottom mirror of row 2 */}
         {rows.length > 0 && (
           <div className="flex flex-wrap items-center justify-between gap-3 px-[18px] py-2 border-t border-[#e8edf5] dark:border-slate-800 bg-white dark:bg-slate-900/20">
             <div className="flex items-center gap-3">
@@ -890,7 +872,7 @@ export default function AgenciaClientesPage() {
         </div>
       </SlidePanel>
 
-      {/* "+" info panel — dados já carregados na linha, sem chamada extra */}
+      {/* "+" info panel */}
       <SlidePanel
         open={infoPanelOpen}
         onClose={() => setInfoPanelOpen(false)}
@@ -988,7 +970,7 @@ export default function AgenciaClientesPage() {
         open={createOpen}
         onClose={closeCreate}
         title="Criar novo cliente"
-        subtitle="O cliente será vinculado automaticamente à sua agência"
+        subtitle="O cliente será vinculado automaticamente ao seu perfil de Partner"
         widthMode="compact"
         compactWidth={480}
         footer={
