@@ -102,8 +102,9 @@ import { useToast } from "@/components/ui/use-toast";
 import { useSidebar } from "@/contexts/sidebar-context";
 import { PageHeader } from "@/components/page-header";
 
-type ColKey = "usuario" | "contato" | "tipo_funcao" | "vinculo" | "status" | "ultimo_acesso";
+type ColKey = "codigo" | "usuario" | "contato" | "tipo_funcao" | "vinculo" | "status" | "ultimo_acesso";
 const ALL_COLUMNS: { key: ColKey; label: string; info: string }[] = [
+  { key: "codigo", label: "Código", info: "Código público sequencial do usuário (ex.: 00001). Não é o id técnico." },
   { key: "usuario", label: "Usuário", info: "Nome, e-mail e status de presença do usuário." },
   { key: "contato", label: "Contato", info: "Atalhos para ligar ou chamar no WhatsApp." },
   { key: "tipo_funcao", label: "Tipo / Função", info: "Tipo de conta, função na plataforma e sinalizações de LGPD." },
@@ -111,7 +112,7 @@ const ALL_COLUMNS: { key: ColKey; label: string; info: string }[] = [
   { key: "status", label: "Status", info: "Situação da conta: ativo, bloqueado ou pausado automaticamente." },
   { key: "ultimo_acesso", label: "Último Acesso", info: "Data do último login e tempo de inatividade." },
 ];
-const DEFAULT_VISIBLE: ColKey[] = ["usuario", "contato", "tipo_funcao", "vinculo", "status", "ultimo_acesso"];
+const DEFAULT_VISIBLE: ColKey[] = ["codigo", "usuario", "contato", "tipo_funcao", "vinculo", "status", "ultimo_acesso"];
 
 // ── Conta vinculada (Agency/Company/Partner/Nômade) ────────────────────────
 const LINK_TYPE_LABEL: Record<string, string> = {
@@ -2580,6 +2581,16 @@ export default function UsuariosPage() {
                         }}
                       >
                         <div className="inline-flex items-center gap-1">
+                          {col.key === "codigo" && (
+                            <SortableHeader
+                              label={col.label}
+                              field="user_code"
+                              type="text"
+                              sortKey={userSortKey ? String(userSortKey) : null}
+                              sortDir={userSortDir}
+                              onSort={handleUserSort}
+                            />
+                          )}
                           {col.key === "usuario" && (
                             <SortableHeader
                               label={col.label}
@@ -2764,6 +2775,14 @@ export default function UsuariosPage() {
                             </TooltipProvider>
                           </div>
                         </td>
+
+                        {visibleCols.has("codigo") && (
+                          <td className="py-3 px-4" style={{ borderRight: "1px solid rgba(148,163,184,0.15)" }}>
+                            <span className="text-xs font-mono text-slate-500 dark:text-slate-400">
+                              {user.user_code || "—"}
+                            </span>
+                          </td>
+                        )}
 
                         {visibleCols.has("usuario") && (
                           <td className="py-3 px-4" style={{ borderRight: "1px solid rgba(148,163,184,0.15)" }}>

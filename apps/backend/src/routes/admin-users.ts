@@ -10,10 +10,11 @@ import { parsePagination } from "../middleware/validate";
 // travar aquela rota pra admin-only quebraria esses fluxos existentes.
 const router = Router();
 
-const ALLOWED_SORT = ["name", "email", "created_at", "last_login", "role", "account_type"] as const;
+const ALLOWED_SORT = ["name", "email", "created_at", "last_login", "role", "account_type", "user_code"] as const;
 
 const enrichedSelect = {
   id: true,
+  user_code: true,
   email: true,
   username: true,
   name: true,
@@ -43,10 +44,16 @@ router.get("/", verifyToken, requireRole("admin"), async (req, res, next) => {
     const is_active = req.query.is_active as string | undefined;
     const sortByRaw = req.query.sortBy as string | undefined;
     const sortDirRaw = req.query.sortDir as string | undefined;
-    const sortBy = (ALLOWED_SORT as readonly string[]).includes(sortByRaw ?? "")
+    const sortByExplicit = (ALLOWED_SORT as readonly string[]).includes(sortByRaw ?? "")
       ? (sortByRaw as (typeof ALLOWED_SORT)[number])
-      : "created_at";
+      : undefined;
     const sortDir = sortDirRaw === "asc" ? "asc" : "desc";
+    // Sem sortBy explícito: user_code asc primeiro (nulls por último), com
+    // created_at desc como desempate — cobre tanto os 12 QA com código
+    // quanto qualquer usuário futuro ainda sem user_code atribuído.
+    const orderBy = sortByExplicit
+      ? { [sortByExplicit]: sortDir }
+      : [{ user_code: { sort: "asc" as const, nulls: "last" as const } }, { created_at: "desc" as const }];
 
     const where: Record<string, unknown> = {};
     if (search) {
@@ -67,7 +74,7 @@ router.get("/", verifyToken, requireRole("admin"), async (req, res, next) => {
         select: enrichedSelect,
         skip,
         take: limit,
-        orderBy: { [sortBy]: sortDir },
+        orderBy,
       }),
     ]);
 
@@ -115,6 +122,7 @@ router.get("/", verifyToken, requireRole("admin"), async (req, res, next) => {
 
       return {
         id: u.id,
+        user_code: u.user_code,
         email: u.email,
         username: u.username,
         name: u.name,

@@ -3,6 +3,8 @@ import { apiClient } from "@/lib/api-client"
 
 export interface ApiUser {
   id: string
+  /** Código público/exibido (ex.: "00001") — só pra UI, nunca usar como chave técnica. */
+  user_code?: string | null
   email: string
   name: string
   role: string

@@ -12,6 +12,9 @@ datasource db {
 
 model User {
   id               String    @id @default(cuid())
+  // Código público/exibido (ex.: "00001") — só pra UI (tela Admin > Usuários).
+  // Nunca usar no lugar de `id` em FK ou lookup técnico.
+  user_code        String?   @unique
   email            String    @unique
   username         String?   @unique
   password_hash    String
