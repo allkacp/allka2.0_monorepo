@@ -6,6 +6,8 @@ export interface FrontendProject {
   hasOwner?: boolean;
   ownerType?: "agency" | "company" | "partner" | null;
   ownerName?: string | null;
+  /** id cru do vínculo novo (agency_id/company_id/partner_id, o que estiver preenchido) — usado só pra pré-selecionar no painel de trocar vínculo do Admin. */
+  ownerId?: string | null;
   name: string;
   description: string;
   client: string;
@@ -97,12 +99,15 @@ export function adaptApiProject(api: any): FrontendProject {
       ? api.agency
       : api.client?.referred_by_partner?.user?.name ?? api.client?.name ?? null);
 
+  const ownerId: string | null = api.agency_id || api.company_id || api.partner_id || null;
+
   return {
     id: api.id,
     seq: api._seq ?? null,
     hasOwner: api._hasOwner ?? true,
     ownerType,
     ownerName,
+    ownerId,
     name: api.title || "",
     description: api.description || "",
     client: api.client?.name || "",

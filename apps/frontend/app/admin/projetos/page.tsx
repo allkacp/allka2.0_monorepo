@@ -93,6 +93,7 @@ import {
   Lock,
   CreditCard,
   ArrowRight,
+  Link2,
 } from "lucide-react";
 import { ProjectManagementModal } from "@/components/project-management-modal";
 import { ProjectViewSlidePanel } from "@/components/project-view-slide-panel";
@@ -124,6 +125,13 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { useToast } from "@/components/ui/use-toast";
 import {
   DropdownMenu,
@@ -349,6 +357,79 @@ export default function AdminProjetosPage({
   const pageRef = useRef<HTMLDivElement>(null);
   const projectRouteBase =
     scope === "agency" ? "/agency/projetos" : "/admin/projetos";
+
+  // ── Vínculo (escopo novo agency_id/company_id/partner_id) — exclusivo do Admin ──
+  const [linkPanelOpen, setLinkPanelOpen] = useState(false);
+  const [linkPanelProject, setLinkPanelProject] = useState<FrontendProject | null>(null);
+  const [linkForm, setLinkForm] = useState<{ type: "none" | "agency" | "company" | "partner"; id: string }>({ type: "none", id: "" });
+  const [linkSaving, setLinkSaving] = useState(false);
+  const [linkError, setLinkError] = useState("");
+  const [linkOptions, setLinkOptions] = useState<{
+    agency: { id: string; name: string }[];
+    company: { id: string; name: string }[];
+    partner: { id: string; name: string }[];
+  }>({ agency: [], company: [], partner: [] });
+
+  useEffect(() => {
+    if (scope !== "admin") return;
+    (async () => {
+      try {
+        const [ag, co, pa] = await Promise.all([
+          apiClient.getAgencies({ limit: "200" }),
+          apiClient.getCompanies({ limit: "200" }),
+          apiClient.getPartners({ limit: "200" }),
+        ]);
+        setLinkOptions({
+          agency: ((ag as any).data || []).map((a: any) => ({ id: a.id, name: a.name })),
+          company: ((co as any).data || []).map((c: any) => ({ id: c.id, name: c.name })),
+          partner: ((pa as any).data || []).map((p: any) => ({ id: p.id, name: p.user?.name || p.user?.email || p.id })),
+        });
+      } catch (err) {
+        console.error("[AdminProjetos] Failed to load link options:", err);
+      }
+    })();
+  }, [scope]);
+
+  const currentLinkOptions =
+    linkForm.type === "agency" ? linkOptions.agency : linkForm.type === "company" ? linkOptions.company : linkForm.type === "partner" ? linkOptions.partner : [];
+
+  function openLinkPanel(project: FrontendProject) {
+    setLinkPanelProject(project);
+    setLinkForm({
+      type: (project.ownerType as any) || "none",
+      id: project.ownerId || "",
+    });
+    setLinkError("");
+    setLinkPanelOpen(true);
+  }
+
+  async function saveLink() {
+    if (!linkPanelProject) return;
+    if (linkForm.type !== "none" && !linkForm.id) {
+      setLinkError("Selecione qual Agency/Company/Partner este projeto pertence, ou marque \"Sem vínculo\"");
+      return;
+    }
+    setLinkSaving(true);
+    setLinkError("");
+    try {
+      const payload =
+        linkForm.type === "agency"
+          ? { agency_id: linkForm.id }
+          : linkForm.type === "company"
+            ? { company_id: linkForm.id }
+            : linkForm.type === "partner"
+              ? { partner_id: linkForm.id }
+              : {};
+      await apiClient.updateProjectLink(linkPanelProject.id, payload);
+      toast({ title: "Vínculo atualizado com sucesso!" });
+      setLinkPanelOpen(false);
+      refetchProjects();
+    } catch (err: any) {
+      setLinkError(err?.message ?? "Erro ao atualizar vínculo");
+    } finally {
+      setLinkSaving(false);
+    }
+  }
 
   const [kanbanColumns, setKanbanColumns] = useState([
     { id: "draft", label: "Rascunho", color: "bg-gray-800", count: 0 },
@@ -3083,31 +3164,51 @@ export default function AdminProjetosPage({
                                   overflow: "hidden",
                                 }}
                               >
-                                <div className="flex flex-col gap-0.5">
-                                  <span className="text-xs text-slate-700 font-medium truncate">
-                                    {project.ownerName || "—"}
-                                  </span>
-                                  {project.ownerType && (
-                                    <span
-                                      className={`inline-flex w-fit items-center px-1.5 py-0.5 rounded text-[9px] font-bold leading-none uppercase tracking-wide ${
-                                        project.ownerType === "agency"
-                                          ? "bg-orange-100 text-orange-700"
+                                <div className="flex items-center gap-1.5">
+                                  <div className="flex flex-col gap-0.5 min-w-0">
+                                    <span className="text-xs text-slate-700 font-medium truncate">
+                                      {project.ownerName || "—"}
+                                    </span>
+                                    {project.ownerType && (
+                                      <span
+                                        className={`inline-flex w-fit items-center px-1.5 py-0.5 rounded text-[9px] font-bold leading-none uppercase tracking-wide ${
+                                          project.ownerType === "agency"
+                                            ? "bg-orange-100 text-orange-700"
+                                            : project.ownerType === "partner"
+                                              ? "bg-purple-100 text-purple-700"
+                                              : "bg-blue-100 text-blue-700"
+                                        }`}
+                                      >
+                                        {project.ownerType === "agency"
+                                          ? "Agency"
                                           : project.ownerType === "partner"
-                                            ? "bg-purple-100 text-purple-700"
-                                            : "bg-blue-100 text-blue-700"
-                                      }`}
-                                    >
-                                      {project.ownerType === "agency"
-                                        ? "Agency"
-                                        : project.ownerType === "partner"
-                                          ? "Partner"
-                                          : "Company"}
-                                    </span>
-                                  )}
-                                  {!project.ownerType && (
-                                    <span className="inline-flex w-fit items-center px-1.5 py-0.5 rounded text-[9px] font-bold leading-none bg-amber-100 text-amber-700">
-                                      Sem dono
-                                    </span>
+                                            ? "Partner"
+                                            : "Company"}
+                                      </span>
+                                    )}
+                                    {!project.ownerType && (
+                                      <span className="inline-flex w-fit items-center px-1.5 py-0.5 rounded text-[9px] font-bold leading-none bg-amber-100 text-amber-700">
+                                        Sem dono
+                                      </span>
+                                    )}
+                                  </div>
+                                  {scope === "admin" && (
+                                    <TooltipProvider delayDuration={400}>
+                                      <Tooltip>
+                                        <TooltipTrigger asChild>
+                                          <button
+                                            onClick={(e) => {
+                                              e.stopPropagation();
+                                              openLinkPanel(project);
+                                            }}
+                                            className="shrink-0 h-5 w-5 flex items-center justify-center rounded-full text-slate-400 hover:text-white hover:bg-gradient-to-br hover:from-[#2558FF] hover:via-[#6E2C96] hover:to-[#D92293] transition-all"
+                                          >
+                                            <Link2 className="h-3 w-3" />
+                                          </button>
+                                        </TooltipTrigger>
+                                        <TooltipContent side="top" className="text-xs">Alterar vínculo</TooltipContent>
+                                      </Tooltip>
+                                    </TooltipProvider>
                                   )}
                                 </div>
                               </td>
@@ -5087,6 +5188,66 @@ export default function AdminProjetosPage({
             }
           }}
         />
+
+        {/* Alterar vínculo (agency_id/company_id/partner_id) — exclusivo do Admin */}
+        {scope === "admin" && (
+          <SlidePanel
+            open={linkPanelOpen}
+            onClose={() => { if (!linkSaving) setLinkPanelOpen(false); }}
+            title="Alterar vínculo"
+            subtitle={linkPanelProject ? linkPanelProject.name : undefined}
+            widthMode="compact"
+            compactWidth={420}
+            footer={
+              <div className="flex items-center justify-end gap-2">
+                <Button variant="outline" onClick={() => setLinkPanelOpen(false)} disabled={linkSaving}>
+                  Cancelar
+                </Button>
+                <Button onClick={saveLink} disabled={linkSaving} className="btn-brand">
+                  {linkSaving ? "Salvando..." : "Salvar vínculo"}
+                </Button>
+              </div>
+            }
+          >
+            <div className="flex-1 overflow-y-auto p-5 space-y-4">
+              <div className="space-y-2">
+                <Label>Este projeto pertence a</Label>
+                <Select
+                  value={linkForm.type}
+                  onValueChange={(v: "none" | "agency" | "company" | "partner") => setLinkForm({ type: v, id: "" })}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">Sem vínculo</SelectItem>
+                    <SelectItem value="agency">Agency</SelectItem>
+                    <SelectItem value="company">Company</SelectItem>
+                    <SelectItem value="partner">Partner</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              {linkForm.type !== "none" && (
+                <div className="space-y-2">
+                  <Label>
+                    {linkForm.type === "agency" ? "Qual Agency" : linkForm.type === "company" ? "Qual Company" : "Qual Partner"}
+                  </Label>
+                  <Select value={linkForm.id} onValueChange={(v) => setLinkForm({ ...linkForm, id: v })}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Selecione..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {currentLinkOptions.map((o) => (
+                        <SelectItem key={o.id} value={o.id}>{o.name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
+              {linkError && <p className="text-xs text-red-600">{linkError}</p>}
+            </div>
+          </SlidePanel>
+        )}
       </div>
     </div>
   );

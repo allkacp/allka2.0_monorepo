@@ -1,7 +1,7 @@
 // @ts-nocheck
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { usePartner } from "@/contexts/partner-context";
 import {
   FolderOpen,
@@ -11,14 +11,20 @@ import {
   Search,
   ChevronLeft,
   ChevronRight,
+  Plus,
 } from "lucide-react";
 import { useSorting, SortableHeader } from "@/hooks/useSorting";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { PageLoader } from "@/components/ui/loading";
 import { PageHeader } from "@/components/page-header";
+import { SlidePanel } from "@/components/slide-panel";
 import { useItemsPerPage } from "@/lib/use-items-per-page";
 import { ItemsPerPageSelect } from "@/components/items-per-page-select";
+import { apiClient } from "@/lib/api-client";
+import { useToast } from "@/components/ui/use-toast";
 
 function fmtBRL(n: number) {
   return (n ?? 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
@@ -28,8 +34,63 @@ function fmtDate(s: string) {
   return new Date(s + "T00:00:00").toLocaleDateString("pt-BR");
 }
 
+const EMPTY_OWN_PROJECT_FORM = { title: "", type: "", value: "", description: "" };
+
 export default function PartnerProjetos() {
   const { projects, stats, loading } = usePartner();
+  const { toast } = useToast();
+
+  // ── "Meus Projetos" — projetos próprios do Partner (partner_id), via
+  // /api/projects. Separado de "Projetos Indicados" acima (relatório de
+  // comissão sobre projetos de empresas indicadas, não tocado aqui).
+  const [ownProjects, setOwnProjects] = useState<any[]>([]);
+  const [ownLoading, setOwnLoading] = useState(true);
+  const [ownCreateOpen, setOwnCreateOpen] = useState(false);
+  const [ownForm, setOwnForm] = useState(EMPTY_OWN_PROJECT_FORM);
+  const [ownSaving, setOwnSaving] = useState(false);
+  const [ownError, setOwnError] = useState("");
+
+  const loadOwnProjects = useCallback(async () => {
+    setOwnLoading(true);
+    try {
+      const res: any = await apiClient.getProjects({ limit: "50" });
+      setOwnProjects(Array.isArray(res.data) ? res.data : []);
+    } catch (err) {
+      console.error("[PartnerProjetos] Failed to load own projects:", err);
+    } finally {
+      setOwnLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadOwnProjects();
+  }, [loadOwnProjects]);
+
+  async function handleCreateOwnProject() {
+    if (!ownForm.title.trim()) {
+      setOwnError("Título é obrigatório");
+      return;
+    }
+    setOwnSaving(true);
+    setOwnError("");
+    try {
+      await apiClient.createProject({
+        title: ownForm.title,
+        type: ownForm.type || undefined,
+        value: ownForm.value ? Number(ownForm.value) : undefined,
+        description: ownForm.description || undefined,
+      });
+      toast({ title: "Projeto criado com sucesso!" });
+      setOwnCreateOpen(false);
+      setOwnForm(EMPTY_OWN_PROJECT_FORM);
+      loadOwnProjects();
+    } catch (err: any) {
+      setOwnError(err?.message ?? "Erro ao criar projeto");
+    } finally {
+      setOwnSaving(false);
+    }
+  }
+
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [currentPage, setCurrentPage] = useState(1);
@@ -101,6 +162,93 @@ export default function PartnerProjetos() {
   return (
     <div className="p-4 sm:p-6 space-y-5">
       {/* Header */}
+      {/* Meus Projetos — projetos próprios do Partner, separado do relatório de comissão abaixo */}
+      <div className="rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 shadow-sm overflow-hidden">
+        <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100 dark:border-slate-800">
+          <div>
+            <h2 className="text-sm font-bold text-slate-800 dark:text-slate-100">Meus Projetos</h2>
+            <p className="text-xs text-slate-400">Projetos criados diretamente por você</p>
+          </div>
+          <Button size="sm" className="btn-brand" onClick={() => { setOwnForm(EMPTY_OWN_PROJECT_FORM); setOwnError(""); setOwnCreateOpen(true); }}>
+            <Plus className="h-3.5 w-3.5 mr-1" /> Criar projeto
+          </Button>
+        </div>
+        {ownLoading ? (
+          <div className="py-8 text-center text-sm text-slate-400">Carregando...</div>
+        ) : ownProjects.length === 0 ? (
+          <div className="py-8 text-center text-sm text-slate-400">Nenhum projeto próprio ainda</div>
+        ) : (
+          <div className="divide-y divide-slate-100 dark:divide-slate-800">
+            {ownProjects.map((p: any) => (
+              <div key={p.id} className="flex items-center justify-between px-4 py-2.5">
+                <div className="min-w-0">
+                  <p className="text-sm font-medium text-slate-700 dark:text-slate-200 truncate">{p.title}</p>
+                  <p className="text-[11px] text-slate-400">{p.type || "—"}</p>
+                </div>
+                <div className="flex items-center gap-2 shrink-0">
+                  <span className="text-xs font-semibold text-slate-600 dark:text-slate-300">{fmtBRL(p.value)}</span>
+                  <span className="text-[10px] px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-slate-500">{p.status}</span>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      <SlidePanel
+        open={ownCreateOpen}
+        onClose={() => { if (!ownSaving) setOwnCreateOpen(false); }}
+        title="Criar projeto"
+        subtitle="O projeto será vinculado automaticamente ao seu perfil de Partner"
+        widthMode="compact"
+        compactWidth={420}
+        footer={
+          <div className="flex items-center justify-end gap-2">
+            <Button variant="outline" onClick={() => setOwnCreateOpen(false)} disabled={ownSaving}>Cancelar</Button>
+            <Button onClick={handleCreateOwnProject} disabled={ownSaving} className="btn-brand">
+              {ownSaving ? "Salvando..." : "Salvar projeto"}
+            </Button>
+          </div>
+        }
+      >
+        <div className="flex-1 overflow-y-auto p-5 space-y-4">
+          <div className="space-y-2">
+            <Label>Título *</Label>
+            <Input
+              placeholder="Ex: Campanha de lançamento"
+              value={ownForm.title}
+              onChange={(e) => setOwnForm({ ...ownForm, title: e.target.value })}
+            />
+          </div>
+          <div className="space-y-2">
+            <Label>Tipo</Label>
+            <Input
+              placeholder="Ex: Marketing Digital"
+              value={ownForm.type}
+              onChange={(e) => setOwnForm({ ...ownForm, type: e.target.value })}
+            />
+          </div>
+          <div className="space-y-2">
+            <Label>Valor</Label>
+            <Input
+              type="number"
+              placeholder="0,00"
+              value={ownForm.value}
+              onChange={(e) => setOwnForm({ ...ownForm, value: e.target.value })}
+            />
+          </div>
+          <div className="space-y-2">
+            <Label>Descrição</Label>
+            <Input
+              placeholder="Notas sobre este projeto..."
+              value={ownForm.description}
+              onChange={(e) => setOwnForm({ ...ownForm, description: e.target.value })}
+            />
+          </div>
+          {ownError && <p className="text-xs text-red-600">{ownError}</p>}
+        </div>
+      </SlidePanel>
+
       <PageHeader title="Projetos Indicados" description="Projetos contratados por empresas através do seu link" />
 
       {/* Stats */}

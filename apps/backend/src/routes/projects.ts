@@ -88,10 +88,82 @@ function projectInScope(
   return false;
 }
 
+// ─── New structured scope (agency_id/company_id/partner_id) ────────────────
+// Roda em paralelo ao escopo legado acima — nada do código anterior foi
+// alterado. Projetos antigos (sem esses 3 campos) continuam visíveis só
+// pelo escopo legado; projetos novos passam a usar isto também. No máximo
+// um dos três é preenchido por projeto (regra aplicada no POST/PUT /link,
+// não em constraint de banco — mesmo padrão do ClientLink).
+function isAdminUser(user?: { role?: string; account_type?: string }): boolean {
+  return user?.role === "admin" || user?.account_type === "admin";
+}
+function isLeaderUser(user?: { role?: string; account_type?: string }): boolean {
+  return user?.role === "lider" || user?.account_type === "lider";
+}
+
+type NewProjectScope =
+  | { kind: "agency"; agencyId: string }
+  | { kind: "company"; companyId: string }
+  | { kind: "partner"; partnerId: string }
+  | { kind: "none" };
+
+async function resolveProjectNewScope(
+  userId: string,
+  accountType: string,
+): Promise<NewProjectScope> {
+  if (accountType === "agencias") {
+    const agency = await prisma.agency.findFirst({ where: { user_id: userId }, select: { id: true } });
+    return agency ? { kind: "agency", agencyId: agency.id } : { kind: "none" };
+  }
+  if (accountType === "empresas") {
+    const user = await prisma.user.findUnique({ where: { id: userId }, select: { company_id: true } });
+    return user?.company_id ? { kind: "company", companyId: user.company_id } : { kind: "none" };
+  }
+  if (accountType === "parceiro") {
+    const profile = await prisma.partnerProfile.findUnique({ where: { user_id: userId }, select: { id: true } });
+    return profile ? { kind: "partner", partnerId: profile.id } : { kind: "none" };
+  }
+  return { kind: "none" };
+}
+
+function newScopeToWhere(scope: NewProjectScope): Record<string, unknown> | null {
+  if (scope.kind === "agency") return { agency_id: scope.agencyId };
+  if (scope.kind === "company") return { company_id: scope.companyId };
+  if (scope.kind === "partner") return { partner_id: scope.partnerId };
+  return null;
+}
+
+// Visibilidade combinada (legado OR novo) pra endpoints de projeto único
+// (GET/:id, PUT/:id, /:id/files, /:id/credentials).
+async function projectVisibleToUser(
+  user: { id: string; account_type?: string; role?: string },
+  project: {
+    agency: string | null;
+    client_id: string | null;
+    agency_id?: string | null;
+    company_id?: string | null;
+    partner_id?: string | null;
+  },
+): Promise<boolean> {
+  const scope = await getProjectScope(user.id, user.account_type ?? "");
+  if (projectInScope(scope, project)) return true;
+  const newScope = await resolveProjectNewScope(user.id, user.account_type ?? "");
+  if (newScope.kind === "agency") return project.agency_id === newScope.agencyId;
+  if (newScope.kind === "company") return project.company_id === newScope.companyId;
+  if (newScope.kind === "partner") return project.partner_id === newScope.partnerId;
+  return false;
+}
+
 const createSchema = z.object({
   title: z.string().min(1),
   description: z.string().optional(),
   client_id: z.string().optional(),
+  // Escopo novo — só o Admin pode enviar isso no body (ver POST /); pra
+  // Agency/Company/Partner é sempre auto-resolvido e o que vier aqui é
+  // ignorado.
+  agency_id: z.string().optional(),
+  company_id: z.string().optional(),
+  partner_id: z.string().optional(),
   status: z
     .enum([
       "draft",
@@ -170,13 +242,24 @@ router.get("/", verifyToken, async (req, res, next) => {
 
     const scope = await getProjectScope(req.user!.id, req.user!.account_type);
     const scopeWhere = scopeToWhere(scope);
+    // Escopo novo roda em paralelo — projeto aparece se bater em QUALQUER
+    // um dos dois (legado OR novo). Não afeta admin/leader (scope "open"),
+    // que já viam tudo sem filtro.
+    const newScope = await resolveProjectNewScope(req.user!.id, req.user!.account_type);
+    const newWhere = newScopeToWhere(newScope);
 
-    if (scopeWhere === null) {
+    let where: Record<string, unknown>;
+    if (scope.kind === "admin" || scope.kind === "open") {
+      where = {};
+    } else if (scopeWhere === null && newWhere === null) {
       res.json({ data: [], total: 0, page, limit });
       return;
+    } else {
+      const orConditions = [scopeWhere, newWhere].filter(
+        (w): w is Record<string, unknown> => w !== null,
+      );
+      where = orConditions.length > 1 ? { OR: orConditions } : orConditions[0];
     }
-
-    const where: Record<string, unknown> = { ...scopeWhere };
     if (status) where["status"] = status;
     if (search) where["title"] = { contains: search };
     // client_id filter is only applied for admin/open — scoped users already have their scope locked
@@ -218,6 +301,9 @@ router.get("/", verifyToken, async (req, res, next) => {
             orderBy: { created_at: "asc" },
           },
           _count: { select: { task_executions: true } },
+          agency_owner: { select: { id: true, name: true } },
+          company_owner: { select: { id: true, name: true } },
+          partner_owner: { select: { id: true, user: { select: { name: true } } } },
         },
         skip,
         take: limit,
@@ -256,25 +342,39 @@ router.get("/", verifyToken, async (req, res, next) => {
       }
     }
 
-    const enriched = data.map((p) => {
-      const ownerType: "agency" | "company" | "partner" | null = p.agency
+    const enriched = data.map((p: any) => {
+      // Escopo novo tem prioridade de exibição quando presente (projeto
+      // criado já no sistema novo); senão cai no cálculo legado de sempre.
+      const ownerType: "agency" | "company" | "partner" | null = p.agency_id
         ? "agency"
-        : partnerReferredSet.has(p.client_id ?? "")
-          ? "partner"
-          : p.client_id
-            ? "company"
-            : null;
+        : p.company_id
+          ? "company"
+          : p.partner_id
+            ? "partner"
+            : p.agency
+              ? "agency"
+              : partnerReferredSet.has(p.client_id ?? "")
+                ? "partner"
+                : p.client_id
+                  ? "company"
+                  : null;
 
-      const ownerName: string | null = p.agency
-        ? p.agency
-        : ownerType === "partner"
-          ? (partnerOwnerMap.get(p.client_id!) ?? (p.client as any)?.name ?? null)
-          : (p.client as any)?.name ?? null;
+      const ownerName: string | null = p.agency_id
+        ? (p.agency_owner?.name ?? null)
+        : p.company_id
+          ? (p.company_owner?.name ?? null)
+          : p.partner_id
+            ? (p.partner_owner?.user?.name ?? null)
+            : p.agency
+              ? p.agency
+              : ownerType === "partner"
+                ? (partnerOwnerMap.get(p.client_id!) ?? (p.client as any)?.name ?? null)
+                : (p.client as any)?.name ?? null;
 
       return {
         ...p,
         _seq: seqMap[p.id] ?? null,
-        _hasOwner: !!(p.agency || p.client_id),
+        _hasOwner: !!(p.agency || p.client_id || p.agency_id || p.company_id || p.partner_id),
         _ownerType: ownerType,
         _ownerName: ownerName,
       };
@@ -318,8 +418,7 @@ router.get("/:id", verifyToken, async (req, res, next) => {
       return;
     }
 
-    const scope = await getProjectScope(req.user!.id, req.user!.account_type);
-    if (!projectInScope(scope, project)) {
+    if (!(await projectVisibleToUser(req.user!, project))) {
       res.status(403).json({ error: "Acesso negado" });
       return;
     }
@@ -335,14 +434,13 @@ router.get("/:id/files", verifyToken, async (req, res, next) => {
   try {
     const parent = await prisma.project.findUnique({
       where: { id: req.params.id as string },
-      select: { agency: true, client_id: true },
+      select: { agency: true, client_id: true, agency_id: true, company_id: true, partner_id: true },
     });
     if (!parent) {
       res.status(404).json({ error: "Projeto não encontrado" });
       return;
     }
-    const scope = await getProjectScope(req.user!.id, req.user!.account_type);
-    if (!projectInScope(scope, parent)) {
+    if (!(await projectVisibleToUser(req.user!, parent))) {
       res.status(403).json({ error: "Acesso negado" });
       return;
     }
@@ -453,14 +551,13 @@ router.get("/:id/credentials", verifyToken, async (req, res, next) => {
   try {
     const parent = await prisma.project.findUnique({
       where: { id: req.params.id as string },
-      select: { agency: true, client_id: true },
+      select: { agency: true, client_id: true, agency_id: true, company_id: true, partner_id: true },
     });
     if (!parent) {
       res.status(404).json({ error: "Projeto não encontrado" });
       return;
     }
-    const scope = await getProjectScope(req.user!.id, req.user!.account_type);
-    if (!projectInScope(scope, parent)) {
+    if (!(await projectVisibleToUser(req.user!, parent))) {
       res.status(403).json({ error: "Acesso negado" });
       return;
     }
@@ -535,14 +632,13 @@ router.post("/:id/credentials", verifyToken, async (req, res, next) => {
   try {
     const parent = await prisma.project.findUnique({
       where: { id: req.params.id as string },
-      select: { agency: true, client_id: true },
+      select: { agency: true, client_id: true, agency_id: true, company_id: true, partner_id: true },
     });
     if (!parent) {
       res.status(404).json({ error: "Projeto não encontrado" });
       return;
     }
-    const scope = await getProjectScope(req.user!.id, req.user!.account_type);
-    if (!projectInScope(scope, parent)) {
+    if (!(await projectVisibleToUser(req.user!, parent))) {
       res.status(403).json({ error: "Acesso negado" });
       return;
     }
@@ -1055,14 +1151,13 @@ router.get("/:id/tasks", verifyToken, async (req, res, next) => {
 
     const parent = await prisma.project.findUnique({
       where: { id: req.params.id as string },
-      select: { agency: true, client_id: true },
+      select: { agency: true, client_id: true, agency_id: true, company_id: true, partner_id: true },
     });
     if (!parent) {
       res.status(404).json({ error: "Projeto não encontrado" });
       return;
     }
-    const scope = await getProjectScope(req.user!.id, req.user!.account_type);
-    if (!projectInScope(scope, parent)) {
+    if (!(await projectVisibleToUser(req.user!, parent))) {
       res.status(403).json({ error: "Acesso negado" });
       return;
     }
@@ -1131,6 +1226,11 @@ router.post(
   validate(createSchema),
   async (req, res, next) => {
     try {
+      if (isLeaderUser(req.user)) {
+        res.status(403).json({ error: "Permissão insuficiente" });
+        return;
+      }
+
       const { start_date, end_date, ...rest } = req.body;
       const scope = await getProjectScope(req.user!.id, req.user!.account_type);
       const agencyName = scope.kind === "agency" ? scope.agencyName : undefined;
@@ -1150,10 +1250,49 @@ router.post(
         return;
       }
 
+      // Escopo novo: Agency/Company/Partner são auto-vinculados ao próprio
+      // perfil — o que vier em agency_id/company_id/partner_id no body é
+      // sempre ignorado pra esses três. Admin pode enviar exatamente um
+      // desses três (ou nenhum); validado abaixo. Não afeta o vínculo
+      // legado (agency/client_id) acima, que continua exatamente como
+      // estava.
+      const newScope = await resolveProjectNewScope(req.user!.id, req.user!.account_type);
+      let newScopeData: Record<string, string> = {};
+      if (newScope.kind === "agency") newScopeData = { agency_id: newScope.agencyId };
+      else if (newScope.kind === "company") newScopeData = { company_id: newScope.companyId };
+      else if (newScope.kind === "partner") newScopeData = { partner_id: newScope.partnerId };
+      else if (isAdminUser(req.user)) {
+        const providedCount = [rest.agency_id, rest.company_id, rest.partner_id].filter(Boolean).length;
+        if (providedCount > 1) {
+          res.status(400).json({ error: "Informe no máximo um vínculo: agency_id, company_id ou partner_id" });
+          return;
+        }
+        if (rest.agency_id) {
+          const exists = await prisma.agency.findUnique({ where: { id: rest.agency_id }, select: { id: true } });
+          if (!exists) { res.status(400).json({ error: "Agency não encontrada" }); return; }
+          newScopeData = { agency_id: rest.agency_id };
+        } else if (rest.company_id) {
+          const exists = await prisma.company.findUnique({ where: { id: rest.company_id }, select: { id: true } });
+          if (!exists) { res.status(400).json({ error: "Company não encontrada" }); return; }
+          newScopeData = { company_id: rest.company_id };
+        } else if (rest.partner_id) {
+          const exists = await prisma.partnerProfile.findUnique({ where: { id: rest.partner_id }, select: { id: true } });
+          if (!exists) { res.status(400).json({ error: "Partner não encontrado" }); return; }
+          newScopeData = { partner_id: rest.partner_id };
+        }
+      }
+      // rest ainda carrega agency_id/company_id/partner_id crus do body
+      // (usados só pra validação acima) — removidos aqui pra não colidir
+      // com newScopeData no create() logo abaixo.
+      delete rest.agency_id;
+      delete rest.company_id;
+      delete rest.partner_id;
+
       const project = await prisma.project.create({
         data: {
           ...rest,
           agency: agencyName || rest.agency,
+          ...newScopeData,
           start_date: toDate(start_date),
           end_date: toDate(end_date),
         },
@@ -1173,8 +1312,18 @@ router.put(
   validate(updateSchema),
   async (req, res, next) => {
     try {
+      if (isLeaderUser(req.user)) {
+        res.status(403).json({ error: "Permissão insuficiente" });
+        return;
+      }
+
       const id = req.params.id as string as string;
       const { start_date, end_date, ...rest } = req.body;
+      // Vínculo novo só muda pelo endpoint dedicado PUT /:id/link
+      // (admin-only) — nunca por aqui, nem pro próprio Admin.
+      delete rest.agency_id;
+      delete rest.company_id;
+      delete rest.partner_id;
       const toDate = (v: string | undefined) => {
         if (!v) return undefined;
         const d = new Date(v);
@@ -1184,7 +1333,7 @@ router.put(
       // Capture previous status and validate scope before update
       const before = await prisma.project.findUnique({
         where: { id },
-        select: { status: true, agency: true, client_id: true },
+        select: { status: true, agency: true, client_id: true, agency_id: true, company_id: true, partner_id: true },
       });
 
       if (!before) {
@@ -1192,8 +1341,7 @@ router.put(
         return;
       }
 
-      const scope = await getProjectScope(req.user!.id, req.user!.account_type);
-      if (!projectInScope(scope, before)) {
+      if (!(await projectVisibleToUser(req.user!, before))) {
         res.status(403).json({ error: "Acesso negado" });
         return;
       }
@@ -1237,19 +1385,84 @@ router.put(
   },
 );
 
+const updateProjectLinkSchema = z.object({
+  agency_id: z.string().nullable().optional(),
+  company_id: z.string().nullable().optional(),
+  partner_id: z.string().nullable().optional(),
+});
+
+// PUT /api/projects/:id/link — admin-only, define/troca/remove o vínculo
+// NOVO do projeto (agency_id/company_id/partner_id). Não toca no vínculo
+// legado (agency string / client_id) de jeito nenhum — mesmo padrão do
+// PUT /api/client-records/:id/link. Envie exatamente um dos três pra
+// vincular, ou nenhum (todos ausentes/null) pra desvincular do escopo novo.
+router.put("/:id/link", verifyToken, validate(updateProjectLinkSchema), async (req, res, next) => {
+  try {
+    if (!isAdminUser(req.user)) {
+      res.status(403).json({ error: "Permissão insuficiente" });
+      return;
+    }
+
+    const id = req.params.id as string;
+    const project = await prisma.project.findUnique({ where: { id }, select: { id: true } });
+    if (!project) {
+      res.status(404).json({ error: "Projeto não encontrado" });
+      return;
+    }
+
+    const body = req.body as z.infer<typeof updateProjectLinkSchema>;
+    const providedCount = [body.agency_id, body.company_id, body.partner_id].filter(Boolean).length;
+    if (providedCount > 1) {
+      res.status(400).json({ error: "Informe no máximo um vínculo: agency_id, company_id ou partner_id" });
+      return;
+    }
+
+    let agencyId: string | null = null;
+    let companyId: string | null = null;
+    let partnerId: string | null = null;
+
+    if (body.agency_id) {
+      const exists = await prisma.agency.findUnique({ where: { id: body.agency_id }, select: { id: true } });
+      if (!exists) { res.status(400).json({ error: "Agency não encontrada" }); return; }
+      agencyId = body.agency_id;
+    } else if (body.company_id) {
+      const exists = await prisma.company.findUnique({ where: { id: body.company_id }, select: { id: true } });
+      if (!exists) { res.status(400).json({ error: "Company não encontrada" }); return; }
+      companyId = body.company_id;
+    } else if (body.partner_id) {
+      const exists = await prisma.partnerProfile.findUnique({ where: { id: body.partner_id }, select: { id: true } });
+      if (!exists) { res.status(400).json({ error: "Partner não encontrado" }); return; }
+      partnerId = body.partner_id;
+    }
+
+    const updated = await prisma.project.update({
+      where: { id },
+      data: { agency_id: agencyId, company_id: companyId, partner_id: partnerId },
+      include: {
+        client: { select: { id: true, name: true, cnpj: true } },
+        agency_owner: { select: { id: true, name: true } },
+        company_owner: { select: { id: true, name: true } },
+        partner_owner: { select: { id: true, user: { select: { name: true } } } },
+      },
+    });
+    res.json(updated);
+  } catch (err) {
+    next(err);
+  }
+});
+
 // DELETE /api/projects/:id
 router.delete("/:id", verifyToken, async (req, res, next) => {
   try {
     const project = await prisma.project.findUnique({
       where: { id: req.params.id as string },
-      select: { agency: true, client_id: true },
+      select: { agency: true, client_id: true, agency_id: true, company_id: true, partner_id: true },
     });
     if (!project) {
       res.status(404).json({ error: "Projeto não encontrado" });
       return;
     }
-    const scope = await getProjectScope(req.user!.id, req.user!.account_type);
-    if (!projectInScope(scope, project)) {
+    if (!(await projectVisibleToUser(req.user!, project))) {
       res.status(403).json({ error: "Acesso negado" });
       return;
     }

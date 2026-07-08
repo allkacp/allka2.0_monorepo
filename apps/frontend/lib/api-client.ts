@@ -300,6 +300,14 @@ class ApiClient {
     return this.put(`/projects/${id}`, data);
   }
 
+  // Admin-only — define/troca/remove o vínculo NOVO do Project com
+  // Agency/Company/Partner (agency_id/company_id/partner_id). Não mexe no
+  // vínculo legado (agency/client_id). Envie { agency_id } ou { company_id }
+  // ou { partner_id }, ou {} / campos null pra desvincular do escopo novo.
+  async updateProjectLink(id: string | number, data: Record<string, any>) {
+    return this.put(`/projects/${id}/link`, data);
+  }
+
   async deleteProject(id: string | number) {
     return this.del(`/projects/${id}`);
   }

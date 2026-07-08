@@ -105,7 +105,8 @@ model Company {
   created_at                           DateTime        @default(now())
   updated_at                           DateTime        @updatedAt
 
-  projects        Project[]
+  projects        Project[]              @relation("ProjectLegacyClient")
+  projects_owned  Project[]              @relation("ProjectNewCompanyOwner")
   invoices        Invoice[]
   users           User[]
   payment_methods CompanyPaymentMethod[]
@@ -235,6 +236,7 @@ model Agency {
   leaderships       AgencyLeadership[]
   reports           AgencyReport[]
   client_links      ClientLink[]
+  projects_owned    Project[]
 
   @@map("agencies")
 }
@@ -409,40 +411,50 @@ model BankAccount {
 // ─── Projects & Tasks ─────────────────────────────────────────────────────────
 
 model Project {
-  id                   String    @id @default(cuid())
+  id                   String          @id @default(cuid())
   title                String
-  description          String?   @db.LongText
+  description          String?         @db.LongText
   client_id            String?
-  client               Company?  @relation(fields: [client_id], references: [id])
-  status               String    @default("draft")
+  client               Company?        @relation("ProjectLegacyClient", fields: [client_id], references: [id])
+  // ── Novo escopo estruturado (adicional ao legado acima; não usado pelos
+  // projetos existentes, que continuam funcionando só por agency/client_id) ──
+  // No máximo um dos três deve estar preenchido — regra aplicada em código,
+  // não em constraint de banco (mesmo padrão do ClientLink).
+  agency_id            String?
+  agency_owner         Agency?         @relation(fields: [agency_id], references: [id], onDelete: SetNull)
+  company_id           String?
+  company_owner        Company?        @relation("ProjectNewCompanyOwner", fields: [company_id], references: [id], onDelete: SetNull)
+  partner_id           String?
+  partner_owner        PartnerProfile? @relation(fields: [partner_id], references: [id], onDelete: SetNull)
+  status               String          @default("draft")
   // draft | negotiation | awaiting-payment | planning | in-progress | paused | completed | cancelled | paid
   // draft | negotiation | awaiting-payment | planning | in-progress | paused | completed | cancelled
-  lifecycle            String    @default("avulso")
+  lifecycle            String          @default("avulso")
   // avulso | mensal
   type                 String?
   // Marketing Digital | Desenvolvimento Web | Design | E-commerce | Desenvolvimento Mobile | Consultoria
-  value                Float     @default(0)
-  budget               Float     @default(0)
-  spent                Float     @default(0)
-  progress             Int       @default(0)
+  value                Float           @default(0)
+  budget               Float           @default(0)
+  spent                Float           @default(0)
+  progress             Int             @default(0)
   agency               String?
   company_type         String?
   // company | agency | nomad
   consultant           String?
   consultant_email     String?
-  team_size            Int       @default(0)
-  nomades              String?   @db.LongText
+  team_size            Int             @default(0)
+  nomades              String?         @db.LongText
   // JSON: string[]
-  bitrix_sync          Boolean   @default(false)
-  portfolio_permission Boolean   @default(false)
-  overdue              Boolean   @default(false)
-  from_lead            Boolean   @default(false)
+  bitrix_sync          Boolean         @default(false)
+  portfolio_permission Boolean         @default(false)
+  overdue              Boolean         @default(false)
+  from_lead            Boolean         @default(false)
   billing_day          Int?
   billing_start_date   String?
   start_date           DateTime?
   end_date             DateTime?
-  created_at           DateTime  @default(now())
-  updated_at           DateTime  @updatedAt
+  created_at           DateTime        @default(now())
+  updated_at           DateTime        @updatedAt
 
   task_executions TaskExecution[]
   invoices        Invoice[]
@@ -1147,6 +1159,7 @@ model PartnerProfile {
   referred_companies Company[]
   withdrawals        PartnerWithdrawal[]
   client_links       ClientLink[]
+  projects_owned     Project[]
 
   @@map("partner_profiles")
 }
