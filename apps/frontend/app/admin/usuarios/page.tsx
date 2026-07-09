@@ -382,39 +382,22 @@ export default function UsuariosPage() {
   const [pageSize, setPageSize] = useItemsPerPage("admin-usuarios", 10);
   const [paginatedUsers, setPaginatedUsers] = useState<User[]>([]);
 
-  // Demo last_login dates injected when the API doesn't return the field.
-  // Covers all inactivity buckets so the UI can be tested end-to-end.
-  const _now = Date.now();
-  const DEMO_LAST_LOGINS: (string | null)[] = [
-    new Date(_now - 0).toISOString(), // idx 0 → hoje
-    new Date(_now - 2 * 86400000).toISOString(), // idx 1 → 2 dias (7days)
-    new Date(_now - 5 * 86400000).toISOString(), // idx 2 → 5 dias (7days)
-    new Date(_now - 15 * 86400000).toISOString(), // idx 3 → 15 dias (30days)
-    new Date(_now - 25 * 86400000).toISOString(), // idx 4 → 25 dias (30days)
-    new Date(_now - 35 * 86400000).toISOString(), // idx 5 → 35 dias (inactive_30)
-    new Date(_now - 50 * 86400000).toISOString(), // idx 6 → 50 dias (inactive_30)
-    new Date(_now - 65 * 86400000).toISOString(), // idx 7 → 65 dias (inactive_60)
-    new Date(_now - 80 * 86400000).toISOString(), // idx 8 → 80 dias (inactive_60)
-    new Date(_now - 95 * 86400000).toISOString(), // idx 9 → 95 dias (inactive_90)
-    new Date(_now - 130 * 86400000).toISOString(), // idx 10 → 130 dias (inactive_90)
-    null, // idx 11 → nunca acessou
-  ];
-
   useEffect(() => {
-    // Map API users — compute inactivity bucket and auto_paused flag
-    const mapped = apiUsers.map((u: any, idx: number) => {
-      // Use API last_login if present; otherwise inject demo date for UI testing
-      const last_login =
-        u.last_login ?? DEMO_LAST_LOGINS[idx % DEMO_LAST_LOGINS.length];
-      const bucket = computeInactivityBucket(last_login);
+    // Map API users — bucket de inatividade calculado a partir do
+    // last_login REAL (nunca mais dados de demonstração injetados aqui —
+    // last_login agora é escrito de verdade em todo login, ver POST
+    // /api/auth/login). auto_paused é "grudento": fica true tanto pelo
+    // bucket ao vivo quanto por reactivation_review_required persistido,
+    // pra não voltar a "Ativo" sozinho só porque o usuário logou de novo.
+    const mapped = apiUsers.map((u: any) => {
+      const bucket = computeInactivityBucket(u.last_login);
       return {
         ...u,
-        last_login,
         is_active: u.is_active ?? true,
         online_status: "offline",
         account_type: u.account_type || "empresas",
         inactivity_bucket: bucket,
-        auto_paused: bucket === "inactive_90",
+        auto_paused: bucket === "inactive_90" || u.reactivation_review_required === true,
       };
     });
     setUsers(mapped);
@@ -3007,15 +2990,26 @@ export default function UsuariosPage() {
                             {(() => {
                               const linked = getLinkedAccount(user);
                               if (linked === "unknown")
-                                return <span className="text-xs text-amber-600 dark:text-amber-400">Tipo desconhecido</span>;
+                                return (
+                                  <div className="space-y-1">
+                                    <p className="text-xs text-amber-600 dark:text-amber-400">Tipo desconhecido</p>
+                                    <NeonBadge color="amber">TIPO DESCONHECIDO</NeonBadge>
+                                  </div>
+                                );
                               if (!linked)
-                                return <span className="text-xs text-slate-300 dark:text-slate-600">Sem vínculo</span>;
+                                return (
+                                  <div className="space-y-1">
+                                    <p className="text-xs text-slate-400 dark:text-slate-500">Sem vínculo</p>
+                                    <NeonBadge color="gray">NÃO VINCULADO</NeonBadge>
+                                  </div>
+                                );
+                              const linkBadge = getAccountTypeBadge(user.profile_link_type, user.role);
                               return (
-                                <div className="space-y-0.5">
+                                <div className="space-y-1">
                                   <p className="text-xs font-medium text-slate-700 dark:text-slate-300 truncate max-w-[160px]">
                                     {linked.name}
                                   </p>
-                                  <span className="text-[10px] text-slate-400 uppercase tracking-wide">{linked.type}</span>
+                                  <NeonBadge color={linkBadge.badgeColor}>{linkBadge.label.toUpperCase()}</NeonBadge>
                                 </div>
                               );
                             })()}
@@ -3024,23 +3018,33 @@ export default function UsuariosPage() {
 
                         {visibleCols.has("status") && (
                           <td className="py-3 px-4" style={{ borderRight: "1px solid rgba(148,163,184,0.15)" }}>
-                            {user.auto_paused ? (
-                              <span className="allka-badge allka-badge-status-pausado">
-                                <span className="w-1.5 h-1.5 rounded-full flex-shrink-0 bg-amber-500" />
-                                Pausado
-                              </span>
-                            ) : (
-                              <span
-                                className={
-                                  user.is_active
-                                    ? "allka-badge allka-badge-status-ativo"
-                                    : "allka-badge allka-badge-status-bloqueado"
-                                }
-                              >
-                                <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${user.is_active ? "bg-emerald-500" : "bg-red-500"}`} />
-                                {user.is_active ? "Ativo" : "Bloqueado"}
-                              </span>
-                            )}
+                            <div className="space-y-1">
+                              {user.auto_paused ? (
+                                <span className="allka-badge allka-badge-status-pausado">
+                                  <span className="w-1.5 h-1.5 rounded-full flex-shrink-0 bg-amber-500" />
+                                  Pausado
+                                </span>
+                              ) : (
+                                <span
+                                  className={
+                                    user.is_active
+                                      ? "allka-badge allka-badge-status-ativo"
+                                      : "allka-badge allka-badge-status-bloqueado"
+                                  }
+                                >
+                                  <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${user.is_active ? "bg-emerald-500" : "bg-red-500"}`} />
+                                  {user.is_active ? "Ativo" : "Bloqueado"}
+                                </span>
+                              )}
+                              {user.accessed_after_inactivity_pause && (
+                                <NeonBadge
+                                  color="amber"
+                                  tooltip="Usuário pausado por inatividade acessou recentemente. A conta permanece pausada até revisão administrativa."
+                                >
+                                  Acesso após pausa
+                                </NeonBadge>
+                              )}
+                            </div>
                           </td>
                         )}
 
@@ -3201,17 +3205,35 @@ export default function UsuariosPage() {
                   </div>
                   <div className="rounded-xl border border-slate-200 dark:border-slate-700 p-3.5">
                     <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide mb-1.5">Status</p>
-                    <span
-                      className={
-                        infoPanelUser.auto_paused
-                          ? "allka-badge allka-badge-status-pausado"
-                          : infoPanelUser.is_active
-                            ? "allka-badge allka-badge-status-ativo"
-                            : "allka-badge allka-badge-status-bloqueado"
-                      }
-                    >
-                      {infoPanelUser.auto_paused ? "Pausado" : infoPanelUser.is_active ? "Ativo" : "Bloqueado"}
-                    </span>
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      <span
+                        className={
+                          infoPanelUser.auto_paused
+                            ? "allka-badge allka-badge-status-pausado"
+                            : infoPanelUser.is_active
+                              ? "allka-badge allka-badge-status-ativo"
+                              : "allka-badge allka-badge-status-bloqueado"
+                        }
+                      >
+                        {infoPanelUser.auto_paused ? "Pausado" : infoPanelUser.is_active ? "Ativo" : "Bloqueado"}
+                      </span>
+                      {infoPanelUser.accessed_after_inactivity_pause && (
+                        <NeonBadge
+                          color="amber"
+                          tooltip="Usuário pausado por inatividade acessou recentemente. A conta permanece pausada até revisão administrativa."
+                        >
+                          Acesso após pausa
+                        </NeonBadge>
+                      )}
+                    </div>
+                    {infoPanelUser.accessed_after_inactivity_pause && (
+                      <p className="text-xs text-slate-400 dark:text-slate-500 mt-1.5">
+                        Conta pausada por inatividade. Houve acesso recente, mas ela permanece pausada até revisão.
+                        {infoPanelUser.inactivity_paused_accessed_at && (
+                          <> Último acesso pós-pausa: {new Date(infoPanelUser.inactivity_paused_accessed_at).toLocaleString("pt-BR")}.</>
+                        )}
+                      </p>
+                    )}
                   </div>
                   <div className="rounded-xl border border-slate-200 dark:border-slate-700 p-3.5">
                     <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide mb-1.5">Último acesso</p>
@@ -3244,9 +3266,27 @@ export default function UsuariosPage() {
                     </div>
                     {(() => {
                       const linked = getLinkedAccount(infoPanelUser);
-                      const text =
-                        linked === "unknown" ? "Tipo desconhecido" : linked ? `${linked.name} (${linked.type})` : "Sem vínculo";
-                      return <p className="text-sm text-slate-700 dark:text-slate-300">{text}</p>;
+                      if (linked === "unknown")
+                        return (
+                          <div className="flex items-center gap-2">
+                            <p className="text-sm text-slate-700 dark:text-slate-300">Tipo desconhecido</p>
+                            <NeonBadge color="amber">TIPO DESCONHECIDO</NeonBadge>
+                          </div>
+                        );
+                      if (!linked)
+                        return (
+                          <div className="flex items-center gap-2">
+                            <p className="text-sm text-slate-700 dark:text-slate-300">Sem vínculo</p>
+                            <NeonBadge color="gray">NÃO VINCULADO</NeonBadge>
+                          </div>
+                        );
+                      const linkBadge = getAccountTypeBadge(infoPanelUser.profile_link_type, infoPanelUser.role);
+                      return (
+                        <div className="flex items-center gap-2">
+                          <p className="text-sm text-slate-700 dark:text-slate-300">{linked.name}</p>
+                          <NeonBadge color={linkBadge.badgeColor}>{linkBadge.label.toUpperCase()}</NeonBadge>
+                        </div>
+                      );
                     })()}
                   </div>
                   {infoPanelUser.leader_areas && infoPanelUser.leader_areas.length > 0 && (

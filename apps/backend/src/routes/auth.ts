@@ -64,18 +64,58 @@ router.post("/login", validate(loginSchema), async (req, res, next) => {
       }
     }
 
+    // ── Pausa por inatividade (>=90 dias sem login) ─────────────────────────
+    // Mesmo limiar do bucket "inactive_90" calculado no frontend
+    // (computeInactivityBucket). Usa o last_login ANTES deste login pra
+    // decidir — nunca o valor recém-atualizado. Login de usuário nunca
+    // ativo (last_login null) não conta como "pausado" — mesma regra que o
+    // frontend já aplicava (bucket "never" ≠ "inactive_90").
+    const NINETY_DAYS_MS = 90 * 24 * 60 * 60 * 1000;
+    const now = new Date();
+    const wasPausedByInactivity =
+      !!user.last_login && now.getTime() - user.last_login.getTime() >= NINETY_DAYS_MS;
+    // "Grudento": mesmo que este login registre last_login=now (deixando de
+    // parecer "90+ dias" numa PRÓXIMA tentativa), reactivation_review_required
+    // já sinalizado continua bloqueando — só um Admin limpa essa flag.
+    const isPausedByInactivity = wasPausedByInactivity || user.reactivation_review_required === true;
+
+    if (isPausedByInactivity) {
+      // Registra a tentativa (não é um login bem-sucedido, mas o admin
+      // precisa ver que houve atividade recente) e NUNCA emite token —
+      // is_active não é tocado, a conta não é reativada automaticamente.
+      await prisma.user.update({
+        where: { id: user.id },
+        data: {
+          last_login: now,
+          inactivity_paused_accessed_at: now,
+          inactivity_paused_access_count: { increment: 1 },
+          reactivation_review_required: true,
+        },
+      });
+      res.status(403).json({
+        error:
+          "Conta pausada por inatividade. Identificamos uma tentativa recente de acesso. Aguarde revisão administrativa ou entre em contato com o suporte.",
+      });
+      return;
+    }
+
+    const updated = await prisma.user.update({
+      where: { id: user.id },
+      data: { last_login: now },
+    });
+
     const token = jwt.sign(
       {
-        id: user.id,
-        email: user.email,
-        role: user.role,
-        account_type: user.account_type,
+        id: updated.id,
+        email: updated.email,
+        role: updated.role,
+        account_type: updated.account_type,
       },
       config.JWT_SECRET,
       { expiresIn: "7d" },
     );
 
-    const { password_hash: _pw, ...safeUser } = user;
+    const { password_hash: _pw, ...safeUser } = updated;
     res.json({ token, user: safeUser });
   } catch (err) {
     next(err);

@@ -27,6 +27,9 @@ const enrichedSelect = {
   phone: true,
   company_id: true,
   last_login: true,
+  inactivity_paused_accessed_at: true,
+  inactivity_paused_access_count: true,
+  reactivation_review_required: true,
   created_at: true,
   updated_at: true,
   company: { select: { id: true, name: true } },
@@ -107,6 +110,14 @@ function mapUser(u: EnrichedUser) {
     phone: u.phone,
     company_id: u.company_id,
     last_login: u.last_login,
+    // Pausa por inatividade: accessed_after_inactivity_pause é o fato ("já
+    // aconteceu alguma vez"); reactivation_review_required é a pendência
+    // ("ainda não foi revisado por um Admin") — hoje sempre iguais porque
+    // não existe ação de "marcar como revisado", mas são colunas
+    // independentes no banco para permitir isso no futuro sem migração.
+    accessed_after_inactivity_pause: u.inactivity_paused_accessed_at !== null,
+    inactivity_paused_accessed_at: u.inactivity_paused_accessed_at,
+    reactivation_review_required: u.reactivation_review_required,
     created_at: u.created_at,
     updated_at: u.updated_at,
     agency_id: u.agency?.id ?? null,

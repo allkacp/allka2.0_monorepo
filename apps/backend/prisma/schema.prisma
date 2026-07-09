@@ -31,6 +31,14 @@ model User {
   company_id       String?
   company          Company?  @relation(fields: [company_id], references: [id])
   last_login       DateTime?
+  // Pausa por inatividade (>=90 dias sem login) é um status derivado do
+  // last_login, calculado no momento do login seguinte (ver POST
+  // /api/auth/login) — não existe cron. Estes 3 campos tornam esse estado
+  // "grudento": uma vez marcado, só um Admin limpa manualmente; o próprio
+  // login do usuário pausado NUNCA reativa a conta sozinho.
+  inactivity_paused_accessed_at  DateTime?
+  inactivity_paused_access_count Int       @default(0)
+  reactivation_review_required   Boolean   @default(false)
   created_at       DateTime  @default(now())
   updated_at       DateTime  @updatedAt
 

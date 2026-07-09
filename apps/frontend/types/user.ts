@@ -72,6 +72,11 @@ export interface User {
   has_lgpd_consent?: boolean;
   lgpd_consent_at?: string | null;
   lgpd_consent_label?: string;
+  /** Pausa por inatividade: acesso registrado após a conta ter ficado >=90
+   * dias sem login (GET /api/admin/users). Não reativa a conta sozinho. */
+  accessed_after_inactivity_pause?: boolean;
+  inactivity_paused_accessed_at?: string | null;
+  reactivation_review_required?: boolean;
 }
 
 // Per-company category-based permissions (managed by company admin/responsible)
