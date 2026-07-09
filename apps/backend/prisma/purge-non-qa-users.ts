@@ -1,25 +1,25 @@
 /**
  * purge-non-qa-users.ts
  *
- * Deixa a base como se só existissem os 12 usuários QA principais: corrige
- * seus dados (senha, is_active, user_code) e APAGA FISICAMENTE todo o resto,
- * junto dos perfis dependentes (Agency/PartnerProfile/Nomade/LiderArea) que
- * só existem por causa deles. Nunca toca em Client/ClientLink/Project/Task/
- * Payment/Wallet — essas tabelas não são tocadas por este script.
+ * Deixa a base com SOMENTE os 12 usuários QA principais: corrige seus
+ * dados (senha, is_active, user_code) e APAGA FISICAMENTE todo o resto —
+ * incluindo os perfis dependentes (Agency/PartnerProfile/Nomade/LiderArea)
+ * e os registros "folha" que só existem por causa desses perfis
+ * (Qualification, WalletTransaction, BankAccount, WithdrawalRequest,
+ * PartnerCommission, PartnerWithdrawal, MatchQueueEntry, TermAcceptance,
+ * ChatParticipant, ChatMessage, CourseEnrollment).
  *
- * Modo padrão é DRY-RUN (não altera nada). Só executa de verdade com
- * --apply explícito.
+ * Nunca mexe em Client/ClientLink/Project/Task/Product/TaskTemplate:
+ *  - Se a Agency/PartnerProfile a ser removida tiver qualquer ClientLink
+ *    real apontando pra ela, o usuário inteiro fica em pendência (nada é
+ *    tocado) — mesmo que o schema tecnicamente permita cascade, a regra de
+ *    negócio proíbe apagar ClientLink.
+ *  - TaskExecution.nomade_id é setado pra NULL (nunca deletado) — preserva
+ *    o histórico de execução/projeto, só desvincula o nômade removido.
+ *  - Se sobrar uma FK desconhecida/inesperada, a transaction inteira desse
+ *    usuário é revertida e ele fica listado como pendência — nunca força.
  *
- * Segurança:
- *  - Nunca deleta nenhum dos 12 QA, nem a Company de nenhum deles.
- *  - Cada delete (usuário + seus perfis dependentes) roda em uma transaction
- *    própria — se alguma FK bloquear, essa transaction inteira é revertida
- *    e o usuário fica como "pendência" (não deletado), sem abortar o script
- *    inteiro nem forçar delete.
- *  - Limpeza de Company órfã (criada só pra um usuário deletado) é uma
- *    etapa separada, também com try/catch por linha — se a Company tiver
- *    Project/Client/Invoice/etc. reais, o delete falha e ela é listada como
- *    pendência, nunca forçada.
+ * Modo padrão é DRY-RUN. Só executa de verdade com --apply.
  *
  * Execução:
  *   cd apps/backend
@@ -28,7 +28,7 @@
  */
 
 import "dotenv/config";
-import { PrismaClient } from "@prisma/client";
+import { PrismaClient, type Prisma } from "@prisma/client";
 import bcrypt from "bcryptjs";
 
 const prisma = new PrismaClient();
@@ -44,25 +44,130 @@ interface QaUser {
 }
 
 const QA_USERS: QaUser[] = [
-  { user_code: "00001", email: "admin@allka.test", name: "Vinicius Guardia Admin", role: "admin", account_type: "admin" },
-  { user_code: "00002", email: "agencia@allka.test", name: "Gabriel Franco Agency", role: "agency_admin", account_type: "agencias" },
-  { user_code: "00003", email: "agencia2@allka.test", name: "Teste 2 Agency", role: "agency_admin", account_type: "agencias" },
-  { user_code: "00004", email: "agencia3@allka.test", name: "Teste 3 Agency", role: "agency_admin", account_type: "agencias" },
-  { user_code: "00005", email: "company@allka.test", name: "Rose Bonifácio Company", role: "company_admin", account_type: "empresas" },
-  { user_code: "00006", email: "company2@allka.test", name: "Teste 2 Company", role: "company_admin", account_type: "empresas" },
-  { user_code: "00007", email: "company3@allka.test", name: "Teste 3 Company", role: "company_admin", account_type: "empresas" },
-  { user_code: "00008", email: "partner@allka.test", name: "Valdério Partner", role: "partner", account_type: "parceiro" },
-  { user_code: "00009", email: "partner2@allka.test", name: "Teste 2 Partner", role: "partner", account_type: "parceiro" },
-  { user_code: "00010", email: "partner3@allka.test", name: "Teste 3 Partner", role: "partner", account_type: "parceiro" },
-  { user_code: "00011", email: "leader@allka.test", name: "Maria Brito Leader", role: "lider", account_type: "lider" },
-  { user_code: "00012", email: "nomad@allka.test", name: "Reynário Nomad", role: "nomad", account_type: "nomades" },
+  { user_code: "User_00001", email: "admin@allka.test", name: "Vinicius Guardia Admin", role: "admin", account_type: "admin" },
+  { user_code: "User_00002", email: "agencia@allka.test", name: "Gabriel Franco Agency", role: "agency_admin", account_type: "agencias" },
+  { user_code: "User_00003", email: "agencia2@allka.test", name: "Teste 2 Agency", role: "agency_admin", account_type: "agencias" },
+  { user_code: "User_00004", email: "agencia3@allka.test", name: "Teste 3 Agency", role: "agency_admin", account_type: "agencias" },
+  { user_code: "User_00005", email: "company@allka.test", name: "Rose Bonifácio Company", role: "company_admin", account_type: "empresas" },
+  { user_code: "User_00006", email: "company2@allka.test", name: "Teste 2 Company", role: "company_admin", account_type: "empresas" },
+  { user_code: "User_00007", email: "company3@allka.test", name: "Teste 3 Company", role: "company_admin", account_type: "empresas" },
+  { user_code: "User_00008", email: "partner@allka.test", name: "Valdério Partner", role: "partner", account_type: "parceiro" },
+  { user_code: "User_00009", email: "partner2@allka.test", name: "Teste 2 Partner", role: "partner", account_type: "parceiro" },
+  { user_code: "User_00010", email: "partner3@allka.test", name: "Teste 3 Partner", role: "partner", account_type: "parceiro" },
+  { user_code: "User_00011", email: "leader@allka.test", name: "Maria Brito Leader", role: "lider", account_type: "lider" },
+  { user_code: "User_00012", email: "nomad@allka.test", name: "Reynário Nomad", role: "nomad", account_type: "nomades" },
 ];
 const QA_EMAILS = new Set(QA_USERS.map((u) => u.email));
 
-// Contas reais fora dos 12 QA que NUNCA devem ser deletadas nem alteradas
-// por este script — ex.: o login admin real do operador (documentado no
-// README), diferente do admin@allka.test (QA).
-const PROTECTED_EMAILS = new Set(["cp@lamego.com.vc"]);
+// Nenhuma conta é protegida além dos 12 QA — cp@lamego.com.vc e as contas
+// .com.vc/.exemplo.com/etc. são candidatas normais a exclusão.
+
+type Tx = Prisma.TransactionClient;
+
+interface UserDeps {
+  id: string;
+  email: string;
+  name: string;
+  agencyId: string | null;
+  partnerProfileId: string | null;
+  nomadeId: string | null;
+}
+
+async function resolveDeps(u: { id: string; email: string; name: string }): Promise<UserDeps> {
+  const [agency, partner, nomade] = await Promise.all([
+    prisma.agency.findUnique({ where: { user_id: u.id }, select: { id: true } }),
+    prisma.partnerProfile.findUnique({ where: { user_id: u.id }, select: { id: true } }),
+    prisma.nomade.findUnique({ where: { user_id: u.id }, select: { id: true } }),
+  ]);
+  return {
+    id: u.id,
+    email: u.email,
+    name: u.name,
+    agencyId: agency?.id ?? null,
+    partnerProfileId: partner?.id ?? null,
+    nomadeId: nomade?.id ?? null,
+  };
+}
+
+// Conta quantos ClientLink reais apontam pra essa Agency/Partner — bloqueio
+// duro, nunca forçado, mesmo que o schema tecnicamente faça cascade.
+async function countClientLinks(deps: UserDeps): Promise<number> {
+  const [byAgency, byPartner] = await Promise.all([
+    deps.agencyId ? prisma.clientLink.count({ where: { agency_id: deps.agencyId } }) : Promise.resolve(0),
+    deps.partnerProfileId ? prisma.clientLink.count({ where: { partner_id: deps.partnerProfileId } }) : Promise.resolve(0),
+  ]);
+  return byAgency + byPartner;
+}
+
+interface DepCount {
+  table: string;
+  count: number;
+  action: string;
+}
+
+async function countDependents(deps: UserDeps): Promise<DepCount[]> {
+  const results: DepCount[] = [];
+  if (deps.nomadeId) {
+    const [qual, wallet, bank, withdrawal, taskExec] = await Promise.all([
+      prisma.qualification.count({ where: { nomade_id: deps.nomadeId } }),
+      prisma.walletTransaction.count({ where: { nomade_id: deps.nomadeId } }),
+      prisma.bankAccount.count({ where: { nomade_id: deps.nomadeId } }),
+      prisma.withdrawalRequest.count({ where: { nomade_id: deps.nomadeId } }),
+      prisma.taskExecution.count({ where: { nomade_id: deps.nomadeId } }),
+    ]);
+    if (qual) results.push({ table: "qualifications", count: qual, action: "deletar" });
+    if (wallet) results.push({ table: "wallet_transactions", count: wallet, action: "deletar" });
+    if (bank) results.push({ table: "bank_accounts", count: bank, action: "deletar" });
+    if (withdrawal) results.push({ table: "withdrawal_requests", count: withdrawal, action: "deletar" });
+    if (taskExec) results.push({ table: "task_executions", count: taskExec, action: "desvincular (nomade_id = NULL, preserva o registro)" });
+  }
+  if (deps.partnerProfileId) {
+    const [comm, pwithdrawal] = await Promise.all([
+      prisma.partnerCommission.count({ where: { partner_id: deps.partnerProfileId } }),
+      prisma.partnerWithdrawal.count({ where: { partner_profile_id: deps.partnerProfileId } }),
+    ]);
+    if (comm) results.push({ table: "partner_commissions", count: comm, action: "deletar" });
+    if (pwithdrawal) results.push({ table: "partner_withdrawals", count: pwithdrawal, action: "deletar" });
+  }
+  if (deps.agencyId) {
+    const matchQueue = await prisma.matchQueueEntry.count({ where: { agency_id: deps.agencyId } });
+    if (matchQueue) results.push({ table: "match_queue_entries", count: matchQueue, action: "deletar" });
+  }
+  const [terms, chatPart, chatMsg, courseEnroll] = await Promise.all([
+    prisma.termAcceptance.count({ where: { user_id: deps.id } }),
+    prisma.chatParticipant.count({ where: { user_id: deps.id } }),
+    prisma.chatMessage.count({ where: { sender_id: deps.id } }),
+    prisma.courseEnrollment.count({ where: { user_id: deps.id } }),
+  ]);
+  if (terms) results.push({ table: "term_acceptances", count: terms, action: "deletar" });
+  if (chatPart) results.push({ table: "chat_participants", count: chatPart, action: "deletar" });
+  if (chatMsg) results.push({ table: "chat_messages", count: chatMsg, action: "deletar" });
+  if (courseEnroll) results.push({ table: "course_enrollments", count: courseEnroll, action: "deletar" });
+  return results;
+}
+
+async function cleanupDependents(tx: Tx, deps: UserDeps): Promise<void> {
+  if (deps.nomadeId) {
+    await tx.qualification.deleteMany({ where: { nomade_id: deps.nomadeId } });
+    await tx.walletTransaction.deleteMany({ where: { nomade_id: deps.nomadeId } });
+    await tx.bankAccount.deleteMany({ where: { nomade_id: deps.nomadeId } });
+    await tx.withdrawalRequest.deleteMany({ where: { nomade_id: deps.nomadeId } });
+    await tx.taskExecution.updateMany({ where: { nomade_id: deps.nomadeId }, data: { nomade_id: null } });
+  }
+  if (deps.partnerProfileId) {
+    await tx.partnerCommission.deleteMany({ where: { partner_id: deps.partnerProfileId } });
+    await tx.partnerWithdrawal.deleteMany({ where: { partner_profile_id: deps.partnerProfileId } });
+  }
+  if (deps.agencyId) {
+    await tx.matchQueueEntry.deleteMany({ where: { agency_id: deps.agencyId } });
+  }
+  await tx.termAcceptance.deleteMany({ where: { user_id: deps.id } });
+  await tx.chatParticipant.deleteMany({ where: { user_id: deps.id } });
+  await tx.chatMessage.deleteMany({ where: { sender_id: deps.id } });
+  await tx.courseEnrollment.deleteMany({ where: { user_id: deps.id } });
+  // Coupon.linked_user_id é opcional — desvincula em vez de deletar o cupom.
+  await tx.coupon.updateMany({ where: { linked_user_id: deps.id }, data: { linked_user_id: null } });
+}
 
 async function main() {
   console.log("════════════════════════════════════════════════");
@@ -70,15 +175,12 @@ async function main() {
   console.log("════════════════════════════════════════════════");
 
   // ── 1-2. Conferir que os 12 existem ──────────────────────────────────────
-  const foundUsers: Record<string, { id: string; company_id: string | null }> = {};
+  const foundUsers: Record<string, { id: string }> = {};
   const missing: string[] = [];
   for (const q of QA_USERS) {
-    const u = await prisma.user.findUnique({ where: { email: q.email }, select: { id: true, company_id: true } });
-    if (!u) {
-      missing.push(q.email);
-      continue;
-    }
-    foundUsers[q.email] = u;
+    const u = await prisma.user.findUnique({ where: { email: q.email }, select: { id: true } });
+    if (!u) missing.push(q.email);
+    else foundUsers[q.email] = u;
   }
   if (missing.length > 0) {
     console.error("\n❌ ABORTADO: usuários QA obrigatórios ausentes:", missing);
@@ -86,7 +188,7 @@ async function main() {
   }
   console.log("✅ Os 12 usuários QA existem.");
 
-  // ── 3-4-5. Corrigir senha/is_active/user_code/nome/role dos 12 ──────────
+  // ── 3-4-5-6. Corrigir senha/is_active/user_code/nome/role dos 12 ────────
   console.log("\n════════════════════════════════════════════════");
   console.log("CORRIGINDO OS 12 USUÁRIOS QA");
   console.log("════════════════════════════════════════════════");
@@ -108,28 +210,47 @@ async function main() {
     console.log(`  ${APPLY ? "✅ atualizado" : "[dry-run] iria atualizar"}: ${q.user_code} ${q.email} — senha=${PASSWORD}, is_active=true, name="${q.name}"`);
   }
 
-  // Companies dos 12 QA (protegidas — nunca deletadas)
-  const protectedCompanyIds = new Set(
-    Object.values(foundUsers).map((u) => u.company_id).filter((x): x is string => !!x),
-  );
-
-  // ── 6. Identificar usuários fora da lista ───────────────────────────────
+  // ── Identificar usuários fora da lista (SEM proteção nenhuma) ───────────
   const allUsersBefore = await prisma.user.count();
   const nonQaUsers = await prisma.user.findMany({
-    where: { email: { notIn: [...QA_EMAILS, ...PROTECTED_EMAILS] } },
-    select: { id: true, email: true, name: true, company_id: true },
+    where: { email: { notIn: Array.from(QA_EMAILS) } },
+    select: { id: true, email: true, name: true },
   });
 
-  // ── 7. Relatório antes de deletar ───────────────────────────────────────
   console.log("\n════════════════════════════════════════════════");
-  console.log("RELATÓRIO — O QUE SERÁ DELETADO");
+  console.log("RESOLVENDO DEPENDÊNCIAS DE CADA USUÁRIO FORA DOS 12");
   console.log("════════════════════════════════════════════════");
   console.log("Total de usuários antes:", allUsersBefore);
   console.log("Serão mantidos (QA):", QA_USERS.length);
-  console.log("Protegidos (não-QA, nunca deletados):", Array.from(PROTECTED_EMAILS).join(", "));
-  console.log("Serão deletados:", nonQaUsers.length);
-  console.log("\nE-mails que serão deletados:");
-  nonQaUsers.forEach((u) => console.log(`  - ${u.email} (${u.name}) id=${u.id}`));
+  console.log("Candidatos a deletar:", nonQaUsers.length);
+
+  const blocked: { email: string; reason: string }[] = [];
+  const deletable: UserDeps[] = [];
+
+  for (const u of nonQaUsers) {
+    const deps = await resolveDeps(u);
+    const clientLinkCount = await countClientLinks(deps);
+    if (clientLinkCount > 0) {
+      blocked.push({ email: u.email, reason: `${clientLinkCount} ClientLink(s) real(is) vinculado(s) — NÃO será tocado (regra: nunca apagar ClientLink)` });
+      console.log(`\n⛔ ${u.email} — BLOQUEADO: ${clientLinkCount} ClientLink real(is). Usuário e perfil ficam intactos.`);
+      continue;
+    }
+    const deps2 = await countDependents(deps);
+    if (deps2.length === 0) {
+      console.log(`\n✅ ${u.email} — sem dependentes, pode deletar direto.`);
+    } else {
+      console.log(`\n📋 ${u.email} — dependentes a resolver antes de deletar:`);
+      deps2.forEach((d) => console.log(`     - ${d.table}: ${d.count} registro(s) → ${d.action}`));
+    }
+    deletable.push(deps);
+  }
+
+  console.log("\n════════════════════════════════════════════════");
+  console.log("RESUMO DO PLANO");
+  console.log("════════════════════════════════════════════════");
+  console.log("Bloqueados por ClientLink real (não tocados):", blocked.length);
+  blocked.forEach((b) => console.log(`   - ${b.email}: ${b.reason}`));
+  console.log("Serão deletados (com dependentes resolvidos):", deletable.length);
 
   if (!APPLY) {
     console.log("\n════════════════════════════════════════════════");
@@ -139,30 +260,34 @@ async function main() {
     return;
   }
 
-  // ── 8. Deletar fisicamente, por usuário, em transaction individual ─────
+  // ── Deletar, um usuário por vez, em transaction própria ─────────────────
   console.log("\n════════════════════════════════════════════════");
   console.log("DELETANDO (--apply)");
   console.log("════════════════════════════════════════════════");
 
   const deleted: string[] = [];
   const failed: { email: string; error: string }[] = [];
-  const candidateCompanyIds = new Set<string>();
+  const candidateCompanyUsers = await prisma.user.findMany({
+    where: { email: { in: nonQaUsers.map((u) => u.email) } },
+    select: { email: true, company_id: true },
+  });
+  const companyIdByEmail = new Map(candidateCompanyUsers.map((u) => [u.email, u.company_id]));
 
-  for (const u of nonQaUsers) {
-    if (u.company_id) candidateCompanyIds.add(u.company_id);
+  for (const deps of deletable) {
     try {
       await prisma.$transaction(async (tx) => {
-        await tx.agency.deleteMany({ where: { user_id: u.id } });
-        await tx.partnerProfile.deleteMany({ where: { user_id: u.id } });
-        await tx.nomade.deleteMany({ where: { user_id: u.id } });
-        await tx.liderArea.deleteMany({ where: { user_id: u.id } });
-        await tx.user.delete({ where: { id: u.id } });
+        await cleanupDependents(tx, deps);
+        await tx.agency.deleteMany({ where: { user_id: deps.id } });
+        await tx.partnerProfile.deleteMany({ where: { user_id: deps.id } });
+        await tx.nomade.deleteMany({ where: { user_id: deps.id } });
+        await tx.liderArea.deleteMany({ where: { user_id: deps.id } });
+        await tx.user.delete({ where: { id: deps.id } });
       });
-      deleted.push(u.email);
-      console.log(`  ✅ deletado: ${u.email}`);
+      deleted.push(deps.email);
+      console.log(`  ✅ deletado: ${deps.email}`);
     } catch (e: any) {
-      failed.push({ email: u.email, error: e.message });
-      console.log(`  ⚠️  PENDÊNCIA (não deletado, bloqueado por FK): ${u.email} — ${e.message}`);
+      failed.push({ email: deps.email, error: e.message });
+      console.log(`  ⚠️  PENDÊNCIA (não deletado, FK inesperada — nada foi alterado pra este usuário): ${deps.email} — ${e.message}`);
     }
   }
 
@@ -170,6 +295,15 @@ async function main() {
   console.log("\n════════════════════════════════════════════════");
   console.log("LIMPEZA DE COMPANIES ÓRFÃS");
   console.log("════════════════════════════════════════════════");
+  const protectedCompanyIds = new Set(
+    await prisma.user
+      .findMany({ where: { email: { in: Array.from(QA_EMAILS) } }, select: { company_id: true } })
+      .then((rows) => rows.map((r) => r.company_id).filter((x): x is string => !!x)),
+  );
+  const candidateCompanyIds = new Set(
+    deleted.map((email) => companyIdByEmail.get(email)).filter((x): x is string => !!x),
+  );
+
   const companiesDeleted: string[] = [];
   const companiesFailed: { id: string; name: string; error: string }[] = [];
 
@@ -181,6 +315,11 @@ async function main() {
     const remainingUsers = await prisma.user.count({ where: { company_id: companyId } });
     if (remainingUsers > 0) {
       console.log(`  ⏭️  pulando ${companyId} — ainda tem ${remainingUsers} usuário(s) vinculado(s)`);
+      continue;
+    }
+    const clientLinkCount = await prisma.clientLink.count({ where: { company_id: companyId } });
+    if (clientLinkCount > 0) {
+      console.log(`  ⛔ pulando ${companyId} — tem ${clientLinkCount} ClientLink real (nunca apagar)`);
       continue;
     }
     const company = await prisma.company.findUnique({ where: { id: companyId }, select: { id: true, name: true } });
@@ -197,17 +336,23 @@ async function main() {
 
   // ── Resumo final ─────────────────────────────────────────────────────────
   const totalAfter = await prisma.user.count();
+  const activeAfter = await prisma.user.count({ where: { is_active: true } });
   console.log("\n════════════════════════════════════════════════");
   console.log("RESUMO FINAL");
   console.log("════════════════════════════════════════════════");
   console.log("Total de usuários antes:", allUsersBefore);
+  console.log("Bloqueados por ClientLink real:", blocked.length);
   console.log("Usuários deletados:", deleted.length);
-  console.log("Usuários em pendência (não deletados):", failed.length);
+  console.log("Usuários em pendência (FK inesperada):", failed.length);
   if (failed.length > 0) failed.forEach((f) => console.log(`   - ${f.email}: ${f.error}`));
-  console.log("Total de usuários depois:", totalAfter);
+  console.log("Total de usuários depois:", totalAfter, "| ativos:", activeAfter, "| inativos:", totalAfter - activeAfter);
   console.log("Companies órfãs deletadas:", companiesDeleted.length);
   console.log("Companies em pendência:", companiesFailed.length);
   if (companiesFailed.length > 0) companiesFailed.forEach((f) => console.log(`   - ${f.name} (${f.id}): ${f.error}`));
+
+  if (totalAfter !== QA_USERS.length) {
+    console.log(`\n⚠️  Total final (${totalAfter}) ainda não é ${QA_USERS.length}. Veja bloqueados/pendências acima — nenhum foi forçado.`);
+  }
 }
 
 main()

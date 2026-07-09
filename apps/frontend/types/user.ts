@@ -68,6 +68,10 @@ export interface User {
   company?: Company;
   agency?: Agency;
   lgpd?: UserLGPD;
+  /** Real LGPD consent, computed server-side from term_acceptances (GET /api/admin/users). */
+  has_lgpd_consent?: boolean;
+  lgpd_consent_at?: string | null;
+  lgpd_consent_label?: string;
 }
 
 // Per-company category-based permissions (managed by company admin/responsible)

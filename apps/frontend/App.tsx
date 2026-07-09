@@ -192,6 +192,9 @@ const CompanyRelatoriosPage = React.lazy(
 const CompanyClientesPage = React.lazy(
   () => import("@/app/company/clientes/page"),
 );
+const CompanyUsuariosPage = React.lazy(
+  () => import("@/app/company/usuarios/page"),
+);
 
 // ─── Agência Pages ─────────────────────────────────────────────────────────
 const AgencyDashboardPage = React.lazy(
@@ -927,6 +930,10 @@ export default function App() {
                   <Route
                     path="/company/clientes"
                     element={<CompanyClientesPage />}
+                  />
+                  <Route
+                    path="/company/usuarios"
+                    element={<CompanyUsuariosPage />}
                   />
 
                   {/* ─── Agency (novo) ────────────────────────────────────── */}

@@ -4,6 +4,7 @@ import { z } from "zod";
 import { prisma } from "../lib/prisma";
 import { verifyToken, requireRole } from "../middleware/auth";
 import { validate, parsePagination } from "../middleware/validate";
+import { generateNextUserCode } from "../lib/user-code";
 
 const router = Router();
 
@@ -29,6 +30,7 @@ const updateUserSchema = createUserSchema
 
 const safeSelect = {
   id: true,
+  user_code: true,
   email: true,
   username: true,
   name: true,
@@ -144,12 +146,14 @@ router.post(
 
       const user = await prisma.$transaction(async (tx) => {
         // 1. Create the User record
+        const user_code = await generateNextUserCode(tx);
         const created = await tx.user.create({
           data: {
             ...(rest as object),
             account_type,
             role: resolvedRole,
             password_hash,
+            user_code,
             ...(company_id ? { company_id } : {}),
           } as Parameters<typeof tx.user.create>[0]["data"],
           select: { ...safeSelect, id: true },

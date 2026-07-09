@@ -142,6 +142,26 @@ class ApiClient {
     return this.get("/admin/users", filters);
   }
 
+  // Admin-only — vincula/desvincula/troca a empresa de um usuário
+  // (payload: { link_type: "company" | null, company_id: string | null }).
+  async updateAdminUserCompanyLink(id: string | number, data: Record<string, any>) {
+    return this.put(`/admin/users/${id}/link`, data);
+  }
+
+  // Self-service Company — colaboradores da própria empresa do usuário
+  // logado. Nunca aceita company_id (o backend resolve pelo token).
+  async getCompanyUsers(filters?: Record<string, any>) {
+    return this.get("/company/users", filters);
+  }
+
+  async createCompanyUser(data: Record<string, any>) {
+    return this.post("/company/users", data);
+  }
+
+  async updateCompanyUser(id: string | number, data: Record<string, any>) {
+    return this.put(`/company/users/${id}`, data);
+  }
+
   async getUser(id: string | number) {
     return this.get(`/users/${id}`);
   }

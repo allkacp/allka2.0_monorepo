@@ -1,7 +1,9 @@
 import { Router } from "express";
+import type { Prisma } from "@prisma/client";
+import { z } from "zod";
 import { prisma } from "../lib/prisma";
 import { verifyToken, requireRole } from "../middleware/auth";
-import { parsePagination } from "../middleware/validate";
+import { parsePagination, validate } from "../middleware/validate";
 
 // Rota admin-only pra listar TODOS os usuários de acesso/login da plataforma
 // (tela Admin > Usuários). Deliberadamente separada de GET /api/users, que
@@ -32,7 +34,101 @@ const enrichedSelect = {
   partner: { select: { id: true, status: true } },
   nomade: { select: { id: true, name: true } },
   lider_areas: { select: { id: true, area_nome: true, ativo: true } },
+  // LGPD: consentimento real = ao menos 1 aceite (term_acceptances) de um
+  // Term atualmente ativo. Não é flag fake — reflete o banco.
+  term_acceptances: {
+    where: { term: { is_active: true } },
+    select: { accepted_at: true },
+    orderBy: { accepted_at: "desc" as const },
+    take: 1,
+  },
 };
+
+type EnrichedUser = Prisma.UserGetPayload<{ select: typeof enrichedSelect }>;
+
+// Compartilhado entre GET / (listagem) e PUT /:id/link (retorno após
+// vincular/desvincular) — mesma forma enriquecida em ambos, pra UI poder
+// atualizar a linha da tabela sem precisar recarregar a lista inteira.
+function mapUser(u: EnrichedUser) {
+  const activeLiderAreas = u.lider_areas.filter((a) => a.ativo);
+
+  // has_profile_link/profile_link_* — regra fixa por account_type
+  // conhecido; account_type fora dessa lista fica null (não false),
+  // pra distinguir "tipo sem regra" de "tipo conhecido sem vínculo".
+  let has_profile_link: boolean | null;
+  let profile_link_type: string | null;
+  let profile_link_name: string | null;
+  let profile_link_status: string | null = null;
+
+  if (u.account_type === "admin") {
+    has_profile_link = true;
+    profile_link_type = "admin";
+    profile_link_name = "Admin";
+  } else if (u.account_type === "agencias") {
+    has_profile_link = !!u.agency;
+    profile_link_type = "agency";
+    profile_link_name = u.agency?.name ?? null;
+  } else if (u.account_type === "empresas") {
+    has_profile_link = !!u.company;
+    profile_link_type = "company";
+    profile_link_name = u.company?.name ?? null;
+  } else if (u.account_type === "parceiro") {
+    has_profile_link = !!u.partner;
+    profile_link_type = "partner";
+    profile_link_name = u.partner ? u.name : null;
+    profile_link_status = u.partner?.status ?? null;
+  } else if (u.account_type === "lider") {
+    has_profile_link = activeLiderAreas.length > 0;
+    profile_link_type = "leader";
+    profile_link_name = activeLiderAreas.map((a) => a.area_nome).join(", ") || null;
+  } else if (u.account_type === "nomades") {
+    has_profile_link = !!u.nomade;
+    profile_link_type = "nomad";
+    profile_link_name = u.nomade?.name ?? null;
+  } else {
+    has_profile_link = null;
+    profile_link_type = "unknown";
+    profile_link_name = null;
+  }
+
+  const lgpdAcceptance = u.term_acceptances[0] ?? null;
+  const has_lgpd_consent = !!lgpdAcceptance;
+
+  return {
+    id: u.id,
+    user_code: u.user_code,
+    email: u.email,
+    username: u.username,
+    name: u.name,
+    role: u.role,
+    account_type: u.account_type,
+    is_active: u.is_active,
+    avatar: u.avatar,
+    phone: u.phone,
+    company_id: u.company_id,
+    last_login: u.last_login,
+    created_at: u.created_at,
+    updated_at: u.updated_at,
+    agency_id: u.agency?.id ?? null,
+    agency_name: u.agency?.name ?? null,
+    company_name: u.company?.name ?? null,
+    partner_profile_id: u.partner?.id ?? null,
+    partner_status: u.partner?.status ?? null,
+    partner_name: u.partner ? u.name : null,
+    nomad_id: u.nomade?.id ?? null,
+    nomad_name: u.nomade?.name ?? null,
+    leader_areas: activeLiderAreas.map((a) => a.area_nome),
+    has_profile_link,
+    profile_link_type,
+    profile_link_name,
+    profile_link_status,
+    has_lgpd_consent,
+    lgpd_consent_at: lgpdAcceptance?.accepted_at ?? null,
+    lgpd_consent_label: has_lgpd_consent
+      ? "Consentimento LGPD registrado"
+      : "Consentimento LGPD pendente",
+  };
+}
 
 // GET /api/admin/users — admin-only
 router.get("/", verifyToken, requireRole("admin"), async (req, res, next) => {
@@ -78,80 +174,73 @@ router.get("/", verifyToken, requireRole("admin"), async (req, res, next) => {
       }),
     ]);
 
-    const data = users.map((u) => {
-      const activeLiderAreas = u.lider_areas.filter((a) => a.ativo);
-
-      // has_profile_link/profile_link_* — regra fixa por account_type
-      // conhecido; account_type fora dessa lista fica null (não false),
-      // pra distinguir "tipo sem regra" de "tipo conhecido sem vínculo".
-      let has_profile_link: boolean | null;
-      let profile_link_type: string | null;
-      let profile_link_name: string | null;
-      let profile_link_status: string | null = null;
-
-      if (u.account_type === "admin") {
-        has_profile_link = true;
-        profile_link_type = "admin";
-        profile_link_name = "Admin";
-      } else if (u.account_type === "agencias") {
-        has_profile_link = !!u.agency;
-        profile_link_type = "agency";
-        profile_link_name = u.agency?.name ?? null;
-      } else if (u.account_type === "empresas") {
-        has_profile_link = !!u.company;
-        profile_link_type = "company";
-        profile_link_name = u.company?.name ?? null;
-      } else if (u.account_type === "parceiro") {
-        has_profile_link = !!u.partner;
-        profile_link_type = "partner";
-        profile_link_name = u.partner ? u.name : null;
-        profile_link_status = u.partner?.status ?? null;
-      } else if (u.account_type === "lider") {
-        has_profile_link = activeLiderAreas.length > 0;
-        profile_link_type = "leader";
-        profile_link_name = activeLiderAreas.map((a) => a.area_nome).join(", ") || null;
-      } else if (u.account_type === "nomades") {
-        has_profile_link = !!u.nomade;
-        profile_link_type = "nomad";
-        profile_link_name = u.nomade?.name ?? null;
-      } else {
-        has_profile_link = null;
-        profile_link_type = "unknown";
-        profile_link_name = null;
-      }
-
-      return {
-        id: u.id,
-        user_code: u.user_code,
-        email: u.email,
-        username: u.username,
-        name: u.name,
-        role: u.role,
-        account_type: u.account_type,
-        is_active: u.is_active,
-        avatar: u.avatar,
-        phone: u.phone,
-        company_id: u.company_id,
-        last_login: u.last_login,
-        created_at: u.created_at,
-        updated_at: u.updated_at,
-        agency_id: u.agency?.id ?? null,
-        agency_name: u.agency?.name ?? null,
-        company_name: u.company?.name ?? null,
-        partner_profile_id: u.partner?.id ?? null,
-        partner_status: u.partner?.status ?? null,
-        partner_name: u.partner ? u.name : null,
-        nomad_id: u.nomade?.id ?? null,
-        nomad_name: u.nomade?.name ?? null,
-        leader_areas: activeLiderAreas.map((a) => a.area_nome),
-        has_profile_link,
-        profile_link_type,
-        profile_link_name,
-        profile_link_status,
-      };
-    });
+    const data = users.map(mapUser);
 
     res.json({ data, total, page, limit, totalPages: total === 0 ? 0 : Math.ceil(total / limit) });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// Só "company" é suportado por enquanto — vincular a Agency/Partner/Nomad
+// exigiria decidir conversão de account_type, o que este endpoint
+// deliberadamente recusa fazer silenciosamente (ver regra abaixo).
+const linkSchema = z.object({
+  link_type: z.literal("company").nullable(),
+  company_id: z.string().nullable(),
+});
+
+// PUT /api/admin/users/:id/link — admin-only. Vincula/desvincula/troca a
+// empresa de um usuário. Nunca deleta Company nem User.
+router.put("/:id/link", verifyToken, requireRole("admin"), validate(linkSchema), async (req, res, next) => {
+  try {
+    const { link_type, company_id } = req.body as { link_type: "company" | null; company_id: string | null };
+
+    const target = await prisma.user.findUnique({
+      where: { id: req.params.id as string },
+      select: { id: true, account_type: true },
+    });
+    if (!target) {
+      res.status(404).json({ error: "Usuário não encontrado" });
+      return;
+    }
+
+    if (link_type === null) {
+      // Desvincular: mantém account_type como está (estratégia documentada
+      // — usuário empresa sem company_id aparece como "Sem empresa
+      // vinculada" e continua account_type "empresas").
+      const updated = await prisma.user.update({
+        where: { id: target.id },
+        data: { company_id: null },
+        select: enrichedSelect,
+      });
+      res.json(mapUser(updated));
+      return;
+    }
+
+    // link_type === "company"
+    if (!company_id) {
+      res.status(400).json({ error: "company_id é obrigatório quando link_type = company" });
+      return;
+    }
+    if (target.account_type !== "empresas") {
+      res.status(400).json({
+        error: `Usuário é do tipo "${target.account_type}" — vincular a uma empresa exigiria trocar o tipo de conta, o que este endpoint não faz automaticamente. Ajuste o tipo de conta manualmente antes de vincular.`,
+      });
+      return;
+    }
+    const company = await prisma.company.findUnique({ where: { id: company_id }, select: { id: true } });
+    if (!company) {
+      res.status(404).json({ error: "Empresa não encontrada" });
+      return;
+    }
+
+    const updated = await prisma.user.update({
+      where: { id: target.id },
+      data: { company_id },
+      select: enrichedSelect,
+    });
+    res.json(mapUser(updated));
   } catch (err) {
     next(err);
   }

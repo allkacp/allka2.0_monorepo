@@ -43,6 +43,10 @@ import {
   Pencil,
   AlertTriangle,
   Mail,
+  CheckCircle2,
+  XCircle,
+  Loader2,
+  Link2,
 } from "lucide-react";
 import { useSorting, SortableHeader } from "@/hooks/useSorting";
 import { useTableScrollSync } from "@/hooks/useTableScrollSync";
@@ -104,7 +108,7 @@ import { PageHeader } from "@/components/page-header";
 
 type ColKey = "codigo" | "usuario" | "contato" | "tipo_funcao" | "vinculo" | "status" | "ultimo_acesso";
 const ALL_COLUMNS: { key: ColKey; label: string; info: string }[] = [
-  { key: "codigo", label: "Código", info: "Código público sequencial do usuário (ex.: 00001). Não é o id técnico." },
+  { key: "codigo", label: "ID", info: "ID público sequencial do usuário (ex.: User_00001). Não é o id técnico." },
   { key: "usuario", label: "Usuário", info: "Nome, e-mail e status de presença do usuário." },
   { key: "contato", label: "Contato", info: "Atalhos para ligar ou chamar no WhatsApp." },
   { key: "tipo_funcao", label: "Tipo / Função", info: "Tipo de conta, função na plataforma e sinalizações de LGPD." },
@@ -272,6 +276,67 @@ export default function UsuariosPage() {
   const searchBoxRef = useRef<HTMLDivElement>(null);
   const [infoPanelOpen, setInfoPanelOpen] = useState(false);
   const [infoPanelUser, setInfoPanelUser] = useState<any>(null);
+  // Alterar vínculo (Admin > Usuários) — vincular/desvincular/trocar a
+  // empresa de um usuário via PUT /api/admin/users/:id/link. Só "empresas"
+  // é suportado por enquanto (ver regra no backend).
+  const [linkPanelOpen, setLinkPanelOpen] = useState(false);
+  const [linkTargetUser, setLinkTargetUser] = useState<any>(null);
+  const [linkCompanyId, setLinkCompanyId] = useState<string>("");
+  const [linkSaving, setLinkSaving] = useState(false);
+  const [companiesForSelect, setCompaniesForSelect] = useState<{ id: string; name: string }[]>([]);
+  const [companiesLoading, setCompaniesLoading] = useState(false);
+
+  const openLinkPanel = (user: any) => {
+    setLinkTargetUser(user);
+    setLinkCompanyId(user.company_id || "");
+    setLinkPanelOpen(true);
+    if (companiesForSelect.length === 0) {
+      setCompaniesLoading(true);
+      apiClient
+        .getCompanies({ limit: 500 })
+        .then((res: any) => {
+          const list = Array.isArray(res?.data) ? res.data : Array.isArray(res) ? res : [];
+          setCompaniesForSelect(list.map((c: any) => ({ id: c.id, name: c.name })));
+        })
+        .catch(() => setCompaniesForSelect([]))
+        .finally(() => setCompaniesLoading(false));
+    }
+  };
+
+  const closeLinkPanel = () => {
+    if (linkSaving) return;
+    setLinkPanelOpen(false);
+  };
+
+  const handleSaveLink = async () => {
+    if (!linkTargetUser) return;
+    setLinkSaving(true);
+    try {
+      const payload = linkCompanyId
+        ? { link_type: "company", company_id: linkCompanyId }
+        : { link_type: null, company_id: null };
+      const updated = await apiClient.updateAdminUserCompanyLink(linkTargetUser.id, payload);
+      toast({
+        title: linkCompanyId ? "Vínculo atualizado" : "Usuário desvinculado",
+        description: linkCompanyId
+          ? `Usuário vinculado a ${updated.company_name || "empresa selecionada"}.`
+          : "Usuário não está mais vinculado a nenhuma empresa.",
+      });
+      setLinkPanelOpen(false);
+      if (infoPanelUser && infoPanelUser.id === linkTargetUser.id) {
+        setInfoPanelUser(updated);
+      }
+      refetchUsers();
+    } catch (e: any) {
+      toast({
+        title: "Não foi possível salvar o vínculo",
+        description: e?.message || "Tente novamente.",
+        variant: "destructive",
+      });
+    } finally {
+      setLinkSaving(false);
+    }
+  };
   const [advancedFilters, setAdvancedFilters] = useState({
     // Identificação
     name: "",
@@ -412,8 +477,8 @@ export default function UsuariosPage() {
             ? "ativo"
             : "bloqueado";
         const lgpdLabel = [
-          user.lgpd?.consent_given === false ? "sem consentimento lgpd" : "",
-          user.lgpd?.deletion_requested ? "exclusão solicitada" : "",
+          user.has_lgpd_consent === false ? "lgpd pendente sem consentimento" : "",
+          user.has_lgpd_consent === true ? "lgpd consentimento registrado" : "",
         ].join(" ");
         // Phone digit match — only when query has digits
         const phoneMatch =
@@ -2913,16 +2978,26 @@ export default function UsuariosPage() {
                               <p className="text-xs text-slate-600 dark:text-slate-400">
                                 {getRoleLabel(user.role)}
                               </p>
-                              {!user.lgpd?.consent_given && (
-                                <NeonBadge color="orange" tooltip="Usuário ainda não aceitou os termos de consentimento LGPD.">
-                                  Sem consentimento LGPD
-                                </NeonBadge>
-                              )}
-                              {user.lgpd?.deletion_requested && (
-                                <NeonBadge color="red" tooltip="Usuário solicitou a exclusão dos seus dados pessoais.">
-                                  Exclusão solicitada
-                                </NeonBadge>
-                              )}
+                              <TooltipProvider>
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    {user.has_lgpd_consent ? (
+                                      <span className="inline-flex items-center gap-1 rounded-full border border-emerald-200 bg-emerald-50 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-700 w-fit cursor-default dark:border-emerald-400/20 dark:bg-emerald-500/10 dark:text-emerald-300">
+                                        <CheckCircle2 className="h-2.5 w-2.5" />
+                                        LGPD
+                                      </span>
+                                    ) : (
+                                      <span className="inline-flex items-center gap-1 rounded-full border border-rose-200 bg-rose-50 px-1.5 py-0.5 text-[10px] font-semibold text-rose-700 w-fit cursor-default dark:border-rose-400/20 dark:bg-rose-500/10 dark:text-rose-300">
+                                        <XCircle className="h-2.5 w-2.5" />
+                                        LGPD
+                                      </span>
+                                    )}
+                                  </TooltipTrigger>
+                                  <TooltipContent className="text-xs">
+                                    {user.has_lgpd_consent ? "Consentimento LGPD registrado" : "Consentimento LGPD pendente"}
+                                  </TooltipContent>
+                                </Tooltip>
+                              </TooltipProvider>
                             </div>
                           </td>
                         )}
@@ -3145,7 +3220,28 @@ export default function UsuariosPage() {
                     </p>
                   </div>
                   <div className="rounded-xl border border-slate-200 dark:border-slate-700 p-3.5">
-                    <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide mb-1.5">Conta vinculada</p>
+                    <div className="flex items-center justify-between gap-2 mb-1.5">
+                      <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide">Conta vinculada</p>
+                      <TooltipProvider>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <button
+                              type="button"
+                              onClick={() => infoPanelUser.account_type === "empresas" && openLinkPanel(infoPanelUser)}
+                              disabled={infoPanelUser.account_type !== "empresas"}
+                              className="text-[10px] font-semibold text-blue-600 dark:text-blue-400 hover:underline disabled:text-slate-300 disabled:no-underline dark:disabled:text-slate-600 disabled:cursor-not-allowed"
+                            >
+                              Alterar vínculo
+                            </button>
+                          </TooltipTrigger>
+                          {infoPanelUser.account_type !== "empresas" && (
+                            <TooltipContent className="text-xs max-w-[220px]">
+                              Vínculo de empresa só é suportado para usuários do tipo Empresa.
+                            </TooltipContent>
+                          )}
+                        </Tooltip>
+                      </TooltipProvider>
+                    </div>
                     {(() => {
                       const linked = getLinkedAccount(infoPanelUser);
                       const text =
@@ -3175,8 +3271,12 @@ export default function UsuariosPage() {
                       {infoPanelUser.updated_at ? new Date(infoPanelUser.updated_at).toLocaleDateString("pt-BR") : "—"}
                     </p>
                   </div>
-                  <div className="rounded-xl border border-slate-200 dark:border-slate-700 p-3.5 sm:col-span-2">
-                    <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide mb-1.5">ID</p>
+                  <div className="rounded-xl border border-slate-200 dark:border-slate-700 p-3.5">
+                    <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide mb-1.5">ID público</p>
+                    <p className="text-sm font-mono text-slate-700 dark:text-slate-300">{infoPanelUser.user_code || "—"}</p>
+                  </div>
+                  <div className="rounded-xl border border-slate-200 dark:border-slate-700 p-3.5">
+                    <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide mb-1.5">ID técnico</p>
                     <p className="text-xs font-mono text-slate-500 dark:text-slate-400 truncate">{infoPanelUser.id}</p>
                   </div>
                 </div>
@@ -3184,23 +3284,81 @@ export default function UsuariosPage() {
 
               <div>
                 <h3 className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-3">LGPD</h3>
-                <div className="flex flex-wrap gap-2">
-                  {infoPanelUser.lgpd?.consent_given ? (
-                    <NeonBadge color="emerald">Consentimento dado</NeonBadge>
+                <div className="flex items-center gap-2">
+                  {infoPanelUser.has_lgpd_consent ? (
+                    <CheckCircle2 className="h-4 w-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
                   ) : (
-                    <NeonBadge color="orange">Sem consentimento LGPD</NeonBadge>
+                    <XCircle className="h-4 w-4 text-rose-600 dark:text-rose-400 shrink-0" />
                   )}
-                  {infoPanelUser.lgpd?.deletion_requested && (
-                    <NeonBadge color="red">Exclusão solicitada</NeonBadge>
-                  )}
-                  {infoPanelUser.lgpd?.communication_opt_in && (
-                    <NeonBadge color="blue">Opt-in de comunicação</NeonBadge>
-                  )}
+                  <div>
+                    <p className={infoPanelUser.has_lgpd_consent ? "text-sm text-emerald-700 dark:text-emerald-300" : "text-sm text-rose-700 dark:text-rose-300"}>
+                      {infoPanelUser.has_lgpd_consent ? "Consentimento LGPD registrado" : "Consentimento LGPD pendente"}
+                    </p>
+                    {infoPanelUser.has_lgpd_consent && infoPanelUser.lgpd_consent_at && (
+                      <p className="text-xs text-slate-400 dark:text-slate-500">
+                        Aceito em: {new Date(infoPanelUser.lgpd_consent_at).toLocaleString("pt-BR")}
+                      </p>
+                    )}
+                  </div>
                 </div>
               </div>
             </div>
           </div>
         )}
+      </SlidePanel>
+
+      {/* Alterar vínculo — vincular/desvincular/trocar a empresa do usuário */}
+      <SlidePanel
+        open={linkPanelOpen}
+        onClose={closeLinkPanel}
+        title="Alterar vínculo"
+        subtitle={linkTargetUser?.name}
+        widthMode="compact"
+        compactWidth={420}
+        footer={
+          <div className="flex items-center justify-end gap-2 p-4">
+            <Button variant="outline" size="sm" onClick={closeLinkPanel} disabled={linkSaving}>
+              Cancelar
+            </Button>
+            <Button size="sm" onClick={handleSaveLink} disabled={linkSaving} className="btn-brand border-0">
+              {linkSaving ? <Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" /> : null}
+              Salvar
+            </Button>
+          </div>
+        }
+      >
+        <div className="p-5 flex-1 overflow-y-auto space-y-4">
+          <div className="flex items-center gap-2 text-slate-500 dark:text-slate-400">
+            <Link2 className="h-4 w-4" />
+            <p className="text-xs">
+              Vincule este usuário a uma empresa, troque a empresa atual, ou desvincule por completo. Somente o Admin pode
+              alterar esse vínculo.
+            </p>
+          </div>
+          <div>
+            <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-1.5">
+              Empresa vinculada
+            </p>
+            <Select value={linkCompanyId || "__none__"} onValueChange={(v) => setLinkCompanyId(v === "__none__" ? "" : v)}>
+              <SelectTrigger className="h-9 text-sm">
+                <SelectValue placeholder={companiesLoading ? "Carregando empresas..." : "Selecione uma empresa"} />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="__none__">Sem empresa vinculada</SelectItem>
+                {companiesForSelect.map((c) => (
+                  <SelectItem key={c.id} value={c.id}>
+                    {c.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            {companiesLoading && (
+              <p className="text-xs text-slate-400 mt-1.5 flex items-center gap-1.5">
+                <Loader2 className="h-3 w-3 animate-spin" /> Carregando lista de empresas...
+              </p>
+            )}
+          </div>
+        </div>
       </SlidePanel>
 
       {isViewDialogOpen && (

@@ -83,6 +83,12 @@ const navigationConfig = {
         current: false,
       },
       {
+        name: "Usuários",
+        href: "/company/usuarios",
+        icon: Users,
+        current: false,
+      },
+      {
         name: "Projetos",
         href: "/company/projetos",
         icon: FolderOpen,

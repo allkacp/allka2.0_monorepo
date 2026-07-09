@@ -2,6 +2,7 @@ import { Router } from "express";
 import bcrypt from "bcryptjs";
 import { prisma } from "../lib/prisma";
 import { verifyToken, requireRole } from "../middleware/auth";
+import { generateNextUserCode } from "../lib/user-code";
 
 // POST /api/admin/seed/company-test
 // Admin-only endpoint to seed the company test user + data in any environment.
@@ -52,6 +53,7 @@ router.post(
           account_type: "empresas",
           company_id: CT_COMPANY_ID,
           is_active: true,
+          user_code: await generateNextUserCode(prisma),
         },
       });
 
