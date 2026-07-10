@@ -89,6 +89,19 @@ async function resolveDeps(u: { id: string; email: string; name: string }): Prom
   };
 }
 
+// Detecta se uma tabela existe no banco atual (information_schema), pra
+// lidar com schema.prisma tendo model sem a tabela correspondente existir
+// de fato no banco (ex.: coupons/coupon_usages em produção). DATABASE()
+// resolve pro schema da própria conexão ativa (mesmo banco do DATABASE_URL).
+async function tableExists(tableName: string): Promise<boolean> {
+  const rows = await prisma.$queryRaw<{ cnt: bigint | number }[]>`
+    SELECT COUNT(*) as cnt
+    FROM information_schema.tables
+    WHERE table_schema = DATABASE() AND table_name = ${tableName}
+  `;
+  return Number(rows[0]?.cnt ?? 0) > 0;
+}
+
 // Conta quantos ClientLink reais apontam pra essa Agency/Partner — bloqueio
 // duro, nunca forçado, mesmo que o schema tecnicamente faça cascade.
 async function countClientLinks(deps: UserDeps): Promise<number> {
@@ -146,7 +159,7 @@ async function countDependents(deps: UserDeps): Promise<DepCount[]> {
   return results;
 }
 
-async function cleanupDependents(tx: Tx, deps: UserDeps): Promise<void> {
+async function cleanupDependents(tx: Tx, deps: UserDeps, couponsTableExists: boolean): Promise<void> {
   if (deps.nomadeId) {
     await tx.qualification.deleteMany({ where: { nomade_id: deps.nomadeId } });
     await tx.walletTransaction.deleteMany({ where: { nomade_id: deps.nomadeId } });
@@ -166,7 +179,11 @@ async function cleanupDependents(tx: Tx, deps: UserDeps): Promise<void> {
   await tx.chatMessage.deleteMany({ where: { sender_id: deps.id } });
   await tx.courseEnrollment.deleteMany({ where: { user_id: deps.id } });
   // Coupon.linked_user_id é opcional — desvincula em vez de deletar o cupom.
-  await tx.coupon.updateMany({ where: { linked_user_id: deps.id }, data: { linked_user_id: null } });
+  // Só roda se a tabela coupons existir de fato no banco atual (schema.prisma
+  // tem o model, mas em produção a tabela pode não ter sido criada ainda).
+  if (couponsTableExists) {
+    await tx.coupon.updateMany({ where: { linked_user_id: deps.id }, data: { linked_user_id: null } });
+  }
 }
 
 async function main() {
@@ -265,6 +282,15 @@ async function main() {
   console.log("DELETANDO (--apply)");
   console.log("════════════════════════════════════════════════");
 
+  // schema.prisma tem o model Coupon/CouponUsage, mas nem todo banco (ex.:
+  // produção hoje) tem as tabelas coupons/coupon_usages de fato criadas.
+  // Checa uma vez, fora do loop por usuário — é um fato do banco, não do
+  // usuário sendo processado.
+  const couponsTableExists = await tableExists("coupons");
+  if (!couponsTableExists) {
+    console.log("ℹ️  Tabela coupons não existe neste banco; etapa de desvincular cupons ignorada.");
+  }
+
   const deleted: string[] = [];
   const failed: { email: string; error: string }[] = [];
   const candidateCompanyUsers = await prisma.user.findMany({
@@ -276,7 +302,7 @@ async function main() {
   for (const deps of deletable) {
     try {
       await prisma.$transaction(async (tx) => {
-        await cleanupDependents(tx, deps);
+        await cleanupDependents(tx, deps, couponsTableExists);
         await tx.agency.deleteMany({ where: { user_id: deps.id } });
         await tx.partnerProfile.deleteMany({ where: { user_id: deps.id } });
         await tx.nomade.deleteMany({ where: { user_id: deps.id } });
