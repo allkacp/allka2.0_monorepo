@@ -52,10 +52,12 @@ export function SlidePanel({
       setClosing(false);
     } else if (mounted) {
       setClosing(true);
+      // 450ms — a saída real (CSS global em globals.css, [data-slot="sheet-content"][data-state="closed"])
+      // roda a 420ms; desmontar antes disso corta a animação. 450ms dá uma margem seguindo o mesmo valor.
       const t = setTimeout(() => {
         setMounted(false);
         setClosing(false);
-      }, 300);
+      }, 450);
       return () => clearTimeout(t);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -99,35 +101,37 @@ export function SlidePanel({
       data-slot="sheet-content"
       data-state={closing ? "closed" : "open"}
       style={style}
-      className="fixed bg-white dark:bg-slate-900 shadow-2xl border-l border-slate-200 dark:border-slate-700 flex flex-col overflow-hidden data-[state=open]:animate-in data-[state=open]:slide-in-from-right data-[state=open]:fade-in-0 data-[state=closed]:animate-out data-[state=closed]:slide-out-to-right data-[state=closed]:fade-out-0 duration-300"
+      className="fixed bg-white dark:bg-slate-900 shadow-2xl border-l border-slate-200/80 dark:border-slate-700/80 flex flex-col overflow-hidden data-[state=open]:animate-in data-[state=open]:slide-in-from-right data-[state=open]:fade-in-0 data-[state=closed]:animate-out data-[state=closed]:slide-out-to-right data-[state=closed]:fade-out-0 duration-300"
     >
       <div
-        className="flex items-center justify-between px-5 py-3 flex-shrink-0"
+        className="flex items-center justify-between px-6 py-4 flex-shrink-0"
         style={{
           background:
-            "var(--brand-gradient, linear-gradient(to right, #0a1628, #1e3a8a, #0a1628))",
+            "var(--app-brand-gradient, var(--brand-gradient, linear-gradient(to right, #0a1628, #1e3a8a, #0a1628)))",
         }}
       >
-        <div className="min-w-0 flex-1 text-sm font-bold text-white truncate">
-          {title}
+        <div className="min-w-0 flex-1 truncate">
+          <p className="text-base font-semibold text-white truncate">
+            {title}
+          </p>
           {subtitle && (
-            <p className="text-[11px] font-normal text-white/60 mt-0.5 truncate">
+            <p className="text-xs font-normal text-white/70 mt-1 truncate">
               {subtitle}
             </p>
           )}
         </div>
         <button
           onClick={onClose}
-          className="text-white/70 hover:text-white hover:bg-white/20 rounded-lg p-1.5 transition-colors flex-shrink-0"
+          className="text-white/80 hover:text-white hover:bg-white/25 rounded-lg p-2 transition-all duration-200 flex-shrink-0 ml-3"
         >
-          <X className="h-4 w-4" />
+          <X className="h-5 w-5" />
         </button>
       </div>
 
       <div className="flex flex-1 overflow-hidden min-h-0">{children}</div>
 
       {footer && (
-        <div className="flex-shrink-0 border-t border-slate-200 dark:border-slate-700 px-5 py-3">
+        <div className="flex-shrink-0 border-t border-slate-200/80 dark:border-slate-700/80 bg-white/50 dark:bg-slate-900/50 backdrop-blur-sm px-6 py-4">
           {footer}
         </div>
       )}

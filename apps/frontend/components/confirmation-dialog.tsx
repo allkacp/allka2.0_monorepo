@@ -71,18 +71,18 @@ export function ConfirmationDialog({
       widthMode="compact"
       compactWidth={420}
       footer={
-        <div className="flex gap-3">
+        <div className="flex gap-2">
           <Button
             variant="outline"
-            className="flex-1 h-9 text-sm border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800"
+            className="flex-1 h-10 text-sm font-medium border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors"
             onClick={onClose}
           >
             {cancelText}
           </Button>
           <Button
-            className={`flex-1 h-9 text-sm font-semibold text-white border-0 shadow-sm ${
+            className={`flex-1 h-10 text-sm font-semibold text-white border-0 transition-all ${
               destructive
-                ? "bg-gradient-to-r from-red-500 to-rose-600 hover:from-red-600 hover:to-rose-700 shadow-red-200 dark:shadow-red-900/30"
+                ? "bg-red-600 hover:bg-red-700 shadow-md hover:shadow-lg shadow-red-500/20 dark:shadow-red-900/40"
                 : "btn-brand"
             }`}
             onClick={handleConfirm}
@@ -93,16 +93,16 @@ export function ConfirmationDialog({
       }
     >
       <div className="px-6 py-5 flex-1 overflow-y-auto">
-        <div className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl mb-4 ${
+        <div className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl mb-5 ${
           destructive
-            ? "bg-red-50 dark:bg-red-900/20"
-            : "bg-blue-50 dark:bg-blue-900/20"
+            ? "bg-red-100 dark:bg-red-900/30"
+            : "bg-blue-100 dark:bg-blue-900/30"
         }`}>
           {destructive
-            ? <AlertTriangle className="h-5 w-5 text-red-500" />
-            : <CheckCircle2 className="h-5 w-5 text-blue-500" />}
+            ? <AlertTriangle className="h-6 w-6 text-red-600 dark:text-red-400" />
+            : <CheckCircle2 className="h-6 w-6 text-blue-600 dark:text-blue-400" />}
         </div>
-        <p className="text-sm text-slate-500 dark:text-slate-400 leading-relaxed">{message}</p>
+        <p className="text-sm text-slate-600 dark:text-slate-300 leading-relaxed">{message}</p>
       </div>
     </SlidePanel>
   )
