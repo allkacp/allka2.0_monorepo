@@ -14,7 +14,7 @@
  *   1. Restaura todos os produtos reais (seed-all-products.ts)
  *   2. Cria modelos de tarefas e vincula a produtos (migrate-tasks.ts)
  *   3. Vincula produtos a projetos em andamento e gera tarefas operacionais
- *      (seed-in-progress.cjs) — apenas se não existirem tarefas ainda
+ *      (src/scripts/seed-in-progress.ts) — apenas se não existirem tarefas ainda
  *
  * Todos os passos são idempotentes: podem ser executados múltiplas vezes.
  * ─────────────────────────────────────────────────────────────────────────────
@@ -79,7 +79,7 @@ async function main() {
   if (afterStep2.projectTasks === 0 && afterStep2.projects > 0) {
     run(
       "Gerar tarefas operacionais (projetos em andamento)",
-      "node seed-in-progress.cjs",
+      "npx tsx src/scripts/seed-in-progress.ts",
     );
   } else if (afterStep2.projectTasks > 0) {
     console.log(

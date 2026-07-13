@@ -1,9 +1,36 @@
 import "dotenv/config";
 
 import { prisma } from "../lib/prisma";
-import { gerarTarefasDoProjeto } from "../lib/generate-tasks";
+import { withProjectCode } from "../lib/create-project";
+import { confirmPaymentAndGenerateProjectTasks, withIdempotentRetry } from "../lib/confirm-payment";
+
+// ─── Guarda de ambiente ─────────────────────────────────────────────────
+// Fixture de demo/QA — nunca contra produção. Permite local e QA
+// (não exige localhost como os scripts de reset/verify, que são
+// estritamente locais); bloqueia só quando NODE_ENV sinaliza produção.
+if (process.env.NODE_ENV === "production") {
+  console.error("❌ BLOQUEADO: NODE_ENV=production. Este é um fixture de demo/QA, nunca roda em produção.");
+  process.exit(1);
+}
+{
+  const rawUrl = process.env.DATABASE_URL ?? "";
+  try {
+    const u = new URL(rawUrl);
+    console.log(`── Ambiente: host=${u.hostname} porta=${u.port} banco=${u.pathname.replace(/^\//, "")} NODE_ENV=${process.env.NODE_ENV ?? "(não definido)"} ──`);
+  } catch {
+    console.log(`── Ambiente: NODE_ENV=${process.env.NODE_ENV ?? "(não definido)"} (DATABASE_URL não pôde ser parseada) ──`);
+  }
+}
 
 const AGENCY_NAME = "Lamego Teste Agency";
+
+// Status cujo fixture representa um projeto JÁ EM OPERAÇÃO (pagamento
+// presumivelmente confirmado) — só esses passam pelo fluxo oficial de
+// confirmação de pagamento e ganham tarefas reais. Rascunho, negociação,
+// aguardando pagamento e cancelado permanecem SEM tarefa (rascunho/pendente
+// não deveria ter tarefa; cancelado nesta fixture representa cancelamento
+// antes da execução — ver descrições em PROJECTS abaixo).
+const STATUSES_WITH_CONFIRMED_PAYMENT = new Set<SeedStatus>(["planning", "in-progress", "completed"]);
 
 type SeedStatus =
   | "draft"
@@ -258,11 +285,19 @@ async function ensureClients() {
 
 async function getAgencyContext() {
   const agency = await prisma.agency.findFirst({ include: { user: true }, orderBy: { created_at: "asc" } });
+  if (!agency?.user) {
+    // Sem fallback silencioso: sem um usuário Agency real, não há quem
+    // autorar os projetos (created_by_user_id) nem confirmar pagamento
+    // (requesterUser) — melhor falhar alto e claro do que inventar autoria.
+    throw new Error("Nenhuma Agency com usuário vinculado encontrada — rode db:seed:agencia primeiro.");
+  }
 
   return {
-    consultantName: agency?.user?.name ?? AGENCY_NAME,
-    consultantEmail: agency?.user?.email ?? null,
-    agencyName: agency?.name ?? AGENCY_NAME,
+    consultantName: agency.user.name ?? AGENCY_NAME,
+    consultantEmail: agency.user.email ?? null,
+    agencyName: agency.name ?? AGENCY_NAME,
+    createdByUserId: agency.user.id,
+    requesterUser: { id: agency.user.id, account_type: agency.user.account_type, role: agency.user.role },
   };
 }
 
@@ -287,6 +322,7 @@ async function ensureProject(
   consultantName: string,
   consultantEmail: string | null,
   agencyName: string,
+  createdByUserId: string,
 ) {
   const existing = await prisma.project.findFirst({
     where: { title: spec.title, agency: agencyName },
@@ -322,32 +358,36 @@ async function ensureProject(
     return { projectId: existing.id, created: false };
   }
 
-  const project = await prisma.project.create({
-    data: {
-      title: spec.title,
-      description: spec.description,
-      status: spec.status,
-      lifecycle: spec.lifecycle,
-      type: spec.type,
-      client_id: companyId,
-      agency: agencyName,
-      company_type: "agency",
-      consultant: consultantName,
-      consultant_email: consultantEmail,
-      team_size: spec.teamSize,
-      progress: spec.progress,
-      value: 0,
-      budget: 0,
-      spent: 0,
-      from_lead: false,
-      bitrix_sync: false,
-      portfolio_permission: false,
-      overdue: false,
-      start_date: startDate,
-      end_date: endDate,
-    },
-    select: { id: true },
-  });
+  const project = await withProjectCode(prisma, (tx, projectCode) =>
+    tx.project.create({
+      data: {
+        title: spec.title,
+        description: spec.description,
+        status: spec.status,
+        lifecycle: spec.lifecycle,
+        type: spec.type,
+        client_id: companyId,
+        agency: agencyName,
+        company_type: "agency",
+        consultant: consultantName,
+        consultant_email: consultantEmail,
+        team_size: spec.teamSize,
+        progress: spec.progress,
+        value: 0,
+        budget: 0,
+        spent: 0,
+        from_lead: false,
+        bitrix_sync: false,
+        portfolio_permission: false,
+        overdue: false,
+        start_date: startDate,
+        end_date: endDate,
+        project_code: projectCode,
+        created_by_user_id: createdByUserId,
+      },
+      select: { id: true },
+    }),
+  );
 
   return { projectId: project.id, created: true };
 }
@@ -464,6 +504,8 @@ async function main() {
 
   let created = 0;
   let reused = 0;
+  let paymentsConfirmed = 0;
+  let tasksSkipped = 0;
 
   for (let index = 0; index < PROJECTS.length; index += 1) {
     const spec = PROJECTS[index];
@@ -475,23 +517,60 @@ async function main() {
       agencyContext.consultantName,
       agencyContext.consultantEmail,
       agencyContext.agencyName,
+      agencyContext.createdByUserId,
     );
 
     if (wasCreated) created += 1;
     else reused += 1;
 
     await syncProjectProducts(projectId, spec);
-    await gerarTarefasDoProjeto(projectId);
+
+    if (STATUSES_WITH_CONFIRMED_PAYMENT.has(spec.status)) {
+      // Fluxo oficial único: confirma (ou reaproveita, se já rodou antes)
+      // um Payment PENDENTE->PAGO, congela PaymentItems e gera tarefas —
+      // tudo dentro da mesma transação do serviço central. Nunca cria
+      // Payment/PaymentItem/ProjectTask diretamente aqui.
+      const result = await withIdempotentRetry(() =>
+        prisma.$transaction((tx) =>
+          confirmPaymentAndGenerateProjectTasks(tx, {
+            projectId,
+            requesterUser: agencyContext.requesterUser,
+            billingCycleKey: spec.lifecycle === "mensal" ? undefined : "avulso",
+            notes: `Fixture de demo — ${spec.title}`,
+          }),
+        ),
+      );
+      paymentsConfirmed += 1;
+      if (result.tasksResult) {
+        console.log(`  → Payment confirmado + ${result.tasksResult.generated} tarefa(s) geradas (${result.tasksResult.stages_generated} etapa(s))`);
+      } else if (result.alreadyProcessed) {
+        console.log(`  → Payment já confirmado em execução anterior (idempotente)`);
+      }
+      // confirmPaymentAndGenerateProjectTasks força Project.status="in-progress"
+      // como efeito colateral (reflete o comportamento real do sistema: um
+      // pagamento confirmado sempre põe o projeto em execução). Aqui é só
+      // fixture visual de status — restaura o status pretendido do fixture
+      // (planning/completed) sem afetar Payment/PaymentItems/tarefas já
+      // gerados.
+      if (spec.status !== "in-progress") {
+        await prisma.project.update({ where: { id: projectId }, data: { status: spec.status } });
+      }
+    } else {
+      tasksSkipped += 1;
+    }
+
     await normalizeCompletedStates(projectId, spec.status);
 
     console.log(`✓ ${spec.status.padEnd(16)} ${spec.title}`);
   }
 
   console.log("");
-  console.log(`Projetos processados: ${PROJECTS.length}`);
-  console.log(`Novos criados:        ${created}`);
-  console.log(`Reaproveitados:       ${reused}`);
-  console.log(`Agency usada:         ${agencyContext.agencyName}`);
+  console.log(`Projetos processados:      ${PROJECTS.length}`);
+  console.log(`Novos criados:             ${created}`);
+  console.log(`Reaproveitados:            ${reused}`);
+  console.log(`Pagamentos confirmados:    ${paymentsConfirmed}`);
+  console.log(`Sem tarefa (por desenho):  ${tasksSkipped}`);
+  console.log(`Agency usada:              ${agencyContext.agencyName}`);
 }
 
 main()

@@ -3,6 +3,7 @@ import bcrypt from "bcryptjs";
 import { prisma } from "../lib/prisma";
 import { verifyToken, requireRole } from "../middleware/auth";
 import { generateNextUserCode } from "../lib/user-code";
+import { withProjectCode } from "../lib/create-project";
 
 // POST /api/admin/seed/company-test
 // Admin-only endpoint to seed the company test user + data in any environment.
@@ -69,11 +70,14 @@ router.post(
         { id: "proj-ct-08", title: "Consultoria SEO — Auditoria Técnica",   type: "Consultoria",            status: "cancelado", value: 1800,  budget: 1800,  progress: 20,  start_date: daysAgo(200), end_date: daysAgo(150) },
       ];
       for (const proj of projects) {
-        await prisma.project.upsert({
-          where: { id: proj.id },
-          update: { ...proj },
-          create: { ...proj, client_id: CT_COMPANY_ID },
-        });
+        const existing = await prisma.project.findUnique({ where: { id: proj.id }, select: { id: true } });
+        if (existing) {
+          await prisma.project.update({ where: { id: proj.id }, data: { ...proj } });
+        } else {
+          await withProjectCode(prisma, (tx, projectCode) =>
+            tx.project.create({ data: { ...proj, client_id: CT_COMPANY_ID, project_code: projectCode } }),
+          );
+        }
       }
 
       // ── Tasks ─────────────────────────────────────────────────────────────
@@ -224,21 +228,30 @@ router.post(
         { id: "seed-agencia-proj-06", title: "App de Fidelidade UX/UI — Starbucks",  client_id: "seed-agencia-cli-01", status: "awaiting-payment", type: "UX/UI",         value: 35000, budget: 35000, spent: 0,     progress: 0,   lifecycle: "avulso", start_date: future(14), end_date: future(104), overdue: false },
       ];
       for (const p of projects) {
-        await prisma.project.upsert({
-          where:  { id: p.id },
-          update: { status: p.status, progress: p.progress, spent: p.spent },
-          create: {
-            ...p,
-            agency:           AGENCY_NAME,
-            company_type:     "company",
-            consultant:       CONSULTANT,
-            consultant_email: CONSULTANT_EMAIL,
-            portfolio_permission: p.status === "completed",
-            bitrix_sync:      false,
-            from_lead:        false,
-            nomades:          "[]",
-          },
-        });
+        const existing = await prisma.project.findUnique({ where: { id: p.id }, select: { id: true } });
+        if (existing) {
+          await prisma.project.update({
+            where: { id: p.id },
+            data: { status: p.status, progress: p.progress, spent: p.spent },
+          });
+        } else {
+          await withProjectCode(prisma, (tx, projectCode) =>
+            tx.project.create({
+              data: {
+                ...p,
+                agency:           AGENCY_NAME,
+                company_type:     "company",
+                consultant:       CONSULTANT,
+                consultant_email: CONSULTANT_EMAIL,
+                portfolio_permission: p.status === "completed",
+                bitrix_sync:      false,
+                from_lead:        false,
+                nomades:          "[]",
+                project_code: projectCode,
+              },
+            }),
+          );
+        }
       }
 
       // ── Tasks ─────────────────────────────────────────────────────────────
@@ -344,11 +357,17 @@ router.post(
         { id: "seed-empresa-proj-05", title: "Auditoria SEO + Conteúdo Q3",     status: "planning",         type: "Marketing Digital",     budget: 4500,  value: 4500,  progress: 10,  start_date: future(14), end_date: future(74)  },
       ];
       for (const p of projects) {
-        await prisma.project.upsert({
-          where:  { id: p.id },
-          update: { status: p.status, progress: p.progress },
-          create: { ...p, client_id: COMPANY_ID },
-        });
+        const existing = await prisma.project.findUnique({ where: { id: p.id }, select: { id: true } });
+        if (existing) {
+          await prisma.project.update({
+            where: { id: p.id },
+            data: { status: p.status, progress: p.progress },
+          });
+        } else {
+          await withProjectCode(prisma, (tx, projectCode) =>
+            tx.project.create({ data: { ...p, client_id: COMPANY_ID, project_code: projectCode } }),
+          );
+        }
       }
 
       // ── Tasks ─────────────────────────────────────────────────────────────
@@ -503,11 +522,19 @@ router.post(
       });
 
       // ── Projeto ───────────────────────────────────────────────────────────
-      await prisma.project.upsert({
-        where:  { id: "seed-project-lider-01" },
-        update: { consultant: CONSULTOR, consultant_email: LIDER_EMAIL },
-        create: { id: "seed-project-lider-01", title: "Projeto Allka Seed", description: "Gestão de performance e mídia paga", client_id: "seed-company-lider-01", status: "in-progress", lifecycle: "mensal", type: "Marketing Digital", value: 5000, budget: 5000, progress: 40, consultant: CONSULTOR, consultant_email: LIDER_EMAIL, start_date: past(30) },
-      });
+      const existingLiderProject = await prisma.project.findUnique({ where: { id: "seed-project-lider-01" }, select: { id: true } });
+      if (existingLiderProject) {
+        await prisma.project.update({
+          where: { id: "seed-project-lider-01" },
+          data: { consultant: CONSULTOR, consultant_email: LIDER_EMAIL },
+        });
+      } else {
+        await withProjectCode(prisma, (tx, projectCode) =>
+          tx.project.create({
+            data: { id: "seed-project-lider-01", title: "Projeto Allka Seed", description: "Gestão de performance e mídia paga", client_id: "seed-company-lider-01", status: "in-progress", lifecycle: "mensal", type: "Marketing Digital", value: 5000, budget: 5000, progress: 40, consultant: CONSULTOR, consultant_email: LIDER_EMAIL, start_date: past(30), project_code: projectCode },
+          }),
+        );
+      }
 
       // ── ProjectProduct ────────────────────────────────────────────────────
       const ppExists = await prisma.projectProduct.findUnique({

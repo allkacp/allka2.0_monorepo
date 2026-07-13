@@ -88,6 +88,15 @@ if (isMySQL) {
   );
 }
 
+// Removido de propósito: um middleware $use() que auto-gerava
+// Project.project_code existiu aqui brevemente e foi removido — abria sua
+// PRÓPRIA transação (client.$transaction(...)) separada da transação do
+// chamador (se o create() falhasse depois por outro motivo, o número da
+// sequência já tinha sido consumido, criando buraco permanente) e não
+// tinha teste persistido. Todo código que cria Project agora usa o helper
+// explícito createProjectWithSequentialCode() (ver src/lib/create-project.ts),
+// que gera o código sempre na MESMA transação/conexão do create.
+
 export const prisma: PrismaClient = client;
 
 if (process.env.NODE_ENV !== "production") {

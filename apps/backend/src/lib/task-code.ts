@@ -1,31 +1,18 @@
-import { prisma } from "./prisma";
+import type { DbClient } from "./project-scope";
+import { getNextSequenceValue, formatTaskCode } from "./sequence";
 
 /**
- * Returns the next available global task code in the format T000001.
+ * Próximo código de tarefa no formato T000001, T000002, ...
  *
- * The implementation finds the highest existing numeric code and increments it.
- * This function must be called inside a transaction or with appropriate
- * serialization when used at high concurrency, but for SQLite (single-writer)
- * the default behavior is safe.
+ * Antes: SELECT MAX(task_code) + 1 sem lock, sem transação — risco real de
+ * colisão sob concorrência no MySQL (só detectada, não evitada, pela
+ * constraint @unique em task_code). Agora usa a sequência atômica
+ * (EntitySequence, key="project_task") — ver src/lib/sequence.ts.
+ *
+ * Deve ser chamada com o Prisma Transaction Client (tx) de dentro da mesma
+ * transação que cria a ProjectTask.
  */
-export async function getNextTaskCode(): Promise<string> {
-  // Find the task with the highest numeric task_code
-  const last = await prisma.projectTask.findFirst({
-    where: {
-      task_code: { not: null },
-    },
-    orderBy: { task_code: "desc" },
-    select: { task_code: true },
-  });
-
-  let next = 1;
-  if (last?.task_code) {
-    // Extract the numeric part from e.g. "T000042" → 42
-    const numeric = parseInt(last.task_code.replace(/^T/, ""), 10);
-    if (!isNaN(numeric)) {
-      next = numeric + 1;
-    }
-  }
-
-  return "T" + String(next).padStart(6, "0");
+export async function getNextTaskCode(db: DbClient): Promise<string> {
+  const seq = await getNextSequenceValue(db, "project_task");
+  return formatTaskCode(seq);
 }

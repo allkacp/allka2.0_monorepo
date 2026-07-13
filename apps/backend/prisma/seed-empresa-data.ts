@@ -8,6 +8,7 @@
 
 import "dotenv/config";
 import { PrismaClient } from "@prisma/client";
+import { withProjectCode } from "../src/lib/create-project";
 
 const prisma = new PrismaClient();
 
@@ -75,95 +76,110 @@ async function main() {
   console.log(`  ✓ Usuário empresa  → company_id vinculado (${updated.count} registro${updated.count === 1 ? "" : "s"})`);
 
   // ── 3. Projetos ───────────────────────────────────────────────────────────
-  const proj1 = await prisma.project.upsert({
-    where:  { id: IDS.proj1 },
-    update: {},
-    create: {
-      id:          IDS.proj1,
-      title:       "Site Institucional + SEO",
-      description: "Criação de site institucional responsivo com otimização SEO e integração com Google Analytics.",
-      client_id:   IDS.company,
-      status:      "in-progress",
-      type:        "Marketing Digital",
-      budget:      12000,
-      value:       12000,
-      progress:    45,
-      start_date:  past(30),
-      end_date:    future(60),
-    },
-  });
+  const proj1 = await withProjectCode(prisma, (tx, projectCode) =>
+    tx.project.upsert({
+      where:  { id: IDS.proj1 },
+      update: {},
+      create: {
+        id:          IDS.proj1,
+        title:       "Site Institucional + SEO",
+        description: "Criação de site institucional responsivo com otimização SEO e integração com Google Analytics.",
+        client_id:   IDS.company,
+        status:      "in-progress",
+        type:        "Marketing Digital",
+        budget:      12000,
+        value:       12000,
+        progress:    45,
+        start_date:  past(30),
+        end_date:    future(60),
+        project_code: projectCode,
+      },
+    }),
+  );
 
-  const proj2 = await prisma.project.upsert({
-    where:  { id: IDS.proj2 },
-    update: {},
-    create: {
-      id:          IDS.proj2,
-      title:       "Campanha Google Ads — Q2/2026",
-      description: "Gestão de campanhas Google Ads com foco em geração de leads qualificados para o segmento B2B.",
-      client_id:   IDS.company,
-      status:      "in-progress",
-      type:        "Marketing Digital",
-      budget:      8500,
-      value:       8500,
-      progress:    70,
-      start_date:  past(45),
-      end_date:    future(30),
-    },
-  });
+  const proj2 = await withProjectCode(prisma, (tx, projectCode) =>
+    tx.project.upsert({
+      where:  { id: IDS.proj2 },
+      update: {},
+      create: {
+        id:          IDS.proj2,
+        title:       "Campanha Google Ads — Q2/2026",
+        description: "Gestão de campanhas Google Ads com foco em geração de leads qualificados para o segmento B2B.",
+        client_id:   IDS.company,
+        status:      "in-progress",
+        type:        "Marketing Digital",
+        budget:      8500,
+        value:       8500,
+        progress:    70,
+        start_date:  past(45),
+        end_date:    future(30),
+        project_code: projectCode,
+      },
+    }),
+  );
 
-  const proj3 = await prisma.project.upsert({
-    where:  { id: IDS.proj3 },
-    update: {},
-    create: {
-      id:          IDS.proj3,
-      title:       "Identidade Visual & Branding",
-      description: "Desenvolvimento completo da identidade visual: logotipo, paleta de cores, tipografia e manual de marca.",
-      client_id:   IDS.company,
-      status:      "completed",
-      type:        "Design",
-      budget:      6000,
-      value:       6000,
-      progress:    100,
-      start_date:  past(90),
-      end_date:    past(10),
-    },
-  });
+  const proj3 = await withProjectCode(prisma, (tx, projectCode) =>
+    tx.project.upsert({
+      where:  { id: IDS.proj3 },
+      update: {},
+      create: {
+        id:          IDS.proj3,
+        title:       "Identidade Visual & Branding",
+        description: "Desenvolvimento completo da identidade visual: logotipo, paleta de cores, tipografia e manual de marca.",
+        client_id:   IDS.company,
+        status:      "completed",
+        type:        "Design",
+        budget:      6000,
+        value:       6000,
+        progress:    100,
+        start_date:  past(90),
+        end_date:    past(10),
+        project_code: projectCode,
+      },
+    }),
+  );
 
-  const proj4 = await prisma.project.upsert({
-    where:  { id: IDS.proj4 },
-    update: {},
-    create: {
-      id:          IDS.proj4,
-      title:       "App Mobile — Versão 2.0",
-      description: "Desenvolvimento da versão 2.0 do aplicativo mobile com novas funcionalidades e redesign completo da interface.",
-      client_id:   IDS.company,
-      status:      "awaiting-payment",
-      type:        "Desenvolvimento Mobile",
-      budget:      22000,
-      value:       22000,
-      progress:    0,
-      start_date:  future(7),
-      end_date:    future(97),
-    },
-  });
+  const proj4 = await withProjectCode(prisma, (tx, projectCode) =>
+    tx.project.upsert({
+      where:  { id: IDS.proj4 },
+      update: {},
+      create: {
+        id:          IDS.proj4,
+        title:       "App Mobile — Versão 2.0",
+        description: "Desenvolvimento da versão 2.0 do aplicativo mobile com novas funcionalidades e redesign completo da interface.",
+        client_id:   IDS.company,
+        status:      "awaiting-payment",
+        type:        "Desenvolvimento Mobile",
+        budget:      22000,
+        value:       22000,
+        progress:    0,
+        start_date:  future(7),
+        end_date:    future(97),
+        project_code: projectCode,
+      },
+    }),
+  );
 
-  const proj5 = await prisma.project.upsert({
-    where:  { id: IDS.proj5 },
-    update: {},
-    create: {
-      id:          IDS.proj5,
-      title:       "Auditoria SEO + Conteúdo Q3",
-      description: "Auditoria técnica completa de SEO e planejamento de conteúdo para o terceiro trimestre.",
-      client_id:   IDS.company,
-      status:      "planning",
-      type:        "Marketing Digital",
-      budget:      4500,
-      value:       4500,
-      progress:    10,
-      start_date:  future(14),
-      end_date:    future(74),
-    },
-  });
+  const proj5 = await withProjectCode(prisma, (tx, projectCode) =>
+    tx.project.upsert({
+      where:  { id: IDS.proj5 },
+      update: {},
+      create: {
+        id:          IDS.proj5,
+        title:       "Auditoria SEO + Conteúdo Q3",
+        description: "Auditoria técnica completa de SEO e planejamento de conteúdo para o terceiro trimestre.",
+        client_id:   IDS.company,
+        status:      "planning",
+        type:        "Marketing Digital",
+        budget:      4500,
+        value:       4500,
+        progress:    10,
+        start_date:  future(14),
+        end_date:    future(74),
+        project_code: projectCode,
+      },
+    }),
+  );
 
   console.log(`  ✓ Projeto 1       → ${proj1.title}`);
   console.log(`  ✓ Projeto 2       → ${proj2.title}`);

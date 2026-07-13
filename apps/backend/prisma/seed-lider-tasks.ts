@@ -1,6 +1,9 @@
 import "dotenv/config";
 import { PrismaClient } from "@prisma/client";
 import bcrypt from "bcryptjs";
+import { withProjectCode } from "../src/lib/create-project";
+import { confirmPaymentAndGenerateProjectTasks, withIdempotentRetry } from "../src/lib/confirm-payment";
+import { generateTasksFromSpec, type TaskSpec } from "../src/lib/generate-tasks-from-spec";
 
 const prisma = new PrismaClient();
 
@@ -330,9 +333,11 @@ async function main() {
   const hash = await bcrypt.hash(seedPassword, 10);
 
   // ── 1. Usuário líder ──────────────────────────────────────────────────────
+  // update: {} de propósito — usuário existente nunca tem password_hash/
+  // is_active tocados por um seed reutilizável (só a criação define isso).
   await prisma.user.upsert({
     where: { id: IDS.liderUser },
-    update: { password_hash: hash },
+    update: {},
     create: {
       id:            IDS.liderUser,
       email:         "lider@allka.com.vc",
@@ -363,7 +368,7 @@ async function main() {
   // ── 3. Usuário da agência (responsável pelas tarefas) ─────────────────────
   await prisma.user.upsert({
     where: { id: IDS.agenciaUser },
-    update: { password_hash: hash },
+    update: {},
     create: {
       id:            IDS.agenciaUser,
       email:         "agencia.seed@allka.com.vc",
@@ -385,7 +390,7 @@ async function main() {
   for (const u of nomadeEmails) {
     await prisma.user.upsert({
       where:  { id: u.id },
-      update: { password_hash: hash },
+      update: {},
       create: {
         id:            u.id,
         email:         u.email,
@@ -476,30 +481,33 @@ async function main() {
   console.log("  ✅ Produto criado: Gestão de Performance");
 
   // ── 8. Projeto ────────────────────────────────────────────────────────────
-  await prisma.project.upsert({
-    where:  { id: IDS.project },
-    update: {
-      consultant:       CONSULTOR,
-      consultant_email: "lider@allka.com.vc",
-      type:             "Marketing Digital",
-      description:      "Projeto de gestão de performance e mídia paga para a Empresa Seed Performance, com campanhas em Google Ads, Meta Ads e estratégia de SEO.",
-    },
-    create: {
-      id:               IDS.project,
-      title:            "Projeto Allka Seed",
-      description:      "Projeto de gestão de performance e mídia paga para a Empresa Seed Performance, com campanhas em Google Ads, Meta Ads e estratégia de SEO.",
-      client_id:        IDS.company,
-      status:           "in-progress",
-      lifecycle:        "mensal",
-      type:             "Marketing Digital",
-      value:            5000,
-      budget:           5000,
-      progress:         40,
-      consultant:       CONSULTOR,
-      consultant_email: "lider@allka.com.vc",
-      start_date:       past(30),
-    },
-  });
+  await withProjectCode(prisma, (tx, projectCode) =>
+    tx.project.upsert({
+      where:  { id: IDS.project },
+      update: {
+        consultant:       CONSULTOR,
+        consultant_email: "lider@allka.com.vc",
+        type:             "Marketing Digital",
+        description:      "Projeto de gestão de performance e mídia paga para a Empresa Seed Performance, com campanhas em Google Ads, Meta Ads e estratégia de SEO.",
+      },
+      create: {
+        id:               IDS.project,
+        title:            "Projeto Allka Seed",
+        description:      "Projeto de gestão de performance e mídia paga para a Empresa Seed Performance, com campanhas em Google Ads, Meta Ads e estratégia de SEO.",
+        client_id:        IDS.company,
+        status:           "in-progress",
+        lifecycle:        "mensal",
+        type:             "Marketing Digital",
+        value:            5000,
+        budget:           5000,
+        progress:         40,
+        consultant:       CONSULTOR,
+        consultant_email: "lider@allka.com.vc",
+        start_date:       past(30),
+        project_code:     projectCode,
+      },
+    }),
+  );
   console.log("  ✅ Projeto criado: Projeto Allka Seed");
 
   // ── 9. ProjectProduct ─────────────────────────────────────────────────────
@@ -525,15 +533,49 @@ async function main() {
   }
   console.log("  ✅ ProjectProduct criado");
 
+  // ── 9b. Confirmar pagamento oficial (Payment PAGO + PaymentItem) ──────────
+  // "Gestão de Performance" é um produto de demo sem CatalogTask vinculado —
+  // o serviço oficial não tem como GERAR as 15 tarefas específicas abaixo
+  // (conteúdo 100% autoral: checklist, briefing e responsáveis nômade por
+  // tarefa, sem equivalente em template de catálogo). Ainda assim, nenhuma
+  // ProjectTask deste projeto deve existir sem um Payment PAGO + PaymentItem
+  // reais por trás — confirma isso pelo serviço central antes de criar as
+  // tarefas (que continuam sendo criadas diretamente logo abaixo, já que não
+  // há gerador de catálogo capaz de produzi-las).
+  let liderPaymentId: string;
+  {
+    const requester = await prisma.user.findFirst({
+      where: { account_type: "admin" },
+      select: { id: true, account_type: true, role: true },
+    });
+    if (!requester) throw new Error("Nenhum usuário admin encontrado — necessário para confirmar pagamento.");
+    const paymentResult = await withIdempotentRetry(() =>
+      prisma.$transaction((tx) =>
+        confirmPaymentAndGenerateProjectTasks(tx, {
+          projectId: IDS.project,
+          requesterUser: requester,
+          notes: "Seed de demonstração — Líder/Nômade (Gestão de Performance)",
+        }),
+      ),
+    );
+    liderPaymentId = paymentResult.payment.id;
+    if (paymentResult.alreadyProcessed) {
+      console.log("  ✅ Payment já confirmado anteriormente (idempotente)");
+    } else {
+      console.log("  ✅ Payment confirmado + PaymentItem congelado");
+    }
+  }
+
   // ── 10. ProjectTasks (15 tarefas com dados completos) ─────────────────────
+  // Nenhuma ProjectTask é criada diretamente aqui — tudo passa por
+  // generateTasksFromSpec (src/lib/generate-tasks-from-spec.ts), o segundo
+  // ponto oficial de geração de tarefa (ao lado de gerarTarefasDoProjeto),
+  // reservado exatamente para este caso: conteúdo 100% autoral sem
+  // CatalogTask real por trás, mas ainda exigindo Payment PAGO + PaymentItem.
   const briefingSnapshot = JSON.stringify(BRIEFING_QUESTIONS);
-  let created = 0;
-  let updated = 0;
 
-  for (const t of TASKS) {
+  const taskSpecs: TaskSpec[] = TASKS.map((t) => {
     const dates = lifecycleDates(t.status);
-
-    // Checklist contextual da tarefa
     const checklist = [
       { id: "c1", text: "Briefing coletado e validado",            done: true },
       { id: "c2", text: "Acessos às contas de anúncio liberados",  done: true },
@@ -542,7 +584,6 @@ async function main() {
       { id: "c5", text: "Relatório de resultados gerado",          done: t.status === "APROVADA" },
     ];
 
-    // Steps snapshot (resumo das etapas) + dados base
     const stepsSnapshot = JSON.stringify(
       STAGE_TITLES.map((s, i) => ({
         ref: `E0${i + 1}`,
@@ -553,46 +594,88 @@ async function main() {
       })),
     );
 
-    const baseData = {
-      project_id:            IDS.project,
-      project_product_id:    IDS.projectProduct,
-      product_id:            IDS.product,
-      task_code:             t.code,
-      code_snapshot:         t.code,
-      title:                 t.title,
-      name_snapshot:         t.title,
-      category_snapshot:     CATEGORY,
-      description:           t.description,
-      status:                t.status,
-      priority:              t.priority,
-      fase:                  t.fase,
-      phase:                 t.fase,
-      due_date:              t.due_date,
-      start_date:            dates.start_date,
-      data_lancamento:       dates.data_lancamento,
-      data_inicio_execucao:  dates.data_inicio_execucao,
-      data_conclusao:        dates.data_conclusao,
-      completed_at:          dates.completed_at,
-      lider_responsavel_id:  IDS.liderUser,
-      responsavel_agencia_id: IDS.agenciaUser,
-      nomade_responsavel_id: t.nomadeId,
-      observations:          t.observations ?? null,
-      briefing_snapshot:     briefingSnapshot,
-      checklist_snapshot:    JSON.stringify(checklist),
-      steps_snapshot:        stepsSnapshot,
+    // Etapas embutidas na especificação — generateTasksFromSpec cria só o
+    // que falta (create-only, por source_key), nunca apaga/recria etapa
+    // existente. Status inicial contextual por tarefa (stagesFor); se a
+    // etapa já existir de uma execução anterior, esse status inicial é
+    // ignorado — o real (possivelmente alterado manualmente) é preservado.
+    const stageStatuses = stagesFor(t.status);
+    const stages = STAGE_TITLES.map((s, i) => ({
+      code: `E0${i + 1}`,
+      catalogStepRef: `E0${i + 1}`,
+      titulo: s.titulo,
+      descricao: s.descricao,
+      ordem: i + 1,
+      status: stageStatuses[i],
+      obrigatoria: true,
+      briefingNecessario: i === 0,
+      checklistSnapshot: JSON.stringify(checklist.slice(0, 3)),
+    }));
+
+    return {
+      code: t.code,
+      codeSnapshot: t.code,
+      title: t.title,
+      description: t.description,
+      status: t.status,
+      priority: t.priority,
+      dueDate: t.due_date,
+      liderResponsavelId: IDS.liderUser,
+      responsavelAgenciaId: IDS.agenciaUser,
+      nomadeResponsavelId: t.nomadeId,
+      fase: t.fase,
+      briefingSnapshot,
+      checklistSnapshot: JSON.stringify(checklist),
+      stepsSnapshot,
+      observations: t.observations ?? null,
+      stages,
     };
+  });
 
-    const exists = await prisma.projectTask.findUnique({ where: { id: t.id } });
-    if (exists) {
-      await prisma.projectTask.update({ where: { id: t.id }, data: baseData });
-      updated++;
-    } else {
-      await prisma.projectTask.create({ data: { id: t.id, ...baseData } });
-      created++;
-    }
+  const genResult = await withIdempotentRetry(() =>
+    prisma.$transaction((tx) =>
+      generateTasksFromSpec(tx, {
+        projectId: IDS.project,
+        paymentId: liderPaymentId,
+        projectProductId: IDS.projectProduct,
+        productId: IDS.product,
+        tasks: taskSpecs,
+        // Título/descrição/briefing/checklist/steps ficam em sincronia com a
+        // especificação abaixo em reexecuções — nunca status, datas,
+        // responsáveis ou etapas (ver generateTasksFromSpec).
+        syncMetadata: true,
+      }),
+    ),
+  );
+  console.log(
+    `  ✅ ${genResult.created + genResult.reused} tarefas (${genResult.created} criadas, ${genResult.reused} reaproveitadas) | ` +
+      `etapas: ${genResult.stagesCreated} criadas, ${genResult.stagesReused} reaproveitadas`,
+  );
 
-    // ── Briefing answers (recria sempre p/ idempotência) ──────────────────
-    await prisma.taskBriefingAnswer.deleteMany({ where: { project_task_id: t.id } });
+  // Guarda de sanidade: "Gestão de Performance" é por desenho um produto sem
+  // CatalogTask real (ver comentário na confirmação de pagamento acima). Se
+  // algum outro script (ex.: db:seed:catalog-tasks) criar um CatalogTask
+  // provisório pra ele nesse meio-tempo, confirmPaymentAndGenerateProjectTasks
+  // geraria uma 16ª tarefa genérica indesejada — checa aqui pra nunca passar
+  // batido silenciosamente.
+  const totalTasksForProject = await prisma.projectTask.count({ where: { project_id: IDS.project } });
+  if (totalTasksForProject !== TASKS.length) {
+    console.warn(
+      `  ⚠️  Esperado ${TASKS.length} tarefas no projeto, encontrado ${totalTasksForProject} — ` +
+        `provável CatalogTask provisório criado pra "${IDS.product}" por outro script; investigue antes de confiar na contagem.`,
+    );
+  }
+
+  // Etapas já foram criadas (create-only) dentro de generateTasksFromSpec
+  // acima. Briefing answers e anexos abaixo seguem o mesmo princípio:
+  // create-only por chave natural, nunca delete+recreate — preserva
+  // qualquer edição feita entre execuções.
+  let briefingCreated = 0;
+  let attachmentsCreated = 0;
+  for (const t of TASKS) {
+    const realId = genResult.taskIds[t.code];
+
+    // ── Briefing answers (create-only por project_task_id + question_key) ──
     const answerMap: Record<string, string> = {
       objetivo:  t.brief.objetivo,
       publico:   t.brief.publico,
@@ -602,68 +685,63 @@ async function main() {
       canais:    t.brief.canais,
     };
     for (const q of BRIEFING_QUESTIONS) {
+      const existingAnswer = await prisma.taskBriefingAnswer.findUnique({
+        where: { project_task_id_question_key: { project_task_id: realId, question_key: q.key } },
+      });
+      if (existingAnswer) continue;
       await prisma.taskBriefingAnswer.create({
         data: {
-          project_task_id: t.id,
+          project_task_id: realId,
           question_key:    q.key,
           question_text:   q.text,
           answer:          answerMap[q.key] ?? "",
         },
       });
+      briefingCreated++;
     }
 
-    // ── Etapas (recria sempre p/ idempotência) ────────────────────────────
-    await prisma.projectTaskStage.deleteMany({ where: { project_task_id: t.id } });
-    const stageStatuses = stagesFor(t.status);
-    for (let i = 0; i < STAGE_TITLES.length; i++) {
-      await prisma.projectTaskStage.create({
-        data: {
-          project_task_id:   t.id,
-          catalog_step_ref:  `E0${i + 1}`,
-          titulo:            STAGE_TITLES[i].titulo,
-          descricao:         STAGE_TITLES[i].descricao,
-          ordem:             i + 1,
-          status:            stageStatuses[i],
-          obrigatoria:       true,
-          briefing_necessario: i === 0,
-          checklist_snapshot: JSON.stringify(checklist.slice(0, 3)),
-        },
-      });
-    }
-
-    // ── Anexos (recria sempre p/ idempotência) ────────────────────────────
-    await prisma.taskAttachment.deleteMany({ where: { project_task_id: t.id } });
-    // Referência sempre presente
-    await prisma.taskAttachment.create({
-      data: {
-        project_task_id: t.id,
-        type:            "reference",
-        name:            "Guia de marca e diretrizes da campanha.pdf",
-        url:             "https://exemplo.allka.com.vc/seed/guia-de-marca.pdf",
-        size:            842_137,
-        mime_type:       "application/pdf",
-        observations:    "Material de referência enviado pela agência no briefing.",
-        uploaded_by:     "Agência Performance Seed",
-      },
+    // ── Anexos (create-only por project_task_id + name) ─────────────────────
+    const existingRef = await prisma.taskAttachment.findFirst({
+      where: { project_task_id: realId, name: "Guia de marca e diretrizes da campanha.pdf" },
     });
-    // Entrega para tarefas com hasDelivery
-    if (t.hasDelivery) {
+    if (!existingRef) {
       await prisma.taskAttachment.create({
         data: {
-          project_task_id: t.id,
-          type:            "delivery",
-          name:            `Entrega — ${t.title}.pdf`,
-          url:             "https://exemplo.allka.com.vc/seed/entrega-final.pdf",
-          size:            1_284_902,
+          project_task_id: realId,
+          type:            "reference",
+          name:            "Guia de marca e diretrizes da campanha.pdf",
+          url:             "https://exemplo.allka.com.vc/seed/guia-de-marca.pdf",
+          size:            842_137,
           mime_type:       "application/pdf",
-          observations:    "Entrega submetida pelo nômade para análise do líder.",
-          uploaded_by:     nomades.find((n) => n.id === t.nomadeId)?.name ?? "Nômade",
+          observations:    "Material de referência enviado pela agência no briefing.",
+          uploaded_by:     "Agência Performance Seed",
         },
       });
+      attachmentsCreated++;
+    }
+    if (t.hasDelivery) {
+      const deliveryName = `Entrega — ${t.title}.pdf`;
+      const existingDelivery = await prisma.taskAttachment.findFirst({
+        where: { project_task_id: realId, name: deliveryName },
+      });
+      if (!existingDelivery) {
+        await prisma.taskAttachment.create({
+          data: {
+            project_task_id: realId,
+            type:            "delivery",
+            name:            deliveryName,
+            url:             "https://exemplo.allka.com.vc/seed/entrega-final.pdf",
+            size:            1_284_902,
+            mime_type:       "application/pdf",
+            observations:    "Entrega submetida pelo nômade para análise do líder.",
+            uploaded_by:     nomades.find((n) => n.id === t.nomadeId)?.name ?? "Nômade",
+          },
+        });
+        attachmentsCreated++;
+      }
     }
   }
-  console.log(`  ✅ 15 tarefas com dados completos (${created} criadas, ${updated} atualizadas)`);
-  console.log("     • briefing + respostas, etapas, checklist, anexos, responsáveis e datas preenchidos");
+  console.log(`     • briefing respostas novas: ${briefingCreated} | anexos novos: ${attachmentsCreated} (nada apagado)`);
 
   console.log("\n🎉 Seed concluído com sucesso!");
   console.log("   Login líder: lider@allka.com.vc / (SEED_TEST_USER_PASSWORD)");

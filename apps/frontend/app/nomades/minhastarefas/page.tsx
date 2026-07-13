@@ -9,6 +9,8 @@ import { Badge } from "@/components/ui/badge"
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet"
 import { PageHeader } from "@/components/page-header"
+import { useSidebar } from "@/contexts/sidebar-context"
+import { useAppFrameMetrics } from "@/hooks/useAppFrameMetrics"
 
 const STATUS_CFG: Record<string, { label: string; cls: string; Icon: any }> = {
   em_andamento: { label: "Em andamento", cls: "bg-blue-100 text-blue-700 border-blue-200",    Icon: Clock },
@@ -104,6 +106,8 @@ function StarRating({ value }: { value: number }) {
 }
 
 export default function MinhasTarefasPage() {
+  const { sidebarWidth } = useSidebar();
+  const { headerHeight, footerHeight } = useAppFrameMetrics();
   const [tab, setTab]       = useState("ativas")
   const [detail, setDetail] = useState<MyTask | null>(null)
 
@@ -209,22 +213,36 @@ export default function MinhasTarefasPage() {
 
       {/* Detail sheet */}
       <Sheet open={!!detail} onOpenChange={() => setDetail(null)}>
-        <SheetContent side="right" hideOverlay className="w-full sm:max-w-lg overflow-y-auto">
+        <SheetContent
+          side="right"
+          hideOverlay
+          className="w-full p-0 flex flex-col overflow-hidden"
+          style={{
+            left: `${sidebarWidth}px`,
+            width: `calc(100vw - ${sidebarWidth}px)`,
+            top: `${headerHeight - 1}px`,
+            bottom: `${footerHeight - 1}px`,
+          }}
+        >
           {detail && (() => {
             const cfg  = STATUS_CFG[detail.status]
             const Icon = cfg.Icon
             return (
               <>
-                <SheetTitle className="text-base font-bold pr-6">{detail.title}</SheetTitle>
-                <div className="mt-4 space-y-5">
-                  <div className="flex flex-wrap gap-2">
-                    <span className={`text-xs font-medium px-2 py-0.5 rounded-full border flex items-center gap-1 ${cfg.cls}`}>
+                <div className="px-6 py-5 shrink-0 bg-gradient-to-br from-blue-600 via-blue-700 to-purple-700">
+                  <SheetTitle className="text-lg font-bold text-white">{detail.title}</SheetTitle>
+                  <p className="text-sm text-blue-100 mt-1 flex items-center gap-2">
+                    <span>{detail.client}</span>
+                    <span className="text-xs px-2 py-0.5 rounded-full bg-white/20 flex items-center gap-1">
                       <Icon className="h-3 w-3" /> {cfg.label}
                     </span>
-                    <span className="text-xs text-slate-400 bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded-full">{detail.client}</span>
-                  </div>
+                  </p>
+                </div>
 
-                  <div className="grid grid-cols-2 gap-3">
+                <div className="flex-1 overflow-y-auto bg-slate-50 dark:bg-slate-950/40 px-[50px] py-[50px]">
+                  <div className="space-y-6 max-w-3xl mx-auto">
+                    <div className="rounded-2xl border border-slate-200/80 dark:border-slate-700/80 bg-white dark:bg-slate-900 shadow-sm p-6 space-y-4">
+                      <div className="grid grid-cols-2 gap-3">
                     <div className="rounded-lg border border-slate-100 dark:border-slate-700 p-3">
                       <p className="text-[10px] text-slate-400 uppercase tracking-wide mb-1">Valor</p>
                       <p className="text-sm font-bold text-slate-800 dark:text-slate-100">{fmtBRL(detail.value)}</p>
@@ -269,15 +287,17 @@ export default function MinhasTarefasPage() {
                       </p>
                     </div>
                   )}
+                    </div>
+                  </div>
+                </div>
 
-                  {/* Actions for active tasks */}
+                <div className="border-t border-slate-200/80 dark:border-slate-700/80 px-6 py-4 bg-white dark:bg-slate-900 flex items-center justify-end gap-3">
                   {["em_andamento", "atrasada"].includes(detail.status) && (
-                    <Button className="w-full gap-2 bg-blue-600 hover:bg-blue-700 text-white" onClick={() => setDetail(null)}>
+                    <Button className="btn-brand gap-2" onClick={() => setDetail(null)}>
                       <Upload className="h-4 w-4" /> Enviar entrega
                     </Button>
                   )}
-
-                  <Button variant="outline" className="w-full" onClick={() => setDetail(null)}>Fechar</Button>
+                  <Button variant="outline" onClick={() => setDetail(null)}>Fechar</Button>
                 </div>
               </>
             )

@@ -976,8 +976,7 @@ export default function AdminClientesPage() {
         onClose={() => setFilterPanelOpen(false)}
         title="Filtros"
         subtitle="Filtre a lista de clientes por status"
-        widthMode="compact"
-        compactWidth={360}
+        widthMode="full"
       >
         <div className="p-5 flex-1 overflow-y-auto space-y-3">
           <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Status</p>
@@ -1008,8 +1007,7 @@ export default function AdminClientesPage() {
         onClose={() => setColConfigOpen(false)}
         title="Configurar colunas"
         subtitle="Escolha quais colunas aparecem na tabela"
-        widthMode="compact"
-        compactWidth={360}
+        widthMode="full"
       >
         <div className="p-5 flex-1 overflow-y-auto space-y-2">
           {ALL_COLUMNS.map((col) => (
@@ -1042,8 +1040,7 @@ export default function AdminClientesPage() {
             ? `${formatClientSequenceId(infoPanelClient.sequence_number)} · ${infoPanelClient.address || "Endereço não informado"}`
             : undefined
         }
-        widthMode="compact"
-        compactWidth={480}
+        widthMode="full"
       >
         {infoPanelClient && (() => {
           const link = infoPanelClient.links[0];
@@ -1131,8 +1128,7 @@ export default function AdminClientesPage() {
         onClose={closeForm}
         title={editingId ? "Editar cliente" : "Criar novo cliente"}
         subtitle={editingId ? "Altere os dados e/ou o vínculo deste cliente" : "Defina os dados e o vínculo (opcional) deste cliente"}
-        widthMode="compact"
-        compactWidth={480}
+        widthMode="full"
         footer={
           <div className="flex items-center justify-end gap-2">
             <Button variant="outline" onClick={closeForm} disabled={saving}>

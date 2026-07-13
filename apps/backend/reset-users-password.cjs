@@ -6,12 +6,18 @@ const bcrypt = require("bcryptjs");
 const { PrismaClient } = require("@prisma/client");
 
 const prisma = new PrismaClient();
-const TEMPORARY_PASSWORD = process.env.RESET_USERS_PASSWORD || "123456";
+// Obrigatória, sem fallback hardcoded — encerra antes de qualquer escrita se ausente.
+const TEMPORARY_PASSWORD = process.env.RESET_USERS_PASSWORD;
 const SALT_ROUNDS = 10;
 
 async function main() {
+  if (!TEMPORARY_PASSWORD) {
+    console.error("❌ RESET_USERS_PASSWORD não definida — obrigatória, sem valor padrão embutido.");
+    process.exitCode = 1;
+    return;
+  }
   console.log("🔐 Iniciando reset de senha dos usuários...");
-  console.log("   Usando senha informada por variável de ambiente ou padrão 123456");
+  console.log("   Usando senha definida em RESET_USERS_PASSWORD (nunca impressa)");
 
   const passwordHash = await bcrypt.hash(TEMPORARY_PASSWORD, SALT_ROUNDS);
 

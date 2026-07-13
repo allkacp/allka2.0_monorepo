@@ -1,17 +1,18 @@
 /**
  * seed-project-tasks.ts
  * ================================================================
- * Popula TODOS os projetos existentes com ProductProduct + ProjectTask
- * + ProjectTaskStage usando produtos reais do catálogo.
+ * Popula projetos existentes com ProjectProduct (todos os status) e,
+ * para projetos já em operação (planning/in-progress/completed), gera
+ * tarefas reais via o fluxo oficial de pagamento
+ * (confirmPaymentAndGenerateProjectTasks) — nunca cria ProjectTask
+ * diretamente. draft/negotiation/awaiting-payment/cancelled recebem só
+ * o vínculo de produto, sem tarefa (não haveria Payment PAGO real pra
+ * justificar uma).
  *
  * IDEMPOTENTE:
- *   - Usa upsert/findFirst antes de criar qualquer registro
- *   - Não apaga NADA — apenas insere o que falta
- *   - Seguro rodar múltiplas vezes
- *
- * Distribuição:
- *   - Cada projeto recebe 2 produtos, rotacionando pelos 11 produtos ativos
- *   - seed-product-perf-01 é ignorado (sem CatalogTask vinculados)
+ *   - ProjectProduct: upsert por (project_id, product_id)
+ *   - Tarefas: confirmPaymentAndGenerateProjectTasks reaproveita um
+ *     Payment PENDENTE/PAGO compatível existente em vez de duplicar
  *
  * Para rodar:
  *   cd apps/backend && npm run db:seed:qa-project-tasks
@@ -19,12 +20,9 @@
  */
 
 import "dotenv/config";
-import { PrismaClient } from "@prisma/client";
-import { gerarTarefasDoProjeto } from "../src/lib/generate-tasks";
+import { prisma } from "../src/lib/prisma";
+import { confirmPaymentAndGenerateProjectTasks, withIdempotentRetry } from "../src/lib/confirm-payment";
 
-const prisma = new PrismaClient();
-
-// Produtos com CatalogTask ativos — exclui seed-product-perf-01 (sem links)
 const ACTIVE_PRODUCT_IDS = [
   "PA0001", // Gestão de Tráfego
   "PA0002", // SEO
@@ -41,15 +39,31 @@ const ACTIVE_PRODUCT_IDS = [
 
 const PRODUCTS_PER_PROJECT = 2;
 
+const STATUSES_WITH_CONFIRMED_PAYMENT = new Set(["planning", "in-progress", "completed"]);
+
+function projectProductStatusFor(projectStatus: string) {
+  if (projectStatus === "completed") return "CONCLUIDO";
+  if (projectStatus === "cancelled") return "CANCELADO";
+  if (STATUSES_WITH_CONFIRMED_PAYMENT.has(projectStatus)) return "EM_EXECUCAO";
+  return "PENDENTE";
+}
+
 async function main() {
   console.log("=".repeat(65));
-  console.log("  SEED: Todos os Projetos → ProjectProduct + ProjectTask + Stages");
+  console.log("  SEED: Projetos existentes → ProjectProduct (+ tarefas se pago)");
   console.log("=".repeat(65));
 
-  // 1. Verificar produtos ativos disponíveis
+  const requester = await prisma.user.findFirst({
+    where: { account_type: "admin" },
+    select: { id: true, account_type: true, role: true },
+  });
+  if (!requester) {
+    throw new Error("Nenhum usuário admin encontrado — necessário como requesterUser para confirmar pagamento.");
+  }
+
   const products = await prisma.product.findMany({
     where: { id: { in: ACTIVE_PRODUCT_IDS }, is_active: true },
-    select: { id: true, name: true, category: true },
+    select: { id: true, name: true, category: true, base_price: true },
     orderBy: { id: "asc" },
   });
 
@@ -58,39 +72,30 @@ async function main() {
     process.exit(1);
   }
   console.log(`\n✔  Produtos ativos disponíveis: ${products.length}`);
-  products.forEach((p) => console.log(`    · ${p.id.padEnd(22)} ${p.name}`));
 
-  // 2. Buscar todos os projetos
   const projects = await prisma.project.findMany({
-    select: { id: true, title: true, status: true, agency: true, client_id: true },
+    select: { id: true, title: true, status: true },
     orderBy: { created_at: "asc" },
   });
-  console.log(`\n✔  Projetos encontrados: ${projects.length}`);
+  console.log(`✔  Projetos encontrados: ${projects.length}`);
 
-  // 3. Para cada projeto, vincular 2 produtos (rotacionando) e gerar tarefas
   let totalPPCreated = 0;
   let totalPPSkipped = 0;
-  let totalTasksGenerated = 0;
-  let totalTasksSkipped = 0;
-  let totalStagesGenerated = 0;
+  let paymentsConfirmed = 0;
+  let tasksGenerated = 0;
+  let stagesGenerated = 0;
+  const skipped: Array<{ title: string; reason: string }> = [];
   const errors: string[] = [];
 
   for (let i = 0; i < projects.length; i++) {
     const project = projects[i];
-
-    // Selecionar 2 produtos desta rodada (rotação circular pelos disponíveis)
-    const productIds = Array.from({ length: PRODUCTS_PER_PROJECT }, (_, k) => {
-      return products[(i * PRODUCTS_PER_PROJECT + k) % products.length].id;
-    });
-
-    // Garantir que não há duplicata (pode ocorrer se PRODUCTS_PER_PROJECT >= products.length)
+    const productIds = Array.from({ length: PRODUCTS_PER_PROJECT }, (_, k) =>
+      products[(i * PRODUCTS_PER_PROJECT + k) % products.length].id,
+    );
     const uniqueProductIds = [...new Set(productIds)];
 
-    console.log(`\n${"─".repeat(60)}`);
-    console.log(`📁 [${i + 1}/${projects.length}] ${project.title} (${project.status})`);
-    console.log(`   Produtos: ${uniqueProductIds.join(", ")}`);
+    console.log(`\n📁 [${i + 1}/${projects.length}] ${project.title} (${project.status})`);
 
-    // 3a. Criar ProjectProduct para cada produto (skip se já existir)
     for (const productId of uniqueProductIds) {
       const prod = products.find((p) => p.id === productId);
       if (!prod) continue;
@@ -99,8 +104,9 @@ async function main() {
         where: { project_id_product_id: { project_id: project.id, product_id: productId } },
       });
 
+      const desiredStatus = projectProductStatusFor(project.status);
+
       if (existing) {
-        console.log(`   → Já vinculado: ${prod.name}`);
         totalPPSkipped++;
         continue;
       }
@@ -112,81 +118,81 @@ async function main() {
           product_name_snapshot: prod.name,
           product_code_snapshot: prod.id,
           product_category_snapshot: prod.category,
-          status: "EM_EXECUCAO",
+          product_price_snapshot: prod.base_price ?? 0,
+          preco_final_cliente_snapshot: prod.base_price ?? 0,
+          pagador_snapshot: "CLIENTE",
+          status: desiredStatus,
         },
       });
-      console.log(`   ✓  Produto vinculado: ${prod.name}`);
       totalPPCreated++;
     }
 
-    // 3b. Gerar tarefas + etapas via gerarTarefasDoProjeto (idempotente)
+    if (!STATUSES_WITH_CONFIRMED_PAYMENT.has(project.status)) {
+      skipped.push({ title: project.title, reason: `status "${project.status}" não gera tarefa (sem pagamento presumido)` });
+      continue;
+    }
+
     try {
-      const result = await gerarTarefasDoProjeto(project.id);
-      totalTasksGenerated += result.generated;
-      totalTasksSkipped += result.skipped;
-      totalStagesGenerated += result.stages_generated;
-
-      if (result.generated > 0 || result.stages_generated > 0) {
-        console.log(
-          `   ✓  Tarefas: +${result.generated} criadas, ${result.skipped} existentes | ` +
-          `Etapas: +${result.stages_generated}`,
-        );
-      } else {
-        console.log(`   →  Sem novas tarefas (tudo já existia)`);
+      const result = await withIdempotentRetry(() =>
+        prisma.$transaction((tx) =>
+          confirmPaymentAndGenerateProjectTasks(tx, {
+            projectId: project.id,
+            requesterUser: requester,
+            notes: "Seed de manutenção — confirmação de pagamento de teste",
+          }),
+        ),
+      );
+      if (result.tasksResult) {
+        paymentsConfirmed++;
+        tasksGenerated += result.tasksResult.generated;
+        stagesGenerated += result.tasksResult.stages_generated;
+        console.log(`   ✓ Payment confirmado + ${result.tasksResult.generated} tarefa(s) / ${result.tasksResult.stages_generated} etapa(s)`);
+      } else if (result.alreadyProcessed) {
+        console.log(`   → Payment já confirmado anteriormente (idempotente)`);
       }
-
-      if (result.produtos_sem_modelo.length > 0) {
-        console.log(`   ⚠  Sem modelo: ${result.produtos_sem_modelo.join(", ")}`);
+      // confirmPaymentAndGenerateProjectTasks força Project.status="in-progress"
+      // como efeito colateral — restaura o status original do projeto
+      // (planning/completed) já que este script só deveria popular tarefas,
+      // não migrar o status de negócio do projeto.
+      if (project.status !== "in-progress") {
+        await prisma.project.update({ where: { id: project.id }, data: { status: project.status } });
       }
-    } catch (err: any) {
-      const msg = `Erro ao gerar tarefas para "${project.title}": ${err?.message ?? err}`;
-      console.error(`   ❌  ${msg}`);
-      errors.push(msg);
+    } catch (err) {
+      const reason = err instanceof Error ? err.message : String(err);
+      skipped.push({ title: project.title, reason });
+      errors.push(`${project.title}: ${reason}`);
+      console.warn(`   ⚠️  Pagamento/tarefas ignorados: ${reason}`);
     }
   }
 
-  // 4. Contagens finais diretas do banco
   const finalPP = await prisma.projectProduct.count();
   const finalPT = await prisma.projectTask.count();
   const finalStages = await prisma.projectTaskStage.count();
-  const byStatus = await prisma.projectTask.groupBy({
-    by: ["status"],
-    _count: { id: true },
-    orderBy: { status: "asc" },
-  });
 
   console.log(`\n${"=".repeat(65)}`);
   console.log("  RELATÓRIO FINAL");
   console.log("=".repeat(65));
-  console.log(`Projetos processados           : ${projects.length}`);
-  console.log(`Vínculos novos (ProjectProduct): ${totalPPCreated}`);
-  console.log(`Vínculos já existentes         : ${totalPPSkipped}`);
-  console.log(`Tarefas criadas agora          : ${totalTasksGenerated}`);
-  console.log(`Tarefas já existentes          : ${totalTasksSkipped}`);
-  console.log(`Etapas criadas agora           : ${totalStagesGenerated}`);
+  console.log(`Projetos processados            : ${projects.length}`);
+  console.log(`Vínculos novos (ProjectProduct)  : ${totalPPCreated}`);
+  console.log(`Vínculos já existentes           : ${totalPPSkipped}`);
+  console.log(`Pagamentos confirmados agora     : ${paymentsConfirmed}`);
+  console.log(`Tarefas criadas agora            : ${tasksGenerated}`);
+  console.log(`Etapas criadas agora             : ${stagesGenerated}`);
+  console.log(`Projetos sem tarefa (por desenho): ${skipped.length}`);
   if (errors.length > 0) {
-    console.log(`Erros                          : ${errors.length}`);
-    errors.forEach((e) => console.log(`  ❌  ${e}`));
+    console.log(`Erros                            : ${errors.length}`);
   }
   console.log(`\nTotais finais no banco:`);
   console.log(`  ProjectProduct total : ${finalPP}`);
   console.log(`  ProjectTask total    : ${finalPT}`);
   console.log(`  ProjectTaskStage total: ${finalStages}`);
-  console.log(`\n  Por status (ProjectTask):`);
-  byStatus.forEach((s) =>
-    console.log(`    ${s.status.padEnd(35)}: ${s._count.id}`),
-  );
 
-  if (errors.length === 0) {
-    console.log("\n✅  Seed concluído com sucesso!");
-  } else {
-    console.log(`\n⚠   Seed concluído com ${errors.length} erro(s). Verifique acima.`);
-  }
+  console.log(errors.length === 0 ? "\n✅  Seed concluído com sucesso!" : `\n⚠  Seed concluído com ${errors.length} erro(s) — ver acima.`);
 }
 
 main()
   .catch((e) => {
     console.error("\n❌  Erro fatal durante o seed:", e?.message ?? e);
-    process.exit(1);
+    process.exitCode = 1;
   })
   .finally(() => prisma.$disconnect());

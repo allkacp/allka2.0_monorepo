@@ -17,6 +17,8 @@ import { Sheet, SheetContent } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
+import { useAppFrameMetrics } from "@/hooks/useAppFrameMetrics";
+import { useSidebar } from "@/contexts/sidebar-context";
 import {
   Select,
   SelectContent,
@@ -188,6 +190,8 @@ export function TarefasFilterDrawer({
   uniqueLideres,
   uniqueCategorias,
 }: TarefasFilterDrawerProps) {
+  const { sidebarWidth } = useSidebar();
+  const { headerHeight, footerHeight } = useAppFrameMetrics();
   const [draft, setDraft] = useState<FilterValues>(initialFilters);
 
   // Sync draft when drawer opens
@@ -276,7 +280,14 @@ export function TarefasFilterDrawer({
       <SheetContent
         side="right"
         hideOverlay
-        className="w-full sm:max-w-135 p-0 flex flex-col overflow-hidden border-l border-slate-200 dark:border-slate-700"
+        style={{
+          left: `${sidebarWidth - 2}px`,
+          width: `calc(100vw - ${sidebarWidth - 2}px)`,
+          maxWidth: `calc(100vw - ${sidebarWidth - 2}px)`,
+          top: `${headerHeight - 1}px`,
+          bottom: `${footerHeight - 1}px`,
+        }}
+        className="w-full p-0 flex flex-col overflow-hidden border-l border-slate-200 dark:border-slate-700"
       >
         {/* ── Gradient header ─────────────────────────────────────── */}
         <div

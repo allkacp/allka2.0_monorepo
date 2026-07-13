@@ -216,16 +216,31 @@ jobs:
              docker compose --env-file .env -f docker-compose.yml up -d mysql && \
              docker compose --env-file .env -f docker-compose.yml run --rm migrate && \
              docker compose --env-file .env -f docker-compose.yml up -d --no-deps backend && \
-             docker compose --env-file .env -f docker-compose.yml run --rm --no-deps backend npm run db:seed:real:prod && \
              docker image prune -f"
 
-      # ── Seed dados reais (Agency / Empresa / Líder) ────────────────────────────
-      # O seed roda AUTOMÁTICO no bloco de deploy acima, logo após o migrate:
-      #   npm run db:seed:real:prod  →  node prisma/seed-real.cjs
-      # Script prod-safe (Node puro, sem tsx; só @prisma/client + bcryptjs).
-      # Idempotente (upsert) — cria/atualiza Agency, Empresa e Líder e nunca apaga.
-      # Alternativa manual via endpoints admin (requerem Bearer token de admin):
-      #   POST /api/admin/seed/agency-real | empresa-real | lider-real
+      # ── Nenhum seed roda automaticamente no deploy ──────────────────────────────
+      # O deploy normal faz só: build → migrate deploy → subir o backend →
+      # limpeza de imagens antigas. Não existe seed de produção nem bootstrap
+      # automático — decisão explícita (ver "SANEAMENTO FINAL DA FASE 1", seção 4):
+      # não há hoje necessidade comprovada de dados obrigatórios pós-deploy que
+      # não venham de migration. Catálogo de produtos/tarefas, quando precisar
+      # ser (re)populado, é feito manualmente via os comandos já existentes
+      # (db:seed:products, db:seed:catalog-tasks) — nenhum dos dois é
+      # automático nem específico de produção.
+      #
+      # apps/backend/src/scripts/seed-realistic-demo.ts é um seed de
+      # DEMONSTRAÇÃO — cria usuários/projetos/tarefas de teste com senha de
+      # teste. Não é uma ferramenta de produção: bloqueia contra qualquer host
+      # que não seja localhost/127.0.0.1, não é compilado pro build (fica em
+      # src/scripts/, fora do tsconfig), não é citado neste workflow nem no
+      # Dockerfile, e não pode ser invocado dentro do container de produção.
+      #
+      # Existe também um caminho alternativo via endpoints admin (Bearer token
+      # de admin): POST /api/admin/seed/agency-real | empresa-real | lider-real
+      # (src/routes/admin-seed.ts). ATENÇÃO: esses endpoints ainda não foram
+      # migrados pra este mesmo padrão (ainda criam ProjectTask diretamente,
+      # sem passar pelo serviço central de pagamento) — gap conhecido, fora do
+      # escopo desta correção.
       # ────────────────────────────────────────────────────────────────────────────
 
       - name: Reset users password on VPS

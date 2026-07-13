@@ -162,6 +162,15 @@ async function main() {
                 gateway: "FAKE_SANDBOX",
                 paid_at: paidAt!,
                 notes: invNum,
+                // Marcador dedicado (nunca null/"avulso"/"YYYY-MM") — impede
+                // que a busca de "payment compatível" do serviço central de
+                // confirmação de pagamento confunda esta fatura decorativa
+                // com o pagamento real que gera tarefas do projeto (achado
+                // real via verify-active-scripts.ts: um Payment aqui com
+                // billing_cycle_key null era tratado como pagamento "avulso"
+                // legado compatível). Este arquivo NUNCA congela PaymentItem
+                // nem chama geração de tarefa — é só histórico de fatura.
+                billing_cycle_key: "invoice-demo",
               },
             });
             createdPay++;
@@ -194,6 +203,9 @@ async function main() {
               gateway: "FAKE_SANDBOX",
               paid_at: paidAt!,
               notes: invNum,
+              // Ver comentário acima — marcador dedicado pra não colidir com
+              // a busca de pagamento compatível do fluxo oficial.
+              billing_cycle_key: "invoice-demo",
             },
           });
           createdPay++;

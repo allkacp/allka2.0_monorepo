@@ -98,6 +98,7 @@ import {
 import { ProjectManagementModal } from "@/components/project-management-modal";
 import { ProjectViewSlidePanel } from "@/components/project-view-slide-panel";
 import { useSidebar } from "@/contexts/sidebar-context";
+import { useAppFrameMetrics } from "@/hooks/useAppFrameMetrics";
 import {
   DndContext,
   type DragEndEvent,
@@ -332,14 +333,8 @@ export default function AdminProjetosPage({
 
   // sidebar / header measurements for filter modal
   const { sidebarWidth } = useSidebar();
-  const [headerHeight, setHeaderHeight] = useState(64);
-  const [footerHeight, setFooterHeight] = useState(0);
-  useEffect(() => {
-    const header = document.querySelector("header");
-    const footer = document.querySelector("footer");
-    if (header) setHeaderHeight(header.getBoundingClientRect().height);
-    if (footer) setFooterHeight(footer.getBoundingClientRect().height);
-  }, []);
+  const { headerHeight, footerHeight } = useAppFrameMetrics();
+  
 
   useEffect(() => {
     if (!showPendingModal) return;
@@ -2508,8 +2503,8 @@ export default function AdminProjetosPage({
               {/* ── Slide-over: todos os projetos pendentes ── */}
               {showPendingModal && (
                 <div
-                  className="fixed top-0 right-0 bottom-0 flex flex-col z-[80] shadow-2xl border-l border-border animate-in slide-in-from-right duration-300 ease-out overflow-hidden bg-background"
-                  style={{ left: sidebarWidth }}
+                  className="fixed right-0 flex flex-col z-[80] shadow-2xl border-l border-border animate-in slide-in-from-right duration-300 ease-out overflow-hidden bg-background"
+                  style={{ left: `${sidebarWidth - 2}px`, top: `${headerHeight - 1}px`, bottom: `${footerHeight - 1}px` }}
                 >
                   {/* Panel header — gradiente da sidebar */}
                   <div
@@ -2706,8 +2701,7 @@ export default function AdminProjetosPage({
                   onClose={() => setColConfigOpen(false)}
                   title="Configurar colunas"
                   subtitle="Escolha quais colunas aparecem na tabela"
-                  widthMode="compact"
-                  compactWidth={360}
+                  widthMode="full"
                 >
                   <div className="p-5 flex-1 overflow-y-auto space-y-2">
                     <div className="flex items-center justify-between mb-1">
@@ -4766,8 +4760,7 @@ export default function AdminProjetosPage({
           }}
           title="Duplicar Projeto"
           subtitle="Selecione o que deseja incluir na cópia"
-          widthMode="compact"
-          compactWidth={520}
+          widthMode="full"
           footer={
             <div className="flex items-center justify-end gap-2">
               <Button
@@ -5196,8 +5189,7 @@ export default function AdminProjetosPage({
             onClose={() => { if (!linkSaving) setLinkPanelOpen(false); }}
             title="Alterar vínculo"
             subtitle={linkPanelProject ? linkPanelProject.name : undefined}
-            widthMode="compact"
-            compactWidth={420}
+            widthMode="full"
             footer={
               <div className="flex items-center justify-end gap-2">
                 <Button variant="outline" onClick={() => setLinkPanelOpen(false)} disabled={linkSaving}>

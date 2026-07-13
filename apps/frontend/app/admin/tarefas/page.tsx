@@ -2680,8 +2680,7 @@ export default function AdminTarefasPage({
         onClose={() => setColConfigOpen(false)}
         title="Configurar colunas"
         subtitle="Escolha quais colunas aparecem na tabela"
-        widthMode="compact"
-        compactWidth={360}
+        widthMode="full"
       >
         <div className="flex-1 overflow-y-auto">
           <div className="p-2 space-y-0.5">

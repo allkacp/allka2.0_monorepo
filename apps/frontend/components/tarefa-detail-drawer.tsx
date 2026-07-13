@@ -64,6 +64,7 @@ import {
 } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
 import { useSidebar } from "@/contexts/sidebar-context";
+import { useAppFrameMetrics } from "@/hooks/useAppFrameMetrics";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -449,6 +450,7 @@ export function TarefaDetailDrawer({
   onLaunch?: (tarefa: any) => void;
 }) {
   const { sidebarWidth } = useSidebar();
+  const { headerHeight, footerHeight } = useAppFrameMetrics();
   const [tab, setTab] = useState<TabKey>("dados");
   const [isEditMode, setIsEditMode] = useState(false);
   const [editStatus, setEditStatus] = useState<string>("");
@@ -588,9 +590,11 @@ export function TarefaDetailDrawer({
           hideOverlay={true}
           className="p-0 flex flex-col overflow-hidden border-l border-slate-200 dark:border-slate-700 w-auto! max-w-none!"
           style={{
-            left: `${sidebarWidth}px`,
-            width: `calc(100vw - ${sidebarWidth}px)`,
-            maxWidth: `calc(100vw - ${sidebarWidth}px)`,
+            left: `${sidebarWidth - 2}px`,
+            width: `calc(100vw - ${sidebarWidth - 2}px)`,
+            maxWidth: `calc(100vw - ${sidebarWidth - 2}px)`,
+            top: `${headerHeight - 1}px`,
+            bottom: `${footerHeight - 1}px`,
           }}
         >
           {/* ── Gradient Header ────────────────────────────────────────── */}

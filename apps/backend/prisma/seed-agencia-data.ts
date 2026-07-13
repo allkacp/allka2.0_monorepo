@@ -10,6 +10,7 @@
 
 import "dotenv/config";
 import { PrismaClient } from "@prisma/client";
+import { withProjectCode } from "../src/lib/create-project";
 
 const prisma = new PrismaClient();
 
@@ -101,11 +102,13 @@ async function main() {
 
   for (const p of projects) {
     const { created_at, ...rest } = p;
-    await prisma.project.upsert({
-      where:  { id: p.id },
-      update: { title: p.title, status: p.status, progress: p.progress, agency: AGENCY_NAME },
-      create: { ...rest, agency: AGENCY_NAME, company_type: "company", lifecycle: "avulso", created_at },
-    });
+    await withProjectCode(prisma, (tx, projectCode) =>
+      tx.project.upsert({
+        where:  { id: p.id },
+        update: { title: p.title, status: p.status, progress: p.progress, agency: AGENCY_NAME },
+        create: { ...rest, agency: AGENCY_NAME, company_type: "company", lifecycle: "avulso", created_at, project_code: projectCode },
+      }),
+    );
     console.log(`  ✓ Projeto [${p.status.padEnd(17)}] → ${p.title}`);
   }
 

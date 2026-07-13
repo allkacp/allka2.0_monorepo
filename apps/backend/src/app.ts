@@ -104,7 +104,7 @@ app.get("/api/admin/health-check", async (_req, res, next) => {
       restore_commands: warnings.length > 0 ? [
         "cd apps/backend && npx tsx seed-all-products.ts",
         "cd apps/backend && npx tsx migrate-tasks.ts",
-        "cd apps/backend && node seed-in-progress.cjs",
+        "cd apps/backend && npx tsx src/scripts/seed-in-progress.ts",
       ] : [],
     });
   } catch (err) {

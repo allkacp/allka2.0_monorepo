@@ -40,7 +40,12 @@ export type MetricType =
   | "companies"
   | "activeProjects"
   | "revenue"
-  | "avgRating";
+  | "avgRating"
+  | "totalProjects"
+  | "pendingPayments"
+  | "linkedProducts"
+  | "catalogProducts"
+  | "orgPartners";
 
 export type WidgetSize = "standard" | "compact";
 

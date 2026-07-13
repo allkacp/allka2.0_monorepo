@@ -27,7 +27,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-import { useSidebar } from "@/contexts/sidebar-context";
+import { useAppFrameMetrics } from "@/hooks/useAppFrameMetrics";
 import { cn } from "@/lib/utils";
 import { ModalBrandHeader } from "@/components/ui/modal-brand-header";
 
@@ -188,7 +188,7 @@ export function PermissionProfileSlidePanel({
   profile,
   onSave,
 }: PermissionProfileSlidePanelProps) {
-  const { sidebarWidth } = useSidebar();
+  const { sidebarWidth, headerHeight, footerHeight } = useAppFrameMetrics();
   const [isClosing, setIsClosing] = useState(false);
   const [isMounted, setIsMounted] = useState(false);
   useEffect(() => {
@@ -285,10 +285,12 @@ export function PermissionProfileSlidePanel({
         data-slot="sheet-content"
         data-state={isClosing ? "closed" : "open"}
         style={{
-          left: `${sidebarWidth}px`,
-          width: `calc(100vw - ${sidebarWidth}px)`,
+          left: `${sidebarWidth - 2}px`,
+          width: `calc(100vw - ${sidebarWidth - 2}px)`,
+          top: `${headerHeight - 1}px`,
+          bottom: `${footerHeight - 1}px`,
         }}
-        className="fixed top-0 z-50 h-[calc(100vh-24px)] bg-background shadow-2xl flex flex-col overflow-hidden border-l border-border data-[state=open]:animate-in data-[state=open]:slide-in-from-right data-[state=open]:fade-in-0 data-[state=closed]:animate-out data-[state=closed]:slide-out-to-right data-[state=closed]:fade-out-0"
+        className="fixed z-50 bg-background shadow-2xl flex flex-col overflow-hidden border-l border-border data-[state=open]:animate-in data-[state=open]:slide-in-from-right data-[state=open]:fade-in-0 data-[state=closed]:animate-out data-[state=closed]:slide-out-to-right data-[state=closed]:fade-out-0"
       >
         {/* ── Header ── */}
         <ModalBrandHeader

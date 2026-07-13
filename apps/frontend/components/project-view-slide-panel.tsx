@@ -44,6 +44,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { useSidebar } from "@/contexts/sidebar-context";
+import { useAppFrameMetrics } from "@/hooks/useAppFrameMetrics";
 import { apiClient } from "@/lib/api-client";
 import { TaskLaunchDrawer } from "@/components/task-launch-drawer";
 import { cn } from "@/lib/utils";
@@ -971,6 +972,7 @@ export function ProjectViewSlidePanel({
   onCancel,
 }: ProjectViewSlidePanelProps) {
   const { sidebarWidth } = useSidebar();
+  const { headerHeight, footerHeight } = useAppFrameMetrics();
   const [activeTab, setActiveTab] = useState("visao-geral");
 
   // ── Products state ────────────────────────────────────────────────────────
@@ -1237,6 +1239,8 @@ export function ProjectViewSlidePanel({
             left: `${sidebarWidth}px`,
             width: `calc(100vw - ${sidebarWidth}px)`,
             maxWidth: `calc(100vw - ${sidebarWidth}px)`,
+            top: `${headerHeight - 1}px`,
+            bottom: `${footerHeight - 1}px`,
           }}
         >
           <div className="relative flex flex-col h-full overflow-hidden">

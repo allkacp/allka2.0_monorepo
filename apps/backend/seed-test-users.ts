@@ -20,8 +20,13 @@ import bcrypt from "bcryptjs";
 
 const prisma = new PrismaClient();
 
-// Senha dos usuários de teste. Fallback "123456" se a env não estiver definida.
-const PASSWORD = process.env.SEED_TEST_USER_PASSWORD || "123456";
+// Senha dos usuários de teste — obrigatória, sem fallback hardcoded. Encerra
+// antes de qualquer escrita se ausente.
+if (!process.env.SEED_TEST_USER_PASSWORD) {
+  console.error("❌ SEED_TEST_USER_PASSWORD não definida — obrigatória, sem valor padrão embutido.");
+  process.exit(1);
+}
+const PASSWORD: string = process.env.SEED_TEST_USER_PASSWORD;
 
 async function main() {
   if (process.env.NODE_ENV === "production") {
@@ -233,7 +238,7 @@ async function main() {
   }
 
   console.log("\n✔  Todos os usuários e vínculos estão prontos.");
-  console.log(`   Senha comum: ${PASSWORD}\n`);
+  console.log("   Senha comum: (definida em SEED_TEST_USER_PASSWORD — nunca impressa)\n");
 }
 
 main()

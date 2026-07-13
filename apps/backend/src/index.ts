@@ -50,7 +50,7 @@ async function logStartupState(): Promise<void> {
   }
   if (projectTasks === 0 && projects > 0) {
     console.warn("  ⚠️  ATENÇÃO: Projetos sem tarefas operacionais.");
-    console.warn("     Execute: cd apps/backend && node seed-in-progress.cjs");
+    console.warn("     Execute: cd apps/backend && npx tsx src/scripts/seed-in-progress.ts");
   }
   console.log("─────────────────────────────────────────────");
 }

@@ -16,6 +16,9 @@
 import "dotenv/config";
 import { PrismaClient } from "@prisma/client";
 import bcrypt from "bcryptjs";
+import { withProjectCode } from "../src/lib/create-project";
+import { confirmPaymentAndGenerateProjectTasks, withIdempotentRetry } from "../src/lib/confirm-payment";
+import { ensureTaskStages } from "../src/lib/generate-tasks-from-spec";
 
 const prisma = new PrismaClient({ log: ["error"] });
 const DRY_RUN =
@@ -165,7 +168,7 @@ async function main() {
   } else {
     await prisma.user.upsert({
       where: { email: PARTNER_EMAIL },
-      update: { is_active: true, name: PARTNER_NAME, password_hash: passwordHash },
+      update: { name: PARTNER_NAME },
       create: {
         email: PARTNER_EMAIL,
         password_hash: passwordHash,
@@ -256,11 +259,13 @@ async function main() {
       log(`  [DRY] upsert project → ${p.id} | ${p.title} [${p.status}]`);
     } else {
       const { created_at, ...rest } = p;
-      await prisma.project.upsert({
-        where: { id: p.id },
-        update: { title: p.title, status: p.status, progress: p.progress, agency: agencyName },
-        create: { ...rest, agency: agencyName, company_type: "company", lifecycle: "avulso", created_at },
-      });
+      await withProjectCode(prisma, (tx, projectCode) =>
+        tx.project.upsert({
+          where: { id: p.id },
+          update: { title: p.title, status: p.status, progress: p.progress, agency: agencyName },
+          create: { ...rest, agency: agencyName, company_type: "company", lifecycle: "avulso", created_at, project_code: projectCode },
+        }),
+      );
       log(`  ✓ [${p.status.padEnd(17)}] ${p.title}`);
     }
     counts.agProjects++;
@@ -273,11 +278,13 @@ async function main() {
       log(`  [DRY] upsert project → ${p.id} | ${p.title} [${p.status}] client=${p.client_id}`);
     } else {
       const { created_at, ...rest } = p;
-      await prisma.project.upsert({
-        where: { id: p.id },
-        update: { title: p.title, status: p.status, progress: p.progress, client_id: p.client_id, agency: null },
-        create: { ...rest, agency: null, company_type: "company", lifecycle: "avulso", created_at },
-      });
+      await withProjectCode(prisma, (tx, projectCode) =>
+        tx.project.upsert({
+          where: { id: p.id },
+          update: { title: p.title, status: p.status, progress: p.progress, client_id: p.client_id, agency: null },
+          create: { ...rest, agency: null, company_type: "company", lifecycle: "avulso", created_at, project_code: projectCode },
+        }),
+      );
       log(`  ✓ [${p.status.padEnd(17)}] ${p.title}`);
     }
     counts.partnerProjects++;
@@ -406,10 +413,49 @@ async function main() {
   const layoutBriefingSnapshot  = JSON.stringify(LAYOUT_BRIEFING_QUESTIONS);
   const contentBriefingSnapshot = JSON.stringify(CONTENT_BRIEFING_QUESTIONS);
 
-  // ── 9. Tarefas ────────────────────────────────────────────────────────────────
-  // Estratégia: priorizar task com ID fixo (runs anteriores), senão buscar existente
-  // por product_id, senão criar nova com ID fixo.
-  section("7. Tarefas do projeto");
+  // ── 9. Confirmar pagamento oficial (Payment PAGO + PaymentItems) ──────────────
+  // As tarefas nunca são criadas à mão — confirmPaymentAndGenerateProjectTasks
+  // gera as tarefas genéricas a partir dos CatalogTasks reais de DC0001/DC0002;
+  // a seção seguinte só CUSTOMIZA o conteúdo (título, briefing, etapas) dessas
+  // tarefas oficiais pro roteiro rico deste projeto de demonstração — nunca
+  // cria ProjectTask diretamente.
+  section("7. Confirmar pagamento (DC0001+DC0002) e gerar tarefas oficiais");
+  if (DRY_RUN) {
+    log(`  [DRY] confirmar pagamento oficial (DC0001+DC0002) e gerar tarefas`);
+  } else {
+    const requester = await prisma.user.findFirst({
+      where: { account_type: "admin" },
+      select: { id: true, account_type: true, role: true },
+    });
+    if (!requester) throw new Error("Nenhum usuário admin encontrado — necessário para confirmar pagamento.");
+
+    const paymentResult = await withIdempotentRetry(() =>
+      prisma.$transaction((tx) =>
+        confirmPaymentAndGenerateProjectTasks(tx, {
+          projectId: PROJ02,
+          requesterUser: requester,
+          billingCycleKey: "avulso",
+          notes: "Fixture de demo — showcase parceiro (Campanha Digital Copa)",
+        }),
+      ),
+    );
+    if (paymentResult.tasksResult) {
+      log(`  ✓ Payment confirmado + ${paymentResult.tasksResult.generated} tarefa(s) oficiais geradas`);
+    } else if (paymentResult.alreadyProcessed) {
+      log(`  → Payment já confirmado anteriormente (idempotente)`);
+    }
+    // confirmPaymentAndGenerateProjectTasks força status="in-progress" — este
+    // projeto de demo é "planning" por design (pago, aguardando início real).
+    await prisma.project.update({ where: { id: PROJ02 }, data: { status: "planning" } });
+  }
+
+  // ── 10. Tarefas ───────────────────────────────────────────────────────────────
+  // Encontra as tarefas OFICIAIS recém-geradas por produto (nunca cria uma
+  // nova) e customiza o conteúdo pro roteiro rico deste projeto de demo. Se o
+  // catálogo real gerou mais de uma tarefa pro mesmo produto (ex.: DC0002 com
+  // 2 CatalogTasks), consolida em uma só — as etapas combinadas (T01+T02) já
+  // eram um roteiro manual único antes desta correção.
+  section("8. Tarefas do projeto");
 
   let actualLayoutTaskId: string = TASK_LAYOUT_ID;
   let actualContentTaskId: string = TASK_CONTENT_ID;
@@ -447,43 +493,49 @@ async function main() {
   };
 
   if (DRY_RUN) {
-    log(`  [DRY] find-or-create task → "Criação de Layout para Redes Sociais" [PARA_LANCAMENTO]`);
-    log(`  [DRY] find-or-create task → "Conteúdo e Legenda para Criativos" [PARA_LANCAMENTO]`);
+    log(`  [DRY] customizar tarefa oficial → "Criação de Layout para Redes Sociais" [PARA_LANCAMENTO]`);
+    log(`  [DRY] customizar tarefa oficial → "Conteúdo e Legenda para Criativos" [PARA_LANCAMENTO]`);
   } else {
-    // Layout task
-    const existingLayoutById  = await prisma.projectTask.findUnique({ where: { id: TASK_LAYOUT_ID } });
-    const existingLayoutByPP  = existingLayoutById ?? await prisma.projectTask.findFirst({
+    // Layout task — sempre gerada pelo serviço oficial acima; nunca criada aqui.
+    const officialLayoutTasks = await prisma.projectTask.findMany({
       where: { project_product_id: ppLayoutId!, product_id: "DC0001" },
       orderBy: { created_at: "asc" },
     });
-    if (existingLayoutByPP) {
-      actualLayoutTaskId = existingLayoutByPP.id;
-      await prisma.projectTask.update({ where: { id: actualLayoutTaskId }, data: { ...layoutTaskData, project_product_id: ppLayoutId! } });
-      log(`  ↺ updated task layout "${layoutTaskData.title}" (${actualLayoutTaskId})`);
-    } else {
-      await prisma.projectTask.create({ data: { id: TASK_LAYOUT_ID, ...layoutTaskData, project_product_id: ppLayoutId! } });
-      log(`  ✓ created task layout "${layoutTaskData.title}" (${TASK_LAYOUT_ID})`);
+    if (officialLayoutTasks.length === 0) {
+      throw new Error(`Nenhuma tarefa oficial encontrada para DC0001 em ${PROJ02} — confirmPaymentAndGenerateProjectTasks deveria ter gerado ao menos uma.`);
+    }
+    const [layoutTask, ...extraLayoutTasks] = officialLayoutTasks;
+    actualLayoutTaskId = layoutTask.id;
+    await prisma.projectTask.update({ where: { id: actualLayoutTaskId }, data: { ...layoutTaskData, project_product_id: ppLayoutId! } });
+    log(`  ↺ customizada tarefa layout "${layoutTaskData.title}" (${actualLayoutTaskId})`);
+    if (extraLayoutTasks.length > 0) {
+      await prisma.projectTask.deleteMany({ where: { id: { in: extraLayoutTasks.map((t) => t.id) } } });
+      log(`  ✓ consolidadas ${extraLayoutTasks.length} tarefa(s) extra(s) de DC0001 na tarefa única de layout`);
     }
 
-    // Content task
-    const existingContentById = await prisma.projectTask.findUnique({ where: { id: TASK_CONTENT_ID } });
-    const existingContentByPP = existingContentById ?? await prisma.projectTask.findFirst({
+    // Content task — idem; DC0002 pode gerar mais de uma tarefa (T01+T02),
+    // consolidadas aqui na única tarefa "conteúdo" com etapas combinadas.
+    const officialContentTasks = await prisma.projectTask.findMany({
       where: { project_product_id: ppContentId!, product_id: "DC0002" },
       orderBy: { created_at: "asc" },
     });
-    if (existingContentByPP) {
-      actualContentTaskId = existingContentByPP.id;
-      await prisma.projectTask.update({ where: { id: actualContentTaskId }, data: { ...contentTaskData, project_product_id: ppContentId! } });
-      log(`  ↺ updated task content "${contentTaskData.title}" (${actualContentTaskId})`);
-    } else {
-      await prisma.projectTask.create({ data: { id: TASK_CONTENT_ID, ...contentTaskData, project_product_id: ppContentId! } });
-      log(`  ✓ created task content "${contentTaskData.title}" (${TASK_CONTENT_ID})`);
+    if (officialContentTasks.length === 0) {
+      throw new Error(`Nenhuma tarefa oficial encontrada para DC0002 em ${PROJ02} — confirmPaymentAndGenerateProjectTasks deveria ter gerado ao menos uma.`);
+    }
+    const [contentTask, ...extraContentTasks] = officialContentTasks;
+    actualContentTaskId = contentTask.id;
+    await prisma.projectTask.update({ where: { id: actualContentTaskId }, data: { ...contentTaskData, project_product_id: ppContentId! } });
+    log(`  ↺ customizada tarefa conteúdo "${contentTaskData.title}" (${actualContentTaskId})`);
+    if (extraContentTasks.length > 0) {
+      await prisma.projectTask.deleteMany({ where: { id: { in: extraContentTasks.map((t) => t.id) } } });
+      log(`  ✓ consolidadas ${extraContentTasks.length} tarefa(s) extra(s) de DC0002 na tarefa única de conteúdo`);
     }
   }
   counts.tasks += 2;
 
   // ── 10. Etapas ────────────────────────────────────────────────────────────────
-  // deleteMany das etapas da tarefa alvo + createMany para garantir exatamente as certas
+  // Create-only por source_key (ensureTaskStages, src/lib/generate-tasks-from-spec.ts)
+  // — nunca apaga/redefine etapa já existente, só cria o que falta.
   section("8. Etapas das tarefas");
 
   if (DRY_RUN) {
@@ -492,25 +544,39 @@ async function main() {
     for (const s of CONTENT_STAGES) log(`  [DRY] stage content ordem ${s.ordem} | "${s.titulo}"`);
     log(`  [DRY] total 7 etapas para conteúdo`);
   } else {
-    // Substituir etapas do layout
-    await prisma.projectTaskStage.deleteMany({ where: { project_task_id: actualLayoutTaskId } });
-    for (const s of LAYOUT_STAGES) {
-      await prisma.projectTaskStage.create({
-        data: { id: `${actualLayoutTaskId}-s${s.ordem}`, project_task_id: actualLayoutTaskId, titulo: s.titulo, descricao: s.descricao, ordem: s.ordem, obrigatoria: true, depende_da_etapa_anterior: s.ordem > 1, briefing_necessario: s.briefing_necessario, status: s.ordem === 1 ? "PENDENTE" : "BLOQUEADA" },
-      });
-      counts.stages++;
-    }
-    log(`  ✓ 4 etapas para layout (task: ${actualLayoutTaskId})`);
+    const layoutStageResult = await ensureTaskStages(
+      prisma,
+      actualLayoutTaskId,
+      `demo:${PROJ02}:layout`,
+      LAYOUT_STAGES.map((s) => ({
+        code: s.id,
+        titulo: s.titulo,
+        descricao: s.descricao,
+        ordem: s.ordem,
+        obrigatoria: true,
+        briefingNecessario: s.briefing_necessario,
+        status: s.ordem === 1 ? "PENDENTE" : "BLOQUEADA",
+      })),
+    );
+    counts.stages += layoutStageResult.created;
+    log(`  ✓ etapas layout: ${layoutStageResult.created} criadas, ${layoutStageResult.reused} reaproveitadas (task: ${actualLayoutTaskId})`);
 
-    // Substituir etapas do conteúdo
-    await prisma.projectTaskStage.deleteMany({ where: { project_task_id: actualContentTaskId } });
-    for (const s of CONTENT_STAGES) {
-      await prisma.projectTaskStage.create({
-        data: { id: `${actualContentTaskId}-s${s.ordem}`, project_task_id: actualContentTaskId, titulo: s.titulo, descricao: s.descricao, ordem: s.ordem, obrigatoria: true, depende_da_etapa_anterior: s.ordem > 1, briefing_necessario: s.briefing_necessario, status: s.ordem === 1 ? "PENDENTE" : "BLOQUEADA" },
-      });
-      counts.stages++;
-    }
-    log(`  ✓ 7 etapas para conteúdo (task: ${actualContentTaskId})`);
+    const contentStageResult = await ensureTaskStages(
+      prisma,
+      actualContentTaskId,
+      `demo:${PROJ02}:content`,
+      CONTENT_STAGES.map((s) => ({
+        code: s.id,
+        titulo: s.titulo,
+        descricao: s.descricao,
+        ordem: s.ordem,
+        obrigatoria: true,
+        briefingNecessario: s.briefing_necessario,
+        status: s.ordem === 1 ? "PENDENTE" : "BLOQUEADA",
+      })),
+    );
+    counts.stages += contentStageResult.created;
+    log(`  ✓ etapas conteúdo: ${contentStageResult.created} criadas, ${contentStageResult.reused} reaproveitadas (task: ${actualContentTaskId})`);
   }
   if (DRY_RUN) { counts.stages = LAYOUT_STAGES.length + CONTENT_STAGES.length; }
 

@@ -8,7 +8,7 @@ import {
 } from "@/lib/dashboard-presets-by-role";
 import type React from "react";
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { PageLoader } from "@/components/ui/loading";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -87,6 +87,7 @@ import {
   DialogDescription,
   DialogFooter,
 } from "@/components/ui/dialog";
+import { Sheet, SheetContent } from "@/components/ui/sheet";
 import {
   Popover,
   PopoverContent,
@@ -112,6 +113,7 @@ import {
 import { Input } from "@/components/ui/input"; // Added Input
 import { Label } from "@/components/ui/label"; // Added Label
 import { useSidebar } from "@/contexts/sidebar-context"; // Added import for sidebar context
+import { useAppFrameMetrics } from "@/hooks/useAppFrameMetrics";
 import { useDashboard } from "@/hooks/useDashboard";
 // Inline fallback — dev-mocks/ é gitignored e não está disponível no build de produção
 const generateDashboardData = (from?: Date, to?: Date): any => {
@@ -879,7 +881,8 @@ const generatePublicToken = (
 const ROLE_WIDGET_IDS = new Set<string>(WIDGETS_BY_ROLE["AGENCY"]);
 
 export default function AdminDashboardPage() {
-  const { sidebarCollapsed } = useSidebar(); // Get sidebar collapse state
+  const { sidebarCollapsed, sidebarWidth } = useSidebar(); // Get sidebar collapse state
+  const { headerHeight, footerHeight } = useAppFrameMetrics();
   const { toast } = useToast(); // Get toast function
   const {
     stats: apiStats,
@@ -1143,8 +1146,6 @@ export default function AdminDashboardPage() {
   const [saveDashboardOpen, setSaveDashboardOpen] = useState(false); // State for the save dashboard dialog
   const [isEditDashboardModalOpen, setIsEditDashboardModalOpen] =
     useState(false);
-  const [isEditPanelMounted, setIsEditPanelMounted] = useState(false);
-  const [isEditPanelClosing, setIsEditPanelClosing] = useState(false);
   const [draftWidgets, setDraftWidgets] = useState<WidgetState[]>([]);
   const [modalDraggedId, setModalDraggedId] = useState<string | null>(null);
   const [modalDragOverId, setModalDragOverId] = useState<string | null>(null);
@@ -1758,6 +1759,16 @@ export default function AdminDashboardPage() {
     null,
   );
   const [detailsWidgetId, setDetailsWidgetId] = useState<string | null>(null);
+  // Sticky: WidgetDetailsModal (chamada dentro do JSX) precisa continuar
+  // renderizando o mesmo widget enquanto o Sheet ainda está tocando a
+  // animação de saída — senão o painel fecha em branco no meio do slide.
+  // O hook e o derive ficam AQUI, no topo do componente, antes de qualquer
+  // return condicional — nunca dentro de WidgetDetailsModal (um
+  // `const detailsWidgetId = ...` sombreando este mesmo nome ali dentro
+  // entraria em temporal dead zone pro bloco inteiro da função).
+  const detailsWidgetStickyRef = useRef<string | null>(null);
+  if (detailsWidgetId) detailsWidgetStickyRef.current = detailsWidgetId;
+  const visibleDetailsWidgetId = detailsWidgetId ?? detailsWidgetStickyRef.current;
   const [showHistoricalModal, setShowHistoricalModal] = useState(false);
   const [histModalKey, setHistModalKey] = useState<string>(""); // "YYYY-MM"
   const [histFormData, setHistFormData] = useState<Partial<ManualDataEntry>>(
@@ -1947,10 +1958,12 @@ export default function AdminDashboardPage() {
   };
 
   const handleCloseEditPanel = () => {
-    setIsEditPanelClosing(true);
+    // Fecha o Sheet imediatamente (dispara a animação de saída dele, ver
+    // components/ui/sheet.tsx). O reset do resto do estado (modo, rename em
+    // progresso etc.) só acontece depois — senão o conteúdo "pisca" pro
+    // estado padrão enquanto o painel ainda está deslizando pra fora.
+    setIsEditDashboardModalOpen(false);
     setTimeout(() => {
-      setIsEditPanelClosing(false);
-      setIsEditDashboardModalOpen(false);
       setEditModalMode("none");
       setIsNewDashboardMode(false);
       setIsEditingHeaderName(false);
@@ -2137,14 +2150,6 @@ export default function AdminDashboardPage() {
     }
   }, []);
 
-  useEffect(() => {
-    if (isEditDashboardModalOpen) {
-      const id = requestAnimationFrame(() => setIsEditPanelMounted(true));
-      return () => cancelAnimationFrame(id);
-    } else {
-      setIsEditPanelMounted(false);
-    }
-  }, [isEditDashboardModalOpen]);
 
   useEffect(() => {
     // Guard: skip saving until the initial load effect has populated state.
@@ -3456,12 +3461,16 @@ export default function AdminDashboardPage() {
   };
 
   // ── Widget Details Modal ───────────────────────────────────────────────────
+  // Sem hook aqui dentro e sem `const detailsWidgetId = ...` sombreando o
+  // estado do componente — os dois causam bug (ordem de hooks / temporal
+  // dead zone). O valor "grudento" já vem pronto de fora
+  // (visibleDetailsWidgetId); esta função só lê, nunca declara.
   const WidgetDetailsModal = () => {
-    if (!detailsWidgetId) return null;
-    const title = getWidgetTitle(detailsWidgetId);
+    if (!visibleDetailsWidgetId) return null;
+    const title = getWidgetTitle(visibleDetailsWidgetId);
 
     // Resolve effective period for this widget (uses per-widget override if any)
-    const widgetInstance = widgets.find((w) => w.type === detailsWidgetId);
+    const widgetInstance = widgets.find((w) => w.type === visibleDetailsWidgetId);
     const modalPeriod = widgetInstance
       ? getWidgetPeriod(widgetInstance.id)
       : {
@@ -3566,13 +3575,13 @@ export default function AdminDashboardPage() {
           subtitle: "Convites e partners por nível",
         },
       };
-    const cfg = cfgMap[detailsWidgetId] ?? {
+    const cfg = cfgMap[visibleDetailsWidgetId] ?? {
       icon: <Settings className="h-6 w-6" />,
       subtitle: "Detalhes do widget",
     };
 
     const renderContent = () => {
-      switch (detailsWidgetId) {
+      switch (visibleDetailsWidgetId) {
         case "metrics": {
           const mp = getMetricsForPeriod();
           const items: Array<{
@@ -6665,16 +6674,25 @@ export default function AdminDashboardPage() {
     };
 
     return (
-      <Dialog
+      <Sheet
         open={!!detailsWidgetId}
         onOpenChange={() => setDetailsWidgetId(null)}
       >
-        <DialogContent
-          className="!max-w-[1000px] w-[calc(100vw-2rem)] p-0 overflow-hidden"
-          showCloseButton={false}
+        <SheetContent
+          side="right"
+          hideOverlay
+          className="w-full p-0 flex flex-col overflow-hidden"
+          style={{
+            left: `${sidebarWidth}px`,
+            width: `calc(100vw - ${sidebarWidth}px)`,
+            top: `${headerHeight - 1}px`,
+            bottom: `${footerHeight - 1}px`,
+          }}
         >
-          {/* Brand-gradient header */}
-          <div className="app-brand-header px-5 py-4 text-white">
+          {/* Brand-gradient header — pr-14 dá espaço pro botão fechar
+              embutido do SheetContent (absolute top-5 right-5) não
+              sobrepor o botão "Fechar" próprio deste header */}
+          <div className="app-brand-header pl-5 pr-14 py-4 text-white">
             {/* Top row: icon + title/subtitle | period badge + action buttons */}
             <div className="flex items-center gap-3">
               {/* Icon */}
@@ -6763,14 +6781,14 @@ export default function AdminDashboardPage() {
               {/* Action icon buttons */}
               <div className="flex items-center gap-1 shrink-0">
                 <button
-                  onClick={() => openWidgetShareDialog(detailsWidgetId!, title)}
+                  onClick={() => openWidgetShareDialog(visibleDetailsWidgetId!, title)}
                   title="Compartilhar"
                   className="flex items-center justify-center h-8 w-8 rounded-lg bg-white/10 hover:bg-white/30 active:scale-90 transition-all duration-150"
                 >
                   <Share2 className="h-4 w-4" />
                 </button>
                 <button
-                  onClick={() => exportWidgetToPng(detailsWidgetId!, title)}
+                  onClick={() => exportWidgetToPng(visibleDetailsWidgetId!, title)}
                   title="Exportar PNG"
                   className="flex items-center justify-center h-8 w-8 rounded-lg bg-white/10 hover:bg-white/30 active:scale-90 transition-all duration-150"
                 >
@@ -6786,15 +6804,19 @@ export default function AdminDashboardPage() {
               </div>
             </div>
           </div>
-          {/* Scrollable content — overflow-y-scroll keeps scrollbar always visible */}
-          <div
-            className="px-6 py-5 space-y-4 max-h-[68vh] overflow-y-scroll transition-opacity duration-150"
-            key={`${detailsWidgetId}-${modalPeriod.label}`}
-          >
-            {renderContent()}
+          {/* Scrollable content — preenche o espaço até o footer/fim do
+              painel, em vez do antigo max-h-[68vh] herdado do modal
+              centralizado */}
+          <div className="flex-1 overflow-y-auto bg-slate-200 dark:bg-slate-950/40 px-[50px] py-[50px]">
+            <div
+              className="max-w-5xl mx-auto rounded-2xl border border-slate-200/80 dark:border-slate-700/80 bg-white dark:bg-slate-900 shadow-sm p-6 space-y-4 transition-opacity duration-150"
+              key={`${visibleDetailsWidgetId}-${modalPeriod.label}`}
+            >
+              {renderContent()}
+            </div>
           </div>
-        </DialogContent>
-      </Dialog>
+        </SheetContent>
+      </Sheet>
     );
   };
   // ─────────────────────────────────────────────────────────────────────────
@@ -11774,188 +11796,238 @@ export default function AdminDashboardPage() {
         {/* end dashboard-export-area */}
       </div>
 
-      <Dialog open={showEditDialog} onOpenChange={setShowEditDialog}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle>Editar Dashboard</DialogTitle>
-            <DialogDescription>Altere o nome do dashboard</DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="edit-dashboard-name">Nome do Dashboard</Label>
-              <Input
-                id="edit-dashboard-name"
-                value={editingDashboardName}
-                onChange={(e) => setEditingDashboardName(e.target.value)}
-                placeholder="Digite o nome do dashboard"
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") {
-                    handleSaveEditedDashboard();
-                  }
-                }}
-              />
+      <Sheet open={showEditDialog} onOpenChange={setShowEditDialog}>
+        <SheetContent
+          side="right"
+          hideOverlay
+          className="w-full p-0 flex flex-col overflow-hidden"
+          style={{
+            left: `${sidebarWidth}px`,
+            width: `calc(100vw - ${sidebarWidth}px)`,
+            top: `${headerHeight - 1}px`,
+            bottom: `${footerHeight - 1}px`,
+          }}
+        >
+          <div className="px-6 py-5 shrink-0 bg-gradient-to-br from-blue-600 via-blue-700 to-indigo-700">
+            <h2 className="text-lg font-bold text-white">Editar Dashboard</h2>
+            <p className="text-sm text-blue-100 mt-1">Altere o nome do dashboard</p>
+          </div>
+
+          <div className="flex-1 overflow-y-auto bg-slate-200 dark:bg-slate-950/40 px-[50px] py-[50px]">
+            <div className="max-w-3xl mx-auto">
+              <div className="rounded-2xl border border-slate-200/80 dark:border-slate-700/80 bg-white dark:bg-slate-900 shadow-sm p-6">
+                <div className="space-y-2">
+                  <Label htmlFor="edit-dashboard-name">Nome do Dashboard</Label>
+                  <Input
+                    id="edit-dashboard-name"
+                    value={editingDashboardName}
+                    onChange={(e) => setEditingDashboardName(e.target.value)}
+                    placeholder="Digite o nome do dashboard"
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        handleSaveEditedDashboard();
+                      }
+                    }}
+                  />
+                </div>
+              </div>
             </div>
           </div>
-          <DialogFooter>
+
+          <div className="border-t border-slate-200/80 dark:border-slate-700/80 px-6 py-4 bg-white dark:bg-slate-900 flex items-center justify-end gap-3">
             <Button variant="outline" onClick={() => setShowEditDialog(false)}>
               Cancelar
             </Button>
             <Button
+              className="btn-brand"
               onClick={handleSaveEditedDashboard}
               disabled={!editingDashboardName.trim()}
             >
               Salvar Alterações
             </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+          </div>
+        </SheetContent>
+      </Sheet>
 
-      <Dialog open={showShareDialog} onOpenChange={setShowShareDialog}>
-        <DialogContent className="sm:max-w-lg">
-          <DialogHeader>
-            <DialogTitle>Compartilhar Dashboard</DialogTitle>
-            <DialogDescription>
-              Escolha como deseja compartilhar este dashboard
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4">
-            {/* Global Sharing */}
-            <div className="flex items-center justify-between p-4 border rounded-lg">
-              <div className="space-y-0.5">
+      <Sheet open={showShareDialog} onOpenChange={setShowShareDialog}>
+        <SheetContent
+          side="right"
+          hideOverlay
+          className="w-full p-0 flex flex-col overflow-hidden"
+          style={{
+            left: `${sidebarWidth}px`,
+            width: `calc(100vw - ${sidebarWidth}px)`,
+            top: `${headerHeight - 1}px`,
+            bottom: `${footerHeight - 1}px`,
+          }}
+        >
+          <div className="px-6 py-5 shrink-0 bg-gradient-to-br from-green-600 via-green-700 to-emerald-700">
+            <div className="flex items-center gap-2 text-white">
+              <Share2 className="h-5 w-5" />
+              <h2 className="text-lg font-bold">Compartilhar Dashboard</h2>
+            </div>
+            <p className="text-sm text-green-100 mt-1">Escolha como deseja compartilhar este dashboard</p>
+          </div>
+
+          <div className="flex-1 overflow-y-auto bg-slate-200 dark:bg-slate-950/40 px-[50px] py-[50px]">
+            <div className="max-w-3xl mx-auto space-y-6">
+              {/* Global Sharing Card */}
+              <div className="rounded-2xl border border-slate-200/80 dark:border-slate-700/80 bg-white dark:bg-slate-900 shadow-sm p-6">
+                <div className="flex items-center justify-between">
+                  <div className="space-y-0.5">
+                    <div className="flex items-center gap-2">
+                      <Globe className="h-4 w-4 text-blue-500" />
+                      <Label htmlFor="share-global" className="font-medium">
+                        Compartilhar Globalmente
+                      </Label>
+                    </div>
+                    <p className="text-sm text-muted-foreground">
+                      Disponível para todas as contas
+                    </p>
+                  </div>
+                  <Switch
+                    id="share-global"
+                    checked={shareGlobal}
+                    onCheckedChange={setShareGlobal}
+                  />
+                </div>
+              </div>
+
+              {/* Professional Sharing Card */}
+              <div className="rounded-2xl border border-slate-200/80 dark:border-slate-700/80 bg-white dark:bg-slate-900 shadow-sm p-6 space-y-4">
                 <div className="flex items-center gap-2">
-                  <Globe className="h-4 w-4 text-blue-500" />
-                  <Label htmlFor="share-global" className="font-medium">
-                    Compartilhar Globalmente
+                  <Users className="h-4 w-4 text-green-500" />
+                  <Label className="font-medium">
+                    Compartilhar com Profissionais
                   </Label>
                 </div>
-                <p className="text-sm text-muted-foreground">
-                  Disponível para todas as contas
-                </p>
-              </div>
-              <Switch
-                id="share-global"
-                checked={shareGlobal}
-                onCheckedChange={setShareGlobal}
-              />
-            </div>
 
-            {/* Professional Sharing */}
-            <div className="space-y-3">
-              <div className="flex items-center gap-2">
-                <Users className="h-4 w-4 text-green-500" />
-                <Label className="font-medium">
-                  Compartilhar com Profissionais
-                </Label>
-              </div>
+                <Input
+                  placeholder="Buscar profissional..."
+                  value={professionalSearch}
+                  onChange={(e) => setProfessionalSearch(e.target.value)}
+                  className="w-full"
+                />
 
-              <Input
-                placeholder="Buscar profissional..."
-                value={professionalSearch}
-                onChange={(e) => setProfessionalSearch(e.target.value)}
-                className="w-full"
-              />
-
-              <div className="border rounded-lg max-h-[200px] overflow-y-auto">
-                {/* Mock professional list - replace with real data */}
-                {[
-                  {
-                    id: "prof-1",
-                    name: "Dr. João Silva",
-                    specialty: "Psicólogo",
-                  },
-                  {
-                    id: "prof-2",
-                    name: "Dra. Maria Santos",
-                    specialty: "Nutricionista",
-                  },
-                  {
-                    id: "prof-3",
-                    name: "Dr. Pedro Costa",
-                    specialty: "Personal Trainer",
-                  },
-                  {
-                    id: "prof-4",
-                    name: "Dra. Ana Lima",
-                    specialty: "Terapeuta",
-                  },
-                ]
-                  .filter((prof) =>
-                    professionalSearch
-                      ? prof.name
-                          .toLowerCase()
-                          .includes(professionalSearch.toLowerCase())
-                      : true,
-                  )
-                  .map((professional) => (
-                    <div
-                      key={professional.id}
-                      className="flex items-center justify-between p-3 hover:bg-muted/50 border-b last:border-b-0"
-                    >
-                      <div className="flex-1">
-                        <p className="font-medium text-sm">
-                          {professional.name}
-                        </p>
-                        <p className="text-xs text-muted-foreground">
-                          {professional.specialty}
-                        </p>
+                <div className="border rounded-lg max-h-[300px] overflow-y-auto">
+                  {/* Mock professional list - replace with real data */}
+                  {[
+                    {
+                      id: "prof-1",
+                      name: "Dr. João Silva",
+                      specialty: "Psicólogo",
+                    },
+                    {
+                      id: "prof-2",
+                      name: "Dra. Maria Santos",
+                      specialty: "Nutricionista",
+                    },
+                    {
+                      id: "prof-3",
+                      name: "Dr. Pedro Costa",
+                      specialty: "Personal Trainer",
+                    },
+                    {
+                      id: "prof-4",
+                      name: "Dra. Ana Lima",
+                      specialty: "Terapeuta",
+                    },
+                  ]
+                    .filter((prof) =>
+                      professionalSearch
+                        ? prof.name
+                            .toLowerCase()
+                            .includes(professionalSearch.toLowerCase())
+                        : true,
+                    )
+                    .map((professional) => (
+                      <div
+                        key={professional.id}
+                        className="flex items-center justify-between p-3 hover:bg-muted/50 border-b last:border-b-0"
+                      >
+                        <div className="flex-1">
+                          <p className="font-medium text-sm">
+                            {professional.name}
+                          </p>
+                          <p className="text-xs text-muted-foreground">
+                            {professional.specialty}
+                          </p>
+                        </div>
+                        <Switch
+                          checked={shareWithProfessionals.includes(
+                            professional.id,
+                          )}
+                          onCheckedChange={() =>
+                            handleToggleProfessional(professional.id)
+                          }
+                        />
                       </div>
-                      <Switch
-                        checked={shareWithProfessionals.includes(
-                          professional.id,
-                        )}
-                        onCheckedChange={() =>
-                          handleToggleProfessional(professional.id)
-                        }
-                      />
-                    </div>
-                  ))}
-              </div>
+                    ))}
+                </div>
 
-              {shareWithProfessionals.length > 0 && (
-                <p className="text-sm text-muted-foreground">
-                  {shareWithProfessionals.length} profissional(is)
-                  selecionado(s)
-                </p>
-              )}
+                {shareWithProfessionals.length > 0 && (
+                  <p className="text-sm text-muted-foreground">
+                    {shareWithProfessionals.length} profissional(is)
+                    selecionado(s)
+                  </p>
+                )}
+              </div>
             </div>
           </div>
-          <DialogFooter>
+
+          <div className="border-t border-slate-200/80 dark:border-slate-700/80 px-6 py-4 bg-white dark:bg-slate-900 flex items-center justify-end gap-3">
             <Button variant="outline" onClick={() => setShowShareDialog(false)}>
               Cancelar
             </Button>
-            <Button onClick={handleSaveSharing}>Salvar Compartilhamento</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+            <Button className="btn-brand" onClick={handleSaveSharing}>
+              Salvar Compartilhamento
+            </Button>
+          </div>
+        </SheetContent>
+      </Sheet>
 
-      <Dialog
+      <Sheet
         open={showSaveDashboardDialog}
         onOpenChange={setShowSaveDashboardDialog}
       >
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle>Salvar Dashboard</DialogTitle>
-            <DialogDescription>
-              Dê um nome ao seu dashboard personalizado
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="dashboard-name">Nome do Dashboard</Label>
-              <Input
-                id="dashboard-name"
-                value={newDashboardName}
-                onChange={(e) => setNewDashboardName(e.target.value)}
-                placeholder="Ex: Meu Dashboard Financeiro"
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") {
-                    handleSaveDashboard();
-                  }
-                }}
-              />
+        <SheetContent
+          side="right"
+          hideOverlay
+          className="w-full p-0 flex flex-col overflow-hidden"
+          style={{
+            left: `${sidebarWidth}px`,
+            width: `calc(100vw - ${sidebarWidth}px)`,
+            top: `${headerHeight - 1}px`,
+            bottom: `${footerHeight - 1}px`,
+          }}
+        >
+          <div className="px-6 py-5 shrink-0 bg-gradient-to-br from-blue-600 via-blue-700 to-indigo-700">
+            <h2 className="text-lg font-bold text-white">Salvar Dashboard</h2>
+            <p className="text-sm text-blue-100 mt-1">Dê um nome ao seu dashboard personalizado</p>
+          </div>
+
+          <div className="flex-1 overflow-y-auto bg-slate-200 dark:bg-slate-950/40 px-[50px] py-[50px]">
+            <div className="max-w-3xl mx-auto">
+              <div className="rounded-2xl border border-slate-200/80 dark:border-slate-700/80 bg-white dark:bg-slate-900 shadow-sm p-6">
+                <div className="space-y-2">
+                  <Label htmlFor="dashboard-name">Nome do Dashboard</Label>
+                  <Input
+                    id="dashboard-name"
+                    value={newDashboardName}
+                    onChange={(e) => setNewDashboardName(e.target.value)}
+                    placeholder="Ex: Meu Dashboard Financeiro"
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        handleSaveDashboard();
+                      }
+                    }}
+                  />
+                </div>
+              </div>
             </div>
           </div>
-          <DialogFooter>
+
+          <div className="border-t border-slate-200/80 dark:border-slate-700/80 px-6 py-4 bg-white dark:bg-slate-900 flex items-center justify-end gap-3 shrink-0">
             <Button
               variant="outline"
               onClick={() => setShowSaveDashboardDialog(false)}
@@ -11963,24 +12035,35 @@ export default function AdminDashboardPage() {
               Cancelar
             </Button>
             <Button
+              className="btn-brand"
               onClick={handleSaveDashboard}
               disabled={!newDashboardName.trim()}
             >
               Salvar Dashboard
             </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+          </div>
+        </SheetContent>
+      </Sheet>
 
       {/* ── Public Share Dialog ───────────────────────────────────────────── */}
-      <Dialog
+      <Sheet
         open={showPublicShareDialog}
         onOpenChange={setShowPublicShareDialog}
       >
-        <DialogContent className="sm:max-w-md p-0 overflow-hidden">
+        <SheetContent
+          side="right"
+          hideOverlay
+          className="w-full p-0 flex flex-col overflow-hidden"
+          style={{
+            left: `${sidebarWidth}px`,
+            width: `calc(100vw - ${sidebarWidth}px)`,
+            top: `${headerHeight - 1}px`,
+            bottom: `${footerHeight - 1}px`,
+          }}
+        >
           {/* Brand gradient header strip */}
           <div
-            className="px-6 pt-5 pb-4"
+            className="px-6 pt-5 pb-4 shrink-0"
             style={{
               background:
                 "linear-gradient(135deg, #000000 0%, #1a2a6f 45%, #c81a7f 100%)",
@@ -12003,7 +12086,8 @@ export default function AdminDashboardPage() {
             </div>
           </div>
 
-          <div className="px-6 pt-4 pb-6 space-y-4">
+          <div className="flex-1 overflow-y-auto bg-slate-200 dark:bg-slate-950/40 px-[50px] py-[50px]">
+            <div className="max-w-2xl mx-auto rounded-2xl border border-slate-200/80 dark:border-slate-700/80 bg-white dark:bg-slate-900 shadow-sm p-6 space-y-4">
             <Tabs
               value={shareActiveTab}
               onValueChange={setShareActiveTab}
@@ -12192,50 +12276,46 @@ export default function AdminDashboardPage() {
             </Tabs>
 
             {/* Generated Link */}
-            <div className="space-y-2 pt-1">
-              <div className="flex gap-2">
+            {generatedShareLink && (
+              <div className="flex gap-2 items-center pt-1">
+                <Input
+                  readOnly
+                  value={generatedShareLink}
+                  className="text-xs font-mono bg-muted/40"
+                  onClick={(e) => (e.target as HTMLInputElement).select()}
+                />
                 <Button
-                  className="flex-1 btn-brand"
-                  onClick={handleGenerateShareLink}
-                  disabled={sharePinEnabled && sharePin.length !== 4}
+                  variant="outline"
+                  size="sm"
+                  className="shrink-0 gap-1.5 border-violet-200 dark:border-violet-700 hover:border-violet-400 hover:bg-violet-50 dark:hover:bg-violet-950/30 text-violet-700 dark:text-violet-400"
+                  onClick={handleCopyShareLink}
                 >
-                  <Link2 className="h-4 w-4 mr-1.5" />
-                  Gerar Link
+                  <Copy className="h-3.5 w-3.5" />
+                  Copiar
                 </Button>
               </div>
-              {generatedShareLink && (
-                <div className="flex gap-2 items-center">
-                  <Input
-                    readOnly
-                    value={generatedShareLink}
-                    className="text-xs font-mono bg-muted/40"
-                    onClick={(e) => (e.target as HTMLInputElement).select()}
-                  />
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="shrink-0 gap-1.5 border-violet-200 dark:border-violet-700 hover:border-violet-400 hover:bg-violet-50 dark:hover:bg-violet-950/30 text-violet-700 dark:text-violet-400"
-                    onClick={handleCopyShareLink}
-                  >
-                    <Copy className="h-3.5 w-3.5" />
-                    Copiar
-                  </Button>
-                </div>
-              )}
-            </div>
-
-            <div className="flex justify-end pt-1">
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => setShowPublicShareDialog(false)}
-              >
-                Fechar
-              </Button>
+            )}
             </div>
           </div>
-        </DialogContent>
-      </Dialog>
+
+          <div className="border-t border-slate-200/80 dark:border-slate-700/80 px-6 py-4 bg-white dark:bg-slate-900 flex items-center justify-end gap-3 shrink-0">
+            <Button
+              variant="outline"
+              onClick={() => setShowPublicShareDialog(false)}
+            >
+              Fechar
+            </Button>
+            <Button
+              className="btn-brand"
+              onClick={handleGenerateShareLink}
+              disabled={sharePinEnabled && sharePin.length !== 4}
+            >
+              <Link2 className="h-4 w-4 mr-1.5" />
+              Gerar Link
+            </Button>
+          </div>
+        </SheetContent>
+      </Sheet>
       {/* ──────────────────────────────────────────────────────────────────── */}
 
       {selectedMetric && (
@@ -12253,19 +12333,32 @@ export default function AdminDashboardPage() {
       {WidgetDetailsModal()}
 
       {/* ── Historical Data Modal ─────────────────────────────────────────── */}
-      <Dialog open={showHistoricalModal} onOpenChange={setShowHistoricalModal}>
-        <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <History className="h-4 w-4 text-amber-500" />
-              Dados Históricos Manuais
-            </DialogTitle>
-            <DialogDescription>
+      <Sheet open={showHistoricalModal} onOpenChange={setShowHistoricalModal}>
+        <SheetContent
+          side="right"
+          hideOverlay
+          className="w-full p-0 flex flex-col overflow-hidden"
+          style={{
+            left: `${sidebarWidth}px`,
+            width: `calc(100vw - ${sidebarWidth}px)`,
+            top: `${headerHeight - 1}px`,
+            bottom: `${footerHeight - 1}px`,
+          }}
+        >
+          <div className="px-6 py-5 shrink-0 bg-gradient-to-br from-amber-600 via-amber-700 to-orange-700">
+            <div className="flex items-center gap-2 text-white">
+              <History className="h-5 w-5" />
+              <h2 className="text-lg font-bold">Dados Históricos Manuais</h2>
+            </div>
+            <p className="text-sm text-amber-100 mt-1">
               Insira dados reais para um mês específico. Serão aplicados sobre
               os dados gerados quando o período do dashboard corresponder a esse
               mês.
-            </DialogDescription>
-          </DialogHeader>
+            </p>
+          </div>
+
+          <div className="flex-1 overflow-y-auto bg-slate-200 dark:bg-slate-950/40 px-[50px] py-[50px]">
+            <div className="space-y-6 max-w-4xl mx-auto">
 
           {/* Month picker + saved entries count */}
           <div className="flex items-center gap-3 py-2 border-b border-border/40">
@@ -12637,8 +12730,10 @@ export default function AdminDashboardPage() {
               </div>
             </div>
           )}
+            </div>
+          </div>
 
-          <DialogFooter className="gap-2">
+          <div className="border-t border-slate-200/80 dark:border-slate-700/80 px-6 py-4 bg-white dark:bg-slate-900 flex items-center justify-end gap-3">
             <Button
               variant="outline"
               onClick={() => setShowHistoricalModal(false)}
@@ -12653,13 +12748,16 @@ export default function AdminDashboardPage() {
               <Save className="h-4 w-4 mr-1.5" />
               Salvar Dados
             </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+          </div>
+        </SheetContent>
+      </Sheet>
 
-      {/* Edit Dashboard Panel */}
-      {(isEditDashboardModalOpen || isEditPanelClosing) &&
-        (() => {
+      {/* Edit Dashboard Panel — sempre renderizado (não gated por
+          isEditDashboardModalOpen); é o próprio <Sheet> que decide quando
+          desmontar de verdade via seu estado interno, dando tempo da
+          animação de saída rodar. Gatear aqui desmontaria o painel no
+          mesmo instante do fechamento, cortando a animação. */}
+      {(() => {
           const modalGradientMap: Record<string, string> = {
             blue: "from-blue-500 to-blue-700",
             green: "from-green-500 to-green-700",
@@ -12679,28 +12777,28 @@ export default function AdminDashboardPage() {
             .filter((lib) => ROLE_WIDGET_IDS.has(lib.id))
             .filter((lib) => !draftWidgets.some((dw) => dw.type === lib.id));
           return (
-            <>
-              <div
-                className={cn(
-                  "fixed top-0 bottom-0 right-0 z-40 bg-black/30 backdrop-blur-[1px] transition-opacity duration-300",
-                  isEditPanelClosing ? "opacity-0" : "opacity-100",
-                )}
-                style={{ left: "var(--sidebar-width)" }}
-                onClick={handleCloseEditPanel}
-              />
-              <div
-                data-slot="sheet-content"
-                data-state={isEditPanelClosing ? "closed" : "open"}
-                className="fixed top-0 bg-background z-50 flex flex-col shadow-2xl data-[state=open]:animate-in data-[state=open]:slide-in-from-right data-[state=open]:fade-in-0 data-[state=closed]:animate-out data-[state=closed]:slide-out-to-right data-[state=closed]:fade-out-0"
+            <Sheet
+              open={isEditDashboardModalOpen}
+              onOpenChange={(o) => {
+                if (!o) handleCloseEditPanel();
+              }}
+            >
+              <SheetContent
+                side="right"
+                hideOverlay
+                className="w-full p-0 flex flex-col overflow-hidden"
                 style={{
-                  left: "var(--sidebar-width)",
-                  right: 0,
-                  bottom: "var(--footer-height, 0px)",
+                  left: `${sidebarWidth}px`,
+                  width: `calc(100vw - ${sidebarWidth}px)`,
+                  top: `${headerHeight - 1}px`,
+                  bottom: `${footerHeight - 1}px`,
                 }}
               >
-                {/* Header */}
+                {/* Header — pr-14 dá espaço pro botão fechar embutido do
+                    SheetContent (absolute top-5 right-5) não sobrepor os
+                    botões de modo */}
                 <div
-                  className="flex-shrink-0 px-6 py-4 text-white"
+                  className="flex-shrink-0 pl-6 pr-14 py-4 text-white"
                   style={{ background: "var(--app-brand-gradient)" }}
                 >
                   <div className="flex items-center justify-between">
@@ -12807,13 +12905,6 @@ export default function AdminDashboardPage() {
                         <Plus className="h-3.5 w-3.5" />
                         Adicionar
                       </button>
-                      <div className="w-px h-5 bg-white/25 mx-1" />
-                      <button
-                        onClick={handleCloseEditPanel}
-                        className="bg-white/15 hover:bg-white/30 rounded-lg p-1.5 transition-colors"
-                      >
-                        <X className="h-4 w-4" />
-                      </button>
                     </div>
                   </div>
                 </div>
@@ -12823,7 +12914,7 @@ export default function AdminDashboardPage() {
                   {/* Main widgets grid */}
                   <div
                     className={cn(
-                      "flex-1 overflow-y-auto p-6 transition-all duration-300",
+                      "flex-1 overflow-y-auto p-6 bg-slate-200 dark:bg-slate-950/40 transition-all duration-300",
                       editModalMode === "adicionar" && "border-r border-border",
                     )}
                   >
@@ -13179,8 +13270,8 @@ export default function AdminDashboardPage() {
                     {draftWidgets.length} total
                   </span>
                 </div>
-              </div>
-            </>
+              </SheetContent>
+            </Sheet>
           );
         })()}
       <ConfirmationDialog

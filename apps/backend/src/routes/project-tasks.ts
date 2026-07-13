@@ -7,6 +7,7 @@ import { validate } from "../middleware/validate";
 import { selecionarNomadeParaTarefa } from "../lib/selecionar-nomade";
 import { atribuirLiderParaTarefa } from "../lib/atribuir-lider";
 import { withZeroDateRecovery } from "../lib/clean-zero-datetimes";
+import { combinedProjectWhere } from "../lib/project-scope";
 
 const router = Router();
 
@@ -156,39 +157,20 @@ async function getTaskScopeWhere(
     return { lider_responsavel_id: userId };
   }
 
-  // Agency: scoped to tasks in projects belonging to their agency (by name)
-  if (accountType === "agencias") {
-    const user = await prisma.user.findUnique({
-      where: { id: userId },
-      select: { agency: { select: { name: true } } },
-    });
-    const agencyName = user?.agency?.name;
-    if (!agencyName) return null; // not linked to any agency → no access
-    return { project: { agency: agencyName } };
+  // Agency/Company/Partner: escopo combinado legado (agency/client_id) OU
+  // novo (agency_id/company_id/partner_id) — mesmo helper usado em
+  // GET /api/projects (src/lib/project-scope.ts), pra não ficar dessincronizado
+  // de novo. Antes, esta função só reconhecia o escopo legado: uma tarefa
+  // nascida num projeto vinculado só pelo campo novo (agency_id/company_id/
+  // partner_id) ficava invisível aqui mesmo aparecendo em GET /api/projects.
+  if (["agencias", "empresas", "parceiro"].includes(accountType)) {
+    const { where } = await combinedProjectWhere(prisma, userId, accountType);
+    if (where === null) return null; // não vinculado a nenhum escopo → sem acesso
+    return { project: where };
   }
 
-  // Company: scoped to tasks in projects where the client is their company
-  if (accountType === "empresas") {
-    const user = await prisma.user.findUnique({
-      where: { id: userId },
-      select: { company_id: true },
-    });
-    if (!user?.company_id) return null; // not linked to any company → no access
-    return { project: { client_id: user.company_id } };
-  }
-
-  // Partner: scoped to tasks in projects of companies they referred
-  if (accountType === "parceiro") {
-    const profile = await prisma.partnerProfile.findUnique({
-      where: { user_id: userId },
-      select: { referred_companies: { select: { id: true } } },
-    });
-    const companyIds = profile?.referred_companies?.map((c) => c.id) ?? [];
-    if (companyIds.length === 0) return null; // no referred companies → no access
-    return { project: { client_id: { in: companyIds } } };
-  }
-
-  // Unknown account type → deny
+  // Unknown account type (inclui "nomades" hoje) → nega. Comportamento
+  // inalterado nesta fase — permissões de Nomad não são implementadas aqui.
   return null;
 }
 

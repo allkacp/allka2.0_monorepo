@@ -20,6 +20,15 @@ router.get("/stats", verifyToken, async (req, res, next) => {
       pendingWithdrawals,
       totalInvoices,
       paidInvoices,
+      projectsByStatusRaw,
+      pendingPaymentsAgg,
+      paidPaymentsAgg,
+      totalProjectProducts,
+      totalUsers,
+      activeUsersReal,
+      totalAgencies,
+      totalPartners,
+      totalCatalogProducts,
     ] = await Promise.all([
       prisma.company.count(),
       prisma.project.count(),
@@ -37,6 +46,18 @@ router.get("/stats", verifyToken, async (req, res, next) => {
       }),
       prisma.invoice.count(),
       prisma.invoice.count({ where: { status: "paid" } }),
+      // Contagens reais do fluxo Projeto -> Pagamento -> Tarefa (ver create-project.ts /
+      // confirm-payment.ts). Distintas de totalProjects/activeProjects acima, que usam o
+      // conceito antigo (Invoice/status "in-progress") de um subsistema financeiro paralelo.
+      prisma.project.groupBy({ by: ["status"], _count: { id: true } }),
+      prisma.payment.aggregate({ _count: true, _sum: { amount: true }, where: { status: "PENDENTE" } }),
+      prisma.payment.aggregate({ _count: true, _sum: { amount: true }, where: { status: "PAGO" } }),
+      prisma.projectProduct.count(),
+      prisma.user.count(),
+      prisma.user.count({ where: { is_active: true } }),
+      prisma.agency.count(),
+      prisma.partnerProfile.count(),
+      prisma.product.count(),
     ]);
 
     const invoiceAmounts = await prisma.invoice.aggregate({
@@ -44,12 +65,17 @@ router.get("/stats", verifyToken, async (req, res, next) => {
       where: { status: "paid" },
     });
 
+    const projectsByStatus = Object.fromEntries(
+      projectsByStatusRaw.map((g) => [g.status, g._count.id]),
+    );
+
     res.json({
       companies: { total: totalCompanies },
       projects: {
         total: totalProjects,
         active: activeProjects,
         inactive: totalProjects - activeProjects,
+        byStatus: projectsByStatus,
       },
       nomades: {
         total: totalNomades,
@@ -71,6 +97,21 @@ router.get("/stats", verifyToken, async (req, res, next) => {
         pendingWithdrawals,
         totalWithdrawals,
       },
+      // Campos reais adicionais (Project/Payment/ProjectProduct/User/Agency/PartnerProfile/
+      // Product) -- aditivos, não substituem nada acima. Alimentam os cards "Total de
+      // Projetos", "Pagamentos Pendentes", "Produtos Vinculados", "Produtos no Catálogo" e
+      // "Agências & Parceiros" do Admin Dashboard.
+      payments: {
+        pendingCount: pendingPaymentsAgg._count,
+        pendingAmount: pendingPaymentsAgg._sum.amount ?? 0,
+        paidCount: paidPaymentsAgg._count,
+        paidAmount: paidPaymentsAgg._sum.amount ?? 0,
+      },
+      projectProducts: { total: totalProjectProducts },
+      users: { total: totalUsers, active: activeUsersReal },
+      agencies: { total: totalAgencies },
+      partners: { total: totalPartners },
+      catalogProducts: { total: totalCatalogProducts },
     });
   } catch (err) {
     next(err);
@@ -147,10 +188,12 @@ router.get("/recent-activities", verifyToken, async (req, res, next) => {
         orderBy: { created_at: "desc" },
         select: {
           id: true,
+          project_code: true,
           title: true,
           status: true,
           created_at: true,
           client: { select: { name: true } },
+          created_by: { select: { name: true } },
         },
       }),
       prisma.taskExecution.findMany({
@@ -175,8 +218,10 @@ router.get("/recent-activities", verifyToken, async (req, res, next) => {
       ...recentProjects.map((p) => ({
         type: "project",
         id: p.id,
+        project_code: p.project_code,
         title: `Projeto: ${p.title}`,
         subtitle: p.client?.name,
+        creator: p.created_by?.name ?? null,
         status: p.status,
         date: p.created_at,
       })),

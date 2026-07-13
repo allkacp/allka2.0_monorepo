@@ -4,8 +4,8 @@ import { z } from "zod";
 import { prisma } from "../lib/prisma";
 import { verifyToken } from "../middleware/auth";
 import { validate } from "../middleware/validate";
-import { getNextTaskCode } from "../lib/task-code";
 import { assertProductContractable } from "../lib/product-contractability";
+import { recalculateProjectValue } from "../lib/project-value";
 
 const router = Router();
 
@@ -216,107 +216,14 @@ router.post(
         },
       });
 
-      // 5. Auto-generate ProjectTasks from CatalogTask links.
-      // Only generate if project is in a paid/contracted state.
-      // For earlier statuses (draft, negotiation), tasks will be generated
-      // automatically when the project transitions to "planning" via gerarTarefasDoProjeto.
-      const TASK_GENERATION_STATUSES = ["planning", "in-progress", "paused"];
-      const taskLinks = product.task_links;
-      let generatedCount = 0;
-      let skippedCount = 0;
-
-      if (TASK_GENERATION_STATUSES.includes(project.status)) {
-        for (const link of taskLinks) {
-          const ct = link.catalog_task;
-
-          // Idempotency: skip if task for this project_product + catalog_task already exists
-          const existing = await prisma.projectTask.findFirst({
-            where: {
-              project_product_id: projectProduct.id,
-              catalog_task_id: ct.id,
-            },
-          });
-
-          if (existing) {
-            skippedCount++;
-            continue;
-          }
-
-          const taskCode = await getNextTaskCode();
-          const newTask = await prisma.projectTask.create({
-            data: {
-              project_id,
-              project_product_id: projectProduct.id,
-              product_id,
-              catalog_task_id: ct.id,
-              code_snapshot: ct.code,
-              name_snapshot: ct.name,
-              category_snapshot: ct.category,
-              task_code: taskCode,
-              title: ct.name,
-              description: ct.description || null,
-              status: "PARA_LANCAMENTO",
-              priority: ct.default_priority || "medium",
-              sort_order: link.sort_order,
-              phase: link.phase || null,
-              fase: link.phase || null,
-              checklist_snapshot: ct.checklist || null,
-              steps_snapshot: ct.steps || null,
-              briefing_snapshot: ct.briefing_questions || null,
-            },
-          });
-
-          // Create stages from CatalogTask.steps JSON, or one fallback stage
-          let parsedSteps: Array<{
-            id?: string;
-            code?: string;
-            name?: string;
-            titulo?: string;
-            description?: string;
-            descricao?: string;
-            order?: number;
-          }> = [];
-          if (ct.steps) {
-            try {
-              const raw = JSON.parse(ct.steps);
-              if (Array.isArray(raw)) parsedSteps = raw;
-            } catch { /* ignore */ }
-          }
-
-          const stagesToCreate =
-            parsedSteps.length > 0
-              ? parsedSteps.map((step, idx) => ({
-                  project_task_id: newTask.id,
-                  catalog_step_ref: step.id ?? step.code ?? `${ct.id}-step-${idx + 1}`,
-                  titulo: step.name ?? step.titulo ?? `Etapa ${idx + 1}`,
-                  descricao: step.description ?? step.descricao ?? null,
-                  ordem: step.order ?? idx + 1,
-                  status: idx === 0 ? "PENDENTE" : "BLOQUEADA",
-                  obrigatoria: true,
-                  depende_da_etapa_anterior: idx > 0,
-                  briefing_necessario: false,
-                }))
-              : [
-                  {
-                    project_task_id: newTask.id,
-                    catalog_step_ref: ct.id,
-                    titulo: ct.name,
-                    descricao: ct.description ?? null,
-                    ordem: 1,
-                    status: "PENDENTE",
-                    obrigatoria: link.is_mandatory,
-                    depende_da_etapa_anterior: false,
-                    briefing_necessario: false,
-                  },
-                ];
-
-          if (stagesToCreate.length > 0) {
-            await prisma.projectTaskStage.createMany({ data: stagesToCreate });
-          }
-
-          generatedCount++;
-        }
-      }
+      // Vincular produto NUNCA gera tarefa — a única origem permitida de
+      // geração automática nesta fase é pagamento confirmado como PAGO (ver
+      // src/lib/confirm-payment.ts). O bloco que gerava tarefas aqui (uma
+      // por CatalogTask vinculado, quando o projeto já estava em
+      // planning/in-progress/paused) foi removido de propósito. Em vez
+      // disso, só recalculamos o valor do projeto a partir dos produtos
+      // válidos — nunca confiamos em valor enviado pelo frontend.
+      await recalculateProjectValue(prisma, project_id);
 
       const result = await prisma.projectProduct.findUnique({
         where: { id: projectProduct.id },
@@ -328,8 +235,8 @@ router.post(
 
       res.status(201).json({
         project_product: result,
-        tasks_generated: generatedCount,
-        tasks_skipped: skippedCount,
+        tasks_generated: 0,
+        tasks_skipped: 0,
       });
     } catch (err) {
       next(err);
@@ -378,6 +285,10 @@ router.patch(
         data,
         include: { tasks: { orderBy: [{ sort_order: "asc" }] } },
       });
+      // Cobre o caso de cancelamento (status -> CANCELADO) e qualquer
+      // mudança de preço negociado — o total do projeto sempre reflete só
+      // os vínculos ainda válidos.
+      await recalculateProjectValue(prisma, updated.project_id);
       res.json(updated);
     } catch (err) {
       next(err);
@@ -403,6 +314,7 @@ router.delete(
       }
 
       await prisma.projectProduct.delete({ where: { id } });
+      await recalculateProjectValue(prisma, existing.project_id);
       res.status(204).send();
     } catch (err) {
       next(err);

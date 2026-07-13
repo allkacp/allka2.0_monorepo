@@ -4,155 +4,19 @@ import { prisma } from "../lib/prisma";
 import { verifyToken } from "../middleware/auth";
 import { validate, parsePagination } from "../middleware/validate";
 import { gerarTarefasDoProjeto } from "../lib/generate-tasks";
+import { withProjectCode } from "../lib/create-project";
+import {
+  getProjectScope,
+  scopeToWhere,
+  projectInScope,
+  isAdminUser,
+  isLeaderUser,
+  resolveProjectNewScope,
+  newScopeToWhere,
+  projectVisibleToUser,
+} from "../lib/project-scope";
 
 const router = Router();
-
-// ─── Project scope helpers ───────────────────────────────────────────────────
-
-type ProjectScope =
-  | { kind: "admin" }
-  | { kind: "open" }
-  | { kind: "agency"; agencyName: string }
-  | { kind: "agency_unlinked" }
-  | { kind: "company"; companyId: string }
-  | { kind: "company_unlinked" }
-  | { kind: "partner"; companyIds: string[] }
-  | { kind: "partner_unlinked" };
-
-async function getProjectScope(
-  userId: string,
-  accountType: string,
-): Promise<ProjectScope> {
-  if (accountType === "admin") return { kind: "admin" };
-
-  if (accountType === "agencias") {
-    const user = await prisma.user.findUnique({
-      where: { id: userId },
-      select: { agency: { select: { name: true } } },
-    });
-    const agencyName = user?.agency?.name;
-    if (!agencyName) return { kind: "agency_unlinked" };
-    return { kind: "agency", agencyName };
-  }
-
-  if (accountType === "empresas") {
-    const user = await prisma.user.findUnique({
-      where: { id: userId },
-      select: { company_id: true },
-    });
-    if (!user?.company_id) return { kind: "company_unlinked" };
-    return { kind: "company", companyId: user.company_id };
-  }
-
-  if (accountType === "parceiro") {
-    const profile = await prisma.partnerProfile.findUnique({
-      where: { user_id: userId },
-      select: { referred_companies: { select: { id: true } } },
-    });
-    const companyIds = profile?.referred_companies?.map((c) => c.id) ?? [];
-    if (companyIds.length === 0) return { kind: "partner_unlinked" };
-    return { kind: "partner", companyIds };
-  }
-
-  return { kind: "open" };
-}
-
-function scopeToWhere(scope: ProjectScope): Record<string, unknown> | null {
-  if (
-    scope.kind === "company_unlinked" ||
-    scope.kind === "agency_unlinked" ||
-    scope.kind === "partner_unlinked"
-  )
-    return null;
-  if (scope.kind === "agency") return { agency: scope.agencyName };
-  if (scope.kind === "company") return { client_id: scope.companyId };
-  if (scope.kind === "partner") return { client_id: { in: scope.companyIds } };
-  return {};
-}
-
-function projectInScope(
-  scope: ProjectScope,
-  project: { agency: string | null; client_id: string | null },
-): boolean {
-  if (scope.kind === "admin" || scope.kind === "open") return true;
-  if (
-    scope.kind === "company_unlinked" ||
-    scope.kind === "agency_unlinked" ||
-    scope.kind === "partner_unlinked"
-  )
-    return false;
-  if (scope.kind === "agency") return project.agency === scope.agencyName;
-  if (scope.kind === "company") return project.client_id === scope.companyId;
-  if (scope.kind === "partner")
-    return scope.companyIds.includes(project.client_id ?? "");
-  return false;
-}
-
-// ─── New structured scope (agency_id/company_id/partner_id) ────────────────
-// Roda em paralelo ao escopo legado acima — nada do código anterior foi
-// alterado. Projetos antigos (sem esses 3 campos) continuam visíveis só
-// pelo escopo legado; projetos novos passam a usar isto também. No máximo
-// um dos três é preenchido por projeto (regra aplicada no POST/PUT /link,
-// não em constraint de banco — mesmo padrão do ClientLink).
-function isAdminUser(user?: { role?: string; account_type?: string }): boolean {
-  return user?.role === "admin" || user?.account_type === "admin";
-}
-function isLeaderUser(user?: { role?: string; account_type?: string }): boolean {
-  return user?.role === "lider" || user?.account_type === "lider";
-}
-
-type NewProjectScope =
-  | { kind: "agency"; agencyId: string }
-  | { kind: "company"; companyId: string }
-  | { kind: "partner"; partnerId: string }
-  | { kind: "none" };
-
-async function resolveProjectNewScope(
-  userId: string,
-  accountType: string,
-): Promise<NewProjectScope> {
-  if (accountType === "agencias") {
-    const agency = await prisma.agency.findFirst({ where: { user_id: userId }, select: { id: true } });
-    return agency ? { kind: "agency", agencyId: agency.id } : { kind: "none" };
-  }
-  if (accountType === "empresas") {
-    const user = await prisma.user.findUnique({ where: { id: userId }, select: { company_id: true } });
-    return user?.company_id ? { kind: "company", companyId: user.company_id } : { kind: "none" };
-  }
-  if (accountType === "parceiro") {
-    const profile = await prisma.partnerProfile.findUnique({ where: { user_id: userId }, select: { id: true } });
-    return profile ? { kind: "partner", partnerId: profile.id } : { kind: "none" };
-  }
-  return { kind: "none" };
-}
-
-function newScopeToWhere(scope: NewProjectScope): Record<string, unknown> | null {
-  if (scope.kind === "agency") return { agency_id: scope.agencyId };
-  if (scope.kind === "company") return { company_id: scope.companyId };
-  if (scope.kind === "partner") return { partner_id: scope.partnerId };
-  return null;
-}
-
-// Visibilidade combinada (legado OR novo) pra endpoints de projeto único
-// (GET/:id, PUT/:id, /:id/files, /:id/credentials).
-async function projectVisibleToUser(
-  user: { id: string; account_type?: string; role?: string },
-  project: {
-    agency: string | null;
-    client_id: string | null;
-    agency_id?: string | null;
-    company_id?: string | null;
-    partner_id?: string | null;
-  },
-): Promise<boolean> {
-  const scope = await getProjectScope(user.id, user.account_type ?? "");
-  if (projectInScope(scope, project)) return true;
-  const newScope = await resolveProjectNewScope(user.id, user.account_type ?? "");
-  if (newScope.kind === "agency") return project.agency_id === newScope.agencyId;
-  if (newScope.kind === "company") return project.company_id === newScope.companyId;
-  if (newScope.kind === "partner") return project.partner_id === newScope.partnerId;
-  return false;
-}
 
 const createSchema = z.object({
   title: z.string().min(1),
@@ -240,12 +104,12 @@ router.get("/", verifyToken, async (req, res, next) => {
     const client_id = req.query.client_id as string | undefined;
     const search = req.query.search as string | undefined;
 
-    const scope = await getProjectScope(req.user!.id, req.user!.account_type);
+    const scope = await getProjectScope(prisma, req.user!.id, req.user!.account_type);
     const scopeWhere = scopeToWhere(scope);
     // Escopo novo roda em paralelo — projeto aparece se bater em QUALQUER
     // um dos dois (legado OR novo). Não afeta admin/leader (scope "open"),
     // que já viam tudo sem filtro.
-    const newScope = await resolveProjectNewScope(req.user!.id, req.user!.account_type);
+    const newScope = await resolveProjectNewScope(prisma, req.user!.id, req.user!.account_type);
     const newWhere = newScopeToWhere(newScope);
 
     let where: Record<string, unknown>;
@@ -311,16 +175,14 @@ router.get("/", verifyToken, async (req, res, next) => {
       }),
     ]);
 
-    // Compute global sequence number: oldest project = 1, newest = N (stable when new projects added)
-    // Uses Prisma (no raw SQL) so it works in both SQLite (dev) and MySQL (prod)
-    let seqMap: Record<string, number> = {};
-    if (data.length > 0) {
-      const allProjectIds = await prisma.project.findMany({
-        select: { id: true },
-        orderBy: [{ created_at: "asc" }, { id: "asc" }],
-      });
-      allProjectIds.forEach((p, i) => { seqMap[p.id] = i + 1; });
-    }
+    // _seq agora deriva do project_code persistido (proj_00001, ...), não
+    // mais de ranking por created_at — o código é estável mesmo quando
+    // outro projeto é excluído ou a ordem de criação muda.
+    const seqOf = (code: string | null): number | null => {
+      if (!code) return null;
+      const n = parseInt(code.replace(/^proj_/, ""), 10);
+      return isNaN(n) ? null : n;
+    };
 
     // Build set of client_ids that belong to partner-referred companies (direct DB query, no join dependency)
     const clientIdsInPage = [...new Set(data.map((p) => p.client_id).filter(Boolean))] as string[];
@@ -373,7 +235,7 @@ router.get("/", verifyToken, async (req, res, next) => {
 
       return {
         ...p,
-        _seq: seqMap[p.id] ?? null,
+        _seq: seqOf(p.project_code),
         _hasOwner: !!(p.agency || p.client_id || p.agency_id || p.company_id || p.partner_id),
         _ownerType: ownerType,
         _ownerName: ownerName,
@@ -418,7 +280,7 @@ router.get("/:id", verifyToken, async (req, res, next) => {
       return;
     }
 
-    if (!(await projectVisibleToUser(req.user!, project))) {
+    if (!(await projectVisibleToUser(prisma, req.user!, project))) {
       res.status(403).json({ error: "Acesso negado" });
       return;
     }
@@ -440,7 +302,7 @@ router.get("/:id/files", verifyToken, async (req, res, next) => {
       res.status(404).json({ error: "Projeto não encontrado" });
       return;
     }
-    if (!(await projectVisibleToUser(req.user!, parent))) {
+    if (!(await projectVisibleToUser(prisma, req.user!, parent))) {
       res.status(403).json({ error: "Acesso negado" });
       return;
     }
@@ -557,7 +419,7 @@ router.get("/:id/credentials", verifyToken, async (req, res, next) => {
       res.status(404).json({ error: "Projeto não encontrado" });
       return;
     }
-    if (!(await projectVisibleToUser(req.user!, parent))) {
+    if (!(await projectVisibleToUser(prisma, req.user!, parent))) {
       res.status(403).json({ error: "Acesso negado" });
       return;
     }
@@ -638,7 +500,7 @@ router.post("/:id/credentials", verifyToken, async (req, res, next) => {
       res.status(404).json({ error: "Projeto não encontrado" });
       return;
     }
-    if (!(await projectVisibleToUser(req.user!, parent))) {
+    if (!(await projectVisibleToUser(prisma, req.user!, parent))) {
       res.status(403).json({ error: "Acesso negado" });
       return;
     }
@@ -709,7 +571,7 @@ router.patch(
         res.status(404).json({ error: "Projeto não encontrado" });
         return;
       }
-      const scope = await getProjectScope(req.user!.id, req.user!.account_type);
+      const scope = await getProjectScope(prisma, req.user!.id, req.user!.account_type);
       if (!projectInScope(scope, parent)) {
         res.status(403).json({ error: "Acesso negado" });
         return;
@@ -788,7 +650,7 @@ router.delete(
         res.status(404).json({ error: "Projeto não encontrado" });
         return;
       }
-      const scope = await getProjectScope(req.user!.id, req.user!.account_type);
+      const scope = await getProjectScope(prisma, req.user!.id, req.user!.account_type);
       if (!projectInScope(scope, parent)) {
         res.status(403).json({ error: "Acesso negado" });
         return;
@@ -835,7 +697,7 @@ router.post(
         res.status(404).json({ error: "Projeto não encontrado" });
         return;
       }
-      const scope = await getProjectScope(req.user!.id, req.user!.account_type);
+      const scope = await getProjectScope(prisma, req.user!.id, req.user!.account_type);
       if (!projectInScope(scope, parent)) {
         res.status(403).json({ error: "Acesso negado" });
         return;
@@ -897,7 +759,7 @@ router.post(
         res.status(404).json({ error: "Projeto não encontrado" });
         return;
       }
-      const scope = await getProjectScope(req.user!.id, req.user!.account_type);
+      const scope = await getProjectScope(prisma, req.user!.id, req.user!.account_type);
       if (!projectInScope(scope, parent)) {
         res.status(403).json({ error: "Acesso negado" });
         return;
@@ -957,7 +819,7 @@ router.get("/:id/dashboard", verifyToken, async (req, res, next) => {
       },
     });
     if (!proj) { res.status(404).json({ error: "Projeto não encontrado" }); return; }
-    const scope = await getProjectScope(req.user!.id, req.user!.account_type);
+    const scope = await getProjectScope(prisma, req.user!.id, req.user!.account_type);
     if (!projectInScope(scope, { agency: proj.agency, client_id: proj.client_id })) { res.status(403).json({ error: "Acesso negado" }); return; }
 
     // Task counts
@@ -1038,7 +900,7 @@ router.get("/:id/log", verifyToken, async (req, res, next) => {
       },
     });
     if (!proj) { res.status(404).json({ error: "Projeto não encontrado" }); return; }
-    const scope = await getProjectScope(req.user!.id, req.user!.account_type);
+    const scope = await getProjectScope(prisma, req.user!.id, req.user!.account_type);
     if (!projectInScope(scope, { agency: proj.agency, client_id: proj.client_id })) { res.status(403).json({ error: "Acesso negado" }); return; }
 
     type LogEntry = { id: string; event: string; description: string; actor_name?: string; meta?: string; created_at: Date };
@@ -1107,7 +969,7 @@ router.get("/:id/billing", verifyToken, async (req, res, next) => {
       select: { agency: true, client_id: true },
     });
     if (!parent) { res.status(404).json({ error: "Projeto não encontrado" }); return; }
-    const scope = await getProjectScope(req.user!.id, req.user!.account_type);
+    const scope = await getProjectScope(prisma, req.user!.id, req.user!.account_type);
     if (!projectInScope(scope, parent)) { res.status(403).json({ error: "Acesso negado" }); return; }
 
     const [invoices, payments] = await Promise.all([
@@ -1157,7 +1019,7 @@ router.get("/:id/tasks", verifyToken, async (req, res, next) => {
       res.status(404).json({ error: "Projeto não encontrado" });
       return;
     }
-    if (!(await projectVisibleToUser(req.user!, parent))) {
+    if (!(await projectVisibleToUser(prisma, req.user!, parent))) {
       res.status(403).json({ error: "Acesso negado" });
       return;
     }
@@ -1200,21 +1062,81 @@ router.get("/:id/tasks", verifyToken, async (req, res, next) => {
   }
 });
 
-// POST /api/projects/:id/generate-tasks  — idempotent (re-)generation of tasks from all linked products
+// POST /api/projects/:id/generate-tasks — reprocessa a geração de tarefas
+// de um Payment JÁ CONFIRMADO específico (ferramenta de reparo, ex.:
+// geração parcial anterior). Admin-only. Exige payment_id explícito no
+// corpo — nunca escolhe "o último pagamento PAGO" sozinho. Usa
+// exclusivamente os PaymentItems congelados daquele Payment (nunca
+// reconsulta os produtos atuais do projeto) — um produto adicionado depois
+// do pagamento nunca entra num reprocessamento dele. Idempotente via
+// generation_key — nunca duplica. Não é uma via alternativa de geração: a
+// única origem permitida de um Payment PAGO continua sendo
+// confirmPaymentAndGenerateProjectTasks (ver src/lib/confirm-payment.ts);
+// este endpoint nunca cria Payment novo.
 router.post("/:id/generate-tasks", verifyToken, async (req, res, next) => {
   try {
-    const result = await gerarTarefasDoProjeto(
-      req.params.id as string as string,
-    );
-    res.status(201).json({
-      ...result,
-      message: `${result.generated} tarefa(s) gerada(s), ${result.skipped} j\u00e1 existia(m).`,
-    });
-  } catch (err: any) {
-    if (err?.message?.includes("n\u00e3o encontrado")) {
-      res.status(404).json({ error: err.message });
+    if (!isAdminUser(req.user)) {
+      res.status(403).json({ error: "Permissão insuficiente — reprocessamento é restrito a Admin" });
       return;
     }
+
+    const projectId = req.params.id as string;
+    const { payment_id } = req.body as { payment_id?: string };
+    if (!payment_id) {
+      res.status(400).json({ error: "payment_id é obrigatório" });
+      return;
+    }
+
+    const project = await prisma.project.findUnique({ where: { id: projectId } });
+    if (!project) {
+      res.status(404).json({ error: "Projeto não encontrado" });
+      return;
+    }
+
+    const payment = await prisma.payment.findUnique({ where: { id: payment_id } });
+    if (!payment) {
+      res.status(404).json({ error: "Payment não encontrado" });
+      return;
+    }
+    if (payment.project_id !== projectId) {
+      res.status(400).json({ error: "Payment não pertence a este projeto" });
+      return;
+    }
+    if (payment.status !== "PAGO") {
+      res.status(400).json({ error: `Payment está ${payment.status}, não pode ser reprocessado (precisa estar PAGO)` });
+      return;
+    }
+
+    const paymentItems = await prisma.paymentItem.findMany({ where: { payment_id: payment.id } });
+    if (paymentItems.length === 0) {
+      // Não usa fallback silencioso pra "todos os produtos atuais" — sem
+      // PaymentItems, não há o que reprocessar, ponto.
+      res.status(400).json({ error: "Este Payment não possui PaymentItems — nada para reprocessar." });
+      return;
+    }
+
+    const projectProductIds = [...new Set(paymentItems.map((i) => i.project_product_id))];
+    const tarefasJaExistentesAntes = await prisma.projectTask.count({ where: { origin_payment_id: payment.id } });
+
+    const result = await prisma.$transaction((tx) =>
+      gerarTarefasDoProjeto(tx, projectId, {
+        paymentId: payment.id,
+        paidAt: payment.paid_at ?? payment.created_at,
+        billingCycleKey: payment.billing_cycle_key ?? "avulso",
+        projectProductIds,
+      }),
+    );
+
+    res.status(201).json({
+      paymentId: payment.id,
+      tarefasJaExistentes: tarefasJaExistentesAntes,
+      tarefasRecriadas: result.generated,
+      tarefasIgnoradas: result.skipped,
+      etapasGeradas: result.stages_generated,
+      totalTarefasProjeto: result.total_tarefas,
+      message: `${result.generated} tarefa(s) recriada(s), ${result.skipped} já existia(m) (payment ${payment.id}).`,
+    });
+  } catch (err) {
     next(err);
   }
 });
@@ -1232,7 +1154,7 @@ router.post(
       }
 
       const { start_date, end_date, ...rest } = req.body;
-      const scope = await getProjectScope(req.user!.id, req.user!.account_type);
+      const scope = await getProjectScope(prisma, req.user!.id, req.user!.account_type);
       const agencyName = scope.kind === "agency" ? scope.agencyName : undefined;
       const toDate = (v: string | undefined) => {
         if (!v) return undefined;
@@ -1256,7 +1178,7 @@ router.post(
       // desses três (ou nenhum); validado abaixo. Não afeta o vínculo
       // legado (agency/client_id) acima, que continua exatamente como
       // estava.
-      const newScope = await resolveProjectNewScope(req.user!.id, req.user!.account_type);
+      const newScope = await resolveProjectNewScope(prisma, req.user!.id, req.user!.account_type);
       let newScopeData: Record<string, string> = {};
       if (newScope.kind === "agency") newScopeData = { agency_id: newScope.agencyId };
       else if (newScope.kind === "company") newScopeData = { company_id: newScope.companyId };
@@ -1287,17 +1209,29 @@ router.post(
       delete rest.agency_id;
       delete rest.company_id;
       delete rest.partner_id;
+      // created_by_user_id nunca vem do payload — createSchema nem declara
+      // esse campo, então o Zod já descarta silenciosamente qualquer valor
+      // enviado (inclusive por Admin); a linha abaixo só documenta a
+      // intenção e protege caso o schema mude no futuro.
+      delete (rest as Record<string, unknown>).created_by_user_id;
 
-      const project = await prisma.project.create({
-        data: {
-          ...rest,
-          agency: agencyName || rest.agency,
-          ...newScopeData,
-          start_date: toDate(start_date),
-          end_date: toDate(end_date),
-        },
-        include: { client: { select: { id: true, name: true, cnpj: true } } },
-      });
+      // Autoria + código sequencial persistente na mesma transação da
+      // criação — se qualquer um falhar, nenhum dos dois fica parcialmente
+      // aplicado.
+      const project = await withProjectCode(prisma, (tx, projectCode) =>
+        tx.project.create({
+          data: {
+            ...rest,
+            agency: agencyName || rest.agency,
+            ...newScopeData,
+            start_date: toDate(start_date),
+            end_date: toDate(end_date),
+            created_by_user_id: req.user!.id,
+            project_code: projectCode,
+          },
+          include: { client: { select: { id: true, name: true, cnpj: true } } },
+        }),
+      );
       res.status(201).json(project);
     } catch (err) {
       next(err);
@@ -1324,6 +1258,11 @@ router.put(
       delete rest.agency_id;
       delete rest.company_id;
       delete rest.partner_id;
+      // Autoria nunca é editável — created_by_user_id fica travado no
+      // criador original. updateSchema também não declara este campo, então
+      // o Zod já descarta qualquer valor enviado; delete aqui é só defensivo.
+      delete rest.created_by_user_id;
+      delete rest.project_code;
       const toDate = (v: string | undefined) => {
         if (!v) return undefined;
         const d = new Date(v);
@@ -1341,7 +1280,7 @@ router.put(
         return;
       }
 
-      if (!(await projectVisibleToUser(req.user!, before))) {
+      if (!(await projectVisibleToUser(prisma, req.user!, before))) {
         res.status(403).json({ error: "Acesso negado" });
         return;
       }
@@ -1368,15 +1307,10 @@ router.put(
         include: { client: { select: { id: true, name: true, cnpj: true } } },
       });
 
-      // Auto-generate operational tasks when project transitions to "planning"
-      if (rest.status === "planning" && before?.status !== "planning") {
-        gerarTarefasDoProjeto(id).catch((err) =>
-          console.error(
-            `[generate-tasks] Erro ao gerar tarefas para projeto ${id}:`,
-            err,
-          ),
-        );
-      }
+      // Mudar o status do projeto (inclusive para "planning") NUNCA gera
+      // tarefas sozinho — a única origem permitida de geração automática
+      // nesta fase é pagamento confirmado como PAGO (ver
+      // src/lib/confirm-payment.ts). Chamada removida de propósito.
 
       res.json(project);
     } catch (err) {
@@ -1462,7 +1396,7 @@ router.delete("/:id", verifyToken, async (req, res, next) => {
       res.status(404).json({ error: "Projeto não encontrado" });
       return;
     }
-    if (!(await projectVisibleToUser(req.user!, project))) {
+    if (!(await projectVisibleToUser(prisma, req.user!, project))) {
       res.status(403).json({ error: "Acesso negado" });
       return;
     }

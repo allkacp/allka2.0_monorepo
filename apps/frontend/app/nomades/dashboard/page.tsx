@@ -43,6 +43,8 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { toPng } from "html-to-image";
 import { useTasks } from "@/hooks/useTasks";
+import { useSidebar } from "@/contexts/sidebar-context";
+import { useAppFrameMetrics } from "@/hooks/useAppFrameMetrics";
 import {
   Tooltip,
   TooltipContent,
@@ -415,6 +417,8 @@ function CustomizePanel({
   onClose: () => void;
   onSave: (w: NomadeWidget[]) => void;
 }) {
+  const { sidebarWidth } = useSidebar();
+  const { headerHeight, footerHeight } = useAppFrameMetrics();
   const [draft, setDraft] = useState<NomadeWidget[]>(() =>
     [...widgets].sort((a, b) => a.order - b.order),
   );
@@ -510,9 +514,15 @@ function CustomizePanel({
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex">
-      <div className="flex-1 bg-black/30" onClick={onClose} />
-      <div className="w-95 bg-white shadow-2xl flex flex-col h-full overflow-hidden">
+    <div
+      className="fixed z-50 bg-white dark:bg-slate-900 shadow-2xl border-l border-slate-200 dark:border-slate-700 flex flex-col overflow-hidden"
+      style={{
+        left: `${sidebarWidth - 2}px`,
+        width: `calc(100vw - ${sidebarWidth - 2}px)`,
+        top: `${headerHeight - 1}px`,
+        bottom: `${footerHeight - 1}px`,
+      }}
+    >
         {/* Header */}
         <div className="flex items-center justify-between px-5 py-4 border-b border-slate-200">
           <div className="flex items-center gap-2">
@@ -699,7 +709,7 @@ function CustomizePanel({
             </Button>
             <Button
               size="sm"
-              className="bg-emerald-600 hover:bg-emerald-700 text-white"
+              className="btn-brand"
               onClick={() => onSave(draft)}
             >
               <Save className="h-3.5 w-3.5 mr-1" />
@@ -708,7 +718,6 @@ function CustomizePanel({
           </div>
         </div>
       </div>
-    </div>
   );
 }
 

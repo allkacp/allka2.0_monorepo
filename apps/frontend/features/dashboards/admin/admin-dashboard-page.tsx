@@ -33,7 +33,7 @@ import type {
 
 import type React from "react";
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { PageLoader } from "@/components/ui/loading";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -126,6 +126,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { MetricChartModal } from "@/components/admin/metric-chart-modal";
+import { SlidePanel } from "@/components/slide-panel";
 import { toPng } from "html-to-image";
 import jsPDF from "jspdf";
 import {
@@ -411,6 +412,11 @@ export function AdminDashboardPage() {
     { id: "activeProjects", order: 3, visible: true },
     { id: "revenue", order: 4, visible: true },
     { id: "avgRating", order: 5, visible: true },
+    { id: "totalProjects", order: 6, visible: true },
+    { id: "pendingPayments", order: 7, visible: true },
+    { id: "linkedProducts", order: 8, visible: true },
+    { id: "catalogProducts", order: 9, visible: true },
+    { id: "orgPartners", order: 10, visible: true },
   ]);
   const [draggedMetric, setDraggedMetric] = useState<MetricType | null>(null);
   const [dragOverMetric, setDragOverMetric] = useState<MetricType | null>(null);
@@ -425,8 +431,6 @@ export function AdminDashboardPage() {
   const [saveDashboardOpen, setSaveDashboardOpen] = useState(false); // State for the save dashboard dialog
   const [isEditDashboardModalOpen, setIsEditDashboardModalOpen] =
     useState(false);
-  const [isEditPanelMounted, setIsEditPanelMounted] = useState(false);
-  const [isEditPanelClosing, setIsEditPanelClosing] = useState(false);
   const [draftWidgets, setDraftWidgets] = useState<WidgetState[]>([]);
   const [modalDraggedId, setModalDraggedId] = useState<string | null>(null);
   const [modalDragOverId, setModalDragOverId] = useState<string | null>(null);
@@ -1117,6 +1121,18 @@ export function AdminDashboardPage() {
     null,
   );
   const [detailsWidgetId, setDetailsWidgetId] = useState<string | null>(null);
+  // Sticky: WidgetDetailsModal (chamada dentro do JSX) precisa continuar
+  // renderizando o mesmo widget enquanto o SlidePanel ainda está tocando a
+  // animação de saída — senão o painel fecha em branco no meio do slide.
+  // O hook e o derive ficam AQUI, no topo do componente, antes de qualquer
+  // return condicional — nunca dentro de WidgetDetailsModal. Ali dentro,
+  // um `const detailsWidgetId = ...` sombreando este mesmo nome entra em
+  // temporal dead zone pro bloco INTEIRO da função (mesmo antes da própria
+  // linha de declaração), o que gera "Cannot access before initialization".
+  // Por isso o valor "grudento" usa um nome diferente (visibleDetailsWidgetId).
+  const detailsWidgetStickyRef = useRef<string | null>(null);
+  if (detailsWidgetId) detailsWidgetStickyRef.current = detailsWidgetId;
+  const visibleDetailsWidgetId = detailsWidgetId ?? detailsWidgetStickyRef.current;
   const [showHistoricalModal, setShowHistoricalModal] = useState(false);
   const [histModalKey, setHistModalKey] = useState<string>(""); // "YYYY-MM"
   const [histFormData, setHistFormData] = useState<Partial<ManualDataEntry>>(
@@ -1308,14 +1324,17 @@ export function AdminDashboardPage() {
   };
 
   const handleCloseEditPanel = () => {
-    setIsEditPanelClosing(true);
+    // Fecha o SlidePanel imediatamente (dispara a animação de saída dele).
+    // O reset do resto do estado (modo, rename em progresso etc.) só
+    // acontece depois, senão o conteúdo "pisca" pro estado padrão enquanto
+    // o painel ainda está deslizando pra fora — mesmo prazo do timeout
+    // interno do SlidePanel (components/slide-panel.tsx).
+    setIsEditDashboardModalOpen(false);
     setTimeout(() => {
-      setIsEditPanelClosing(false);
-      setIsEditDashboardModalOpen(false);
       setEditModalMode("none");
       setIsNewDashboardMode(false);
       setIsEditingHeaderName(false);
-    }, 420);
+    }, 450);
   };
 
   const handleSaveHeaderName = () => {
@@ -1540,15 +1559,6 @@ export function AdminDashboardPage() {
       setWidgets(currentDashboard.widgets);
     }
   }, []);
-
-  useEffect(() => {
-    if (isEditDashboardModalOpen) {
-      const id = requestAnimationFrame(() => setIsEditPanelMounted(true));
-      return () => cancelAnimationFrame(id);
-    } else {
-      setIsEditPanelMounted(false);
-    }
-  }, [isEditDashboardModalOpen]);
 
   useEffect(() => {
     // Guard: skip saving until the initial load effect has populated state.
@@ -1954,30 +1964,112 @@ export function AdminDashboardPage() {
 
   const metrics = (() => {
     const base = getMetricsForPeriod();
-    if (!apiStats) return base;
-    const s = apiStats;
+    // Cards abaixo não têm equivalente no gerador mock — são sempre dado real
+    // (ou o estado neutro "—" enquanto apiStats ainda carrega). Nunca usam
+    // getMetricsForPeriod(); sem crescimento inventado (change:0/trend neutro).
+    const realOnly = {
+      totalProjects: {
+        value: apiStats ? (apiStats.projects?.total ?? 0).toLocaleString("pt-BR") : "—",
+        change: 0,
+        trend: "up" as const,
+      },
+      pendingPayments: {
+        value: apiStats ? (apiStats.payments?.pendingCount ?? 0).toLocaleString("pt-BR") : "—",
+        change: 0,
+        trend: "up" as const,
+      },
+      linkedProducts: {
+        value: apiStats ? (apiStats.projectProducts?.total ?? 0).toLocaleString("pt-BR") : "—",
+        change: 0,
+        trend: "up" as const,
+      },
+      catalogProducts: {
+        value: apiStats ? (apiStats.catalogProducts?.total ?? 0).toLocaleString("pt-BR") : "—",
+        change: 0,
+        trend: "up" as const,
+      },
+      orgPartners: {
+        value: apiStats
+          ? `${(apiStats.agencies?.total ?? 0).toLocaleString("pt-BR")} / ${(apiStats.partners?.total ?? 0).toLocaleString("pt-BR")}`
+          : "—",
+        change: 0,
+        trend: "up" as const,
+      },
+      // Avaliação Média — sem fonte real: nenhum endpoint usado pelo dashboard expõe uma
+      // média de avaliação agregada da plataforma. Existem campos de rating pontuais e
+      // desconectados entre si no schema (Nomade.performance_avg_rating, TaskExecution.rating,
+      // Product.average_rating, PartnerReview.rating), mas nenhum é somado/exposto por
+      // /api/dashboard/stats, /revenue, /widgets ou /recent-activities — os únicos endpoints
+      // que este dashboard chama. "—" sempre (não depende de apiStats: não é "ainda
+      // carregando", é "não implementado").
+      avgRating: { value: "—", change: 0, trend: "up" as const },
+    };
+    // Receita Confirmada — soma de Payment.status="PAGO" (apiStats.payments.paidAmount),
+    // nunca financial.totalRevenue (Invoice, subsistema legado desconectado do fluxo
+    // Projeto -> Pagamento -> Tarefa). Mostra "—" (nunca R$ 0,00) enquanto apiStats não
+    // carregou OU se a resposta do backend vier sem payments.paidAmount como número —
+    // um campo ausente é uma resposta incompleta, não "confirmado zero".
+    const hasRealPaidAmount =
+      !!apiStats && !!apiStats.payments && Number.isFinite(apiStats.payments.paidAmount);
+    const revenueReal = {
+      value: hasRealPaidAmount ? `R$ ${(apiStats!.payments!.paidAmount / 1000).toFixed(1)}k` : "—",
+      change: 0,
+      trend: "up" as const,
+    };
+    // Usuários Ativos = User.is_active=true (apiStats.users.active) — nunca
+    // nomades.active (Nomade.status="ativo" é outro model). "—" se ausente/não-numérico.
+    const hasRealActiveUsers =
+      !!apiStats && !!apiStats.users && Number.isFinite(apiStats.users.active);
+    const activeUsersReal = {
+      value: hasRealActiveUsers ? apiStats!.users!.active!.toLocaleString("pt-BR") : "—",
+      change: 0,
+      trend: "up" as const,
+    };
+    // Total de Usuários = apiStats.users.total. Sem série histórica no endpoint pra
+    // calcular crescimento real vs. período anterior — estado neutro (0%), nunca o
+    // +12,5% hardcoded de getMetricsForPeriod(). "—" se ausente/não-numérico.
+    const hasRealTotalUsers = !!apiStats && !!apiStats.users && Number.isFinite(apiStats.users.total);
+    const totalUsersReal = {
+      value: hasRealTotalUsers ? apiStats!.users!.total.toLocaleString("pt-BR") : "—",
+      change: 0,
+      trend: "up" as const,
+    };
+    // Empresas = apiStats.companies.total. Sem série histórica no endpoint pra
+    // calcular crescimento real — 0% neutro, nunca o +5,6% hardcoded. "—" se ausente/não-numérico.
+    const hasRealCompanies = !!apiStats && !!apiStats.companies && Number.isFinite(apiStats.companies.total);
+    const companiesReal = {
+      value: hasRealCompanies ? apiStats!.companies!.total.toLocaleString("pt-BR") : "—",
+      change: 0,
+      trend: "up" as const,
+    };
+    // Projetos Ativos = apiStats.projects.active (definição atual do backend: só
+    // status="in-progress" — não alterada nesta tarefa, ver diagnóstico). 0% neutro,
+    // nunca o -2,1% hardcoded. "—" se projects/active ausente ou não-numérico.
+    const hasRealActiveProjects =
+      !!apiStats && !!apiStats.projects && Number.isFinite(apiStats.projects.active);
+    const activeProjectsReal = {
+      value: hasRealActiveProjects ? apiStats!.projects!.active.toLocaleString("pt-BR") : "—",
+      change: 0,
+      trend: "up" as const,
+    };
+    if (!apiStats)
+      return {
+        ...base,
+        ...realOnly,
+        revenue: revenueReal,
+        activeUsers: activeUsersReal,
+        totalUsers: totalUsersReal,
+        companies: companiesReal,
+        activeProjects: activeProjectsReal,
+      };
     return {
       ...base,
-      totalUsers: {
-        ...base.totalUsers,
-        value: (s.nomades?.total ?? 0).toLocaleString("pt-BR"),
-      },
-      activeUsers: {
-        ...base.activeUsers,
-        value: (s.nomades?.active ?? 0).toLocaleString("pt-BR"),
-      },
-      companies: {
-        ...base.companies,
-        value: (s.companies?.total ?? 0).toLocaleString("pt-BR"),
-      },
-      activeProjects: {
-        ...base.activeProjects,
-        value: (s.projects?.active ?? 0).toLocaleString("pt-BR"),
-      },
-      revenue: {
-        ...base.revenue,
-        value: `R$ ${((s.financial?.totalRevenue ?? 0) / 1000).toFixed(1)}k`,
-      },
+      totalUsers: totalUsersReal,
+      activeUsers: activeUsersReal,
+      companies: companiesReal,
+      activeProjects: activeProjectsReal,
+      revenue: revenueReal,
+      ...realOnly,
     };
   })();
 
@@ -2686,6 +2778,11 @@ export function AdminDashboardPage() {
     activeProjects: Briefcase,
     revenue: DollarSign,
     avgRating: Star,
+    totalProjects: LayoutGrid,
+    pendingPayments: Clock,
+    linkedProducts: FileText,
+    catalogProducts: Database,
+    orgPartners: Globe,
   };
 
   const metricNames: Record<MetricType, string> = {
@@ -2693,8 +2790,13 @@ export function AdminDashboardPage() {
     activeUsers: "Usuários Ativos",
     companies: "Empresas",
     activeProjects: "Projetos Ativos",
-    revenue: "Receita",
+    revenue: "Receita Confirmada",
     avgRating: "Avaliação Média",
+    totalProjects: "Total de Projetos",
+    pendingPayments: "Pagamentos Pendentes",
+    linkedProducts: "Produtos Vinculados",
+    catalogProducts: "Produtos no Catálogo",
+    orgPartners: "Agências & Parceiros",
   };
 
 
@@ -2703,8 +2805,13 @@ export function AdminDashboardPage() {
     activeUsers: "Usuários que realizaram login ou ação nos últimos 30 dias.",
     companies: "Total de empresas com conta ativa na plataforma.",
     activeProjects: "Projetos com status ativo ou em andamento no momento.",
-    revenue: "Receita total gerada pela plataforma no período selecionado.",
+    revenue: "Receita confirmada — soma dos Payments com status PAGO.",
     avgRating: "Média de avaliação dos nômades pelas empresas em tarefas concluídas.",
+    totalProjects: "Total de projetos cadastrados, em qualquer status (rascunho, negociação, aguardando pagamento, em andamento, concluído ou cancelado).",
+    pendingPayments: "Quantidade de pagamentos com status PENDENTE aguardando confirmação.",
+    linkedProducts: "Produtos vinculados a projetos (ProjectProduct) atualmente cadastrados.",
+    catalogProducts: "Produtos ativos no catálogo da plataforma.",
+    orgPartners: "Agências e parceiros (partners) cadastrados na plataforma.",
   };
 
   const metricLinks: Record<MetricType, string> = {
@@ -2714,6 +2821,11 @@ export function AdminDashboardPage() {
     activeProjects: "/admin/projetos",
     revenue: "/admin/financeiro",
     avgRating: "/admin/relatorios",
+    totalProjects: "/admin/projetos",
+    pendingPayments: "/admin/financeiro",
+    linkedProducts: "/admin/projetos",
+    catalogProducts: "/admin/produtos",
+    orgPartners: "/admin/empresas",
   };
 
   const renderMetricCard = (
@@ -2788,6 +2900,41 @@ export function AdminDashboardPage() {
         gradientFrom = "from-amber-600/10";
         cardBgGradient = "from-amber-500 to-orange-600";
         borderClass = "border-2 border-amber-300/70 dark:border-amber-300/50";
+        shadowClass = "";
+        break;
+      case "totalProjects":
+        bgColor = "from-indigo-400 to-indigo-600";
+        gradientFrom = "from-indigo-600/10";
+        cardBgGradient = "from-indigo-500 to-blue-700";
+        borderClass = "border-2 border-indigo-300/70 dark:border-indigo-300/50";
+        shadowClass = "";
+        break;
+      case "pendingPayments":
+        bgColor = "from-rose-400 to-rose-600";
+        gradientFrom = "from-rose-600/10";
+        cardBgGradient = "from-rose-500 to-red-700";
+        borderClass = "border-2 border-rose-300/70 dark:border-rose-300/50";
+        shadowClass = "";
+        break;
+      case "linkedProducts":
+        bgColor = "from-cyan-400 to-cyan-600";
+        gradientFrom = "from-cyan-600/10";
+        cardBgGradient = "from-cyan-500 to-sky-700";
+        borderClass = "border-2 border-cyan-300/70 dark:border-cyan-300/50";
+        shadowClass = "";
+        break;
+      case "catalogProducts":
+        bgColor = "from-teal-400 to-teal-600";
+        gradientFrom = "from-teal-600/10";
+        cardBgGradient = "from-teal-500 to-emerald-700";
+        borderClass = "border-2 border-teal-300/70 dark:border-teal-300/50";
+        shadowClass = "";
+        break;
+      case "orgPartners":
+        bgColor = "from-fuchsia-400 to-fuchsia-600";
+        gradientFrom = "from-fuchsia-600/10";
+        cardBgGradient = "from-fuchsia-500 to-purple-700";
+        borderClass = "border-2 border-fuchsia-300/70 dark:border-fuchsia-300/50";
         shadowClass = "";
         break;
       default:
@@ -3049,12 +3196,16 @@ export function AdminDashboardPage() {
   };
 
   // ── Widget Details Modal ───────────────────────────────────────────────────
+  // Sem hook aqui dentro e sem `const detailsWidgetId = ...` sombreando o
+  // estado do componente — os dois causam bug (ordem de hooks / temporal
+  // dead zone). O valor "grudento" já vem pronto de fora
+  // (visibleDetailsWidgetId); esta função só lê, nunca declara.
   const WidgetDetailsModal = () => {
-    if (!detailsWidgetId) return null;
-    const title = getWidgetTitle(detailsWidgetId);
+    if (!visibleDetailsWidgetId) return null;
+    const title = getWidgetTitle(visibleDetailsWidgetId);
 
     // Resolve effective period for this widget (uses per-widget override if any)
-    const widgetInstance = widgets.find((w) => w.type === detailsWidgetId);
+    const widgetInstance = widgets.find((w) => w.type === visibleDetailsWidgetId);
     const modalPeriod = widgetInstance
       ? getWidgetPeriod(widgetInstance.id)
       : {
@@ -3159,13 +3310,13 @@ export function AdminDashboardPage() {
           subtitle: "Convites e partners por nível",
         },
       };
-    const cfg = cfgMap[detailsWidgetId] ?? {
+    const cfg = cfgMap[visibleDetailsWidgetId] ?? {
       icon: <Settings className="h-6 w-6" />,
       subtitle: "Detalhes do widget",
     };
 
     const renderContent = () => {
-      switch (detailsWidgetId) {
+      switch (visibleDetailsWidgetId) {
         case "metrics": {
           const mp = getMetricsForPeriod(undefined, modalPeriodKey);
           const items: Array<{
@@ -6333,136 +6484,121 @@ export function AdminDashboardPage() {
     };
 
     return (
-      <Dialog
+      <SlidePanel
         open={!!detailsWidgetId}
-        onOpenChange={() => setDetailsWidgetId(null)}
+        onClose={() => setDetailsWidgetId(null)}
+        title={title}
+        subtitle="Veja os detalhes e indicadores deste widget."
+        widthMode="full"
       >
-        <DialogContent
-          className="!max-w-[1000px] w-[calc(100vw-2rem)] p-0 overflow-hidden"
-          showCloseButton={false}
-        >
-          {/* Brand-gradient header */}
-          <div className="app-brand-header px-5 py-4 text-white">
-            {/* Top row: icon + title/subtitle | period badge + action buttons */}
-            <div className="flex items-center gap-3">
-              {/* Icon */}
-              <div className="p-2.5 bg-white/20 rounded-xl shrink-0">
+        <div className="flex-1 overflow-y-auto px-[50px] py-[50px] bg-slate-200 dark:bg-slate-950/40">
+          {/* Toolbar: ícone + descrição específica do widget | período | ações */}
+          <div className="rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 shadow-sm mb-4 px-5 py-3.5 flex items-center gap-3 flex-wrap">
+            <div className="flex items-center gap-2.5 min-w-0 flex-1">
+              <div className="p-2 bg-muted/60 rounded-lg shrink-0 text-muted-foreground">
                 {cfg.icon}
               </div>
-              {/* Title + subtitle — grows but never forces other items to wrap */}
-              <div className="flex-1 min-w-0">
-                <h2 className="text-base font-bold leading-tight truncate">
-                  {title}
-                </h2>
-                <p className="text-xs text-white/70 mt-0.5 truncate">
-                  {cfg.subtitle}
-                </p>
-              </div>
-              {/* Period selector dropdown — white-themed for the gradient header */}
-              {widgetInstance &&
-                (() => {
-                  const wp = widgetPeriods.find(
-                    (p) => p.widgetId === widgetInstance.id,
-                  );
-                  const isCustom = wp?.mode === "custom";
-                  const periodOptions = [
-                    { key: "global", label: "Período global" },
-                    { key: "today", label: "Hoje" },
-                    { key: "7days", label: "Últimos 7 dias" },
-                    { key: "30days", label: "Últimos 30 dias" },
-                    { key: "thisMonth", label: "Este mês" },
-                    { key: "lastMonth", label: "Mês passado" },
-                    { key: "90days", label: "Últimos 90 dias" },
-                    { key: "365days", label: "Último ano" },
-                  ];
-                  const activeLabel = isCustom
-                    ? wp!.customPeriod!.label
-                    : "Período global";
-                  return (
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <button className="inline-flex items-center gap-1.5 text-[11px] font-medium bg-white/20 hover:bg-white/30 text-white rounded-full px-3 py-1.5 whitespace-nowrap transition-colors shrink-0">
-                          <Calendar className="h-3 w-3 opacity-80" />
-                          {activeLabel}
-                          <ChevronDown className="h-3 w-3 opacity-70" />
-                        </button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent
-                        align="end"
-                        className="w-52 z-[9999]"
-                      >
-                        <DropdownMenuLabel className="text-xs text-muted-foreground">
-                          Período do widget
-                        </DropdownMenuLabel>
-                        <DropdownMenuSeparator />
-                        {periodOptions.map((opt) => {
-                          const isSelected =
-                            opt.key === "global"
-                              ? !isCustom
-                              : isCustom &&
-                                wp!.customPeriod!.label === opt.label;
-                          return (
-                            <DropdownMenuItem
-                              key={opt.key}
-                              onClick={() =>
-                                setWidgetCustomPeriod(
-                                  widgetInstance.id,
-                                  opt.key === "global" ? "global" : opt.key,
-                                )
-                              }
-                              className="text-xs"
-                            >
-                              <Check
-                                className={cn(
-                                  "mr-2 h-3 w-3",
-                                  isSelected ? "opacity-100" : "opacity-0",
-                                )}
-                              />
-                              {opt.label}
-                            </DropdownMenuItem>
-                          );
-                        })}
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                  );
-                })()}
-              {/* Divider */}
-              <div className="h-6 w-px bg-white/20 shrink-0" />
-              {/* Action icon buttons */}
-              <div className="flex items-center gap-1 shrink-0">
-                <button
-                  onClick={() => openWidgetShareDialog(detailsWidgetId!, title)}
-                  title="Compartilhar"
-                  className="flex items-center justify-center h-8 w-8 rounded-lg bg-white/10 hover:bg-white/30 active:scale-90 transition-all duration-150"
-                >
-                  <Share2 className="h-4 w-4" />
-                </button>
-                <button
-                  onClick={() => exportWidgetToPng(detailsWidgetId!, title)}
-                  title="Exportar PNG"
-                  className="flex items-center justify-center h-8 w-8 rounded-lg bg-white/10 hover:bg-white/30 active:scale-90 transition-all duration-150"
-                >
-                  <Download className="h-4 w-4" />
-                </button>
-                <button
-                  onClick={() => setDetailsWidgetId(null)}
-                  title="Fechar"
-                  className="flex items-center justify-center h-8 w-8 rounded-lg bg-white/10 hover:bg-red-500/60 active:scale-90 transition-all duration-150"
-                >
-                  <X className="h-4 w-4" />
-                </button>
-              </div>
+              <p className="text-xs text-muted-foreground truncate">
+                {cfg.subtitle}
+              </p>
+            </div>
+            {/* Period selector dropdown */}
+            {widgetInstance &&
+              (() => {
+                const wp = widgetPeriods.find(
+                  (p) => p.widgetId === widgetInstance.id,
+                );
+                const isCustom = wp?.mode === "custom";
+                const periodOptions = [
+                  { key: "global", label: "Período global" },
+                  { key: "today", label: "Hoje" },
+                  { key: "7days", label: "Últimos 7 dias" },
+                  { key: "30days", label: "Últimos 30 dias" },
+                  { key: "thisMonth", label: "Este mês" },
+                  { key: "lastMonth", label: "Mês passado" },
+                  { key: "90days", label: "Últimos 90 dias" },
+                  { key: "365days", label: "Último ano" },
+                ];
+                const activeLabel = isCustom
+                  ? wp!.customPeriod!.label
+                  : "Período global";
+                return (
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <button className="inline-flex items-center gap-1.5 text-[11px] font-medium bg-muted hover:bg-muted/70 text-foreground rounded-full px-3 py-1.5 whitespace-nowrap transition-colors shrink-0">
+                        <Calendar className="h-3 w-3 opacity-80" />
+                        {activeLabel}
+                        <ChevronDown className="h-3 w-3 opacity-70" />
+                      </button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent
+                      align="end"
+                      className="w-52 z-[9999]"
+                    >
+                      <DropdownMenuLabel className="text-xs text-muted-foreground">
+                        Período do widget
+                      </DropdownMenuLabel>
+                      <DropdownMenuSeparator />
+                      {periodOptions.map((opt) => {
+                        const isSelected =
+                          opt.key === "global"
+                            ? !isCustom
+                            : isCustom &&
+                              wp!.customPeriod!.label === opt.label;
+                        return (
+                          <DropdownMenuItem
+                            key={opt.key}
+                            onClick={() =>
+                              setWidgetCustomPeriod(
+                                widgetInstance.id,
+                                opt.key === "global" ? "global" : opt.key,
+                              )
+                            }
+                            className="text-xs"
+                          >
+                            <Check
+                              className={cn(
+                                "mr-2 h-3 w-3",
+                                isSelected ? "opacity-100" : "opacity-0",
+                              )}
+                            />
+                            {opt.label}
+                          </DropdownMenuItem>
+                        );
+                      })}
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                );
+              })()}
+            {/* Divider */}
+            <div className="h-6 w-px bg-border shrink-0" />
+            {/* Action icon buttons */}
+            <div className="flex items-center gap-1 shrink-0">
+              <button
+                onClick={() => openWidgetShareDialog(visibleDetailsWidgetId!, title)}
+                title="Compartilhar"
+                className="flex items-center justify-center h-8 w-8 rounded-lg text-muted-foreground hover:text-violet-600 dark:hover:text-violet-400 hover:bg-violet-100 dark:hover:bg-violet-900/40 active:scale-90 transition-all duration-150"
+              >
+                <Share2 className="h-4 w-4" />
+              </button>
+              <button
+                onClick={() => exportWidgetToPng(visibleDetailsWidgetId!, title)}
+                title="Exportar PNG"
+                className="flex items-center justify-center h-8 w-8 rounded-lg text-muted-foreground hover:text-violet-600 dark:hover:text-violet-400 hover:bg-violet-100 dark:hover:bg-violet-900/40 active:scale-90 transition-all duration-150"
+              >
+                <Download className="h-4 w-4" />
+              </button>
             </div>
           </div>
-          {/* Scrollable content — overflow-y-scroll keeps scrollbar always visible */}
+          {/* Scrollable content card */}
           <div
-            className="px-6 py-5 space-y-4 max-h-[68vh] overflow-y-scroll transition-opacity duration-150"
-            key={`${detailsWidgetId}-${modalPeriod.label}`}
+            className="rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 shadow-sm px-6 py-5 space-y-4 transition-opacity duration-150"
+            key={`${visibleDetailsWidgetId}-${modalPeriod.label}`}
           >
             {renderContent()}
           </div>
-        </DialogContent>
-      </Dialog>
+        </div>
+      </SlidePanel>
     );
   };
   // ─────────────────────────────────────────────────────────────────────────
@@ -6593,8 +6729,13 @@ export function AdminDashboardPage() {
                             activeUsers: "Usuários Ativos",
                             companies: "Empresas",
                             activeProjects: "Projetos Ativos",
-                            revenue: "Receita",
+                            revenue: "Receita Confirmada",
                             avgRating: "Avaliação Média",
+                            totalProjects: "Total de Projetos",
+                            pendingPayments: "Pagamentos Pendentes",
+                            linkedProducts: "Produtos Vinculados",
+                            catalogProducts: "Produtos no Catálogo",
+                            orgPartners: "Agências & Parceiros",
                           };
                           return (
                             <Button
@@ -6622,38 +6763,98 @@ export function AdminDashboardPage() {
                       undefined,
                       wp.periodKey,
                     );
+                    const widgetRealOnly = {
+                      totalProjects: {
+                        value: apiStats ? (apiStats.projects?.total ?? 0).toLocaleString("pt-BR") : "—",
+                        change: 0,
+                        trend: "up" as const,
+                      },
+                      pendingPayments: {
+                        value: apiStats ? (apiStats.payments?.pendingCount ?? 0).toLocaleString("pt-BR") : "—",
+                        change: 0,
+                        trend: "up" as const,
+                      },
+                      linkedProducts: {
+                        value: apiStats ? (apiStats.projectProducts?.total ?? 0).toLocaleString("pt-BR") : "—",
+                        change: 0,
+                        trend: "up" as const,
+                      },
+                      catalogProducts: {
+                        value: apiStats ? (apiStats.catalogProducts?.total ?? 0).toLocaleString("pt-BR") : "—",
+                        change: 0,
+                        trend: "up" as const,
+                      },
+                      orgPartners: {
+                        value: apiStats
+                          ? `${(apiStats.agencies?.total ?? 0).toLocaleString("pt-BR")} / ${(apiStats.partners?.total ?? 0).toLocaleString("pt-BR")}`
+                          : "—",
+                        change: 0,
+                        trend: "up" as const,
+                      },
+                      // Avaliação Média — mesma regra do strip principal: sem fonte real
+                      // implementada em nenhum endpoint usado pelo dashboard. "—" sempre.
+                      avgRating: { value: "—", change: 0, trend: "up" as const },
+                    };
+                    // Mesma regra da Receita Confirmada do strip principal: payments.paidAmount, nunca financial.totalRevenue.
+                    // "—" tanto sem apiStats quanto com apiStats.payments.paidAmount ausente/não-numérico.
+                    const hasWidgetRealPaidAmount =
+                      !!apiStats && !!apiStats.payments && Number.isFinite(apiStats.payments.paidAmount);
+                    const widgetRevenueReal = {
+                      value: hasWidgetRealPaidAmount ? `R$ ${(apiStats!.payments!.paidAmount / 1000).toFixed(1)}k` : "—",
+                      change: 0,
+                      trend: "up" as const,
+                    };
+                    // Mesma regra do strip principal: users.active (User.is_active=true), nunca nomades.active.
+                    const hasWidgetRealActiveUsers =
+                      !!apiStats && !!apiStats.users && Number.isFinite(apiStats.users.active);
+                    const widgetActiveUsersReal = {
+                      value: hasWidgetRealActiveUsers ? apiStats!.users!.active!.toLocaleString("pt-BR") : "—",
+                      change: 0,
+                      trend: "up" as const,
+                    };
+                    // Mesma regra do strip principal: sem série histórica pra crescimento real — 0% neutro.
+                    const hasWidgetRealTotalUsers =
+                      !!apiStats && !!apiStats.users && Number.isFinite(apiStats.users.total);
+                    const widgetTotalUsersReal = {
+                      value: hasWidgetRealTotalUsers ? apiStats!.users!.total.toLocaleString("pt-BR") : "—",
+                      change: 0,
+                      trend: "up" as const,
+                    };
+                    // Mesma regra do strip principal: companies.total, 0% neutro, "—" se ausente.
+                    const hasWidgetRealCompanies =
+                      !!apiStats && !!apiStats.companies && Number.isFinite(apiStats.companies.total);
+                    const widgetCompaniesReal = {
+                      value: hasWidgetRealCompanies ? apiStats!.companies!.total.toLocaleString("pt-BR") : "—",
+                      change: 0,
+                      trend: "up" as const,
+                    };
+                    // Mesma regra do strip principal: projects.active (definição atual do
+                    // backend, não alterada), 0% neutro, "—" se ausente/não-numérico.
+                    const hasWidgetRealActiveProjects =
+                      !!apiStats && !!apiStats.projects && Number.isFinite(apiStats.projects.active);
+                    const widgetActiveProjectsReal = {
+                      value: hasWidgetRealActiveProjects ? apiStats!.projects!.active.toLocaleString("pt-BR") : "—",
+                      change: 0,
+                      trend: "up" as const,
+                    };
                     const widgetMetrics = !apiStats
-                      ? widgetBase
+                      ? {
+                          ...widgetBase,
+                          ...widgetRealOnly,
+                          revenue: widgetRevenueReal,
+                          activeUsers: widgetActiveUsersReal,
+                          totalUsers: widgetTotalUsersReal,
+                          companies: widgetCompaniesReal,
+                          activeProjects: widgetActiveProjectsReal,
+                        }
                       : {
                           ...widgetBase,
-                          totalUsers: {
-                            ...widgetBase.totalUsers,
-                            value: (
-                              apiStats.nomades?.total ?? 0
-                            ).toLocaleString("pt-BR"),
-                          },
-                          activeUsers: {
-                            ...widgetBase.activeUsers,
-                            value: (
-                              apiStats.nomades?.active ?? 0
-                            ).toLocaleString("pt-BR"),
-                          },
-                          companies: {
-                            ...widgetBase.companies,
-                            value: (
-                              apiStats.companies?.total ?? 0
-                            ).toLocaleString("pt-BR"),
-                          },
-                          activeProjects: {
-                            ...widgetBase.activeProjects,
-                            value: (
-                              apiStats.projects?.active ?? 0
-                            ).toLocaleString("pt-BR"),
-                          },
-                          revenue: {
-                            ...widgetBase.revenue,
-                            value: `R$ ${((apiStats.financial?.totalRevenue ?? 0) / 1000).toFixed(1)}k`,
-                          },
+                          totalUsers: widgetTotalUsersReal,
+                          activeUsers: widgetActiveUsersReal,
+                          companies: widgetCompaniesReal,
+                          activeProjects: widgetActiveProjectsReal,
+                          revenue: widgetRevenueReal,
+                          ...widgetRealOnly,
                         };
                     return metricCards
                       .filter((m) => m.visible)
@@ -11636,37 +11837,37 @@ export function AdminDashboardPage() {
       </Dialog>
 
       {/* ── Public Share Dialog ───────────────────────────────────────────── */}
-      <Dialog
+      <SlidePanel
         open={showPublicShareDialog}
-        onOpenChange={setShowPublicShareDialog}
+        onClose={() => setShowPublicShareDialog(false)}
+        title={shareTarget?.type === "widget" ? "Compartilhar widget" : "Compartilhar dashboard"}
+        subtitle={
+          shareTarget?.type === "widget"
+            ? shareTarget.title || "Gere ou copie o link público deste widget."
+            : "Gere ou copie o link público deste dashboard."
+        }
+        widthMode="full"
+        footer={
+          <>
+            <Button
+              variant="outline"
+              onClick={() => setShowPublicShareDialog(false)}
+            >
+              Fechar
+            </Button>
+            <Button
+              className="btn-brand"
+              onClick={handleGenerateShareLink}
+              disabled={sharePinEnabled && sharePin.length !== 4}
+            >
+              <Link2 className="h-4 w-4 mr-1.5" />
+              Gerar Link
+            </Button>
+          </>
+        }
       >
-        <DialogContent className="sm:max-w-md p-0 overflow-hidden">
-          {/* Brand gradient header strip */}
-          <div
-            className="px-6 pt-5 pb-4"
-            style={{
-              background:
-                "linear-gradient(135deg, #000000 0%, #1a2a6f 45%, #c81a7f 100%)",
-            }}
-          >
-            <div className="flex items-center gap-3">
-              <div className="flex items-center justify-center h-9 w-9 rounded-xl bg-white/15 shrink-0">
-                <Share2 className="h-4.5 w-4.5 text-white" />
-              </div>
-              <div>
-                <h2 className="text-base font-semibold text-white leading-tight">
-                  Compartilhar via Link
-                </h2>
-                <p className="text-xs text-white/70 mt-0.5">
-                  {shareTarget
-                    ? `${shareTarget.type === "widget" ? "Widget" : "Dashboard"}: ${shareTarget.title}`
-                    : "Configure as opções e gere um link público"}
-                </p>
-              </div>
-            </div>
-          </div>
-
-          <div className="px-6 pt-4 pb-6 space-y-4">
+        <div className="flex-1 overflow-y-auto px-[50px] py-[50px] bg-slate-200 dark:bg-slate-950/40">
+          <div className="rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 shadow-sm p-6 space-y-4 max-w-2xl mx-auto">
             <Tabs
               value={shareActiveTab}
               onValueChange={setShareActiveTab}
@@ -11855,50 +12056,28 @@ export function AdminDashboardPage() {
             </Tabs>
 
             {/* Generated Link */}
-            <div className="space-y-2 pt-1">
-              <div className="flex gap-2">
+            {generatedShareLink && (
+              <div className="flex gap-2 items-center pt-1">
+                <Input
+                  readOnly
+                  value={generatedShareLink}
+                  className="text-xs font-mono bg-muted/40"
+                  onClick={(e) => (e.target as HTMLInputElement).select()}
+                />
                 <Button
-                  className="flex-1 btn-brand"
-                  onClick={handleGenerateShareLink}
-                  disabled={sharePinEnabled && sharePin.length !== 4}
+                  variant="outline"
+                  size="sm"
+                  className="shrink-0 gap-1.5 border-violet-200 dark:border-violet-700 hover:border-violet-400 hover:bg-violet-50 dark:hover:bg-violet-950/30 text-violet-700 dark:text-violet-400"
+                  onClick={handleCopyShareLink}
                 >
-                  <Link2 className="h-4 w-4 mr-1.5" />
-                  Gerar Link
+                  <Copy className="h-3.5 w-3.5" />
+                  Copiar
                 </Button>
               </div>
-              {generatedShareLink && (
-                <div className="flex gap-2 items-center">
-                  <Input
-                    readOnly
-                    value={generatedShareLink}
-                    className="text-xs font-mono bg-muted/40"
-                    onClick={(e) => (e.target as HTMLInputElement).select()}
-                  />
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="shrink-0 gap-1.5 border-violet-200 dark:border-violet-700 hover:border-violet-400 hover:bg-violet-50 dark:hover:bg-violet-950/30 text-violet-700 dark:text-violet-400"
-                    onClick={handleCopyShareLink}
-                  >
-                    <Copy className="h-3.5 w-3.5" />
-                    Copiar
-                  </Button>
-                </div>
-              )}
-            </div>
-
-            <div className="flex justify-end pt-1">
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => setShowPublicShareDialog(false)}
-              >
-                Fechar
-              </Button>
-            </div>
+            )}
           </div>
-        </DialogContent>
-      </Dialog>
+        </div>
+      </SlidePanel>
       {/* ──────────────────────────────────────────────────────────────────── */}
 
       {selectedMetric && (
@@ -11916,19 +12095,41 @@ export function AdminDashboardPage() {
       {WidgetDetailsModal()}
 
       {/* ── Historical Data Modal ─────────────────────────────────────────── */}
-      <Dialog open={showHistoricalModal} onOpenChange={setShowHistoricalModal}>
-        <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <History className="h-4 w-4 text-amber-500" />
-              Dados Históricos Manuais
-            </DialogTitle>
-            <DialogDescription>
+      <SlidePanel
+        open={showHistoricalModal}
+        onClose={() => setShowHistoricalModal(false)}
+        title="Histórico do dashboard"
+        subtitle="Acompanhe alterações e eventos recentes deste painel."
+        widthMode="full"
+        footer={
+          <>
+            <Button
+              variant="outline"
+              onClick={() => setShowHistoricalModal(false)}
+            >
+              Cancelar
+            </Button>
+            <Button
+              onClick={saveHistoricalEntry}
+              disabled={!histModalKey}
+              className="btn-brand"
+            >
+              <Save className="h-4 w-4 mr-1.5" />
+              Salvar Dados
+            </Button>
+          </>
+        }
+      >
+        <div className="flex-1 overflow-y-auto px-[50px] py-[50px] bg-slate-200 dark:bg-slate-950/40">
+        <div className="rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 shadow-sm p-5 space-y-4">
+          <div className="flex items-start gap-2 text-sm text-muted-foreground">
+            <History className="h-4 w-4 text-amber-500 mt-0.5 shrink-0" />
+            <p>
               Insira dados reais para um mês específico. Serão aplicados sobre
               os dados gerados quando o período do dashboard corresponder a esse
               mês.
-            </DialogDescription>
-          </DialogHeader>
+            </p>
+          </div>
 
           {/* Month picker + saved entries count */}
           <div className="flex items-center gap-3 py-2 border-b border-border/40">
@@ -12300,29 +12501,16 @@ export function AdminDashboardPage() {
               </div>
             </div>
           )}
+        </div>
+        </div>
+      </SlidePanel>
 
-          <DialogFooter className="gap-2">
-            <Button
-              variant="outline"
-              onClick={() => setShowHistoricalModal(false)}
-            >
-              Cancelar
-            </Button>
-            <Button
-              onClick={saveHistoricalEntry}
-              disabled={!histModalKey}
-              className="btn-brand"
-            >
-              <Save className="h-4 w-4 mr-1.5" />
-              Salvar Dados
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* Edit Dashboard Panel */}
-      {(isEditDashboardModalOpen || isEditPanelClosing) &&
-        (() => {
+      {/* Edit Dashboard Panel — SlidePanel é sempre renderizado (não gated por
+          isEditDashboardModalOpen aqui); é ele mesmo que decide quando
+          desmontar de verdade via seu estado interno `mounted`, o que dá
+          tempo da animação de saída rodar. Gatear aqui desmontaria o painel
+          no mesmo instante do fechamento, cortando a animação. */}
+      {(() => {
           const modalGradientMap: Record<string, string> = {
             blue: "from-blue-500 to-blue-700",
             green: "from-green-500 to-green-700",
@@ -12342,142 +12530,141 @@ export function AdminDashboardPage() {
             (lib) => !draftWidgets.some((dw) => dw.type === lib.id),
           );
           return (
-            <>
-              <div
-                className={cn(
-                  "fixed top-0 bottom-0 right-0 z-40 bg-black/30 backdrop-blur-[1px] transition-opacity duration-300",
-                  isEditPanelClosing ? "opacity-0" : "opacity-100",
-                )}
-                style={{ left: "var(--sidebar-width)" }}
-                onClick={handleCloseEditPanel}
-              />
-              <div
-                data-slot="sheet-content"
-                data-state={isEditPanelClosing ? "closed" : "open"}
-                className="fixed top-0 bg-background z-50 flex flex-col shadow-2xl data-[state=open]:animate-in data-[state=open]:slide-in-from-right data-[state=open]:fade-in-0 data-[state=closed]:animate-out data-[state=closed]:slide-out-to-right data-[state=closed]:fade-out-0"
-                style={{
-                  left: "var(--sidebar-width)",
-                  right: 0,
-                  bottom: "var(--footer-height, 0px)",
-                }}
-              >
-                {/* Header */}
-                <div
-                  className="flex-shrink-0 px-6 py-4 text-white"
-                  style={{ background: "var(--app-brand-gradient)" }}
-                >
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                      <div className="bg-white/20 rounded-lg p-1.5">
-                        <LayoutGrid className="h-4 w-4" />
+            <SlidePanel
+              open={isEditDashboardModalOpen}
+              onClose={handleCloseEditPanel}
+              title={isNewDashboardMode ? "Novo Dashboard" : "Editar dashboard"}
+              subtitle={
+                isNewDashboardMode
+                  ? "Adicione widgets e dê um nome ao seu novo dashboard."
+                  : "Atualize as configurações principais deste painel."
+              }
+              widthMode="full"
+              footer={
+                <div className="flex items-center gap-4 w-full">
+                  <div className="flex items-center gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="h-8 px-4 text-sm"
+                      onClick={() => setShowCancelConfirmDialog(true)}
+                    >
+                      Cancelar
+                    </Button>
+                    <Button
+                      size="sm"
+                      className="h-8 px-5 text-sm btn-brand shadow-sm gap-1.5"
+                      onClick={() => setShowSaveConfirmDialog(true)}
+                    >
+                      <Save className="h-3.5 w-3.5" />
+                      {isNewDashboardMode ? "Criar" : "Salvar"}
+                    </Button>
+                  </div>
+                  <div className="w-px h-5 bg-border" />
+                  <span className="text-xs text-muted-foreground">
+                    {draftWidgets.filter((w) => w.visible).length} visíveis ·{" "}
+                    {draftWidgets.filter((w) => !w.visible).length} ocultos ·{" "}
+                    {draftWidgets.length} total
+                  </span>
+                </div>
+              }
+            >
+              <div className="flex flex-col flex-1 overflow-hidden w-full">
+                {/* Toolbar: nome do dashboard (renomeável) + modo remover/adicionar */}
+                <div className="flex-shrink-0 flex items-center justify-between gap-3 px-5 py-3 border-b border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 flex-wrap">
+                  <div>
+                    {isEditingHeaderName ? (
+                      <div className="flex items-center gap-2">
+                        <input
+                          autoFocus
+                          value={editHeaderName}
+                          onChange={(e) =>
+                            setEditHeaderName(e.target.value)
+                          }
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") handleSaveHeaderName();
+                            if (e.key === "Escape")
+                              setIsEditingHeaderName(false);
+                          }}
+                          placeholder={
+                            isNewDashboardMode ? "Nome do dashboard..." : ""
+                          }
+                          className="text-sm font-bold leading-tight rounded-md px-2.5 py-1 border border-input bg-background focus:outline-none focus:border-ring w-48"
+                        />
+                        <button
+                          onMouseDown={(e) => e.preventDefault()}
+                          onClick={handleSaveHeaderName}
+                          className="flex items-center gap-1 btn-brand rounded-md px-2.5 py-1 text-xs font-semibold transition-all"
+                        >
+                          <Check className="h-3 w-3" />
+                          Salvar
+                        </button>
+                        <button
+                          onMouseDown={(e) => e.preventDefault()}
+                          onClick={() => setIsEditingHeaderName(false)}
+                          className="bg-muted hover:bg-muted/70 rounded-md p-1 transition-colors"
+                          title="Cancelar edição"
+                        >
+                          <X className="h-3 w-3" />
+                        </button>
                       </div>
-                      <div>
-                        <p className="text-white/60 text-[10px] font-medium uppercase tracking-wide leading-tight">
-                          {isNewDashboardMode
-                            ? "Novo Dashboard"
-                            : "Editar Dashboard"}
-                        </p>
-                        {isEditingHeaderName ? (
-                          <div className="flex items-center gap-2 mt-0.5">
-                            <input
-                              autoFocus
-                              value={editHeaderName}
-                              onChange={(e) =>
-                                setEditHeaderName(e.target.value)
-                              }
-                              onKeyDown={(e) => {
-                                if (e.key === "Enter") handleSaveHeaderName();
-                                if (e.key === "Escape")
-                                  setIsEditingHeaderName(false);
-                              }}
-                              placeholder={
-                                isNewDashboardMode ? "Nome do dashboard..." : ""
-                              }
-                              className="bg-white/20 text-white placeholder-white/50 text-sm font-bold leading-tight rounded-md px-2.5 py-1 border border-white/30 focus:outline-none focus:border-white/60 w-48"
-                            />
-                            <button
-                              onMouseDown={(e) => e.preventDefault()}
-                              onClick={handleSaveHeaderName}
-                              className="flex items-center gap-1 bg-white text-blue-700 hover:bg-white/90 active:scale-95 rounded-md px-2.5 py-1 text-xs font-semibold transition-all shadow-sm"
-                            >
-                              <Check className="h-3 w-3" />
-                              Salvar
-                            </button>
-                            <button
-                              onMouseDown={(e) => e.preventDefault()}
-                              onClick={() => setIsEditingHeaderName(false)}
-                              className="bg-white/15 hover:bg-white/30 rounded-md p-1 transition-colors"
-                              title="Cancelar edição"
-                            >
-                              <X className="h-3 w-3" />
-                            </button>
-                          </div>
-                        ) : (
-                          <div className="flex items-center gap-1.5 mt-0.5">
-                            <h2 className="text-base font-bold leading-tight">
-                              {editHeaderName ||
-                                (isNewDashboardMode
-                                  ? "Novo Dashboard"
-                                  : "Dashboard Padrão")}
-                            </h2>
-                            <button
-                              onClick={() => setIsEditingHeaderName(true)}
-                              className="bg-white/15 hover:bg-white/30 rounded p-0.5 transition-colors"
-                              title="Renomear dashboard"
-                            >
-                              <Pencil className="h-3 w-3" />
-                            </button>
-                          </div>
-                        )}
-                        <p className="text-white/70 text-[11px] mt-0.5">
-                          {isNewDashboardMode
-                            ? "Adicione widgets à direita e dê um nome ao dashboard"
-                            : `Arraste para reordenar · ${draftWidgets.filter((w) => w.visible).length} widgets ativos`}
-                        </p>
+                    ) : (
+                      <div className="flex items-center gap-1.5">
+                        <h3 className="text-sm font-bold leading-tight text-foreground">
+                          {editHeaderName ||
+                            (isNewDashboardMode
+                              ? "Novo Dashboard"
+                              : "Dashboard Padrão")}
+                        </h3>
+                        <button
+                          onClick={() => setIsEditingHeaderName(true)}
+                          className="text-muted-foreground hover:text-foreground hover:bg-muted rounded p-0.5 transition-colors"
+                          title="Renomear dashboard"
+                        >
+                          <Pencil className="h-3 w-3" />
+                        </button>
                       </div>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      {/* Mode buttons */}
-                      <button
-                        onClick={() =>
-                          setEditModalMode((m) =>
-                            m === "remover" ? "none" : "remover",
-                          )
-                        }
-                        className={cn(
-                          "flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all",
-                          editModalMode === "remover"
-                            ? "bg-red-500 text-white shadow-md"
-                            : "bg-white/15 hover:bg-white/25 text-white/90",
-                        )}
-                      >
-                        <Trash2 className="h-3.5 w-3.5" />
-                        Remover
-                      </button>
-                      <button
-                        onClick={() =>
-                          setEditModalMode((m) =>
-                            m === "adicionar" ? "none" : "adicionar",
-                          )
-                        }
-                        className={cn(
-                          "flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all",
-                          editModalMode === "adicionar"
-                            ? "bg-emerald-500 text-white shadow-md"
-                            : "bg-white/15 hover:bg-white/25 text-white/90",
-                        )}
-                      >
-                        <Plus className="h-3.5 w-3.5" />
-                        Adicionar
-                      </button>
-                      <div className="w-px h-5 bg-white/25 mx-1" />
-                      <button
-                        onClick={handleCloseEditPanel}
-                        className="bg-white/15 hover:bg-white/30 rounded-lg p-1.5 transition-colors"
-                      >
-                        <X className="h-4 w-4" />
-                      </button>
-                    </div>
+                    )}
+                    <p className="text-muted-foreground text-[11px] mt-0.5">
+                      {isNewDashboardMode
+                        ? "Adicione widgets à direita e dê um nome ao dashboard"
+                        : `Arraste para reordenar · ${draftWidgets.filter((w) => w.visible).length} widgets ativos`}
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    {/* Mode buttons */}
+                    <button
+                      onClick={() =>
+                        setEditModalMode((m) =>
+                          m === "remover" ? "none" : "remover",
+                        )
+                      }
+                      className={cn(
+                        "flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all",
+                        editModalMode === "remover"
+                          ? "bg-red-500 text-white shadow-md"
+                          : "bg-muted hover:bg-muted/70 text-foreground",
+                      )}
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                      Remover
+                    </button>
+                    <button
+                      onClick={() =>
+                        setEditModalMode((m) =>
+                          m === "adicionar" ? "none" : "adicionar",
+                        )
+                      }
+                      className={cn(
+                        "flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all",
+                        editModalMode === "adicionar"
+                          ? "bg-emerald-500 text-white shadow-md"
+                          : "bg-muted hover:bg-muted/70 text-foreground",
+                      )}
+                    >
+                      <Plus className="h-3.5 w-3.5" />
+                      Adicionar
+                    </button>
                   </div>
                 </div>
 
@@ -12814,36 +13001,8 @@ export function AdminDashboardPage() {
                     </div>
                   )}
                 </div>
-
-                {/* Footer */}
-                <div className="flex-shrink-0 border-t bg-muted/20 px-6 py-3 flex items-center gap-4">
-                  <div className="flex items-center gap-2">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="h-8 px-4 text-sm"
-                      onClick={() => setShowCancelConfirmDialog(true)}
-                    >
-                      Cancelar
-                    </Button>
-                    <Button
-                      size="sm"
-                      className="h-8 px-5 text-sm btn-brand shadow-sm gap-1.5"
-                      onClick={() => setShowSaveConfirmDialog(true)}
-                    >
-                      <Save className="h-3.5 w-3.5" />
-                      {isNewDashboardMode ? "Criar" : "Salvar"}
-                    </Button>
-                  </div>
-                  <div className="w-px h-5 bg-border" />
-                  <span className="text-xs text-muted-foreground">
-                    {draftWidgets.filter((w) => w.visible).length} visíveis ·{" "}
-                    {draftWidgets.filter((w) => !w.visible).length} ocultos ·{" "}
-                    {draftWidgets.length} total
-                  </span>
-                </div>
               </div>
-            </>
+            </SlidePanel>
           );
         })()}
       <ConfirmationDialog

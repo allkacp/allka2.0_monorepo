@@ -11,26 +11,26 @@ datasource db {
 // ─── Auth & Users ────────────────────────────────────────────────────────────
 
 model User {
-  id               String    @id @default(cuid())
+  id                             String    @id @default(cuid())
   // Código público/exibido (ex.: "00001") — só pra UI (tela Admin > Usuários).
   // Nunca usar no lugar de `id` em FK ou lookup técnico.
-  user_code        String?   @unique
-  email            String    @unique
-  username         String?   @unique
-  password_hash    String
-  name             String
-  role             String    @default("company_user")
+  user_code                      String?   @unique
+  email                          String    @unique
+  username                       String?   @unique
+  password_hash                  String
+  name                           String
+  role                           String    @default("company_user")
   // company_user | company_admin | company_financial | agency_user | agency_admin | nomad | admin | partner
-  account_type     String    @default("empresas")
+  account_type                   String    @default("empresas")
   // empresas | agencias | nomades | admin | parceiro
-  is_active        Boolean   @default(true)
-  avatar           String?   @db.LongText
-  phone            String?
-  position         String?
-  admin_profile_id String?
-  company_id       String?
-  company          Company?  @relation(fields: [company_id], references: [id])
-  last_login       DateTime?
+  is_active                      Boolean   @default(true)
+  avatar                         String?   @db.LongText
+  phone                          String?
+  position                       String?
+  admin_profile_id               String?
+  company_id                     String?
+  company                        Company?  @relation(fields: [company_id], references: [id])
+  last_login                     DateTime?
   // Pausa por inatividade (>=90 dias sem login) é um status derivado do
   // last_login, calculado no momento do login seguinte (ver POST
   // /api/auth/login) — não existe cron. Estes 3 campos tornam esse estado
@@ -39,8 +39,8 @@ model User {
   inactivity_paused_accessed_at  DateTime?
   inactivity_paused_access_count Int       @default(0)
   reactivation_review_required   Boolean   @default(false)
-  created_at       DateTime  @default(now())
-  updated_at       DateTime  @updatedAt
+  created_at                     DateTime  @default(now())
+  updated_at                     DateTime  @updatedAt
 
   nomade              Nomade?
   agency              Agency?
@@ -53,6 +53,7 @@ model User {
   tasks_como_lider    ProjectTask[]      @relation("TaskLiderResponsavel")
   linked_coupons      Coupon[]
   created_clients     Client[]           @relation("ClientCreatedBy")
+  created_projects    Project[]          @relation("ProjectCreatedBy")
 
   @@map("users")
 }
@@ -437,6 +438,20 @@ model Project {
   company_owner        Company?        @relation("ProjectNewCompanyOwner", fields: [company_id], references: [id], onDelete: SetNull)
   partner_id           String?
   partner_owner        PartnerProfile? @relation(fields: [partner_id], references: [id], onDelete: SetNull)
+  // Autoria real do projeto — sempre resolvida pelo backend a partir do
+  // token autenticado (nunca aceita do payload). Distinta do ownership
+  // organizacional acima (agency_id/company_id/partner_id), que continua
+  // sendo o filtro usado para escopo de listagem. Nullable só porque os 3
+  // fixtures "sem vínculo" do seed local são inseridos direto pelo script,
+  // sem passar pela API — todo projeto real criado via POST /api/projects
+  // sempre tem isto preenchido.
+  created_by_user_id   String?
+  created_by           User?           @relation("ProjectCreatedBy", fields: [created_by_user_id], references: [id], onDelete: SetNull)
+  // Código público sequencial e persistente (proj_00001, proj_00002, ...).
+  // Obrigatório desde a fase 2 da migration (depois do backfill dos
+  // projetos existentes) — toda linha nova recebe um valor via
+  // getNextSequenceValue(tx, "project") — ver src/lib/sequence.ts.
+  project_code         String          @unique
   status               String          @default("draft")
   // draft | negotiation | awaiting-payment | planning | in-progress | paused | completed | cancelled | paid
   // draft | negotiation | awaiting-payment | planning | in-progress | paused | completed | cancelled
@@ -474,7 +489,24 @@ model Project {
   payments        Payment[]
   credentials     ProjectCredential[]
 
+  @@index([created_by_user_id])
   @@map("projects")
+}
+
+// ─── EntitySequence — contador atômico e seguro para códigos sequenciais ────
+// Usado para gerar project_code (proj_00001) e ProjectTask.task_code
+// (T000001) sem depender de SELECT MAX()+1 nem de ranking de consulta.
+// O incremento é feito via UPDATE ... SET current_value = LAST_INSERT_ID(
+// current_value + 1) dentro da transação chamadora — idioma padrão do MySQL
+// para sequências customizadas, atômico sob concorrência (ver
+// src/lib/sequence.ts).
+model EntitySequence {
+  id            String   @id @default(cuid())
+  key           String   @unique
+  current_value Int      @default(0)
+  updated_at    DateTime @updatedAt
+
+  @@map("entity_sequences")
 }
 
 model Specialty {
@@ -551,7 +583,12 @@ model Product {
   id                String   @id @default(cuid())
   name              String
   description       String?  @db.LongText
-  short_description String?
+  // Sem @db.VarChar explícito, o Prisma aplicava o padrão de 191 chars pro
+  // MySQL — curto demais pro conteúdo real (ex.: PA0003 tem 251 chars, texto
+  // legítimo, não lixo de dado). Ampliado com folga; continua VarChar (não
+  // Text) porque o campo é conceitualmente "curto" — só a coluna estava
+  // subdimensionada. Ver migration 20260711100400_widen_short_description.
+  short_description String?  @db.VarChar(500)
   category          String
   tags              String?  @db.LongText
   // JSON: string[]
@@ -577,6 +614,7 @@ model Product {
   task_links       ProductCatalogTask[]
   project_products ProjectProduct[]
   project_tasks    ProjectTask[]
+  payment_items    PaymentItem[]
 
   @@map("products")
 }
@@ -739,8 +777,9 @@ model ProjectProduct {
   created_at DateTime @default(now())
   updated_at DateTime @updatedAt
 
-  tasks       ProjectTask[]
-  credentials ProjectCredential[]
+  tasks         ProjectTask[]
+  credentials   ProjectCredential[]
+  payment_items PaymentItem[]
 
   @@unique([project_id, product_id])
   @@map("project_products")
@@ -766,6 +805,24 @@ model ProjectTask {
 
   // Globally unique operational task code — T000001, T000002, …
   task_code String? @unique
+
+  // ── Origem da geração (preenchidos só em tarefas nascidas de pagamento
+  // confirmado — ver src/lib/confirm-payment.ts). project_id/project_product_id/
+  // product_id/catalog_task_id acima já respondem "qual projeto/produto/
+  // template originou"; os campos abaixo cobrem o que ainda faltava: qual
+  // pagamento e qual ciclo, e a chave que impede duplicar a mesma tarefa. ──
+  origin_payment_id String?
+  origin_payment    Payment? @relation("PaymentGeneratedTasks", fields: [origin_payment_id], references: [id], onDelete: SetNull)
+  // paymentId:projectProductId:catalogTaskId:occurrenceIndex — impede
+  // recriar a mesma tarefa do mesmo produto/pagamento/ciclo/ocorrência.
+  generation_key    String?  @unique
+  // Espelha Payment.billing_cycle_key no momento da geração (fica preservado
+  // mesmo se o Payment for editado depois).
+  billing_cycle_key String?
+  // Reservado para produtos que no futuro gerem mais de uma ocorrência da
+  // mesma tarefa numa única geração (ex.: "3x" do mesmo item). Sempre 0
+  // nesta fase — não há hoje quantidade contratada por ProjectProduct.
+  occurrence_index  Int      @default(0)
 
   // Task fields
   title                  String
@@ -812,6 +869,7 @@ model ProjectTask {
   credentials        ProjectCredential[]
   lider_responsavel  User?                   @relation("TaskLiderResponsavel", fields: [lider_responsavel_id], references: [id])
 
+  @@index([origin_payment_id])
   @@map("project_tasks")
 }
 
@@ -824,6 +882,14 @@ model ProjectTaskStage {
 
   catalog_step_ref          String?
   // reference code from the source CatalogTask step JSON
+  // Chave estável de origem pra etapas geradas por especificação (ver
+  // src/lib/generate-tasks-from-spec.ts) — formato
+  // "spec:{generationKey}:stage:{stageCode}". Permite reencontrar a MESMA
+  // etapa em reexecuções (create-only, nunca apaga) sem depender do id
+  // interno. Nula pras etapas do gerador genérico por catálogo, que não
+  // precisam desse rastreio (idempotência já garantida por generation_key
+  // na ProjectTask pai).
+  source_key                String?
   titulo                    String
   descricao                 String? @db.LongText
   ordem                     Int     @default(0)
@@ -838,6 +904,7 @@ model ProjectTaskStage {
   created_at DateTime @default(now())
   updated_at DateTime @updatedAt
 
+  @@unique([project_task_id, source_key])
   @@map("project_task_stages")
 }
 
@@ -1378,11 +1445,65 @@ model Payment {
   card_last_digits    String?
   card_holder         String?
   notes               String?   @db.LongText
+  // Confirmação real de pagamento (status -> PAGO) reaproveita este campo
+  // já existente em vez de um novo `confirmed_at` redundante.
   paid_at             DateTime?
+  // Idempotência real e persistida (substitui o antigo findFirst+observations
+  // em texto livre). Identifica esta TENTATIVA/cobrança específica — ver
+  // src/lib/confirm-payment.ts. Formato: fake:{paymentId}:{billingCycleKey}
+  // depois de confirmado (ou draft:{projectId}:{cycleKey} enquanto ainda
+  // PENDENTE e sem payment_id conhecido pelo chamador).
+  idempotency_key     String?   @unique
+  // Identifica o ciclo coberto por este pagamento: "avulso" para contratação
+  // avulsa, ou "YYYY-MM" para o ciclo mensal efetivamente pago.
+  billing_cycle_key   String?
   created_at          DateTime  @default(now())
   updated_at          DateTime  @updatedAt
 
+  generated_tasks ProjectTask[] @relation("PaymentGeneratedTasks")
+  items           PaymentItem[]
+
   @@map("payments")
+}
+
+// ─── PaymentItem — snapshot congelado dos ProjectProducts cobertos por um
+// Payment específico ─────────────────────────────────────────────────────
+// Sem isto, Payment não registrava explicitamente QUAIS ProjectProducts
+// foram pagos — reprocessamento e auditoria dependiam de reconsultar os
+// produtos ATUAIS do projeto, o que quebra assim que um produto é
+// adicionado/removido depois do pagamento. Uma vez criado, um PaymentItem
+// nunca é alterado (histórico comercial imutável, mesmo padrão dos
+// snapshots em ProjectProduct).
+model PaymentItem {
+  id         String  @id @default(cuid())
+  payment_id String
+  payment    Payment @relation(fields: [payment_id], references: [id], onDelete: Cascade)
+
+  project_product_id String
+  project_product    ProjectProduct @relation(fields: [project_product_id], references: [id])
+  product_id         String?
+  product            Product?       @relation(fields: [product_id], references: [id], onDelete: SetNull)
+
+  product_name_snapshot String
+  unit_price_snapshot   Float
+  // Não existe hoje campo de "quantidade contratada" em ProjectProduct —
+  // sempre 1 nesta fase (reservado pra quando essa noção existir).
+  quantity_snapshot     Int     @default(1)
+  total_snapshot        Float
+  recurrence_snapshot   String?
+  // Ciclo ao qual este item pertence — espelha Payment.billing_cycle_key no
+  // momento da criação (fica preservado mesmo se o Payment for editado).
+  billing_cycle_key     String?
+
+  created_at DateTime @default(now())
+
+  // Mesmo ProjectProduct não pode aparecer duas vezes no mesmo Payment —
+  // como cada Payment já pertence a exatamente um ciclo, isso também cobre
+  // "não duas vezes no mesmo Payment E ciclo".
+  @@unique([payment_id, project_product_id])
+  @@index([payment_id])
+  @@index([project_product_id])
+  @@map("payment_items")
 }
 
 // ─── Expenses (Despesas Operacionais) ────────────────────────────────────────

@@ -8,6 +8,8 @@ import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet"
 import { PageHeader } from "@/components/page-header"
+import { useSidebar } from "@/contexts/sidebar-context"
+import { useAppFrameMetrics } from "@/hooks/useAppFrameMetrics"
 
 const CATEGORIAS = ["Todos", "Design", "Conteúdo", "Desenvolvimento", "Marketing", "Gestão"]
 
@@ -147,17 +149,21 @@ const AVAILABLE_TASKS: Task[] = [
 const fmtBRL = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })
 
 export default function TarefasDisponiveisPage() {
+  const { sidebarWidth } = useSidebar();
+  const { headerHeight, footerHeight } = useAppFrameMetrics();
   const [search, setSearch]     = useState("")
   const [categoria, setCateg]   = useState("Todos")
   const [saved, setSaved]       = useState<Set<number>>(new Set())
   const [detail, setDetail]     = useState<Task | null>(null)
   const [applying, setApplying] = useState<number | null>(null)
+  const [confirmApply, setConfirmApply] = useState<Task | null>(null)
 
   const toggleSave = (id: number) =>
     setSaved((prev) => { const s = new Set(prev); s.has(id) ? s.delete(id) : s.add(id); return s })
 
   const handleApply = (id: number) => {
     setApplying(id)
+    setConfirmApply(null)
     setTimeout(() => setApplying(null), 1500)
   }
 
@@ -278,7 +284,7 @@ export default function TarefasDisponiveisPage() {
                 <Button
                   size="sm"
                   className="flex-1 text-xs h-8 bg-blue-600 hover:bg-blue-700 text-white"
-                  onClick={() => handleApply(t.id)}
+                  onClick={() => setConfirmApply(t)}
                   disabled={applying === t.id}
                 >
                   {applying === t.id ? "Enviado ✓" : "Candidatar-se"}
@@ -298,12 +304,28 @@ export default function TarefasDisponiveisPage() {
 
       {/* Detail sheet */}
       <Sheet open={!!detail} onOpenChange={() => setDetail(null)}>
-        <SheetContent side="right" hideOverlay className="w-full sm:max-w-lg overflow-y-auto">
+        <SheetContent
+          side="right"
+          hideOverlay
+          className="w-full p-0 flex flex-col overflow-hidden"
+          style={{
+            left: `${sidebarWidth}px`,
+            width: `calc(100vw - ${sidebarWidth}px)`,
+            top: `${headerHeight - 1}px`,
+            bottom: `${footerHeight - 1}px`,
+          }}
+        >
           {detail && (
             <>
-              <SheetTitle className="text-base font-bold pr-6">{detail.title}</SheetTitle>
-              <div className="mt-4 space-y-5">
-                <div className="flex flex-wrap gap-2">
+              <div className="px-6 py-5 shrink-0 bg-gradient-to-br from-blue-600 via-blue-700 to-purple-700">
+                <SheetTitle className="text-lg font-bold text-white">{detail.title}</SheetTitle>
+                <p className="text-sm text-blue-100 mt-1">{detail.client}</p>
+              </div>
+
+              <div className="flex-1 overflow-y-auto bg-slate-50 dark:bg-slate-950/40 px-[50px] py-[50px]">
+                <div className="space-y-6 max-w-3xl mx-auto">
+                  <div className="rounded-2xl border border-slate-200/80 dark:border-slate-700/80 bg-white dark:bg-slate-900 shadow-sm p-6 space-y-4">
+                    <div className="flex flex-wrap gap-2">
                   <span className={`text-xs font-medium px-2 py-0.5 rounded-full border ${URGENCIA_CFG[detail.urgency].cls}`}>
                     Urgência {URGENCIA_CFG[detail.urgency].label}
                   </span>
@@ -350,17 +372,139 @@ export default function TarefasDisponiveisPage() {
                     ))}
                   </div>
                 </div>
-
-                <div className="flex gap-2 pt-2">
-                  <Button
-                    className="flex-1 bg-blue-600 hover:bg-blue-700 text-white"
-                    onClick={() => { handleApply(detail.id); setDetail(null) }}
-                    disabled={applying === detail.id}
-                  >
-                    {applying === detail.id ? "Candidatura enviada ✓" : "Candidatar-se agora"}
-                  </Button>
-                  <Button variant="outline" onClick={() => setDetail(null)}>Fechar</Button>
+                  </div>
                 </div>
+              </div>
+
+              <div className="border-t border-slate-200/80 dark:border-slate-700/80 px-6 py-4 bg-white dark:bg-slate-900 flex items-center justify-end gap-3">
+                <Button variant="outline" onClick={() => setDetail(null)}>Fechar</Button>
+                <Button
+                  className="btn-brand"
+                  onClick={() => { setConfirmApply(detail); setDetail(null) }}
+                  disabled={applying === detail.id}
+                >
+                  {applying === detail.id ? "Candidatura enviada ✓" : "Candidatar-se agora"}
+                </Button>
+              </div>
+            </>
+          )}
+        </SheetContent>
+      </Sheet>
+
+      {/* Confirmation sheet for applying */}
+      <Sheet open={!!confirmApply} onOpenChange={() => setConfirmApply(null)}>
+        <SheetContent
+          side="right"
+          hideOverlay
+          className="w-full p-0 flex flex-col overflow-hidden"
+          style={{
+            left: `${sidebarWidth}px`,
+            width: `calc(100vw - ${sidebarWidth}px)`,
+            top: `${headerHeight - 1}px`,
+            bottom: `${footerHeight - 1}px`,
+          }}
+        >
+          {confirmApply && (
+            <>
+              <div className="px-6 py-5 shrink-0 bg-gradient-to-br from-blue-600 via-blue-700 to-purple-700">
+                <SheetTitle className="text-lg font-bold text-white">
+                  Confirmar Candidatura
+                </SheetTitle>
+                <p className="text-sm text-blue-100 mt-1">
+                  Revise as informações antes de confirmar sua candidatura
+                </p>
+              </div>
+
+              <div className="flex-1 overflow-y-auto bg-slate-50 dark:bg-slate-950/40 px-[50px] py-[50px]">
+                <div className="space-y-6 max-w-3xl mx-auto">
+                  {/* Task info card */}
+                  <div className="rounded-2xl border border-slate-200/80 dark:border-slate-700/80 bg-white dark:bg-slate-900 shadow-sm p-6 space-y-4">
+                    <div>
+                      <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1">Tarefa</p>
+                      <h3 className="text-lg font-bold text-slate-800 dark:text-slate-100">{confirmApply.title}</h3>
+                      <p className="text-sm text-slate-500 mt-0.5">{confirmApply.client}</p>
+                    </div>
+
+                    <div className="flex flex-wrap gap-2">
+                      <span className={`text-xs font-medium px-2 py-0.5 rounded-full border ${URGENCIA_CFG[confirmApply.urgency].cls}`}>
+                        Urgência {URGENCIA_CFG[confirmApply.urgency].label}
+                      </span>
+                      <span className={`text-xs font-medium px-2 py-0.5 rounded-full border ${NIVEL_BADGE[confirmApply.nivelMinimo]}`}>
+                        {confirmApply.nivelMinimo}+ requerido
+                      </span>
+                    </div>
+
+                    <div className="grid grid-cols-3 gap-3 pt-2">
+                      <div className="rounded-lg bg-violet-50 dark:bg-violet-950/30 border border-violet-100 dark:border-violet-800 p-3 text-center">
+                        <Wallet className="h-4 w-4 text-violet-500 mx-auto mb-1" />
+                        <p className="text-sm font-bold text-slate-800 dark:text-slate-100">{fmtBRL(confirmApply.value)}</p>
+                        <p className="text-[10px] text-slate-400">Valor</p>
+                      </div>
+                      <div className="rounded-lg bg-blue-50 dark:bg-blue-950/30 border border-blue-100 dark:border-blue-800 p-3 text-center">
+                        <Clock className="h-4 w-4 text-blue-500 mx-auto mb-1" />
+                        <p className="text-sm font-bold text-slate-800 dark:text-slate-100">{confirmApply.estimatedHours}h</p>
+                        <p className="text-[10px] text-slate-400">Estimativa</p>
+                      </div>
+                      <div className="rounded-lg bg-amber-50 dark:bg-amber-950/30 border border-amber-100 dark:border-amber-800 p-3 text-center">
+                        <Clock className="h-4 w-4 text-amber-500 mx-auto mb-1" />
+                        <p className="text-sm font-bold text-slate-800 dark:text-slate-100">{confirmApply.deadline}</p>
+                        <p className="text-[10px] text-slate-400">Prazo</p>
+                      </div>
+                    </div>
+
+                    <div>
+                      <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1.5">Descrição</p>
+                      <p className="text-sm text-slate-600 dark:text-slate-300 leading-relaxed">{confirmApply.description}</p>
+                    </div>
+
+                    <div>
+                      <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">Habilidades necessárias</p>
+                      <div className="flex flex-wrap gap-1.5">
+                        {confirmApply.skills.map((s) => (
+                          <span key={s} className="text-xs px-2 py-0.5 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700">
+                            {s}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Expectations card */}
+                  <div className="rounded-2xl border border-blue-200/80 dark:border-blue-700/80 bg-blue-50/50 dark:bg-blue-950/20 shadow-sm p-6">
+                    <h4 className="text-sm font-semibold text-blue-900 dark:text-blue-100 mb-3">O que esperamos de você</h4>
+                    <ul className="space-y-2 text-sm text-blue-800 dark:text-blue-200">
+                      <li className="flex items-start gap-2">
+                        <span className="text-blue-500 mt-0.5">•</span>
+                        <span>Cumprir o prazo estabelecido ({confirmApply.deadline})</span>
+                      </li>
+                      <li className="flex items-start gap-2">
+                        <span className="text-blue-500 mt-0.5">•</span>
+                        <span>Entregar trabalho de qualidade de acordo com os requisitos</span>
+                      </li>
+                      <li className="flex items-start gap-2">
+                        <span className="text-blue-500 mt-0.5">•</span>
+                        <span>Manter comunicação ativa durante a execução</span>
+                      </li>
+                      <li className="flex items-start gap-2">
+                        <span className="text-blue-500 mt-0.5">•</span>
+                        <span>Aplicar as habilidades listadas: {confirmApply.skills.join(", ")}</span>
+                      </li>
+                    </ul>
+                  </div>
+                </div>
+              </div>
+
+              <div className="border-t border-slate-200/80 dark:border-slate-700/80 px-6 py-4 bg-white dark:bg-slate-900 flex items-center justify-end gap-3">
+                <Button variant="outline" onClick={() => setConfirmApply(null)}>
+                  Cancelar
+                </Button>
+                <Button
+                  className="btn-brand"
+                  onClick={() => handleApply(confirmApply.id)}
+                  disabled={applying === confirmApply.id}
+                >
+                  {applying === confirmApply.id ? "Enviado ✓" : "Confirmar candidatura"}
+                </Button>
               </div>
             </>
           )}

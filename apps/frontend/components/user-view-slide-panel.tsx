@@ -96,7 +96,7 @@ import {
   ResponsiveContainer,
 } from "recharts";
 import { useState, useEffect } from "react";
-import { useSidebar } from "@/contexts/sidebar-context";
+import { useAppFrameMetrics } from "@/hooks/useAppFrameMetrics";
 import { User as UserType } from "@/types/user";
 import { useToast } from "@/hooks/use-toast";
 import {
@@ -574,7 +574,7 @@ export function UserViewSlidePanel({
     "premium",
   );
 
-  const { sidebarWidth } = useSidebar();
+  const { sidebarWidth, headerHeight, footerHeight } = useAppFrameMetrics();
   const { toast } = useToast();
 
   const fakeUser = createFakeUserData(user);
@@ -768,10 +768,12 @@ export function UserViewSlidePanel({
   }, []);
 
   // Define panel positioning - Extends from sidebar to right edge
-  const [panelStyle, setPanelStyle] = useState<{ left: string; width: string }>(
+  const [panelStyle, setPanelStyle] = useState<{ left: string; width: string; top: string; bottom: string }>(
     {
       left: "240px",
       width: "calc(100vw - 240px)",
+      top: "0px",
+      bottom: "0px",
     },
   );
 
@@ -781,16 +783,21 @@ export function UserViewSlidePanel({
         typeof sidebarWidth === "number"
           ? sidebarWidth
           : parseInt(sidebarWidth as string) || 240;
+      const left = sidebarWidthPx - 2;
+      const top = headerHeight - 1;
+      const bottom = footerHeight - 1;
       setPanelStyle({
-        left: `${sidebarWidthPx}px`,
-        width: `calc(100vw - ${sidebarWidthPx}px)`,
+        left: `${left}px`,
+        width: `calc(100vw - ${left}px)`,
+        top: `${top}px`,
+        bottom: `${bottom}px`,
       });
     };
 
     calculatePanelStyle();
     window.addEventListener("resize", calculatePanelStyle);
     return () => window.removeEventListener("resize", calculatePanelStyle);
-  }, [sidebarWidth]);
+  }, [sidebarWidth, headerHeight, footerHeight]);
 
   useEffect(() => {
     if (!open) {
@@ -1771,10 +1778,12 @@ export function UserViewSlidePanel({
       <div
         data-slot="sheet-content"
         data-state={isClosing ? "closed" : "open"}
-        className="fixed top-0 z-50 h-[calc(100vh-24px)] bg-background flex flex-col shadow-2xl border-l border-border overflow-hidden data-[state=open]:animate-in data-[state=open]:slide-in-from-right data-[state=open]:fade-in-0 data-[state=closed]:animate-out data-[state=closed]:slide-out-to-right data-[state=closed]:fade-out-0"
+        className="fixed z-50 bg-background flex flex-col shadow-2xl border-l border-border overflow-hidden data-[state=open]:animate-in data-[state=open]:slide-in-from-right data-[state=open]:fade-in-0 data-[state=closed]:animate-out data-[state=closed]:slide-out-to-right data-[state=closed]:fade-out-0"
         style={{
           left: panelStyle.left,
           width: panelStyle.width,
+          top: panelStyle.top,
+          bottom: panelStyle.bottom,
         }}
       >
         {/* Header - Modern and Premium */}

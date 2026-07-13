@@ -1,6 +1,7 @@
 import "dotenv/config";
 import { PrismaClient } from "@prisma/client";
 import bcrypt from "bcryptjs";
+import { withProjectCode } from "../src/lib/create-project";
 
 const prisma = new PrismaClient();
 
@@ -46,7 +47,9 @@ async function main() {
 
   const adminUser = await prisma.user.upsert({
     where: { email: "admin@allka.com" },
-    update: { is_active: false },
+    // update: {} de propósito — usuário existente nunca tem password_hash/
+    // is_active tocados por um seed reutilizável (só a criação define isso).
+    update: {},
     create: {
       email: "admin@allka.com",
       password_hash: sharedPassword,
@@ -60,7 +63,7 @@ async function main() {
 
   const adminUser2 = await prisma.user.upsert({
     where: { email: "suporte@allka.com" },
-    update: { is_active: false },
+    update: {},
     create: {
       email: "suporte@allka.com",
       password_hash: sharedPassword,
@@ -75,12 +78,7 @@ async function main() {
   // ─── Admin principal de teste ─────────────────────────────────────────────
   await prisma.user.upsert({
     where: { email: "cp@lamego.com.vc" },
-    update: {
-      name: "Vinicius Guardia",
-      password_hash: sharedPassword,
-      is_active: true,
-      admin_profile_id: masterProfile.id,
-    },
+    update: { name: "Vinicius Guardia", admin_profile_id: masterProfile.id },
     create: {
       email: "cp@lamego.com.vc",
       password_hash: sharedPassword,
@@ -95,7 +93,7 @@ async function main() {
   // ─── Usuários dev por tipo de conta (senha: SEED_TEST_USER_PASSWORD) ────────
   await prisma.user.upsert({
     where: { email: "nomade@allka.com.vc" },
-    update: { password_hash: sharedPassword, is_active: true },
+    update: {},
     create: {
       email: "nomade@allka.com.vc",
       password_hash: sharedPassword,
@@ -108,7 +106,7 @@ async function main() {
 
   await prisma.user.upsert({
     where: { email: "empresa@allka.com.vc" },
-    update: { password_hash: sharedPassword, is_active: true },
+    update: {},
     create: {
       email: "empresa@allka.com.vc",
       password_hash: sharedPassword,
@@ -121,7 +119,7 @@ async function main() {
 
   await prisma.user.upsert({
     where: { email: "agencia@allka.com.vc" },
-    update: { password_hash: sharedPassword, is_active: true },
+    update: {},
     create: {
       email: "agencia@allka.com.vc",
       password_hash: sharedPassword,
@@ -134,7 +132,7 @@ async function main() {
 
   await prisma.user.upsert({
     where: { email: "parceiro@allka.com.vc" },
-    update: { password_hash: sharedPassword, is_active: true },
+    update: {},
     create: {
       email: "parceiro@allka.com.vc",
       password_hash: sharedPassword,
@@ -148,7 +146,7 @@ async function main() {
   // ─── Usuário Líder ────────────────────────────────────────────────────────
   await prisma.user.upsert({
     where: { email: "lider@allka.com.vc" },
-    update: { password_hash: sharedPassword, is_active: true },
+    update: {},
     create: {
       email: "lider@allka.com.vc",
       password_hash: sharedPassword,
@@ -826,140 +824,170 @@ async function main() {
 
   // ─── Projects (10 total) ──────────────────────────────────────────────────
   const projects = await Promise.all([
-    prisma.project.create({
-      data: {
-        title: "Identidade Visual — TechCorp",
-        description: "Redesign completo da marca TechCorp",
-        client_id: companies[0].id,
-        status: "in-progress",
-        lifecycle: "avulso",
-        value: 2400,
-        progress: 45,
-        team_size: 2,
-        start_date: new Date("2026-03-15"),
-      },
-    }),
-    prisma.project.create({
-      data: {
-        title: "Gestão Social — Varejo Modas",
-        description: "Gerenciamento mensal das redes sociais",
-        client_id: companies[1].id,
-        status: "in-progress",
-        lifecycle: "mensal",
-        value: 1500,
-        progress: 70,
-        team_size: 1,
-        start_date: new Date("2026-02-01"),
-        billing_day: 5,
-      },
-    }),
-    prisma.project.create({
-      data: {
-        title: "Campanha de Lançamento — Sabor & Arte",
-        description: "Estratégia completa para novo cardápio",
-        client_id: companies[2].id,
-        status: "planning",
-        lifecycle: "avulso",
-        value: 3800,
-        progress: 10,
-        team_size: 3,
-        start_date: new Date("2026-04-01"),
-      },
-    }),
-    prisma.project.create({
-      data: {
-        title: "Site Institucional — Saúde Total",
-        description: "Desenvolvimento de site responsivo com blog",
-        client_id: companies[3].id,
-        status: "in-progress",
-        lifecycle: "avulso",
-        value: 4200,
-        progress: 60,
-        team_size: 2,
-        start_date: new Date("2026-01-20"),
-      },
-    }),
-    prisma.project.create({
-      data: {
-        title: "SEO + Tráfego — Nova Casa",
-        description: "Otimização SEO e campanhas de tráfego pago",
-        client_id: companies[4].id,
-        status: "in-progress",
-        lifecycle: "mensal",
-        value: 3200,
-        progress: 35,
-        team_size: 2,
-        start_date: new Date("2026-03-01"),
-        billing_day: 10,
-      },
-    }),
-    prisma.project.create({
-      data: {
-        title: "Branding — Advocacia JR",
-        description: "Identidade visual e papelaria jurídica",
-        client_id: companies[5].id,
-        status: "draft",
-        lifecycle: "avulso",
-        value: 2800,
-        progress: 0,
-        team_size: 0,
-        start_date: new Date("2026-05-01"),
-      },
-    }),
-    prisma.project.create({
-      data: {
-        title: "Social Media — FitLife",
-        description: "Gestão de Instagram e TikTok para academia",
-        client_id: companies[6].id,
-        status: "completed",
-        lifecycle: "mensal",
-        value: 1800,
-        progress: 100,
-        team_size: 1,
-        start_date: new Date("2025-12-01"),
-        end_date: new Date("2026-02-28"),
-      },
-    }),
-    prisma.project.create({
-      data: {
-        title: "E-commerce — Amigo Fiel",
-        description: "Loja virtual completa para pet shop",
-        client_id: companies[7].id,
-        status: "in-progress",
-        lifecycle: "avulso",
-        value: 7200,
-        progress: 25,
-        team_size: 3,
-        start_date: new Date("2026-03-10"),
-      },
-    }),
-    prisma.project.create({
-      data: {
-        title: "Vídeo Institucional — Crescer",
-        description: "Vídeo institucional + campanha de matrículas",
-        client_id: companies[8].id,
-        status: "cancelled",
-        lifecycle: "avulso",
-        value: 3500,
-        progress: 15,
-        team_size: 2,
-        start_date: new Date("2026-02-15"),
-        end_date: new Date("2026-03-01"),
-      },
-    }),
-    prisma.project.create({
-      data: {
-        title: "Landing Page — StartupX",
-        description: "Landing page de captação para lançamento",
-        client_id: companies[9].id,
-        status: "planning",
-        lifecycle: "avulso",
-        value: 1600,
-        progress: 5,
-        team_size: 1,
-        start_date: new Date("2026-04-15"),
-      },
-    }),
+    withProjectCode(prisma, (tx, projectCode) =>
+      tx.project.create({
+        data: {
+          title: "Identidade Visual — TechCorp",
+          description: "Redesign completo da marca TechCorp",
+          client_id: companies[0].id,
+          status: "in-progress",
+          lifecycle: "avulso",
+          value: 2400,
+          progress: 45,
+          team_size: 2,
+          start_date: new Date("2026-03-15"),
+          project_code: projectCode,
+        },
+      }),
+    ),
+    withProjectCode(prisma, (tx, projectCode) =>
+      tx.project.create({
+        data: {
+          title: "Gestão Social — Varejo Modas",
+          description: "Gerenciamento mensal das redes sociais",
+          client_id: companies[1].id,
+          status: "in-progress",
+          lifecycle: "mensal",
+          value: 1500,
+          progress: 70,
+          team_size: 1,
+          start_date: new Date("2026-02-01"),
+          billing_day: 5,
+          project_code: projectCode,
+        },
+      }),
+    ),
+    withProjectCode(prisma, (tx, projectCode) =>
+      tx.project.create({
+        data: {
+          title: "Campanha de Lançamento — Sabor & Arte",
+          description: "Estratégia completa para novo cardápio",
+          client_id: companies[2].id,
+          status: "planning",
+          lifecycle: "avulso",
+          value: 3800,
+          progress: 10,
+          team_size: 3,
+          start_date: new Date("2026-04-01"),
+          project_code: projectCode,
+        },
+      }),
+    ),
+    withProjectCode(prisma, (tx, projectCode) =>
+      tx.project.create({
+        data: {
+          title: "Site Institucional — Saúde Total",
+          description: "Desenvolvimento de site responsivo com blog",
+          client_id: companies[3].id,
+          status: "in-progress",
+          lifecycle: "avulso",
+          value: 4200,
+          progress: 60,
+          team_size: 2,
+          start_date: new Date("2026-01-20"),
+          project_code: projectCode,
+        },
+      }),
+    ),
+    withProjectCode(prisma, (tx, projectCode) =>
+      tx.project.create({
+        data: {
+          title: "SEO + Tráfego — Nova Casa",
+          description: "Otimização SEO e campanhas de tráfego pago",
+          client_id: companies[4].id,
+          status: "in-progress",
+          lifecycle: "mensal",
+          value: 3200,
+          progress: 35,
+          team_size: 2,
+          start_date: new Date("2026-03-01"),
+          billing_day: 10,
+          project_code: projectCode,
+        },
+      }),
+    ),
+    withProjectCode(prisma, (tx, projectCode) =>
+      tx.project.create({
+        data: {
+          title: "Branding — Advocacia JR",
+          description: "Identidade visual e papelaria jurídica",
+          client_id: companies[5].id,
+          status: "draft",
+          lifecycle: "avulso",
+          value: 2800,
+          progress: 0,
+          team_size: 0,
+          start_date: new Date("2026-05-01"),
+          project_code: projectCode,
+        },
+      }),
+    ),
+    withProjectCode(prisma, (tx, projectCode) =>
+      tx.project.create({
+        data: {
+          title: "Social Media — FitLife",
+          description: "Gestão de Instagram e TikTok para academia",
+          client_id: companies[6].id,
+          status: "completed",
+          lifecycle: "mensal",
+          value: 1800,
+          progress: 100,
+          team_size: 1,
+          start_date: new Date("2025-12-01"),
+          end_date: new Date("2026-02-28"),
+          project_code: projectCode,
+        },
+      }),
+    ),
+    withProjectCode(prisma, (tx, projectCode) =>
+      tx.project.create({
+        data: {
+          title: "E-commerce — Amigo Fiel",
+          description: "Loja virtual completa para pet shop",
+          client_id: companies[7].id,
+          status: "in-progress",
+          lifecycle: "avulso",
+          value: 7200,
+          progress: 25,
+          team_size: 3,
+          start_date: new Date("2026-03-10"),
+          project_code: projectCode,
+        },
+      }),
+    ),
+    withProjectCode(prisma, (tx, projectCode) =>
+      tx.project.create({
+        data: {
+          title: "Vídeo Institucional — Crescer",
+          description: "Vídeo institucional + campanha de matrículas",
+          client_id: companies[8].id,
+          status: "cancelled",
+          lifecycle: "avulso",
+          value: 3500,
+          progress: 15,
+          team_size: 2,
+          start_date: new Date("2026-02-15"),
+          end_date: new Date("2026-03-01"),
+          project_code: projectCode,
+        },
+      }),
+    ),
+    withProjectCode(prisma, (tx, projectCode) =>
+      tx.project.create({
+        data: {
+          title: "Landing Page — StartupX",
+          description: "Landing page de captação para lançamento",
+          client_id: companies[9].id,
+          status: "planning",
+          lifecycle: "avulso",
+          value: 1600,
+          progress: 5,
+          team_size: 1,
+          start_date: new Date("2026-04-15"),
+          project_code: projectCode,
+        },
+      }),
+    ),
   ]);
 
   // ─── Task Executions (10 total) ───────────────────────────────────────────
@@ -1299,105 +1327,47 @@ async function main() {
   });
 
   // ─── Campaigns (10 total — mix coupon / link / referral) ──────────────────
-  const campaigns = await Promise.all([
-    prisma.campaign.create({
-      data: {
-        name: "Campanha Verão 2026",
-        type: "coupon",
-        status: "active",
-        commission_type: "percentage",
-        commission_value: 8,
-        coupon_code: "VERAO2026",
-      },
-    }),
-    prisma.campaign.create({
-      data: {
-        name: "Cupom Primeira Compra",
-        type: "coupon",
-        status: "active",
-        commission_type: "percentage",
-        commission_value: 15,
-        coupon_code: "PRIMEIRA15",
-      },
-    }),
-    prisma.campaign.create({
-      data: {
-        name: "Desconto Black Friday",
-        type: "coupon",
-        status: "inactive",
-        commission_type: "percentage",
-        commission_value: 25,
-        coupon_code: "BLACK25",
-        start_date: new Date("2026-11-20"),
-        end_date: new Date("2026-11-30"),
-      },
-    }),
-    prisma.campaign.create({
-      data: {
-        name: "Cupom Fidelidade 5%",
-        type: "coupon",
-        status: "active",
-        commission_type: "percentage",
-        commission_value: 5,
-        coupon_code: "FIEL5",
-      },
-    }),
-    prisma.campaign.create({
-      data: {
-        name: "Link Afiliado — Blog Tech",
-        type: "link",
-        status: "active",
-        commission_type: "percentage",
-        commission_value: 10,
-      },
-    }),
-    prisma.campaign.create({
-      data: {
-        name: "Link Afiliado — YouTube",
-        type: "link",
-        status: "active",
-        commission_type: "fixed",
-        commission_value: 50,
-      },
-    }),
-    prisma.campaign.create({
-      data: {
-        name: "Link Afiliado — Influencer",
-        type: "link",
-        status: "paused",
-        commission_type: "percentage",
-        commission_value: 12,
-      },
-    }),
-    prisma.campaign.create({
-      data: {
-        name: "Indicação Amigo — R$30",
-        type: "referral",
-        status: "active",
-        commission_type: "fixed",
-        commission_value: 30,
-      },
-    }),
-    prisma.campaign.create({
-      data: {
-        name: "Indicação Premium",
-        type: "referral",
-        status: "active",
-        commission_type: "percentage",
-        commission_value: 7,
-      },
-    }),
-    prisma.campaign.create({
-      data: {
-        name: "Cupom Parceiro Carlos",
-        type: "coupon",
-        status: "active",
-        commission_type: "percentage",
-        commission_value: 8,
-        coupon_code: "CARLOS10",
-      },
-    }),
-  ]);
+  // Idempotente: campanhas com coupon_code usam essa chave única real
+  // (upsert); as sem coupon_code (link/referral) não têm nenhuma chave
+  // natural no schema além do id, então usam "create apenas se não existir
+  // uma campanha com este name" — nunca substitui coupon_code por um valor
+  // aleatório só pra evitar colisão.
+  const campaignSpecs = [
+    { name: "Campanha Verão 2026", type: "coupon", status: "active", commission_type: "percentage", commission_value: 8, coupon_code: "VERAO2026" },
+    { name: "Cupom Primeira Compra", type: "coupon", status: "active", commission_type: "percentage", commission_value: 15, coupon_code: "PRIMEIRA15" },
+    { name: "Desconto Black Friday", type: "coupon", status: "inactive", commission_type: "percentage", commission_value: 25, coupon_code: "BLACK25", start_date: new Date("2026-11-20"), end_date: new Date("2026-11-30") },
+    { name: "Cupom Fidelidade 5%", type: "coupon", status: "active", commission_type: "percentage", commission_value: 5, coupon_code: "FIEL5" },
+    { name: "Link Afiliado — Blog Tech", type: "link", status: "active", commission_type: "percentage", commission_value: 10 },
+    { name: "Link Afiliado — YouTube", type: "link", status: "active", commission_type: "fixed", commission_value: 50 },
+    { name: "Link Afiliado — Influencer", type: "link", status: "paused", commission_type: "percentage", commission_value: 12 },
+    { name: "Indicação Amigo — R$30", type: "referral", status: "active", commission_type: "fixed", commission_value: 30 },
+    { name: "Indicação Premium", type: "referral", status: "active", commission_type: "percentage", commission_value: 7 },
+    { name: "Cupom Parceiro Carlos", type: "coupon", status: "active", commission_type: "percentage", commission_value: 8, coupon_code: "CARLOS10" },
+  ];
+
+  const campaigns = [];
+  for (const spec of campaignSpecs) {
+    const { name, type, status, commission_type, commission_value, coupon_code, start_date, end_date } = spec;
+    const mutableData = { name, type, status, commission_type, commission_value, coupon_code: coupon_code ?? null, start_date: start_date ?? null, end_date: end_date ?? null };
+
+    if (coupon_code) {
+      campaigns.push(
+        await prisma.campaign.upsert({
+          where: { coupon_code },
+          update: mutableData,
+          create: mutableData,
+        }),
+      );
+      continue;
+    }
+
+    const existing = await prisma.campaign.findFirst({ where: { name, coupon_code: null } });
+    campaigns.push(
+      existing
+        ? await prisma.campaign.update({ where: { id: existing.id }, data: mutableData })
+        : await prisma.campaign.create({ data: mutableData }),
+    );
+  }
 
   // ─── Agency ────────────────────────────────────────────────────────────────
   const existingAgency = await prisma.agency.findUnique({
@@ -1823,7 +1793,8 @@ async function main() {
 
   await prisma.user.upsert({
     where: { email: "company@allka.test" },
-    update: { password_hash: sharedPassword, company_id: CT_COMPANY_ID, is_active: true },
+    // company_id não é sensível (vínculo estrutural) — seguro sincronizar.
+    update: { company_id: CT_COMPANY_ID },
     create: {
       email: "company@allka.test",
       password_hash: sharedPassword,
@@ -1853,11 +1824,13 @@ async function main() {
     { id: "proj-ct-08", title: "Consultoria SEO — Auditoria Técnica",    type: "Consultoria",            status: "cancelado", value: 1800,  budget: 1800,  progress: 20,  start_date: daysAgo(200), end_date: daysAgo(150) },
   ];
   for (const proj of ctProjects) {
-    await prisma.project.upsert({
-      where: { id: proj.id },
-      update: { ...proj },
-      create: { ...proj, client_id: CT_COMPANY_ID },
-    });
+    await withProjectCode(prisma, (tx, projectCode) =>
+      tx.project.upsert({
+        where: { id: proj.id },
+        update: { ...proj },
+        create: { ...proj, client_id: CT_COMPANY_ID, project_code: projectCode },
+      }),
+    );
   }
 
   // Tasks
@@ -1949,7 +1922,7 @@ async function main() {
       console.log("⚠️  Modelos tarefas (0):  npx tsx migrate-tasks.ts");
     }
     if (projectTaskCount === 0) {
-      console.log("⚠️  Tarefas operat. (0):  node seed-in-progress.cjs");
+      console.log("⚠️  Tarefas operat. (0):  npx tsx src/scripts/seed-in-progress.ts");
     }
     console.log("⚠️  ─────────────────────────────────────────────────────\n");
   }

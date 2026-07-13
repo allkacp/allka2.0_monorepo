@@ -3140,8 +3140,7 @@ export default function UsuariosPage() {
         onClose={() => setColConfigOpen(false)}
         title="Configurar colunas"
         subtitle="Escolha quais colunas aparecem na tabela"
-        widthMode="compact"
-        compactWidth={360}
+        widthMode="full"
       >
         <div className="p-5 flex-1 overflow-y-auto space-y-2">
           {ALL_COLUMNS.map((col) => (
@@ -3161,6 +3160,7 @@ export default function UsuariosPage() {
       {/* "+" info panel — real user data already loaded in the table, no extra fetch needed */}
       <SlidePanel
         open={infoPanelOpen}
+        widthMode="full"
         onClose={() => setInfoPanelOpen(false)}
         title={
           infoPanelUser && (

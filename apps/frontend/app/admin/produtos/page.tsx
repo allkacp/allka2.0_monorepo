@@ -513,7 +513,7 @@ export default function AdminProdutosPage() {
   const { specialties } = useSpecialties();
   const { toast } = useToast();
   const { sidebarWidth } = useSidebar();
-  const { headerHeight: frameHeaderHeight, footerHeight: frameFooterHeight } = useAppFrameMetrics();
+  const { headerHeight, footerHeight } = useAppFrameMetrics();
 
   // Filters and view mode state
   const [searchTerm, setSearchTerm] = useState("");
@@ -559,8 +559,6 @@ export default function AdminProdutosPage() {
     "status",
     "ordenar",
   ]);
-  const headerHeight = 64;
-  const footerHeight = 40;
 
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
   const [isProductSheetOpen, setIsProductSheetOpen] = useState(false); // Renamed from isCreateOpen
@@ -3624,6 +3622,8 @@ export default function AdminProdutosPage() {
           style={{
             left: `${sidebarWidth}px`,
             width: `calc(100vw - ${sidebarWidth}px)`,
+            top: `${headerHeight - 1}px`,
+            bottom: `${footerHeight - 1}px`,
           }}
         >
           <ModalBrandHeader
@@ -3859,6 +3859,8 @@ export default function AdminProdutosPage() {
           style={{
             left: `${sidebarWidth}px`,
             width: `calc(100vw - ${sidebarWidth}px)`,
+            top: `${headerHeight - 1}px`,
+            bottom: `${footerHeight - 1}px`,
           }}
         >
           <ModalBrandHeader
@@ -4130,6 +4132,8 @@ export default function AdminProdutosPage() {
           style={{
             left: `${sidebarWidth}px`,
             width: `calc(100vw - ${sidebarWidth}px)`,
+            top: `${headerHeight - 1}px`,
+            bottom: `${footerHeight - 1}px`,
           }}
         >
           <ModalBrandHeader
@@ -4485,8 +4489,8 @@ export default function AdminProdutosPage() {
           className="p-0 flex flex-col z-[70] [&>button:last-child]:top-3 [&>button:last-child]:right-3 [&>button:last-child]:p-1.5 [&>button:last-child]:hover:bg-white/20 [&>button:last-child_svg]:size-4"
           style={{
             left: `${sidebarWidth - 2}px`,
-            top: `${frameHeaderHeight - 1}px`,
-            bottom: `${frameFooterHeight - 1}px`,
+            top: `${headerHeight - 1}px`,
+            bottom: `${footerHeight - 1}px`,
             height: "auto",
             width: `calc(100vw - ${sidebarWidth - 2}px)`,
           }}
@@ -6460,8 +6464,8 @@ export default function AdminProdutosPage() {
           className="p-0 flex flex-col z-[70] [&>button:last-child]:top-3 [&>button:last-child]:right-3 [&>button:last-child]:p-1.5 [&>button:last-child]:hover:bg-white/20 [&>button:last-child_svg]:size-4"
           style={{
             left: `${sidebarWidth - 2}px`,
-            top: `${frameHeaderHeight - 1}px`,
-            bottom: `${frameFooterHeight - 1}px`,
+            top: `${headerHeight - 1}px`,
+            bottom: `${footerHeight - 1}px`,
             height: "auto",
             width: `calc(100vw - ${sidebarWidth - 2}px)`,
           }}
