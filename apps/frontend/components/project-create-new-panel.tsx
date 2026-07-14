@@ -610,7 +610,11 @@ export function ProjectCreateNewPanel({
   // (each Company.user is both a possible client contact AND consultant).
   useEffect(() => {
     if (!open) return;
-    if (allowCompanySelect && !resolvedCompanyId) {
+    // No resolved company → nothing to scope the query to. Without this,
+    // an unscoped getUsers() call would return every platform user (e.g.
+    // for Agency, which has no company_id to filter by), flooding the
+    // consultant/client pickers instead of falling back to plain text inputs.
+    if (!resolvedCompanyId) {
       setLocalConsultants([]);
       setLoadingConsultants(false);
       return;
@@ -1662,7 +1666,82 @@ export function ProjectCreateNewPanel({
       <SlidePanel
         open={open}
         onClose={handleClose}
-        title={formData.nome || (cloneMode ? "Clonar Projeto" : "Novo Projeto")}
+        title={
+          <>
+            <div className="relative flex-shrink-0">
+              <button
+                onClick={handleAvatarClick}
+                title="Imagem do projeto (opcional)"
+                className="relative h-11 w-11 rounded-full bg-white/10 border-2 border-white/40 shadow group overflow-hidden hover:border-white/70 transition-all"
+              >
+                <div className="absolute inset-0 flex items-center justify-center bg-gradient-to-br from-blue-600 to-violet-600">
+                  <FolderKanban className="h-5 w-5 text-white/80" />
+                </div>
+                {avatarPreview && (
+                  <img
+                    src={avatarPreview}
+                    alt="logo"
+                    className="absolute inset-0 w-full h-full object-cover"
+                  />
+                )}
+                <div className="absolute inset-0 bg-black/50 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity rounded-full">
+                  <Camera className="h-3.5 w-3.5 text-white" />
+                </div>
+              </button>
+
+              {/* Avatar menu — positioned relative to the avatar itself */}
+              {showAvatarMenu && avatarPreview && (
+                <>
+                  <div
+                    className="fixed inset-0 z-40"
+                    onClick={() => setShowAvatarMenu(false)}
+                  />
+                  <div className="absolute z-50 top-full left-0 mt-1 bg-white rounded-xl shadow-2xl border border-gray-100 overflow-hidden min-w-[172px]">
+                    <button
+                      onClick={() => {
+                        setShowAvatarMenu(false);
+                        setTimeout(() => fileInputRef.current?.click(), 10);
+                      }}
+                      className="flex items-center gap-2.5 w-full px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
+                    >
+                      <Camera className="h-3.5 w-3.5 text-gray-400" />
+                      Nova foto
+                    </button>
+                    {originalRawSrc && (
+                      <button
+                        onClick={() => {
+                          setShowAvatarMenu(false);
+                          setRawImageSrc(originalRawSrc);
+                          setCropZoom(1);
+                          setCropOffset({ x: 0, y: 0 });
+                          setCropOpen(true);
+                        }}
+                        className="flex items-center gap-2.5 w-full px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 transition-colors border-t border-gray-100"
+                      >
+                        <ZoomIn className="h-3.5 w-3.5 text-gray-400" />
+                        Reposicionar
+                      </button>
+                    )}
+                    <button
+                      onClick={() => {
+                        setShowAvatarMenu(false);
+                        setAvatarPreview(null);
+                        setOriginalRawSrc(null);
+                      }}
+                      className="flex items-center gap-2.5 w-full px-4 py-2.5 text-sm text-red-500 hover:bg-red-50 transition-colors border-t border-gray-100"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                      Remover foto
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
+            <span className="truncate">
+              {formData.nome || (cloneMode ? "Clonar Projeto" : "Novo Projeto")}
+            </span>
+          </>
+        }
         subtitle={cloneMode ? "Clonar projeto existente" : "Configure os dados do projeto"}
         widthMode="full"
         footer={
@@ -1717,87 +1796,6 @@ export function ProjectCreateNewPanel({
             className="hidden"
             onChange={handleFileChange}
           />
-
-          {/* Project identity — moved from header per the global modal standard (plain text-only header) */}
-          <div className="flex items-center gap-3 px-6 py-4 border-b border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/40 flex-shrink-0">
-            <div className="relative flex-shrink-0">
-              <button
-                onClick={handleAvatarClick}
-                className="relative h-16 w-16 rounded-full bg-slate-200 dark:bg-slate-700 border-2 border-white dark:border-slate-800 shadow group overflow-hidden hover:border-blue-300 transition-all"
-              >
-                <div className="absolute inset-0 flex items-center justify-center bg-gradient-to-br from-blue-600 to-violet-600">
-                  <FolderKanban className="h-6 w-6 text-white/80" />
-                </div>
-                {avatarPreview && (
-                  <img
-                    src={avatarPreview}
-                    alt="logo"
-                    className="absolute inset-0 w-full h-full object-cover"
-                  />
-                )}
-                <div className="absolute inset-0 bg-black/50 flex flex-col items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity rounded-full">
-                  <Camera className="h-4 w-4 text-white" />
-                  <span className="text-[8px] text-white/90 font-medium mt-0.5">
-                    {avatarPreview ? "Editar" : "Foto"}
-                  </span>
-                </div>
-              </button>
-
-              {/* Avatar menu — positioned relative to the avatar itself */}
-              {showAvatarMenu && avatarPreview && (
-                <>
-                  <div
-                    className="fixed inset-0 z-40"
-                    onClick={() => setShowAvatarMenu(false)}
-                  />
-                  <div className="absolute z-50 top-full left-0 mt-1 bg-white rounded-xl shadow-2xl border border-gray-100 overflow-hidden min-w-[172px]">
-                    <button
-                      onClick={() => {
-                        setShowAvatarMenu(false);
-                        setTimeout(() => fileInputRef.current?.click(), 10);
-                      }}
-                      className="flex items-center gap-2.5 w-full px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
-                    >
-                      <Camera className="h-3.5 w-3.5 text-gray-400" />
-                      Nova foto
-                    </button>
-                    {originalRawSrc && (
-                      <button
-                        onClick={() => {
-                          setShowAvatarMenu(false);
-                          setRawImageSrc(originalRawSrc);
-                          setCropZoom(1);
-                          setCropOffset({ x: 0, y: 0 });
-                          setCropOpen(true);
-                        }}
-                        className="flex items-center gap-2.5 w-full px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 transition-colors border-t border-gray-100"
-                      >
-                        <ZoomIn className="h-3.5 w-3.5 text-gray-400" />
-                        Reposicionar
-                      </button>
-                    )}
-                    <button
-                      onClick={() => {
-                        setShowAvatarMenu(false);
-                        setAvatarPreview(null);
-                        setOriginalRawSrc(null);
-                      }}
-                      className="flex items-center gap-2.5 w-full px-4 py-2.5 text-sm text-red-500 hover:bg-red-50 transition-colors border-t border-gray-100"
-                    >
-                      <Trash2 className="h-3.5 w-3.5" />
-                      Remover foto
-                    </button>
-                  </div>
-                </>
-              )}
-            </div>
-            <div className="min-w-0">
-              <p className="text-sm font-semibold text-slate-700 dark:text-slate-200">
-                {formData.nome || (cloneMode ? "Clonar Projeto" : "Novo Projeto")}
-              </p>
-              <p className="text-xs text-slate-400">Imagem do projeto (opcional)</p>
-            </div>
-          </div>
 
           {/* Crop overlay */}
           {cropOpen && rawImageSrc && (

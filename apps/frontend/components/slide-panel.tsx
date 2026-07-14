@@ -111,9 +111,9 @@ export function SlidePanel({
         }}
       >
         <div className="min-w-0 flex-1 truncate">
-          <p className="text-base font-semibold text-white truncate">
+          <div className="text-base font-semibold text-white truncate flex items-center gap-3">
             {title}
-          </p>
+          </div>
           {subtitle && (
             <p className="text-xs font-normal text-white/70 mt-1 truncate">
               {subtitle}

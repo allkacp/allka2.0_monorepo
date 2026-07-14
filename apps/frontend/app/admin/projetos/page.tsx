@@ -5139,8 +5139,9 @@ export default function AdminProjetosPage({
           }}
           initialData={projectCreateData}
           cloneMode={!!projectCreateData && !draftPanelProjectId}
-          allowCompanySelect={!projectCreateData}
+          allowCompanySelect={scope === "admin" && !projectCreateData}
           agencyName={scope === "agency" ? agencyName : undefined}
+          companyName={scope === "agency" ? agencyName : undefined}
           draftProducts={
             draftPanelProducts.length > 0 ? draftPanelProducts : undefined
           }

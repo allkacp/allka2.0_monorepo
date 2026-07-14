@@ -1408,17 +1408,17 @@
 
   /* Brand surface - applies the theme gradient globally */
   .brand-surface {
-    background: var(--brand-gradient, linear-gradient(135deg, #000000 0%, #1a2a6f 45%, #c81a7f 100%));
+    background: var(--brand-gradient, linear-gradient(to bottom, #0b1336 0%, #12205e 28%, #2d1a6e 52%, #7d1b6a 78%, #c81a7f 100%));
   }
 
   .brand-surface-subtle {
-    background: var(--brand-gradient, linear-gradient(135deg, #000000 0%, #1a2a6f 45%, #c81a7f 100%));
+    background: var(--brand-gradient, linear-gradient(to bottom, #0b1336 0%, #12205e 28%, #2d1a6e 52%, #7d1b6a 78%, #c81a7f 100%));
     opacity: 0.1;
   }
 
   /* App brand header - unified header style for company modals */
   .app-brand-header {
-    background: var(--app-brand-header, var(--app-brand-gradient, linear-gradient(135deg, #000000 0%, #1a2a6f 45%, #c81a7f 100%)));
+    background: var(--app-brand-header, var(--app-brand-gradient, linear-gradient(to bottom, #0b1336 0%, #12205e 28%, #2d1a6e 52%, #7d1b6a 78%, #c81a7f 100%)));
     color: white;
     min-height: 100px;
   }
@@ -1440,13 +1440,13 @@
 
   /* Superfície principal do sistema */
   .app-brand-surface {
-    background: var(--app-brand-bg, linear-gradient(135deg, #000000 0%, #1a2a6f 45%, #c81a7f 100%));
+    background: var(--app-brand-bg, linear-gradient(to bottom, #0b1336 0%, #12205e 28%, #2d1a6e 52%, #7d1b6a 78%, #c81a7f 100%));
     color: white;
   }
 
   /* Versão suave para áreas internas */
   .app-brand-soft {
-    background: color-mix(in srgb, var(--app-brand-bg, linear-gradient(135deg, #000000 0%, #1a2a6f 45%, #c81a7f 100%)) 12%, transparent);
+    background: color-mix(in srgb, var(--app-brand-bg, linear-gradient(to bottom, #0b1336 0%, #12205e 28%, #2d1a6e 52%, #7d1b6a 78%, #c81a7f 100%)) 12%, transparent);
   }
 }
 
@@ -1527,7 +1527,7 @@
 }
 
 ::-webkit-scrollbar-thumb {
-  background: var(--brand-gradient, linear-gradient(135deg, #000000 0%, #1a2a6f 45%, #c81a7f 100%));
+  background: var(--brand-gradient, linear-gradient(to bottom, #0b1336 0%, #12205e 28%, #2d1a6e 52%, #7d1b6a 78%, #c81a7f 100%));
   border-radius: 999px;
   transition: filter 0.2s;
 }
@@ -1544,7 +1544,7 @@
 /* Follows the sidebar theme via --app-brand-gradient (sidebar-context.tsx) */
 .btn-brand,
 .btn-brand:not([disabled]) {
-  background: var(--app-brand-button, var(--app-brand-gradient, linear-gradient(135deg, #000000 0%, #1a2a6f 45%, #c81a7f 100%))) !important;
+  background: var(--app-brand-button, var(--app-brand-gradient, linear-gradient(to bottom, #0b1336 0%, #12205e 28%, #2d1a6e 52%, #7d1b6a 78%, #c81a7f 100%))) !important;
   color: #fff !important;
   border: 1px solid rgba(255,255,255,0.45) !important;
   box-shadow: 0 2px 8px rgba(0,0,0,0.25) !important;
@@ -1956,7 +1956,7 @@
   background: transparent;
 }
 .empresas-table-scroll::-webkit-scrollbar-thumb {
-  background: var(--brand-gradient, linear-gradient(135deg, #000000 0%, #1a2a6f 45%, #c81a7f 100%));
+  background: var(--brand-gradient, linear-gradient(to bottom, #0b1336 0%, #12205e 28%, #2d1a6e 52%, #7d1b6a 78%, #c81a7f 100%));
   border-radius: 999px;
 }
 .empresas-table-scroll::-webkit-scrollbar-thumb:hover {

@@ -82,7 +82,10 @@ const SidebarContext = createContext<SidebarContextType | undefined>(undefined);
 
 // Lookup: Tailwind bg-* class names → valid CSS color values
 const BG_TO_CSS: Record<string, string> = {
-  "bg-slate-900": "#0f172a",
+  // "bg-slate-900" is the default/reset sidebar background — sidebar.tsx paints it as
+  // a vertical 5-stop gradient (see getSidebarStyle's `!bg || bg === "bg-slate-900"` branch),
+  // so the CSS var driving buttons/headers/scrollbars must match that exact gradient, not a flat color.
+  "bg-slate-900": "linear-gradient(to bottom, #0b1336 0%, #12205e 28%, #2d1a6e 52%, #7d1b6a 78%, #c81a7f 100%)",
   "bg-blue-900": "#1e3a8a",
   "bg-blue-800": "#1e40af",
   "bg-slate-800": "#1e293b",
@@ -97,7 +100,7 @@ const BG_TO_CSS: Record<string, string> = {
 
 function bgToCSS(bg: string): string {
   if (!bg)
-    return "linear-gradient(135deg, #000000 0%, #1a2a6f 45%, #c81a7f 100%)";
+    return "linear-gradient(to bottom, #0b1336 0%, #12205e 28%, #2d1a6e 52%, #7d1b6a 78%, #c81a7f 100%)";
   if (bg.startsWith("custom-gradient:"))
     return bg.replace("custom-gradient:", "");
   if (BG_TO_CSS[bg]) return BG_TO_CSS[bg];

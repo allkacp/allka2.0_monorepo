@@ -92,6 +92,13 @@ import {
 import { ItemsPerPageSelect } from "@/components/items-per-page-select";
 import { UserCreateSlidePanel } from "@/components/user-create-slide-panel";
 import { ConfirmationDialog } from "@/components/confirmation-dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from "@/components/ui/dialog";
 import { createPortal } from "react-dom";
 import { usePlatformUsers } from "@/contexts/platform-users-context";
 import { apiClient } from "@/lib/api-client";
@@ -104,6 +111,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { useToast } from "@/components/ui/use-toast";
 import { useSidebar } from "@/contexts/sidebar-context";
+import { useAppFrameMetrics } from "@/hooks/useAppFrameMetrics";
 import { PageHeader } from "@/components/page-header";
 
 type ColKey = "codigo" | "usuario" | "contato" | "tipo_funcao" | "vinculo" | "status" | "ultimo_acesso";
@@ -175,6 +183,7 @@ export default function UsuariosPage() {
   });
   const { toast } = useToast();
   const { sidebarWidth, sidebarSettings, previewTheme } = useSidebar();
+  const { headerHeight: infoModalHeaderHeight } = useAppFrameMetrics();
   const [visibleCols, setVisibleCols] = useState<Set<ColKey>>(new Set(DEFAULT_VISIBLE));
   const {
     tableScrollRef,
@@ -276,6 +285,7 @@ export default function UsuariosPage() {
   const searchBoxRef = useRef<HTMLDivElement>(null);
   const [infoPanelOpen, setInfoPanelOpen] = useState(false);
   const [infoPanelUser, setInfoPanelUser] = useState<any>(null);
+  const [avatarLightboxOpen, setAvatarLightboxOpen] = useState(false);
   // Alterar vínculo (Admin > Usuários) — vincular/desvincular/trocar a
   // empresa de um usuário via PUT /api/admin/users/:id/link. Só "empresas"
   // é suportado por enquanto (ver regra no backend).
@@ -2760,7 +2770,7 @@ export default function UsuariosPage() {
                                     <Plus className="h-3 w-3" />
                                   </button>
                                 </TooltipTrigger>
-                                <TooltipContent className="text-xs font-medium">Mais informações</TooltipContent>
+                                <TooltipContent className="text-xs font-medium">Clique para visualizar todas as informações</TooltipContent>
                               </Tooltip>
                             </TooltipProvider>
                             <TooltipProvider delayDuration={400}>
@@ -3158,194 +3168,276 @@ export default function UsuariosPage() {
       </SlidePanel>
 
       {/* "+" info panel — real user data already loaded in the table, no extra fetch needed */}
-      <SlidePanel
-        open={infoPanelOpen}
-        widthMode="full"
-        onClose={() => setInfoPanelOpen(false)}
-        title={
-          infoPanelUser && (
-            <div className="flex items-center gap-3">
-              <Avatar className="h-10 w-10 shadow-sm">
-                <AvatarFallback className="text-xs font-bold text-white bg-gradient-to-br from-blue-500 to-blue-700">
-                  {infoPanelUser.name.split(" ").map((n: string) => n[0]).join("").toUpperCase().slice(0, 2)}
-                </AvatarFallback>
-              </Avatar>
-              <div className="min-w-0">
-                <p className="truncate">{infoPanelUser.name}</p>
-              </div>
-            </div>
-          )
-        }
-        subtitle={infoPanelUser && infoPanelUser.email}
-      >
-        {infoPanelUser && (
-          <div className="flex-1 overflow-y-auto p-5">
-            <div className="max-w-3xl mx-auto space-y-6">
-              <div>
-                <h3 className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-3">
-                  Dados do usuário
-                </h3>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div className="rounded-xl border border-slate-200 dark:border-slate-700 p-3.5">
-                    <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide mb-1.5">Contato</p>
-                    <p className="flex items-center gap-1.5 text-sm text-slate-700 dark:text-slate-300">
-                      <Mail className="h-3.5 w-3.5 text-slate-400 flex-shrink-0" />
-                      {infoPanelUser.email || "—"}
-                    </p>
-                    <p className="flex items-center gap-1.5 text-sm text-slate-700 dark:text-slate-300 mt-1">
-                      <Phone className="h-3.5 w-3.5 text-slate-400 flex-shrink-0" />
-                      {infoPanelUser.phone || "—"}
-                    </p>
+      {/* Detalhes do usuário — modal centralizado (Dialog nativo cobre backdrop,
+          fechar por X/clique-fora/Esc). safe() nunca deixa undefined/null/NaN
+          vazar pra tela — sempre "—" como fallback. */}
+      <Dialog open={infoPanelOpen} onOpenChange={setInfoPanelOpen}>
+        <DialogContent
+          showCloseButton={false}
+          className="z-[100] sm:max-w-3xl lg:max-w-[min(1000px,calc(100vw-var(--sidebar-width,240px)-64px))] lg:left-[calc((100vw+var(--sidebar-width,240px))/2)] p-0 overflow-hidden flex flex-col max-h-[70vh]"
+          style={{ top: `calc(${infoModalHeaderHeight}px + (100vh - ${infoModalHeaderHeight}px) / 2)` }}
+        >
+          {infoPanelUser && (() => {
+            const safe = (v: unknown) => {
+              if (v === null || v === undefined) return "—";
+              if (typeof v === "number" && Number.isNaN(v)) return "—";
+              if (typeof v === "string" && v.trim() === "") return "—";
+              return v as React.ReactNode;
+            };
+            const safeBool = (v: unknown) => (v === true ? "Sim" : v === false ? "Não" : "—");
+            const safeDate = (v: unknown, withTime = false) => {
+              if (!v) return "—";
+              const d = new Date(v as string);
+              if (Number.isNaN(d.getTime())) return "—";
+              return withTime ? d.toLocaleString("pt-BR") : d.toLocaleDateString("pt-BR");
+            };
+            return (
+              <>
+                <DialogHeader className="app-brand-header relative shrink-0 flex flex-row items-center gap-3 px-6 py-2.5 min-h-[64px] text-white">
+                  <button
+                    type="button"
+                    onClick={() => setAvatarLightboxOpen(true)}
+                    className="shrink-0 rounded-full focus:outline-none focus:ring-2 focus:ring-white/50"
+                    title="Ver foto ampliada"
+                  >
+                    <Avatar className="h-11 w-11 shadow-md ring-2 ring-white/30 hover:ring-white/60 cursor-pointer transition-all">
+                      <AvatarFallback className="text-xs font-bold text-white bg-gradient-to-br from-blue-500 to-blue-700">
+                        {infoPanelUser.name.split(" ").map((n: string) => n[0]).join("").toUpperCase().slice(0, 2)}
+                      </AvatarFallback>
+                    </Avatar>
+                  </button>
+                  <div className="min-w-0 flex-1">
+                    <DialogTitle className="truncate text-white">Detalhes do usuário</DialogTitle>
+                    <DialogDescription className="truncate text-white/70">
+                      {safe(infoPanelUser.name)} · {safe(infoPanelUser.email)}
+                    </DialogDescription>
                   </div>
-                  <div className="rounded-xl border border-slate-200 dark:border-slate-700 p-3.5">
-                    <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide mb-1.5">Tipo · Função</p>
-                    <p className="text-sm text-slate-700 dark:text-slate-300">
-                      {getAccountTypeBadge(infoPanelUser.account_type, infoPanelUser.role).label} · {getRoleLabel(infoPanelUser.role)}
-                    </p>
-                  </div>
-                  <div className="rounded-xl border border-slate-200 dark:border-slate-700 p-3.5">
-                    <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide mb-1.5">Status</p>
-                    <div className="flex flex-wrap items-center gap-1.5">
-                      <span
-                        className={
-                          infoPanelUser.auto_paused
-                            ? "allka-badge allka-badge-status-pausado"
-                            : infoPanelUser.is_active
-                              ? "allka-badge allka-badge-status-ativo"
-                              : "allka-badge allka-badge-status-bloqueado"
-                        }
-                      >
-                        {infoPanelUser.auto_paused ? "Pausado" : infoPanelUser.is_active ? "Ativo" : "Bloqueado"}
-                      </span>
-                      {infoPanelUser.accessed_after_inactivity_pause && (
-                        <NeonBadge
-                          color="amber"
-                          tooltip="Usuário pausado por inatividade acessou recentemente. A conta permanece pausada até revisão administrativa."
-                        >
-                          Acesso após pausa
-                        </NeonBadge>
-                      )}
-                    </div>
-                    {infoPanelUser.accessed_after_inactivity_pause && (
-                      <p className="text-xs text-slate-400 dark:text-slate-500 mt-1.5">
-                        Conta pausada por inatividade. Houve acesso recente, mas ela permanece pausada até revisão.
-                        {infoPanelUser.inactivity_paused_accessed_at && (
-                          <> Último acesso pós-pausa: {new Date(infoPanelUser.inactivity_paused_accessed_at).toLocaleString("pt-BR")}.</>
-                        )}
-                      </p>
-                    )}
-                  </div>
-                  <div className="rounded-xl border border-slate-200 dark:border-slate-700 p-3.5">
-                    <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide mb-1.5">Último acesso</p>
-                    <p className="text-sm text-slate-700 dark:text-slate-300">
-                      {infoPanelUser.last_login ? new Date(infoPanelUser.last_login).toLocaleString("pt-BR") : "Nunca acessou"}
-                    </p>
-                  </div>
-                  <div className="rounded-xl border border-slate-200 dark:border-slate-700 p-3.5">
-                    <div className="flex items-center justify-between gap-2 mb-1.5">
-                      <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide">Conta vinculada</p>
-                      <TooltipProvider>
-                        <Tooltip>
-                          <TooltipTrigger asChild>
-                            <button
-                              type="button"
-                              onClick={() => infoPanelUser.account_type === "empresas" && openLinkPanel(infoPanelUser)}
-                              disabled={infoPanelUser.account_type !== "empresas"}
-                              className="text-[10px] font-semibold text-blue-600 dark:text-blue-400 hover:underline disabled:text-slate-300 disabled:no-underline dark:disabled:text-slate-600 disabled:cursor-not-allowed"
-                            >
-                              Alterar vínculo
-                            </button>
-                          </TooltipTrigger>
-                          {infoPanelUser.account_type !== "empresas" && (
-                            <TooltipContent className="text-xs max-w-[220px]">
-                              Vínculo de empresa só é suportado para usuários do tipo Empresa.
-                            </TooltipContent>
-                          )}
-                        </Tooltip>
-                      </TooltipProvider>
-                    </div>
-                    {(() => {
-                      const linked = getLinkedAccount(infoPanelUser);
-                      if (linked === "unknown")
-                        return (
-                          <div className="flex items-center gap-2">
-                            <p className="text-sm text-slate-700 dark:text-slate-300">Tipo desconhecido</p>
-                            <NeonBadge color="amber">TIPO DESCONHECIDO</NeonBadge>
-                          </div>
-                        );
-                      if (!linked)
-                        return (
-                          <div className="flex items-center gap-2">
-                            <p className="text-sm text-slate-700 dark:text-slate-300">Sem vínculo</p>
-                            <NeonBadge color="gray">NÃO VINCULADO</NeonBadge>
-                          </div>
-                        );
-                      const linkBadge = getAccountTypeBadge(infoPanelUser.profile_link_type, infoPanelUser.role);
-                      return (
-                        <div className="flex items-center gap-2">
-                          <p className="text-sm text-slate-700 dark:text-slate-300">{linked.name}</p>
-                          <NeonBadge color={linkBadge.badgeColor}>{linkBadge.label.toUpperCase()}</NeonBadge>
+                  <button
+                    type="button"
+                    onClick={() => setInfoPanelOpen(false)}
+                    className="absolute top-5 right-5 rounded-lg transition-all hover:bg-white/20 focus:outline-none focus:ring-2 focus:ring-white/40 p-1.5"
+                    title="Fechar"
+                    aria-label="Fechar"
+                  >
+                    <X className="size-6 text-white drop-shadow-md" />
+                    <span className="sr-only">Fechar</span>
+                  </button>
+                </DialogHeader>
+
+                <div className="flex-1 overflow-y-auto p-4">
+                  <div className="space-y-4">
+                    <div>
+                      <h3 className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-2">
+                        Dados do usuário
+                      </h3>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
+                        <div className="rounded-lg border border-slate-200 dark:border-slate-700 p-2">
+                          <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide mb-1">Contato</p>
+                          <p className="flex items-center gap-1.5 text-xs text-slate-700 dark:text-slate-300">
+                            <Mail className="h-3.5 w-3.5 text-slate-400 flex-shrink-0" />
+                            {safe(infoPanelUser.email)}
+                          </p>
+                          <p className="flex items-center gap-1.5 text-xs text-slate-700 dark:text-slate-300 mt-1">
+                            <Phone className="h-3.5 w-3.5 text-slate-400 flex-shrink-0" />
+                            {safe(infoPanelUser.phone)}
+                          </p>
+                          <p className="text-xs text-slate-700 dark:text-slate-300 mt-1">
+                            Usuário: {safe(infoPanelUser.username)}
+                          </p>
                         </div>
-                      );
-                    })()}
-                  </div>
-                  {infoPanelUser.leader_areas && infoPanelUser.leader_areas.length > 0 && (
-                    <div className="rounded-xl border border-slate-200 dark:border-slate-700 p-3.5">
-                      <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide mb-1.5">Áreas de liderança</p>
-                      <div className="flex flex-wrap gap-1.5">
-                        {infoPanelUser.leader_areas.map((area: string) => (
-                          <NeonBadge key={area} color="amber">{area}</NeonBadge>
-                        ))}
+                        <div className="rounded-lg border border-slate-200 dark:border-slate-700 p-2">
+                          <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide mb-1">Tipo · Função</p>
+                          <p className="text-xs text-slate-700 dark:text-slate-300">
+                            {getAccountTypeBadge(infoPanelUser.account_type, infoPanelUser.role).label} · {getRoleLabel(infoPanelUser.role)}
+                          </p>
+                        </div>
+                        <div className="rounded-lg border border-slate-200 dark:border-slate-700 p-2">
+                          <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide mb-1">Status</p>
+                          <div className="flex flex-wrap items-center gap-1.5">
+                            <span
+                              className={
+                                infoPanelUser.auto_paused
+                                  ? "allka-badge allka-badge-status-pausado"
+                                  : infoPanelUser.is_active
+                                    ? "allka-badge allka-badge-status-ativo"
+                                    : "allka-badge allka-badge-status-bloqueado"
+                              }
+                            >
+                              {infoPanelUser.auto_paused ? "Pausado" : infoPanelUser.is_active ? "Ativo" : "Bloqueado"}
+                            </span>
+                            {infoPanelUser.accessed_after_inactivity_pause && (
+                              <NeonBadge
+                                color="amber"
+                                tooltip="Usuário pausado por inatividade acessou recentemente. A conta permanece pausada até revisão administrativa."
+                              >
+                                Acesso após pausa
+                              </NeonBadge>
+                            )}
+                          </div>
+                          {infoPanelUser.accessed_after_inactivity_pause && (
+                            <p className="text-xs text-slate-400 dark:text-slate-500 mt-1">
+                              Conta pausada por inatividade. Houve acesso recente, mas ela permanece pausada até revisão.
+                              {infoPanelUser.inactivity_paused_accessed_at && (
+                                <> Último acesso pós-pausa: {safeDate(infoPanelUser.inactivity_paused_accessed_at, true)}.</>
+                              )}
+                            </p>
+                          )}
+                          <p className="text-xs text-slate-400 dark:text-slate-500 mt-1">
+                            Revisão de reativação pendente: {safeBool(infoPanelUser.reactivation_review_required)}
+                          </p>
+                        </div>
+                        <div className="rounded-lg border border-slate-200 dark:border-slate-700 p-2">
+                          <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide mb-1">Último acesso</p>
+                          <p className="text-xs text-slate-700 dark:text-slate-300">
+                            {infoPanelUser.last_login ? safeDate(infoPanelUser.last_login, true) : "Nunca acessou"}
+                          </p>
+                        </div>
+                        <div className="rounded-lg border border-slate-200 dark:border-slate-700 p-2">
+                          <div className="flex items-center justify-between gap-2 mb-1">
+                            <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide">Conta vinculada</p>
+                            <TooltipProvider>
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <button
+                                    type="button"
+                                    onClick={() => infoPanelUser.account_type === "empresas" && openLinkPanel(infoPanelUser)}
+                                    disabled={infoPanelUser.account_type !== "empresas"}
+                                    className="text-[10px] font-semibold text-blue-600 dark:text-blue-400 hover:underline disabled:text-slate-300 disabled:no-underline dark:disabled:text-slate-600 disabled:cursor-not-allowed"
+                                  >
+                                    Alterar vínculo
+                                  </button>
+                                </TooltipTrigger>
+                                {infoPanelUser.account_type !== "empresas" && (
+                                  <TooltipContent className="text-xs max-w-[220px]">
+                                    Vínculo de empresa só é suportado para usuários do tipo Empresa.
+                                  </TooltipContent>
+                                )}
+                              </Tooltip>
+                            </TooltipProvider>
+                          </div>
+                          {(() => {
+                            const linked = getLinkedAccount(infoPanelUser);
+                            if (linked === "unknown")
+                              return (
+                                <div className="flex items-center gap-2">
+                                  <p className="text-xs text-slate-700 dark:text-slate-300">Tipo desconhecido</p>
+                                  <NeonBadge color="amber">TIPO DESCONHECIDO</NeonBadge>
+                                </div>
+                              );
+                            if (!linked)
+                              return (
+                                <div className="flex items-center gap-2">
+                                  <p className="text-xs text-slate-700 dark:text-slate-300">Sem vínculo</p>
+                                  <NeonBadge color="gray">NÃO VINCULADO</NeonBadge>
+                                </div>
+                              );
+                            const linkBadge = getAccountTypeBadge(infoPanelUser.profile_link_type, infoPanelUser.role);
+                            return (
+                              <div className="flex items-center gap-2">
+                                <p className="text-xs text-slate-700 dark:text-slate-300">{linked.name}</p>
+                                <NeonBadge color={linkBadge.badgeColor}>{linkBadge.label.toUpperCase()}</NeonBadge>
+                              </div>
+                            );
+                          })()}
+                          <p className="text-xs text-slate-400 dark:text-slate-500 mt-1">
+                            Status do vínculo: {safe(infoPanelUser.profile_link_status)}
+                          </p>
+                        </div>
+                        {infoPanelUser.leader_areas && infoPanelUser.leader_areas.length > 0 && (
+                          <div className="rounded-lg border border-slate-200 dark:border-slate-700 p-2">
+                            <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide mb-1">Áreas de liderança</p>
+                            <div className="flex flex-wrap gap-1.5">
+                              {infoPanelUser.leader_areas.map((area: string) => (
+                                <NeonBadge key={area} color="amber">{area}</NeonBadge>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                        <div className="rounded-lg border border-slate-200 dark:border-slate-700 p-2">
+                          <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide mb-1">Membro desde</p>
+                          <p className="text-xs text-slate-700 dark:text-slate-300">
+                            {safeDate(infoPanelUser.created_at)}
+                          </p>
+                        </div>
+                        <div className="rounded-lg border border-slate-200 dark:border-slate-700 p-2">
+                          <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide mb-1">Atualizado em</p>
+                          <p className="text-xs text-slate-700 dark:text-slate-300">
+                            {safeDate(infoPanelUser.updated_at)}
+                          </p>
+                        </div>
+                        <div className="rounded-lg border border-slate-200 dark:border-slate-700 p-2">
+                          <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide mb-1">ID público</p>
+                          <p className="text-sm font-mono text-slate-700 dark:text-slate-300">{safe(infoPanelUser.user_code)}</p>
+                        </div>
+                        <div className="rounded-lg border border-slate-200 dark:border-slate-700 p-2">
+                          <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide mb-1">ID técnico</p>
+                          <p className="text-xs font-mono text-slate-500 dark:text-slate-400 truncate">{safe(infoPanelUser.id)}</p>
+                        </div>
+                        <div className="rounded-lg border border-slate-200 dark:border-slate-700 p-2.5 sm:col-span-2">
+                          <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide mb-1">IDs técnicos de vínculo</p>
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-1 text-xs font-mono text-slate-500 dark:text-slate-400">
+                            <p className="truncate">Agency: {safe(infoPanelUser.agency_id)}</p>
+                            <p className="truncate">Company: {safe(infoPanelUser.company_id)}</p>
+                            <p className="truncate">Partner: {safe(infoPanelUser.partner_profile_id)}</p>
+                            <p className="truncate">Nômade: {safe(infoPanelUser.nomad_id)}</p>
+                          </div>
+                        </div>
                       </div>
                     </div>
-                  )}
-                  <div className="rounded-xl border border-slate-200 dark:border-slate-700 p-3.5">
-                    <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide mb-1.5">Membro desde</p>
-                    <p className="text-sm text-slate-700 dark:text-slate-300">
-                      {infoPanelUser.created_at ? new Date(infoPanelUser.created_at).toLocaleDateString("pt-BR") : "—"}
-                    </p>
-                  </div>
-                  <div className="rounded-xl border border-slate-200 dark:border-slate-700 p-3.5">
-                    <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide mb-1.5">Atualizado em</p>
-                    <p className="text-sm text-slate-700 dark:text-slate-300">
-                      {infoPanelUser.updated_at ? new Date(infoPanelUser.updated_at).toLocaleDateString("pt-BR") : "—"}
-                    </p>
-                  </div>
-                  <div className="rounded-xl border border-slate-200 dark:border-slate-700 p-3.5">
-                    <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide mb-1.5">ID público</p>
-                    <p className="text-sm font-mono text-slate-700 dark:text-slate-300">{infoPanelUser.user_code || "—"}</p>
-                  </div>
-                  <div className="rounded-xl border border-slate-200 dark:border-slate-700 p-3.5">
-                    <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide mb-1.5">ID técnico</p>
-                    <p className="text-xs font-mono text-slate-500 dark:text-slate-400 truncate">{infoPanelUser.id}</p>
-                  </div>
-                </div>
-              </div>
 
-              <div>
-                <h3 className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-3">LGPD</h3>
-                <div className="flex items-center gap-2">
-                  {infoPanelUser.has_lgpd_consent ? (
-                    <CheckCircle2 className="h-4 w-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
-                  ) : (
-                    <XCircle className="h-4 w-4 text-rose-600 dark:text-rose-400 shrink-0" />
-                  )}
-                  <div>
-                    <p className={infoPanelUser.has_lgpd_consent ? "text-sm text-emerald-700 dark:text-emerald-300" : "text-sm text-rose-700 dark:text-rose-300"}>
-                      {infoPanelUser.has_lgpd_consent ? "Consentimento LGPD registrado" : "Consentimento LGPD pendente"}
-                    </p>
-                    {infoPanelUser.has_lgpd_consent && infoPanelUser.lgpd_consent_at && (
-                      <p className="text-xs text-slate-400 dark:text-slate-500">
-                        Aceito em: {new Date(infoPanelUser.lgpd_consent_at).toLocaleString("pt-BR")}
-                      </p>
-                    )}
+                    <div>
+                      <h3 className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-2">LGPD</h3>
+                      <div className="flex items-center gap-2">
+                        {infoPanelUser.has_lgpd_consent ? (
+                          <CheckCircle2 className="h-4 w-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
+                        ) : (
+                          <XCircle className="h-4 w-4 text-rose-600 dark:text-rose-400 shrink-0" />
+                        )}
+                        <div>
+                          <p className={infoPanelUser.has_lgpd_consent ? "text-sm text-emerald-700 dark:text-emerald-300" : "text-sm text-rose-700 dark:text-rose-300"}>
+                            {infoPanelUser.has_lgpd_consent ? "Consentimento LGPD registrado" : "Consentimento LGPD pendente"}
+                          </p>
+                          {infoPanelUser.has_lgpd_consent && infoPanelUser.lgpd_consent_at && (
+                            <p className="text-xs text-slate-400 dark:text-slate-500">
+                              Aceito em: {safeDate(infoPanelUser.lgpd_consent_at, true)}
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                    </div>
                   </div>
                 </div>
-              </div>
-            </div>
-          </div>
+              </>
+            );
+          })()}
+        </DialogContent>
+      </Dialog>
+
+      {/* Foto ampliada do usuário — lightbox simples sobre o modal de detalhes */}
+      {avatarLightboxOpen &&
+        infoPanelUser &&
+        createPortal(
+          <div
+            className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/70"
+            onClick={() => setAvatarLightboxOpen(false)}
+          >
+            <button
+              type="button"
+              onClick={() => setAvatarLightboxOpen(false)}
+              className="absolute top-5 right-5 rounded-lg transition-all hover:bg-white/20 focus:outline-none focus:ring-2 focus:ring-white/40 p-1.5"
+              title="Fechar"
+              aria-label="Fechar"
+            >
+              <X className="size-7 text-white drop-shadow-md" />
+            </button>
+            <Avatar className="h-56 w-56 shadow-2xl ring-4 ring-white/30" onClick={(e) => e.stopPropagation()}>
+              <AvatarFallback className="text-6xl font-bold text-white bg-gradient-to-br from-blue-500 to-blue-700">
+                {infoPanelUser.name.split(" ").map((n: string) => n[0]).join("").toUpperCase().slice(0, 2)}
+              </AvatarFallback>
+            </Avatar>
+          </div>,
+          document.body,
         )}
-      </SlidePanel>
 
       {/* Alterar vínculo — vincular/desvincular/trocar a empresa do usuário */}
       <SlidePanel
