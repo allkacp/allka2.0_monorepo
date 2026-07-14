@@ -3,6 +3,7 @@ import { z } from "zod";
 import { prisma } from "../lib/prisma";
 import { verifyToken } from "../middleware/auth";
 import { validate, parsePagination } from "../middleware/validate";
+import { resolveMyAgencyId, resolveMyPartnerId } from "../lib/project-scope";
 
 const router = Router();
 
@@ -204,16 +205,14 @@ async function resolveOwnScopeId(
   user: { id: string; account_type?: string; role?: string },
 ): Promise<{ kind: "agency" | "company" | "partner"; id: string | null } | null> {
   if (isAgencyUser(user)) {
-    const u = await prisma.user.findUnique({ where: { id: user.id }, select: { agency: { select: { id: true } } } });
-    return { kind: "agency", id: u?.agency?.id ?? null };
+    return { kind: "agency", id: await resolveMyAgencyId(prisma, user.id) };
   }
   if (isCompanyUser(user)) {
     const u = await prisma.user.findUnique({ where: { id: user.id }, select: { company_id: true } });
     return { kind: "company", id: u?.company_id ?? null };
   }
   if (isPartnerUser(user)) {
-    const p = await prisma.partnerProfile.findUnique({ where: { user_id: user.id }, select: { id: true } });
-    return { kind: "partner", id: p?.id ?? null };
+    return { kind: "partner", id: await resolveMyPartnerId(prisma, user.id) };
   }
   return null;
 }

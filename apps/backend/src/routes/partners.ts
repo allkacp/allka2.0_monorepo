@@ -4,6 +4,7 @@ import { z } from "zod";
 import { prisma } from "../lib/prisma";
 import { verifyToken, requireRole } from "../middleware/auth";
 import { validate, parsePagination } from "../middleware/validate";
+import { resolveMyPartnerId } from "../lib/project-scope";
 
 const router = Router();
 
@@ -71,14 +72,14 @@ function toAdminWithdrawalDTO(w: {
   processed_at: Date | null;
   partner: {
     balance: number;
-    user: { name: string | null; email: string } | null;
+    owner: { name: string | null; email: string } | null;
   };
 }) {
   return {
     id: w.id,
     partnerId: w.partner_profile_id,
-    partnerName: w.partner.user?.name ?? "",
-    partnerEmail: w.partner.user?.email ?? "",
+    partnerName: w.partner.owner?.name ?? "",
+    partnerEmail: w.partner.owner?.email ?? "",
     partnerBalance: w.partner.balance,
     amount: w.amount,
     pixKey: w.pix_key,
@@ -141,17 +142,17 @@ router.get("/", verifyToken, async (req, res, next) => {
     const where: Record<string, unknown> = {};
     if (status) where["status"] = status;
     if (search) {
-      where["user"] = {
+      where["owner"] = {
         OR: [{ name: { contains: search } }, { email: { contains: search } }],
       };
     }
 
-    const [total, data] = await Promise.all([
+    const [total, rawData] = await Promise.all([
       prisma.partnerProfile.count({ where }),
       prisma.partnerProfile.findMany({
         where,
         include: {
-          user: { select: { id: true, name: true, email: true, avatar: true } },
+          owner: { select: { id: true, name: true, email: true, avatar: true } },
           _count: { select: { commissions: true } },
         },
         skip,
@@ -159,6 +160,10 @@ router.get("/", verifyToken, async (req, res, next) => {
         orderBy: { created_at: "desc" },
       }),
     ]);
+    // Resposta expõe o dono sob "user" (compat — ver apps/frontend/app/admin/
+    // clientes/page.tsx, admin/projetos/page.tsx, lider/clientes/page.tsx,
+    // que leem p.user?.name/.email da listagem).
+    const data = rawData.map(({ owner, ...rest }) => ({ ...rest, user: owner }));
 
     res.json({ data, total, page, limit });
   } catch (err) {
@@ -169,10 +174,11 @@ router.get("/", verifyToken, async (req, res, next) => {
 // GET /api/partners/me
 router.get("/me", verifyToken, async (req, res, next) => {
   try {
-    const partner = await prisma.partnerProfile.findUnique({
-      where: { user_id: req.user!.id },
+    const myPartnerId = await resolveMyPartnerId(prisma, req.user!.id);
+    const partner = myPartnerId ? await prisma.partnerProfile.findUnique({
+      where: { id: myPartnerId },
       include: {
-        user: { select: { name: true, email: true } },
+        owner: { select: { name: true, email: true } },
         commissions: {
           orderBy: { created_at: "desc" },
           take: 20,
@@ -182,7 +188,7 @@ router.get("/me", verifyToken, async (req, res, next) => {
           select: { id: true, name: true },
         },
       },
-    });
+    }) : null;
 
     if (!partner) {
       res.status(404).json({ error: "Perfil de parceiro não encontrado" });
@@ -268,10 +274,10 @@ router.get("/me", verifyToken, async (req, res, next) => {
     // campos soltos na raiz (snake_case) e "profile" nunca era populado.
     const profile = {
       id: partner.id,
-      userId: partner.user_id,
-      name: (partner as any).user?.name ?? "",
-      email: (partner as any).user?.email ?? "",
-      avatarInitials: ((partner as any).user?.name ?? "P")
+      userId: partner.owner_user_id,
+      name: (partner as any).owner?.name ?? "",
+      email: (partner as any).owner?.email ?? "",
+      avatarInitials: ((partner as any).owner?.name ?? "P")
         .split(" ")
         .filter(Boolean)
         .slice(0, 2)
@@ -305,18 +311,16 @@ router.get("/me/commissions", verifyToken, requirePartner, async (req, res, next
   try {
     const { page, limit, skip } = parsePagination(req.query);
 
-    const partner = await prisma.partnerProfile.findUnique({
-      where: { user_id: req.user!.id },
-    });
-    if (!partner) {
+    const myPartnerId = await resolveMyPartnerId(prisma, req.user!.id);
+    if (!myPartnerId) {
       res.status(404).json({ error: "Perfil de parceiro não encontrado" });
       return;
     }
 
     const [total, data] = await Promise.all([
-      prisma.partnerCommission.count({ where: { partner_id: partner.id } }),
+      prisma.partnerCommission.count({ where: { partner_id: myPartnerId } }),
       prisma.partnerCommission.findMany({
-        where: { partner_id: partner.id },
+        where: { partner_id: myPartnerId },
         include: { campaign: { select: { name: true, type: true } } },
         skip,
         take: limit,
@@ -357,9 +361,12 @@ router.post(
         pix_key_type: string;
       };
 
-      const partner = await prisma.partnerProfile.findUnique({
-        where: { user_id: req.user!.id },
-      });
+      const myPartnerId = await resolveMyPartnerId(prisma, req.user!.id);
+      if (!myPartnerId) {
+        res.status(404).json({ error: "Perfil de parceiro não encontrado" });
+        return;
+      }
+      const partner = await prisma.partnerProfile.findUnique({ where: { id: myPartnerId } });
       if (!partner) {
         res.status(404).json({ error: "Perfil de parceiro não encontrado" });
         return;
@@ -399,16 +406,14 @@ router.post(
 // GET /api/partners/withdrawals — histórico de saques do próprio Partner logado.
 router.get("/withdrawals", verifyToken, requirePartner, async (req, res, next) => {
   try {
-    const partner = await prisma.partnerProfile.findUnique({
-      where: { user_id: req.user!.id },
-    });
-    if (!partner) {
+    const myPartnerId = await resolveMyPartnerId(prisma, req.user!.id);
+    if (!myPartnerId) {
       res.status(404).json({ error: "Perfil de parceiro não encontrado" });
       return;
     }
 
     const withdrawals = await prisma.partnerWithdrawal.findMany({
-      where: { partner_profile_id: partner.id },
+      where: { partner_profile_id: myPartnerId },
       orderBy: { requested_at: "desc" },
     });
 
@@ -438,7 +443,7 @@ router.get(
         prisma.partnerWithdrawal.count({ where }),
         prisma.partnerWithdrawal.findMany({
           where,
-          include: { partner: { include: { user: { select: { name: true, email: true } } } } },
+          include: { partner: { include: { owner: { select: { name: true, email: true } } } } },
           skip,
           take: limit,
           orderBy: { requested_at: "desc" },
@@ -476,7 +481,7 @@ router.put(
 
       const existing = await prisma.partnerWithdrawal.findUnique({
         where: { id },
-        include: { partner: { include: { user: { select: { name: true, email: true } } } } },
+        include: { partner: { include: { owner: { select: { name: true, email: true } } } } },
       });
       if (!existing) {
         res.status(404).json({ error: "Solicitação de saque não encontrada" });
@@ -541,7 +546,7 @@ router.put(
 
           return tx.partnerWithdrawal.findUnique({
             where: { id },
-            include: { partner: { include: { user: { select: { name: true, email: true } } } } },
+            include: { partner: { include: { owner: { select: { name: true, email: true } } } } },
           });
         }).catch((err) => {
           if (err instanceof Error && (err.message === "INSUFFICIENT_BALANCE" || err.message === "ALREADY_PROCESSED")) {
@@ -590,7 +595,7 @@ router.put(
 
       const withdrawal = await prisma.partnerWithdrawal.findUnique({
         where: { id },
-        include: { partner: { include: { user: { select: { name: true, email: true } } } } },
+        include: { partner: { include: { owner: { select: { name: true, email: true } } } } },
       });
       if (!withdrawal) {
         res.status(404).json({ error: "Solicitação de saque não encontrada" });
@@ -610,7 +615,7 @@ router.get("/:id", verifyToken, async (req, res, next) => {
     const partner = await prisma.partnerProfile.findUnique({
       where: { id: (req.params.id as string) },
       include: {
-        user: { select: { id: true, name: true, email: true } },
+        owner: { select: { id: true, name: true, email: true } },
         commissions: {
           orderBy: { created_at: "desc" },
           take: 50,
@@ -635,7 +640,7 @@ router.post(
   verifyToken,
   validate(
     z.object({
-      user_id: z.string().min(1),
+      owner_user_id: z.string().min(1),
       referral_code: z.string().optional(),
       pix_key: z.string().optional(),
       pix_key_type: z.enum(["cpf", "email", "phone", "random"]).optional(),
@@ -646,7 +651,7 @@ router.post(
     try {
       const partner = await prisma.partnerProfile.create({
         data: req.body,
-        include: { user: { select: { id: true, name: true, email: true } } },
+        include: { owner: { select: { id: true, name: true, email: true } } },
       });
       res.status(201).json(partner);
     } catch (err) {

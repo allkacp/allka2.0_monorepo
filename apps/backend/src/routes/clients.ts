@@ -3,6 +3,7 @@ import { z } from "zod";
 import { prisma } from "../lib/prisma";
 import { verifyToken, requireRole } from "../middleware/auth";
 import { validate, parsePagination } from "../middleware/validate";
+import { resolveMyPartnerId } from "../lib/project-scope";
 
 const router = Router();
 
@@ -39,7 +40,18 @@ const createSchema = z.object({
 
 const updateSchema = createSchema.partial();
 
-const COMPANY_COUNT_SELECT = { _count: { select: { users: true, projects: true, invoices: true } } } as const;
+const COMPANY_COUNT_SELECT = { _count: { select: { members: true, projects: true, invoices: true } } } as const;
+
+// Resposta HTTP deste router sempre expôs a contagem de usuários sob
+// "_count.users" (consumido por apps/frontend/app/admin/empresas/page.tsx:890
+// via c._count?.users) — a relação Prisma virou "members" (ver
+// schema.prisma), mas o contrato externo desta rota não muda.
+function withUsersCountAlias<T extends { _count: { members: number; projects: number; invoices: number } }>(
+  company: T,
+): Omit<T, "_count"> & { _count: { users: number; projects: number; invoices: number } } {
+  const { members, ...restCount } = company._count;
+  return { ...company, _count: { ...restCount, users: members } };
+}
 
 // GET /api/clients
 router.get("/", verifyToken, async (req, res, next) => {
@@ -57,7 +69,8 @@ router.get("/", verifyToken, async (req, res, next) => {
         where: { id: user.company_id },
         include: COMPANY_COUNT_SELECT,
       });
-      res.json({ data: company ? [company] : [], total: company ? 1 : 0, page: 1, limit: 1 });
+      const data = company ? [withUsersCountAlias(company)] : [];
+      res.json({ data, total: company ? 1 : 0, page: 1, limit: 1 });
       return;
     }
 
@@ -65,9 +78,9 @@ router.get("/", verifyToken, async (req, res, next) => {
     if (account_type === "agencias") {
       const user = await prisma.user.findUnique({
         where: { id: userId },
-        select: { agency: { select: { name: true } } },
+        select: { agency_link: { select: { name: true } } },
       });
-      const agencyName = user?.agency?.name;
+      const agencyName = user?.agency_link?.name;
       if (!agencyName) {
         res.json({ data: [], total: 0, page: 1, limit: 20 });
         return;
@@ -103,7 +116,7 @@ router.get("/", verifyToken, async (req, res, next) => {
         delete where["id"];
       }
 
-      const [total, data] = await Promise.all([
+      const [total, rawData] = await Promise.all([
         prisma.company.count({ where }),
         prisma.company.findMany({
           where,
@@ -114,35 +127,32 @@ router.get("/", verifyToken, async (req, res, next) => {
         }),
       ]);
 
-      res.json({ data, total, page, limit });
+      res.json({ data: rawData.map(withUsersCountAlias), total, page, limit });
       return;
     }
 
     // Partner users see only companies referred by them
     if (account_type === "parceiro") {
-      const profile = await prisma.partnerProfile.findUnique({
-        where: { user_id: userId },
-        select: { id: true },
-      });
-      if (!profile) {
+      const myPartnerId = await resolveMyPartnerId(prisma, userId);
+      if (!myPartnerId) {
         res.json({ data: [], total: 0, page: 1, limit: 20 });
         return;
       }
       const { page, limit, skip } = parsePagination(req.query);
       const search = req.query.search as string | undefined;
-      const where: Record<string, unknown> = { referred_by_partner_id: profile.id };
+      const where: Record<string, unknown> = { referred_by_partner_id: myPartnerId };
       if (search) {
         where["AND"] = [
-          { referred_by_partner_id: profile.id },
+          { referred_by_partner_id: myPartnerId },
           { OR: [{ name: { contains: search } }, { cnpj: { contains: search } }] },
         ];
         delete where["referred_by_partner_id"];
       }
-      const [total, data] = await Promise.all([
+      const [total, rawData] = await Promise.all([
         prisma.company.count({ where }),
         prisma.company.findMany({ where, include: COMPANY_COUNT_SELECT, skip, take: limit, orderBy: { name: "asc" } }),
       ]);
-      res.json({ data, total, page, limit });
+      res.json({ data: rawData.map(withUsersCountAlias), total, page, limit });
       return;
     }
 
@@ -167,7 +177,7 @@ router.get("/", verifyToken, async (req, res, next) => {
     }
     if (status) where["status"] = status;
 
-    const [total, data] = await Promise.all([
+    const [total, rawData] = await Promise.all([
       prisma.company.count({ where }),
       prisma.company.findMany({
         where,
@@ -178,7 +188,7 @@ router.get("/", verifyToken, async (req, res, next) => {
       }),
     ]);
 
-    res.json({ data, total, page, limit });
+    res.json({ data: rawData.map(withUsersCountAlias), total, page, limit });
   } catch (err) {
     next(err);
   }
@@ -203,7 +213,7 @@ router.get("/:id", verifyToken, async (req, res, next) => {
 
     const company = await prisma.company.findUnique({
       where: { id: req.params.id as string },
-      include: { _count: { select: { users: true, projects: true, invoices: true } } },
+      include: { _count: { select: { members: true, projects: true, invoices: true } } },
     });
 
     if (!company) {
@@ -211,7 +221,7 @@ router.get("/:id", verifyToken, async (req, res, next) => {
       return;
     }
 
-    res.json(company);
+    res.json(withUsersCountAlias(company));
   } catch (err) {
     next(err);
   }

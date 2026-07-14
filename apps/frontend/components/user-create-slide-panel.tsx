@@ -108,6 +108,10 @@ export function UserCreateSlidePanel({
     password: "",
     account_type: companyId ? "empresas" : "empresas",
     role: companyId ? "company_user" : "company_user",
+    // Nome da organização (Agency/Company/Partner) sendo fundada — distinto
+    // do nome da pessoa acima. Só usado quando !companyId (fundando uma
+    // organização nova, não entrando numa já existente) — Tarefa 11.
+    organizationName: "",
     is_active: true,
     plan: "free",
     // Etapa 2 - Dados
@@ -128,6 +132,9 @@ export function UserCreateSlidePanel({
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [showPassword, setShowPassword] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
+  // Impede duplo-envio enquanto a criação está em andamento (Tarefa 11) —
+  // gap pré-existente: o botão não tinha nenhuma trava contra clique duplo.
+  const [isCreating, setIsCreating] = useState(false);
 
   // Vínculo com empresas
   const [availableCompanies, setAvailableCompanies] = useState<
@@ -223,6 +230,7 @@ export function UserCreateSlidePanel({
         password: "",
         account_type: "empresas",
         role: "company_user",
+        organizationName: "",
         is_active: true,
         plan: "free",
         cpf: "",
@@ -257,6 +265,14 @@ export function UserCreateSlidePanel({
       newErrors.password = "Senha é obrigatória (mínimo 6 caracteres)";
     if (!newUser.account_type)
       newErrors.account_type = "Tipo de usuário é obrigatório";
+    if (
+      !companyId &&
+      (newUser.account_type === "agencias" ||
+        newUser.account_type === "parceiro" ||
+        newUser.account_type === "empresas") &&
+      !newUser.organizationName.trim()
+    )
+      newErrors.organizationName = "Nome da organização é obrigatório";
     if (!lgpdConsent)
       newErrors.lgpd_consent =
         "Aceite da Política de Privacidade é obrigatório";
@@ -285,7 +301,9 @@ export function UserCreateSlidePanel({
   };
 
   const handleCreateUser = async () => {
+    if (isCreating) return;
     setCreateError(null);
+    setIsCreating(true);
     try {
       const payload: Record<string, any> = {
         email: newUser.email,
@@ -298,6 +316,8 @@ export function UserCreateSlidePanel({
       };
       if (linkedCompanyIds.length > 0) {
         payload.company_id = linkedCompanyIds[0];
+      } else if (newUser.organizationName.trim()) {
+        payload.organization_name = newUser.organizationName.trim();
       }
       const created = await apiClient.createUser(payload);
 
@@ -319,6 +339,8 @@ export function UserCreateSlidePanel({
         description: msg,
         variant: "destructive",
       });
+    } finally {
+      setIsCreating(false);
     }
   };
 
@@ -480,7 +502,7 @@ export function UserCreateSlidePanel({
                             empresas: "company_admin",
                             agencias: "agency_admin",
                             nomades:  "nomad",
-                            parceiro: "partner",
+                            parceiro: "partner_admin",
                             lider:    "lider",
                             admin:    "admin",
                           };
@@ -510,6 +532,36 @@ export function UserCreateSlidePanel({
                       </p>
                     )}
                   </div>
+                  {!companyId &&
+                    (newUser.account_type === "agencias" ||
+                      newUser.account_type === "parceiro" ||
+                      newUser.account_type === "empresas") && (
+                      <div className="space-y-2 rounded-lg border border-amber-200 dark:border-amber-400/20 bg-amber-50 dark:bg-amber-500/10 p-3">
+                        <Label>
+                          Nome d
+                          {newUser.account_type === "agencias"
+                            ? "a Agência"
+                            : newUser.account_type === "empresas"
+                              ? "a Empresa"
+                              : "o Parceiro"}{" "}
+                          *
+                        </Label>
+                        <Input
+                          placeholder="Nome da organização"
+                          value={newUser.organizationName}
+                          onChange={(e) =>
+                            setNewUser({ ...newUser, organizationName: e.target.value })
+                          }
+                          className={errors.organizationName ? "border-red-500" : ""}
+                        />
+                        {errors.organizationName && (
+                          <p className="text-xs text-red-500">{errors.organizationName}</p>
+                        )}
+                        <p className="text-[11px] text-amber-700 dark:text-amber-300">
+                          Este usuário será o administrador principal desta organização.
+                        </p>
+                      </div>
+                    )}
                   <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-2">
                       <Label>Status da Conta *</Label>
@@ -1046,10 +1098,11 @@ export function UserCreateSlidePanel({
           ) : (
             <Button
               onClick={handleCreateUser}
+              disabled={isCreating}
               className="bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700"
             >
               <Check className="h-4 w-4 mr-1" />
-              Criar Usuário
+              {isCreating ? "Criando..." : "Criar Usuário"}
             </Button>
           )}
         </div>

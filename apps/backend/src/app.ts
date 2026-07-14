@@ -28,6 +28,8 @@ import adminReportsRouter from "./routes/admin-reports";
 import adminSeedRouter from "./routes/admin-seed";
 import adminUsersRouter from "./routes/admin-users";
 import companyUsersRouter from "./routes/company-users";
+import agencyUsersRouter from "./routes/agency-users";
+import partnerUsersRouter from "./routes/partner-users";
 import levelsRouter from "./routes/levels";
 import taskTemplatesRouter from "./routes/task-templates";
 import projectProductsRouter from "./routes/project-products";
@@ -144,8 +146,11 @@ app.use("/api/admin/reports", adminReportsRouter);
 app.use("/api/admin/seed", adminSeedRouter);
 // Admin-only listing of all platform login users (tela Admin > Usuários)
 app.use("/api/admin/users", adminUsersRouter);
-// Self-service: Company cria/lista/edita os próprios usuários (colaboradores)
+// Self-service: Company/Agency/Partner criam/listam/editam os próprios
+// usuários (colaboradores) — mesmo padrão nos 3 (Tarefa 10)
 app.use("/api/company/users", companyUsersRouter);
+app.use("/api/agency/users", agencyUsersRouter);
+app.use("/api/partner/users", partnerUsersRouter);
 app.use("/api/levels", levelsRouter);
 app.use("/api/task-templates", taskTemplatesRouter);
 // project-products também serve /api/project-products/tasks (sub-rota do mesmo router)

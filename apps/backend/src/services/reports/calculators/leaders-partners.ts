@@ -106,7 +106,7 @@ export async function calcUsabilidadeAgenciasLideradas(
 
   const agencies = await prisma.agency.findMany({
     where: { id: { in: ctx.scope.agencyIds } },
-    select: { id: true, name: true, user: { select: { last_login: true } } },
+    select: { id: true, name: true, owner: { select: { last_login: true } } },
   });
 
   const cutoff = new Date();
@@ -115,9 +115,9 @@ export async function calcUsabilidadeAgenciasLideradas(
   inactive90.setDate(inactive90.getDate() - 90);
 
   const breakdown = {
-    active_30d: agencies.filter((a) => a.user?.last_login && a.user.last_login >= cutoff).length,
+    active_30d: agencies.filter((a) => a.owner?.last_login && a.owner.last_login >= cutoff).length,
     inactive_90d: agencies.filter(
-      (a) => !a.user?.last_login || a.user.last_login < inactive90,
+      (a) => !a.owner?.last_login || a.owner.last_login < inactive90,
     ).length,
   };
 

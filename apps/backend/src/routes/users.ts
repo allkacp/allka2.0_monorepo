@@ -18,6 +18,12 @@ const createUserSchema = z.object({
   phone: z.string().optional(),
   avatar: z.string().optional(),
   company_id: z.string().optional(),
+  // Nome da organização (Agency/Company) sendo criada — distinto do nome do
+  // usuário principal. Opcional por retrocompatibilidade com chamadores que
+  // ainda não enviam isto (nesse caso cai no fallback antigo: nome do
+  // usuário). Sem efeito para account_type=parceiro (PartnerProfile não tem
+  // campo de nome próprio — o nome exibido sempre vem do User vinculado).
+  organization_name: z.string().min(1).optional(),
 });
 
 const updateUserSchema = createUserSchema
@@ -40,6 +46,8 @@ const safeSelect = {
   avatar: true,
   phone: true,
   company_id: true,
+  agency_id: true,
+  partner_id: true,
   last_login: true,
   created_at: true,
   updated_at: true,
@@ -107,7 +115,7 @@ const DEFAULT_ROLE: Record<string, string> = {
   agencias: "agency_admin",
   empresas: "company_admin",
   nomades:  "nomad",
-  parceiro: "partner",
+  parceiro: "partner_admin",
   lider:    "lider",
   admin:    "admin",
 };
@@ -125,23 +133,34 @@ router.post(
         role: rawRole,
         account_type,
         company_id,
+        organization_name,
         ...rest
       } = req.body as {
         password: string;
         role: string;
         account_type: string;
         company_id?: string;
+        organization_name?: string;
         [key: string]: unknown;
       };
 
       const password_hash = await bcrypt.hash(password, 10);
 
-      // Normalize role: use provided role if compatible; otherwise use default for account_type
+      // Normalize role: usa o role explícito quando ele não é o default "não
+      // informado" do zod (company_user); caso contrário, decide pelo
+      // company_id, não pelo valor ambíguo de rawRole — zod sempre entrega
+      // "company_user" quando o chamador não manda nada, então usar
+      // "rawRole === company_user" pra decidir "é uma empresa nova?" (bug
+      // real encontrado na Tarefa 9: toda empresa nova virava company_user
+      // órfão, sem Company nenhuma criada, porque a condição nunca batia).
+      // Com company_id presente → adicionando a uma empresa existente,
+      // default company_user. Sem company_id → fundando organização nova,
+      // default é sempre o *_admin daquele account_type.
       const resolvedRole =
         rawRole && rawRole !== "company_user"
           ? rawRole
-          : (account_type === "empresas" && (rawRole === "company_user" || company_id))
-            ? (rawRole || DEFAULT_ROLE[account_type] || "company_user")
+          : company_id
+            ? (rawRole || "company_user")
             : (DEFAULT_ROLE[account_type] || rawRole || "company_user");
 
       const user = await prisma.$transaction(async (tx) => {
@@ -159,20 +178,26 @@ router.post(
           select: { ...safeSelect, id: true },
         });
 
-        // 2. Create the profile entity matching account_type
+        // 2. Create the profile entity matching account_type, and — pro
+        // usuário principal, que é sempre criado atomicamente junto com a
+        // organização — o vínculo de membro (User.agency_id/company_id/
+        // partner_id) é preenchido na mesma transação. É esse vínculo, não
+        // a propriedade (owner_user_id), que passa a definir o escopo de
+        // acesso (ver resolveMyAgencyId/resolveMyPartnerId).
         if (account_type === "agencias") {
-          const existing = await tx.agency.findUnique({ where: { user_id: created.id } });
-          if (!existing) {
-            await tx.agency.create({
+          const existing = await tx.agency.findUnique({ where: { owner_user_id: created.id } });
+          const agency =
+            existing ??
+            (await tx.agency.create({
               data: {
-                user_id: created.id,
-                name: (rest.name as string) || "Nova Agência",
+                owner_user_id: created.id,
+                name: organization_name || (rest.name as string) || "Nova Agência",
                 email: rest.email as string | undefined,
                 status: "ativo",
                 partner_level: "bronze",
               },
-            });
-          }
+            }));
+          await tx.user.update({ where: { id: created.id }, data: { agency_id: agency.id } });
         } else if (account_type === "nomades") {
           const existing = await tx.nomade.findUnique({ where: { user_id: created.id } });
           if (!existing) {
@@ -186,18 +211,19 @@ router.post(
             });
           }
         } else if (account_type === "parceiro") {
-          const existing = await tx.partnerProfile.findUnique({ where: { user_id: created.id } });
-          if (!existing) {
-            await tx.partnerProfile.create({
+          const existing = await tx.partnerProfile.findUnique({ where: { owner_user_id: created.id } });
+          const partner =
+            existing ??
+            (await tx.partnerProfile.create({
               data: {
-                user_id: created.id,
+                owner_user_id: created.id,
                 status: "pending",
                 balance: 0,
                 total_earned: 0,
                 total_withdrawn: 0,
               },
-            });
-          }
+            }));
+          await tx.user.update({ where: { id: created.id }, data: { partner_id: partner.id } });
         } else if (account_type === "lider") {
           const existing = await tx.liderArea.findFirst({ where: { user_id: created.id } });
           if (!existing) {
@@ -212,10 +238,14 @@ router.post(
             });
           }
         } else if (account_type === "empresas" && !company_id && resolvedRole !== "company_user") {
-          // Create a new Company for company_admin users without an existing company link
+          // Create a new Company for company_admin users without an existing company link.
+          // owner_user_id marca o usuário principal (propriedade); company_id
+          // no User marca o vínculo de membro (escopo) — o mesmo usuário
+          // recebe os dois, já que é ele quem acabou de fundar a empresa.
           const company = await tx.company.create({
             data: {
-              name: (rest.name as string) || "Nova Empresa",
+              owner_user_id: created.id,
+              name: organization_name || (rest.name as string) || "Nova Empresa",
               email: rest.email as string | undefined,
               status: "ativo",
             },
@@ -224,7 +254,6 @@ router.post(
             where: { id: created.id },
             data: { company_id: company.id },
           });
-          return tx.user.findUnique({ where: { id: created.id }, select: safeSelect });
         }
 
         return tx.user.findUnique({ where: { id: created.id }, select: safeSelect });

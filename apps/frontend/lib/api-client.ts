@@ -162,6 +162,34 @@ class ApiClient {
     return this.put(`/company/users/${id}`, data);
   }
 
+  // Self-service Agency — colaboradores da própria agência do usuário
+  // logado. Nunca aceita agency_id (o backend resolve pelo token).
+  async getAgencyUsers(filters?: Record<string, any>) {
+    return this.get("/agency/users", filters);
+  }
+
+  async createAgencyUser(data: Record<string, any>) {
+    return this.post("/agency/users", data);
+  }
+
+  async updateAgencyUser(id: string | number, data: Record<string, any>) {
+    return this.put(`/agency/users/${id}`, data);
+  }
+
+  // Self-service Partner — colaboradores do próprio partner do usuário
+  // logado. Nunca aceita partner_id (o backend resolve pelo token).
+  async getPartnerUsers(filters?: Record<string, any>) {
+    return this.get("/partner/users", filters);
+  }
+
+  async createPartnerUser(data: Record<string, any>) {
+    return this.post("/partner/users", data);
+  }
+
+  async updatePartnerUser(id: string | number, data: Record<string, any>) {
+    return this.put(`/partner/users/${id}`, data);
+  }
+
   async getUser(id: string | number) {
     return this.get(`/users/${id}`);
   }

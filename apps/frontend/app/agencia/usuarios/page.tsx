@@ -5,23 +5,16 @@ import { Plus, Mail, Loader2, Pencil, Lock, Unlock, Crown } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { PageHeader } from "@/components/page-header";
 import { SlidePanel } from "@/components/slide-panel";
 import { useToast } from "@/components/ui/use-toast";
 import { apiClient } from "@/lib/api-client";
 
-// Self-service: a própria Company cria/gerencia seus colaboradores via
-// /api/company/users. Não mostra company_id nem permite escolher outra
-// empresa — o backend sempre vincula à empresa do usuário logado. Vincular
-// a outra empresa ou desvincular é exclusivo do Admin (Admin > Usuários).
-interface CompanyUser {
+// Self-service: a própria Agency cria/gerencia seus colaboradores via
+// /api/agency/users. Não mostra agency_id nem permite escolher outra
+// agência — o backend sempre vincula à agência do usuário logado. Espelha
+// company/usuarios/page.tsx (Tarefa 11).
+interface AgencyUser {
   id: string;
   user_code: string | null;
   name: string;
@@ -29,20 +22,15 @@ interface CompanyUser {
   role: string;
   account_type: string;
   is_active: boolean;
-  company_id: string | null;
-  company_name: string | null;
+  agency_id: string | null;
+  agency_name: string | null;
   created_at: string;
 }
 
-const ROLE_LABEL: Record<string, string> = {
-  company_user: "Usuário",
-  company_financial: "Financeiro",
-};
+const EMPTY_FORM = { name: "", email: "", password: "" };
 
-const EMPTY_FORM = { name: "", email: "", password: "", role: "company_user" };
-
-export default function CompanyUsuariosPage() {
-  const [users, setUsers] = useState<CompanyUser[]>([]);
+export default function AgenciaUsuariosPage() {
+  const [users, setUsers] = useState<AgencyUser[]>([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -54,9 +42,9 @@ export default function CompanyUsuariosPage() {
   const [formError, setFormError] = useState("");
   const [saving, setSaving] = useState(false);
 
-  const [editUser, setEditUser] = useState<CompanyUser | null>(null);
+  const [editUser, setEditUser] = useState<AgencyUser | null>(null);
   const [editOpen, setEditOpen] = useState(false);
-  const [editForm, setEditForm] = useState({ name: "", role: "company_user", is_active: true, password: "" });
+  const [editForm, setEditForm] = useState({ name: "", is_active: true, password: "" });
   const [editSaving, setEditSaving] = useState(false);
 
   const load = useCallback(async () => {
@@ -65,7 +53,7 @@ export default function CompanyUsuariosPage() {
     try {
       const params: Record<string, string> = { limit: "200" };
       if (search) params.search = search;
-      const data: any = await apiClient.getCompanyUsers(params);
+      const data: any = await apiClient.getAgencyUsers(params);
       setUsers(Array.isArray(data.data) ? data.data : []);
       setTotal(data.total ?? 0);
     } catch (e: any) {
@@ -78,6 +66,13 @@ export default function CompanyUsuariosPage() {
   useEffect(() => {
     load();
   }, [load]);
+
+  // agency_admin nunca é atribuível via este painel self-service (o backend
+  // só aceita role="agency_user" aqui) — então role === "agency_admin"
+  // identifica com segurança quem é o usuário principal.
+  function isPrincipal(u: AgencyUser) {
+    return u.role === "agency_admin";
+  }
 
   function openCreate() {
     setForm(EMPTY_FORM);
@@ -104,11 +99,11 @@ export default function CompanyUsuariosPage() {
     setSaving(true);
     setFormError("");
     try {
-      await apiClient.createCompanyUser({
+      await apiClient.createAgencyUser({
         name: form.name,
         email: form.email,
         password: form.password,
-        role: form.role,
+        role: "agency_user",
       });
       toast({ title: "Usuário criado com sucesso!" });
       setCreateOpen(false);
@@ -120,17 +115,9 @@ export default function CompanyUsuariosPage() {
     }
   }
 
-  // O principal (company_admin) nunca é atribuível via este painel
-  // self-service (o Select só oferece company_user/company_financial) —
-  // então role === "company_admin" identifica com segurança quem é o
-  // usuário principal, sem precisar de um campo novo do backend.
-  function isPrincipal(u: CompanyUser) {
-    return u.role === "company_admin";
-  }
-
-  function openEdit(u: CompanyUser) {
+  function openEdit(u: AgencyUser) {
     setEditUser(u);
-    setEditForm({ name: u.name, role: u.role, is_active: u.is_active, password: "" });
+    setEditForm({ name: u.name, is_active: u.is_active, password: "" });
     setEditOpen(true);
   }
   function closeEdit() {
@@ -143,11 +130,10 @@ export default function CompanyUsuariosPage() {
     try {
       const payload: Record<string, any> = {
         name: editForm.name,
-        role: editForm.role,
         is_active: editForm.is_active,
       };
       if (editForm.password) payload.password = editForm.password;
-      await apiClient.updateCompanyUser(editUser.id, payload);
+      await apiClient.updateAgencyUser(editUser.id, payload);
       toast({ title: "Usuário atualizado" });
       setEditOpen(false);
       load();
@@ -162,7 +148,7 @@ export default function CompanyUsuariosPage() {
     <div className="p-4 sm:p-6 space-y-4">
       <PageHeader
         title="Usuários"
-        description="Colaboradores com acesso à sua empresa na plataforma"
+        description="Colaboradores com acesso à sua agência na plataforma"
         actions={
           <Button onClick={openCreate} size="sm" className="h-9 gap-2 px-4 text-sm btn-brand border-0 shadow-sm">
             <Plus className="h-4 w-4" /> Novo usuário
@@ -210,7 +196,7 @@ export default function CompanyUsuariosPage() {
                       {u.name}
                       {isPrincipal(u) && (
                         <span
-                          title="Usuário principal — administrador da empresa"
+                          title="Usuário principal — administrador da agência"
                           className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[10px] font-semibold bg-amber-100 text-amber-700 border border-amber-200 dark:bg-amber-500/10 dark:text-amber-300 dark:border-amber-400/20"
                         >
                           <Crown className="h-2.5 w-2.5" /> Principal
@@ -223,7 +209,7 @@ export default function CompanyUsuariosPage() {
                   </td>
                   <td className="px-4 py-3">
                     <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold border bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-500/10 dark:text-blue-300 dark:border-blue-400/20">
-                      {isPrincipal(u) ? "Administrador" : (ROLE_LABEL[u.role] ?? u.role)}
+                      {isPrincipal(u) ? "Administrador" : "Usuário"}
                     </span>
                   </td>
                   <td className="px-4 py-3">
@@ -257,7 +243,7 @@ export default function CompanyUsuariosPage() {
         open={createOpen}
         onClose={closeCreate}
         title="Novo usuário"
-        subtitle="Colaborador da sua empresa"
+        subtitle="Colaborador da sua agência"
         widthMode="compact"
         compactWidth={420}
         footer={
@@ -291,7 +277,7 @@ export default function CompanyUsuariosPage() {
               type="email"
               value={form.email}
               onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))}
-              placeholder="usuario@empresa.com"
+              placeholder="usuario@agencia.com"
               className="h-9 text-sm mt-1"
             />
           </div>
@@ -304,18 +290,6 @@ export default function CompanyUsuariosPage() {
               placeholder="Mínimo 6 caracteres"
               className="h-9 text-sm mt-1"
             />
-          </div>
-          <div>
-            <Label className="text-xs">Função</Label>
-            <Select value={form.role} onValueChange={(v) => setForm((f) => ({ ...f, role: v }))}>
-              <SelectTrigger className="h-9 text-sm mt-1">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="company_user">Usuário</SelectItem>
-                <SelectItem value="company_financial">Financeiro</SelectItem>
-              </SelectContent>
-            </Select>
           </div>
         </div>
       </SlidePanel>
@@ -349,24 +323,11 @@ export default function CompanyUsuariosPage() {
               className="h-9 text-sm mt-1"
             />
           </div>
-          {editUser && isPrincipal(editUser) ? (
+          {editUser && isPrincipal(editUser) && (
             <p className="flex items-center gap-1.5 text-xs text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-400/20 rounded-md px-3 py-2">
               <Crown className="h-3.5 w-3.5 shrink-0" />
-              Usuário principal — administrador da empresa. Função e bloqueio não podem ser alterados por aqui.
+              Usuário principal — administrador da agência. Bloqueio não pode ser alterado por aqui.
             </p>
-          ) : (
-            <div>
-              <Label className="text-xs">Função</Label>
-              <Select value={editForm.role} onValueChange={(v) => setEditForm((f) => ({ ...f, role: v }))}>
-                <SelectTrigger className="h-9 text-sm mt-1">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="company_user">Usuário</SelectItem>
-                  <SelectItem value="company_financial">Financeiro</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
           )}
           <div>
             <Label className="text-xs">Nova senha (opcional)</Label>

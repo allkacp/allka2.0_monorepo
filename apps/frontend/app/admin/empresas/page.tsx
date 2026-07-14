@@ -11,8 +11,16 @@ import { useNavigate, useParams } from "react-router-dom";
 import { PageLoader } from "@/components/ui/loading";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from "@/components/ui/dialog";
 import {
   Building2,
   Users,
@@ -42,6 +50,7 @@ import {
   AlertTriangle,
   ShieldCheck,
   Phone,
+  Loader2,
 } from "lucide-react";
 import { useSorting, SortableHeader } from "@/hooks/useSorting";
 import { ExportButton } from "@/components/export-button";
@@ -64,7 +73,6 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { ItemsPerPageSelect } from "@/components/items-per-page-select";
-import { CompanyCreateSlidePanel } from "@/components/company-create-slide-panel";
 import { CompanyEditSlidePanel } from "@/components/company-edit-slide-panel";
 import { CompanyViewSlidePanel } from "@/components/company-view-slide-panel";
 import { ConfirmationDialog } from "@/components/confirmation-dialog";
@@ -691,7 +699,21 @@ export default function EmpresasPage() {
     membro_desde: "created_at",
   };
   const [searchQuery, setSearchQuery] = useState("");
-  const [createPanelOpen, setCreatePanelOpen] = useState(false);
+  // Criação de Company com usuário principal obrigatório (Tarefa 11) —
+  // deliberadamente não reaproveita CompanyCreateSlidePanel (que continua
+  // existindo em project-create-new-panel.tsx/project-create-slide-panel.tsx
+  // pra empresa "casca" sem usuário, no add-inline dentro da criação de
+  // projeto) — forçar cadastro de login completo nesse fluxo rápido seria
+  // um endpoint/UX incompatível (Tarefa 9, regra 5).
+  const [createWithOwnerOpen, setCreateWithOwnerOpen] = useState(false);
+  const [createWithOwnerSubmitting, setCreateWithOwnerSubmitting] = useState(false);
+  const [createWithOwnerForm, setCreateWithOwnerForm] = useState({
+    organizationName: "",
+    name: "",
+    email: "",
+    password: "",
+    phone: "",
+  });
   const [editPanelOpen, setEditPanelOpen] = useState(false);
   const [viewPanelOpen, setViewPanelOpen] = useState(false);
   const [selectedCompany, setSelectedCompany] = useState<Company | null>(null);
@@ -1229,9 +1251,52 @@ export default function EmpresasPage() {
     totalProjects: companies.reduce((acc, c) => acc + c.projects_count, 0),
   };
 
-  const handleCreateCompany = async () => {
-    refetchCompanies();
-    setCreatePanelOpen(false);
+  const handleCreateCompanyWithOwner = async () => {
+    if (createWithOwnerSubmitting) return;
+    const f = createWithOwnerForm;
+    if (!f.organizationName.trim() || !f.name.trim() || !f.email.trim() || !f.password) {
+      toast({
+        title: "Campos obrigatórios",
+        description: "Nome da empresa, nome do usuário principal, e-mail e senha são obrigatórios.",
+        variant: "destructive",
+      });
+      return;
+    }
+    if (f.password.length < 6) {
+      toast({
+        title: "Senha muito curta",
+        description: "A senha do usuário principal precisa ter ao menos 6 caracteres.",
+        variant: "destructive",
+      });
+      return;
+    }
+    setCreateWithOwnerSubmitting(true);
+    try {
+      // Backend cria Company + usuário principal (company_admin) na mesma
+      // transação — endpoint dedicado (POST /api/users), diferente do
+      // CompanyCreateSlidePanel/POST /api/clients acima (Tarefa 9/11).
+      await apiClient.createUser({
+        organization_name: f.organizationName.trim(),
+        name: f.name.trim(),
+        email: f.email.trim(),
+        password: f.password,
+        account_type: "empresas",
+        role: "company_admin",
+        ...(f.phone ? { phone: f.phone } : {}),
+      });
+      toast({ title: "Empresa criada", description: `"${f.organizationName.trim()}" cadastrada com sucesso.` });
+      setCreateWithOwnerOpen(false);
+      setCreateWithOwnerForm({ organizationName: "", name: "", email: "", password: "", phone: "" });
+      refetchCompanies();
+    } catch (error: any) {
+      toast({
+        title: "Erro ao criar empresa",
+        description: error?.message || "Verifique os dados e tente novamente.",
+        variant: "destructive",
+      });
+    } finally {
+      setCreateWithOwnerSubmitting(false);
+    }
   };
 
   const handleEditCompany = (company: Company) => {
@@ -1596,7 +1661,7 @@ export default function EmpresasPage() {
             <Tooltip>
               <TooltipTrigger asChild>
                 <button
-                  onClick={() => setCreatePanelOpen(true)}
+                  onClick={() => setCreateWithOwnerOpen(true)}
                   className="group relative flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-border/60 hover:border-transparent overflow-hidden transition-all"
                 >
                   <span
@@ -3951,11 +4016,105 @@ export default function EmpresasPage() {
           );
         })()}
 
-      <CompanyCreateSlidePanel
-        open={createPanelOpen}
-        onOpenChange={setCreatePanelOpen}
-        onCreate={handleCreateCompany}
-      />
+      {/* Nova Empresa — sempre com usuário principal (company_admin) obrigatório,
+          criado atomicamente junto (Tarefa 9/11). CompanyCreateSlidePanel (empresa
+          sem usuário) continua existindo só para o "Cadastrar empresa" inline
+          dentro da criação de projeto — não usado aqui de propósito. */}
+      <Dialog open={createWithOwnerOpen} onOpenChange={setCreateWithOwnerOpen}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Nova Empresa</DialogTitle>
+            <DialogDescription>
+              Cria a empresa e o usuário principal (administrador) juntos, na mesma operação.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-4 py-4">
+            <div className="space-y-2">
+              <Label htmlFor="create-company-org-name">
+                Nome da Empresa <span className="text-red-500">*</span>
+              </Label>
+              <Input
+                id="create-company-org-name"
+                placeholder="Ex: Acme Ltda"
+                value={createWithOwnerForm.organizationName}
+                onChange={(e) =>
+                  setCreateWithOwnerForm((f) => ({ ...f, organizationName: e.target.value }))
+                }
+              />
+            </div>
+
+            <div className="pt-1 border-t border-slate-200 dark:border-slate-700">
+              <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mt-3 mb-1">
+                Usuário principal
+              </p>
+              <p className="text-xs text-slate-400 mb-3">
+                Será o administrador desta empresa — pode criar e gerenciar os demais usuários da equipe depois.
+              </p>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="create-company-name">
+                Nome do responsável <span className="text-red-500">*</span>
+              </Label>
+              <Input
+                id="create-company-name"
+                placeholder="Nome completo"
+                value={createWithOwnerForm.name}
+                onChange={(e) => setCreateWithOwnerForm((f) => ({ ...f, name: e.target.value }))}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="create-company-email">
+                E-mail do responsável <span className="text-red-500">*</span>
+              </Label>
+              <Input
+                id="create-company-email"
+                type="email"
+                placeholder="contato@empresa.com"
+                value={createWithOwnerForm.email}
+                onChange={(e) => setCreateWithOwnerForm((f) => ({ ...f, email: e.target.value }))}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="create-company-password">
+                Senha de acesso <span className="text-red-500">*</span>
+              </Label>
+              <Input
+                id="create-company-password"
+                type="password"
+                placeholder="Mínimo 6 caracteres"
+                value={createWithOwnerForm.password}
+                onChange={(e) => setCreateWithOwnerForm((f) => ({ ...f, password: e.target.value }))}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="create-company-phone">Telefone (opcional)</Label>
+              <Input
+                id="create-company-phone"
+                placeholder="+55 11 98765-4321"
+                value={createWithOwnerForm.phone}
+                onChange={(e) => setCreateWithOwnerForm((f) => ({ ...f, phone: e.target.value }))}
+              />
+            </div>
+          </div>
+          <div className="flex items-center justify-end gap-2">
+            <Button
+              variant="outline"
+              onClick={() => setCreateWithOwnerOpen(false)}
+              disabled={createWithOwnerSubmitting}
+            >
+              Cancelar
+            </Button>
+            <Button
+              className="btn-brand"
+              onClick={handleCreateCompanyWithOwner}
+              disabled={createWithOwnerSubmitting}
+            >
+              {createWithOwnerSubmitting && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+              Criar empresa
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       <ConfirmationDialog
         open={deleteDialog.open}

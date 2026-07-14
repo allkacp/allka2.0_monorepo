@@ -142,7 +142,7 @@ router.get("/me", verifyToken, async (req, res, next) => {
         phone: true,
         is_active: true,
         created_at: true,
-        agency: {
+        owned_agency: {
           select: {
             id: true,
             name: true,
@@ -163,7 +163,12 @@ router.get("/me", verifyToken, async (req, res, next) => {
       return;
     }
 
-    res.json(user);
+    // Resposta sempre expôs a agência sob a chave "agency" (consumido por
+    // apps/frontend/contexts/agencia-context.tsx e sidebar-context.tsx via
+    // currentUser.agency.name) — campo Prisma virou "owned_agency", contrato
+    // externo não muda.
+    const { owned_agency, ...restUser } = user;
+    res.json({ ...restUser, agency: owned_agency });
   } catch (err) {
     next(err);
   }

@@ -29,7 +29,14 @@ model User {
   position                       String?
   admin_profile_id               String?
   company_id                     String?
-  company                        Company?  @relation(fields: [company_id], references: [id])
+  company                        Company?  @relation("CompanyMembers", fields: [company_id], references: [id])
+  // ── Vínculo de subusuário (membro) com Agency/Partner — nullable:
+  // Admin, Nomad, Leader e usuários órfãos legados não têm nenhum dos
+  // três preenchido. Espelha o padrão já usado por company_id acima.
+  agency_id                      String?
+  agency_link                    Agency?   @relation("AgencyMembers", fields: [agency_id], references: [id])
+  partner_id                     String?
+  partner_link                   PartnerProfile? @relation("PartnerMembers", fields: [partner_id], references: [id])
   last_login                     DateTime?
   // Pausa por inatividade (>=90 dias sem login) é um status derivado do
   // last_login, calculado no momento do login seguinte (ver POST
@@ -43,8 +50,12 @@ model User {
   updated_at                     DateTime  @updatedAt
 
   nomade              Nomade?
-  agency              Agency?
-  partner             PartnerProfile?
+  // Lado reverso de "eu sou o principal desta organização" — no máximo 1 de
+  // cada, aplicado em código (mesmo padrão do comentário em Project sobre
+  // agency_id/company_id/partner_id: "no máximo um dos três preenchido").
+  owned_agency        Agency?            @relation("AgencyOwner")
+  owned_company       Company?           @relation("CompanyOwner")
+  owned_partner       PartnerProfile?    @relation("PartnerOwner")
   term_acceptances    TermAcceptance[]
   chat_participations ChatParticipant[]
   sent_messages       ChatMessage[]      @relation("SentMessages")
@@ -114,13 +125,20 @@ model Company {
   use_master_as_financial_fallback     Boolean         @default(true)
   referred_by_partner_id               String? // FK to PartnerProfile (who referred this company)
   referred_by_partner                  PartnerProfile? @relation(fields: [referred_by_partner_id], references: [id], onDelete: SetNull)
+  // Usuário principal — nullable porque, hoje, a maioria das Companies
+  // existentes não tem nenhum usuário vinculado ainda (empresa "casca",
+  // criada antes do primeiro company_admin). Toda Company nova criada pelo
+  // fluxo atualizado sempre preenche isto; regra aplicada em código, não
+  // em constraint de banco (mesmo padrão do resto do schema).
+  owner_user_id                        String?         @unique
+  owner                                User?           @relation("CompanyOwner", fields: [owner_user_id], references: [id])
   created_at                           DateTime        @default(now())
   updated_at                           DateTime        @updatedAt
 
   projects        Project[]              @relation("ProjectLegacyClient")
   projects_owned  Project[]              @relation("ProjectNewCompanyOwner")
   invoices        Invoice[]
-  users           User[]
+  members         User[]                 @relation("CompanyMembers")
   payment_methods CompanyPaymentMethod[]
   squad_config    SquadConfig?
   coupon_usages   CouponUsage[]
@@ -231,8 +249,14 @@ model ClientLink {
 
 model Agency {
   id             String   @id @default(cuid())
-  user_id        String   @unique
-  user           User     @relation(fields: [user_id], references: [id])
+  // Coluna física continua "user_id" (@map) — só o campo Prisma vira
+  // owner_user_id, pra refletir que é o usuário PRINCIPAL, não o único.
+  // @unique mantido de propósito: 1 pessoa não pode ser dona de 2 agências
+  // ao mesmo tempo. Quem deixa de ser 1:1 é o vínculo de membro (ver
+  // User.agency_id / Agency.members abaixo), não a posse.
+  owner_user_id  String   @unique @map("user_id")
+  owner          User     @relation("AgencyOwner", fields: [owner_user_id], references: [id])
+  members        User[]   @relation("AgencyMembers")
   name           String
   cnpj           String?  @unique
   email          String?
@@ -1215,8 +1239,10 @@ model AdminPermission {
 
 model PartnerProfile {
   id                 String   @id @default(cuid())
-  user_id            String   @unique
-  user               User     @relation(fields: [user_id], references: [id])
+  // Coluna física continua "user_id" (@map) — mesmo padrão de Agency acima.
+  owner_user_id      String   @unique @map("user_id")
+  owner              User     @relation("PartnerOwner", fields: [owner_user_id], references: [id])
+  members            User[]   @relation("PartnerMembers")
   balance            Float    @default(0)
   total_earned       Float    @default(0)
   total_withdrawn    Float    @default(0)

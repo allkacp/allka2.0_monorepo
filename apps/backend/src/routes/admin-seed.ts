@@ -186,7 +186,7 @@ router.post(
         update: { name: AGENCY_NAME, partner_level: "gold", wallet_balance: 28500, status: "ativo" },
         create: {
           id:             "seed-agencia-dev-01",
-          user_id:        userRecord.id,
+          owner_user_id:  userRecord.id,
           name:           AGENCY_NAME,
           cnpj:           "12.345.678/0001-90",
           email:          "contato@lamegoagency.com.br",

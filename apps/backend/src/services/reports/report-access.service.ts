@@ -6,6 +6,7 @@
 //  3. Returns a 403-ready error object — never silently allows access.
 
 import { prisma } from "../../lib/prisma";
+import { resolveMyPartnerId } from "../../lib/project-scope";
 import type { JwtPayload } from "../../middleware/auth";
 import type { ResolvedScope } from "./types";
 
@@ -145,17 +146,17 @@ export async function resolveUserScope(user: JwtPayload): Promise<ResolvedScope>
 
   // ── Agency ────────────────────────────────────────────────────────────────
   if (user.account_type === "agencias") {
-    const agency = await prisma.agency.findUnique({
-      where: { user_id: user.id },
-      select: { id: true, name: true },
+    const dbUser = await prisma.user.findUnique({
+      where: { id: user.id },
+      select: { agency_id: true, agency_link: { select: { name: true } } },
     });
-    if (!agency) {
+    if (!dbUser?.agency_id || !dbUser.agency_link) {
       return { type: "OWN_AGENCY_SCOPE", agencyIds: [], agencyNames: [] };
     }
     return {
       type: "OWN_AGENCY_SCOPE",
-      agencyIds: [agency.id],
-      agencyNames: [agency.name],
+      agencyIds: [dbUser.agency_id],
+      agencyNames: [dbUser.agency_link.name],
     };
   }
 
@@ -191,8 +192,11 @@ export async function resolveUserScope(user: JwtPayload): Promise<ResolvedScope>
 
   // ── Partner / Embaixadora ─────────────────────────────────────────────────
   if (user.account_type === "parceiro") {
+    const partnerId = await resolveMyPartnerId(prisma, user.id);
+    if (!partnerId) return { type: "OWN_PARTNER_SCOPE", agencyIds: [], agencyNames: [] };
+
     const partner = await prisma.partnerProfile.findUnique({
-      where: { user_id: user.id },
+      where: { id: partnerId },
       select: {
         id: true,
         led_agencies: {

@@ -129,6 +129,12 @@ const navigationConfig = {
       current: false,
     },
     {
+      name: "Usuários",
+      href: "/agency/usuarios",
+      icon: Users,
+      current: false,
+    },
+    {
       name: "Projetos",
       href: "/agency/projetos",
       icon: FolderOpen,
@@ -176,6 +182,12 @@ const navigationConfig = {
       name: "Agências",
       href: "/partner/agencias",
       icon: Building2,
+      current: false,
+    },
+    {
+      name: "Usuários",
+      href: "/partner/usuarios",
+      icon: Users,
       current: false,
     },
     {
@@ -342,6 +354,12 @@ const navigationConfig = {
         {
           name: "Empresas",
           href: "/admin/empresas",
+          icon: Building2,
+          current: false,
+        },
+        {
+          name: "Agências",
+          href: "/admin/agencias",
           icon: Building2,
           current: false,
         },
@@ -635,6 +653,19 @@ export function Sidebar() {
     } catch { setNomadUser({}); }
   }, [accountType]);
 
+  // Role do usuário real logado — usado só pra esconder o item "Usuários"
+  // (gestão de equipe) de subusuários comuns (company_user/agency_user/
+  // partner_user), que o backend já bloqueia (403) mas não deveriam nem ver
+  // o menu (Tarefa 11).
+  const [currentUserRole, setCurrentUserRole] = useState<string | null>(null);
+  useEffect(() => {
+    try {
+      const u = JSON.parse(localStorage.getItem("allka_user") || "{}");
+      setCurrentUserRole(u?.role ?? null);
+    } catch { setCurrentUserRole(null); }
+  }, [accountType]);
+  const isOrgAdmin = currentUserRole === "company_admin" || currentUserRole === "agency_admin" || currentUserRole === "partner_admin";
+
   const handleResizeMouseDown = (e: React.MouseEvent) => {
     if (collapsed) return;
     e.preventDefault();
@@ -759,13 +790,23 @@ export function Sidebar() {
       });
     }
 
+    // "Usuários" (gestão de equipe) só aparece pro *_admin de cada
+    // organização — subusuário comum não vê o menu (Tarefa 11).
+    const hideTeamMenuForNonAdmin = (items: any[]) =>
+      isOrgAdmin ? items : items.filter((item) => item.href !== "/agency/usuarios" && item.href !== "/partner/usuarios");
+
     // Regular users see only their account type menu
     if (accountType === "empresas") {
-      return navigationConfig.empresas[accountSubType || "company"];
+      const items = navigationConfig.empresas[accountSubType || "company"];
+      return isOrgAdmin ? items : items.filter((item) => item.href !== "/company/usuarios");
     }
 
     if (accountType === "lider") {
       return navigationConfig.lider;
+    }
+
+    if (accountType === "agencias" || accountType === "parceiro") {
+      return hideTeamMenuForNonAdmin(navigationConfig[accountType] || []);
     }
 
     return navigationConfig[accountType] || [];

@@ -33,8 +33,8 @@ const enrichedSelect = {
   created_at: true,
   updated_at: true,
   company: { select: { id: true, name: true } },
-  agency: { select: { id: true, name: true } },
-  partner: { select: { id: true, status: true } },
+  owned_agency: { select: { id: true, name: true } },
+  owned_partner: { select: { id: true, status: true } },
   nomade: { select: { id: true, name: true } },
   lider_areas: { select: { id: true, area_nome: true, ativo: true } },
   // LGPD: consentimento real = ao menos 1 aceite (term_acceptances) de um
@@ -68,18 +68,18 @@ function mapUser(u: EnrichedUser) {
     profile_link_type = "admin";
     profile_link_name = "Admin";
   } else if (u.account_type === "agencias") {
-    has_profile_link = !!u.agency;
+    has_profile_link = !!u.owned_agency;
     profile_link_type = "agency";
-    profile_link_name = u.agency?.name ?? null;
+    profile_link_name = u.owned_agency?.name ?? null;
   } else if (u.account_type === "empresas") {
     has_profile_link = !!u.company;
     profile_link_type = "company";
     profile_link_name = u.company?.name ?? null;
   } else if (u.account_type === "parceiro") {
-    has_profile_link = !!u.partner;
+    has_profile_link = !!u.owned_partner;
     profile_link_type = "partner";
-    profile_link_name = u.partner ? u.name : null;
-    profile_link_status = u.partner?.status ?? null;
+    profile_link_name = u.owned_partner ? u.name : null;
+    profile_link_status = u.owned_partner?.status ?? null;
   } else if (u.account_type === "lider") {
     has_profile_link = activeLiderAreas.length > 0;
     profile_link_type = "leader";
@@ -120,12 +120,12 @@ function mapUser(u: EnrichedUser) {
     reactivation_review_required: u.reactivation_review_required,
     created_at: u.created_at,
     updated_at: u.updated_at,
-    agency_id: u.agency?.id ?? null,
-    agency_name: u.agency?.name ?? null,
+    agency_id: u.owned_agency?.id ?? null,
+    agency_name: u.owned_agency?.name ?? null,
     company_name: u.company?.name ?? null,
-    partner_profile_id: u.partner?.id ?? null,
-    partner_status: u.partner?.status ?? null,
-    partner_name: u.partner ? u.name : null,
+    partner_profile_id: u.owned_partner?.id ?? null,
+    partner_status: u.owned_partner?.status ?? null,
+    partner_name: u.owned_partner ? u.name : null,
     nomad_id: u.nomade?.id ?? null,
     nomad_name: u.nomade?.name ?? null,
     leader_areas: activeLiderAreas.map((a) => a.area_nome),

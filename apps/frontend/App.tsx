@@ -60,6 +60,7 @@ const AdminUsuariosInternosPage = React.lazy(
   () => import("@/app/admin/usuarios-internos/page"),
 );
 const AdminEmpresasPage = React.lazy(() => import("@/app/admin/empresas/page"));
+const AdminAgenciasPage = React.lazy(() => import("@/app/admin/agencias/page"));
 const AdminNomadesPg = React.lazy(() => import("@/app/admin/nomades/page"));
 const AdminProjetosPage = React.lazy(() => import("@/app/admin/projetos/page"));
 const AdminProdutosPage = React.lazy(() => import("@/app/admin/produtos/page"));
@@ -168,6 +169,9 @@ const PartnerRelatoriosPage = React.lazy(
 const PartnerClientesPage = React.lazy(
   () => import("@/app/partner/clientes/page"),
 );
+const PartnerUsuariosPage = React.lazy(
+  () => import("@/app/partner/usuarios/page"),
+);
 
 // ─── Empresa Pages ──────────────────────────────────────────────────────────
 const CompanyDashboardPage = React.lazy(
@@ -217,6 +221,9 @@ const AgencyRelatoriosPage = React.lazy(
 );
 const AgencyClientesPage = React.lazy(
   () => import("@/app/agencia/clientes/page"),
+);
+const AgencyUsuariosPage = React.lazy(
+  () => import("@/app/agencia/usuarios/page"),
 );
 
 // ─── Login Pages ─────────────────────────────────────────────────────────
@@ -685,6 +692,10 @@ export default function App() {
                     path="/admin/empresas/:empresaId"
                     element={<AdminEmpresasPage />}
                   />
+                  <Route
+                    path="/admin/agencias"
+                    element={<AdminAgenciasPage />}
+                  />
                   <Route path="/admin/nomades" element={<AdminNomadesPg />} />
                   <Route
                     path="/admin/projetos"
@@ -935,6 +946,10 @@ export default function App() {
                     path="/company/usuarios"
                     element={<CompanyUsuariosPage />}
                   />
+                  <Route
+                    path="/partner/usuarios"
+                    element={<PartnerUsuariosPage />}
+                  />
 
                   {/* ─── Agency (novo) ────────────────────────────────────── */}
                   <Route
@@ -972,6 +987,10 @@ export default function App() {
                   <Route
                     path="/agency/clientes"
                     element={<AgencyClientesPage />}
+                  />
+                  <Route
+                    path="/agency/usuarios"
+                    element={<AgencyUsuariosPage />}
                   />
 
                   {/* ─── Agência ──────────────────────────────────────────── */}

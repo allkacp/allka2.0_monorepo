@@ -18,9 +18,12 @@ const router = Router();
 // alguém a admin da própria conta sem esse fluxo ter sido pedido.
 const COMPANY_ASSIGNABLE_ROLES = ["company_user", "company_financial"] as const;
 
-function requireCompanyUser(req: Request, res: Response, next: NextFunction): void {
-  if (req.user?.account_type !== "empresas") {
-    res.status(403).json({ error: "Acesso restrito a usuários de Empresa" });
+// Só company_admin gerencia a equipe — company_user/company_financial
+// recebem 403 (Tarefa 10). account_type sozinho não basta mais: um
+// subusuário comum também tem account_type="empresas".
+function requireCompanyAdmin(req: Request, res: Response, next: NextFunction): void {
+  if (req.user?.account_type !== "empresas" || req.user?.role !== "company_admin") {
+    res.status(403).json({ error: "Acesso restrito ao administrador da empresa" });
     return;
   }
   next();
@@ -32,6 +35,13 @@ function requireCompanyUser(req: Request, res: Response, next: NextFunction): vo
 async function resolveCallerCompanyId(userId: string): Promise<string | null> {
   const u = await prisma.user.findUnique({ where: { id: userId }, select: { company_id: true } });
   return u?.company_id ?? null;
+}
+
+// Resolve o owner_user_id da Company — usado pra impedir que o admin
+// bloqueie o próprio usuário principal (Tarefa 10).
+async function resolveCompanyOwnerUserId(companyId: string): Promise<string | null> {
+  const c = await prisma.company.findUnique({ where: { id: companyId }, select: { owner_user_id: true } });
+  return c?.owner_user_id ?? null;
 }
 
 const createSchema = z.object({
@@ -91,7 +101,7 @@ function toDTO(u: {
 }
 
 // GET /api/company/users — lista só os usuários da própria empresa
-router.get("/", verifyToken, requireCompanyUser, async (req, res, next) => {
+router.get("/", verifyToken, requireCompanyAdmin, async (req, res, next) => {
   try {
     const companyId = await resolveCallerCompanyId(req.user!.id);
     if (!companyId) {
@@ -126,7 +136,7 @@ router.get("/", verifyToken, requireCompanyUser, async (req, res, next) => {
 
 // POST /api/company/users — cria um usuário sempre vinculado à empresa do
 // usuário logado (company_id nunca vem do body).
-router.post("/", verifyToken, requireCompanyUser, validate(createSchema), async (req, res, next) => {
+router.post("/", verifyToken, requireCompanyAdmin, validate(createSchema), async (req, res, next) => {
   try {
     const companyId = await resolveCallerCompanyId(req.user!.id);
     if (!companyId) {
@@ -174,7 +184,7 @@ router.post("/", verifyToken, requireCompanyUser, validate(createSchema), async 
 
 // PUT /api/company/users/:id — só edita usuário da própria empresa; nunca
 // altera company_id/account_type/user_code (fora do schema de validação).
-router.put("/:id", verifyToken, requireCompanyUser, validate(updateSchema), async (req, res, next) => {
+router.put("/:id", verifyToken, requireCompanyAdmin, validate(updateSchema), async (req, res, next) => {
   try {
     const companyId = await resolveCallerCompanyId(req.user!.id);
     if (!companyId) {
@@ -197,6 +207,15 @@ router.put("/:id", verifyToken, requireCompanyUser, validate(updateSchema), asyn
       is_active?: boolean;
       password?: string;
     };
+
+    if (rest.is_active === false) {
+      const ownerUserId = await resolveCompanyOwnerUserId(companyId);
+      if (ownerUserId && target.id === ownerUserId) {
+        res.status(403).json({ error: "Não é possível bloquear o usuário principal da empresa" });
+        return;
+      }
+    }
+
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const data: Record<string, any> = { ...rest };
     if (password) {

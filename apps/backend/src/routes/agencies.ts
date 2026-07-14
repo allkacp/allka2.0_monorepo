@@ -3,6 +3,7 @@ import { z } from "zod";
 import { prisma } from "../lib/prisma";
 import { verifyToken, requireRole } from "../middleware/auth";
 import { validate, parsePagination } from "../middleware/validate";
+import { resolveMyAgencyId, resolveMyPartnerId } from "../lib/project-scope";
 
 const router = Router();
 
@@ -15,26 +16,41 @@ const createSchema = z.object({
     .enum(["bronze", "silver", "gold", "platinum", "diamond"])
     .default("bronze"),
   status: z.string().default("ativo"),
-  user_id: z.string().min(1),
+  owner_user_id: z.string().min(1),
 });
 
-const updateSchema = createSchema.partial().omit({ user_id: true });
+const updateSchema = createSchema.partial().omit({ owner_user_id: true });
+
+// Resposta HTTP deste router sempre expôs o dono da Agency sob a chave
+// "user" (consumido por apps/frontend/app/admin/agencias/page.tsx via
+// agency.user.name/.email) — o campo Prisma virou "owner" (ver
+// schema.prisma), mas o contrato externo desta rota não muda.
+function withUserAlias<T extends { owner?: { id: string; email: string; name: string } | null }>(
+  agency: T,
+): Omit<T, "owner"> & { user: T["owner"] } {
+  const { owner, ...rest } = agency;
+  return { ...rest, user: owner } as Omit<T, "owner"> & { user: T["owner"] };
+}
 
 // GET /api/agencies
 router.get("/", verifyToken, async (req, res, next) => {
   try {
     const { role, account_type, id: userId } = req.user!;
 
-    // Agency users see only their own agency
+    // Agency users (owner or future member) see only the agency they belong to
     if (account_type === "agencias") {
-      const agency = await prisma.agency.findFirst({
-        where: { user_id: userId },
-        include: {
-          user: { select: { id: true, email: true, name: true } },
-          match_queue_entry: true,
-        },
-      });
-      res.json({ data: agency ? [agency] : [], total: agency ? 1 : 0, page: 1, limit: 1 });
+      const myAgencyId = await resolveMyAgencyId(prisma, userId);
+      const agency = myAgencyId
+        ? await prisma.agency.findUnique({
+            where: { id: myAgencyId },
+            include: {
+              owner: { select: { id: true, email: true, name: true } },
+              match_queue_entry: true,
+            },
+          })
+        : null;
+      const data = agency ? [withUserAlias(agency)] : [];
+      res.json({ data, total: agency ? 1 : 0, page: 1, limit: 1 });
       return;
     }
 
@@ -60,12 +76,12 @@ router.get("/", verifyToken, async (req, res, next) => {
       ];
     }
 
-    const [total, data] = await Promise.all([
+    const [total, rawData] = await Promise.all([
       prisma.agency.count({ where }),
       prisma.agency.findMany({
         where,
         include: {
-          user: { select: { id: true, email: true, name: true } },
+          owner: { select: { id: true, email: true, name: true } },
           match_queue_entry: true,
         },
         skip,
@@ -73,6 +89,7 @@ router.get("/", verifyToken, async (req, res, next) => {
         orderBy: { created_at: "desc" },
       }),
     ]);
+    const data = rawData.map(withUserAlias);
 
     res.json({ data, total, page, limit });
   } catch (err) {
@@ -85,10 +102,10 @@ router.get("/:id", verifyToken, async (req, res, next) => {
   try {
     const { role, account_type, id: userId } = req.user!;
 
-    // Agency users can only see their own agency
+    // Agency users (owner or future member) can only see the agency they belong to
     if (account_type === "agencias") {
-      const own = await prisma.agency.findFirst({ where: { user_id: userId }, select: { id: true } });
-      if (!own || own.id !== req.params.id) {
+      const myAgencyId = await resolveMyAgencyId(prisma, userId);
+      if (!myAgencyId || myAgencyId !== req.params.id) {
         res.status(403).json({ error: "Acesso não autorizado" });
         return;
       }
@@ -100,7 +117,7 @@ router.get("/:id", verifyToken, async (req, res, next) => {
     const agency = await prisma.agency.findUnique({
       where: { id: (req.params.id as string) },
       include: {
-        user: { select: { id: true, email: true, name: true } },
+        owner: { select: { id: true, email: true, name: true } },
         match_queue_entry: true,
       },
     });
@@ -110,7 +127,7 @@ router.get("/:id", verifyToken, async (req, res, next) => {
       return;
     }
 
-    res.json(agency);
+    res.json(withUserAlias(agency));
   } catch (err) {
     next(err);
   }
@@ -121,9 +138,9 @@ router.post("/", verifyToken, requireRole("admin"), validate(createSchema), asyn
   try {
     const agency = await prisma.agency.create({
       data: req.body,
-      include: { user: { select: { id: true, email: true, name: true } } },
+      include: { owner: { select: { id: true, email: true, name: true } } },
     });
-    res.status(201).json(agency);
+    res.status(201).json(withUserAlias(agency));
   } catch (err) {
     next(err);
   }
@@ -157,22 +174,20 @@ router.delete("/:id", verifyToken, requireRole("admin"), async (req, res, next) 
 // GET /api/agencies/led — agencies led by the current partner
 router.get("/led/list", verifyToken, async (req, res, next) => {
   try {
-    const partner = await prisma.partnerProfile.findUnique({
-      where: { user_id: req.user!.id },
-    });
-    if (!partner) {
+    const myPartnerId = await resolveMyPartnerId(prisma, req.user!.id);
+    if (!myPartnerId) {
       res.status(404).json({ error: "Perfil de parceiro não encontrado" });
       return;
     }
 
     const leaderships = await prisma.agencyLeadership.findMany({
-      where: { partner_id: partner.id, status: "active" },
+      where: { partner_id: myPartnerId, status: "active" },
       include: {
         agency: {
           include: {
-            user: { select: { id: true, email: true, name: true } },
+            owner: { select: { id: true, email: true, name: true } },
             reports: {
-              where: { partner_id: partner.id },
+              where: { partner_id: myPartnerId },
               orderBy: [{ period_year: "desc" }, { period_month: "desc" }],
               take: 5,
             },
@@ -191,10 +206,8 @@ router.get("/led/list", verifyToken, async (req, res, next) => {
 // POST /api/agencies/:id/lead — start leading an agency
 router.post("/:id/lead", verifyToken, async (req, res, next) => {
   try {
-    const partner = await prisma.partnerProfile.findUnique({
-      where: { user_id: req.user!.id },
-    });
-    if (!partner) {
+    const myPartnerId = await resolveMyPartnerId(prisma, req.user!.id);
+    if (!myPartnerId) {
       res.status(404).json({ error: "Perfil de parceiro não encontrado" });
       return;
     }
@@ -208,8 +221,8 @@ router.post("/:id/lead", verifyToken, async (req, res, next) => {
     }
 
     const leadership = await prisma.agencyLeadership.upsert({
-      where: { partner_id_agency_id: { partner_id: partner.id, agency_id: agency.id } },
-      create: { partner_id: partner.id, agency_id: agency.id, status: "active", notes: req.body.notes },
+      where: { partner_id_agency_id: { partner_id: myPartnerId, agency_id: agency.id } },
+      create: { partner_id: myPartnerId, agency_id: agency.id, status: "active", notes: req.body.notes },
       update: { status: "active", notes: req.body.notes },
       include: { agency: true },
     });
@@ -223,16 +236,14 @@ router.post("/:id/lead", verifyToken, async (req, res, next) => {
 // DELETE /api/agencies/:id/lead — stop leading an agency
 router.delete("/:id/lead", verifyToken, async (req, res, next) => {
   try {
-    const partner = await prisma.partnerProfile.findUnique({
-      where: { user_id: req.user!.id },
-    });
-    if (!partner) {
+    const myPartnerId = await resolveMyPartnerId(prisma, req.user!.id);
+    if (!myPartnerId) {
       res.status(404).json({ error: "Perfil de parceiro não encontrado" });
       return;
     }
 
     await prisma.agencyLeadership.updateMany({
-      where: { partner_id: partner.id, agency_id: (req.params.id as string) },
+      where: { partner_id: myPartnerId, agency_id: (req.params.id as string) },
       data: { status: "ended", ended_at: new Date() },
     });
 
@@ -245,16 +256,14 @@ router.delete("/:id/lead", verifyToken, async (req, res, next) => {
 // GET /api/agencies/:id/reports — reports for a led agency
 router.get("/:id/reports", verifyToken, async (req, res, next) => {
   try {
-    const partner = await prisma.partnerProfile.findUnique({
-      where: { user_id: req.user!.id },
-    });
-    if (!partner) {
+    const myPartnerId = await resolveMyPartnerId(prisma, req.user!.id);
+    if (!myPartnerId) {
       res.status(404).json({ error: "Perfil de parceiro não encontrado" });
       return;
     }
 
     const reports = await prisma.agencyReport.findMany({
-      where: { partner_id: partner.id, agency_id: (req.params.id as string) },
+      where: { partner_id: myPartnerId, agency_id: (req.params.id as string) },
       orderBy: [{ period_year: "desc" }, { period_month: "desc" }],
     });
 
@@ -281,10 +290,8 @@ const reportSchema = z.object({
 // POST /api/agencies/:id/reports — create a report for a led agency
 router.post("/:id/reports", verifyToken, validate(reportSchema), async (req, res, next) => {
   try {
-    const partner = await prisma.partnerProfile.findUnique({
-      where: { user_id: req.user!.id },
-    });
-    if (!partner) {
+    const myPartnerId = await resolveMyPartnerId(prisma, req.user!.id);
+    if (!myPartnerId) {
       res.status(404).json({ error: "Perfil de parceiro não encontrado" });
       return;
     }
@@ -292,7 +299,7 @@ router.post("/:id/reports", verifyToken, validate(reportSchema), async (req, res
     const body = req.body;
     const report = await prisma.agencyReport.create({
       data: {
-        partner_id: partner.id,
+        partner_id: myPartnerId,
         agency_id: (req.params.id as string),
         title: body.title,
         content: body.content,
@@ -317,10 +324,8 @@ router.post("/:id/reports", verifyToken, validate(reportSchema), async (req, res
 // PUT /api/agencies/:id/reports/:reportId — update a report
 router.put("/:id/reports/:reportId", verifyToken, validate(reportSchema.partial()), async (req, res, next) => {
   try {
-    const partner = await prisma.partnerProfile.findUnique({
-      where: { user_id: req.user!.id },
-    });
-    if (!partner) {
+    const myPartnerId = await resolveMyPartnerId(prisma, req.user!.id);
+    if (!myPartnerId) {
       res.status(404).json({ error: "Perfil de parceiro não encontrado" });
       return;
     }
@@ -331,7 +336,7 @@ router.put("/:id/reports/:reportId", verifyToken, validate(reportSchema.partial(
     if (body.improvements !== undefined) updateData.improvements = JSON.stringify(body.improvements);
 
     const report = await prisma.agencyReport.update({
-      where: { id: (req.params.reportId as string), partner_id: partner.id },
+      where: { id: (req.params.reportId as string), partner_id: myPartnerId },
       data: updateData,
     });
 
@@ -344,16 +349,14 @@ router.put("/:id/reports/:reportId", verifyToken, validate(reportSchema.partial(
 // DELETE /api/agencies/:id/reports/:reportId — delete a report
 router.delete("/:id/reports/:reportId", verifyToken, async (req, res, next) => {
   try {
-    const partner = await prisma.partnerProfile.findUnique({
-      where: { user_id: req.user!.id },
-    });
-    if (!partner) {
+    const myPartnerId = await resolveMyPartnerId(prisma, req.user!.id);
+    if (!myPartnerId) {
       res.status(404).json({ error: "Perfil de parceiro não encontrado" });
       return;
     }
 
     await prisma.agencyReport.delete({
-      where: { id: (req.params.reportId as string), partner_id: partner.id },
+      where: { id: (req.params.reportId as string), partner_id: myPartnerId },
     });
 
     res.status(204).send();
@@ -369,10 +372,10 @@ router.get("/me/alerts", verifyToken, async (req, res, next) => {
     const now = new Date();
 
     // Find the agency and its name (used as FK in Project.agency)
-    const agency = await prisma.agency.findFirst({
-      where: { user_id: userId },
-      select: { id: true, name: true },
-    });
+    const myAgencyId = await resolveMyAgencyId(prisma, userId);
+    const agency = myAgencyId
+      ? await prisma.agency.findUnique({ where: { id: myAgencyId }, select: { id: true, name: true } })
+      : null;
     if (!agency) {
       res.json({ data: [] });
       return;

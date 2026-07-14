@@ -143,7 +143,7 @@ router.get("/", verifyToken, async (req, res, next) => {
               cnpj: true,
               referred_by_partner_id: true,
               referred_by_partner: {
-                select: { user: { select: { id: true, name: true } } },
+                select: { owner: { select: { id: true, name: true } } },
               },
             },
           },
@@ -167,7 +167,7 @@ router.get("/", verifyToken, async (req, res, next) => {
           _count: { select: { task_executions: true } },
           agency_owner: { select: { id: true, name: true } },
           company_owner: { select: { id: true, name: true } },
-          partner_owner: { select: { id: true, user: { select: { name: true } } } },
+          partner_owner: { select: { id: true, owner: { select: { name: true } } } },
         },
         skip,
         take: limit,
@@ -193,13 +193,13 @@ router.get("/", verifyToken, async (req, res, next) => {
         where: { id: { in: clientIdsInPage }, referred_by_partner_id: { not: null } },
         select: {
           id: true,
-          referred_by_partner: { select: { user: { select: { name: true } } } },
+          referred_by_partner: { select: { owner: { select: { name: true } } } },
         },
       });
       for (const c of referredCompanies) {
         partnerReferredSet.add(c.id);
-        if (c.referred_by_partner?.user?.name) {
-          partnerOwnerMap.set(c.id, c.referred_by_partner.user.name);
+        if (c.referred_by_partner?.owner?.name) {
+          partnerOwnerMap.set(c.id, c.referred_by_partner.owner.name);
         }
       }
     }
@@ -1376,7 +1376,7 @@ router.put("/:id/link", verifyToken, validate(updateProjectLinkSchema), async (r
         client: { select: { id: true, name: true, cnpj: true } },
         agency_owner: { select: { id: true, name: true } },
         company_owner: { select: { id: true, name: true } },
-        partner_owner: { select: { id: true, user: { select: { name: true } } } },
+        partner_owner: { select: { id: true, owner: { select: { name: true } } } },
       },
     });
     res.json(updated);

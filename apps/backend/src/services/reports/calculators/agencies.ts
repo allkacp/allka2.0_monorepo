@@ -77,7 +77,7 @@ export async function calcAtividade(ctx: CalculatorContext): Promise<IndicatorRe
   const activeAgencies = await prisma.agency.count({
     where: {
       status: "ativo",
-      user: { last_login: { gte: ctx.current.start, lte: ctx.current.end } },
+      owner: { last_login: { gte: ctx.current.start, lte: ctx.current.end } },
     },
   });
 
@@ -110,7 +110,7 @@ export async function calcInatividade(ctx: CalculatorContext): Promise<Indicator
     prisma.agency.count({
       where: {
         status: "ativo",
-        user: {
+        owner: {
           OR: [
             { last_login: { lt: cutoff } },
             { last_login: null },

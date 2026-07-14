@@ -88,6 +88,7 @@ export default function AgenciasPage() {
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [createForm, setCreateForm] = useState({
+    organizationName: "",
     name: "",
     email: "",
     password: "",
@@ -132,18 +133,35 @@ export default function AgenciasPage() {
   )
 
   const handleCreate = async () => {
-    if (!createForm.name.trim() || !createForm.email.trim() || !createForm.password) {
+    if (isSubmitting) return
+    if (
+      !createForm.organizationName.trim() ||
+      !createForm.name.trim() ||
+      !createForm.email.trim() ||
+      !createForm.password
+    ) {
       toast({
         title: "Campos obrigatórios",
-        description: "Nome, e-mail e senha são obrigatórios.",
+        description: "Nome da agência, nome do usuário principal, e-mail e senha são obrigatórios.",
+        variant: "destructive",
+      })
+      return
+    }
+    if (createForm.password.length < 6) {
+      toast({
+        title: "Senha muito curta",
+        description: "A senha do usuário principal precisa ter ao menos 6 caracteres.",
         variant: "destructive",
       })
       return
     }
     setIsSubmitting(true)
     try {
-      // Backend creates the Agency record automatically inside $transaction
+      // Backend cria Agency + usuário principal (agency_admin) na mesma
+      // transação — role nunca é escolhido pelo formulário, é sempre
+      // agency_admin pra quem funda a agência (Tarefa 9/11).
       await apiClient.createUser({
+        organization_name: createForm.organizationName.trim(),
         name: createForm.name.trim(),
         email: createForm.email.trim(),
         password: createForm.password,
@@ -151,9 +169,9 @@ export default function AgenciasPage() {
         role: "agency_admin",
         ...(createForm.phone ? { phone: createForm.phone } : {}),
       })
-      toast({ title: "Agência criada", description: `"${createForm.name.trim()}" cadastrada com sucesso.` })
+      toast({ title: "Agência criada", description: `"${createForm.organizationName.trim()}" cadastrada com sucesso.` })
       setIsAddDialogOpen(false)
-      setCreateForm({ name: "", email: "", password: "", phone: "", partner_level: "bronze" })
+      setCreateForm({ organizationName: "", name: "", email: "", password: "", phone: "", partner_level: "bronze" })
       await refetch()
     } catch (err: any) {
       toast({
@@ -403,17 +421,37 @@ export default function AgenciasPage() {
           <DialogHeader>
             <DialogTitle>Nova Agência</DialogTitle>
             <DialogDescription>
-              Cria um usuário agency_admin e vincula uma agência automaticamente.
+              Cria a agência e o usuário principal (administrador) juntos, na mesma operação.
             </DialogDescription>
           </DialogHeader>
           <div className="grid gap-4 py-4">
             <div className="space-y-2">
-              <Label htmlFor="create-name">
+              <Label htmlFor="create-org-name">
                 Nome da Agência <span className="text-red-500">*</span>
               </Label>
               <Input
-                id="create-name"
+                id="create-org-name"
                 placeholder="Ex: Digital Innovations"
+                value={createForm.organizationName}
+                onChange={(e) => setCreateForm((f) => ({ ...f, organizationName: e.target.value }))}
+              />
+            </div>
+
+            <div className="pt-1 border-t border-slate-200 dark:border-slate-700">
+              <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mt-3 mb-1">
+                Usuário principal
+              </p>
+              <p className="text-xs text-slate-400 mb-3">
+                Será o administrador desta agência — pode criar e gerenciar os demais usuários da equipe depois.
+              </p>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="create-name">
+                Nome do responsável <span className="text-red-500">*</span>
+              </Label>
+              <Input
+                id="create-name"
+                placeholder="Nome completo"
                 value={createForm.name}
                 onChange={(e) => setCreateForm((f) => ({ ...f, name: e.target.value }))}
               />
@@ -443,7 +481,7 @@ export default function AgenciasPage() {
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="create-phone">Telefone</Label>
+              <Label htmlFor="create-phone">Telefone (opcional)</Label>
               <Input
                 id="create-phone"
                 placeholder="+55 11 98765-4321"

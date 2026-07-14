@@ -8,6 +8,23 @@ import type { Prisma, PrismaClient } from "@prisma/client";
  */
 export type DbClient = PrismaClient | Prisma.TransactionClient;
 
+// ─── Resolução de escopo por vínculo de membro ──────────────────────────────
+// Fonte da verdade pra "qual organização este usuário enxerga" é sempre
+// User.agency_id / User.partner_id (vínculo de membro, preenchido tanto pro
+// usuário principal quanto por futuros subusuários) — nunca a relação de
+// propriedade (Agency/PartnerProfile.owner_user_id, exposta via
+// User.owned_agency/owned_partner). Propriedade define quem é o
+// administrador principal; vínculo de membro define quem enxerga os dados.
+export async function resolveMyAgencyId(db: DbClient, userId: string): Promise<string | null> {
+  const user = await db.user.findUnique({ where: { id: userId }, select: { agency_id: true } });
+  return user?.agency_id ?? null;
+}
+
+export async function resolveMyPartnerId(db: DbClient, userId: string): Promise<string | null> {
+  const user = await db.user.findUnique({ where: { id: userId }, select: { partner_id: true } });
+  return user?.partner_id ?? null;
+}
+
 export type ProjectScope =
   | { kind: "admin" }
   | { kind: "open" }
@@ -28,9 +45,9 @@ export async function getProjectScope(
   if (accountType === "agencias") {
     const user = await db.user.findUnique({
       where: { id: userId },
-      select: { agency: { select: { name: true } } },
+      select: { agency_link: { select: { name: true } } },
     });
-    const agencyName = user?.agency?.name;
+    const agencyName = user?.agency_link?.name;
     if (!agencyName) return { kind: "agency_unlinked" };
     return { kind: "agency", agencyName };
   }
@@ -45,8 +62,10 @@ export async function getProjectScope(
   }
 
   if (accountType === "parceiro") {
+    const partnerId = await resolveMyPartnerId(db, userId);
+    if (!partnerId) return { kind: "partner_unlinked" };
     const profile = await db.partnerProfile.findUnique({
-      where: { user_id: userId },
+      where: { id: partnerId },
       select: { referred_companies: { select: { id: true } } },
     });
     const companyIds = profile?.referred_companies?.map((c) => c.id) ?? [];
@@ -112,16 +131,16 @@ export async function resolveProjectNewScope(
   accountType: string,
 ): Promise<NewProjectScope> {
   if (accountType === "agencias") {
-    const agency = await db.agency.findFirst({ where: { user_id: userId }, select: { id: true } });
-    return agency ? { kind: "agency", agencyId: agency.id } : { kind: "none" };
+    const agencyId = await resolveMyAgencyId(db, userId);
+    return agencyId ? { kind: "agency", agencyId } : { kind: "none" };
   }
   if (accountType === "empresas") {
     const user = await db.user.findUnique({ where: { id: userId }, select: { company_id: true } });
     return user?.company_id ? { kind: "company", companyId: user.company_id } : { kind: "none" };
   }
   if (accountType === "parceiro") {
-    const profile = await db.partnerProfile.findUnique({ where: { user_id: userId }, select: { id: true } });
-    return profile ? { kind: "partner", partnerId: profile.id } : { kind: "none" };
+    const partnerId = await resolveMyPartnerId(db, userId);
+    return partnerId ? { kind: "partner", partnerId } : { kind: "none" };
   }
   return { kind: "none" };
 }
