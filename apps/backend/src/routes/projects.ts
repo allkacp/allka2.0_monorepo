@@ -143,7 +143,7 @@ router.get("/", verifyToken, async (req, res, next) => {
               cnpj: true,
               referred_by_partner_id: true,
               referred_by_partner: {
-                select: { owner: { select: { id: true, name: true } } },
+                select: { agency: { select: { owner: { select: { id: true, name: true } } } } },
               },
             },
           },
@@ -167,7 +167,7 @@ router.get("/", verifyToken, async (req, res, next) => {
           _count: { select: { task_executions: true } },
           agency_owner: { select: { id: true, name: true } },
           company_owner: { select: { id: true, name: true } },
-          partner_owner: { select: { id: true, owner: { select: { name: true } } } },
+          partner_owner: { select: { id: true, agency: { select: { owner: { select: { name: true } } } } } },
         },
         skip,
         take: limit,
@@ -193,13 +193,13 @@ router.get("/", verifyToken, async (req, res, next) => {
         where: { id: { in: clientIdsInPage }, referred_by_partner_id: { not: null } },
         select: {
           id: true,
-          referred_by_partner: { select: { owner: { select: { name: true } } } },
+          referred_by_partner: { select: { agency: { select: { owner: { select: { name: true } } } } } },
         },
       });
       for (const c of referredCompanies) {
         partnerReferredSet.add(c.id);
-        if (c.referred_by_partner?.owner?.name) {
-          partnerOwnerMap.set(c.id, c.referred_by_partner.owner.name);
+        if (c.referred_by_partner?.agency?.owner?.name) {
+          partnerOwnerMap.set(c.id, c.referred_by_partner.agency.owner.name);
         }
       }
     }
@@ -1172,17 +1172,15 @@ router.post(
         return;
       }
 
-      // Escopo novo: Agency/Company/Partner são auto-vinculados ao próprio
-      // perfil — o que vier em agency_id/company_id/partner_id no body é
-      // sempre ignorado pra esses três. Admin pode enviar exatamente um
-      // desses três (ou nenhum); validado abaixo. Não afeta o vínculo
-      // legado (agency/client_id) acima, que continua exatamente como
-      // estava.
+      // Escopo novo: Agency/Company são auto-vinculados ao próprio perfil —
+      // o que vier em agency_id/company_id/partner_id no body é sempre
+      // ignorado pra esses dois. Admin pode enviar exatamente um dos três
+      // (ou nenhum); validado abaixo. Não afeta o vínculo legado
+      // (agency/client_id) acima, que continua exatamente como estava.
       const newScope = await resolveProjectNewScope(prisma, req.user!.id, req.user!.account_type);
       let newScopeData: Record<string, string> = {};
       if (newScope.kind === "agency") newScopeData = { agency_id: newScope.agencyId };
       else if (newScope.kind === "company") newScopeData = { company_id: newScope.companyId };
-      else if (newScope.kind === "partner") newScopeData = { partner_id: newScope.partnerId };
       else if (isAdminUser(req.user)) {
         const providedCount = [rest.agency_id, rest.company_id, rest.partner_id].filter(Boolean).length;
         if (providedCount > 1) {
@@ -1376,7 +1374,7 @@ router.put("/:id/link", verifyToken, validate(updateProjectLinkSchema), async (r
         client: { select: { id: true, name: true, cnpj: true } },
         agency_owner: { select: { id: true, name: true } },
         company_owner: { select: { id: true, name: true } },
-        partner_owner: { select: { id: true, owner: { select: { name: true } } } },
+        partner_owner: { select: { id: true, agency: { select: { owner: { select: { name: true } } } } } },
       },
     });
     res.json(updated);

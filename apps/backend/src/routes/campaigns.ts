@@ -49,7 +49,7 @@ router.get("/", verifyToken, async (req, res, next) => {
     const linkedPartners = campaignIds.length
       ? await prisma.partnerProfile.findMany({
           where: { linked_campaign_id: { in: campaignIds } },
-          include: { owner: { select: { id: true, name: true } } },
+          include: { agency: { select: { id: true, name: true, owner: { select: { id: true, name: true } } } } },
         })
       : [];
     const linkedByCampaign = new Map(
@@ -63,8 +63,10 @@ router.get("/", verifyToken, async (req, res, next) => {
         ...rest,
         active_referrals: _count.commissions,
         total_earned: commissions.reduce((sum, x) => sum + x.amount, 0),
-        linked_user_id: linked?.owner_user_id ?? null,
-        linked_user_name: linked?.owner?.name ?? null,
+        // "Usuário vinculado" agora é o dono da Agency que é esse Partner —
+        // não existe mais um usuário próprio do PartnerProfile.
+        linked_user_id: linked?.agency?.owner?.id ?? null,
+        linked_user_name: linked?.agency?.owner?.name ?? linked?.agency?.name ?? null,
       };
     });
 
@@ -83,7 +85,7 @@ router.get("/:id", verifyToken, async (req, res, next) => {
         commissions: {
           include: {
             partner: {
-              include: { owner: { select: { id: true, name: true } } },
+              include: { agency: { select: { id: true, name: true, owner: { select: { id: true, name: true } } } } },
             },
           },
           take: 20,

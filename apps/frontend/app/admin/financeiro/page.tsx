@@ -47,8 +47,12 @@ import { useTableScrollSync } from "@/hooks/useTableScrollSync";
 import { IconToolbarButton } from "@/components/icon-toolbar-button";
 import { SlidePanel } from "@/components/slide-panel";
 import type { DateRange } from "react-day-picker";
-import { PageHeader } from "@/components/page-header";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import {
+  STANDARD_SHELL_PANEL_CLASS,
+  StandardPageBanner,
+} from "@/components/standard-page-shell";
+import { PinToTrayButton } from "@/components/pin-to-tray-button";
 import {
   CheckCircle2,
   XCircle,
@@ -1047,26 +1051,27 @@ export default function AdminFinanceiroPage() {
   };
 
   return (
-    <div ref={pageRef} className="space-y-4">
-
-      <PageHeader
+    <div className={STANDARD_SHELL_PANEL_CLASS}>
+    <div className="h-full min-h-0 flex flex-col" ref={pageRef}>
+      <div className="shrink-0 -mb-[11px]">
+      <StandardPageBanner
+        icon={Wallet}
         title="Gestão Financeira"
         description="Gerencie faturas, recebimentos e saques da plataforma."
         actions={<>
-          <ExportButton pageRef={pageRef} filename="financeiro" />
+          <div className="bg-white rounded-lg">
+            <ExportButton pageRef={pageRef} filename="financeiro" />
+          </div>
           {activeTab === "despesas" ? (
             <TooltipProvider delayDuration={400}>
               <Tooltip>
                 <TooltipTrigger asChild>
                   <button
                     onClick={openCreateExpenseSheet}
-                    className="group relative flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-border/60 hover:border-transparent overflow-hidden transition-all"
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-white/70 text-white bg-white/10 hover:bg-white/20 transition-colors text-xs font-semibold whitespace-nowrap"
                   >
-                    <span className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none" style={{ background: "linear-gradient(135deg,#000000 0%,#1a2a6f 45%,#c81a7f 100%)" }} />
-                    <Plus className="relative z-10 h-3.5 w-3.5 shrink-0 text-[#7d1b6a] group-hover:text-white transition-colors" />
-                    <span className="relative z-10 text-xs font-semibold bg-clip-text text-transparent [background-image:linear-gradient(135deg,#1a2a6f_0%,#7d1b6a_55%,#c81a7f_100%)] group-hover:[background-image:none] group-hover:text-white transition-colors">
-                      Nova Despesa
-                    </span>
+                    <Plus className="h-3.5 w-3.5 shrink-0" />
+                    Nova Despesa
                   </button>
                 </TooltipTrigger>
                 <TooltipContent side="bottom" sideOffset={6}>Criar nova despesa</TooltipContent>
@@ -1078,22 +1083,23 @@ export default function AdminFinanceiroPage() {
                 <TooltipTrigger asChild>
                   <button
                     onClick={openCreateSheet}
-                    className="group relative flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-border/60 hover:border-transparent overflow-hidden transition-all"
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-white/70 text-white bg-white/10 hover:bg-white/20 transition-colors text-xs font-semibold whitespace-nowrap"
                   >
-                    <span className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none" style={{ background: "linear-gradient(135deg,#000000 0%,#1a2a6f 45%,#c81a7f 100%)" }} />
-                    <Plus className="relative z-10 h-3.5 w-3.5 shrink-0 text-[#7d1b6a] group-hover:text-white transition-colors" />
-                    <span className="relative z-10 text-xs font-semibold bg-clip-text text-transparent [background-image:linear-gradient(135deg,#1a2a6f_0%,#7d1b6a_55%,#c81a7f_100%)] group-hover:[background-image:none] group-hover:text-white transition-colors">
-                      Nova Fatura
-                    </span>
+                    <Plus className="h-3.5 w-3.5 shrink-0" />
+                    Nova Fatura
                   </button>
                 </TooltipTrigger>
                 <TooltipContent side="bottom" sideOffset={6}>Criar nova fatura</TooltipContent>
               </Tooltip>
             </TooltipProvider>
           )}
+          <PinToTrayButton id="page-financeiro" label="Gestão Financeira" icon={Wallet} path="/admin/financeiro" />
         </>}
       />
+      </div>
 
+      <div className="flex-1 min-h-0 overflow-y-auto">
+      <div className="space-y-4">
       {/* ── KPI Cards — estilo idêntico a Projetos ─────────────────── */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
         <div className="relative rounded-xl overflow-hidden shadow-sm border-2 border-emerald-300/70 dark:border-emerald-800/70 bg-gradient-to-br from-emerald-500 to-teal-700 px-3 pt-2 pb-1.5">
@@ -4084,6 +4090,9 @@ export default function AdminFinanceiroPage() {
         </div>
         </div>
       </SlidePanel>
+    </div>
+    </div>
+    </div>
     </div>
   );
 }

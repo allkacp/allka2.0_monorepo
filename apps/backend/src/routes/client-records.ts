@@ -3,7 +3,7 @@ import { z } from "zod";
 import { prisma } from "../lib/prisma";
 import { verifyToken } from "../middleware/auth";
 import { validate, parsePagination } from "../middleware/validate";
-import { resolveMyAgencyId, resolveMyPartnerId } from "../lib/project-scope";
+import { resolveMyAgencyId } from "../lib/project-scope";
 
 const router = Router();
 
@@ -18,9 +18,10 @@ const router = Router();
 //   admin   → role === "admin" (às vezes account_type === "admin" também)
 //   leader  → role === "lider" (valor em português; account_type também
 //             pode vir "lider", ver seed-test-users.ts)
-//   agency  → account_type === "agencias"
+//   agency  → account_type === "agencias" (Partner é um upgrade DESTE
+//             mesmo account_type — não existe mais "parceiro" separado;
+//             ver resolveMyPartnerId em lib/project-scope.ts)
 //   company → account_type === "empresas"
-//   partner → account_type === "parceiro" || role === "partner"
 //   nomad   → account_type === "nomades" || role === "nomad"
 
 function isAdminUser(user?: { role?: string; account_type?: string }): boolean {
@@ -35,23 +36,67 @@ function isAgencyUser(user?: { account_type?: string }): boolean {
 function isCompanyUser(user?: { account_type?: string }): boolean {
   return user?.account_type === "empresas";
 }
-function isPartnerUser(user?: { role?: string; account_type?: string }): boolean {
-  return user?.account_type === "parceiro" || user?.role === "partner";
-}
 function isNomadUser(user?: { role?: string; account_type?: string }): boolean {
   return user?.account_type === "nomades" || user?.role === "nomad";
 }
 
 // Quem pode criar Client: Admin (com ou sem vínculo), Agency (vinculado à
-// própria Agency), Company (vinculado à própria Company) e Partner
-// (vinculado ao próprio PartnerProfile). Leader é read-only; Nomad não cria.
+// própria Agency) e Company (vinculado à própria Company). Partner não é
+// mais um account_type separado (é a própria Agency com PartnerProfile
+// ativo — já coberto por isAgencyUser). Leader é read-only; Nomad não cria.
 function canCreateClient(user?: { role?: string; account_type?: string }): boolean {
-  return isAdminUser(user) || isAgencyUser(user) || isCompanyUser(user) || isPartnerUser(user);
+  return isAdminUser(user) || isAgencyUser(user) || isCompanyUser(user);
 }
 
 function normalizeDocument(doc: string): string | undefined {
   const digits = doc.replace(/\D/g, "");
   return digits.length > 0 ? digits : undefined;
+}
+
+// Mesma normalização de documento (só dígitos) — nome próprio só pra
+// deixar claro no call-site que é telefone, não CPF/CNPJ.
+const normalizePhoneDigits = normalizeDocument;
+
+// trim + lowercase + colapsa espaços repetidos + remove acentos (NFD e
+// descarta os diacríticos). Usado só para comparação de duplicidade em
+// memória — não é persistido normalizado (mudaria o dado exibido).
+function normalizeName(name: string): string {
+  const noDiacritics = name
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, " ")
+    .normalize("NFD")
+    .split("")
+    .filter((ch) => {
+      const code = ch.charCodeAt(0);
+      return code < 0x0300 || code > 0x036f; // descarta marcas diacríticas combinantes
+    })
+    .join("");
+  return noDiacritics;
+}
+
+// true se o client já está vinculado ao mesmo dono (agency/company/partner)
+// do usuário que está tentando criar o duplicado. Sub-user de agência
+// (role agency_user) só "enxerga" o que ele mesmo criou — mesma regra do
+// GET / e GET /:id — então pra ele o match só conta como "própria carteira"
+// se created_by_user_id também bater; senão cai no fluxo de outra
+// organização (mensagem genérica, sem revelar o registro que ele não pode ver).
+function candidateMatchesOwnScope(
+  client: ClientWithLinks,
+  scope: { kind: "agency" | "company" | "partner"; id: string } | null,
+  user?: { id: string; role?: string },
+): boolean {
+  if (!scope) return false;
+  const linked = client.links.some((l) => {
+    if (scope.kind === "agency") return l.agency_id === scope.id;
+    if (scope.kind === "company") return l.company_id === scope.id;
+    return l.partner_id === scope.id;
+  });
+  if (!linked) return false;
+  if (scope.kind === "agency" && user?.role === "agency_user") {
+    return client.created_by_user_id === user.id;
+  }
+  return true;
 }
 
 // Preprocessors rodam ANTES da validação de formato do zod (ex.: .email()),
@@ -98,9 +143,12 @@ const createClientSchema = z.object({
   segment: z.preprocess(trimToUndefined, z.string().optional()),
   status: z.preprocess(trimLowerToUndefined, z.enum(["active", "inactive", "prospect"]).default("active")),
   address: z.preprocess(trimToUndefined, z.string().optional()),
+  number: z.preprocess(trimToUndefined, z.string().optional()),
+  neighborhood: z.preprocess(trimToUndefined, z.string().optional()),
   city: z.preprocess(trimToUndefined, z.string().optional()),
   state: z.preprocess(trimToUndefined, z.string().optional()),
   zip_code: z.preprocess(trimToUndefined, z.string().optional()),
+  avatar: z.preprocess(trimToUndefined, z.string().optional()),
   notes: z.preprocess(trimToUndefined, z.string().optional()),
   description: z.preprocess(trimToUndefined, z.string().optional()),
   // Só admin pode de fato usar estes — Agency tem os seus ignorados de
@@ -124,9 +172,12 @@ const updateClientSchema = z.object({
   segment: z.preprocess(trimToNullable, z.string().nullable().optional()),
   status: z.preprocess(trimLowerToUndefined, z.enum(["active", "inactive", "prospect"]).optional()),
   address: z.preprocess(trimToNullable, z.string().nullable().optional()),
+  number: z.preprocess(trimToNullable, z.string().nullable().optional()),
+  neighborhood: z.preprocess(trimToNullable, z.string().nullable().optional()),
   city: z.preprocess(trimToNullable, z.string().nullable().optional()),
   state: z.preprocess(trimToNullable, z.string().nullable().optional()),
   zip_code: z.preprocess(trimToNullable, z.string().nullable().optional()),
+  avatar: z.preprocess(trimToNullable, z.string().nullable().optional()),
   notes: z.preprocess(trimToNullable, z.string().nullable().optional()),
   description: z.preprocess(trimToNullable, z.string().nullable().optional()),
 });
@@ -151,9 +202,12 @@ type ClientWithLinks = {
   segment: string | null;
   status: string;
   address: string | null;
+  number: string | null;
+  neighborhood: string | null;
   city: string | null;
   state: string | null;
   zip_code: string | null;
+  avatar: string | null;
   notes: string | null;
   description: string | null;
   created_by_user_id: string | null;
@@ -175,9 +229,12 @@ function toClientDTO(c: ClientWithLinks) {
     segment: c.segment,
     status: c.status,
     address: c.address,
+    number: c.number,
+    neighborhood: c.neighborhood,
     city: c.city,
     state: c.state,
     zip_code: c.zip_code,
+    avatar: c.avatar,
     notes: c.notes,
     description: c.description,
     created_by_user_id: c.created_by_user_id,
@@ -210,9 +267,6 @@ async function resolveOwnScopeId(
   if (isCompanyUser(user)) {
     const u = await prisma.user.findUnique({ where: { id: user.id }, select: { company_id: true } });
     return { kind: "company", id: u?.company_id ?? null };
-  }
-  if (isPartnerUser(user)) {
-    return { kind: "partner", id: await resolveMyPartnerId(prisma, user.id) };
   }
   return null;
 }
@@ -264,6 +318,12 @@ router.get("/", verifyToken, async (req, res, next) => {
         return;
       }
       where["links"] = { some: { [`${scope.kind}_id`]: scope.id } };
+      // Sub-user de agência (role agency_user) só vê o que ele mesmo criou;
+      // o principal (agency_admin) continua vendo tudo da agência, como
+      // sempre. Company/Partner não têm essa distinção nesta etapa.
+      if (scope.kind === "agency" && user.role === "agency_user") {
+        where["created_by_user_id"] = user.id;
+      }
     }
     // Admin e Leader: sem filtro extra, veem tudo. Leader é somente-leitura
     // (não há POST/PUT/DELETE nesta rota ainda de qualquer forma).
@@ -311,42 +371,93 @@ router.post("/", verifyToken, validate(createClientSchema), async (req, res, nex
     // chega com trim — a remoção de pontuação é feita aqui.
     const document = body.document ? normalizeDocument(body.document) : undefined;
     const email = body.email;
+    const phoneNorm = body.phone ? normalizePhoneDigits(body.phone) : undefined;
+    const nameNorm = normalizeName(body.name);
 
-    if (document) {
-      const dup = await prisma.client.findFirst({ where: { document }, select: { id: true } });
-      if (dup) {
-        res.status(409).json({ error: "Cliente já existe com este documento" });
+    // Resolve o escopo do usuário ANTES da checagem de duplicidade (não só
+    // depois, pra montar o vínculo) — precisamos saber se um eventual
+    // duplicado encontrado é "meu" ou "de outra organização" pra decidir
+    // qual dos dois dados a resposta pode revelar.
+    let callerScope: { kind: "agency" | "company" | "partner"; id: string } | null = null;
+    if (isAgencyUser(user) || isCompanyUser(user)) {
+      const resolved = await resolveOwnScopeId(user);
+      if (!resolved || !resolved.id) {
+        const label = isAgencyUser(user) ? "Agência" : "Company";
+        res.status(403).json({ error: `${label} não encontrada para o usuário logado` });
         return;
       }
+      callerScope = { kind: resolved.kind, id: resolved.id };
     }
-    if (email) {
-      // Sem @unique no banco de propósito (produto pode ter e-mail repetido
-      // entre clients legítimos de perfis diferentes) — mas a criação ainda
-      // bloqueia duplicidade por regra de produto, não só por constraint.
-      const dup = await prisma.client.findFirst({ where: { email }, select: { id: true } });
-      if (dup) {
-        res.status(409).json({ error: "Cliente já existe com este e-mail" });
+
+    // ── Verificação global de duplicidade (toda a plataforma, qualquer
+    // Agency/Company/Partner) ────────────────────────────────────────────
+    // document/email já são persistidos normalizados (dígitos / lowercase
+    // — ver preprocessors do schema e normalizeDocument acima), então dá
+    // pra comparar direto no banco. phone e name NÃO são normalizados em
+    // repouso nesta etapa (fora de escopo — exigiria migration pra coluna
+    // normalizada), então são comparados em memória contra todos os
+    // clients; seguro com o volume atual (~70 registros), mas não escala —
+    // se a base crescer muito, revisitar com coluna normalizada + índice.
+    const exactOr: Record<string, unknown>[] = [];
+    if (document) exactOr.push({ document });
+    if (email) exactOr.push({ email });
+
+    const [exactMatches, allClients] = await Promise.all([
+      exactOr.length > 0
+        ? prisma.client.findMany({ where: { OR: exactOr }, include: CLIENT_INCLUDE })
+        : Promise.resolve([] as ClientWithLinks[]),
+      prisma.client.findMany({ include: CLIENT_INCLUDE }),
+    ]);
+
+    const duplicates = new Map<string, ClientWithLinks>();
+    for (const c of exactMatches) duplicates.set(c.id, c);
+    for (const c of allClients) {
+      const phoneHit = phoneNorm && c.phone ? normalizePhoneDigits(c.phone) === phoneNorm : false;
+      const nameHit = normalizeName(c.name) === nameNorm;
+      if (phoneHit || nameHit) duplicates.set(c.id, c);
+    }
+
+    if (duplicates.size > 0) {
+      const candidates = Array.from(duplicates.values());
+      const sameScopeMatch = candidates.find((c) => candidateMatchesOwnScope(c, callerScope, user));
+
+      if (sameScopeMatch) {
+        // Mesma Agency/Company/Partner do usuário logado: pode ver os
+        // dados, já que é o dono do registro — nenhuma informação nova é
+        // exposta além do que ele já enxerga via GET /:id ou na listagem.
+        res.status(409).json({
+          error: "Este cliente já está cadastrado na sua carteira.",
+          code: "CLIENT_ALREADY_REGISTERED_SAME_AGENCY",
+          client: toClientDTO(sameScopeMatch),
+        });
         return;
       }
+
+      // Duplicado pertence a outra organização (ou está sem vínculo, ou o
+      // usuário é Admin/Leader sem escopo próprio) — mensagem genérica,
+      // sem nome, id ou qualquer dado da outra organização. O código
+      // prepara o frontend para futuramente oferecer "Solicitar ajuda"
+      // (chamado ao Admin), que NÃO é implementado nesta etapa.
+      res.status(409).json({
+        error:
+          "Não foi possível cadastrar este cliente porque já existe um cadastro correspondente na plataforma. Caso precise de ajuda, solicite uma análise ao suporte.",
+        code: "CLIENT_ALREADY_REGISTERED_OTHER_AGENCY",
+        supportRequestAvailable: true,
+      });
+      return;
     }
 
     let linkAgencyId: string | undefined;
     let linkCompanyId: string | undefined;
     let linkPartnerId: string | undefined;
 
-    if (isAgencyUser(user) || isCompanyUser(user) || isPartnerUser(user)) {
+    if (callerScope) {
       // Vínculo sempre automático ao próprio perfil logado — qualquer
       // agency_id/company_id/partner_id enviado no body é ignorado de
       // propósito (não dá pra Agency/Company/Partner escolher outro dono).
-      const scope = await resolveOwnScopeId(user);
-      if (!scope || !scope.id) {
-        const label = isAgencyUser(user) ? "Agência" : isCompanyUser(user) ? "Company" : "Partner";
-        res.status(403).json({ error: `${label} não encontrada para o usuário logado` });
-        return;
-      }
-      if (scope.kind === "agency") linkAgencyId = scope.id;
-      else if (scope.kind === "company") linkCompanyId = scope.id;
-      else linkPartnerId = scope.id;
+      if (callerScope.kind === "agency") linkAgencyId = callerScope.id;
+      else if (callerScope.kind === "company") linkCompanyId = callerScope.id;
+      else linkPartnerId = callerScope.id;
     } else {
       // Admin: no máximo um vínculo, e só se o id informado existir de fato.
       const providedCount = [body.agency_id, body.company_id, body.partner_id].filter(Boolean).length;
@@ -390,9 +501,12 @@ router.post("/", verifyToken, validate(createClientSchema), async (req, res, nex
           segment: body.segment,
           status: body.status,
           address: body.address,
+          number: body.number,
+          neighborhood: body.neighborhood,
           city: body.city,
           state: body.state,
           zip_code: body.zip_code,
+          avatar: body.avatar,
           notes: body.notes,
           description: body.description,
           created_by_user_id: user.id,
@@ -469,7 +583,8 @@ router.put("/:id", verifyToken, validate(updateClientSchema), async (req, res, n
     const data: Record<string, unknown> = {};
     const passthroughFields = [
       "name", "type", "phone", "website", "segment", "status",
-      "address", "city", "state", "zip_code", "notes", "description",
+      "address", "number", "neighborhood", "city", "state", "zip_code", "avatar",
+      "notes", "description",
     ] as const;
     for (const key of passthroughFields) {
       if (body[key] !== undefined) data[key] = body[key];
@@ -591,6 +706,12 @@ router.get("/:id", verifyToken, async (req, res, next) => {
       return l.partner_id === scope.id;
     });
     if (!hasLink) {
+      res.status(403).json({ error: "Acesso não autorizado" });
+      return;
+    }
+    // Sub-user de agência só abre o que ele mesmo criou — mesma regra do
+    // GET / e da checagem de duplicidade no POST.
+    if (scope.kind === "agency" && user.role === "agency_user" && client.created_by_user_id !== user.id) {
       res.status(403).json({ error: "Acesso não autorizado" });
       return;
     }

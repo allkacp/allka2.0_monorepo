@@ -9,6 +9,7 @@ const router = Router();
 const createSchema = z.object({
   name: z.string().min(1),
   email: z.string().email(),
+  cnpj: z.string().optional(),
   whatsapp: z.string().optional(),
   avatar: z.string().optional(),
   level: z

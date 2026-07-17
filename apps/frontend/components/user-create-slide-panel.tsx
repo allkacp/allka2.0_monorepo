@@ -30,9 +30,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
-import { Checkbox } from "@/components/ui/checkbox";
-import { useAppFrameMetrics } from "@/hooks/useAppFrameMetrics";
-import { ModalBrandHeader } from "@/components/ui/modal-brand-header";
+import { StandardModalDialog } from "@/components/standard-modal-dialog";
 import { useToast } from "@/hooks/use-toast";
 import { apiClient } from "@/lib/api-client";
 import { DEFAULT_COMPANY_PERMISSIONS } from "@/types/user";
@@ -45,6 +43,12 @@ interface UserCreateSlidePanelProps {
   /** When set, the panel was opened from within a company and will pre-fill company context */
   companyId?: number | string;
   companyName?: string;
+  /** Tipo da organização de onde o painel foi aberto (ver company-view-
+   * slide-panel.tsx > CompanyUsersTab) — decide se o vínculo vira
+   * company_id ou agency_id e ajusta account_type/role/rótulos default.
+   * Sem isso, todo cadastro feito de dentro de uma Agency era enviado como
+   * company_id (FK errada) e o vínculo exibia o ID cru em vez do nome. */
+  orgType?: "company" | "agency" | "nomad" | "partner";
 }
 
 export function UserCreateSlidePanel({
@@ -53,16 +57,9 @@ export function UserCreateSlidePanel({
   onUserCreated,
   companyId,
   companyName,
+  orgType,
 }: UserCreateSlidePanelProps) {
-  const [isClosing, setIsClosing] = useState(false);
-  const [isMounted, setIsMounted] = useState(false);
-  useEffect(() => {
-    if (open) {
-      const id = requestAnimationFrame(() => setIsMounted(true));
-      return () => cancelAnimationFrame(id);
-    }
-    if (!isClosing) setIsMounted(false);
-  }, [open, isClosing]);
+  const isAgencyContext = !!companyId && orgType === "agency";
   const [currentStep, setCurrentStep] = useState(1);
   useEffect(() => {
     // Scroll Radix ScrollArea viewport back to top on step change
@@ -75,7 +72,6 @@ export function UserCreateSlidePanel({
   const fileInputRef = useRef<HTMLInputElement>(null);
   // Reset scroll to top every time the panel opens or the step changes
   const bodyScrollRef = useRef<HTMLDivElement>(null);
-  const { sidebarWidth, headerHeight, footerHeight } = useAppFrameMetrics();
   const { toast } = useToast();
 
   // Company-level permissions — only used when creating from within a company
@@ -95,10 +91,6 @@ export function UserCreateSlidePanel({
     }));
   };
 
-  // LGPD consent state
-  const [lgpdConsent, setLgpdConsent] = useState(false);
-  const [legalBasis, setLegalBasis] = useState("consent");
-
   // Estado do novo usuário
   const [newUser, setNewUser] = useState({
     // Etapa 1 - Conta
@@ -106,8 +98,8 @@ export function UserCreateSlidePanel({
     email: "",
     username: "",
     password: "",
-    account_type: companyId ? "empresas" : "empresas",
-    role: companyId ? "company_user" : "company_user",
+    account_type: isAgencyContext ? "agencias" : "empresas",
+    role: isAgencyContext ? "agency_user" : "company_user",
     // Nome da organização (Agency/Company/Partner) sendo fundada — distinto
     // do nome da pessoa acima. Só usado quando !companyId (fundando uma
     // organização nova, não entrando numa já existente) — Tarefa 11.
@@ -164,37 +156,6 @@ export function UserCreateSlidePanel({
     Sistema: [{ id: "admin_access", label: "Acesso Admin" }],
   };
 
-  // Define panel positioning - Extends from sidebar to right edge
-  const [panelStyle, setPanelStyle] = useState<{ left: string; width: string; top: string; bottom: string }>(
-    {
-      left: "240px",
-      width: "calc(100vw - 240px)",
-      top: "0px",
-      bottom: "0px",
-    },
-  );
-
-  useEffect(() => {
-    const calculatePanelStyle = () => {
-      const sidebarWidthPx =
-        typeof sidebarWidth === "number"
-          ? sidebarWidth
-          : parseInt(sidebarWidth as string) || 240;
-      const left = sidebarWidthPx - 2;
-      const top = headerHeight - 1;
-      const bottom = footerHeight - 1;
-      setPanelStyle({
-        left: `${left}px`,
-        width: `calc(100vw - ${left}px)`,
-        top: `${top}px`,
-        bottom: `${bottom}px`,
-      });
-    };
-    calculatePanelStyle();
-    window.addEventListener("resize", calculatePanelStyle);
-    return () => window.removeEventListener("resize", calculatePanelStyle);
-  }, [sidebarWidth, headerHeight, footerHeight]);
-
   // Load companies when panel opens
   useEffect(() => {
     if (open) {
@@ -213,47 +174,40 @@ export function UserCreateSlidePanel({
           setAvailableCompanies(list);
         })
         .catch(() => {});
-    } else {
-      setIsClosing(false);
     }
   }, [open]);
 
   const handleClose = () => {
-    setIsClosing(true);
-    setTimeout(() => {
-      onClose();
-      setCurrentStep(1);
-      setNewUser({
-        name: "",
-        email: "",
-        username: "",
-        password: "",
-        account_type: "empresas",
-        role: "company_user",
-        organizationName: "",
-        is_active: true,
-        plan: "free",
-        cpf: "",
-        birth_date: "",
-        phone: "",
-        whatsapp: "",
-        cep: "",
-        street: "",
-        number: "",
-        city: "",
-        state: "",
-        notes: "",
-        permissions: [],
-      });
-      setAvatarPreview(null);
-      setErrors({});
-      setCreateError(null);
-      setLgpdConsent(false);
-      setLegalBasis("consent");
-      setLinkedCompanyIds(companyId ? [String(companyId)] : []);
-      setNoCompanyLink(false);
-      setCompanySearch("");
-    }, 420);
+    onClose();
+    setCurrentStep(1);
+    setNewUser({
+      name: "",
+      email: "",
+      username: "",
+      password: "",
+      account_type: isAgencyContext ? "agencias" : "empresas",
+      role: isAgencyContext ? "agency_user" : "company_user",
+      organizationName: "",
+      is_active: true,
+      plan: "free",
+      cpf: "",
+      birth_date: "",
+      phone: "",
+      whatsapp: "",
+      cep: "",
+      street: "",
+      number: "",
+      city: "",
+      state: "",
+      notes: "",
+      permissions: [],
+    });
+    setAvatarPreview(null);
+    setErrors({});
+    setCreateError(null);
+    setLinkedCompanyIds(companyId ? [String(companyId)] : []);
+    setNoCompanyLink(false);
+    setCompanySearch("");
   };
 
   const validateStep1 = () => {
@@ -268,14 +222,10 @@ export function UserCreateSlidePanel({
     if (
       !companyId &&
       (newUser.account_type === "agencias" ||
-        newUser.account_type === "parceiro" ||
         newUser.account_type === "empresas") &&
       !newUser.organizationName.trim()
     )
       newErrors.organizationName = "Nome da organização é obrigatório";
-    if (!lgpdConsent)
-      newErrors.lgpd_consent =
-        "Aceite da Política de Privacidade é obrigatório";
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
@@ -314,7 +264,9 @@ export function UserCreateSlidePanel({
         account_type: newUser.account_type || "empresas",
         phone: newUser.phone || undefined,
       };
-      if (linkedCompanyIds.length > 0) {
+      if (isAgencyContext) {
+        payload.agency_id = String(companyId);
+      } else if (linkedCompanyIds.length > 0) {
         payload.company_id = linkedCompanyIds[0];
       } else if (newUser.organizationName.trim()) {
         payload.organization_name = newUser.organizationName.trim();
@@ -353,61 +305,81 @@ export function UserCreateSlidePanel({
     });
   };
 
-  if (!open && !isClosing) return null;
-
   return (
-    <>
-      <div
-        data-slot="sheet-content"
-        data-state={isClosing ? "closed" : "open"}
-        className="fixed z-80 bg-background flex flex-col shadow-2xl border-l border-border overflow-hidden data-[state=open]:animate-in data-[state=open]:slide-in-from-right data-[state=open]:fade-in-0 data-[state=closed]:animate-out data-[state=closed]:slide-out-to-right data-[state=closed]:fade-out-0"
-        style={{
-          left: panelStyle.left,
-          width: panelStyle.width,
-          top: panelStyle.top,
-          bottom: panelStyle.bottom,
-        }}
-      >
-        {/* Header with brand theme */}
-        <ModalBrandHeader
-          title="Criar Novo Usuário"
-          left={
-            <div className="flex items-center gap-4">
-              <div className="relative">
-                <Avatar className="h-12 w-12 border-2 border-blue-300/50">
-                  <AvatarFallback className="bg-gradient-to-br from-blue-500 to-cyan-400 text-white">
-                    {newUser.name ? newUser.name.charAt(0).toUpperCase() : "N"}
-                  </AvatarFallback>
-                </Avatar>
-                <button
-                  onClick={() => fileInputRef.current?.click()}
-                  className="absolute -bottom-1 -right-1 bg-blue-600 hover:bg-blue-700 rounded-full p-1.5 text-white transition-colors border border-blue-950"
-                  type="button"
-                >
-                  <Camera className="h-3 w-3" />
-                </button>
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  accept="image/*"
-                  onChange={handleAvatarUpload}
-                  className="hidden"
-                />
-              </div>
-              <div>
-                <p className="text-xs text-blue-200">
-                  Etapa {currentStep} de 3
-                </p>
-              </div>
+    <StandardModalDialog
+      open={open}
+      onClose={handleClose}
+      title="Criar Novo Usuário"
+      subtitle={`Etapa ${currentStep} de 3`}
+      footer={
+        <>
+          {createError && (
+            <div className="mb-3 rounded-md bg-red-50 border border-red-200 px-4 py-3 flex items-start gap-2">
+              <AlertCircle className="h-4 w-4 text-red-500 mt-0.5 shrink-0" />
+              <p className="text-sm text-red-700 leading-snug">{createError}</p>
             </div>
-          }
-          onClose={handleClose}
-        />
-
+          )}
+          <div
+            className={`flex items-center ${currentStep === 1 ? "justify-start" : "justify-between"}`}
+          >
+            <Button
+              variant="outline"
+              onClick={handlePrevStep}
+              disabled={currentStep === 1}
+              className={currentStep === 1 ? "hidden" : ""}
+            >
+              <ChevronLeft className="h-4 w-4 mr-1" />
+              Voltar
+            </Button>
+            {currentStep < 3 ? (
+              <Button onClick={handleNextStep} className="btn-brand">
+                Próximo
+                <ChevronRight className="h-4 w-4 ml-1" />
+              </Button>
+            ) : (
+              <Button
+                onClick={handleCreateUser}
+                disabled={isCreating}
+                className="bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700"
+              >
+                <Check className="h-4 w-4 mr-1" />
+                {isCreating ? "Criando..." : "Criar Usuário"}
+              </Button>
+            )}
+          </div>
+        </>
+      }
+    >
         {/* Conteúdo com Scroll Interno */}
         <div ref={bodyScrollRef} className="flex-1 min-h-0 overflow-hidden">
           <ScrollArea className="h-full">
             <div className="p-6 space-y-6">
+              {/* Avatar + upload — antes ficava no cabeçalho (ModalBrandHeader),
+                  agora no topo do corpo já que o EmbeddedSlideScreen tem um
+                  cabeçalho mais simples (título/subtítulo/pin/fechar). */}
+              <div className="flex items-center gap-4">
+                <div className="relative">
+                  <Avatar className="h-12 w-12 border-2 border-blue-300/50">
+                    <AvatarFallback className="bg-gradient-to-br from-blue-500 to-cyan-400 text-white">
+                      {newUser.name ? newUser.name.charAt(0).toUpperCase() : "N"}
+                    </AvatarFallback>
+                  </Avatar>
+                  <button
+                    onClick={() => fileInputRef.current?.click()}
+                    className="absolute -bottom-1 -right-1 bg-blue-600 hover:bg-blue-700 rounded-full p-1.5 text-white transition-colors border border-blue-950"
+                    type="button"
+                  >
+                    <Camera className="h-3 w-3" />
+                  </button>
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept="image/*"
+                    onChange={handleAvatarUpload}
+                    className="hidden"
+                  />
+                </div>
+              </div>
               {/* ETAPA 1: CONTA */}
               {currentStep === 1 && (
                 <div className="space-y-4">
@@ -489,9 +461,9 @@ export function UserCreateSlidePanel({
                     <Label>Tipo de Usuário *</Label>
                     {companyId ? (
                       <div className="flex items-center gap-2 h-9 rounded-md border border-input bg-muted px-3 text-sm text-muted-foreground">
-                        <span>Empresas</span>
+                        <span>{isAgencyContext ? "Agências" : "Empresas"}</span>
                         <span className="ml-auto text-xs text-slate-400">
-                          Vinculado à empresa
+                          {isAgencyContext ? "Vinculado à agência" : "Vinculado à empresa"}
                         </span>
                       </div>
                     ) : (
@@ -502,7 +474,6 @@ export function UserCreateSlidePanel({
                             empresas: "company_admin",
                             agencias: "agency_admin",
                             nomades:  "nomad",
-                            parceiro: "partner_admin",
                             lider:    "lider",
                             admin:    "admin",
                           };
@@ -520,7 +491,6 @@ export function UserCreateSlidePanel({
                           <SelectItem value="empresas">Empresas</SelectItem>
                           <SelectItem value="agencias">Agências</SelectItem>
                           <SelectItem value="nomades">Nômades</SelectItem>
-                          <SelectItem value="parceiro">Parceiro</SelectItem>
                           <SelectItem value="lider">Líder de Área</SelectItem>
                           <SelectItem value="admin">Admin</SelectItem>
                         </SelectContent>
@@ -534,16 +504,13 @@ export function UserCreateSlidePanel({
                   </div>
                   {!companyId &&
                     (newUser.account_type === "agencias" ||
-                      newUser.account_type === "parceiro" ||
                       newUser.account_type === "empresas") && (
                       <div className="space-y-2 rounded-lg border border-amber-200 dark:border-amber-400/20 bg-amber-50 dark:bg-amber-500/10 p-3">
                         <Label>
                           Nome d
                           {newUser.account_type === "agencias"
                             ? "a Agência"
-                            : newUser.account_type === "empresas"
-                              ? "a Empresa"
-                              : "o Parceiro"}{" "}
+                            : "a Empresa"}{" "}
                           *
                         </Label>
                         <Input
@@ -605,15 +572,24 @@ export function UserCreateSlidePanel({
                     </div>
                   </div>
 
-                  {/* VÍNCULO COM EMPRESAS */}
+                  {/* VÍNCULO COM EMPRESA/AGÊNCIA */}
                   <div className="pt-2 border-t border-slate-100">
                     <div className="flex items-center gap-2 mb-3">
                       <Building2 className="h-4 w-4 text-blue-600" />
                       <h3 className="font-semibold text-sm text-slate-800">
-                        Vínculo com Empresa(s)
+                        {isAgencyContext ? "Vínculo com Agência" : "Vínculo com Empresa(s)"}
                       </h3>
                     </div>
 
+                    {isAgencyContext ? (
+                      // Aberto de dentro do detalhe de uma Agency específica —
+                      // vínculo é fixo (essa Agency), sem busca/toggle.
+                      <span className="inline-flex items-center gap-1.5 bg-blue-50 text-blue-700 border border-blue-200 rounded-full px-2.5 py-1 text-xs font-medium">
+                        <Building2 className="h-3 w-3" />
+                        {companyName || String(companyId)}
+                      </span>
+                    ) : (
+                      <>
                     {/* No-link toggle */}
                     <div className="flex items-center gap-2 mb-3">
                       <input
@@ -737,81 +713,8 @@ export function UserCreateSlidePanel({
                         )}
                       </div>
                     )}
-                  </div>
-
-                  {/* LGPD & Privacidade */}
-                  <div className="pt-2 border-t border-slate-100">
-                    <div className="flex items-center gap-2 mb-3">
-                      <Shield className="h-4 w-4 text-blue-600" />
-                      <h3 className="font-semibold text-sm text-slate-800">
-                        LGPD &amp; Privacidade
-                      </h3>
-                    </div>
-                    <div className="space-y-3">
-                      <div className="space-y-1.5">
-                        <Label>Base legal do tratamento</Label>
-                        <Select
-                          value={legalBasis}
-                          onValueChange={setLegalBasis}
-                        >
-                          <SelectTrigger>
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="consent">
-                              Consentimento (Art. 7º, I)
-                            </SelectItem>
-                            <SelectItem value="contract">
-                              Execução de contrato (Art. 7º, V)
-                            </SelectItem>
-                            <SelectItem value="legitimate_interest">
-                              Legítimo interesse (Art. 7º, IX)
-                            </SelectItem>
-                            <SelectItem value="legal_obligation">
-                              Obrigação legal (Art. 7º, II)
-                            </SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </div>
-                      <div className="flex items-start gap-3 p-3 rounded-lg bg-blue-50 border border-blue-100">
-                        <Checkbox
-                          id="lgpd-consent"
-                          checked={lgpdConsent}
-                          onCheckedChange={(checked) =>
-                            setLgpdConsent(!!checked)
-                          }
-                          className="mt-0.5"
-                        />
-                        <label
-                          htmlFor="lgpd-consent"
-                          className="text-xs text-slate-700 leading-relaxed cursor-pointer"
-                        >
-                          Li e aceito a{" "}
-                          <a
-                            href="#"
-                            className="text-blue-600 underline underline-offset-2"
-                            onClick={(e) => e.preventDefault()}
-                          >
-                            Política de Privacidade
-                          </a>{" "}
-                          e os{" "}
-                          <a
-                            href="#"
-                            className="text-blue-600 underline underline-offset-2"
-                            onClick={(e) => e.preventDefault()}
-                          >
-                            Termos de Uso
-                          </a>
-                          , e autorizo o tratamento dos meus dados pessoais
-                          conforme descrito. *
-                        </label>
-                      </div>
-                      {errors.lgpd_consent && (
-                        <p className="text-xs text-red-500">
-                          {errors.lgpd_consent}
-                        </p>
-                      )}
-                    </div>
+                    </>
+                    )}
                   </div>
                 </div>
               )}
@@ -1068,45 +971,6 @@ export function UserCreateSlidePanel({
             </div>
           </ScrollArea>
         </div>
-
-        {/* Inline error — shown when creation fails, persists until next attempt */}
-        {createError && (
-          <div className="mx-4 mt-2 rounded-md bg-red-50 border border-red-200 px-4 py-3 flex items-start gap-2 shrink-0">
-            <AlertCircle className="h-4 w-4 text-red-500 mt-0.5 shrink-0" />
-            <p className="text-sm text-red-700 leading-snug">{createError}</p>
-          </div>
-        )}
-
-        {/* Footer - FIXO */}
-        <div
-          className={`flex-shrink-0 border-t border-slate-200 bg-slate-50 p-4 flex items-center ${currentStep === 1 ? "justify-start" : "justify-between"}`}
-        >
-          <Button
-            variant="outline"
-            onClick={handlePrevStep}
-            disabled={currentStep === 1}
-            className={currentStep === 1 ? "hidden" : ""}
-          >
-            <ChevronLeft className="h-4 w-4 mr-1" />
-            Voltar
-          </Button>
-          {currentStep < 3 ? (
-            <Button onClick={handleNextStep} className="btn-brand">
-              Próximo
-              <ChevronRight className="h-4 w-4 ml-1" />
-            </Button>
-          ) : (
-            <Button
-              onClick={handleCreateUser}
-              disabled={isCreating}
-              className="bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700"
-            >
-              <Check className="h-4 w-4 mr-1" />
-              {isCreating ? "Criando..." : "Criar Usuário"}
-            </Button>
-          )}
-        </div>
-      </div>
-    </>
+    </StandardModalDialog>
   );
 }

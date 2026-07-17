@@ -6,8 +6,24 @@ import { prisma } from "../lib/prisma";
 import { config } from "../config";
 import { verifyToken } from "../middleware/auth";
 import { validate } from "../middleware/validate";
+import { resolveMyAgencyId } from "../lib/project-scope";
 
 const router = Router();
+
+// Status do PartnerProfile da Agency a que este usuário pertence (via
+// User.agency_id) — usado só pra decidir se o front libera as rotas
+// /partner/*, que agora dependem da Agency ter aceito o convite (não de um
+// account_type separado). null quando o usuário não é de uma agência ou a
+// agência nunca recebeu convite.
+async function resolvePartnerStatus(userId: string): Promise<string | null> {
+  const agencyId = await resolveMyAgencyId(prisma, userId);
+  if (!agencyId) return null;
+  const partner = await prisma.partnerProfile.findUnique({
+    where: { agency_id: agencyId },
+    select: { status: true },
+  });
+  return partner?.status ?? null;
+}
 
 const loginSchema = z.object({
   email: z.string().email(),
@@ -15,8 +31,11 @@ const loginSchema = z.object({
   /** Optional access-type selected by the user on the login screen.
    *  When provided, the backend validates that the user's role/account_type
    *  grants access to that panel. */
+  // Não existe mais accessType "PARTNER" — Partner não é um portal de login
+  // separado, é um upgrade da própria Agency (ver PartnerProfile no
+  // schema.prisma). Quem se torna Partner continua entrando por AGENCY.
   accessType: z
-    .enum(["ADMIN", "AGENCY", "NOMAD", "COMPANY", "PARTNER", "LEADER"])
+    .enum(["ADMIN", "AGENCY", "NOMAD", "COMPANY", "LEADER"])
     .optional(),
 });
 
@@ -29,7 +48,6 @@ const ACCESS_TYPE_RULES: Record<
   AGENCY: (u) => u.account_type === "agencias",
   NOMAD: (u) => u.account_type === "nomades" || u.role === "nomad",
   COMPANY: (u) => u.account_type === "empresas",
-  PARTNER: (u) => u.account_type === "parceiro" || u.role === "partner",
   LEADER: (u) => u.role === "lider",
 };
 
@@ -116,7 +134,8 @@ router.post("/login", validate(loginSchema), async (req, res, next) => {
     );
 
     const { password_hash: _pw, ...safeUser } = updated;
-    res.json({ token, user: safeUser });
+    const partner_status = await resolvePartnerStatus(updated.id);
+    res.json({ token, user: { ...safeUser, partner_status } });
   } catch (err) {
     next(err);
   }
@@ -134,6 +153,7 @@ router.get("/me", verifyToken, async (req, res, next) => {
       where: { id: req.user!.id },
       select: {
         id: true,
+        user_code: true,
         email: true,
         name: true,
         role: true,
@@ -168,7 +188,8 @@ router.get("/me", verifyToken, async (req, res, next) => {
     // currentUser.agency.name) — campo Prisma virou "owned_agency", contrato
     // externo não muda.
     const { owned_agency, ...restUser } = user;
-    res.json({ ...restUser, agency: owned_agency });
+    const partner_status = await resolvePartnerStatus(user.id);
+    res.json({ ...restUser, agency: owned_agency, partner_status });
   } catch (err) {
     next(err);
   }

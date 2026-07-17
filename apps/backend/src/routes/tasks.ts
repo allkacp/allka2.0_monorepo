@@ -63,7 +63,7 @@ router.get("/", verifyToken, async (req, res, next) => {
     if (nomade_id) where["nomade_id"] = nomade_id;
 
     // If nomad role, only show their own tasks
-    if (req.user?.role === "nomad") {
+    if (req.user?.role === "nomad" || req.user?.role === "nomad_admin") {
       where["nomade"] = {
         user_id: req.user.id,
       };

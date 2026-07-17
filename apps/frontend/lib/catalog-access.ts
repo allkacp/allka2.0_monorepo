@@ -51,6 +51,11 @@ export function resolveCatalogIdentity(accountType: AccountType): CatalogIdentit
   const companyId = user.active_company_id ?? user.company_id ?? null;
   const agencyId = user.active_agency_id ?? user.agency_id ?? null;
 
+  // Partner não é mais um account_type separado — é a Agency logada com
+  // PartnerProfile.status "active" (ver auth.ts /login e /me). O escopo de
+  // catálogo (preço interno, cesta, descontos) continua sendo o da Agency
+  // (kind "agency") mesmo quando ela é Partner — não existe mais um kind
+  // "partner" alcançável por accountType/role algum.
   const kind: CatalogProfileKind =
     accountType === "admin" || role === "admin"
       ? "admin"
@@ -60,11 +65,9 @@ export function resolveCatalogIdentity(accountType: AccountType): CatalogIdentit
           ? "company"
           : accountType === "nomades" || role === "nomad"
             ? "nomad"
-            : accountType === "parceiro" || role === "partner"
-              ? "partner"
-              : accountType === "lider" || role === "lider"
-                ? "leader"
-                : "company";
+            : accountType === "lider" || role === "lider"
+              ? "leader"
+              : "company";
 
   const scopeId =
     kind === "agency"

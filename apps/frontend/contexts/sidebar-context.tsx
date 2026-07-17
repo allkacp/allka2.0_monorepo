@@ -56,6 +56,7 @@ interface UserProfile {
   avatar: string;
   department: string;
   joinDate: string;
+  user_code?: string;
 }
 
 interface SidebarContextType {

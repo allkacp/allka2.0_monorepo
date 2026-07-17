@@ -6,7 +6,6 @@
 //  3. Returns a 403-ready error object — never silently allows access.
 
 import { prisma } from "../../lib/prisma";
-import { resolveMyPartnerId } from "../../lib/project-scope";
 import type { JwtPayload } from "../../middleware/auth";
 import type { ResolvedScope } from "./types";
 
@@ -190,30 +189,13 @@ export async function resolveUserScope(user: JwtPayload): Promise<ResolvedScope>
     return { type: "OWN_NOMAD_SCOPE", nomadeId: nomade.id };
   }
 
-  // ── Partner / Embaixadora ─────────────────────────────────────────────────
-  if (user.account_type === "parceiro") {
-    const partnerId = await resolveMyPartnerId(prisma, user.id);
-    if (!partnerId) return { type: "OWN_PARTNER_SCOPE", agencyIds: [], agencyNames: [] };
-
-    const partner = await prisma.partnerProfile.findUnique({
-      where: { id: partnerId },
-      select: {
-        id: true,
-        led_agencies: {
-          where: { status: "active" },
-          select: { agency_id: true, agency: { select: { name: true } } },
-        },
-      },
-    });
-    if (!partner) return { type: "OWN_PARTNER_SCOPE", agencyIds: [], agencyNames: [] };
-
-    return {
-      type: "OWN_PARTNER_SCOPE",
-      partnerProfileId: partner.id,
-      agencyIds: partner.led_agencies.map((l) => l.agency_id),
-      agencyNames: partner.led_agencies.map((l) => l.agency.name),
-    };
-  }
+  // "parceiro" nunca é mais um account_type de usuário (Partner é upgrade
+  // da própria Agency — ver PartnerProfile no schema.prisma), então este
+  // branch nunca mais é alcançado. OWN_PARTNER_SCOPE continua existindo
+  // como tipo de escopo (usado por relatórios antigos configurados pra
+  // ele), mas nada resolve pra esse tipo indo pra frente — quem precisar
+  // de visão "agências lideradas" usa GET /api/agencies/led/list
+  // diretamente (agencies.ts), não este módulo de relatórios genérico.
 
   return { type: "OWN_PROFILE_SCOPE" };
 }

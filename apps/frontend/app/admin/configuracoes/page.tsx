@@ -64,7 +64,11 @@ import {
   X,
   Sliders,
 } from "lucide-react";
-import { PageHeader } from "@/components/page-header";
+import {
+  STANDARD_SHELL_PANEL_CLASS,
+  StandardPageBanner,
+} from "@/components/standard-page-shell";
+import { PinToTrayButton } from "@/components/pin-to-tray-button";
 
 // ─── helpers ──────────────────────────────────────────────────────────────────
 
@@ -678,12 +682,21 @@ export default function AdminConfiguracoesPage() {
   }
 
   return (
-    <div className="space-y-6">
-      <PageHeader
+    <div className={STANDARD_SHELL_PANEL_CLASS}>
+    <div className="h-full min-h-0 flex flex-col">
+      <div className="shrink-0 -mb-[11px]">
+      <StandardPageBanner
+        icon={Settings}
         title="Configurações"
         description="Gerencie as configurações gerais da plataforma"
+        actions={
+          <PinToTrayButton id="page-configuracoes" label="Configurações" icon={Settings} path="/admin/configuracoes" />
+        }
       />
+      </div>
 
+      <div className="flex-1 min-h-0 overflow-y-auto">
+      <div className="space-y-6">
       <Tabs defaultValue="general" className="space-y-4">
         <TabsList className="h-auto flex-wrap gap-0.5 text-xs">
           <TabsTrigger value="general" className="text-xs px-3 h-8">
@@ -1892,6 +1905,9 @@ export default function AdminConfiguracoesPage() {
           </SectionCard>
         </TabsContent>
       </Tabs>
+    </div>
+    </div>
+    </div>
     </div>
   );
 }

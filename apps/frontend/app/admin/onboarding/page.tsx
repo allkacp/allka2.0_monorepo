@@ -1,6 +1,11 @@
 ﻿// @ts-nocheck
 import { useState, useMemo } from "react";
 import { useSidebar } from "@/contexts/sidebar-context";
+import {
+  STANDARD_SHELL_PANEL_CLASS,
+  StandardPageBanner,
+} from "@/components/standard-page-shell";
+import { PinToTrayButton } from "@/components/pin-to-tray-button";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -989,24 +994,33 @@ export default function AdminOnboardingPage() {
   const FormIcon = resolveIcon(form.accountTypes);
 
   return (
-    <div className="space-y-5">
-
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-xl font-bold text-slate-900 dark:text-white tracking-tight flex items-center gap-2">
-            <Rocket className="h-5 w-5 text-blue-500" /> Onboarding
-          </h1>
-          <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">Circuitos de boas-vindas por tipo de conta</p>
-        </div>
-        <div className="flex items-center gap-2">
-          <ExportButton filename="circuitos" />
-          <Button onClick={openCreate} className="h-9 gap-2 btn-brand shadow-md border-0">
-            <Plus className="h-4 w-4" /> Novo Circuito
-          </Button>
-        </div>
+    <div className={STANDARD_SHELL_PANEL_CLASS}>
+    <div className="h-full min-h-0 flex flex-col">
+      <div className="shrink-0 -mb-[11px]">
+      <StandardPageBanner
+        icon={Rocket}
+        title="Onboarding"
+        description="Circuitos de boas-vindas por tipo de conta"
+        actions={
+          <>
+            <div className="bg-white rounded-lg">
+              <ExportButton filename="circuitos" />
+            </div>
+            <button
+              onClick={openCreate}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-white/70 text-white bg-white/10 hover:bg-white/20 transition-colors text-xs font-semibold whitespace-nowrap"
+            >
+              <Plus className="h-3.5 w-3.5 shrink-0" />
+              Novo Circuito
+            </button>
+            <PinToTrayButton id="page-onboarding" label="Onboarding" icon={Rocket} path="/admin/onboarding" />
+          </>
+        }
+      />
       </div>
 
+      <div className="flex-1 min-h-0 overflow-y-auto">
+      <div className="space-y-5">
       {/* KPI Cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         {[
@@ -1565,6 +1579,9 @@ export default function AdminOnboardingPage() {
         variant="destructive"
         onConfirm={handleDelete}
       />
+    </div>
+    </div>
+    </div>
     </div>
   );
 }

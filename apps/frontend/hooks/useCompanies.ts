@@ -34,7 +34,10 @@ interface UseCompaniesReturn {
   refetch: () => void
   createCompany: (data: { name: string; cnpj?: string; email?: string; phone?: string; status?: string; segment?: string; address?: string; description?: string; website?: string }) => Promise<ApiCompany>
   updateCompany: (id: string, data: Partial<ApiCompany>) => Promise<ApiCompany>
-  deleteCompany: (id: string) => Promise<void>
+  deleteCompany: (
+    id: string,
+    userActions?: { userId: string; action: "delete" | "unlink" | "suspend" }[],
+  ) => Promise<void>
 }
 
 export function useCompanies(): UseCompaniesReturn {
@@ -75,8 +78,11 @@ export function useCompanies(): UseCompaniesReturn {
     return result
   }, [fetchCompanies])
 
-  const deleteCompany = useCallback(async (id: string) => {
-    await apiClient.deleteCompany(id)
+  const deleteCompany = useCallback(async (
+    id: string,
+    userActions?: { userId: string; action: "delete" | "unlink" | "suspend" }[],
+  ) => {
+    await apiClient.deleteCompany(id, userActions)
     await fetchCompanies()
   }, [fetchCompanies])
 

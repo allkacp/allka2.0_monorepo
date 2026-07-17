@@ -32,6 +32,7 @@ import {
   Package,
   FolderPlus,
 } from "lucide-react";
+import { cn } from "@/lib/utils";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -116,7 +117,15 @@ function getInitials(name) {
     .slice(0, 2);
 }
 
-export function Header() {
+// "User_00001" → "User_1" — versão reduzida (sem zero à esquerda) do
+// user_code, usada como ID amigável em vez do CUID técnico.
+function reducedUserCode(code?: string) {
+  if (!code) return "";
+  const m = /(\d+)\s*$/.exec(code);
+  return m ? `User_${parseInt(m[1], 10)}` : code;
+}
+
+export function Header({ transparent = false }: { transparent?: boolean } = {}) {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
   const [notifOpen, setNotifOpen] = useState(false);
@@ -133,7 +142,7 @@ export function Header() {
 
   const navigate = useNavigate();
   const location = useLocation();
-  const { accountType, unlockAccountType, previewUserName, previewUserEmail } =
+  const { accountType, unlockAccountType, previewUserName, previewUserEmail, isPartnerActive } =
     useAccountType();
   const { userProfile, updateUserProfile } = useSidebar();
   const { theme, setTheme } = useSettings();
@@ -191,6 +200,7 @@ export function Header() {
             name: u.name,
             email: u.email || "",
             job_title: u.job_title || "",
+            user_code: u.user_code || "",
           });
       })
       .catch(() => {
@@ -239,15 +249,6 @@ export function Header() {
         companiesPath: "/admin/empresas",
         projectsPath: "/admin/projetos",
       };
-    if (accountType === "parceiro")
-      return {
-        users: false,
-        companies: true,
-        projects: false,
-        usersPath: "",
-        companiesPath: `${base("parceiro")}/agencias`,
-        projectsPath: "",
-      };
     if (accountType === "empresas")
       return {
         users: false,
@@ -260,11 +261,13 @@ export function Header() {
     if (accountType === "agencias")
       return {
         users: false,
-        companies: false,
+        // Partner é um upgrade da Agency (PartnerProfile.status "active")
+        // — quando ativo, a busca também alcança as agências lideradas.
+        companies: isPartnerActive,
         projects: true,
         tasks: true,
         usersPath: "",
-        companiesPath: "",
+        companiesPath: isPartnerActive ? "/partner/agencias" : "",
         projectsPath: "/agency/projetos",
         tasksPath: "/agency/tarefas",
       };
@@ -461,40 +464,6 @@ export function Header() {
   });
 
   let ctx = (() => {
-    if (accountType === "parceiro") {
-      const p = partner.profile;
-      if (!p) return PLACEHOLDER("Parceiro", "/partner/dashboard");
-      const lvl = LEVEL_CONFIG[p.level ?? "bronze"];
-      return {
-        name: p.name,
-        email: p.email,
-        initials: getInitials(p.name),
-        roleLabel: "Parceiro",
-        levelBadge: lvl,
-        wallet: {
-          label: "Saldo disponível",
-          value: fmtBRL(p.balance),
-          icon: Wallet,
-          color: "text-blue-600",
-        },
-        stat: {
-          label: "Total ganho",
-          value: fmtBRL(p.totalEarned),
-          icon: TrendingUp,
-        },
-        points: "1.450 pts",
-        level: lvl.label,
-        nextLevel: "Prata",
-        tasks: "3 tarefas abertas",
-        settingsPath: "/partner/dashboard",
-        menuItems: [
-          { label: "Meu Perfil", icon: User, path: "/partner/dashboard" },
-          { label: "Comissões", icon: DollarSign, path: "/partner/comissoes" },
-          { label: "Saques", icon: Wallet, path: "/partner/saques" },
-          { label: "Agências", icon: Building2, path: "/partner/agencias" },
-        ],
-      };
-    }
     if (accountType === "empresas") {
       const p = empresa.profile;
       if (!p) return PLACEHOLDER("Empresa", "/company/dashboard");
@@ -538,11 +507,20 @@ export function Header() {
     if (accountType === "agencias") {
       const p = agencia.profile;
       if (!p) return PLACEHOLDER("Agência", "/agency/dashboard");
+      // Partner é um upgrade da Agency (PartnerProfile.status "active") —
+      // quando ativo, anexa os atalhos de Partner ao menu da própria Agency.
+      const partnerMenuItems = isPartnerActive
+        ? [
+            { label: "Comissões", icon: DollarSign, path: "/partner/comissoes" },
+            { label: "Saques", icon: Wallet, path: "/partner/saques" },
+            { label: "Agências lideradas", icon: Building2, path: "/partner/agencias" },
+          ]
+        : [];
       return {
         name: p.name,
         email: p.email,
         initials: getInitials(p.name),
-        roleLabel: "Agência",
+        roleLabel: isPartnerActive ? "Agência · Partner" : "Agência",
         levelBadge: null,
         wallet: {
           label: "MRR mensal",
@@ -569,6 +547,7 @@ export function Header() {
           { label: "Projetos", icon: FolderOpen, path: "/agency/projetos" },
           { label: "Tarefas", icon: CheckSquare, path: "/agency/tarefas" },
           { label: "Financeiro", icon: Wallet, path: "/agency/financeiro" },
+          ...partnerMenuItems,
         ],
       };
     }
@@ -685,20 +664,38 @@ export function Header() {
     month: "long",
     year: "numeric",
   });
+  const hasBottomStats = Boolean(
+    ctx.points || ctx.stat || ctx.tasks || ctx.wallet,
+  );
 
   return (
     <>
       {/* search overlay removed — dropdown is now inline below the bar */}
 
       <header
-        className="border-b border-white pb-2.5 px-4 sm:px-8 relative z-90 shadow-xl overflow-visible"
-        style={{
-          background:
-            "var(--app-brand-gradient, linear-gradient(135deg, #000000 0%, #1a2a6f 45%, #c81a7f 100%))",
-        }}
+        className={cn(
+          "border-b px-4 sm:px-8 relative z-90 overflow-visible",
+          hasBottomStats && "pb-2.5",
+          transparent
+            ? "border-white/15"
+            : "border-white shadow-xl",
+        )}
+        style={
+          transparent
+            ? { background: "transparent" }
+            : {
+                background:
+                  "var(--app-brand-gradient, linear-gradient(135deg, #000000 0%, #1a2a6f 45%, #c81a7f 100%))",
+              }
+        }
       >
         {/* === TOP ROW: greeting + right actions === */}
-        <div className="flex items-center h-16 gap-4 border-b border-white/8">
+        <div
+          className={cn(
+            "flex items-center h-16 gap-4",
+            hasBottomStats && "border-b border-white/8",
+          )}
+        >
           {/* Mobile hamburger */}
           <Button
             variant="ghost"
@@ -714,13 +711,28 @@ export function Header() {
           </Button>
 
           {/* Greeting + date */}
-          <div className="hidden lg:block shrink-0">
-            <p className="text-lg font-bold text-white leading-tight tracking-tight">
-              {greeting}, {firstName}!
-            </p>
-            <p className="text-xs text-white/45 leading-tight capitalize mt-0.5">
-              {today}
-            </p>
+          <div className="hidden lg:flex items-center gap-3 shrink-0">
+            <div>
+              <p className="text-lg font-bold text-white leading-tight tracking-tight">
+                {greeting}, {firstName}!
+              </p>
+              <p className="text-xs text-white/45 leading-tight capitalize mt-0.5">
+                {today}
+              </p>
+            </div>
+            {ctx.level && (
+              <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-white/8 border border-white/10 shrink-0">
+                <div className="h-6 w-6 rounded-lg bg-yellow-400/20 flex items-center justify-center shrink-0">
+                  <Zap className="h-3.5 w-3.5 text-yellow-400" />
+                </div>
+                <div>
+                  <p className="text-[10px] text-white/45 leading-none">Nível</p>
+                  <p className="text-xs font-bold text-white leading-tight">
+                    {ctx.level}
+                  </p>
+                </div>
+              </div>
+            )}
           </div>
           <div className="lg:hidden min-w-0">
             <p className="text-sm font-bold text-white truncate">
@@ -1039,6 +1051,11 @@ export function Header() {
                           {ctx.email}
                         </p>
                       )}
+                      {userProfile.user_code && (
+                        <p className="text-[10px] text-gray-400 font-mono truncate mt-0.5">
+                          {reducedUserCode(userProfile.user_code)}
+                        </p>
+                      )}
                     </div>
                   </div>
                   {(ctx.wallet || ctx.points || ctx.tasks) && (
@@ -1110,21 +1127,9 @@ export function Header() {
           </div>
         </div>
 
-        {/* === BOTTOM ROW: quick stats pills === */}
+        {/* === BOTTOM ROW: quick stats pills (level moved up next to greeting) === */}
+        {hasBottomStats && (
         <div className="hidden lg:flex items-center gap-2 h-12 overflow-x-auto no-scrollbar pt-0.5">
-          {ctx.level && (
-            <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-white/8 border border-white/10 hover:bg-white/12 transition-colors shrink-0">
-              <div className="h-6 w-6 rounded-lg bg-yellow-400/20 flex items-center justify-center shrink-0">
-                <Zap className="h-3.5 w-3.5 text-yellow-400" />
-              </div>
-              <div>
-                <p className="text-[10px] text-white/45 leading-none">Nível</p>
-                <p className="text-xs font-bold text-white leading-tight">
-                  {ctx.level}
-                </p>
-              </div>
-            </div>
-          )}
           {ctx.points && (
             <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-white/8 border border-white/10 hover:bg-white/12 transition-colors shrink-0">
               <div className="h-6 w-6 rounded-lg bg-amber-400/20 flex items-center justify-center shrink-0">
@@ -1185,6 +1190,7 @@ export function Header() {
             </button>
           )}
         </div>
+        )}
       </header>
 
       <NotificationPreferencesPanel
@@ -1245,22 +1251,6 @@ export function Header() {
               currentMrr: p.currentMrr,
               totalProjects: p.totalProjects,
               partnerLevel: p.partnerLevel,
-            };
-          }
-          if (accountType === "parceiro" && partner.profile) {
-            const p = partner.profile;
-            return {
-              id: p.id,
-              name: p.name,
-              email: p.email,
-              role: "partner",
-              account_type: "parceiro",
-              phone: p.phone ?? "",
-              is_active: true,
-              is_admin: false,
-              permissions: [],
-              created_at: p.createdAt ?? "",
-              updated_at: p.createdAt ?? "",
             };
           }
           // admin + nomades: use real authenticated user (or context fallback)

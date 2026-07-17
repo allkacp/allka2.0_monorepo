@@ -93,7 +93,11 @@ import {
 import { Checkbox } from "@/components/ui/checkbox";
 import { cn } from "@/lib/utils";
 import { PageLoader } from "@/components/ui/loading";
-import { PageHeader } from "@/components/page-header";
+import {
+  STANDARD_SHELL_PANEL_CLASS,
+  StandardPageBanner,
+} from "@/components/standard-page-shell";
+import { PinToTrayButton } from "@/components/pin-to-tray-button";
 import { ItemsPerPageSelect } from "@/components/items-per-page-select";
 import { useSorting, SortableHeader } from "@/hooks/useSorting";
 import { useTableScrollSync } from "@/hooks/useTableScrollSync";
@@ -1614,30 +1618,38 @@ export default function AdminTarefasPage({
 
   return (
     <TooltipProvider>
-      <div className="space-y-5 p-4 md:p-6">
+      <div className={STANDARD_SHELL_PANEL_CLASS}>
+      <div className="h-full min-h-0 flex flex-col">
+      <div className="shrink-0 -mb-[11px]">
         {/* ── Header ─────────────────────────────────────────────── */}
-        <PageHeader
+        <StandardPageBanner
+          icon={CheckSquare2}
           title="Tarefas"
           description="Acompanhe todas as tarefas operacionais da plataforma."
           actions={
-            <TooltipProvider delayDuration={400}>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <button
-                    onClick={fetchTarefas}
-                    disabled={loading}
-                    className="group relative flex items-center justify-center h-8 w-8 rounded-lg border border-border/60 hover:border-transparent overflow-hidden transition-all disabled:opacity-50"
-                  >
-                    <span className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none" style={{ background: "linear-gradient(135deg,#000000 0%,#1a2a6f 45%,#c81a7f 100%)" }} />
-                    <RefreshCw className={cn("relative z-10 h-4 w-4 text-[#7d1b6a] group-hover:text-white transition-colors", loading && "animate-spin")} />
-                  </button>
-                </TooltipTrigger>
-                <TooltipContent side="bottom" sideOffset={6}>Atualizar</TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
+            <>
+              <TooltipProvider delayDuration={400}>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <button
+                      onClick={fetchTarefas}
+                      disabled={loading}
+                      className="flex items-center justify-center h-8 w-8 rounded-lg border border-white/70 text-white bg-white/10 hover:bg-white/20 transition-colors disabled:opacity-50"
+                    >
+                      <RefreshCw className={cn("h-4 w-4", loading && "animate-spin")} />
+                    </button>
+                  </TooltipTrigger>
+                  <TooltipContent side="bottom" sideOffset={6}>Atualizar</TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+              <PinToTrayButton id="page-tarefas" label="Tarefas" icon={CheckSquare2} path="/admin/tarefas" />
+            </>
           }
         />
+      </div>
 
+      <div className="flex-1 min-h-0 overflow-y-auto">
+      <div className="space-y-5">
         {/* ── Stat Cards ─────────────────────────────────────────── */}
         <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-3">
           {[
@@ -2610,6 +2622,9 @@ export default function AdminTarefasPage({
             </div>
           )}
         </div>
+      </div>
+      </div>
+      </div>
       </div>
 
       {/* Advanced Filters Drawer */}

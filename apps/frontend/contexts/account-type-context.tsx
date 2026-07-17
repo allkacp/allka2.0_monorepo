@@ -14,7 +14,6 @@ export type AccountType =
   | "agencias"
   | "nomades"
   | "admin"
-  | "parceiro"
   | "lider";
 export type AccountSubType = "company" | "in-house" | null;
 
@@ -30,6 +29,9 @@ interface AccountTypeContextType {
   /** Email do usuário de preview (só em dev). Null quando não definido. */
   previewUserEmail: string | null;
   setPreviewUser: (name: string, email: string) => void;
+  /** Partner não é um account_type separado — é a Agency logada com
+   *  PartnerProfile.status "active" (ver auth.ts /login e /me). */
+  isPartnerActive: boolean;
 }
 
 const AccountTypeContext = createContext<AccountTypeContextType | undefined>(
@@ -55,8 +57,11 @@ function inferFromPath(path: string): {
     return { accountType: "empresas", accountSubType: "company" };
   if (path.startsWith("/agency") || path.startsWith("/agencia"))
     return { accountType: "agencias", accountSubType: null };
+  // Partner não é mais um account_type/portal separado — as rotas
+  // /partner/* seguem existindo (URLs inalteradas), mas são acessadas por
+  // uma Agency com PartnerProfile ativo, não por um perfil "parceiro".
   if (path.startsWith("/partner") || path.startsWith("/parceiro"))
-    return { accountType: "parceiro", accountSubType: null };
+    return { accountType: "agencias", accountSubType: null };
   return { accountType: "admin", accountSubType: null };
 }
 
@@ -128,6 +133,7 @@ export function AccountTypeProvider({ children }: { children: ReactNode }) {
     () => loadStoredProfile(pathname).previewUserEmail,
   );
   const [isLocked, setIsLocked] = useState(false);
+  const [isPartnerActive, setIsPartnerActive] = useState(false);
 
   useEffect(() => {
     const syncFromStorage = () => {
@@ -136,6 +142,12 @@ export function AccountTypeProvider({ children }: { children: ReactNode }) {
       setAccountSubType(next.accountSubType);
       setPreviewUserName(next.previewUserName);
       setPreviewUserEmail(next.previewUserEmail);
+      try {
+        const u = JSON.parse(localStorage.getItem("allka_user") || "{}");
+        setIsPartnerActive(u?.partner_status === "active");
+      } catch {
+        setIsPartnerActive(false);
+      }
     };
 
     syncFromStorage();
@@ -222,6 +234,7 @@ export function AccountTypeProvider({ children }: { children: ReactNode }) {
         previewUserName,
         previewUserEmail,
         setPreviewUser,
+        isPartnerActive,
       }}
     >
       {children}

@@ -9,24 +9,34 @@ import React, {
 import { useItemsPerPage } from "@/lib/use-items-per-page";
 import { useNavigate, useParams } from "react-router-dom";
 import { PageLoader } from "@/components/ui/loading";
+import {
+  STANDARD_SHELL_PANEL_CLASS,
+  STANDARD_SHELL_TABLE_CARD_CLASS,
+  StandardPageBanner,
+  StandardMetricCard,
+} from "@/components/standard-page-shell";
+import { usePinEntry, useConsumePendingActivation } from "@/contexts/open-screens-context";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
+import { Textarea } from "@/components/ui/textarea";
 import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
-} from "@/components/ui/dialog";
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import {
   Building2,
   Users,
   Search,
   Plus,
+  ArrowLeft,
   Eye,
+  EyeOff,
   Trash2,
   ChevronLeft,
   ChevronRight,
@@ -51,14 +61,17 @@ import {
   ShieldCheck,
   Phone,
   Loader2,
+  FileText,
+  Globe,
+  MapPin,
+  Tag,
+  Camera,
+  Briefcase,
+  Wallet,
+  Pin,
 } from "lucide-react";
 import { useSorting, SortableHeader } from "@/hooks/useSorting";
 import { ExportButton } from "@/components/export-button";
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
   Accordion,
@@ -73,6 +86,7 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { ItemsPerPageSelect } from "@/components/items-per-page-select";
+import { StandardModalDialog } from "@/components/standard-modal-dialog";
 import { CompanyEditSlidePanel } from "@/components/company-edit-slide-panel";
 import { CompanyViewSlidePanel } from "@/components/company-view-slide-panel";
 import { ConfirmationDialog } from "@/components/confirmation-dialog";
@@ -86,7 +100,6 @@ import {
 import { useToast } from "@/components/ui/use-toast";
 import { useCompanies } from "@/hooks/useCompanies";
 import { apiClient } from "@/lib/api-client";
-import { PageHeader } from "@/components/page-header";
 
 const gradientMap: Record<string, string> = {
   "bg-gradient-to-br from-blue-900 via-blue-800 to-cyan-900":
@@ -121,8 +134,89 @@ const gradientMap: Record<string, string> = {
     "linear-gradient(to top right, #000000, #0f172a, #111827)",
 };
 
-type CompanyType = "all" | "company" | "agency" | "nomad" | "partner";
+// "partner" não é mais um CompanyType — Partner é um upgrade da própria
+// Agency (Company.partner_status), não uma organização separada com
+// cadastro/listagem próprios. Ver "Convidar para Partner" na linha da
+// tabela de Agency e o modal de convite em company-view-slide-panel.tsx.
+type CompanyType = "all" | "company" | "agency" | "nomad";
 type CompanyStatus = "all" | "active" | "inactive" | "pending";
+
+// Única fonte de verdade pro estado "sem nenhum filtro avançado ativo" —
+// usada no valor inicial do useState, no reset do modal "Filtros avançados"
+// e no botão "Limpar filtros" da toolbar (ver ETAPA 5 / correção). Antes
+// disso o mesmo objeto estava duplicado à mão em dois lugares diferentes.
+const EMPTY_ADVANCED_FILTERS = {
+  name: "",
+  cnpj: "",
+  email: "",
+  phone: "",
+  whatsapp: "",
+  location: "",
+  types: [] as string[],
+  statuses: [] as string[],
+  accountTypes: [] as string[],
+  partnerLevels: [] as string[],
+  minUsers: "",
+  maxUsers: "",
+  minProjects: "",
+  maxProjects: "",
+  hasBitrixId: false,
+  hasAsaasId: false,
+  registrationDateFrom: "",
+  registrationDateTo: "",
+};
+
+const EMPTY_CREATE_WITH_OWNER_FORM = {
+  type: "company" as Exclude<CompanyType, "all">,
+  organizationName: "",
+  name: "",
+  email: "",
+  password: "",
+  phone: "",
+  // Dados adicionais da Company (type === "company")
+  companyCnpj: "",
+  companyPhone: "",
+  companyWebsite: "",
+  companySegment: "",
+  companyStatus: "ativo",
+  companyAddress: "",
+  companyNumber: "",
+  companyNeighborhood: "",
+  companyCity: "",
+  companyState: "",
+  companyZipCode: "",
+  companyPixKey: "",
+  companyPixKeyType: "cpf",
+  companyDescription: "",
+  companyLogo: "",
+  // Dados adicionais da Agency (type === "agency")
+  agencyCnpj: "",
+  agencyPhone: "",
+  agencyStatus: "ativo",
+  agencyAddress: "",
+  agencyNumber: "",
+  agencyNeighborhood: "",
+  agencyCity: "",
+  agencyState: "",
+  agencyZipCode: "",
+  agencyPixKey: "",
+  agencyPixKeyType: "cpf",
+  // Dados adicionais do Nômade (type === "nomad") — pessoa física, mas o
+  // CNPJ é obrigatório pra prestar serviços à plataforma.
+  nomadCnpj: "",
+  nomadWhatsapp: "",
+  nomadLevel: "bronze",
+  nomadStatus: "aguardando_aprovacao",
+  nomadAvatar: "",
+  nomadAddress: "",
+  nomadNumber: "",
+  nomadNeighborhood: "",
+  nomadCity: "",
+  nomadState: "",
+  nomadZipCode: "",
+  nomadPixKey: "",
+  nomadPixKeyType: "cpf",
+};
 
 type Company = {
   id: number;
@@ -251,6 +345,131 @@ const avatarColors = [
 ];
 const avatarColor = (id: number) => avatarColors[id % avatarColors.length];
 
+// Ícone por tipo de conta — só usado pelas abas do Novo Cadastro (ETAPA 9).
+const CREATE_TYPE_TAB_ICON: Record<Exclude<CompanyType, "all">, React.ElementType> = {
+  company: Building2,
+  agency: Briefcase,
+  nomad: MapPin,
+};
+
+// Barra de abas de tipo de conta do Novo Cadastro — troca só a apresentação
+// do seletor antigo (grid de botões); o valor interno (createWithOwnerForm.type)
+// e o handler de troca continuam exatamente os mesmos (ver ETAPA 9).
+function CreateTypeTabs({
+  value,
+  onChange,
+  getLabel,
+  getInfo,
+}: {
+  value: Exclude<CompanyType, "all">;
+  onChange: (t: Exclude<CompanyType, "all">) => void;
+  getLabel: (t: Exclude<CompanyType, "all">) => string;
+  getInfo: (t: Exclude<CompanyType, "all">) => string;
+}) {
+  const TAB_ORDER = ["company", "agency", "nomad"] as const;
+  const tabRefs = React.useRef<Record<string, HTMLButtonElement | null>>({});
+
+  const handleTabKeyDown = (e: React.KeyboardEvent, index: number) => {
+    if (e.key !== "ArrowLeft" && e.key !== "ArrowRight") return;
+    e.preventDefault();
+    const delta = e.key === "ArrowRight" ? 1 : -1;
+    const nextIndex = (index + delta + TAB_ORDER.length) % TAB_ORDER.length;
+    const nextType = TAB_ORDER[nextIndex];
+    onChange(nextType);
+    tabRefs.current[nextType]?.focus();
+  };
+
+  return (
+    <div
+      className="grid grid-cols-2 sm:grid-cols-4 gap-2"
+      role="tablist"
+      aria-label="Tipo de conta"
+    >
+      {TAB_ORDER.map((t, index) => {
+        const Icon = CREATE_TYPE_TAB_ICON[t];
+        const active = value === t;
+        return (
+          <TooltipProvider key={t} delayDuration={400}>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button
+                  ref={(el) => { tabRefs.current[t] = el; }}
+                  type="button"
+                  role="tab"
+                  aria-pressed={active}
+                  aria-selected={active}
+                  tabIndex={active ? 0 : -1}
+                  onClick={() => onChange(t)}
+                  onKeyDown={(e) => handleTabKeyDown(e, index)}
+                  className={`flex items-center justify-center gap-2 h-11 px-3 rounded-xl border text-sm font-semibold transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#7d1b6a]/50 ${
+                    active
+                      ? "text-white border-transparent shadow-[0_6px_16px_rgba(110,44,150,0.3)]"
+                      : "bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:border-[#7d1b6a]/50"
+                  }`}
+                  style={
+                    active
+                      ? { background: "linear-gradient(135deg, #111A4D 0%, #6E2C96 55%, #D92293 100%)" }
+                      : undefined
+                  }
+                >
+                  <Icon className="h-4 w-4 shrink-0" />
+                  <span className="truncate">{getLabel(t)}</span>
+                </button>
+              </TooltipTrigger>
+              <TooltipContent side="bottom" sideOffset={6} className="max-w-[220px]">
+                {getInfo(t)}
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
+        );
+      })}
+    </div>
+  );
+}
+
+// Card de agrupamento visual do Novo Cadastro — só apresentação (borda,
+// título, ícone, descrição); os campos dentro continuam com os mesmos
+// ids/values/handlers de antes (ver ETAPA 9).
+// Mensagem de erro discreta de um campo do Novo Cadastro — some sozinha
+// quando o campo correspondente sai de createWithOwnerErrors (ver FASE 5).
+function CreateFieldError({ id, message }: { id: string; message?: string }) {
+  if (!message) return null;
+  return (
+    <p id={`${id}-error`} className="text-xs text-red-600 dark:text-red-400">
+      {message}
+    </p>
+  );
+}
+
+function CreateFormSection({
+  icon: Icon,
+  title,
+  description,
+  children,
+}: {
+  icon: React.ElementType;
+  title: string;
+  description?: string;
+  children?: React.ReactNode;
+}) {
+  return (
+    <div className="rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-4 sm:p-5 space-y-4">
+      <div className="flex items-center gap-2.5">
+        <div className="h-8 w-8 rounded-lg bg-slate-100 dark:bg-slate-800 flex items-center justify-center flex-shrink-0">
+          <Icon className="h-4 w-4 text-[#7d1b6a] dark:text-[#c07ab0]" />
+        </div>
+        <div className="min-w-0">
+          <h3 className="text-sm font-semibold text-slate-700 dark:text-slate-200 truncate">{title}</h3>
+          {description && (
+            <p className="text-xs text-slate-400 truncate">{description}</p>
+          )}
+        </div>
+      </div>
+      <div className="space-y-3">{children}</div>
+    </div>
+  );
+}
+
 function CompanyAvatar({ company }: { company: Company }) {
   const [err, setErr] = React.useState(false);
   if (company.avatar && !err) {
@@ -272,6 +491,99 @@ function CompanyAvatar({ company }: { company: Company }) {
       <span className="text-xs font-bold text-white">
         {companyInitials(company.name)}
       </span>
+    </div>
+  );
+}
+
+// Bloco de endereço reutilizado pelos 4 tipos do "Novo Cadastro" — cada tipo
+// só muda o prefixo das chaves no form (companyZipCode, agencyZipCode, ...),
+// já resolvido dinamicamente por handleCreateWithOwnerCepChange via
+// createWithOwnerForm.type. Mesmo layout/labels do bloco Endereço de
+// admin/clientes (CEP com autofill via ViaCEP, Rua+Número, Bairro, Cidade+UF).
+function CreateWithOwnerAddressFields({
+  prefix,
+  form,
+  setForm,
+  cepLoading,
+  cepError,
+  onCepChange,
+}: {
+  prefix: "company" | "agency" | "nomad" | "partner";
+  form: Record<string, string>;
+  setForm: React.Dispatch<React.SetStateAction<any>>;
+  cepLoading: boolean;
+  cepError: string;
+  onCepChange: (raw: string) => void;
+}) {
+  const zipKey = `${prefix}ZipCode`;
+  const addressKey = `${prefix}Address`;
+  const numberKey = `${prefix}Number`;
+  const neighborhoodKey = `${prefix}Neighborhood`;
+  const cityKey = `${prefix}City`;
+  const stateKey = `${prefix}State`;
+  return (
+    <div className="space-y-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+        <div className="space-y-2">
+          <Label>CEP</Label>
+          <div className="relative">
+            <Input
+              placeholder="00000-000"
+              value={form[zipKey] || ""}
+              onChange={(e) => onCepChange(e.target.value)}
+              className="pr-7"
+              maxLength={9}
+            />
+            {cepLoading && (
+              <Loader2 className="h-3.5 w-3.5 animate-spin text-slate-400 absolute right-2 top-1/2 -translate-y-1/2" />
+            )}
+          </div>
+          {cepError && <p className="text-xs text-red-500">{cepError}</p>}
+        </div>
+        <div className="space-y-2">
+          <Label>Rua / Avenida</Label>
+          <Input
+            placeholder="Ex: Rua Paulo Lobo"
+            value={form[addressKey] || ""}
+            onChange={(e) => setForm((f: any) => ({ ...f, [addressKey]: e.target.value }))}
+          />
+        </div>
+        <div className="space-y-2">
+          <Label>Número</Label>
+          <Input
+            placeholder="Ex: 123"
+            value={form[numberKey] || ""}
+            onChange={(e) => setForm((f: any) => ({ ...f, [numberKey]: e.target.value }))}
+          />
+        </div>
+      </div>
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+        <div className="space-y-2">
+          <Label>Bairro</Label>
+          <Input
+            placeholder="Ex: Cambuí"
+            value={form[neighborhoodKey] || ""}
+            onChange={(e) => setForm((f: any) => ({ ...f, [neighborhoodKey]: e.target.value }))}
+          />
+        </div>
+        <div className="space-y-2">
+          <Label>Cidade</Label>
+          <Input
+            placeholder="Ex: Campinas"
+            value={form[cityKey] || ""}
+            onChange={(e) => setForm((f: any) => ({ ...f, [cityKey]: e.target.value }))}
+          />
+        </div>
+        <div className="space-y-2">
+          <Label>Estado (UF)</Label>
+          <Input
+            placeholder="SP"
+            maxLength={2}
+            value={form[stateKey] || ""}
+            onChange={(e) => setForm((f: any) => ({ ...f, [stateKey]: e.target.value.toUpperCase() }))}
+          />
+        </div>
+      </div>
     </div>
   );
 }
@@ -327,6 +639,39 @@ export default function EmpresasPage() {
     updateCompany,
     deleteCompany: apiDeleteCompany,
   } = useCompanies();
+  // Agency/Nomad são entidades Prisma separadas de Company — sem hook
+  // próprio, buscadas em paralelo aqui e mescladas na mesma lista via o
+  // campo "type" (ver useEffect de merge abaixo), pra essa tela virar o
+  // ponto único de gestão dos 3 tipos de conta organizacional. Partner NÃO
+  // é um tipo de conta próprio — é um upgrade que uma Agency recebe (ver
+  // PartnerProfile aninhado em cada Agency, "convidar para Partner" na
+  // linha da tabela), por isso não tem fetch/mapping próprio aqui.
+  const [apiAgencies, setApiAgencies] = useState<any[]>([]);
+  const [apiNomades, setApiNomades] = useState<any[]>([]);
+  const refetchOrgTypes = useCallback(async () => {
+    try {
+      const [agRes, noRes] = await Promise.all([
+        apiClient.getAgencies({ limit: "1000" }),
+        apiClient.getNomades({ limit: "1000" }),
+      ]);
+      setApiAgencies((agRes as any)?.data || []);
+      setApiNomades((noRes as any)?.data || []);
+    } catch (err) {
+      console.error("[EmpresasPage] erro ao buscar agencies/nomades", err);
+    }
+  }, []);
+  useEffect(() => {
+    refetchOrgTypes();
+  }, [refetchOrgTypes]);
+  const refetchAllOrgTypes = useCallback(() => {
+    refetchCompanies();
+    refetchOrgTypes();
+    // Sidebar mostra "Empresas" (Company+Agency+Nomad+Partner) num badge
+    // fixo, buscado uma vez só (App.tsx monta o Sidebar acima do <Routes>,
+    // nunca remonta) — sem isso o número ficava defasado após qualquer
+    // criação/edição/exclusão aqui, até um F5.
+    window.dispatchEvent(new Event("allka:admin-counts-changed"));
+  }, [refetchCompanies, refetchOrgTypes]);
   const pageRef = useRef<HTMLDivElement>(null);
   const tableScrollRef = useRef<HTMLDivElement>(null);
   const topScrollRef = useRef<HTMLDivElement>(null);
@@ -456,26 +801,13 @@ export default function EmpresasPage() {
     return new Set(DEFAULT_VISIBLE_COLS);
   });
   const [colConfigOpen, setColConfigOpen] = useState(false);
-  const [colConfigClosing, setColConfigClosing] = useState(false);
   const closeColConfig = useCallback(() => {
-    setColConfigClosing(true);
-    setTimeout(() => {
-      setColConfigClosing(false);
-      setColConfigOpen(false);
-    }, 300);
+    setColConfigOpen(false);
   }, []);
-  useEffect(() => {
-    if (!colConfigOpen) return;
-    const onKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Escape") closeColConfig();
-    };
-    window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
-  }, [colConfigOpen, closeColConfig]);
 
   // ── Company "more info" slide panel (opened via the + button) ───────────
   const [infoPanelCompany, setInfoPanelCompany] = useState<Company | null>(null);
-  const [infoPanelClosing, setInfoPanelClosing] = useState(false);
+  const [infoPanelOpen, setInfoPanelOpen] = useState(false);
   const [infoPanelSummary, setInfoPanelSummary] = useState<{
     projects: { total: number; byStatus: Record<string, number> };
     users: {
@@ -490,6 +822,7 @@ export default function EmpresasPage() {
   const [infoPanelLoading, setInfoPanelLoading] = useState(false);
   const openInfoPanel = useCallback(async (company: Company) => {
     setInfoPanelCompany(company);
+    setInfoPanelOpen(true);
     setInfoPanelSummary(null);
     if (!company._apiId) return;
     setInfoPanelLoading(true);
@@ -503,21 +836,8 @@ export default function EmpresasPage() {
     }
   }, []);
   const closeInfoPanel = useCallback(() => {
-    setInfoPanelClosing(true);
-    setTimeout(() => {
-      setInfoPanelClosing(false);
-      setInfoPanelCompany(null);
-      setInfoPanelSummary(null);
-    }, 300);
+    setInfoPanelOpen(false);
   }, []);
-  useEffect(() => {
-    if (!infoPanelCompany) return;
-    const onKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Escape") closeInfoPanel();
-    };
-    window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
-  }, [infoPanelCompany, closeInfoPanel]);
   const PROJECT_STATUS_LABELS: Record<string, string> = {
     draft: "Rascunho",
     negotiation: "Negociação",
@@ -706,14 +1026,64 @@ export default function EmpresasPage() {
   // projeto) — forçar cadastro de login completo nesse fluxo rápido seria
   // um endpoint/UX incompatível (Tarefa 9, regra 5).
   const [createWithOwnerOpen, setCreateWithOwnerOpen] = useState(false);
-  const [createWithOwnerSubmitting, setCreateWithOwnerSubmitting] = useState(false);
-  const [createWithOwnerForm, setCreateWithOwnerForm] = useState({
-    organizationName: "",
-    name: "",
-    email: "",
-    password: "",
-    phone: "",
+  // Controla QUAL camada está em foco (na frente) — independente de
+  // createWithOwnerOpen. Clicar na "espiadinha" do card de trás só troca o
+  // foco (alterna qual card está na frente), nunca fecha/descarta o Novo
+  // Cadastro — fechar de verdade só acontece pelos botões explícitos
+  // (seta de voltar / X / Cancelar), via handleCreateWithOwnerCancelOrBack.
+  const [createWithOwnerFocused, setCreateWithOwnerFocused] = useState(true);
+  // Bandeja de Telas — cada tela só entra ali se o usuário clicar no ícone
+  // de pin (ao lado do Exportar). Nada se adiciona sozinho, e uma vez
+  // adicionada, só sai de lá clicando em remover (na própria bandeja ou de
+  // novo no mesmo ícone) — fechar/trocar a tela normalmente não desregistra,
+  // e o pin sobrevive a navegar pra outra página (dado persistido no
+  // contexto, não depende deste componente continuar montado).
+  const { pinned: listPinned, toggle: toggleListPinned } = usePinEntry({
+    id: "empresas-list",
+    label: "Empresas",
+    icon: Building2,
+    path: "/admin/empresas",
+    activateKey: "list",
   });
+  const { pinned: createPinned, toggle: toggleCreatePinned } = usePinEntry({
+    id: "empresas-create",
+    label: "Novo Cadastro",
+    icon: Plus,
+    path: "/admin/empresas",
+    activateKey: "create",
+  });
+  useConsumePendingActivation((key) => {
+    if (key === "create") {
+      setCreateWithOwnerOpen(true);
+      setCreateWithOwnerFocused(true);
+    } else if (key === "list") {
+      setCreateWithOwnerFocused(false);
+    } else if (key.startsWith("edit:")) {
+      const id = Number(key.slice(5));
+      const found = companies.find((c) => c.id === id);
+      if (found) handleEditCompany(found);
+    } else if (key.startsWith("view:")) {
+      const id = Number(key.slice(5));
+      const found = companies.find((c) => c.id === id);
+      if (found) handleViewCompany(found);
+    }
+  });
+  const [createWithOwnerSubmitting, setCreateWithOwnerSubmitting] = useState(false);
+  const createWithOwnerAvatarInputRef = useRef<HTMLInputElement>(null);
+  const createWithOwnerNomadAvatarInputRef = useRef<HTMLInputElement>(null);
+  const [createWithOwnerForm, setCreateWithOwnerForm] = useState(EMPTY_CREATE_WITH_OWNER_FORM);
+  const [showCreateWithOwnerPassword, setShowCreateWithOwnerPassword] = useState(false);
+  const [createWithOwnerCepLoading, setCreateWithOwnerCepLoading] = useState(false);
+  const [createWithOwnerCepError, setCreateWithOwnerCepError] = useState("");
+  // Erros por campo do Novo Cadastro — só os 3 campos realmente exigidos
+  // pelo backend (name/email/password, ver createUserSchema em
+  // apps/backend/src/routes/users.ts) + organizationName quando o tipo
+  // precisa. Chave = id do campo (mesmo id usado no <Input>/<Label>).
+  const [createWithOwnerErrors, setCreateWithOwnerErrors] = useState<Record<string, string>>({});
+  const [createWithOwnerErrorSummary, setCreateWithOwnerErrorSummary] = useState(false);
+  const createWithOwnerScrollRef = useRef<HTMLDivElement>(null);
+  // FASE 7 — proteção contra perda de dados ao Cancelar/Voltar
+  const [createWithOwnerDiscardConfirmOpen, setCreateWithOwnerDiscardConfirmOpen] = useState(false);
   const [editPanelOpen, setEditPanelOpen] = useState(false);
   const [viewPanelOpen, setViewPanelOpen] = useState(false);
   const [selectedCompany, setSelectedCompany] = useState<Company | null>(null);
@@ -749,19 +1119,14 @@ export default function EmpresasPage() {
   const [pageSize, setPageSize] = useItemsPerPage("admin-empresas", 10);
   const [currentPage, setCurrentPage] = useState(1);
   const [isFilterModalOpen, setIsFilterModalOpen] = useState(false);
-  const [filterPanelClosing, setFilterPanelClosing] = useState(false);
   const closeFilterPanel = useCallback((resetSelection: boolean) => {
-    setFilterPanelClosing(true);
     setShowFieldPicker(false);
-    setTimeout(() => {
-      setFilterPanelClosing(false);
-      setIsFilterModalOpen(false);
-      if (resetSelection) {
-        setSelectedFilterId(null);
-        setIsEditingFilter(false);
-        setUnsavedChanges(false);
-      }
-    }, 300);
+    setIsFilterModalOpen(false);
+    if (resetSelection) {
+      setSelectedFilterId(null);
+      setIsEditingFilter(false);
+      setUnsavedChanges(false);
+    }
   }, []);
   const [deleteDialog, setDeleteDialog] = useState<{
     open: boolean;
@@ -772,28 +1137,17 @@ export default function EmpresasPage() {
     companyId: null,
     companyName: "",
   });
+  type CompanyDeleteUserAction = "delete" | "unlink" | "suspend";
+  const [deleteDialogMembers, setDeleteDialogMembers] = useState<
+    { id: string; name: string; email: string }[]
+  >([]);
+  const [deleteDialogActions, setDeleteDialogActions] = useState<
+    Record<string, CompanyDeleteUserAction>
+  >({});
+  const [deleteDialogLoadingMembers, setDeleteDialogLoadingMembers] = useState(false);
 
   // Filtros avançados
-  const [advancedFilters, setAdvancedFilters] = useState({
-    name: "",
-    cnpj: "",
-    email: "",
-    phone: "",
-    whatsapp: "",
-    location: "",
-    types: [] as string[],
-    statuses: [] as string[],
-    accountTypes: [] as string[],
-    partnerLevels: [] as string[],
-    minUsers: "",
-    maxUsers: "",
-    minProjects: "",
-    maxProjects: "",
-    hasBitrixId: false,
-    hasAsaasId: false,
-    registrationDateFrom: "",
-    registrationDateTo: "",
-  });
+  const [advancedFilters, setAdvancedFilters] = useState(EMPTY_ADVANCED_FILTERS);
 
   // Gerenciamento de filtros salvos
   const [savedFilters, setSavedFilters] = useState<
@@ -822,21 +1176,6 @@ export default function EmpresasPage() {
   ]);
   const [showFieldPicker, setShowFieldPicker] = useState(false);
 
-  // Close the filters slide panel on Escape — same confirm-on-unsaved-changes
-  // path as clicking the header's X button.
-  useEffect(() => {
-    if (!isFilterModalOpen) return;
-    const onKeyDown = (e: KeyboardEvent) => {
-      if (e.key !== "Escape") return;
-      if (unsavedChanges) {
-        setPendingClose(() => () => closeFilterPanel(true));
-        return;
-      }
-      closeFilterPanel(true);
-    };
-    window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
-  }, [isFilterModalOpen, unsavedChanges, closeFilterPanel]);
 
   // Demo data injected for real-API companies so the UI can be previewed
   const DEMO_DPO = [
@@ -887,9 +1226,7 @@ export default function EmpresasPage() {
         ? "agency"
         : c.type === "nomade"
           ? "nomad"
-          : c.type === "parceiro"
-            ? "partner"
-            : "company") as CompanyType,
+          : "company") as CompanyType,
       status:
         c.status === "ativo"
           ? "active"
@@ -904,6 +1241,14 @@ export default function EmpresasPage() {
       description: c.description || "",
       website: c.website || "",
       avatar: c.logo || c.avatar || null,
+      zip_code: c.zip_code || "",
+      street: c.address || "",
+      number: c.number || "",
+      neighborhood: c.neighborhood || "",
+      city: c.city || "",
+      state: c.state || "",
+      pix_key: c.pix_key || "",
+      pix_type: c.pix_key_type || "",
       // Was hardcoded to "starter" — plan/partner_level/account_type must
       // all derive from the same real value, or sort/filter on the Plano
       // column (which reads company.plan) silently breaks against what's
@@ -945,8 +1290,83 @@ export default function EmpresasPage() {
       use_master_as_financial_fallback:
         c.use_master_as_financial_fallback ?? true,
     })) as Company[];
-    setCompanies(mapped);
-  }, [apiCompanies]);
+
+    // Agency/Nomad — cada um vem de um endpoint/modelo Prisma próprio, sem
+    // o "type" self-declarado que Company tem; aqui o type já nasce certo
+    // (é o próprio tipo da entidade), diferente do bloco acima que precisa
+    // derivar de c.type.
+    const mappedAgencies = apiAgencies.map((a: any, idx: number) => ({
+      id: mapped.length + idx + 1,
+      _apiId: a.id,
+      sequence_number: a.sequence_number ?? undefined,
+      name: a.name || "",
+      legal_name: a.name || "",
+      type: "agency" as CompanyType,
+      status: (a.status === "ativo" ? "active" : a.status === "inativo" ? "inactive" : "pending") as CompanyStatus,
+      email: a.email || a.user?.email || "",
+      phone: a.phone || "",
+      document: a.cnpj || "",
+      location: a.address || "",
+      plan: a.partner_level,
+      partner_level: a.partner_level,
+      account_type: a.partner_level,
+      users_count: a._count?.members ?? 0,
+      projects_count: 0,
+      created_at: a.created_at || new Date().toISOString(),
+      // Presente só quando essa Agency foi convidada/virou Partner — ver
+      // "Convidar para Partner"/badge na linha da tabela.
+      partner_status: a.partner_profile?.status as
+        | "invited"
+        | "active"
+        | "declined"
+        | "suspended"
+        | undefined,
+      logo_gradient: "bg-gradient-to-br from-blue-900 via-blue-800 to-cyan-900",
+      zip_code: a.zip_code || "",
+      street: a.address || "",
+      number: a.number || "",
+      neighborhood: a.neighborhood || "",
+      city: a.city || "",
+      state: a.state || "",
+      pix_key: a.pix_key || "",
+      pix_type: a.pix_key_type || "",
+    })) as Company[];
+
+    const mappedNomades = apiNomades.map((n: any, idx: number) => ({
+      id: mapped.length + mappedAgencies.length + idx + 1,
+      _apiId: n.id,
+      sequence_number: undefined,
+      name: n.name || "",
+      legal_name: n.name || "",
+      type: "nomad" as CompanyType,
+      status: (n.status === "ativo" ? "active" : n.status === "inativo" || n.status === "reprovado" ? "inactive" : "pending") as CompanyStatus,
+      email: n.email || "",
+      phone: n.whatsapp || "",
+      document: n.cnpj || "",
+      location: n.address || "",
+      plan: n.level,
+      partner_level: n.level,
+      account_type: n.level,
+      avatar: n.avatar || undefined,
+      // Nomad é 1:1 com um único usuário (o próprio nômade, via user_id) —
+      // não tem "membros" como Agency, então ou é 1 (já vinculado) ou 0
+      // (nômade criado sem o User atômico, caso legado).
+      users_count: n.user_id ? 1 : 0,
+      projects_count: n._count?.task_executions ?? 0,
+      created_at: n.created_at || new Date().toISOString(),
+      logo_gradient: "bg-gradient-to-br from-green-900 via-emerald-800 to-teal-900",
+      zip_code: n.zip_code || "",
+      street: n.address || "",
+      number: n.number || "",
+      neighborhood: n.neighborhood || "",
+      city: n.city || "",
+      state: n.state || "",
+      pix_key: n.pix_key || "",
+      pix_type: n.pix_key_type || "",
+    })) as Company[];
+
+    setCompanies([...mapped, ...mappedAgencies, ...mappedNomades]);
+  }, [apiCompanies, apiAgencies, apiNomades]);
 
   // ── Search autocomplete (name/ID suggestions as you type) ────────────────
   const [searchFocused, setSearchFocused] = useState(false);
@@ -969,7 +1389,7 @@ export default function EmpresasPage() {
     if (!q) return [];
     return companies
       .filter((c) => {
-        const idCode = `emp_${String(c.sequence_number ?? "").padStart(5, "0")}`;
+        const idCode = `emp_${c.sequence_number ?? ""}`;
         return (
           c.name?.toLowerCase().includes(q) || idCode.toLowerCase().includes(q)
         );
@@ -1013,8 +1433,8 @@ export default function EmpresasPage() {
             (company.phone
               ? company.phone.replace(/\D/g, "").includes(rawDigits)
               : false));
-        // ID match — "emp_00007", "00007", or just "7"
-        const idCode = `emp_${String(company.sequence_number ?? "").padStart(5, "0")}`;
+        // ID match — "emp_7", "7", etc.
+        const idCode = `emp_${company.sequence_number ?? ""}`;
         const idMatch =
           idCode.toLowerCase().includes(q) ||
           (rawDigits.length > 0 &&
@@ -1251,46 +1671,270 @@ export default function EmpresasPage() {
     totalProjects: companies.reduce((acc, c) => acc + c.projects_count, 0),
   };
 
+  // account_type/role que o backend (POST /api/users) espera por tipo —
+  // ele cria a entidade (Agency/Company/Nomade/PartnerProfile) e o usuário
+  // principal na mesma transação (ver apps/backend/src/routes/users.ts).
+  // Nomad não tem campo de "nome da organização" próprio (é pessoa, não
+  // empresa) — só Company/Agency usam organization_name. Partner não entra
+  // aqui: não é um tipo de conta criável (é upgrade de uma Agency já
+  // existente — ver "Convidar para Partner" na linha da tabela).
+  const CREATE_TYPE_CONFIG: Record<
+    Exclude<CompanyType, "all">,
+    { account_type: string; role: string; needsOrgName: boolean; orgLabel: string; entityLabel: string }
+  > = {
+    company: { account_type: "empresas", role: "company_admin", needsOrgName: true, orgLabel: "Nome da Empresa", entityLabel: "Empresa" },
+    agency: { account_type: "agencias", role: "agency_admin", needsOrgName: true, orgLabel: "Nome da Agência", entityLabel: "Agência" },
+    nomad: { account_type: "nomades", role: "nomad", needsOrgName: false, orgLabel: "", entityLabel: "Nômade" },
+  };
+
+  // Genérico pros 3 tipos — cada um usa o mesmo conjunto de campos de
+  // endereço, só com prefixo diferente (companyZipCode, agencyZipCode,
+  // nomadZipCode, partnerZipCode, ...), que já bate com createWithOwnerForm.type.
+  const handleCreateWithOwnerCepChange = async (raw: string) => {
+    const prefix = createWithOwnerForm.type;
+    const digits = raw.replace(/\D/g, "").slice(0, 8);
+    const formatted = digits.length > 5 ? `${digits.slice(0, 5)}-${digits.slice(5)}` : digits;
+    setCreateWithOwnerForm((f) => ({ ...f, [`${prefix}ZipCode`]: formatted }));
+    setCreateWithOwnerCepError("");
+    if (digits.length !== 8) return;
+    setCreateWithOwnerCepLoading(true);
+    try {
+      const res = await fetch(`https://viacep.com.br/ws/${digits}/json/`);
+      const data = await res.json();
+      if (data.erro) {
+        setCreateWithOwnerCepError("CEP não encontrado");
+        return;
+      }
+      setCreateWithOwnerForm((f) => ({
+        ...f,
+        [`${prefix}ZipCode`]: formatted,
+        [`${prefix}Address`]: data.logradouro || f[`${prefix}Address`],
+        [`${prefix}Neighborhood`]: data.bairro || f[`${prefix}Neighborhood`],
+        [`${prefix}City`]: data.localidade || f[`${prefix}City`],
+        [`${prefix}State`]: data.uf || f[`${prefix}State`],
+      }));
+    } catch {
+      setCreateWithOwnerCepError("Erro ao buscar CEP");
+    } finally {
+      setCreateWithOwnerCepLoading(false);
+    }
+  };
+
+  const handleCreateWithOwnerLogoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      setCreateWithOwnerForm((f) => ({ ...f, companyLogo: event.target?.result as string }));
+    };
+    reader.readAsDataURL(file);
+    e.target.value = "";
+  };
+
+  const handleCreateWithOwnerNomadAvatarUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      setCreateWithOwnerForm((f) => ({ ...f, nomadAvatar: event.target?.result as string }));
+    };
+    reader.readAsDataURL(file);
+    e.target.value = "";
+  };
+
+  // Só valida o que o backend de fato exige (ver createUserSchema em
+  // apps/backend/src/routes/users.ts:106-127): name (não-vazio), email
+  // (formato válido), password (mínimo 6) — e organizationName quando o
+  // tipo atual precisa (regra que já existia, agora só com erro por campo
+  // em vez de um toast genérico). Nenhuma regra nova de CNPJ/telefone/CEP/
+  // site foi inventada — o backend aceita esses campos como string livre.
+  const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  const validateCreateWithOwnerForm = (f: typeof createWithOwnerForm) => {
+    const cfg = CREATE_TYPE_CONFIG[f.type as Exclude<CompanyType, "all">];
+    const errors: Record<string, string> = {};
+    if (cfg.needsOrgName && !f.organizationName.trim()) {
+      const orgFieldId = f.type === "agency" ? "create-agency-org-name" : "create-company-org-name";
+      errors[orgFieldId] = `${cfg.orgLabel} é obrigatório.`;
+    }
+    if (f.type === "nomad" && !f.nomadCnpj.trim()) {
+      errors["create-nomad-cnpj"] = "CNPJ é obrigatório para nômades.";
+    }
+    if (!f.name.trim()) {
+      errors["create-company-name"] = "Nome é obrigatório.";
+    }
+    if (!f.email.trim()) {
+      errors["create-company-email"] = "E-mail é obrigatório.";
+    } else if (!EMAIL_RE.test(f.email.trim())) {
+      errors["create-company-email"] = "Informe um e-mail válido.";
+    }
+    if (!f.password) {
+      errors["create-company-password"] = "Senha é obrigatória.";
+    } else if (f.password.length < 6) {
+      errors["create-company-password"] = "A senha precisa ter ao menos 6 caracteres.";
+    }
+    return errors;
+  };
+
+  const clearCreateWithOwnerError = (fieldId: string) => {
+    setCreateWithOwnerErrors((prev) => {
+      if (!prev[fieldId]) return prev;
+      const next = { ...prev };
+      delete next[fieldId];
+      if (Object.keys(next).length === 0) setCreateWithOwnerErrorSummary(false);
+      return next;
+    });
+  };
+
+  const focusAndScrollToField = (fieldId: string) => {
+    const el = document.getElementById(fieldId);
+    const scrollContainer = createWithOwnerScrollRef.current;
+    if (el && scrollContainer) {
+      const elRect = el.getBoundingClientRect();
+      const containerRect = scrollContainer.getBoundingClientRect();
+      const offset = elRect.top - containerRect.top + scrollContainer.scrollTop - 24;
+      scrollContainer.scrollTo({ top: Math.max(0, offset), behavior: "smooth" });
+      (el as HTMLElement).focus({ preventScroll: true });
+    }
+  };
+
+  // FASE 7 — considera TODOS os campos do formulário (não só os do tipo
+  // ativo no momento), comparando contra EMPTY_CREATE_WITH_OWNER_FORM.
+  // `type` fica de fora de propósito: só trocar de aba sem digitar nada
+  // não deve contar como "dados preenchidos" (ver 7.3 — troca de tipo nunca
+  // abre confirmação).
+  const isCreateWithOwnerFormDirty = () => {
+    const { type: _t1, ...rest } = createWithOwnerForm;
+    const { type: _t2, ...emptyRest } = EMPTY_CREATE_WITH_OWNER_FORM;
+    return JSON.stringify(rest) !== JSON.stringify(emptyRest);
+  };
+
+  const resetCreateWithOwnerState = () => {
+    setCreateWithOwnerForm(EMPTY_CREATE_WITH_OWNER_FORM);
+    setCreateWithOwnerErrors({});
+    setCreateWithOwnerErrorSummary(false);
+    setCreateWithOwnerCepError("");
+    setCreateWithOwnerCepLoading(false);
+  };
+
+  const handleCreateWithOwnerCancelOrBack = () => {
+    if (createWithOwnerSubmitting) return;
+    if (isCreateWithOwnerFormDirty()) {
+      setCreateWithOwnerDiscardConfirmOpen(true);
+      return;
+    }
+    resetCreateWithOwnerState();
+    setCreateWithOwnerOpen(false);
+  };
+
+  const handleDiscardCreateWithOwner = () => {
+    resetCreateWithOwnerState();
+    setCreateWithOwnerDiscardConfirmOpen(false);
+    setCreateWithOwnerOpen(false);
+  };
+
   const handleCreateCompanyWithOwner = async () => {
     if (createWithOwnerSubmitting) return;
     const f = createWithOwnerForm;
-    if (!f.organizationName.trim() || !f.name.trim() || !f.email.trim() || !f.password) {
-      toast({
-        title: "Campos obrigatórios",
-        description: "Nome da empresa, nome do usuário principal, e-mail e senha são obrigatórios.",
-        variant: "destructive",
-      });
+    const cfg = CREATE_TYPE_CONFIG[f.type as Exclude<CompanyType, "all">];
+    const errors = validateCreateWithOwnerForm(f);
+    if (Object.keys(errors).length > 0) {
+      setCreateWithOwnerErrors(errors);
+      setCreateWithOwnerErrorSummary(true);
+      // Ordem visual dos campos: organização > nome > e-mail > senha —
+      // sempre foca o primeiro erro nessa ordem, não a ordem de inserção
+      // no objeto (que não é garantida).
+      const orderedFieldIds = [
+        "create-company-org-name",
+        "create-agency-org-name",
+        "create-company-name",
+        "create-company-email",
+        "create-company-password",
+        "create-nomad-cnpj",
+      ];
+      const firstErrorField = orderedFieldIds.find((id) => errors[id]);
+      if (firstErrorField) focusAndScrollToField(firstErrorField);
       return;
     }
-    if (f.password.length < 6) {
-      toast({
-        title: "Senha muito curta",
-        description: "A senha do usuário principal precisa ter ao menos 6 caracteres.",
-        variant: "destructive",
-      });
-      return;
-    }
+    setCreateWithOwnerErrors({});
+    setCreateWithOwnerErrorSummary(false);
     setCreateWithOwnerSubmitting(true);
     try {
-      // Backend cria Company + usuário principal (company_admin) na mesma
-      // transação — endpoint dedicado (POST /api/users), diferente do
-      // CompanyCreateSlidePanel/POST /api/clients acima (Tarefa 9/11).
+      // Backend cria a entidade (Company/Agency/Nomade/PartnerProfile) +
+      // usuário principal na mesma transação — endpoint único (POST
+      // /api/users) pros 4 tipos (Tarefa 9/11).
       await apiClient.createUser({
-        organization_name: f.organizationName.trim(),
+        ...(cfg.needsOrgName ? { organization_name: f.organizationName.trim() } : {}),
         name: f.name.trim(),
         email: f.email.trim(),
         password: f.password,
-        account_type: "empresas",
-        role: "company_admin",
+        account_type: cfg.account_type,
+        role: cfg.role,
         ...(f.phone ? { phone: f.phone } : {}),
+        // Dados completos de cada entidade — cada bloco só é enviado quando
+        // o tipo selecionado é o dele (o backend também ignora os campos
+        // de outros tipos, mas evita mandar lixo à toa).
+        ...(f.type === "company"
+          ? {
+              ...(f.companyCnpj ? { company_cnpj: f.companyCnpj } : {}),
+              ...(f.companyPhone ? { company_phone: f.companyPhone } : {}),
+              ...(f.companyWebsite ? { company_website: f.companyWebsite } : {}),
+              ...(f.companySegment ? { company_segment: f.companySegment } : {}),
+              ...(f.companyStatus ? { company_status: f.companyStatus } : {}),
+              ...(f.companyAddress ? { company_address: f.companyAddress } : {}),
+              ...(f.companyNumber ? { company_number: f.companyNumber } : {}),
+              ...(f.companyNeighborhood ? { company_neighborhood: f.companyNeighborhood } : {}),
+              ...(f.companyCity ? { company_city: f.companyCity } : {}),
+              ...(f.companyState ? { company_state: f.companyState } : {}),
+              ...(f.companyZipCode ? { company_zip_code: f.companyZipCode } : {}),
+              ...(f.companyPixKey ? { company_pix_key: f.companyPixKey } : {}),
+              ...(f.companyPixKey ? { company_pix_key_type: f.companyPixKeyType } : {}),
+              ...(f.companyDescription ? { company_description: f.companyDescription } : {}),
+              ...(f.companyLogo ? { company_logo: f.companyLogo } : {}),
+            }
+          : {}),
+        ...(f.type === "agency"
+          ? {
+              ...(f.agencyCnpj ? { agency_cnpj: f.agencyCnpj } : {}),
+              ...(f.agencyPhone ? { agency_phone: f.agencyPhone } : {}),
+              ...(f.agencyStatus ? { agency_status: f.agencyStatus } : {}),
+              ...(f.agencyAddress ? { agency_address: f.agencyAddress } : {}),
+              ...(f.agencyNumber ? { agency_number: f.agencyNumber } : {}),
+              ...(f.agencyNeighborhood ? { agency_neighborhood: f.agencyNeighborhood } : {}),
+              ...(f.agencyCity ? { agency_city: f.agencyCity } : {}),
+              ...(f.agencyState ? { agency_state: f.agencyState } : {}),
+              ...(f.agencyZipCode ? { agency_zip_code: f.agencyZipCode } : {}),
+              ...(f.agencyPixKey ? { agency_pix_key: f.agencyPixKey } : {}),
+              ...(f.agencyPixKey ? { agency_pix_key_type: f.agencyPixKeyType } : {}),
+            }
+          : {}),
+        ...(f.type === "nomad"
+          ? {
+              nomad_cnpj: f.nomadCnpj.trim(),
+              ...(f.nomadWhatsapp ? { nomad_whatsapp: f.nomadWhatsapp } : {}),
+              ...(f.nomadLevel ? { nomad_level: f.nomadLevel } : {}),
+              ...(f.nomadStatus ? { nomad_status: f.nomadStatus } : {}),
+              ...(f.nomadAvatar ? { nomad_avatar: f.nomadAvatar } : {}),
+              ...(f.nomadAddress ? { nomad_address: f.nomadAddress } : {}),
+              ...(f.nomadNumber ? { nomad_number: f.nomadNumber } : {}),
+              ...(f.nomadNeighborhood ? { nomad_neighborhood: f.nomadNeighborhood } : {}),
+              ...(f.nomadCity ? { nomad_city: f.nomadCity } : {}),
+              ...(f.nomadState ? { nomad_state: f.nomadState } : {}),
+              ...(f.nomadZipCode ? { nomad_zip_code: f.nomadZipCode } : {}),
+              ...(f.nomadPixKey ? { nomad_pix_key: f.nomadPixKey } : {}),
+              ...(f.nomadPixKey ? { nomad_pix_key_type: f.nomadPixKeyType } : {}),
+            }
+          : {}),
       });
-      toast({ title: "Empresa criada", description: `"${f.organizationName.trim()}" cadastrada com sucesso.` });
+      toast({
+        title: `${cfg.entityLabel} criado(a)`,
+        description: `"${(cfg.needsOrgName ? f.organizationName : f.name).trim()}" cadastrado(a) com sucesso.`,
+      });
       setCreateWithOwnerOpen(false);
-      setCreateWithOwnerForm({ organizationName: "", name: "", email: "", password: "", phone: "" });
-      refetchCompanies();
+      resetCreateWithOwnerState();
+      refetchAllOrgTypes();
     } catch (error: any) {
       toast({
-        title: "Erro ao criar empresa",
+        title: `Erro ao criar ${cfg.entityLabel.toLowerCase()}`,
         description: error?.message || "Verifique os dados e tente novamente.",
         variant: "destructive",
       });
@@ -1310,9 +1954,56 @@ export default function EmpresasPage() {
     navigate(`/admin/empresas/${company.id}`, { replace: true });
   };
 
+  // Convida uma Agency existente pra virar Partner — ela precisa aceitar
+  // o convite (PartnerProfile.status "invited") antes de ganhar acesso.
+  const handleInvitePartner = async (company: Company) => {
+    if (!company._apiId) return;
+    try {
+      await apiClient.invitePartner(company._apiId);
+      toast({
+        title: "Convite enviado",
+        description: `"${company.name}" foi convidada para virar Partner.`,
+      });
+      refetchAllOrgTypes();
+    } catch (error: any) {
+      toast({
+        title: "Erro ao convidar",
+        description: error.message || "Não foi possível enviar o convite.",
+        variant: "destructive",
+      });
+    }
+  };
+
+  // Cada endpoint (Company/Agency/Nomade) usa seu próprio vocabulário de
+  // status — a tela unifica pra active/inactive/pending, então salvar
+  // precisa reconverter pro valor nativo daquele tipo.
+  const STATUS_TO_AGENCY: Record<string, string> = { active: "ativo", inactive: "inativo", pending: "pendente" };
+  const STATUS_TO_NOMAD: Record<string, string> = { active: "ativo", inactive: "inativo", pending: "aguardando_aprovacao" };
+
   const handleSaveCompany = async (data: any) => {
     try {
-      if (selectedCompany?._apiId) {
+      if (!selectedCompany?._apiId) {
+        setEditPanelOpen(false);
+        setSelectedCompany(null);
+        return;
+      }
+      const type = selectedCompany.type;
+      if (type === "agency") {
+        await apiClient.updateAgency(selectedCompany._apiId, {
+          name: data.name || data.legal_name,
+          cnpj: data.document || data.cnpj || undefined,
+          email: data.email || undefined,
+          phone: data.phone || undefined,
+          status: data.status ? STATUS_TO_AGENCY[data.status] || data.status : undefined,
+        });
+      } else if (type === "nomad") {
+        await apiClient.updateNomade(selectedCompany._apiId, {
+          name: data.name || data.legal_name,
+          email: data.email || undefined,
+          whatsapp: data.phone || undefined,
+          status: data.status ? STATUS_TO_NOMAD[data.status] || data.status : undefined,
+        });
+      } else {
         await updateCompany(selectedCompany._apiId, {
           name: data.name || data.legal_name,
           cnpj: data.document || data.cnpj || undefined,
@@ -1320,15 +2011,23 @@ export default function EmpresasPage() {
           phone: data.phone || undefined,
           status: data.status || undefined,
           segment: data.segment || undefined,
-          address: data.location || undefined,
+          address: data.street || data.location || undefined,
+          number: data.number || undefined,
+          neighborhood: data.neighborhood || undefined,
+          city: data.city || undefined,
+          state: data.state || undefined,
+          zip_code: data.zip_code || undefined,
+          pix_key: data.pix_key || undefined,
+          pix_key_type: data.pix_type || undefined,
           description: data.description || undefined,
           website: data.website || undefined,
         });
-        toast({
-          title: "Empresa atualizada",
-          description: "Os dados foram salvos com sucesso.",
-        });
       }
+      toast({
+        title: `${getTypeLabel(type)} atualizado(a)`,
+        description: "Os dados foram salvos com sucesso.",
+      });
+      refetchAllOrgTypes();
     } catch (error: any) {
       toast({
         title: "Erro ao salvar",
@@ -1340,13 +2039,36 @@ export default function EmpresasPage() {
     setSelectedCompany(null);
   };
 
-  const handleDeleteCompany = (id: number) => {
+  const handleDeleteCompany = async (id: number) => {
     const company = companies.find((c) => c.id === id);
     setDeleteDialog({
       open: true,
       companyId: id,
       companyName: company?.name ?? "",
     });
+    setDeleteDialogMembers([]);
+    setDeleteDialogActions({});
+    // Só o tipo "company" tem o fluxo de arquivamento + escolha de ação por
+    // usuário (backend em /api/clients); agency/nomad seguem o fluxo simples.
+    if (company?.type === "company" && company._apiId) {
+      setDeleteDialogLoadingMembers(true);
+      try {
+        const res: any = await apiClient.getUsers({ company_id: company._apiId });
+        const members = (res?.data || []).map((u: any) => ({
+          id: u.id,
+          name: u.name || "",
+          email: u.email || "",
+        }));
+        setDeleteDialogMembers(members);
+        setDeleteDialogActions(
+          Object.fromEntries(members.map((m: any) => [m.id, "unlink" as CompanyDeleteUserAction])),
+        );
+      } catch {
+        setDeleteDialogMembers([]);
+      } finally {
+        setDeleteDialogLoadingMembers(false);
+      }
+    }
   };
 
   const handleConfirmDelete = async () => {
@@ -1354,11 +2076,22 @@ export default function EmpresasPage() {
       const company = companies.find((c) => c.id === deleteDialog.companyId);
       if (company?._apiId) {
         try {
-          await apiDeleteCompany(company._apiId);
+          if (company.type === "agency") {
+            await apiClient.deleteAgency(company._apiId);
+          } else if (company.type === "nomad") {
+            await apiClient.deleteNomade(company._apiId);
+          } else {
+            const userActions = deleteDialogMembers.map((m) => ({
+              userId: m.id,
+              action: deleteDialogActions[m.id] ?? "unlink",
+            }));
+            await apiDeleteCompany(company._apiId, userActions);
+          }
           toast({
-            title: "Empresa excluída",
-            description: `"${company.name}" foi excluída com sucesso.`,
+            title: `${getTypeLabel(company.type)} excluído(a)`,
+            description: `"${company.name}" foi excluído(a) com sucesso. O ID ficou disponível para reaproveitamento e os dados foram arquivados no histórico.`,
           });
+          refetchAllOrgTypes();
         } catch (error: any) {
           toast({
             title: "Erro ao excluir",
@@ -1369,6 +2102,8 @@ export default function EmpresasPage() {
       }
     }
     setDeleteDialog({ open: false, companyId: null, companyName: "" });
+    setDeleteDialogMembers([]);
+    setDeleteDialogActions({});
   };
 
   const getTypeLabel = (type: CompanyType) => {
@@ -1403,225 +2138,8 @@ export default function EmpresasPage() {
     return colors[status] as any;
   };
 
-  // Sparkline & stats history data
-  const statsHistory = {
-    total: {
-      data: [6, 8, 7, 10, 9, 11, 14, 13, 15, 16, 17, stats.total],
-      prev: 17,
-      label: "mês passado",
-    },
-    active: {
-      data: [4, 5, 5, 7, 6, 8, 9, 9, 11, 12, 13, stats.active],
-      prev: 13,
-      label: "mês passado",
-    },
-    users: {
-      data: [30, 38, 42, 50, 55, 60, 62, 65, 64, 68, 70, stats.totalUsers],
-      prev: 70,
-      label: "mês passado",
-    },
-    projects: {
-      data: [10, 15, 18, 22, 25, 26, 28, 30, 32, 34, 36, stats.totalProjects],
-      prev: 36,
-      label: "mês passado",
-    },
-  };
-
-  const Sparkline = ({ data, color }: { data: number[]; color: string }) => {
-    const w = 80,
-      h = 28;
-    const min = Math.min(...data),
-      max = Math.max(...data);
-    const range = max - min || 1;
-    const pts = data.map((v, i) => ({
-      x: (i / (data.length - 1)) * w,
-      y: h - 4 - ((v - min) / range) * (h - 12),
-    }));
-    const polyPts = pts.map((p) => `${p.x},${p.y}`).join(" ");
-    const areaPath = `M0,${h} ${pts.map((p) => `L${p.x},${p.y}`).join(" ")} L${w},${h} Z`;
-    const gradId = `fill-${color.replace("#", "")}`;
-    return (
-      <svg width={w} height={h} className="overflow-visible">
-        <defs>
-          <linearGradient id={gradId} x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor={color} stopOpacity="0.18" />
-            <stop offset="100%" stopColor={color} stopOpacity="0.02" />
-          </linearGradient>
-        </defs>
-        <path d={areaPath} fill={`url(#${gradId})`} />
-        <polyline
-          fill="none"
-          stroke={color}
-          strokeWidth="1.5"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          points={polyPts}
-        />
-        <circle
-          cx={pts[pts.length - 1].x}
-          cy={pts[pts.length - 1].y}
-          r="2.5"
-          fill={color}
-        />
-      </svg>
-    );
-  };
-
-  const statColorMap: Record<
-    string,
-    {
-      gradient: string;
-      darkGradient: string;
-      borderClass: string;
-      strokeColor: string;
-    }
-  > = {
-    blue: {
-      gradient: "from-blue-500 to-blue-700",
-      darkGradient: "dark:from-blue-800 dark:to-blue-950",
-      borderClass: "border-2 border-blue-300/70 dark:border-blue-800/70",
-      strokeColor: "white",
-    },
-    emerald: {
-      gradient: "from-emerald-500 to-teal-600",
-      darkGradient: "dark:from-emerald-800 dark:to-teal-900",
-      borderClass: "border-2 border-emerald-300/70 dark:border-emerald-800/70",
-      strokeColor: "white",
-    },
-    violet: {
-      gradient: "from-violet-500 to-purple-700",
-      darkGradient: "dark:from-violet-800 dark:to-purple-950",
-      borderClass: "border-2 border-violet-300/70 dark:border-violet-800/70",
-      strokeColor: "white",
-    },
-    orange: {
-      gradient: "from-orange-500 to-rose-600",
-      darkGradient: "dark:from-orange-800 dark:to-rose-900",
-      borderClass: "border-2 border-orange-300/70 dark:border-orange-800/70",
-      strokeColor: "white",
-    },
-  };
-
-  const StatCard = ({
-    label,
-    value,
-    prevValue,
-    prevLabel,
-    icon: Icon,
-    gradient,
-    sparkKey,
-    trendColor,
-  }: {
-    label: string;
-    value: number;
-    prevValue: number;
-    prevLabel: string;
-    icon: React.ElementType;
-    gradient: string;
-    sparkKey: keyof typeof statsHistory;
-    trendColor: string;
-  }) => {
-    const [hovered, setHovered] = useState(false);
-    const diff = value - prevValue;
-    const pct =
-      prevValue > 0 ? Math.round(Math.abs(diff / prevValue) * 100) : 0;
-    const up = diff >= 0;
-    const colors = statColorMap[trendColor] ?? statColorMap.blue;
-
-    return (
-      <div
-        className={`relative rounded-xl overflow-hidden cursor-default transition-all duration-200 bg-gradient-to-br ${colors.gradient} ${colors.darkGradient} ${colors.borderClass} ${hovered ? "shadow-xl scale-[1.02]" : "shadow-lg"}`}
-        onMouseEnter={() => setHovered(true)}
-        onMouseLeave={() => setHovered(false)}
-      >
-        {/* Info tooltip */}
-        <div
-          className={`absolute top-2 right-2 z-10 transition-opacity duration-150 ${hovered ? "opacity-100" : "opacity-0"}`}
-        >
-          <TooltipProvider>
-            <Tooltip open={hovered}>
-              <TooltipTrigger asChild>
-                <div className="bg-white/20 hover:bg-white/30 rounded-md p-0.5 cursor-pointer transition-colors">
-                  <Info className="h-2.5 w-2.5 text-white" />
-                </div>
-              </TooltipTrigger>
-              <TooltipContent
-                side="top"
-                className="bg-slate-100 border-slate-200 text-slate-900 p-3 rounded-xl shadow-xl"
-              >
-                <div className="min-w-[130px]">
-                  <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider mb-2">
-                    {label}
-                  </p>
-                  <div className="flex items-center justify-between gap-4 mb-1.5">
-                    <span className="text-xs text-slate-500">Atual</span>
-                    <span className="text-sm font-bold text-slate-900">
-                      {value}
-                    </span>
-                  </div>
-                  <div className="flex items-center justify-between gap-4 mb-2">
-                    <span className="text-xs text-slate-500">{prevLabel}</span>
-                    <span className="text-sm font-semibold text-slate-600">
-                      {prevValue}
-                    </span>
-                  </div>
-                  <div
-                    className={`flex items-center gap-1 px-2 py-1 rounded-lg ${up ? "bg-emerald-100 text-emerald-700" : "bg-red-100 text-red-700"}`}
-                  >
-                    {up ? (
-                      <TrendingUp className="h-3 w-3" />
-                    ) : (
-                      <TrendingDown className="h-3 w-3" />
-                    )}
-                    <span className="text-xs font-semibold">
-                      {up ? "+" : "-"}
-                      {pct}% vs {prevLabel}
-                    </span>
-                  </div>
-                </div>
-              </TooltipContent>
-            </Tooltip>
-          </TooltipProvider>
-        </div>
-
-        <div className="px-3 pt-2 pb-2">
-          <div className="flex items-center justify-between mb-1">
-            <p className="text-[10px] font-semibold text-white/80 uppercase tracking-wider leading-tight truncate">
-              {label}
-            </p>
-            <div className="bg-white/20 rounded-md p-1 flex-shrink-0 ml-1">
-              <Icon className="h-3 w-3 text-white" />
-            </div>
-          </div>
-          <div className="flex items-end justify-between gap-2">
-            <div>
-              <p className="text-2xl font-bold leading-none text-white">
-                {value}
-              </p>
-              <div className="inline-flex items-center gap-1 mt-1 px-1.5 py-0.5 rounded-md bg-white/20">
-                {up ? (
-                  <TrendingUp className="h-2.5 w-2.5 text-white" />
-                ) : (
-                  <TrendingDown className="h-2.5 w-2.5 text-white" />
-                )}
-                <span className="text-[9px] font-semibold text-white">
-                  {up ? "+" : "-"}
-                  {pct}%
-                </span>
-                <span className="text-[9px] text-white/60">vs. anterior</span>
-              </div>
-            </div>
-            <div className="flex-shrink-0">
-              <Sparkline
-                data={statsHistory[sparkKey].data}
-                color={colors.strokeColor}
-              />
-            </div>
-          </div>
-        </div>
-      </div>
-    );
-  };
+  // Stat cards / sparkline / cores agora vêm do shell compartilhado
+  // (components/standard-page-shell.tsx) — ver StandardMetricCard acima.
 
   // avatar helpers are module-scope (companyInitials / avatarColor / CompanyAvatar)
 
@@ -1650,97 +2168,246 @@ export default function EmpresasPage() {
     );
   }
 
-  return (
-    <div className="space-y-5" ref={pageRef}>
-      <PageHeader
-        title="Empresas"
-        description="Gerencie todas as empresas cadastradas na plataforma"
-        actions={<>
-          <ExportButton pageRef={pageRef} filename="empresas" />
-          <TooltipProvider delayDuration={400}>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <button
-                  onClick={() => setCreateWithOwnerOpen(true)}
-                  className="group relative flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-border/60 hover:border-transparent overflow-hidden transition-all"
-                >
-                  <span
-                    className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none"
-                    style={{ background: "linear-gradient(135deg,#000000 0%,#1a2a6f 45%,#c81a7f 100%)" }}
-                  />
-                  <Plus className="relative z-10 h-3.5 w-3.5 shrink-0 text-[#7d1b6a] group-hover:text-white transition-colors" />
-                  <span className="relative z-10 text-xs font-semibold bg-clip-text text-transparent [background-image:linear-gradient(135deg,#1a2a6f_0%,#7d1b6a_55%,#c81a7f_100%)] group-hover:[background-image:none] group-hover:text-white transition-colors">
-                    Nova Empresa
-                  </span>
-                </button>
-              </TooltipTrigger>
-              <TooltipContent side="bottom" sideOffset={6}>Criar nova empresa</TooltipContent>
-            </Tooltip>
-          </TooltipProvider>
-        </>}
-      />
+  // Seção "Usuário Principal" (Nome/E-mail/Senha) — extraída pra variável
+  // pra poder ser posicionada em lugares diferentes conforme o tipo: pro
+  // Nomad (pessoa física) esses dados SÃO a identidade principal, então
+  // aparecem logo no topo da aba, junto com CNPJ/WhatsApp — não escondidos
+  // depois de Endereço/Dados Financeiros como nos outros 3 tipos (onde a
+  // organização é a entidade principal e este é só o login do admin).
+  const usuarioPrincipalSection = (
+    <CreateFormSection
+      icon={Users}
+      title="Usuário Principal"
+      description={
+        CREATE_TYPE_CONFIG[createWithOwnerForm.type as Exclude<CompanyType, "all">].needsOrgName
+          ? "Será o administrador desta conta — pode criar e gerenciar os demais usuários da equipe depois."
+          : "Login de acesso desta conta."
+      }
+    >
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <div className="space-y-2">
+          <Label htmlFor="create-company-name">
+            Nome {CREATE_TYPE_CONFIG[createWithOwnerForm.type as Exclude<CompanyType, "all">].needsOrgName ? "do responsável" : "completo"}{" "}
+            <span className="text-red-500">*</span>
+          </Label>
+          <Input
+            id="create-company-name"
+            placeholder="Nome completo"
+            value={createWithOwnerForm.name}
+            onChange={(e) => {
+              setCreateWithOwnerForm((f) => ({ ...f, name: e.target.value }));
+              clearCreateWithOwnerError("create-company-name");
+            }}
+            aria-invalid={!!createWithOwnerErrors["create-company-name"]}
+            aria-describedby={createWithOwnerErrors["create-company-name"] ? "create-company-name-error" : undefined}
+          />
+          <CreateFieldError id="create-company-name" message={createWithOwnerErrors["create-company-name"]} />
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="create-company-email">
+            E-mail <span className="text-red-500">*</span>
+          </Label>
+          <Input
+            id="create-company-email"
+            type="email"
+            placeholder="contato@empresa.com"
+            value={createWithOwnerForm.email}
+            onChange={(e) => {
+              setCreateWithOwnerForm((f) => ({ ...f, email: e.target.value }));
+              clearCreateWithOwnerError("create-company-email");
+            }}
+            aria-invalid={!!createWithOwnerErrors["create-company-email"]}
+            aria-describedby={createWithOwnerErrors["create-company-email"] ? "create-company-email-error" : undefined}
+          />
+          <CreateFieldError id="create-company-email" message={createWithOwnerErrors["create-company-email"]} />
+        </div>
+      </div>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <div className="space-y-2">
+          <Label htmlFor="create-company-password">
+            Senha de acesso <span className="text-red-500">*</span>
+          </Label>
+          <div className="relative">
+            <Input
+              id="create-company-password"
+              type={showCreateWithOwnerPassword ? "text" : "password"}
+              placeholder="Mínimo 6 caracteres"
+              value={createWithOwnerForm.password}
+              onChange={(e) => {
+                setCreateWithOwnerForm((f) => ({ ...f, password: e.target.value }));
+                clearCreateWithOwnerError("create-company-password");
+              }}
+              className="pr-9"
+              aria-invalid={!!createWithOwnerErrors["create-company-password"]}
+              aria-describedby={createWithOwnerErrors["create-company-password"] ? "create-company-password-error" : undefined}
+            />
+            <button
+              type="button"
+              onClick={() => setShowCreateWithOwnerPassword((v) => !v)}
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 transition-colors"
+              aria-label={showCreateWithOwnerPassword ? "Ocultar senha" : "Mostrar senha"}
+            >
+              {showCreateWithOwnerPassword ? (
+                <EyeOff className="h-4 w-4" />
+              ) : (
+                <Eye className="h-4 w-4" />
+              )}
+            </button>
+          </div>
+          <CreateFieldError id="create-company-password" message={createWithOwnerErrors["create-company-password"]} />
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="create-company-phone">Telefone do responsável (opcional)</Label>
+          <Input
+            id="create-company-phone"
+            placeholder="+55 11 98765-4321"
+            value={createWithOwnerForm.phone}
+            onChange={(e) => setCreateWithOwnerForm((f) => ({ ...f, phone: e.target.value }))}
+          />
+        </div>
+      </div>
+    </CreateFormSection>
+  );
 
+  return (
+    <div className={STANDARD_SHELL_PANEL_CLASS}>
+    <div
+      className="relative h-full min-h-0 flex flex-col overflow-hidden"
+      ref={pageRef}
+    >
+      {/* Listagem nunca desmonta — só fica oculta ("hidden") quando o Novo
+          Cadastro está aberto E em foco, pra preservar estado só-de-DOM que
+          não vive em nenhum useState (ex.: posição de scroll horizontal da
+          tabela). Sem efeito cascata/espiadinha aqui — alternar entre esta
+          tela e o Novo Cadastro agora é feito pela Bandeja de Telas global
+          (ícone flutuante abaixo do chat, ver components/open-screens-tray.tsx),
+          registrada logo abaixo via usePinEntry (survive a navegação). */}
+      <div
+        className={
+          createWithOwnerOpen && createWithOwnerFocused
+            ? "hidden"
+            : "h-full min-h-0 flex flex-col"
+        }
+      >
+      <div className="shrink-0 -mb-[11px]">
+      <StandardPageBanner
+        icon={Building2}
+        title="Empresas"
+        description="Gerencie todas as empresas cadastradas na plataforma."
+        actions={
+          <>
+            <div className="bg-white rounded-lg">
+              <ExportButton pageRef={pageRef} filename="empresas" />
+            </div>
+            <TooltipProvider delayDuration={400}>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <button
+                    type="button"
+                    onClick={toggleListPinned}
+                    aria-pressed={listPinned}
+                    className={`flex items-center justify-center h-8 w-8 rounded-lg border transition-colors ${
+                      listPinned
+                        ? "border-white bg-white/25 text-white"
+                        : "border-white/70 bg-white/10 text-white hover:bg-white/20"
+                    }`}
+                  >
+                    <Pin className={`h-3.5 w-3.5 ${listPinned ? "fill-current" : ""}`} />
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent side="bottom" sideOffset={6}>
+                  {listPinned ? "Remover da Bandeja de Telas" : "Adicionar à Bandeja de Telas"}
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+            <TooltipProvider delayDuration={400}>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <button
+                    onClick={() => {
+                      setCreateWithOwnerOpen(true);
+                      setCreateWithOwnerFocused(true);
+                    }}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-white/70 text-white bg-white/10 hover:bg-white/20 transition-colors text-xs font-semibold whitespace-nowrap"
+                  >
+                    <Plus className="h-3.5 w-3.5 shrink-0" />
+                    Novo Cadastro
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent side="bottom" sideOffset={6}>
+                  Criar empresa, agência, nômade ou partner
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+          </>
+        }
+      />
+      </div>
+
+      <div className="flex-1 min-h-0 overflow-y-auto">
+      <div className="space-y-5">
       {/* Stats Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-        <StatCard
+        <StandardMetricCard
           label="Total de Empresas"
           value={stats.total}
-          prevValue={statsHistory.total.prev}
-          prevLabel={statsHistory.total.label}
           icon={Building2}
-          gradient="from-blue-500 to-blue-700"
-          sparkKey="total"
-          trendColor="blue"
+          colorKey="blue"
         />
-        <StatCard
+        <StandardMetricCard
           label="Empresas Ativas"
           value={stats.active}
-          prevValue={statsHistory.active.prev}
-          prevLabel={statsHistory.active.label}
           icon={Activity}
-          gradient="from-emerald-500 to-teal-600"
-          sparkKey="active"
-          trendColor="emerald"
+          colorKey="emerald"
         />
-        <StatCard
+        <StandardMetricCard
           label="Total de Usuários"
           value={stats.totalUsers}
-          prevValue={statsHistory.users.prev}
-          prevLabel={statsHistory.users.label}
           icon={Users}
-          gradient="from-violet-500 to-purple-700"
-          sparkKey="users"
-          trendColor="violet"
+          colorKey="violet"
         />
-        <StatCard
+        <StandardMetricCard
           label="Total de Projetos"
           value={stats.totalProjects}
-          prevValue={statsHistory.projects.prev}
-          prevLabel={statsHistory.projects.label}
           icon={FolderOpen}
-          gradient="from-orange-500 to-rose-600"
-          sparkKey="projects"
-          trendColor="orange"
+          colorKey="orange"
         />
       </div>
 
       {/* Main Table Card */}
-      <Card className="rounded-[20px] border border-[#e6ebf3] dark:border-slate-700/60 shadow-[0_12px_32px_rgba(15,23,42,0.06)] overflow-hidden mx-0">
+      <Card className={STANDARD_SHELL_TABLE_CARD_CLASS}>
         {/* Card Top Bar — row 1: search + filters + gear */}
-        <div className="flex flex-wrap items-center gap-2.5 px-4 py-3 bg-white dark:bg-slate-900/30">
+        <div className="admin-empresas-toolbar-row flex flex-wrap items-center gap-2.5 px-4 py-3 bg-white dark:bg-slate-900/30">
           {/* Search — com autocompletar por nome/ID */}
           <div
             ref={searchBoxRef}
-            className="flex-1 relative min-w-[180px] basis-full sm:basis-auto"
+            className="flex-1 relative min-w-[220px] basis-full sm:basis-auto"
           >
             <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-[#7d1b6a]/50 dark:text-[#c07ab0]/60 z-10" />
             <Input
-              placeholder="Nome, ID, e-mail, CNPJ, telefone..."
+              placeholder="Buscar por nome, CNPJ, e-mail ou responsável..."
+              aria-label="Buscar empresas"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               onFocus={() => setSearchFocused(true)}
-              className="pl-10 h-11 text-sm bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 rounded-[14px] shadow-sm focus-visible:ring-2 focus-visible:ring-[#7d1b6a]/40 focus-visible:border-[#7d1b6a]/60 w-full"
+              onKeyDown={(e) => {
+                if (e.key === "Escape") {
+                  setSearchFocused(false);
+                  (e.target as HTMLInputElement).blur();
+                }
+              }}
+              className="pl-10 pr-9 h-11 text-sm bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 rounded-[14px] shadow-sm focus-visible:ring-2 focus-visible:ring-[#7d1b6a]/40 focus-visible:border-[#7d1b6a]/60 w-full"
             />
+            {searchQuery.trim() && (
+              <button
+                type="button"
+                aria-label="Limpar busca"
+                onClick={() => setSearchQuery("")}
+                className="absolute right-3 top-1/2 -translate-y-1/2 h-5 w-5 flex items-center justify-center rounded-full text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors z-10"
+              >
+                <X className="h-3.5 w-3.5" />
+              </button>
+            )}
             {searchFocused && searchQuery.trim() && (
               <div className="absolute left-0 right-0 top-[calc(100%+6px)] z-20 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-[14px] shadow-xl overflow-hidden">
                 {searchSuggestions.length === 0 ? (
@@ -1764,7 +2431,7 @@ export default function EmpresasPage() {
                         </p>
                         <p className="text-[11px] text-slate-400 font-mono">
                           emp_
-                          {String(c.sequence_number ?? c.id).padStart(5, "0")}
+                          {c.sequence_number ?? c.id}
                         </p>
                       </div>
                     </button>
@@ -1774,11 +2441,62 @@ export default function EmpresasPage() {
             )}
           </div>
 
+          {/* Quick type filter chips — All/Company/Agency/Nomad/Partner */}
+          <div
+            className="flex items-center gap-1.5 flex-shrink-0"
+            role="group"
+            aria-label="Filtrar por tipo de organização"
+          >
+            {(["all", "company", "agency", "nomad"] as CompanyType[]).map((t) => {
+              const active = t === "all" ? advancedFilters.types.length === 0 : advancedFilters.types.length === 1 && advancedFilters.types[0] === t;
+              return (
+                <button
+                  key={t}
+                  type="button"
+                  aria-pressed={active}
+                  onClick={() => setAdvancedFilters({ ...advancedFilters, types: t === "all" ? [] : [t] })}
+                  className={`px-3 py-1.5 rounded-full text-xs font-medium border transition-colors whitespace-nowrap ${
+                    active
+                      ? "text-white border-transparent"
+                      : "bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:border-[#7d1b6a]/50"
+                  }`}
+                  style={active ? { background: "linear-gradient(135deg,#000000 0%,#1a2a6f 45%,#c81a7f 100%)" } : undefined}
+                >
+                  {getTypeLabel(t)}
+                </button>
+              );
+            })}
+          </div>
+
+          {/* Limpar filtros — aparece quando QUALQUER filtro real está ativo,
+              incluindo os campos que só existem dentro do modal "Filtros
+              avançados" (cnpj, email, phone, location, período, etc.), não
+              só os chips rápidos da toolbar. Comparar contra
+              EMPTY_ADVANCED_FILTERS (mesma constante do reset do modal e do
+              valor inicial do useState) evita ter que listar cada campo à
+              mão aqui — ver ETAPA 5 / correção. */}
+          {(searchQuery.trim() !== "" ||
+            JSON.stringify(advancedFilters) !== JSON.stringify(EMPTY_ADVANCED_FILTERS)) && (
+            <button
+              type="button"
+              onClick={() => {
+                setSearchQuery("");
+                setSearchFocused(false);
+                setAdvancedFilters(EMPTY_ADVANCED_FILTERS);
+              }}
+              className="text-xs font-medium text-slate-500 dark:text-slate-400 hover:text-[#7d1b6a] dark:hover:text-[#c07ab0] underline-offset-2 hover:underline transition-colors flex-shrink-0"
+            >
+              Limpar filtros
+            </button>
+          )}
+
           {/* Filter Button — icon only, same gradient-on-hover pattern as "Nova Empresa" */}
           <TooltipProvider delayDuration={400}>
             <Tooltip>
               <TooltipTrigger asChild>
                 <button
+                  type="button"
+                  aria-label="Filtros avançados"
                   onClick={() => setIsFilterModalOpen(true)}
                   className="group relative flex items-center justify-center h-11 w-11 rounded-[12px] border border-slate-200 dark:border-slate-700 hover:border-transparent overflow-hidden transition-all flex-shrink-0"
                 >
@@ -1798,6 +2516,8 @@ export default function EmpresasPage() {
             <Tooltip>
               <TooltipTrigger asChild>
                 <button
+                  type="button"
+                  aria-label="Configurar colunas"
                   onClick={() => setColConfigOpen(true)}
                   className="group relative flex items-center justify-center h-11 w-11 rounded-[12px] border border-slate-200 dark:border-slate-700 hover:border-transparent overflow-hidden transition-all flex-shrink-0"
                 >
@@ -2066,8 +2786,8 @@ export default function EmpresasPage() {
                   key={company.id}
                   className={`group transition-colors cursor-pointer ${
                     rowIndex % 2 === 0
-                      ? "bg-[#F1F4F9] dark:bg-[oklch(0.14_0.026_258)] hover:bg-[#D9E1ED] dark:hover:bg-[oklch(0.21_0.024_258)]"
-                      : "bg-[#DCE3EE] dark:bg-[oklch(0.185_0.024_258)] hover:bg-[#C7D2E3] dark:hover:bg-[oklch(0.21_0.024_258)]"
+                      ? "bg-white dark:bg-slate-900 hover:bg-indigo-50/70 dark:hover:bg-slate-800/60"
+                      : "bg-slate-50/60 dark:bg-slate-900/40 hover:bg-indigo-50/70 dark:hover:bg-slate-800/60"
                   }`}
                 >
                   {/* Actions — pinned to the left, first column */}
@@ -2075,8 +2795,8 @@ export default function EmpresasPage() {
                     <td
                       className={`px-1 py-2 transition-colors ${
                         rowIndex % 2 === 0
-                          ? "bg-[#ECEFF4] group-hover:bg-[#D9E1ED] dark:bg-[oklch(0.14_0.026_258)] dark:group-hover:bg-[oklch(0.21_0.024_258)]"
-                          : "bg-[#D6DCE8] group-hover:bg-[#C7D2E3] dark:bg-[oklch(0.185_0.024_258)] dark:group-hover:bg-[oklch(0.21_0.024_258)]"
+                          ? "bg-white group-hover:bg-indigo-50/70 dark:bg-slate-900 dark:group-hover:bg-slate-800/60"
+                          : "bg-slate-50/60 group-hover:bg-indigo-50/70 dark:bg-slate-900/40 dark:group-hover:bg-slate-800/60"
                       }`}
                       style={{
                         position: "sticky",
@@ -2139,6 +2859,48 @@ export default function EmpresasPage() {
                             </TooltipContent>
                           </Tooltip>
                         </TooltipProvider>
+                        {/* Convidar para Partner — só faz sentido pra Agency sem convite ativo/pendente */}
+                        {company.type === "agency" &&
+                          company.partner_status !== "active" &&
+                          company.partner_status !== "invited" && (
+                            <TooltipProvider delayDuration={400}>
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      handleInvitePartner(company);
+                                    }}
+                                    className="h-[26px] w-[26px] flex items-center justify-center rounded-[8px] bg-white dark:bg-slate-800 border border-[#e8edf5] dark:border-slate-700 text-amber-500 dark:text-amber-400 shadow-[0_4px_10px_rgba(15,23,42,0.06)] hover:bg-gradient-to-br hover:from-[#2558FF] hover:via-[#6E2C96] hover:to-[#D92293] hover:text-white dark:hover:text-[#0a1628] hover:border-transparent hover:shadow-[0_8px_18px_rgba(15,23,42,0.18)] hover:-translate-y-px transition-all duration-150"
+                                  >
+                                    <Award className="h-3.5 w-3.5" />
+                                  </button>
+                                </TooltipTrigger>
+                                <TooltipContent className="text-xs font-medium">
+                                  Convidar para Partner
+                                </TooltipContent>
+                              </Tooltip>
+                            </TooltipProvider>
+                          )}
+                        {/* Excluir empresa */}
+                        <TooltipProvider delayDuration={400}>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleDeleteCompany(company.id);
+                                }}
+                                className="h-[26px] w-[26px] flex items-center justify-center rounded-[8px] bg-white dark:bg-slate-800 border border-[#e8edf5] dark:border-slate-700 text-red-500 dark:text-red-400 shadow-[0_4px_10px_rgba(15,23,42,0.06)] hover:bg-gradient-to-br hover:from-[#2558FF] hover:via-[#6E2C96] hover:to-[#D92293] hover:text-white dark:hover:text-[#0a1628] hover:border-transparent hover:shadow-[0_8px_18px_rgba(15,23,42,0.18)] hover:-translate-y-px transition-all duration-150"
+                              >
+                                <Trash2 className="h-3.5 w-3.5" />
+                              </button>
+                            </TooltipTrigger>
+                            <TooltipContent className="text-xs font-medium">
+                              Excluir empresa
+                            </TooltipContent>
+                          </Tooltip>
+                        </TooltipProvider>
                       </div>
                     </td>
                   )}
@@ -2154,10 +2916,7 @@ export default function EmpresasPage() {
                     >
                       <span className="text-xs font-mono font-semibold text-slate-500 dark:text-slate-400">
                         emp_
-                        {String(company.sequence_number ?? company.id).padStart(
-                          5,
-                          "0",
-                        )}
+                        {company.sequence_number ?? company.id}
                       </span>
                     </td>
                   )}
@@ -2556,9 +3315,7 @@ export default function EmpresasPage() {
                                     ? "border-blue-500 bg-blue-200 text-blue-900 shadow-[0_0_10px_rgba(59,130,246,0.6)] dark:bg-blue-800/70 dark:text-blue-100"
                                     : company.type === "agency"
                                       ? "border-violet-500 bg-violet-200 text-violet-900 shadow-[0_0_10px_rgba(139,92,246,0.6)] dark:bg-violet-800/70 dark:text-violet-100"
-                                      : company.type === "partner"
-                                        ? "border-pink-500 bg-pink-200 text-pink-900 shadow-[0_0_10px_rgba(236,72,153,0.6)] dark:bg-pink-800/70 dark:text-pink-100"
-                                        : "border-orange-500 bg-orange-200 text-orange-900 shadow-[0_0_10px_rgba(249,115,22,0.6)] dark:bg-orange-800/70 dark:text-orange-100"
+                                      : "border-orange-500 bg-orange-200 text-orange-900 shadow-[0_0_10px_rgba(249,115,22,0.6)] dark:bg-orange-800/70 dark:text-orange-100"
                                 }`}
                               >
                                 {getTypeLabel(company.type)}
@@ -2584,9 +3341,14 @@ export default function EmpresasPage() {
                               </span>
                             ) : null;
                           })()}
-                        {company.type === "agency" && company.is_partner && (
+                        {company.type === "agency" && company.partner_status === "active" && (
                           <span className="allka-badge allka-badge-partner">
                             <Award className="h-3 w-3" /> Partner
+                          </span>
+                        )}
+                        {company.type === "agency" && company.partner_status === "invited" && (
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium border border-amber-400 bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300">
+                            <Award className="h-3 w-3" /> Convite pendente
                           </span>
                         )}
                       </div>
@@ -2634,8 +3396,8 @@ export default function EmpresasPage() {
 
         {/* Bottom Pagination */}
         {filteredCompanies.length > 0 && (
-          <div className="flex flex-wrap items-center justify-between gap-3 px-[18px] py-3 border-t border-[#e8edf5] dark:border-slate-800 bg-white dark:bg-slate-900/20">
-            <div className="flex items-center gap-3">
+          <div className="admin-empresas-pagination-row flex flex-wrap items-center justify-between gap-3 px-[18px] py-3 border-t border-[#e8edf5] dark:border-slate-800 bg-white dark:bg-slate-900/20">
+            <div className="flex items-center gap-3 flex-wrap">
               <ItemsPerPageSelect
                 value={pageSize.toString()}
                 onValueChange={(value) => {
@@ -2659,11 +3421,19 @@ export default function EmpresasPage() {
                         );
                         return (
                           <>
-                            {start}-{end} de{" "}
+                            Exibindo{" "}
+                            <span className="font-semibold text-slate-600 dark:text-slate-300">
+                              {start}
+                            </span>{" "}
+                            a{" "}
+                            <span className="font-semibold text-slate-600 dark:text-slate-300">
+                              {end}
+                            </span>{" "}
+                            de{" "}
                             <span className="font-semibold text-slate-600 dark:text-slate-300">
                               {filteredCompanies.length}
                             </span>{" "}
-                            empresa{filteredCompanies.length !== 1 ? "s" : ""}
+                            registro{filteredCompanies.length !== 1 ? "s" : ""}
                           </>
                         );
                       })()}
@@ -2678,13 +3448,14 @@ export default function EmpresasPage() {
 
             {/* Horizontal scrollbar mirror — sits between the count text and
                 the pagination, synced with the table's horizontal scroll.
-                Only rendered when the table actually overflows. */}
+                Only rendered when the table actually overflows. Ref, handler
+                and width calc unchanged — only spacing/alignment touched. */}
             {hasHorizontalOverflow && (
               <div
                 ref={bottomScrollRef}
                 onScroll={handleBottomBarScroll}
                 title="Arraste para rolar a tabela na horizontal e ver as colunas que não couberem na tela"
-                className="hidden md:block flex-1 min-w-[80px] overflow-x-scroll empresas-table-scroll self-center"
+                className="hidden md:block flex-1 min-w-[80px] overflow-x-scroll empresas-table-scroll self-center mx-1"
                 style={{ height: 12 }}
               >
                 <div
@@ -2696,14 +3467,20 @@ export default function EmpresasPage() {
               </div>
             )}
 
-            <div className="flex items-center gap-1">
+            <nav
+              aria-label="Paginação da tabela de empresas"
+              className="flex items-center gap-1 flex-wrap"
+            >
               <button
+                type="button"
                 onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
                 disabled={currentPage === 1}
+                aria-label="Página anterior"
                 title="Página anterior"
-                className="h-7 w-7 flex items-center justify-center rounded-[8px] text-slate-500 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-30 disabled:pointer-events-none transition-colors"
+                className="h-7 px-2 flex items-center gap-1 justify-center rounded-[8px] border border-transparent text-slate-500 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-30 disabled:pointer-events-none transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#7d1b6a]/40"
               >
                 <ChevronLeft className="h-3.5 w-3.5" />
+                <span className="text-xs font-medium">Anterior</span>
               </button>
               {getPageNumbers().map((page, index) =>
                 page === "..." ? (
@@ -2713,16 +3490,23 @@ export default function EmpresasPage() {
                 ) : (
                   <button
                     key={index}
+                    type="button"
                     onClick={() => setCurrentPage(Number(page))}
+                    aria-current={page === currentPage ? "page" : undefined}
+                    aria-label={
+                      page === currentPage
+                        ? `Página atual, ${page}`
+                        : `Ir para a página ${page}`
+                    }
                     title={
                       page === currentPage
                         ? "Página atual"
                         : `Ir para a página ${page}`
                     }
-                    className={`h-7 w-7 flex items-center justify-center rounded-[8px] text-xs font-bold transition-colors ${
+                    className={`h-7 w-7 flex items-center justify-center rounded-[8px] text-xs font-bold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#7d1b6a]/40 ${
                       page === currentPage
                         ? "text-white shadow-[0_6px_14px_rgba(110,44,150,0.25)]"
-                        : "text-slate-500 hover:text-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 dark:text-slate-400"
+                        : "text-slate-500 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 dark:text-slate-400"
                     }`}
                     style={
                       page === currentPage
@@ -2738,23 +3522,29 @@ export default function EmpresasPage() {
                 ),
               )}
               <button
+                type="button"
                 onClick={() =>
                   setCurrentPage(Math.min(totalPages, currentPage + 1))
                 }
                 disabled={currentPage === totalPages}
+                aria-label="Próxima página"
                 title="Próxima página"
-                className="h-7 w-7 flex items-center justify-center rounded-[8px] text-slate-500 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-30 disabled:pointer-events-none transition-colors"
+                className="h-7 px-2 flex items-center gap-1 justify-center rounded-[8px] border border-transparent text-slate-500 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-30 disabled:pointer-events-none transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#7d1b6a]/40"
               >
+                <span className="text-xs font-medium">Próximo</span>
                 <ChevronRight className="h-3.5 w-3.5" />
               </button>
               <PageJumpField className="ml-1.5 pl-1.5 border-l border-slate-200 dark:border-slate-700" />
-            </div>
+            </nav>
           </div>
         )}
       </Card>
+      </div>
+      </div>
+      </div>
 
-      {/* Advanced Filters Modal — sliding panel (same pattern as CompanyEditSlidePanel etc.) */}
-      {(isFilterModalOpen || filterPanelClosing) &&
+      {/* Advanced Filters Modal — Popup 1 */}
+      {isFilterModalOpen &&
         (() => {
           const allFilterFields = [
             { id: "nome", label: "Nome da Empresa", section: "identificacao" },
@@ -2800,49 +3590,162 @@ export default function EmpresasPage() {
             setDraggingFilterId(null);
             setDragOverFilterId(null);
           };
+          const guardedFilterClose = () => {
+            if (unsavedChanges) {
+              setPendingClose(() => () => closeFilterPanel(true));
+              return;
+            }
+            closeFilterPanel(true);
+          };
           return (
-            <div
-              data-slot="sheet-content"
-              data-state={filterPanelClosing ? "closed" : "open"}
-              style={{
-                left: sidebarWidth - 2,
-                top: headerHeight - 1,
-                bottom: footerHeight - 1,
-                width: `calc(100vw - ${sidebarWidth - 2}px)`,
-              }}
-              className="fixed right-0 z-[70] bg-white dark:bg-slate-900 shadow-2xl border-l border-slate-200 dark:border-slate-700 flex flex-col overflow-hidden data-[state=open]:animate-in data-[state=open]:slide-in-from-right data-[state=open]:fade-in-0 data-[state=closed]:animate-out data-[state=closed]:slide-out-to-right data-[state=closed]:fade-out-0 duration-300"
-            >
-                {/* Header — follows sidebar theme */}
-                <div
-                  className="flex items-center justify-between px-5 py-3 flex-shrink-0"
-                  style={getHeaderStyle()}
-                >
-                  <div>
-                    <h2 className="text-sm font-bold text-white">
-                      Filtros Avançados
-                    </h2>
-                    <p className="text-[11px] text-white/60 mt-0.5">
-                      {unsavedChanges
-                        ? "• Alterações não salvas"
-                        : selectedFilterId && !isEditingFilter
-                          ? "Filtro carregado"
-                          : "Configure e aplique filtros"}
-                    </p>
-                  </div>
+            <StandardModalDialog
+              open={isFilterModalOpen}
+              onClose={guardedFilterClose}
+              title="Filtros Avançados"
+              subtitle={
+                unsavedChanges
+                  ? "• Alterações não salvas"
+                  : selectedFilterId && !isEditingFilter
+                    ? "Filtro carregado"
+                    : "Configure e aplique filtros"
+              }
+              footer={
+                <div className="flex items-center justify-between w-full">
                   <button
                     onClick={() => {
-                      if (unsavedChanges) {
-                        setPendingClose(() => () => closeFilterPanel(true));
-                        return;
-                      }
-                      closeFilterPanel(true);
+                      setAdvancedFilters(EMPTY_ADVANCED_FILTERS);
+                      setUnsavedChanges(false);
                     }}
-                    className="text-white/70 hover:text-white hover:bg-white/20 rounded-lg p-1.5 transition-colors"
+                    className="text-[11px] text-slate-400 hover:text-red-500 transition-colors flex items-center gap-1"
                   >
-                    <X className="h-4 w-4" />
+                    <X className="h-3 w-3" /> Limpar filtros
                   </button>
-                </div>
 
+                  <div className="flex items-center gap-2">
+                    {/* Save / update filter */}
+                    {showSaveInput ? (
+                      <div className="flex items-center gap-1.5">
+                        <input
+                          autoFocus
+                          type="text"
+                          value={filterNameInput}
+                          onChange={(e) => setFilterNameInput(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter" && filterNameInput.trim()) {
+                              const newId = `filter-${Date.now()}`;
+                              setSavedFilters([
+                                ...savedFilters,
+                                {
+                                  id: newId,
+                                  name: filterNameInput.trim(),
+                                  filters: advancedFilters,
+                                },
+                              ]);
+                              setSelectedFilterId(newId);
+                              setUnsavedChanges(false);
+                              setShowSaveInput(false);
+                              setFilterNameInput("");
+                            }
+                            if (e.key === "Escape") {
+                              setShowSaveInput(false);
+                              setFilterNameInput("");
+                            }
+                          }}
+                          placeholder={`Filtro ${savedFilters.length + 1}`}
+                          className="h-7 px-2 rounded-md text-[11px] border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-1 focus:ring-blue-400 w-36"
+                        />
+                        <button
+                          disabled={!filterNameInput.trim()}
+                          onClick={() => {
+                            const newId = `filter-${Date.now()}`;
+                            setSavedFilters([
+                              ...savedFilters,
+                              {
+                                id: newId,
+                                name: filterNameInput.trim(),
+                                filters: advancedFilters,
+                              },
+                            ]);
+                            setSelectedFilterId(newId);
+                            setUnsavedChanges(false);
+                            setShowSaveInput(false);
+                            setFilterNameInput("");
+                          }}
+                          className="h-7 px-3 rounded-md text-[11px] font-medium bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-600 hover:to-emerald-700 disabled:opacity-40 text-white transition-all shadow-sm"
+                        >
+                          OK
+                        </button>
+                        <button
+                          onClick={() => {
+                            setShowSaveInput(false);
+                            setFilterNameInput("");
+                          }}
+                          className="h-7 w-7 flex items-center justify-center rounded-md text-[11px] border border-slate-200 dark:border-slate-700 text-slate-400 hover:text-red-500 hover:border-red-300 transition-colors"
+                        >
+                          <X className="h-3 w-3" />
+                        </button>
+                      </div>
+                    ) : selectedFilterId && unsavedChanges ? (
+                      <div className="flex items-center gap-1.5">
+                        <button
+                          onClick={() => {
+                            setSavedFilters(
+                              savedFilters.map((f) =>
+                                f.id === selectedFilterId
+                                  ? { ...f, filters: advancedFilters }
+                                  : f,
+                              ),
+                            );
+                            setUnsavedChanges(false);
+                          }}
+                          className="h-7 px-3 rounded-md text-[11px] font-medium bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white transition-all shadow-sm"
+                        >
+                          Atualizar filtro
+                        </button>
+                        <button
+                          onClick={() => {
+                            setFilterNameInput(
+                              `Filtro ${savedFilters.length + 1}`,
+                            );
+                            setShowSaveInput(true);
+                          }}
+                          className="h-7 px-3 rounded-md text-[11px] font-medium border border-emerald-400 text-emerald-600 hover:bg-emerald-50 transition-colors"
+                        >
+                          Salvar como novo
+                        </button>
+                      </div>
+                    ) : (
+                      <button
+                        onClick={() => {
+                          setFilterNameInput(
+                            `Filtro ${savedFilters.length + 1}`,
+                          );
+                          setShowSaveInput(true);
+                        }}
+                        className="h-7 px-3 rounded-md text-[11px] font-medium bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-600 hover:to-emerald-700 text-white transition-all shadow-sm"
+                      >
+                        Salvar filtro
+                      </button>
+                    )}
+
+                    <div className="w-px h-5 bg-slate-200 dark:bg-slate-700" />
+
+                    <button
+                      onClick={() => closeFilterPanel(true)}
+                      className="h-7 px-3 rounded-md text-[11px] font-medium border border-slate-200 dark:border-slate-600 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+                    >
+                      Cancelar
+                    </button>
+                    <button
+                      onClick={() => closeFilterPanel(false)}
+                      className="h-7 px-4 rounded-md text-[11px] font-semibold btn-brand transition-all shadow-sm"
+                    >
+                      Aplicar Filtros
+                    </button>
+                  </div>
+                </div>
+              }
+            >
                 {/* Body */}
                 <div className="flex flex-1 overflow-hidden min-h-0">
                   {/* Left — Saved Filters */}
@@ -3540,195 +4443,33 @@ export default function EmpresasPage() {
                     </div>
                   </div>
                 </div>
-
-                {/* Footer */}
-                <div className="flex items-center justify-between px-4 py-2.5 border-t border-slate-200 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-900/30 flex-shrink-0">
-                  <button
-                    onClick={() => {
-                      setAdvancedFilters({
-                        name: "",
-                        cnpj: "",
-                        email: "",
-                        phone: "",
-                        whatsapp: "",
-                        location: "",
-                        types: [],
-                        statuses: [],
-                        accountTypes: [],
-                        partnerLevels: [],
-                        minUsers: "",
-                        maxUsers: "",
-                        minProjects: "",
-                        maxProjects: "",
-                        hasBitrixId: false,
-                        hasAsaasId: false,
-                        registrationDateFrom: "",
-                        registrationDateTo: "",
-                      });
-                      setUnsavedChanges(false);
-                    }}
-                    className="text-[11px] text-slate-400 hover:text-red-500 transition-colors flex items-center gap-1"
-                  >
-                    <X className="h-3 w-3" /> Limpar filtros
-                  </button>
-
-                  <div className="flex items-center gap-2">
-                    {/* Save / update filter */}
-                    {showSaveInput ? (
-                      <div className="flex items-center gap-1.5">
-                        <input
-                          autoFocus
-                          type="text"
-                          value={filterNameInput}
-                          onChange={(e) => setFilterNameInput(e.target.value)}
-                          onKeyDown={(e) => {
-                            if (e.key === "Enter" && filterNameInput.trim()) {
-                              const newId = `filter-${Date.now()}`;
-                              setSavedFilters([
-                                ...savedFilters,
-                                {
-                                  id: newId,
-                                  name: filterNameInput.trim(),
-                                  filters: advancedFilters,
-                                },
-                              ]);
-                              setSelectedFilterId(newId);
-                              setUnsavedChanges(false);
-                              setShowSaveInput(false);
-                              setFilterNameInput("");
-                            }
-                            if (e.key === "Escape") {
-                              setShowSaveInput(false);
-                              setFilterNameInput("");
-                            }
-                          }}
-                          placeholder={`Filtro ${savedFilters.length + 1}`}
-                          className="h-7 px-2 rounded-md text-[11px] border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-1 focus:ring-blue-400 w-36"
-                        />
-                        <button
-                          disabled={!filterNameInput.trim()}
-                          onClick={() => {
-                            const newId = `filter-${Date.now()}`;
-                            setSavedFilters([
-                              ...savedFilters,
-                              {
-                                id: newId,
-                                name: filterNameInput.trim(),
-                                filters: advancedFilters,
-                              },
-                            ]);
-                            setSelectedFilterId(newId);
-                            setUnsavedChanges(false);
-                            setShowSaveInput(false);
-                            setFilterNameInput("");
-                          }}
-                          className="h-7 px-3 rounded-md text-[11px] font-medium bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-600 hover:to-emerald-700 disabled:opacity-40 text-white transition-all shadow-sm"
-                        >
-                          OK
-                        </button>
-                        <button
-                          onClick={() => {
-                            setShowSaveInput(false);
-                            setFilterNameInput("");
-                          }}
-                          className="h-7 w-7 flex items-center justify-center rounded-md text-[11px] border border-slate-200 dark:border-slate-700 text-slate-400 hover:text-red-500 hover:border-red-300 transition-colors"
-                        >
-                          <X className="h-3 w-3" />
-                        </button>
-                      </div>
-                    ) : selectedFilterId && unsavedChanges ? (
-                      <div className="flex items-center gap-1.5">
-                        <button
-                          onClick={() => {
-                            setSavedFilters(
-                              savedFilters.map((f) =>
-                                f.id === selectedFilterId
-                                  ? { ...f, filters: advancedFilters }
-                                  : f,
-                              ),
-                            );
-                            setUnsavedChanges(false);
-                          }}
-                          className="h-7 px-3 rounded-md text-[11px] font-medium bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white transition-all shadow-sm"
-                        >
-                          Atualizar filtro
-                        </button>
-                        <button
-                          onClick={() => {
-                            setFilterNameInput(
-                              `Filtro ${savedFilters.length + 1}`,
-                            );
-                            setShowSaveInput(true);
-                          }}
-                          className="h-7 px-3 rounded-md text-[11px] font-medium border border-emerald-400 text-emerald-600 hover:bg-emerald-50 transition-colors"
-                        >
-                          Salvar como novo
-                        </button>
-                      </div>
-                    ) : (
-                      <button
-                        onClick={() => {
-                          setFilterNameInput(
-                            `Filtro ${savedFilters.length + 1}`,
-                          );
-                          setShowSaveInput(true);
-                        }}
-                        className="h-7 px-3 rounded-md text-[11px] font-medium bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-600 hover:to-emerald-700 text-white transition-all shadow-sm"
-                      >
-                        Salvar filtro
-                      </button>
-                    )}
-
-                    <div className="w-px h-5 bg-slate-200 dark:bg-slate-700" />
-
-                    <button
-                      onClick={() => closeFilterPanel(true)}
-                      className="h-7 px-3 rounded-md text-[11px] font-medium border border-slate-200 dark:border-slate-600 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
-                    >
-                      Cancelar
-                    </button>
-                    <button
-                      onClick={() => closeFilterPanel(false)}
-                      className="h-7 px-4 rounded-md text-[11px] font-semibold btn-brand transition-all shadow-sm"
-                    >
-                      Aplicar Filtros
-                    </button>
-                  </div>
-                </div>
-            </div>
+            </StandardModalDialog>
           );
         })()}
-      {/* Configurar colunas — painel deslizante padrão */}
-      {(colConfigOpen || colConfigClosing) && (
-        <div
-          data-slot="sheet-content"
-          data-state={colConfigClosing ? "closed" : "open"}
-          style={{
-            left: sidebarWidth - 2,
-            top: headerHeight - 1,
-            bottom: footerHeight - 1,
-            width: `calc(100vw - ${sidebarWidth - 2}px)`,
-          }}
-          className="fixed right-0 z-[70] bg-white dark:bg-slate-900 shadow-2xl border-l border-slate-200 dark:border-slate-700 flex flex-col overflow-hidden data-[state=open]:animate-in data-[state=open]:slide-in-from-right data-[state=open]:fade-in-0 data-[state=closed]:animate-out data-[state=closed]:slide-out-to-right data-[state=closed]:fade-out-0 duration-300"
-        >
-          <div
-            className="flex items-center justify-between px-5 py-3 flex-shrink-0"
-            style={getHeaderStyle()}
-          >
-            <div>
-              <h2 className="text-sm font-bold text-white">Configurar colunas</h2>
-              <p className="text-[11px] text-white/60 mt-0.5">
-                {visibleCols.size} de {allColumns.length} visíveis
-              </p>
+      {/* Configurar colunas — Popup 1 */}
+      {colConfigOpen && (
+        <StandardModalDialog
+          open={colConfigOpen}
+          onClose={closeColConfig}
+          title="Configurar colunas"
+          subtitle={`${visibleCols.size} de ${allColumns.length} visíveis`}
+          footer={
+            <div className="flex items-center justify-end gap-3 w-full">
+              <button
+                onClick={() => setVisibleCols(new Set(DEFAULT_VISIBLE_COLS))}
+                className="h-9 px-4 rounded-lg text-xs font-medium border border-slate-200 dark:border-slate-700 text-slate-500 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"
+              >
+                Restaurar padrão
+              </button>
+              <button
+                onClick={() => setVisibleCols(new Set(allColumns.map((c) => c.key)))}
+                className="h-9 px-4 rounded-lg text-xs font-semibold btn-brand transition-all"
+              >
+                Mostrar todas
+              </button>
             </div>
-            <button
-              onClick={closeColConfig}
-              className="text-white/70 hover:text-white hover:bg-white/20 rounded-lg p-1.5 transition-colors"
-            >
-              <X className="h-4 w-4" />
-            </button>
-          </div>
-
+          }
+        >
           <div className="flex-1 overflow-y-auto p-6">
             <div className="max-w-3xl mx-auto grid grid-cols-1 sm:grid-cols-2 gap-2">
               {allColumns.map((col) => (
@@ -3765,65 +4506,50 @@ export default function EmpresasPage() {
               ))}
             </div>
           </div>
-
-          <div className="px-5 py-3 border-t border-slate-100 dark:border-slate-700 flex items-center justify-end gap-3 flex-shrink-0">
-            <button
-              onClick={() => setVisibleCols(new Set(DEFAULT_VISIBLE_COLS))}
-              className="h-9 px-4 rounded-lg text-xs font-medium border border-slate-200 dark:border-slate-700 text-slate-500 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"
-            >
-              Restaurar padrão
-            </button>
-            <button
-              onClick={() => setVisibleCols(new Set(allColumns.map((c) => c.key)))}
-              className="h-9 px-4 rounded-lg text-xs font-semibold btn-brand transition-all"
-            >
-              Mostrar todas
-            </button>
-          </div>
-        </div>
+        </StandardModalDialog>
       )}
 
-      {/* Mais informações da empresa — painel deslizante padrão (botão +) */}
-      {(infoPanelCompany || infoPanelClosing) &&
+      {/* Mais informações da empresa — Popup 1 (botão +) */}
+      {infoPanelCompany &&
         (() => {
           const company = infoPanelCompany;
-          if (!company) return null;
           return (
-            <div
-              data-slot="sheet-content"
-              data-state={infoPanelClosing ? "closed" : "open"}
-              style={{
-                left: sidebarWidth - 2,
-                top: headerHeight - 1,
-                bottom: footerHeight - 1,
-                width: `calc(100vw - ${sidebarWidth - 2}px)`,
-              }}
-              className="fixed right-0 z-[70] bg-white dark:bg-slate-900 shadow-2xl border-l border-slate-200 dark:border-slate-700 flex flex-col overflow-hidden data-[state=open]:animate-in data-[state=open]:slide-in-from-right data-[state=open]:fade-in-0 data-[state=closed]:animate-out data-[state=closed]:slide-out-to-right data-[state=closed]:fade-out-0 duration-300"
-            >
-              <div
-                className="flex items-start justify-between px-5 py-3 flex-shrink-0"
-                style={getHeaderStyle()}
-              >
+            <StandardModalDialog
+              open={infoPanelOpen}
+              onClose={closeInfoPanel}
+              title={
                 <div className="flex items-center gap-3">
                   <CompanyAvatar company={company} />
-                  <div>
-                    <h2 className="text-sm font-bold text-white">{company.name}</h2>
-                    <p className="text-[11px] text-white/60 mt-0.5">
-                      emp_
-                      {String(company.sequence_number ?? company.id).padStart(5, "0")}
-                      {" · "}
-                      {company.location || "Localização não informada"}
-                    </p>
-                  </div>
+                  <span className="truncate">{company.name}</span>
                 </div>
-                <button
-                  onClick={closeInfoPanel}
-                  className="text-white/70 hover:text-white hover:bg-white/20 rounded-lg p-1.5 transition-colors"
-                >
-                  <X className="h-4 w-4" />
-                </button>
-              </div>
-
+              }
+              subtitle={`emp_${company.sequence_number ?? company.id} · ${company.location || "Localização não informada"}`}
+              footer={
+                <div className="flex items-center justify-end gap-2 w-full">
+                  <Button
+                    variant="outline"
+                    onClick={() => {
+                      closeInfoPanel();
+                      handleEditCompany(company);
+                    }}
+                  >
+                    <Pencil className="h-3.5 w-3.5 mr-1.5" />
+                    Editar empresa
+                  </Button>
+                  <Button
+                    variant="outline"
+                    className="border-rose-200 dark:border-rose-900/50 text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/30"
+                    onClick={() => {
+                      closeInfoPanel();
+                      handleDeleteCompany(company.id);
+                    }}
+                  >
+                    <Trash2 className="h-3.5 w-3.5 mr-1.5" />
+                    Excluir empresa
+                  </Button>
+                </div>
+              }
+            >
               <div className="flex-1 overflow-y-auto p-5">
                 <div className="max-w-3xl mx-auto space-y-6">
                   {/* Dados completos da empresa */}
@@ -3989,141 +4715,669 @@ export default function EmpresasPage() {
                   </div>
                 </div>
               </div>
-
-              <div className="px-5 py-3 border-t border-slate-100 dark:border-slate-700 flex items-center justify-end gap-2 flex-shrink-0">
-                <button
-                  onClick={() => {
-                    closeInfoPanel();
-                    handleEditCompany(company);
-                  }}
-                  className="h-9 px-4 rounded-lg text-xs font-medium border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors flex items-center gap-1.5"
-                >
-                  <Pencil className="h-3.5 w-3.5" />
-                  Editar empresa
-                </button>
-                <button
-                  onClick={() => {
-                    closeInfoPanel();
-                    handleDeleteCompany(company.id);
-                  }}
-                  className="h-9 px-4 rounded-lg text-xs font-medium border border-rose-200 dark:border-rose-900/50 text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/30 transition-colors flex items-center gap-1.5"
-                >
-                  <Trash2 className="h-3.5 w-3.5" />
-                  Excluir empresa
-                </button>
-              </div>
-            </div>
+            </StandardModalDialog>
           );
         })()}
 
       {/* Nova Empresa — sempre com usuário principal (company_admin) obrigatório,
           criado atomicamente junto (Tarefa 9/11). CompanyCreateSlidePanel (empresa
           sem usuário) continua existindo só para o "Cadastrar empresa" inline
-          dentro da criação de projeto — não usado aqui de propósito. */}
-      <Dialog open={createWithOwnerOpen} onOpenChange={setCreateWithOwnerOpen}>
-        <DialogContent className="max-w-lg">
-          <DialogHeader>
-            <DialogTitle>Nova Empresa</DialogTitle>
-            <DialogDescription>
-              Cria a empresa e o usuário principal (administrador) juntos, na mesma operação.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="grid gap-4 py-4">
-            <div className="space-y-2">
-              <Label htmlFor="create-company-org-name">
-                Nome da Empresa <span className="text-red-500">*</span>
-              </Label>
-              <Input
-                id="create-company-org-name"
-                placeholder="Ex: Acme Ltda"
-                value={createWithOwnerForm.organizationName}
-                onChange={(e) =>
-                  setCreateWithOwnerForm((f) => ({ ...f, organizationName: e.target.value }))
-                }
-              />
+          dentro da criação de projeto — não usado aqui de propósito.
+          ETAPA 8: deixou de ser um SlidePanel sobreposto — agora é uma tela
+          embutida dentro do mesmo admin-empresas-panel, alternando com a
+          listagem via o mesmo estado createWithOwnerOpen (só a apresentação
+          mudou; handlers/estado do formulário são exatamente os mesmos).
+          Sempre montada (nunca some do DOM) — visível/na frente quando
+          aberta E em foco (createWithOwnerOpen && createWithOwnerFocused),
+          escondida (fora de tela + fade) nos outros dois casos: fechada de
+          verdade OU aberta mas sem foco (usuário trocou pra listagem via
+          Bandeja de Telas — o formulário continua intacto, só sai de vista).
+          Nunca fecha/descarta sozinha — só os botões explícitos (seta de
+          voltar, X, Cancelar) fecham de fato, via
+          handleCreateWithOwnerCancelOrBack. */}
+      <div
+        className={`admin-empresas-create absolute inset-0 z-20 min-h-0 flex flex-col overflow-hidden bg-white dark:bg-slate-900 rounded-2xl shadow-[0_24px_60px_-12px_rgba(0,0,0,0.35)] transition-all duration-300 ease-[cubic-bezier(0.32,0.72,0,1)] ${
+          createWithOwnerOpen && createWithOwnerFocused
+            ? "translate-x-0 scale-100 opacity-100"
+            : "translate-x-[6%] scale-[0.97] opacity-0 pointer-events-none"
+        }`}
+        aria-hidden={!createWithOwnerOpen || !createWithOwnerFocused}
+      >
+          <div
+            className="shrink-0 flex items-center gap-3 px-6 py-4 rounded-2xl"
+            style={{
+              background:
+                "var(--app-brand-gradient, var(--brand-gradient, linear-gradient(to right, #0a1628, #1e3a8a, #0a1628)))",
+            }}
+          >
+            <button
+              type="button"
+              onClick={handleCreateWithOwnerCancelOrBack}
+              disabled={createWithOwnerSubmitting}
+              aria-label="Voltar para a listagem de empresas"
+              className="text-white/80 hover:text-white hover:bg-white/15 rounded-lg p-2 transition-all shrink-0 disabled:opacity-40 disabled:pointer-events-none"
+            >
+              <ArrowLeft className="h-5 w-5" />
+            </button>
+            <div className="min-w-0 flex-1 truncate">
+              <div className="text-base font-semibold text-white truncate">
+                Novo Cadastro {getTypeLabel(createWithOwnerForm.type)}
+              </div>
+              <p className="text-xs font-normal text-white/70 mt-1 truncate">
+                Crie uma nova conta e defina seus dados principais.
+              </p>
             </div>
+            <TooltipProvider delayDuration={400}>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <button
+                    type="button"
+                    onClick={toggleCreatePinned}
+                    aria-pressed={createPinned}
+                    className={`flex items-center justify-center h-8 w-8 rounded-lg border transition-colors shrink-0 ${
+                      createPinned
+                        ? "border-white bg-white/25 text-white"
+                        : "border-white/40 bg-white/10 text-white/80 hover:bg-white/20 hover:text-white"
+                    }`}
+                  >
+                    <Pin className={`h-3.5 w-3.5 ${createPinned ? "fill-current" : ""}`} />
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent side="bottom" sideOffset={6}>
+                  {createPinned ? "Remover da Bandeja de Telas" : "Adicionar à Bandeja de Telas"}
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+          </div>
 
-            <div className="pt-1 border-t border-slate-200 dark:border-slate-700">
-              <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mt-3 mb-1">
-                Usuário principal
-              </p>
-              <p className="text-xs text-slate-400 mb-3">
-                Será o administrador desta empresa — pode criar e gerenciar os demais usuários da equipe depois.
-              </p>
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="create-company-name">
-                Nome do responsável <span className="text-red-500">*</span>
-              </Label>
-              <Input
-                id="create-company-name"
-                placeholder="Nome completo"
-                value={createWithOwnerForm.name}
-                onChange={(e) => setCreateWithOwnerForm((f) => ({ ...f, name: e.target.value }))}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="create-company-email">
-                E-mail do responsável <span className="text-red-500">*</span>
-              </Label>
-              <Input
-                id="create-company-email"
-                type="email"
-                placeholder="contato@empresa.com"
-                value={createWithOwnerForm.email}
-                onChange={(e) => setCreateWithOwnerForm((f) => ({ ...f, email: e.target.value }))}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="create-company-password">
-                Senha de acesso <span className="text-red-500">*</span>
-              </Label>
-              <Input
-                id="create-company-password"
-                type="password"
-                placeholder="Mínimo 6 caracteres"
-                value={createWithOwnerForm.password}
-                onChange={(e) => setCreateWithOwnerForm((f) => ({ ...f, password: e.target.value }))}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="create-company-phone">Telefone (opcional)</Label>
-              <Input
-                id="create-company-phone"
-                placeholder="+55 11 98765-4321"
-                value={createWithOwnerForm.phone}
-                onChange={(e) => setCreateWithOwnerForm((f) => ({ ...f, phone: e.target.value }))}
-              />
+          <div ref={createWithOwnerScrollRef} className="flex-1 min-h-0 overflow-y-auto py-5">
+          <div className="space-y-4">
+            <CreateTypeTabs
+              value={createWithOwnerForm.type}
+              onChange={(t) => {
+                setCreateWithOwnerForm((f) => ({ ...f, type: t }));
+                // Erro de nome de organização é por tipo (create-company-org-name
+                // vs create-agency-org-name) — some junto com a troca de aba pra
+                // não deixar o resumo de erro aceso sem nenhum campo vermelho visível.
+                clearCreateWithOwnerError("create-company-org-name");
+                clearCreateWithOwnerError("create-agency-org-name");
+              }}
+              getLabel={getTypeLabel}
+              getInfo={getTypeInfo}
+            />
+
+            {createWithOwnerForm.type === "company" && (
+              <>
+                <CreateFormSection
+                  icon={Building2}
+                  title="Dados da Empresa"
+                  description="Informações principais da organização."
+                >
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                    <div className="space-y-2">
+                      <Label htmlFor="create-company-org-name">
+                        Nome da Empresa <span className="text-red-500">*</span>
+                      </Label>
+                      <Input
+                        id="create-company-org-name"
+                        placeholder="Ex: Acme Ltda"
+                        value={createWithOwnerForm.organizationName}
+                        onChange={(e) => {
+                          setCreateWithOwnerForm((f) => ({ ...f, organizationName: e.target.value }));
+                          clearCreateWithOwnerError("create-company-org-name");
+                        }}
+                        aria-invalid={!!createWithOwnerErrors["create-company-org-name"]}
+                        aria-describedby={createWithOwnerErrors["create-company-org-name"] ? "create-company-org-name-error" : undefined}
+                      />
+                      <CreateFieldError id="create-company-org-name" message={createWithOwnerErrors["create-company-org-name"]} />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="create-company-cnpj">CNPJ</Label>
+                      <Input
+                        id="create-company-cnpj"
+                        placeholder="00.000.000/0000-00"
+                        value={createWithOwnerForm.companyCnpj}
+                        onChange={(e) => setCreateWithOwnerForm((f) => ({ ...f, companyCnpj: e.target.value }))}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="create-company-phone-biz">Telefone da empresa</Label>
+                      <Input
+                        id="create-company-phone-biz"
+                        placeholder="+55 11 3000-0000"
+                        value={createWithOwnerForm.companyPhone}
+                        onChange={(e) => setCreateWithOwnerForm((f) => ({ ...f, companyPhone: e.target.value }))}
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                    <div className="space-y-2">
+                      <Label htmlFor="create-company-website">Website</Label>
+                      <Input
+                        id="create-company-website"
+                        placeholder="https://empresa.com"
+                        value={createWithOwnerForm.companyWebsite}
+                        onChange={(e) => setCreateWithOwnerForm((f) => ({ ...f, companyWebsite: e.target.value }))}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="create-company-segment">Segmento</Label>
+                      <Input
+                        id="create-company-segment"
+                        placeholder="Ex: Varejo, Educação, Saúde..."
+                        value={createWithOwnerForm.companySegment}
+                        onChange={(e) => setCreateWithOwnerForm((f) => ({ ...f, companySegment: e.target.value }))}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="create-company-status">Status</Label>
+                      <Select
+                        value={createWithOwnerForm.companyStatus}
+                        onValueChange={(v) => setCreateWithOwnerForm((f) => ({ ...f, companyStatus: v }))}
+                      >
+                        <SelectTrigger id="create-company-status">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="ativo">Ativo</SelectItem>
+                          <SelectItem value="inativo">Inativo</SelectItem>
+                          <SelectItem value="prospecto">Prospecto</SelectItem>
+                          <SelectItem value="inadimplente">Inadimplente</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label>Logo da empresa (opcional)</Label>
+                    <div className="flex items-center gap-3">
+                      <div className="h-9 w-9 rounded-full overflow-hidden flex-shrink-0 bg-gradient-to-br from-blue-500 to-blue-700 flex items-center justify-center shadow-sm">
+                        {createWithOwnerForm.companyLogo ? (
+                          <img src={createWithOwnerForm.companyLogo} alt="Logo" className="h-full w-full object-cover" />
+                        ) : (
+                          <Building2 className="h-4 w-4 text-white" />
+                        )}
+                      </div>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => createWithOwnerAvatarInputRef.current?.click()}
+                      >
+                        <Camera className="h-3.5 w-3.5 mr-1" /> Escolher
+                      </Button>
+                      <input
+                        ref={createWithOwnerAvatarInputRef}
+                        type="file"
+                        accept="image/*"
+                        onChange={handleCreateWithOwnerLogoUpload}
+                        className="hidden"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="create-company-description">Descrição (opcional)</Label>
+                    <Textarea
+                      id="create-company-description"
+                      placeholder="Breve descrição sobre a empresa..."
+                      className="h-20"
+                      value={createWithOwnerForm.companyDescription}
+                      onChange={(e) => setCreateWithOwnerForm((f) => ({ ...f, companyDescription: e.target.value }))}
+                    />
+                  </div>
+                </CreateFormSection>
+
+                <CreateFormSection icon={MapPin} title="Endereço" description="Localização da empresa.">
+                  <CreateWithOwnerAddressFields
+                    prefix="company"
+                    form={createWithOwnerForm}
+                    setForm={setCreateWithOwnerForm}
+                    cepLoading={createWithOwnerCepLoading}
+                    cepError={createWithOwnerCepError}
+                    onCepChange={handleCreateWithOwnerCepChange}
+                  />
+                </CreateFormSection>
+
+                <CreateFormSection icon={Wallet} title="Dados Financeiros" description="Informações de recebimento via Pix.">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div className="space-y-2">
+                      <Label htmlFor="create-company-pix-key">Chave PIX</Label>
+                      <Input
+                        id="create-company-pix-key"
+                        placeholder="CPF, CNPJ, e-mail, telefone ou chave aleatória"
+                        value={createWithOwnerForm.companyPixKey}
+                        onChange={(e) => setCreateWithOwnerForm((f) => ({ ...f, companyPixKey: e.target.value }))}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="create-company-pix-key-type">Tipo de chave PIX</Label>
+                      <Select
+                        value={createWithOwnerForm.companyPixKeyType}
+                        onValueChange={(v) => setCreateWithOwnerForm((f) => ({ ...f, companyPixKeyType: v }))}
+                      >
+                        <SelectTrigger id="create-company-pix-key-type">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="cpf">CPF</SelectItem>
+                          <SelectItem value="cnpj">CNPJ</SelectItem>
+                          <SelectItem value="email">E-mail</SelectItem>
+                          <SelectItem value="phone">Telefone</SelectItem>
+                          <SelectItem value="random">Aleatória</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+                </CreateFormSection>
+              </>
+            )}
+
+            {createWithOwnerForm.type === "agency" && (
+              <>
+                <CreateFormSection
+                  icon={Briefcase}
+                  title="Dados da Agência"
+                  description="Informações principais da agência."
+                >
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                    <div className="space-y-2">
+                      <Label htmlFor="create-agency-org-name">
+                        Nome da Agência <span className="text-red-500">*</span>
+                      </Label>
+                      <Input
+                        id="create-agency-org-name"
+                        placeholder="Ex: Agência Acme"
+                        value={createWithOwnerForm.organizationName}
+                        onChange={(e) => {
+                          setCreateWithOwnerForm((f) => ({ ...f, organizationName: e.target.value }));
+                          clearCreateWithOwnerError("create-agency-org-name");
+                        }}
+                        aria-invalid={!!createWithOwnerErrors["create-agency-org-name"]}
+                        aria-describedby={createWithOwnerErrors["create-agency-org-name"] ? "create-agency-org-name-error" : undefined}
+                      />
+                      <CreateFieldError id="create-agency-org-name" message={createWithOwnerErrors["create-agency-org-name"]} />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="create-agency-cnpj">CNPJ</Label>
+                      <Input
+                        id="create-agency-cnpj"
+                        placeholder="00.000.000/0000-00"
+                        value={createWithOwnerForm.agencyCnpj}
+                        onChange={(e) => setCreateWithOwnerForm((f) => ({ ...f, agencyCnpj: e.target.value }))}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="create-agency-phone">Telefone da agência</Label>
+                      <Input
+                        id="create-agency-phone"
+                        placeholder="+55 11 3000-0000"
+                        value={createWithOwnerForm.agencyPhone}
+                        onChange={(e) => setCreateWithOwnerForm((f) => ({ ...f, agencyPhone: e.target.value }))}
+                      />
+                    </div>
+                  </div>
+                  <div className="space-y-2 max-w-xs">
+                    <Label htmlFor="create-agency-status">Status</Label>
+                    <Select
+                      value={createWithOwnerForm.agencyStatus}
+                      onValueChange={(v) => setCreateWithOwnerForm((f) => ({ ...f, agencyStatus: v }))}
+                    >
+                      <SelectTrigger id="create-agency-status">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="ativo">Ativo</SelectItem>
+                        <SelectItem value="inativo">Inativo</SelectItem>
+                        <SelectItem value="pendente">Pendente</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </CreateFormSection>
+
+                <CreateFormSection icon={MapPin} title="Endereço" description="Localização da agência.">
+                  <CreateWithOwnerAddressFields
+                    prefix="agency"
+                    form={createWithOwnerForm}
+                    setForm={setCreateWithOwnerForm}
+                    cepLoading={createWithOwnerCepLoading}
+                    cepError={createWithOwnerCepError}
+                    onCepChange={handleCreateWithOwnerCepChange}
+                  />
+                </CreateFormSection>
+
+                <CreateFormSection icon={Wallet} title="Dados Financeiros" description="Informações de recebimento via Pix.">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div className="space-y-2">
+                      <Label htmlFor="create-agency-pix-key">Chave PIX</Label>
+                      <Input
+                        id="create-agency-pix-key"
+                        placeholder="CPF, CNPJ, e-mail, telefone ou chave aleatória"
+                        value={createWithOwnerForm.agencyPixKey}
+                        onChange={(e) => setCreateWithOwnerForm((f) => ({ ...f, agencyPixKey: e.target.value }))}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="create-agency-pix-key-type">Tipo de chave PIX</Label>
+                      <Select
+                        value={createWithOwnerForm.agencyPixKeyType}
+                        onValueChange={(v) => setCreateWithOwnerForm((f) => ({ ...f, agencyPixKeyType: v }))}
+                      >
+                        <SelectTrigger id="create-agency-pix-key-type">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="cpf">CPF</SelectItem>
+                          <SelectItem value="cnpj">CNPJ</SelectItem>
+                          <SelectItem value="email">E-mail</SelectItem>
+                          <SelectItem value="phone">Telefone</SelectItem>
+                          <SelectItem value="random">Aleatória</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+                </CreateFormSection>
+              </>
+            )}
+
+            {createWithOwnerForm.type === "nomad" && (
+              <>
+                <CreateFormSection
+                  icon={MapPin}
+                  title="Dados do Nômade"
+                  description="Contato e situação atual na plataforma."
+                >
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div className="space-y-2">
+                      <Label htmlFor="create-nomad-cnpj">
+                        CNPJ <span className="text-red-500">*</span>
+                      </Label>
+                      <Input
+                        id="create-nomad-cnpj"
+                        placeholder="00.000.000/0001-00"
+                        value={createWithOwnerForm.nomadCnpj}
+                        onChange={(e) => {
+                          setCreateWithOwnerForm((f) => ({ ...f, nomadCnpj: e.target.value }));
+                          clearCreateWithOwnerError("create-nomad-cnpj");
+                        }}
+                        aria-invalid={!!createWithOwnerErrors["create-nomad-cnpj"]}
+                        aria-describedby={createWithOwnerErrors["create-nomad-cnpj"] ? "create-nomad-cnpj-error" : undefined}
+                      />
+                      <CreateFieldError id="create-nomad-cnpj" message={createWithOwnerErrors["create-nomad-cnpj"]} />
+                      <p className="text-[11px] text-slate-400">
+                        Obrigatório para prestar serviços à plataforma.
+                      </p>
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="create-nomad-whatsapp">WhatsApp</Label>
+                      <Input
+                        id="create-nomad-whatsapp"
+                        placeholder="+55 11 98765-4321"
+                        value={createWithOwnerForm.nomadWhatsapp}
+                        onChange={(e) => setCreateWithOwnerForm((f) => ({ ...f, nomadWhatsapp: e.target.value }))}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="create-nomad-status">Status</Label>
+                      <Select
+                        value={createWithOwnerForm.nomadStatus}
+                        onValueChange={(v) => setCreateWithOwnerForm((f) => ({ ...f, nomadStatus: v }))}
+                      >
+                        <SelectTrigger id="create-nomad-status">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="ativo">Ativo</SelectItem>
+                          <SelectItem value="inativo">Inativo</SelectItem>
+                          <SelectItem value="aguardando_aprovacao">Aguardando aprovação</SelectItem>
+                          <SelectItem value="reprovado">Reprovado</SelectItem>
+                          <SelectItem value="pausado">Pausado</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Foto de perfil (opcional)</Label>
+                    <div className="flex items-center gap-3">
+                      <div className="h-12 w-12 rounded-full overflow-hidden flex-shrink-0 bg-gradient-to-br from-blue-500 to-blue-700 flex items-center justify-center shadow-sm">
+                        {createWithOwnerForm.nomadAvatar ? (
+                          <img src={createWithOwnerForm.nomadAvatar} alt="Foto" className="h-full w-full object-cover" />
+                        ) : (
+                          <Users className="h-5 w-5 text-white" />
+                        )}
+                      </div>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => createWithOwnerNomadAvatarInputRef.current?.click()}
+                      >
+                        <Camera className="h-3.5 w-3.5 mr-1" /> Escolher imagem
+                      </Button>
+                      <input
+                        ref={createWithOwnerNomadAvatarInputRef}
+                        type="file"
+                        accept="image/*"
+                        onChange={handleCreateWithOwnerNomadAvatarUpload}
+                        className="hidden"
+                      />
+                    </div>
+                  </div>
+                </CreateFormSection>
+
+                {usuarioPrincipalSection}
+
+                <CreateFormSection
+                  icon={Award}
+                  title="Dados Profissionais"
+                  description="Nível de experiência na plataforma."
+                >
+                  <div className="max-w-xs space-y-2">
+                    <Label htmlFor="create-nomad-level">Nível</Label>
+                    <Select
+                      value={createWithOwnerForm.nomadLevel}
+                      onValueChange={(v) => setCreateWithOwnerForm((f) => ({ ...f, nomadLevel: v }))}
+                    >
+                      <SelectTrigger id="create-nomad-level">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="bronze">Bronze</SelectItem>
+                        <SelectItem value="silver">Silver</SelectItem>
+                        <SelectItem value="gold">Gold</SelectItem>
+                        <SelectItem value="platinum">Platinum</SelectItem>
+                        <SelectItem value="diamond">Diamond</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </CreateFormSection>
+
+                <CreateFormSection icon={MapPin} title="Endereço" description="Localização do nômade.">
+                  <CreateWithOwnerAddressFields
+                    prefix="nomad"
+                    form={createWithOwnerForm}
+                    setForm={setCreateWithOwnerForm}
+                    cepLoading={createWithOwnerCepLoading}
+                    cepError={createWithOwnerCepError}
+                    onCepChange={handleCreateWithOwnerCepChange}
+                  />
+                </CreateFormSection>
+
+                <CreateFormSection icon={Wallet} title="Dados Financeiros" description="Informações de recebimento via Pix.">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div className="space-y-2">
+                      <Label htmlFor="create-nomad-pix-key">Chave PIX</Label>
+                      <Input
+                        id="create-nomad-pix-key"
+                        placeholder="CPF, e-mail, telefone ou chave aleatória"
+                        value={createWithOwnerForm.nomadPixKey}
+                        onChange={(e) => setCreateWithOwnerForm((f) => ({ ...f, nomadPixKey: e.target.value }))}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="create-nomad-pix-key-type">Tipo de chave PIX</Label>
+                      <Select
+                        value={createWithOwnerForm.nomadPixKeyType}
+                        onValueChange={(v) => setCreateWithOwnerForm((f) => ({ ...f, nomadPixKeyType: v }))}
+                      >
+                        <SelectTrigger id="create-nomad-pix-key-type">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="cpf">CPF</SelectItem>
+                          <SelectItem value="email">E-mail</SelectItem>
+                          <SelectItem value="phone">Telefone</SelectItem>
+                          <SelectItem value="random">Aleatória</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+                </CreateFormSection>
+              </>
+            )}
+
+            {createWithOwnerForm.type !== "nomad" && usuarioPrincipalSection}
+          </div>
+          </div>
+
+          <div className="shrink-0 flex items-center justify-between gap-3 px-1 py-4 border-t border-slate-100 dark:border-slate-800">
+            <p
+              className={`text-xs text-red-600 dark:text-red-400 transition-opacity ${
+                createWithOwnerErrorSummary ? "opacity-100" : "opacity-0 pointer-events-none"
+              }`}
+              aria-live="polite"
+            >
+              {createWithOwnerErrorSummary ? "Revise os campos destacados antes de continuar." : ""}
+            </p>
+            <div className="flex items-center gap-2 shrink-0">
+              <Button
+                variant="outline"
+                onClick={handleCreateWithOwnerCancelOrBack}
+                disabled={createWithOwnerSubmitting}
+              >
+                Cancelar
+              </Button>
+              <Button
+                className="btn-brand"
+                onClick={handleCreateCompanyWithOwner}
+                disabled={createWithOwnerSubmitting}
+              >
+                {createWithOwnerSubmitting && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+                Criar
+              </Button>
             </div>
           </div>
-          <div className="flex items-center justify-end gap-2">
-            <Button
-              variant="outline"
-              onClick={() => setCreateWithOwnerOpen(false)}
-              disabled={createWithOwnerSubmitting}
-            >
-              Cancelar
-            </Button>
-            <Button
-              className="btn-brand"
-              onClick={handleCreateCompanyWithOwner}
-              disabled={createWithOwnerSubmitting}
-            >
-              {createWithOwnerSubmitting && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-              Criar empresa
-            </Button>
-          </div>
-        </DialogContent>
-      </Dialog>
+        </div>
+
+      {/* FASE 7 — descarte de cadastro com dados preenchidos (Cancelar/Voltar) */}
+      <ConfirmationDialog
+        open={createWithOwnerDiscardConfirmOpen}
+        onClose={() => setCreateWithOwnerDiscardConfirmOpen(false)}
+        onConfirm={handleDiscardCreateWithOwner}
+        title="Descartar cadastro?"
+        message="Os dados preenchidos ainda não foram salvos. Deseja descartá-los e voltar para a listagem?"
+        confirmText="Descartar e voltar"
+        cancelText="Continuar preenchendo"
+        destructive
+      />
 
       <ConfirmationDialog
         open={deleteDialog.open}
-        onClose={() =>
-          setDeleteDialog({ open: false, companyId: null, companyName: "" })
-        }
+        onClose={() => {
+          setDeleteDialog({ open: false, companyId: null, companyName: "" });
+          setDeleteDialogMembers([]);
+          setDeleteDialogActions({});
+        }}
         onConfirm={handleConfirmDelete}
         title="Excluir empresa"
-        message={`Tem certeza que deseja excluir "${deleteDialog.companyName}"? Esta ação não pode ser desfeita.`}
+        message={
+          <div>
+            <p>
+              Tem certeza que deseja excluir "{deleteDialog.companyName}"? Esta
+              ação não pode ser desfeita. O ID ficará disponível para
+              reaproveitamento e os dados serão arquivados no histórico.
+            </p>
+            {(() => {
+              const company = companies.find((c) => c.id === deleteDialog.companyId);
+              if (company?.type !== "company") return null;
+              return (
+                <div className="mt-4">
+                  {deleteDialogLoadingMembers ? (
+                    <p className="text-xs text-slate-400">
+                      Carregando usuários vinculados...
+                    </p>
+                  ) : deleteDialogMembers.length > 0 ? (
+                    <div className="space-y-3">
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="text-xs font-medium text-slate-500 dark:text-slate-400">
+                          Usuários vinculados ({deleteDialogMembers.length})
+                        </span>
+                        <Select
+                          onValueChange={(v) =>
+                            setDeleteDialogActions(
+                              Object.fromEntries(
+                                deleteDialogMembers.map((m) => [m.id, v as CompanyDeleteUserAction]),
+                              ),
+                            )
+                          }
+                        >
+                          <SelectTrigger className="h-7 w-40 text-xs">
+                            <SelectValue placeholder="Aplicar a todos" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="unlink">Desvincular</SelectItem>
+                            <SelectItem value="suspend">Pausar</SelectItem>
+                            <SelectItem value="delete">Excluir</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="space-y-2 max-h-52 overflow-y-auto pr-1">
+                        {deleteDialogMembers.map((m) => (
+                          <div
+                            key={m.id}
+                            className="flex items-center justify-between gap-2 rounded-lg border border-slate-200 dark:border-slate-700 px-3 py-2"
+                          >
+                            <div className="min-w-0">
+                              <p className="text-xs font-medium text-slate-700 dark:text-slate-200 truncate">
+                                {m.name}
+                              </p>
+                              <p className="text-[11px] text-slate-400 truncate">
+                                {m.email}
+                              </p>
+                            </div>
+                            <Select
+                              value={deleteDialogActions[m.id] ?? "unlink"}
+                              onValueChange={(v) =>
+                                setDeleteDialogActions((prev) => ({
+                                  ...prev,
+                                  [m.id]: v as CompanyDeleteUserAction,
+                                }))
+                              }
+                            >
+                              <SelectTrigger className="h-7 w-32 text-xs shrink-0">
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="unlink">Desvincular</SelectItem>
+                                <SelectItem value="suspend">Pausar</SelectItem>
+                                <SelectItem value="delete">Excluir</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ) : (
+                    <p className="text-xs text-slate-400">
+                      Nenhum usuário vinculado a esta empresa.
+                    </p>
+                  )}
+                </div>
+              );
+            })()}
+          </div>
+        }
         confirmText="Excluir"
         cancelText="Cancelar"
         destructive
@@ -4175,6 +5429,7 @@ export default function EmpresasPage() {
           />
         </>
       )}
+    </div>
     </div>
   );
 }

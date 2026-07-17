@@ -1,20 +1,25 @@
 ﻿// @ts-nocheck
 import { useState, useRef } from "react"
 import { ExportButton } from "@/components/export-button"
+import { PinToTrayButton } from "@/components/pin-to-tray-button"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { NeonBadge } from "@/components/neon-badge"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion"
 import { PermissionProfileSlidePanel } from "@/components/permission-profile-slide-panel"
 import {
   Search, Plus, Users, Shield, Settings, BarChart3, Edit, Trash2,
   Building2, Briefcase, Compass, Store, DollarSign, Lock, FileText, LayoutDashboard, Minus,
 } from "lucide-react"
-import { PageHeader } from "@/components/page-header"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
+import {
+  STANDARD_SHELL_PANEL_CLASS,
+  STANDARD_SHELL_TABLE_CARD_CLASS,
+  StandardPageBanner,
+  StandardMetricCard,
+} from "@/components/standard-page-shell"
 
 // ─── Shared module/action meta (mirrors slide panel) ─────────────────────────────
 type Scope = "none" | "own" | "all"
@@ -73,58 +78,7 @@ interface PermissionProfile {
   permissions: Record<string, ModulePerm>
 }
 
-// ─── Stat card — saturated gradient recipe (matches admin/empresas & admin/clientes) ──
-const STAT_COLOR_MAP: Record<string, { gradient: string; darkGradient: string; borderClass: string }> = {
-  blue: {
-    gradient: "from-blue-500 to-blue-700",
-    darkGradient: "dark:from-blue-800 dark:to-blue-950",
-    borderClass: "border-2 border-blue-300/70 dark:border-blue-800/70",
-  },
-  emerald: {
-    gradient: "from-emerald-500 to-teal-600",
-    darkGradient: "dark:from-emerald-800 dark:to-teal-900",
-    borderClass: "border-2 border-emerald-300/70 dark:border-emerald-800/70",
-  },
-  violet: {
-    gradient: "from-violet-500 to-purple-700",
-    darkGradient: "dark:from-violet-800 dark:to-purple-950",
-    borderClass: "border-2 border-violet-300/70 dark:border-violet-800/70",
-  },
-  orange: {
-    gradient: "from-orange-500 to-rose-600",
-    darkGradient: "dark:from-orange-800 dark:to-rose-900",
-    borderClass: "border-2 border-orange-300/70 dark:border-orange-800/70",
-  },
-}
-
-function StatCard({
-  label,
-  value,
-  icon: Icon,
-  color,
-}: {
-  label: string
-  value: number
-  icon: React.ElementType
-  color: keyof typeof STAT_COLOR_MAP
-}) {
-  const colors = STAT_COLOR_MAP[color]
-  return (
-    <div
-      className={`relative rounded-xl overflow-hidden cursor-default transition-all duration-200 bg-gradient-to-br ${colors.gradient} ${colors.darkGradient} ${colors.borderClass} shadow-lg hover:shadow-xl`}
-    >
-      <div className="px-4 py-3.5">
-        <div className="flex items-center justify-between mb-1">
-          <span className="text-[11px] font-semibold text-white/80 uppercase tracking-wide">{label}</span>
-          <div className="bg-white/20 rounded-md p-1">
-            <Icon className="h-3.5 w-3.5 text-white" />
-          </div>
-        </div>
-        <div className="text-2xl font-bold text-white">{value}</div>
-      </div>
-    </div>
-  )
-}
+// Stat cards agora vêm do shell compartilhado (standard-page-shell.tsx).
 
 export default function PermissionsPage() {
   const [searchQuery, setSearchQuery] = useState("")
@@ -226,24 +180,27 @@ export default function PermissionsPage() {
   ]
 
   return (
-    <div className="space-y-3" ref={pageRef}>
-      <PageHeader
+    <div className={STANDARD_SHELL_PANEL_CLASS}>
+    <div className="h-full min-h-0 flex flex-col" ref={pageRef}>
+      <div className="shrink-0 -mb-[11px]">
+      <StandardPageBanner
+        icon={Shield}
         title="Gestão de Permissões"
         description="Configure perfis de acesso e permissões granulares"
         actions={<>
-          <ExportButton pageRef={pageRef} filename="permissoes" />
+          <div className="bg-white rounded-lg">
+            <ExportButton pageRef={pageRef} filename="permissoes" />
+          </div>
+          <PinToTrayButton id="page-permissoes" label="Permissões" icon={Shield} path="/admin/permissoes" />
           <TooltipProvider delayDuration={400}>
             <Tooltip>
               <TooltipTrigger asChild>
                 <button
                   onClick={handleCreateProfile}
-                  className="group relative flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-border/60 hover:border-transparent overflow-hidden transition-all"
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-white/70 text-white bg-white/10 hover:bg-white/20 transition-colors text-xs font-semibold whitespace-nowrap"
                 >
-                  <span className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none" style={{ background: "linear-gradient(135deg,#000000 0%,#1a2a6f 45%,#c81a7f 100%)" }} />
-                  <Plus className="relative z-10 h-3.5 w-3.5 shrink-0 text-[#7d1b6a] group-hover:text-white transition-colors" />
-                  <span className="relative z-10 text-xs font-semibold bg-clip-text text-transparent [background-image:linear-gradient(135deg,#1a2a6f_0%,#7d1b6a_55%,#c81a7f_100%)] group-hover:[background-image:none] group-hover:text-white transition-colors">
-                    Novo Perfil
-                  </span>
+                  <Plus className="h-3.5 w-3.5 shrink-0" />
+                  Novo Perfil
                 </button>
               </TooltipTrigger>
               <TooltipContent side="bottom" sideOffset={6}>Criar novo perfil de permissão</TooltipContent>
@@ -251,26 +208,17 @@ export default function PermissionsPage() {
           </TooltipProvider>
         </>}
       />
+      </div>
 
-      <Accordion type="single" collapsible className="mb-1">
-        <AccordionItem value="stats" className="border-none">
-          <AccordionTrigger className="bg-white hover:bg-slate-50 rounded-lg px-4 py-3 transition-colors">
-            <div className="flex items-center gap-2">
-              <BarChart3 className="h-5 w-5 text-blue-600" />
-              <span className="font-semibold text-blue-900">Estatísticas e Métricas</span>
-            </div>
-          </AccordionTrigger>
-          <AccordionContent className="pt-3">
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-              {stats.map((stat, index) => (
-                <StatCard key={index} label={stat.label} value={stat.value} icon={stat.icon} color={stat.color} />
-              ))}
-            </div>
-          </AccordionContent>
-        </AccordionItem>
-      </Accordion>
+      <div className="flex-1 min-h-0 overflow-y-auto">
+      <div className="space-y-5">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+        {stats.map((stat, index) => (
+          <StandardMetricCard key={index} label={stat.label} value={stat.value} icon={stat.icon} colorKey={stat.color} />
+        ))}
+      </div>
 
-      <Card className="border-2">
+      <Card className={STANDARD_SHELL_TABLE_CARD_CLASS}>
         <CardContent className="pt-4">
           <div className="flex flex-col gap-4">
             <div className="relative">
@@ -471,6 +419,8 @@ export default function PermissionsPage() {
           </div>
         </CardContent>
       </Card>
+      </div>
+      </div>
 
       <PermissionProfileSlidePanel
         open={isPanelOpen}
@@ -478,6 +428,7 @@ export default function PermissionsPage() {
         profile={selectedProfile}
         onSave={handleSaveProfile}
       />
+    </div>
     </div>
   )
 }

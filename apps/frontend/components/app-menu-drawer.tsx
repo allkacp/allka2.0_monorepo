@@ -181,7 +181,7 @@ interface AppMenuDrawerProps {
 export function AppMenuDrawer({ open, onClose }: AppMenuDrawerProps) {
   const location = useLocation()
   const pathname = location.pathname
-  const { accountType, accountSubType } = useAccountType()
+  const { accountType, accountSubType, isPartnerActive } = useAccountType()
   const { userProfile } = useSidebar()
   const [expandedItems, setExpandedItems] = useState<string[]>([])
 
@@ -190,7 +190,16 @@ export function AppMenuDrawer({ open, onClose }: AppMenuDrawerProps) {
     if (accountType === "empresas") {
       return navigationConfig.empresas[accountSubType || "company"] ?? navigationConfig.empresas.company
     }
-    if (accountType === "parceiro") return navigationConfig.parceiro
+    if (accountType === "agencias") {
+      // Partner é um upgrade da Agency (PartnerProfile.status "active"),
+      // não um account_type separado — anexa os itens exclusivos de
+      // Partner ao menu normal da Agency quando ativo.
+      if (!isPartnerActive) return navigationConfig.agencias
+      const partnerOnlyItems = navigationConfig.parceiro.filter(
+        (item) => item.href !== "/partner/dashboard",
+      )
+      return [...navigationConfig.agencias, ...partnerOnlyItems]
+    }
     if (accountType === "lider") return navigationConfig.lider
     return (navigationConfig as any)[accountType] || []
   }

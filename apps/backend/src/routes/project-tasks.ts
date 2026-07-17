@@ -157,13 +157,14 @@ async function getTaskScopeWhere(
     return { lider_responsavel_id: userId };
   }
 
-  // Agency/Company/Partner: escopo combinado legado (agency/client_id) OU
-  // novo (agency_id/company_id/partner_id) — mesmo helper usado em
-  // GET /api/projects (src/lib/project-scope.ts), pra não ficar dessincronizado
+  // Agency (inclui Partner — upgrade da própria Agency, não um account_type
+  // separado)/Company: escopo combinado legado (agency/client_id) OU novo
+  // (agency_id/company_id/partner_id) — mesmo helper usado em GET
+  // /api/projects (src/lib/project-scope.ts), pra não ficar dessincronizado
   // de novo. Antes, esta função só reconhecia o escopo legado: uma tarefa
   // nascida num projeto vinculado só pelo campo novo (agency_id/company_id/
   // partner_id) ficava invisível aqui mesmo aparecendo em GET /api/projects.
-  if (["agencias", "empresas", "parceiro"].includes(accountType)) {
+  if (["agencias", "empresas"].includes(accountType)) {
     const { where } = await combinedProjectWhere(prisma, userId, accountType);
     if (where === null) return null; // não vinculado a nenhum escopo → sem acesso
     return { project: where };

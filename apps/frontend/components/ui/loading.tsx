@@ -166,44 +166,49 @@ export function PageLoader({
       aria-label={text}
       aria-busy="true"
       className={cn(
-        "flex flex-col items-center justify-center gap-7",
+        "flex flex-col items-center justify-center",
         compact ? "min-h-[280px] py-20" : "min-h-[460px]",
       )}
     >
-      {/* Spinner com glow ambiente */}
-      <div className="relative flex items-center justify-center w-20 h-20">
-        {/* Glow externo */}
-        <div
-          className="absolute inset-0 rounded-full blur-2xl opacity-25"
-          style={{
-            background: `conic-gradient(${BRAND.blue}, ${BRAND.purple}, ${BRAND.magenta}, ${BRAND.blue})`,
-            animation: "allka-halo 2.5s ease-in-out infinite alternate",
-          }}
-        />
-        {/* Glow interno */}
-        <div
-          className="absolute rounded-full blur-lg opacity-20"
-          style={{
-            width: 64,
-            height: 64,
-            background: `radial-gradient(circle, ${BRAND.blue}cc 0%, ${BRAND.purple}80 60%, transparent 90%)`,
-            animation: "allka-halo 2s ease-in-out 0.6s infinite alternate",
-          }}
-        />
-        <SpinnerRing size={52} thickness={4} />
-      </div>
+      {/* Cartão de vidro fosco — garante contraste em qualquer fundo (branco,
+          cinza claro ou o gradiente das telas padronizadas), não só em
+          light/dark mode. */}
+      <div className="flex flex-col items-center gap-6 rounded-2xl border border-white/10 bg-slate-900/85 backdrop-blur-md px-9 py-8 shadow-2xl">
+        {/* Spinner com glow ambiente */}
+        <div className="relative flex items-center justify-center w-20 h-20">
+          {/* Glow externo */}
+          <div
+            className="absolute inset-0 rounded-full blur-2xl opacity-40"
+            style={{
+              background: `conic-gradient(${BRAND.blue}, ${BRAND.purple}, ${BRAND.magenta}, ${BRAND.blue})`,
+              animation: "allka-halo 2.5s ease-in-out infinite alternate",
+            }}
+          />
+          {/* Glow interno */}
+          <div
+            className="absolute rounded-full blur-lg opacity-30"
+            style={{
+              width: 64,
+              height: 64,
+              background: `radial-gradient(circle, ${BRAND.blue}cc 0%, ${BRAND.purple}80 60%, transparent 90%)`,
+              animation: "allka-halo 2s ease-in-out 0.6s infinite alternate",
+            }}
+          />
+          <SpinnerRing size={52} thickness={4} />
+        </div>
 
-      {/* Texto + dots */}
-      <div className="flex flex-col items-center gap-2.5 text-center max-w-xs">
-        <p className="text-sm font-semibold text-slate-700 dark:text-slate-200 tracking-wide">
-          {text}
-        </p>
-        {subtext && (
-          <p className="text-xs text-slate-400 dark:text-slate-500 leading-relaxed">
-            {subtext}
+        {/* Texto + dots */}
+        <div className="flex flex-col items-center gap-2.5 text-center max-w-xs">
+          <p className="text-sm font-semibold text-white tracking-wide">
+            {text}
           </p>
-        )}
-        <PulseDots />
+          {subtext && (
+            <p className="text-xs text-white/60 leading-relaxed">
+              {subtext}
+            </p>
+          )}
+          <PulseDots />
+        </div>
       </div>
     </div>
   );

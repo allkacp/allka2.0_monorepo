@@ -106,131 +106,16 @@ interface UserPermissions {
 interface CompanyUsersTabProps {
   companyId: number | string;
   companyName: string;
+  /** Tipo da organização — o campo de vínculo do usuário muda por tipo
+   * (Company usa company_id, Agency usa agency_id, Partner usa
+   * partner_id). Sem isso o filtro sempre caía no company_id e Agency/
+   * Partner apareciam com 0 usuários mesmo tendo o principal criado
+   * junto no cadastro. */
+  type?: "company" | "agency" | "nomad" | "partner";
   users?: UserListItem[];
   /** Called when a new user is created so the admin/usuarios page stays in sync */
   onUserCreated?: (user: any) => void;
 }
-
-const DEFAULT_USERS: UserListItem[] = [
-  {
-    id: 1,
-    name: "Ana Silva",
-    email: "ana.silva@empresa.com",
-    avatar: "AS",
-    status: "online",
-    profile: "Administrador",
-    lastAccess: "Há 2 horas",
-    createdAt: "12/01/2024",
-    isBlocked: false,
-    cpf: "123.456.789-00",
-    phone: "(11) 98765-4321",
-    address: "Rua das Flores, 123",
-    city: "São Paulo",
-    state: "SP",
-    zipCode: "01234-567",
-    averageOnlineHours: 2.5,
-    averageOfflineDays: 1,
-    permissions: {
-      gestao: [
-        { id: "hire_services", name: "Contratar serviços", enabled: true },
-        { id: "insert_credit", name: "Inserir crédito", enabled: true },
-        { id: "approve_payments", name: "Aprovar pagamentos", enabled: true },
-      ],
-      tasks: [
-        { id: "create_tasks", name: "Criar tarefas", enabled: true },
-        { id: "approve_tasks", name: "Aprovar tarefas", enabled: true },
-        { id: "edit_tasks", name: "Editar tarefas", enabled: true },
-        { id: "delete_tasks", name: "Excluir tarefas", enabled: false },
-      ],
-      projects: [
-        { id: "create_projects", name: "Criar projetos", enabled: true },
-        { id: "edit_projects", name: "Editar projetos", enabled: true },
-        { id: "delete_projects", name: "Excluir projetos", enabled: false },
-      ],
-      users: [
-        { id: "create_users", name: "Criar usuários", enabled: true },
-        { id: "edit_users", name: "Editar usuários", enabled: true },
-        { id: "block_users", name: "Bloquear usuários", enabled: true },
-      ],
-    },
-  },
-  {
-    id: 2,
-    name: "Carlos Santos",
-    email: "carlos.santos@empresa.com",
-    avatar: "CS",
-    status: "online",
-    profile: "Gerente",
-    lastAccess: "Há 30 minutos",
-    createdAt: "15/01/2024",
-    isBlocked: false,
-    cpf: "987.654.321-00",
-    phone: "(11) 99876-5432",
-    address: "Avenida Principal, 456",
-    city: "São Paulo",
-    state: "SP",
-    zipCode: "02345-678",
-    averageOnlineHours: 3.2,
-    averageOfflineDays: 1.5,
-  },
-  {
-    id: 3,
-    name: "Marina Costa",
-    email: "marina.costa@empresa.com",
-    avatar: "MC",
-    status: "offline",
-    profile: "Operador",
-    lastAccess: "Ontem",
-    createdAt: "18/01/2024",
-    isBlocked: false,
-    cpf: "456.789.012-00",
-    phone: "(11) 97654-3210",
-    address: "Rua dos Pinheiros, 789",
-    city: "São Paulo",
-    state: "SP",
-    zipCode: "03456-789",
-    averageOnlineHours: 2.8,
-    averageOfflineDays: 2,
-  },
-  {
-    id: 4,
-    name: "Paulo Oliveira",
-    email: "paulo.oliveira@empresa.com",
-    avatar: "PO",
-    status: "offline",
-    profile: "Operador",
-    lastAccess: "2 dias atrás",
-    createdAt: "10/01/2024",
-    isBlocked: false,
-    cpf: "789.012.345-00",
-    phone: "(11) 96543-2109",
-    address: "Rua da Paz, 321",
-    city: "São Paulo",
-    state: "SP",
-    zipCode: "04567-890",
-    averageOnlineHours: 2.2,
-    averageOfflineDays: 3,
-  },
-  {
-    id: 5,
-    name: "Rita Alves",
-    email: "rita.alves@empresa.com",
-    avatar: "RA",
-    status: "offline",
-    profile: "Visualizador",
-    lastAccess: "3 dias atrás",
-    createdAt: "08/01/2024",
-    isBlocked: true,
-    cpf: "321.098.765-00",
-    phone: "(11) 95432-1098",
-    address: "Rua da Esperança, 654",
-    city: "São Paulo",
-    state: "SP",
-    zipCode: "05678-901",
-    averageOnlineHours: 1.8,
-    averageOfflineDays: 5,
-  },
-];
 
 const timelineData = [
   { day: "Seg", hours: 2.5 },
@@ -261,6 +146,7 @@ const USER_COL_DEFAULTS: Record<UserColKey, number> = {
 export function CompanyUsersTab({
   companyId,
   companyName,
+  type,
   users,
   onUserCreated,
 }: CompanyUsersTabProps) {
@@ -277,12 +163,15 @@ export function CompanyUsersTab({
 
   // Derive UserListItem list from platform-users context for this company
   const companyContextUsers = useMemo<UserListItem[]>(() => {
-    const matched = contextUsers.filter(
-      (u) =>
+    const matched = contextUsers.filter((u) => {
+      if (type === "agency") return String(u.agency_id) === String(companyId);
+      if (type === "partner") return String(u.partner_id) === String(companyId);
+      return (
         u.company_associations?.some(
           (a) => String(a.company_id) === String(companyId),
-        ) || String(u.company_id) === String(companyId),
-    );
+        ) || String(u.company_id) === String(companyId)
+      );
+    });
     if (matched.length === 0) return [];
     return matched.map((u) => {
       const assoc = u.company_associations?.find(
@@ -318,12 +207,10 @@ export function CompanyUsersTab({
         platform_permissions: u.permissions,
       } as UserListItem;
     });
-  }, [contextUsers, companyId]);
+  }, [contextUsers, companyId, type]);
 
   const [userList, setUserList] = useState<UserListItem[]>(
-    () =>
-      users ??
-      (companyContextUsers.length > 0 ? companyContextUsers : DEFAULT_USERS),
+    () => users ?? companyContextUsers,
   );
 
   // Sync whenever context users change (additions, removals, edits) — skip if parent passes static list
@@ -2558,6 +2445,7 @@ export function CompanyUsersTab({
         onUserCreated={handlePlatformUserCreated}
         companyId={companyId}
         companyName={companyName}
+        orgType={type}
       />
     </>
   );

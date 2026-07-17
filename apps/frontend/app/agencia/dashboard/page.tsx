@@ -31,6 +31,7 @@ import {
   Wallet,
   Image,
   ChevronDown as ChevronDownIcon,
+  Award,
 } from "lucide-react";
 import {
   DropdownMenu,
@@ -45,6 +46,8 @@ import { PageLoader } from "@/components/ui/loading";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { toPng } from "html-to-image";
+import { apiClient } from "@/lib/api-client";
+import { useToast } from "@/hooks/use-toast";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -665,12 +668,53 @@ function CustomizePanel({
 // ─── Main page ────────────────────────────────────────────────────────────────
 
 export default function AgenciaDashboard() {
-  const { profile, projects, tasks, invoices, loading } = useAgencia();
+  const { profile, projects, tasks, invoices, loading, setPartnerInviteStatus } =
+    useAgencia();
   const dashboardRef = useRef<HTMLDivElement>(null);
+  const { toast } = useToast();
 
   const [widgets, setWidgets] = useState<AgencyWidget[]>(() => loadWidgets());
   const [showCustomize, setShowCustomize] = useState(false);
   const [exportLoading, setExportLoading] = useState(false);
+  const [partnerInviteLoading, setPartnerInviteLoading] = useState(false);
+
+  const handlePartnerInviteResponse = async (action: "accept" | "decline") => {
+    if (!profile?.id) return;
+    setPartnerInviteLoading(true);
+    try {
+      const newStatus = action === "accept" ? "active" : "declined";
+      if (action === "accept") {
+        await apiClient.acceptPartnerInvite(profile.id);
+        toast({
+          title: "Convite aceito",
+          description: "Sua agência agora é Partner na plataforma.",
+        });
+      } else {
+        await apiClient.declinePartnerInvite(profile.id);
+        toast({ title: "Convite recusado" });
+      }
+      setPartnerInviteStatus(newStatus);
+      // Atualiza o cache local pra RequireAuth (App.tsx) liberar /partner/*
+      // na próxima navegação sem precisar de um novo login.
+      try {
+        const cached = JSON.parse(localStorage.getItem("allka_user") || "null");
+        if (cached) {
+          localStorage.setItem(
+            "allka_user",
+            JSON.stringify({ ...cached, partner_status: newStatus }),
+          );
+        }
+      } catch {}
+    } catch (error: any) {
+      toast({
+        title: "Erro",
+        description: error.message || "Não foi possível processar o convite.",
+        variant: "destructive",
+      });
+    } finally {
+      setPartnerInviteLoading(false);
+    }
+  };
 
   // ── Derived data ─────────────────────────────────────────────────────────────
   const activeProjects = useMemo(
@@ -1589,6 +1633,44 @@ export default function AgenciaDashboard() {
             </Button>
           </div>
         </div>
+
+        {/* Convite de Partner pendente — Partner é um upgrade que esta
+            Agency recebeu do admin e precisa aceitar/recusar explicitamente. */}
+        {profile.partnerInviteStatus === "invited" && (
+          <div className="flex items-center justify-between gap-4 flex-wrap rounded-xl border border-amber-200 bg-amber-50 px-4 py-3">
+            <div className="flex items-center gap-3">
+              <Award className="h-5 w-5 text-amber-600 shrink-0" />
+              <div>
+                <p className="text-sm font-semibold text-amber-900">
+                  Você recebeu um convite para virar Partner
+                </p>
+                <p className="text-xs text-amber-700">
+                  Como Partner, você passa a gerenciar as agências que lidera, receber
+                  comissões e descontos progressivos em produtos.
+                </p>
+              </div>
+            </div>
+            <div className="flex items-center gap-2 shrink-0">
+              <Button
+                size="sm"
+                disabled={partnerInviteLoading}
+                className="text-xs bg-emerald-600 hover:bg-emerald-700 text-white"
+                onClick={() => handlePartnerInviteResponse("accept")}
+              >
+                Aceitar
+              </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                disabled={partnerInviteLoading}
+                className="text-xs"
+                onClick={() => handlePartnerInviteResponse("decline")}
+              >
+                Recusar
+              </Button>
+            </div>
+          </div>
+        )}
 
         {/* Widget grid — 2-col on large screens */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">

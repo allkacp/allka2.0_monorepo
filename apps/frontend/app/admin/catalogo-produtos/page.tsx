@@ -4,12 +4,17 @@
 import { useMemo } from "react";
 import { useParams } from "react-router-dom";
 import { useProjectBasket } from "@/contexts/project-basket-context";
-import { PageHeader } from "@/components/page-header";
 import {
   ProductCatalogView,
   type CatalogSelectedProduct,
 } from "@/components/product-catalog-view";
 import { type Product } from "@/lib/contexts/product-context";
+import {
+  STANDARD_SHELL_PANEL_CLASS,
+  StandardPageBanner,
+} from "@/components/standard-page-shell";
+import { PinToTrayButton } from "@/components/pin-to-tray-button";
+import { Store } from "lucide-react";
 
 export default function AdminCatalogoProdutos() {
   const basket = useProjectBasket();
@@ -61,12 +66,20 @@ export default function AdminCatalogoProdutos() {
   };
 
   return (
-    <div className="flex-1 space-y-3">
-      <PageHeader
+    <div className={STANDARD_SHELL_PANEL_CLASS}>
+    <div className="h-full min-h-0 flex flex-col">
+      <div className="shrink-0 -mb-[11px]">
+      <StandardPageBanner
+        icon={Store}
         title="Catálogo de Produtos"
         description="Visualize os produtos ativos como os clientes os verão"
+        actions={
+          <PinToTrayButton id="page-catalogo-produtos" label="Catálogo de Produtos" icon={Store} path="/admin/catalogo-produtos" />
+        }
       />
+      </div>
 
+      <div className="flex-1 min-h-0 overflow-y-auto -mx-6">
       <ProductCatalogView
         mode="page"
         selectedProducts={selectedProducts}
@@ -78,6 +91,8 @@ export default function AdminCatalogoProdutos() {
         onDecrease={handleDecrease}
         initialProductId={urlProdutoId}
       />
+      </div>
+    </div>
     </div>
   );
 }

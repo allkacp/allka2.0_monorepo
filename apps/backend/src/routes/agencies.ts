@@ -46,6 +46,11 @@ router.get("/", verifyToken, async (req, res, next) => {
             include: {
               owner: { select: { id: true, email: true, name: true } },
               match_queue_entry: true,
+              // Presença/status determina se essa Agency já é (ou foi
+              // convidada a ser) Partner — consumido pelo banner de
+              // aceite/recusa no dashboard e pelo sidebar pra liberar os
+              // itens de nav extras (Agências Lideradas/Comissões/Saques).
+              partner_profile: { select: { id: true, status: true, invited_at: true } },
             },
           })
         : null;
@@ -83,6 +88,8 @@ router.get("/", verifyToken, async (req, res, next) => {
         include: {
           owner: { select: { id: true, email: true, name: true } },
           match_queue_entry: true,
+          partner_profile: { select: { id: true, status: true, invited_at: true } },
+          _count: { select: { members: true } },
         },
         skip,
         take: limit,
@@ -119,6 +126,7 @@ router.get("/:id", verifyToken, async (req, res, next) => {
       include: {
         owner: { select: { id: true, email: true, name: true } },
         match_queue_entry: true,
+        partner_profile: { select: { id: true, status: true, invited_at: true } },
       },
     });
 
@@ -163,6 +171,100 @@ router.put("/:id", verifyToken, requireRole("admin"), validate(updateSchema), as
 router.delete("/:id", verifyToken, requireRole("admin"), async (req, res, next) => {
   try {
     await prisma.agency.delete({ where: { id: (req.params.id as string) } });
+    res.status(204).send();
+  } catch (err) {
+    next(err);
+  }
+});
+
+// ─── Partner Invite Routes ──────────────────────────────────────────────────
+// Partner não é criado direto (não existe mais POST /api/partners) — nasce
+// de um convite do admin a uma Agency já existente, que ela mesma aceita ou
+// recusa. Enquanto "invited", a Agency não tem nenhuma capacidade extra;
+// só vira Partner de fato (status "active") depois do aceite.
+
+// POST /api/agencies/:id/partner-invite — admin convida a Agency :id a virar Partner
+router.post("/:id/partner-invite", verifyToken, requireRole("admin"), async (req, res, next) => {
+  try {
+    const agencyId = req.params.id as string;
+    const agency = await prisma.agency.findUnique({
+      where: { id: agencyId },
+      include: { partner_profile: true },
+    });
+    if (!agency) {
+      res.status(404).json({ error: "Agência não encontrada" });
+      return;
+    }
+    if (agency.partner_profile && ["invited", "active"].includes(agency.partner_profile.status)) {
+      res.status(409).json({
+        error: agency.partner_profile.status === "active"
+          ? "Esta agência já é Partner."
+          : "Esta agência já tem um convite de Partner pendente.",
+      });
+      return;
+    }
+
+    const partner = agency.partner_profile
+      // Já teve um convite antes (recusado/suspenso) — reabre em vez de duplicar.
+      ? await prisma.partnerProfile.update({
+          where: { agency_id: agencyId },
+          data: { status: "invited", invited_at: new Date(), responded_at: null },
+        })
+      : await prisma.partnerProfile.create({
+          data: { agency_id: agencyId, status: "invited", invited_at: new Date() },
+        });
+
+    res.status(201).json(partner);
+  } catch (err) {
+    next(err);
+  }
+});
+
+// POST /api/agencies/:id/partner-invite/accept — a própria Agency aceita
+router.post("/:id/partner-invite/accept", verifyToken, async (req, res, next) => {
+  try {
+    const agencyId = req.params.id as string;
+    const myAgencyId = await resolveMyAgencyId(prisma, req.user!.id);
+    if (myAgencyId !== agencyId) {
+      res.status(403).json({ error: "Você só pode aceitar um convite da sua própria agência" });
+      return;
+    }
+
+    const claim = await prisma.partnerProfile.updateMany({
+      where: { agency_id: agencyId, status: "invited" },
+      data: { status: "active", responded_at: new Date() },
+    });
+    if (claim.count === 0) {
+      res.status(404).json({ error: "Nenhum convite de Partner pendente para esta agência" });
+      return;
+    }
+
+    const partner = await prisma.partnerProfile.findUnique({ where: { agency_id: agencyId } });
+    res.json(partner);
+  } catch (err) {
+    next(err);
+  }
+});
+
+// POST /api/agencies/:id/partner-invite/decline — a própria Agency recusa
+router.post("/:id/partner-invite/decline", verifyToken, async (req, res, next) => {
+  try {
+    const agencyId = req.params.id as string;
+    const myAgencyId = await resolveMyAgencyId(prisma, req.user!.id);
+    if (myAgencyId !== agencyId) {
+      res.status(403).json({ error: "Você só pode recusar um convite da sua própria agência" });
+      return;
+    }
+
+    const claim = await prisma.partnerProfile.updateMany({
+      where: { agency_id: agencyId, status: "invited" },
+      data: { status: "declined", responded_at: new Date() },
+    });
+    if (claim.count === 0) {
+      res.status(404).json({ error: "Nenhum convite de Partner pendente para esta agência" });
+      return;
+    }
+
     res.status(204).send();
   } catch (err) {
     next(err);

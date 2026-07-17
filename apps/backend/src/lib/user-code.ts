@@ -1,13 +1,13 @@
 import type { Prisma, PrismaClient } from "@prisma/client";
 
 // Código público sequencial exibido na UI (tela Admin > Usuários), formato
-// "User_00001", "User_00002", etc. Nunca usar no lugar de `id` (FK/lookup
-// técnico) — é só para exibição.
-const PREFIX = "User_";
-const PAD_LENGTH = 5;
+// "user_1", "user_2", etc — minúsculo e sem zeros à esquerda, mesmo padrão
+// do "emp_N" usado em Company/Agency. Nunca usar no lugar de `id` (FK/
+// lookup técnico) — é só para exibição.
+const PREFIX = "user_";
 
 function formatUserCode(n: number): string {
-  return `${PREFIX}${String(n).padStart(PAD_LENGTH, "0")}`;
+  return `${PREFIX}${n}`;
 }
 
 /**
@@ -28,7 +28,7 @@ export async function generateNextUserCode(
 
   let max = 0;
   for (const u of users) {
-    const match = u.user_code?.match(/^User_(\d+)$/);
+    const match = u.user_code?.match(/^user_(\d+)$/);
     if (match) {
       const n = parseInt(match[1], 10);
       if (n > max) max = n;

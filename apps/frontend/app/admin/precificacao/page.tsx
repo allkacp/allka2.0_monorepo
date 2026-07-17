@@ -55,7 +55,11 @@ import {
 } from "@/hooks/use-pricing";
 import { useSpecialties } from "@/lib/contexts/specialty-context";
 import { useAppFrameMetrics } from "@/hooks/useAppFrameMetrics";
-import PageHeader from "@/components/page-header";
+import {
+  STANDARD_SHELL_PANEL_CLASS,
+  StandardPageBanner,
+} from "@/components/standard-page-shell";
+import { PinToTrayButton } from "@/components/pin-to-tray-button";
 
 const PrecificacaoPage = () => {
   const { sidebarWidth, headerHeight, footerHeight } = useAppFrameMetrics();
@@ -423,12 +427,21 @@ const PrecificacaoPage = () => {
   );
 
   return (
-    <div className="flex flex-col space-y-3">
-      <PageHeader
+    <div className={STANDARD_SHELL_PANEL_CLASS}>
+    <div className="h-full min-h-0 flex flex-col">
+    <div className="shrink-0 -mb-[11px]">
+      <StandardPageBanner
+        icon={DollarSign}
         title="Precificação"
         description="Gerencie comissões, taxas, impostos e custos"
+        actions={
+          <PinToTrayButton id="page-precificacao" label="Precificação" icon={DollarSign} path="/admin/precificacao" />
+        }
       />
+    </div>
 
+    <div className="flex-1 min-h-0 overflow-y-auto">
+    <div className="flex flex-col space-y-3">
       <Accordion type="single" collapsible className="mb-1">
         <AccordionItem value="stats" className="border-none">
           <AccordionTrigger className="bg-white hover:bg-slate-50 rounded-lg px-4 py-3 transition-colors">
@@ -1202,6 +1215,9 @@ const PrecificacaoPage = () => {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+    </div>
+    </div>
+    </div>
     </div>
   );
 };

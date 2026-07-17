@@ -44,7 +44,7 @@ export function PageHeader({ title, description, subtitle, actions, className }:
                 </button>
               </TooltipTrigger>
               <TooltipContent side="bottom" className="max-w-[240px] p-3" sideOffset={6}>
-                <p className="text-xs text-muted-foreground leading-relaxed">{desc}</p>
+                <p className="text-xs text-primary-foreground leading-relaxed">{desc}</p>
               </TooltipContent>
             </Tooltip>
           </TooltipProvider>

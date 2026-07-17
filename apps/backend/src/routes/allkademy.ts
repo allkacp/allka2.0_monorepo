@@ -3,6 +3,7 @@ import { z } from "zod";
 import { prisma } from "../lib/prisma";
 import { verifyToken, requireRole } from "../middleware/auth";
 import { validate, parsePagination } from "../middleware/validate";
+import { resolveMyPartnerId } from "../lib/project-scope";
 
 const router = Router();
 
@@ -19,17 +20,28 @@ function parseAudienceProfiles(value: string): string[] {
     .filter(Boolean);
 }
 
-// Resolve qual token de audiência corresponde ao usuário logado, a partir
+// Resolve os tokens de audiência que se aplicam ao usuário logado, a partir
 // de account_type/role — mapeamento confirmado contra o uso real no
-// restante do backend (ver auth.ts:32-33, lider.ts:13, users.ts:109/197).
-function resolveAudienceProfile(user?: { role?: string; account_type?: string }): AudienceValue | null {
-  if (!user) return null;
-  if (user.account_type === "empresas") return "company";
-  if (user.account_type === "agencias") return "agency";
-  if (user.account_type === "nomades" || user.role === "nomad") return "nomades";
-  if (user.role === "lider" || user.account_type === "lider") return "leader";
-  if (user.account_type === "parceiro" || user.role === "partner") return "partner";
-  return null;
+// restante do backend (ver auth.ts, lider.ts:13, users.ts). Retorna uma
+// lista (não mais um único valor) porque um usuário "agencias" cuja Agency
+// tem um PartnerProfile ativo agora acumula DOIS perfis — "agency" E
+// "partner" — em vez de ser um account_type exclusivo "parceiro" como
+// antes; ele vê tanto o conteúdo normal de Agency quanto o exclusivo de
+// Partner.
+async function resolveAudienceProfiles(user?: { id?: string; role?: string; account_type?: string }): Promise<AudienceValue[]> {
+  if (!user) return [];
+  if (user.account_type === "empresas") return ["company"];
+  if (user.account_type === "agencias") {
+    const profiles: AudienceValue[] = ["agency"];
+    if (user.id) {
+      const partnerId = await resolveMyPartnerId(prisma, user.id);
+      if (partnerId) profiles.push("partner");
+    }
+    return profiles;
+  }
+  if (user.account_type === "nomades" || user.role === "nomad") return ["nomades"];
+  if (user.role === "lider" || user.account_type === "lider") return ["leader"];
+  return [];
 }
 
 function isAdminUser(user?: { role?: string; account_type?: string }): boolean {
@@ -37,17 +49,17 @@ function isAdminUser(user?: { role?: string; account_type?: string }): boolean {
 }
 
 // Curso é visível para o usuário se: ele é admin, OU o curso está publicado
-// E (audience_profiles contém "all" OU contém o perfil resolvido do usuário).
-function courseVisibleToUser(
+// E (audience_profiles contém "all" OU contém algum dos perfis do usuário).
+async function courseVisibleToUser(
   course: { is_published: boolean; audience_profiles: string },
-  user?: { role?: string; account_type?: string },
-): boolean {
+  user?: { id?: string; role?: string; account_type?: string },
+): Promise<boolean> {
   if (isAdminUser(user)) return true;
   if (!course.is_published) return false;
   const tokens = parseAudienceProfiles(course.audience_profiles);
   if (tokens.includes("all")) return true;
-  const profile = resolveAudienceProfile(user);
-  return !!profile && tokens.includes(profile);
+  const profiles = await resolveAudienceProfiles(user);
+  return profiles.some((p) => tokens.includes(p));
 }
 
 const audienceProfilesSchema = z
@@ -104,10 +116,10 @@ router.get("/courses", verifyToken, async (req, res, next) => {
       // Usuário comum só vê cursos publicados e liberados para o perfil dele
       // (ou liberados para "all"). Filtro aplicado no banco, não só na tela.
       where["is_published"] = true;
-      const profile = resolveAudienceProfile(req.user);
+      const profiles = await resolveAudienceProfiles(req.user);
       where["OR"] = [
         { audience_profiles: { contains: "all" } },
-        ...(profile ? [{ audience_profiles: { contains: profile } }] : []),
+        ...profiles.map((profile) => ({ audience_profiles: { contains: profile } })),
       ];
     }
 
@@ -149,7 +161,7 @@ router.get("/courses/:id", verifyToken, async (req, res, next) => {
       return;
     }
 
-    if (!courseVisibleToUser(course, req.user)) {
+    if (!(await courseVisibleToUser(course, req.user))) {
       res.status(403).json({ error: "Curso não disponível para o seu perfil" });
       return;
     }
@@ -249,7 +261,7 @@ router.post("/courses/:id/enroll", verifyToken, async (req, res, next) => {
       return;
     }
 
-    if (!courseVisibleToUser(course, req.user)) {
+    if (!(await courseVisibleToUser(course, req.user))) {
       res.status(403).json({ error: "Curso não disponível para o seu perfil" });
       return;
     }

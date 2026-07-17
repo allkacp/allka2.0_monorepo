@@ -5,7 +5,7 @@ import {
 
 const config: LoginRoleConfig = {
   gradient: "linear-gradient(135deg, #000000 0%, #1a2a6f 50%, #c81a7f 100%)",
-  defaultEmail: "admin@allka.test",
+  defaultEmail: "cp@lamego.com.vc",
   defaultPassword: "123456",
   redirectPath: "/admin/dashboard",
   accessType: "ADMIN",

@@ -87,6 +87,9 @@ export interface AgenciaProfile {
   totalProjects: number;
   totalTasks: number;
   partnerLevel: "bronze" | "silver" | "gold" | "platinum" | "diamond";
+  // Status do convite de Partner — Partner é um upgrade que esta Agency
+  // recebe via convite do admin e precisa aceitar/recusar explicitamente.
+  partnerInviteStatus?: "invited" | "active" | "declined" | "suspended";
 }
 
 // ── Context ────────────────────────────────────────────────────────────────────
@@ -99,6 +102,7 @@ interface AgenciaContextType {
   loading: boolean;
   addProject: (project: AgenciaProject) => void;
   confirmProjectPayment: (projectId: string) => void;
+  setPartnerInviteStatus: (status: AgenciaProfile["partnerInviteStatus"]) => void;
 }
 
 const AgenciaContext = createContext<AgenciaContextType | undefined>(undefined);
@@ -164,6 +168,7 @@ export function AgenciaProvider({ children }: { children: React.ReactNode }) {
               totalProjects: source.totalProjects || 0,
               totalTasks: source.totalTasks || 0,
               partnerLevel: source.partner_level || "bronze",
+              partnerInviteStatus: source.partner_profile?.status || undefined,
             });
         }
         if (projectsRes.status === "fulfilled") {
@@ -254,6 +259,13 @@ export function AgenciaProvider({ children }: { children: React.ReactNode }) {
     );
   }, []);
 
+  const setPartnerInviteStatus = useCallback(
+    (status: AgenciaProfile["partnerInviteStatus"]) => {
+      setProfile((prev) => (prev ? { ...prev, partnerInviteStatus: status } : prev));
+    },
+    [],
+  );
+
   return (
     <AgenciaContext.Provider
       value={{
@@ -264,6 +276,7 @@ export function AgenciaProvider({ children }: { children: React.ReactNode }) {
         loading,
         addProject,
         confirmProjectPayment,
+        setPartnerInviteStatus,
       }}
     >
       {children}

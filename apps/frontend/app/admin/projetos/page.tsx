@@ -11,7 +11,11 @@ import { useSorting, SortableHeader } from "@/hooks/useSorting";
 import { ButtonLoader, PageLoader } from "@/components/ui/loading";
 import { AreaChart, Area, ResponsiveContainer } from "recharts";
 import { ExportButton } from "@/components/export-button";
-import { PageHeader } from "@/components/page-header";
+import { PinToTrayButton } from "@/components/pin-to-tray-button";
+import {
+  STANDARD_SHELL_PANEL_CLASS,
+  StandardPageBanner,
+} from "@/components/standard-page-shell";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -1898,25 +1902,28 @@ export default function AdminProjetosPage({
   }
 
   return (
-    <div className="space-y-5" ref={pageRef}>
-      <PageHeader
+    <div className={STANDARD_SHELL_PANEL_CLASS}>
+    <div className="h-full min-h-0 flex flex-col" ref={pageRef}>
+      <div className="shrink-0 -mb-[11px]">
+      <StandardPageBanner
+        icon={FolderOpen}
         title="Gestão de Projetos"
         description="Centralize, acompanhe e otimize todos os seus projetos em um só lugar."
         actions={
           <>
-            <ExportButton pageRef={pageRef} filename="projetos" />
+            <div className="bg-white rounded-lg">
+              <ExportButton pageRef={pageRef} filename="projetos" />
+            </div>
+            <PinToTrayButton id="page-projetos" label="Gestão de Projetos" icon={FolderOpen} path="/admin/projetos" />
             <TooltipProvider delayDuration={400}>
               <Tooltip>
                 <TooltipTrigger asChild>
                   <button
                     onClick={() => setShowProjectCreate(true)}
-                    className="group relative flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-border/60 hover:border-transparent overflow-hidden transition-all"
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-white/70 text-white bg-white/10 hover:bg-white/20 transition-colors text-xs font-semibold whitespace-nowrap"
                   >
-                    <span className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none" style={{ background: "linear-gradient(135deg,#000000 0%,#1a2a6f 45%,#c81a7f 100%)" }} />
-                    <Plus className="relative z-10 h-3.5 w-3.5 shrink-0 text-[#7d1b6a] group-hover:text-white transition-colors" />
-                    <span className="relative z-10 text-xs font-semibold bg-clip-text text-transparent [background-image:linear-gradient(135deg,#1a2a6f_0%,#7d1b6a_55%,#c81a7f_100%)] group-hover:[background-image:none] group-hover:text-white transition-colors">
-                      Novo Projeto
-                    </span>
+                    <Plus className="h-3.5 w-3.5 shrink-0" />
+                    Novo Projeto
                   </button>
                 </TooltipTrigger>
                 <TooltipContent side="bottom" sideOffset={6}>Criar novo projeto</TooltipContent>
@@ -1925,7 +1932,10 @@ export default function AdminProjetosPage({
           </>
         }
       />
+      </div>
 
+      <div className="flex-1 min-h-0 overflow-y-auto">
+      <div className="space-y-5">
       {/* Stats Cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         <div className="relative rounded-xl overflow-hidden shadow-lg hover:shadow-xl transition-all duration-200 bg-gradient-to-br from-blue-500 to-blue-700 dark:from-blue-800 dark:to-blue-950 border-2 border-blue-300/70 dark:border-blue-800/70 px-3 pt-2 pb-1.5">
@@ -5242,6 +5252,9 @@ export default function AdminProjetosPage({
           </SlidePanel>
         )}
       </div>
+    </div>
+    </div>
+    </div>
     </div>
   );
 }

@@ -57,6 +57,7 @@ import {
   ToggleLeft,
   ChevronsUpDown,
 } from "lucide-react";
+import { EmbeddedSlideScreen } from "@/components/embedded-slide-screen";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
@@ -96,7 +97,6 @@ import {
   ResponsiveContainer,
 } from "recharts";
 import { useState, useEffect } from "react";
-import { useAppFrameMetrics } from "@/hooks/useAppFrameMetrics";
 import { User as UserType } from "@/types/user";
 import { useToast } from "@/hooks/use-toast";
 import {
@@ -145,6 +145,9 @@ interface UserViewSlidePanelProps {
   user: UserType | null;
   agencyFinancial?: AgencyFinancialData;
   viewerRole?: "admin" | "partner" | "agency" | "company" | "nomad";
+  /** Abre já em modo de edição — usado pelo ícone "Editar" da tabela, que é
+   * o mesmo painel de sempre, só pulando direto pro isEditMode=true. */
+  startInEditMode?: boolean;
 }
 
 // Return user data with safe defaults
@@ -257,6 +260,14 @@ const templates = [
   },
 ];
 
+// "User_00001" → "User_1" — versão reduzida (sem zero à esquerda) do
+// user_code, usada como ID amigável em vez do CUID técnico.
+function reducedUserCode(code) {
+  if (!code) return "";
+  const m = /(\d+)\s*$/.exec(code);
+  return m ? `User_${parseInt(m[1], 10)}` : code;
+}
+
 export function UserViewSlidePanel({
   open,
   onClose,
@@ -264,6 +275,7 @@ export function UserViewSlidePanel({
   user,
   agencyFinancial,
   viewerRole = "admin",
+  startInEditMode = false,
 }: UserViewSlidePanelProps) {
   const {
     getUserById,
@@ -274,15 +286,6 @@ export function UserViewSlidePanel({
     removeProjectMembership,
     updateUser,
   } = usePlatformUsers();
-  const [isClosing, setIsClosing] = useState(false);
-  const [isMounted, setIsMounted] = useState(false);
-  useEffect(() => {
-    if (open) {
-      const id = requestAnimationFrame(() => setIsMounted(true));
-      return () => cancelAnimationFrame(id);
-    }
-    if (!isClosing) setIsMounted(false);
-  }, [open, isClosing]);
   const [onlineStatus, setOnlineStatus] = useState("online");
   const [isEditMode, setIsEditMode] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
@@ -574,7 +577,6 @@ export function UserViewSlidePanel({
     "premium",
   );
 
-  const { sidebarWidth, headerHeight, footerHeight } = useAppFrameMetrics();
   const { toast } = useToast();
 
   const fakeUser = createFakeUserData(user);
@@ -767,44 +769,6 @@ export function UserViewSlidePanel({
     }
   }, []);
 
-  // Define panel positioning - Extends from sidebar to right edge
-  const [panelStyle, setPanelStyle] = useState<{ left: string; width: string; top: string; bottom: string }>(
-    {
-      left: "240px",
-      width: "calc(100vw - 240px)",
-      top: "0px",
-      bottom: "0px",
-    },
-  );
-
-  useEffect(() => {
-    const calculatePanelStyle = () => {
-      const sidebarWidthPx =
-        typeof sidebarWidth === "number"
-          ? sidebarWidth
-          : parseInt(sidebarWidth as string) || 240;
-      const left = sidebarWidthPx - 2;
-      const top = headerHeight - 1;
-      const bottom = footerHeight - 1;
-      setPanelStyle({
-        left: `${left}px`,
-        width: `calc(100vw - ${left}px)`,
-        top: `${top}px`,
-        bottom: `${bottom}px`,
-      });
-    };
-
-    calculatePanelStyle();
-    window.addEventListener("resize", calculatePanelStyle);
-    return () => window.removeEventListener("resize", calculatePanelStyle);
-  }, [sidebarWidth, headerHeight, footerHeight]);
-
-  useEffect(() => {
-    if (!open) {
-      setIsClosing(false);
-    }
-  }, [open]);
-
   useEffect(() => {
     const statuses = ["online", "busy", "away", "offline"];
     const interval = setInterval(() => {
@@ -821,17 +785,19 @@ export function UserViewSlidePanel({
       setIsEditMode(false);
       setEditedData({});
     }
-    setIsClosing(true);
-    setTimeout(() => {
-      setIsClosing(false);
-      onClose();
-    }, 420);
+    onClose();
   };
 
   const handleEditMode = () => {
     setIsEditMode(true);
     setEditedData({});
   };
+
+  // Ícone "Editar" da tabela abre este mesmo painel já pedindo edição.
+  useEffect(() => {
+    if (open && startInEditMode) handleEditMode();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, startInEditMode]);
 
   const handleCancelEdit = () => {
     setIsEditMode(false);
@@ -958,6 +924,39 @@ export function UserViewSlidePanel({
     setDadosEditedData((prev) => ({ ...prev, [field]: value }));
   };
 
+  // Busca ViaCEP e preenche rua/bairro/cidade/estado automaticamente —
+  // mesmo padrão já usado em components/admin/user-management-modal.tsx.
+  const [cepLoading, setCepLoading] = useState(false);
+  const [cepError, setCepError] = useState("");
+  const handleCepChange = async (rawCep: string) => {
+    const digits = rawCep.replace(/\D/g, "").slice(0, 8);
+    const formatted = digits.length > 5 ? `${digits.slice(0, 5)}-${digits.slice(5)}` : digits;
+    handleDadosFieldChange("zip_code", formatted);
+    setCepError("");
+    if (digits.length !== 8) return;
+    setCepLoading(true);
+    try {
+      const res = await fetch(`https://viacep.com.br/ws/${digits}/json/`);
+      const data = await res.json();
+      if (data.erro) {
+        setCepError("CEP não encontrado");
+        return;
+      }
+      setDadosEditedData((prev) => ({
+        ...prev,
+        zip_code: formatted,
+        street: data.logradouro || prev.street || "",
+        neighborhood: data.bairro || prev.neighborhood || "",
+        city: data.localidade || prev.city || "",
+        state: data.uf || prev.state || "",
+      }));
+    } catch {
+      setCepError("Erro ao buscar CEP");
+    } finally {
+      setCepLoading(false);
+    }
+  };
+
   const getDadosDisplayValue = (field: string) => {
     return (
       dadosEditedData[field as keyof typeof dadosEditedData] ??
@@ -973,12 +972,12 @@ export function UserViewSlidePanel({
     setIsSaving(true);
     try {
       if (!user?.id) throw new Error("ID do usuário não encontrado");
-      await apiClient.updateUser(String(user.id), {
-        name: dadosEditedData.name || undefined,
-        email: dadosEditedData.email || undefined,
-        phone: dadosEditedData.phone || undefined,
-      });
-      setPersistedUserData((prev) => ({ ...prev, ...dadosEditedData }));
+      // Manda tudo que foi editado — name/email/phone vão pra User; os
+      // demais (dados pessoais, contato extra, endereço, notas) vão pra
+      // UserProfile, o backend separa e persiste os dois num upsert só
+      // (ver PUT /api/users/:id).
+      const updated = await apiClient.updateUser(String(user.id), { ...dadosEditedData });
+      setPersistedUserData((prev) => ({ ...prev, ...dadosEditedData, ...(updated || {}) }));
       toast({
         title: "Sucesso!",
         description: "Dados atualizados com sucesso",
@@ -1619,14 +1618,17 @@ export function UserViewSlidePanel({
     setShowConfirmDialog(false);
     setIsSaving(false);
 
-    // Sincroniza com a API
+    // Sincroniza com a API — manda tudo que foi editado nos dois blocos
+    // (Dados da Conta + Dados Pessoais/Contato/Endereço/Notas). Antes só
+    // mandava name/email/phone/role/account_type, então tudo que vinha de
+    // dadosEditedData (CPF, RG, endereço, etc.) ficava só no estado local
+    // (optimistic update) e sumia ao recarregar a página.
     try {
       await apiClient.updateUser(String(displayUser.id), {
+        ...dadosEditedData,
+        ...contaEditedData,
         name: nameToSave,
         email: emailToSave,
-        phone: contaEditedData.phone || dadosEditedData.phone || undefined,
-        role: contaEditedData.role || undefined,
-        account_type: contaEditedData.account_type || undefined,
       });
       onRefresh?.();
     } catch (error: any) {
@@ -1771,21 +1773,20 @@ export function UserViewSlidePanel({
     offline: "Offline",
   };
 
-  if (!open && !isClosing) return null;
-
   return (
-    <>
-      <div
-        data-slot="sheet-content"
-        data-state={isClosing ? "closed" : "open"}
-        className="fixed z-50 bg-background flex flex-col shadow-2xl border-l border-border overflow-hidden data-[state=open]:animate-in data-[state=open]:slide-in-from-right data-[state=open]:fade-in-0 data-[state=closed]:animate-out data-[state=closed]:slide-out-to-right data-[state=closed]:fade-out-0"
-        style={{
-          left: panelStyle.left,
-          width: panelStyle.width,
-          top: panelStyle.top,
-          bottom: panelStyle.bottom,
-        }}
-      >
+    <EmbeddedSlideScreen
+      open={open}
+      onClose={handleClose}
+      hideHeader
+      pin={{
+        id: `usuarios-view-${user?.id ?? "none"}`,
+        label: user?.name ? `Usuário: ${user.name}` : "Detalhes do usuário",
+        icon: UserIcon,
+        path: "/admin/usuarios",
+        activateKey: `view:${user?.id ?? ""}`,
+      }}
+    >
+      <div className="flex flex-col flex-1 min-h-0 w-full">
         {/* Header - Modern and Premium */}
         <UserViewHeader
           user={displayUser}
@@ -2253,7 +2254,7 @@ export function UserViewSlidePanel({
                     <div className="flex justify-between items-center">
                       <span className="text-xs text-slate-500">ID</span>
                       <code className="bg-slate-100 px-1.5 py-0.5 rounded text-[10px] font-mono text-slate-700">
-                        {displayUser.id}
+                        {reducedUserCode(displayUser.user_code) || displayUser.id}
                       </code>
                     </div>
                     <div className="flex justify-between items-center">
@@ -2644,6 +2645,16 @@ export function UserViewSlidePanel({
                         </p>
                         <p className="text-sm font-semibold text-slate-800 truncate">
                           {displayUser.email?.split("@")[0] || "username"}
+                        </p>
+                      </div>
+
+                      {/* ID (reduzido) */}
+                      <div className="bg-slate-100/70 rounded-lg px-2.5 py-2">
+                        <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 mb-1">
+                          ID
+                        </p>
+                        <p className="text-sm font-semibold text-slate-800 font-mono">
+                          {reducedUserCode(displayUser.user_code) || "—"}
                         </p>
                       </div>
 
@@ -3093,20 +3104,27 @@ export function UserViewSlidePanel({
                           CEP
                         </p>
                         {isDadosEditMode ? (
-                          <Input
-                            value={
-                              (getDadosDisplayValue("zip_code") as string) || ""
-                            }
-                            onChange={(e) =>
-                              handleDadosFieldChange("zip_code", e.target.value)
-                            }
-                            className="border-slate-300 bg-white h-7 text-sm font-mono"
-                            placeholder="00000-000"
-                          />
+                          <div className="relative">
+                            <Input
+                              value={
+                                (getDadosDisplayValue("zip_code") as string) || ""
+                              }
+                              onChange={(e) => handleCepChange(e.target.value)}
+                              className="border-slate-300 bg-white h-7 text-sm font-mono pr-7"
+                              placeholder="00000-000"
+                              maxLength={9}
+                            />
+                            {cepLoading && (
+                              <Loader2 className="h-3.5 w-3.5 animate-spin text-slate-400 absolute right-2 top-1/2 -translate-y-1/2" />
+                            )}
+                          </div>
                         ) : (
                           <p className="text-sm font-semibold text-slate-800 font-mono">
                             {getDadosDisplayValue("zip_code") || "—"}
                           </p>
+                        )}
+                        {isDadosEditMode && cepError && (
+                          <p className="text-[10px] text-red-500 mt-1">{cepError}</p>
                         )}
                       </div>
                       <div className="bg-slate-100/70 rounded-lg px-2.5 py-2">
@@ -5367,7 +5385,7 @@ export function UserViewSlidePanel({
           </AlertDialogContent>
         </AlertDialog>
       </div>
-    </>
+    </EmbeddedSlideScreen>
   );
 }
 

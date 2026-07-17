@@ -41,8 +41,12 @@ import {
   Gem,
   Crown,
 } from "lucide-react";
-import { PageHeader } from "@/components/page-header";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import {
+  STANDARD_SHELL_PANEL_CLASS,
+  StandardPageBanner,
+} from "@/components/standard-page-shell";
+import { PinToTrayButton } from "@/components/pin-to-tray-button";
 import { useNomadeLevels } from "@/hooks/useNomadeLevels";
 import { useNomades } from "@/hooks/useNomades";
 import { apiClient } from "@/lib/api-client";
@@ -723,33 +727,39 @@ export default function NiveisNomadesPage() {
   };
 
   return (
-    <div className="space-y-6 pt-0 pl-0 pr-0">
-      <PageHeader
+    <div className={STANDARD_SHELL_PANEL_CLASS}>
+    <div className="h-full min-h-0 flex flex-col">
+      <div className="shrink-0 -mb-[11px]">
+      <StandardPageBanner
+        icon={Award}
         title="Níveis de Nômades"
         description="Configure os níveis de gamificação dos nômades com critérios de performance, bônus e benefícios"
         actions={
-          activeTab === "config" ? (
-            <TooltipProvider delayDuration={400}>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <button
-                    onClick={() => openEditDialog()}
-                    className="group relative flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-border/60 hover:border-transparent overflow-hidden transition-all"
-                  >
-                    <span className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none" style={{ background: "linear-gradient(135deg,#000000 0%,#1a2a6f 45%,#c81a7f 100%)" }} />
-                    <Plus className="relative z-10 h-3.5 w-3.5 shrink-0 text-[#7d1b6a] group-hover:text-white transition-colors" />
-                    <span className="relative z-10 text-xs font-semibold bg-clip-text text-transparent [background-image:linear-gradient(135deg,#1a2a6f_0%,#7d1b6a_55%,#c81a7f_100%)] group-hover:[background-image:none] group-hover:text-white transition-colors">
+          <>
+            {activeTab === "config" && (
+              <TooltipProvider delayDuration={400}>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <button
+                      onClick={() => openEditDialog()}
+                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-white/70 text-white bg-white/10 hover:bg-white/20 transition-colors text-xs font-semibold whitespace-nowrap"
+                    >
+                      <Plus className="h-3.5 w-3.5 shrink-0" />
                       Novo Nível
-                    </span>
-                  </button>
-                </TooltipTrigger>
-                <TooltipContent side="bottom" sideOffset={6}>Criar novo nível</TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
-          ) : undefined
+                    </button>
+                  </TooltipTrigger>
+                  <TooltipContent side="bottom" sideOffset={6}>Criar novo nível</TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+            )}
+            <PinToTrayButton id="page-niveis-nomades" label="Níveis de Nômades" icon={Award} path="/admin/niveis-nomades" />
+          </>
         }
       />
+      </div>
 
+      <div className="flex-1 min-h-0 overflow-y-auto">
+      <div className="space-y-6">
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
         <TabsList className="grid w-full grid-cols-2 mb-2">
           <TabsTrigger value="config">Configuração de Níveis</TabsTrigger>
@@ -1093,6 +1103,9 @@ export default function NiveisNomadesPage() {
         cancelText="Cancelar"
         destructive
       />
+    </div>
+    </div>
+    </div>
     </div>
   );
 }

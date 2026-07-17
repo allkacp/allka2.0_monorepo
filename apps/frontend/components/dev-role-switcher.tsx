@@ -78,17 +78,20 @@ const ROLES: Array<{
     previewEmail: "agencia@allka.test",
   },
   {
+    // Partner não é mais um account_type separado — é a Agency com
+    // PartnerProfile.status "active" (ver auth.ts /login e /me). Esta
+    // entrada simula uma Agency já com Partner ativo.
     id: "parceiro",
-    label: "Parceiro",
-    description: "Comissões, agências e saques",
+    label: "Agência (Partner)",
+    description: "Comissões, agências lideradas e saques",
     path: "/partner/dashboard",
-    loginPath: "/partner/login",
-    prefix: "/parceiro",
+    loginPath: "/agency/login",
+    prefix: "/partner",
     color: "bg-blue-500",
     emoji: "🤝",
-    accountType: "parceiro",
+    accountType: "agencias",
     accountSubType: null,
-    previewName: "Partner Teste",
+    previewName: "Agência Partner Teste",
     previewEmail: "partner@allka.test",
   },
   {
@@ -190,6 +193,22 @@ export function DevRoleSwitcher() {
                   onClick={() => {
                     setAccountType(role.accountType, role.accountSubType);
                     setPreviewUser(role.previewName, role.previewEmail);
+                    // Simula PartnerProfile.status "active" só pra esta
+                    // entrada de preview — libera os itens de nav
+                    // exclusivos de Partner (ver isPartnerActive).
+                    try {
+                      const cached = JSON.parse(
+                        localStorage.getItem("allka_user") || "{}",
+                      );
+                      localStorage.setItem(
+                        "allka_user",
+                        JSON.stringify({
+                          ...cached,
+                          partner_status: role.id === "parceiro" ? "active" : cached.partner_status,
+                        }),
+                      );
+                      window.dispatchEvent(new CustomEvent("allka:profile-changed"));
+                    } catch {}
                     navigate(
                       isOnLoginPage(pathname) ? role.loginPath : role.path,
                     );

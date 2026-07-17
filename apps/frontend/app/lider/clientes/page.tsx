@@ -61,9 +61,12 @@ interface ClientRecord {
   segment: string | null;
   status: string;
   address: string | null;
+  number: string | null;
+  neighborhood: string | null;
   city: string | null;
   state: string | null;
   zip_code: string | null;
+  avatar: string | null;
   notes: string | null;
   description: string | null;
   created_by_user_id: string | null;
@@ -97,6 +100,15 @@ const avatarColors = [
 const avatarColor = (index: number) => avatarColors[Math.abs(index) % avatarColors.length];
 
 function ClientAvatar({ client, index }: { client: ClientRecord; index: number }) {
+  if (client.avatar) {
+    return (
+      <img
+        src={client.avatar}
+        alt={client.name}
+        className="w-10 h-10 rounded-full object-cover flex-shrink-0 shadow-sm"
+      />
+    );
+  }
   return (
     <div
       className={`w-10 h-10 rounded-full bg-gradient-to-br ${avatarColor(index)} flex items-center justify-center flex-shrink-0 shadow-sm`}
@@ -122,9 +134,10 @@ const STATUS_DOT_BG: Record<string, string> = {
   prospect: "bg-blue-500",
 };
 
-type ColKey = "cliente" | "segmento" | "contato" | "tipo" | "vinculo" | "status" | "cadastro";
+type ColKey = "id" | "cliente" | "segmento" | "contato" | "tipo" | "vinculo" | "status" | "cadastro";
 const ALL_COLUMNS: { key: ColKey; label: string; info: string }[] = [
-  { key: "cliente", label: "Cliente", info: "Nome, código sequencial e documento do cliente." },
+  { key: "id", label: "ID", info: "Código sequencial do cliente." },
+  { key: "cliente", label: "Cliente", info: "Nome e documento do cliente." },
   { key: "segmento", label: "Segmento", info: "Segmento de mercado informado no cadastro." },
   { key: "contato", label: "Contato", info: "E-mail, telefone e site do cliente." },
   { key: "tipo", label: "Tipo", info: "Pessoa Jurídica (PJ) ou Pessoa Física (PF)." },
@@ -132,7 +145,7 @@ const ALL_COLUMNS: { key: ColKey; label: string; info: string }[] = [
   { key: "status", label: "Status", info: "Situação comercial do cliente." },
   { key: "cadastro", label: "Cadastro", info: "Data em que o cliente foi cadastrado." },
 ];
-const DEFAULT_VISIBLE: ColKey[] = ["cliente", "segmento", "contato", "tipo", "vinculo", "status", "cadastro"];
+const DEFAULT_VISIBLE: ColKey[] = ["id", "cliente", "segmento", "contato", "tipo", "vinculo", "status", "cadastro"];
 
 const STAT_COLOR_MAP = {
   blue: {
@@ -585,8 +598,8 @@ export default function LiderClientesPage() {
                       <div className="inline-flex items-center gap-1">
                         <SortableHeader
                           label={col.label}
-                          field={col.key === "cliente" ? "name" : col.key === "cadastro" ? "created_at" : col.key}
-                          type={col.key === "cadastro" ? "date" : "text"}
+                          field={col.key === "id" ? "sequence_number" : col.key === "cliente" ? "name" : col.key === "cadastro" ? "created_at" : col.key}
+                          type={col.key === "cadastro" ? "date" : col.key === "id" ? "number" : "text"}
                           sortKey={sortKey as string}
                           sortDir={sortDir}
                           onSort={handleSort}
@@ -650,13 +663,17 @@ export default function LiderClientesPage() {
                       </div>
                     </td>
 
+                    {visibleCols.has("id") && (
+                      <td className="py-3 px-4 text-xs font-mono text-slate-500 dark:text-slate-400 whitespace-nowrap" style={{ borderRight: "1px solid rgba(148,163,184,0.15)" }}>
+                        {formatClientSequenceId(c.sequence_number)}
+                      </td>
+                    )}
                     {visibleCols.has("cliente") && (
                       <td className="py-3 px-4" style={{ borderRight: "1px solid rgba(148,163,184,0.15)" }}>
                         <div className="flex items-center gap-3">
                           <ClientAvatar client={c} index={i} />
                           <div className="min-w-0 flex-1">
                             <p className="font-bold text-sm text-slate-800 dark:text-slate-100 truncate">{c.name}</p>
-                            <p className="text-[11px] text-slate-400 font-mono">{formatClientSequenceId(c.sequence_number)}</p>
                             {c.document && <p className="text-xs text-slate-400 dark:text-slate-500 truncate">{c.document}</p>}
                           </div>
                         </div>
@@ -905,7 +922,13 @@ export default function LiderClientesPage() {
                     <p className="flex items-start gap-1.5 text-sm text-slate-700 dark:text-slate-300">
                       <MapPin className="h-3.5 w-3.5 text-slate-400 flex-shrink-0 mt-0.5" />
                       <span>
-                        {[infoPanelClient.address, infoPanelClient.city, infoPanelClient.state, infoPanelClient.zip_code]
+                        {[
+                          [infoPanelClient.address, infoPanelClient.number].filter(Boolean).join(", "),
+                          infoPanelClient.neighborhood,
+                          infoPanelClient.city,
+                          infoPanelClient.state,
+                          infoPanelClient.zip_code,
+                        ]
                           .filter(Boolean)
                           .join(" · ") || "Não informado"}
                       </span>

@@ -45,7 +45,12 @@ import {
   Filter,
   Settings2,
 } from "lucide-react";
-import { PageHeader } from "@/components/page-header";
+import { GraduationCap } from "lucide-react";
+import {
+  STANDARD_SHELL_PANEL_CLASS,
+  StandardPageBanner,
+} from "@/components/standard-page-shell";
+import { PinToTrayButton } from "@/components/pin-to-tray-button";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -681,8 +686,11 @@ export default function AdminAllkademyPage() {
   );
 
   return (
-    <div ref={pageRef} className="p-4 sm:p-6 space-y-4">
-      <PageHeader
+    <div className={STANDARD_SHELL_PANEL_CLASS}>
+    <div className="h-full min-h-0 flex flex-col" ref={pageRef}>
+      <div className="shrink-0 -mb-[11px]">
+      <StandardPageBanner
+        icon={GraduationCap}
         title="Allkademy"
         description="Plataforma de cursos e aprendizado"
         actions={<>
@@ -691,10 +699,9 @@ export default function AdminAllkademyPage() {
               <TooltipTrigger asChild>
                 <button
                   onClick={load}
-                  className="group relative flex items-center justify-center h-8 w-8 rounded-lg border border-border/60 hover:border-transparent overflow-hidden transition-all"
+                  className="flex items-center justify-center h-8 w-8 rounded-lg border border-white/70 text-white bg-white/10 hover:bg-white/20 transition-colors"
                 >
-                  <span className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none" style={{ background: "linear-gradient(135deg,#000000 0%,#1a2a6f 45%,#c81a7f 100%)" }} />
-                  <RefreshCw className="relative z-10 h-4 w-4 text-[#7d1b6a] group-hover:text-white transition-colors" />
+                  <RefreshCw className="h-4 w-4" />
                 </button>
               </TooltipTrigger>
               <TooltipContent side="bottom" sideOffset={6}>Atualizar</TooltipContent>
@@ -705,21 +712,22 @@ export default function AdminAllkademyPage() {
               <TooltipTrigger asChild>
                 <button
                   onClick={openCreate}
-                  className="group relative flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-border/60 hover:border-transparent overflow-hidden transition-all"
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-white/70 text-white bg-white/10 hover:bg-white/20 transition-colors text-xs font-semibold whitespace-nowrap"
                 >
-                  <span className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none" style={{ background: "linear-gradient(135deg,#000000 0%,#1a2a6f 45%,#c81a7f 100%)" }} />
-                  <Plus className="relative z-10 h-3.5 w-3.5 shrink-0 text-[#7d1b6a] group-hover:text-white transition-colors" />
-                  <span className="relative z-10 text-xs font-semibold bg-clip-text text-transparent [background-image:linear-gradient(135deg,#1a2a6f_0%,#7d1b6a_55%,#c81a7f_100%)] group-hover:[background-image:none] group-hover:text-white transition-colors">
-                    Novo Curso
-                  </span>
+                  <Plus className="h-3.5 w-3.5 shrink-0" />
+                  Novo Curso
                 </button>
               </TooltipTrigger>
               <TooltipContent side="bottom" sideOffset={6}>Criar novo curso</TooltipContent>
             </Tooltip>
           </TooltipProvider>
+          <PinToTrayButton id="page-allkademy" label="Allkademy" icon={GraduationCap} path="/admin/allkademy" />
         </>}
       />
+      </div>
 
+      <div className="flex-1 min-h-0 overflow-y-auto">
+      <div className="space-y-4">
       {/* Stats — gradient cards matching admin/empresas */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         <StatCard label="Cursos" value={total} icon={BookOpen} color="blue" />
@@ -1218,6 +1226,9 @@ export default function AdminAllkademyPage() {
         variant="destructive"
         onConfirm={handleDelete}
       />
+    </div>
+    </div>
+    </div>
     </div>
   );
 }

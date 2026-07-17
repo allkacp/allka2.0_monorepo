@@ -52,6 +52,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { Sheet, SheetContent } from "@/components/ui/sheet";
+import { EmbeddedSlideScreen } from "@/components/embedded-slide-screen";
 import {
   Dialog,
   DialogContent,
@@ -71,15 +72,6 @@ import {
 import { Input } from "@/components/ui/input";
 import { CopyLinkButton } from "@/components/copy-link-button";
 import { ConfirmationDialog } from "@/components/confirmation-dialog";
-import {
-  BarChart,
-  Bar,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip as RechartsTooltip,
-  ResponsiveContainer,
-} from "recharts";
 import { useAppFrameMetrics } from "@/hooks/useAppFrameMetrics";
 import { NeonBadge } from "@/components/neon-badge";
 import { useToast } from "@/hooks/use-toast";
@@ -285,6 +277,7 @@ export function CompanyViewSlidePanel({
   const [migrationStep, setMigrationStep] = useState<"confirm" | "leader">(
     "confirm",
   );
+  const [isSendingPartnerInvite, setIsSendingPartnerInvite] = useState(false);
   const [avatar, setAvatar] = useState<string | null>(company?.avatar || null);
   const [showAvatarMenu, setShowAvatarMenu] = useState(false);
   const [originalRawSrc, setOriginalRawSrc] = useState<string | null>(null);
@@ -330,6 +323,8 @@ export function CompanyViewSlidePanel({
   const [dadosEditedData, setDadosEditedData] = useState<Record<string, any>>(
     {},
   );
+  const [cepLoading, setCepLoading] = useState(false);
+  const [cepError, setCepError] = useState("");
   const [isSaving, setIsSaving] = useState(false);
   const [editingSocialId, setEditingSocialId] = useState<string | null>(null);
   const [editingSocialUrl, setEditingSocialUrl] = useState("");
@@ -766,14 +761,40 @@ export function CompanyViewSlidePanel({
     setMigrationStep("leader");
   };
 
-  const handleInviteLeader = () => {
-    setShowMigrateModal(false);
-    setMigrationStep("confirm");
+  // Partner não é mais um cadastro à parte — este modal convida a Agency
+  // atual pra virar Partner (PartnerProfile.status "invited"), que ela
+  // precisa aceitar do próprio lado antes de ganhar as capacidades extras.
+  const sendPartnerInvite = async () => {
+    if (!company?._apiId && !company?.id) return;
+    setIsSendingPartnerInvite(true);
+    try {
+      await apiClient.invitePartner(company._apiId || company.id);
+      toast({
+        title: "Convite enviado",
+        description: `"${company.name}" foi convidada para virar Partner.`,
+      });
+      onCompanyUpdate?.({ partner_status: "invited" });
+    } catch (error) {
+      toast({
+        title: "Erro ao convidar",
+        description: error?.message || "Não foi possível enviar o convite.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsSendingPartnerInvite(false);
+      setShowMigrateModal(false);
+      setMigrationStep("confirm");
+    }
   };
 
+  const handleInviteLeader = () => {
+    sendPartnerInvite();
+  };
+
+  // Não existe mais "migrar sem convite" — Partner sempre depende da Agency
+  // aceitar o convite, então essa opção só fecha o modal sem enviar nada.
   const handleMigrateWithoutInvite = () => {
-    setShowMigrateModal(false);
-    setMigrationStep("confirm");
+    handleCloseMigrateModal();
   };
 
   const handleCloseMigrateModal = () => {
@@ -843,6 +864,37 @@ export function CompanyViewSlidePanel({
     }));
   };
 
+  // Busca o CEP no ViaCEP e preenche Rua/Bairro/Cidade/Estado automaticamente
+  // — mesmo padrão usado no cadastro (admin/clientes e "Novo Cadastro").
+  const handleCepChange = async (raw: string) => {
+    const digits = raw.replace(/\D/g, "").slice(0, 8);
+    const formatted = digits.length > 5 ? `${digits.slice(0, 5)}-${digits.slice(5)}` : digits;
+    handleDadosFieldChange("zip_code", formatted);
+    setCepError("");
+    if (digits.length !== 8) return;
+    setCepLoading(true);
+    try {
+      const res = await fetch(`https://viacep.com.br/ws/${digits}/json/`);
+      const data = await res.json();
+      if (data.erro) {
+        setCepError("CEP não encontrado");
+        return;
+      }
+      setDadosEditedData((prev) => ({
+        ...prev,
+        zip_code: formatted,
+        street: data.logradouro || prev.street || (getDadosDisplayValue("street") as string),
+        neighborhood: data.bairro || prev.neighborhood || (getDadosDisplayValue("neighborhood") as string),
+        city: data.localidade || prev.city || (getDadosDisplayValue("city") as string),
+        state: data.uf || prev.state || (getDadosDisplayValue("state") as string),
+      }));
+    } catch {
+      setCepError("Erro ao buscar CEP");
+    } finally {
+      setCepLoading(false);
+    }
+  };
+
   const handleDadosEditMode = () => {
     setIsDadosEditMode(true);
   };
@@ -854,6 +906,7 @@ export function CompanyViewSlidePanel({
 
   const saveSocialLinksDirectly = async (links: SocialLink[]) => {
     if (!company?.id) return;
+    if ((company as any).type && (company as any).type !== "company") return;
     setIsSavingSocial(true);
     try {
       const apiId = (company as any)._apiId || company.id;
@@ -876,40 +929,9 @@ export function CompanyViewSlidePanel({
     }
   };
 
-  const SOCIAL_DEMO_LINKS: SocialLink[] = [
-    {
-      id: "demo-ig",
-      platform: "instagram",
-      url: "https://instagram.com/empresa",
-      order: 0,
-    },
-    {
-      id: "demo-fb",
-      platform: "facebook",
-      url: "https://facebook.com/empresa",
-      order: 1,
-    },
-    {
-      id: "demo-li",
-      platform: "linkedin",
-      url: "https://linkedin.com/company/empresa",
-      order: 2,
-    },
-    {
-      id: "demo-wa",
-      platform: "whatsapp",
-      url: "https://wa.me/5511999999999",
-      order: 3,
-    },
-  ];
-
   const confirmSaveSocialCard = async () => {
     if (!pendingSocialSave) return;
-    const base = (
-      company?.social_links && company.social_links.length > 0
-        ? company.social_links
-        : SOCIAL_DEMO_LINKS
-    ) as SocialLink[];
+    const base = (company?.social_links ?? []) as SocialLink[];
     const updated = base.map((l) =>
       l.id === pendingSocialSave.id ? { ...l, url: pendingSocialSave.url } : l,
     );
@@ -921,11 +943,7 @@ export function CompanyViewSlidePanel({
 
   const confirmDeleteSocialCard = async () => {
     if (!pendingSocialDelete) return;
-    const base = (
-      company?.social_links && company.social_links.length > 0
-        ? company.social_links
-        : SOCIAL_DEMO_LINKS
-    ) as SocialLink[];
+    const base = (company?.social_links ?? []) as SocialLink[];
     const updated = base.filter((l) => l.id !== pendingSocialDelete);
     setShowSocialDeleteConfirm(false);
     setPendingSocialDelete(null);
@@ -994,6 +1012,19 @@ export function CompanyViewSlidePanel({
       toast({
         title: "Erro",
         description: "ID da empresa não encontrado",
+        variant: "destructive",
+      });
+      return;
+    }
+    // Esse formulário (endereço, dados bancários, contato comercial/
+    // financeiro) só existe pra Company — Agency/Nomad/Partner são
+    // entidades diferentes, sem esses campos. Edição básica (nome/e-mail/
+    // telefone/status) pra elas passa pelo CompanyEditSlidePanel, não por
+    // aqui (ver handleSaveCompany em admin/empresas/page.tsx).
+    if ((company as any).type && (company as any).type !== "company") {
+      toast({
+        title: "Edição não disponível",
+        description: "Esse formulário completo é só para Empresas. Use o botão de editar para alterar dados básicos.",
         variant: "destructive",
       });
       return;
@@ -1174,23 +1205,21 @@ export function CompanyViewSlidePanel({
     }
   };
 
-  // Mock data for charts and metrics
-  const moduleUsageData = [
-    { nome: "Vendas", uso: 1200 },
-    { nome: "Financeiro", uso: 980 },
-    { nome: "Relatórios", uso: 850 },
-    { nome: "RH", uso: 720 },
-    { nome: "Operações", uso: 650 },
-  ];
-
-  // Real users linked to this company (via company_associations or company_id)
+  // Real users linked to this org — o campo de vínculo muda por tipo
+  // (Company usa company_id/company_associations, Agency usa agency_id,
+  // Partner usa partner_id). Antes só checava company_id, então Agency e
+  // Partner sempre apareciam com 0 usuários mesmo tendo o principal
+  // criado junto (users.ts seta agency_id/partner_id na criação atômica).
   const companyApiId = company._apiId ?? String(company.id);
-  const companyUsers = contextUsers.filter(
-    (u) =>
+  const companyUsers = contextUsers.filter((u) => {
+    if (company.type === "agency") return u.agency_id === companyApiId;
+    if (company.type === "partner") return u.partner_id === companyApiId;
+    return (
       u.company_associations?.some(
         (a) => String(a.company_id) === companyApiId,
-      ) || u.company_id === companyApiId,
-  );
+      ) || u.company_id === companyApiId
+    );
+  });
 
   // Sort by last_login descending and take up to 5 for the recents card
   const getRelativeTime = (iso: string) => {
@@ -1233,51 +1262,21 @@ export function CompanyViewSlidePanel({
 
   return (
     <>
-      <Sheet
+      <EmbeddedSlideScreen
         open={open && !showMigrateModal}
-        modal={false}
-        onOpenChange={(o) => {
-          if (!o && !showSaveConfirm && !showCancelConfirm) onClose();
+        onClose={() => {
+          if (!showSaveConfirm && !showCancelConfirm) onClose();
+        }}
+        hideHeader
+        pin={{
+          id: `empresas-view-${company.id}`,
+          label: `Empresa: ${company.name}`,
+          icon: Building2,
+          path: "/admin/empresas",
+          activateKey: `view:${company.id}`,
         }}
       >
-        <SheetContent
-          side="right"
-          hideOverlay={true}
-          onInteractOutside={(e) => {
-            if (
-              showSaveConfirm ||
-              showCancelConfirm ||
-              showSocialEditConfirm ||
-              showSocialDeleteConfirm ||
-              showSocialModal ||
-              showWalletHistoryPanel ||
-              showNFHistoryPanel
-            )
-              e.preventDefault();
-          }}
-          onPointerDownOutside={(e) => {
-            if (
-              showSaveConfirm ||
-              showCancelConfirm ||
-              showSocialEditConfirm ||
-              showSocialDeleteConfirm ||
-              showSocialModal ||
-              showWalletHistoryPanel ||
-              showNFHistoryPanel
-            )
-              e.preventDefault();
-          }}
-          className="p-0 flex flex-col gap-0 !w-auto !max-w-none z-[70] [&>button:last-child]:top-3 [&>button:last-child]:right-3 [&>button:last-child]:p-1.5 [&>button:last-child]:hover:bg-white/20 [&>button:last-child_svg]:size-4"
-          style={{
-            left: `${sidebarWidth - 2}px`,
-            top: `${headerHeight - 1}px`,
-            bottom: `${footerHeight - 1}px`,
-            height: "auto",
-            width: `calc(100vw - ${sidebarWidth - 2}px)`,
-            maxWidth: `calc(100vw - ${sidebarWidth - 2}px)`,
-          }}
-        >
-          <div className="relative flex flex-col h-full overflow-hidden">
+          <div className="relative flex flex-col h-full overflow-hidden w-full">
             {/* Hidden file input */}
             <input
               ref={fileInputRef}
@@ -1474,6 +1473,26 @@ export function CompanyViewSlidePanel({
                   </div>
                   <Eye className="h-4 w-4 text-blue-500" />
                 </div>
+                {company.type === "agency" &&
+                  company.partner_status !== "active" &&
+                  company.partner_status !== "invited" && (
+                    <Button
+                      onClick={handleMigrateClick}
+                      className="h-9 px-3 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold rounded-lg gap-1.5"
+                    >
+                      <Star className="h-3.5 w-3.5" />
+                      Convidar para Partner
+                    </Button>
+                  )}
+                {company.type === "agency" && company.partner_status === "invited" && (
+                  <NeonBadge color="amber">Convite de Partner pendente</NeonBadge>
+                )}
+                {company.type === "agency" && company.partner_status === "active" && (
+                  <NeonBadge color="emerald">
+                    <Star className="h-3 w-3 mr-1 inline" />
+                    Partner ativo
+                  </NeonBadge>
+                )}
                 <CopyLinkButton />
               </div>
             </div>
@@ -1690,7 +1709,7 @@ export function CompanyViewSlidePanel({
                             </div>
                           </div>
                           <p className="text-2xl font-bold text-white leading-none">
-                            1.247
+                            —
                           </p>
                           <p className="text-[10px] text-white/60 mt-1">
                             Vinculadas à empresa
@@ -1709,7 +1728,7 @@ export function CompanyViewSlidePanel({
                             </div>
                           </div>
                           <p className="text-2xl font-bold text-white leading-none">
-                            8.430 pts
+                            —
                           </p>
                           <p className="text-[10px] text-white/60 mt-1">
                             Soma dos projetos
@@ -1728,7 +1747,7 @@ export function CompanyViewSlidePanel({
                             </div>
                           </div>
                           <p className="text-2xl font-bold text-white leading-none">
-                            R$ 124.500
+                            —
                           </p>
                           <p className="text-[10px] text-white/60 mt-1">
                             Economia acumulada
@@ -1822,7 +1841,9 @@ export function CompanyViewSlidePanel({
                             ))
                           ) : (
                             <p className="text-xs text-slate-400 dark:text-slate-500 py-3 text-center">
-                              Nenhum usuário cadastrado
+                              {companyUsers.length > 0
+                                ? "Nenhum acesso recente"
+                                : "Nenhum usuário cadastrado"}
                             </p>
                           )}
                         </div>
@@ -1837,35 +1858,10 @@ export function CompanyViewSlidePanel({
                             Módulos mais usados
                           </h3>
                         </div>
-                        <ResponsiveContainer width="100%" height={155}>
-                          <BarChart
-                            data={moduleUsageData}
-                            layout="vertical"
-                            margin={{ top: 0, right: 16, left: 68, bottom: 0 }}
-                          >
-                            <CartesianGrid
-                              strokeDasharray="3 3"
-                              stroke="#e2e8f0"
-                            />
-                            <XAxis type="number" tick={{ fontSize: 10 }} />
-                            <YAxis
-                              dataKey="nome"
-                              type="category"
-                              tick={{ fontSize: 9 }}
-                              width={64}
-                            />
-                            <RechartsTooltip
-                              contentStyle={{
-                                backgroundColor: "#1e293b",
-                                border: "none",
-                                borderRadius: "4px",
-                                color: "#fff",
-                                fontSize: "11px",
-                              }}
-                            />
-                            <Bar dataKey="uso" fill="#3b82f6" radius={2} />
-                          </BarChart>
-                        </ResponsiveContainer>
+                        <div className="flex flex-col items-center justify-center h-[155px] text-slate-400">
+                          <BarChart3 className="h-6 w-6 mb-1.5 opacity-30" />
+                          <p className="text-xs">Sem uso registrado ainda</p>
+                        </div>
                       </div>
                     </div>
 
@@ -3029,21 +3025,29 @@ export function CompanyViewSlidePanel({
                               CEP
                             </p>
                             {isDadosEditMode ? (
-                              <Input
-                                value={
-                                  (getDadosDisplayValue(
-                                    "zip_code",
-                                  ) as string) || ""
-                                }
-                                onChange={(e) =>
-                                  handleDadosFieldChange(
-                                    "zip_code",
-                                    e.target.value,
-                                  )
-                                }
-                                className="border-slate-300 h-8 font-mono text-sm"
-                                placeholder="00000-000"
-                              />
+                              <div className="space-y-1">
+                                <div className="relative">
+                                  <Input
+                                    value={
+                                      (getDadosDisplayValue(
+                                        "zip_code",
+                                      ) as string) || ""
+                                    }
+                                    onChange={(e) =>
+                                      handleCepChange(e.target.value)
+                                    }
+                                    className="border-slate-300 h-8 font-mono text-sm pr-7"
+                                    placeholder="00000-000"
+                                    maxLength={9}
+                                  />
+                                  {cepLoading && (
+                                    <Loader2 className="h-3.5 w-3.5 animate-spin text-slate-400 absolute right-2 top-1/2 -translate-y-1/2" />
+                                  )}
+                                </div>
+                                {cepError && (
+                                  <p className="text-xs text-red-500">{cepError}</p>
+                                )}
+                              </div>
                             ) : (
                               <p className="text-sm font-mono font-bold text-slate-700">
                                 {company.zip_code || ""}
@@ -3523,6 +3527,7 @@ export function CompanyViewSlidePanel({
                   <CompanyUsersTab
                     companyId={company._apiId ?? company.id}
                     companyName={company.name}
+                    type={company.type}
                   />
                 </TabsContent>
 
@@ -3566,37 +3571,10 @@ export function CompanyViewSlidePanel({
                     </div>
                   ) : (
                     (() => {
-                      const DEMO_LINKS: SocialLink[] = [
-                        {
-                          id: "demo-ig",
-                          platform: "instagram",
-                          url: "https://instagram.com/empresa",
-                          order: 0,
-                        },
-                        {
-                          id: "demo-fb",
-                          platform: "facebook",
-                          url: "https://facebook.com/empresa",
-                          order: 1,
-                        },
-                        {
-                          id: "demo-li",
-                          platform: "linkedin",
-                          url: "https://linkedin.com/company/empresa",
-                          order: 2,
-                        },
-                        {
-                          id: "demo-wa",
-                          platform: "whatsapp",
-                          url: "https://wa.me/5511999999999",
-                          order: 3,
-                        },
-                      ];
-
                       const displayLinks: SocialLink[] =
                         company.social_links && company.social_links.length > 0
                           ? company.social_links
-                          : DEMO_LINKS;
+                          : [];
 
                       const handleSaveSocialCard = (linkId: string) => {
                         setPendingSocialSave({
@@ -3637,6 +3615,13 @@ export function CompanyViewSlidePanel({
                               Adicionar
                             </Button>
                           </div>
+
+                          {displayLinks.length === 0 && (
+                            <div className="flex flex-col items-center justify-center py-12 text-slate-400 bg-white rounded-2xl border border-slate-200">
+                              <Share2 className="h-8 w-8 mb-2 opacity-30" />
+                              <p className="text-sm">Nenhuma rede social cadastrada</p>
+                            </div>
+                          )}
 
                           {/* 3-column grid */}
                           <div className="grid grid-cols-3 gap-3">
@@ -4965,8 +4950,7 @@ export function CompanyViewSlidePanel({
             }))}
             companyName={company.name || "empresa"}
           />
-        </SheetContent>
-      </Sheet>
+      </EmbeddedSlideScreen>
 
       {/* Partner Migration Modal - Step 1: Confirm Migration */}
       {showMigrateModal && migrationStep === "confirm" && (
@@ -5079,22 +5063,17 @@ export function CompanyViewSlidePanel({
               {/* Action Buttons */}
               <div className="space-y-3 pt-4">
                 <Button
-                  className="w-full bg-green-600 hover:bg-green-700 text-white font-semibold h-12 rounded-xl transition-all duration-200 shadow-md hover:shadow-lg text-base"
+                  disabled={isSendingPartnerInvite}
+                  className="w-full bg-green-600 hover:bg-green-700 text-white font-semibold h-12 rounded-xl transition-all duration-200 shadow-md hover:shadow-lg text-base disabled:opacity-60"
                   onClick={handleInviteLeader}
                 >
                   <Check className="h-5 w-5 mr-2" />
-                  Sim, convidar!
+                  {isSendingPartnerInvite ? "Enviando convite..." : "Sim, convidar!"}
                 </Button>
                 <Button
-                  className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold h-12 rounded-xl transition-all duration-200 shadow-md hover:shadow-lg text-base"
+                  disabled={isSendingPartnerInvite}
+                  className="w-full bg-red-600 hover:bg-red-700 text-white font-semibold h-12 rounded-xl border-0 transition-all duration-200 shadow-md hover:shadow-lg text-base disabled:opacity-60"
                   onClick={handleMigrateWithoutInvite}
-                >
-                  <X className="h-5 w-5 mr-2" />
-                  Não, apenas migrar
-                </Button>
-                <Button
-                  className="w-full bg-red-600 hover:bg-red-700 text-white font-semibold h-12 rounded-xl border-0 transition-all duration-200 shadow-md hover:shadow-lg text-base"
-                  onClick={handleCloseMigrateModal}
                 >
                   Cancelar
                 </Button>

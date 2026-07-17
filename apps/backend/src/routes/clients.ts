@@ -15,6 +15,13 @@ const createSchema = z.object({
   status: z.string().default("ativo"),
   segment: z.string().optional(),
   address: z.string().optional(),
+  number: z.string().optional(),
+  neighborhood: z.string().optional(),
+  city: z.string().optional(),
+  state: z.string().optional(),
+  zip_code: z.string().optional(),
+  pix_key: z.string().optional(),
+  pix_key_type: z.string().optional(),
   description: z.string().optional(),
   logo: z.string().optional(),
   website: z.string().optional(),
@@ -94,17 +101,31 @@ router.get("/", verifyToken, async (req, res, next) => {
         select: { client_id: true },
         distinct: ["client_id"],
       });
-      const clientIds = agencyProjects.map((p) => p.client_id as string);
+      const clientIds = new Set(agencyProjects.map((p) => p.client_id as string));
 
-      if (clientIds.length === 0) {
+      // Se a agência do usuário também é Partner ativo, some as companies
+      // que ela referiu como Partner (referred_by_partner_id) — antes era
+      // um account_type "parceiro" separado com sua própria listagem; agora
+      // é só mais uma fonte de client_ids pra mesma Agency.
+      const myPartnerId = await resolveMyPartnerId(prisma, userId);
+      if (myPartnerId) {
+        const referred = await prisma.company.findMany({
+          where: { referred_by_partner_id: myPartnerId },
+          select: { id: true },
+        });
+        referred.forEach((c) => clientIds.add(c.id));
+      }
+
+      if (clientIds.size === 0) {
         res.json({ data: [], total: 0, page: 1, limit });
         return;
       }
 
-      const where: Record<string, unknown> = { id: { in: clientIds } };
+      const clientIdList = Array.from(clientIds);
+      const where: Record<string, unknown> = { id: { in: clientIdList } };
       if (search) {
         where["AND"] = [
-          { id: { in: clientIds } },
+          { id: { in: clientIdList } },
           {
             OR: [
               { name: { contains: search } },
@@ -127,31 +148,6 @@ router.get("/", verifyToken, async (req, res, next) => {
         }),
       ]);
 
-      res.json({ data: rawData.map(withUsersCountAlias), total, page, limit });
-      return;
-    }
-
-    // Partner users see only companies referred by them
-    if (account_type === "parceiro") {
-      const myPartnerId = await resolveMyPartnerId(prisma, userId);
-      if (!myPartnerId) {
-        res.json({ data: [], total: 0, page: 1, limit: 20 });
-        return;
-      }
-      const { page, limit, skip } = parsePagination(req.query);
-      const search = req.query.search as string | undefined;
-      const where: Record<string, unknown> = { referred_by_partner_id: myPartnerId };
-      if (search) {
-        where["AND"] = [
-          { referred_by_partner_id: myPartnerId },
-          { OR: [{ name: { contains: search } }, { cnpj: { contains: search } }] },
-        ];
-        delete where["referred_by_partner_id"];
-      }
-      const [total, rawData] = await Promise.all([
-        prisma.company.count({ where }),
-        prisma.company.findMany({ where, include: COMPANY_COUNT_SELECT, skip, take: limit, orderBy: { name: "asc" } }),
-      ]);
       res.json({ data: rawData.map(withUsersCountAlias), total, page, limit });
       return;
     }
@@ -193,6 +189,35 @@ router.get("/", verifyToken, async (req, res, next) => {
     next(err);
   }
 });
+
+// GET /api/clients/archives/:sequenceNumber — admin only
+// Consulta o histórico de Companies já excluídas que usaram este número
+// sequencial (pode haver mais de uma ao longo do tempo, se o número foi
+// reaproveitado várias vezes) — mais recente primeiro. Precisa vir ANTES de
+// GET /:id abaixo, senão "archives" seria capturado como :id.
+router.get(
+  "/archives/:sequenceNumber",
+  verifyToken,
+  requireRole("admin"),
+  async (req, res, next) => {
+    try {
+      const sequence_number = parseInt(req.params.sequenceNumber as string, 10);
+      const archives = await prisma.companyArchive.findMany({
+        where: { sequence_number },
+        orderBy: { deleted_at: "desc" },
+      });
+      res.json(
+        archives.map((a) => ({
+          ...a,
+          snapshot: JSON.parse(a.snapshot),
+          users_snapshot: JSON.parse(a.users_snapshot),
+        })),
+      );
+    } catch (err) {
+      next(err);
+    }
+  },
+);
 
 // GET /api/clients/:id
 router.get("/:id", verifyToken, async (req, res, next) => {
@@ -371,10 +396,91 @@ router.put(
   },
 );
 
+const deleteUserActionSchema = z.object({
+  userId: z.string(),
+  action: z.enum(["delete", "unlink", "suspend"]),
+});
+const deleteCompanySchema = z.object({
+  userActions: z.array(deleteUserActionSchema).default([]),
+});
+
 // DELETE /api/clients/:id — admin only
+// Company <-> User has a circular FK (Company.owner_user_id -> User,
+// User.company_id -> Company), and User rows linked via company_id
+// (@@relation("CompanyMembers")) have no cascade — so a bare
+// prisma.company.delete() fails with P2003 the moment the company has its
+// (mandatory) first company_admin user. Break the cycle explicitly.
+//
+// Before deleting, snapshot the company (+ linked users, project/invoice
+// counts) into CompanyArchive, and apply the admin's chosen action to each
+// linked user (delete / unlink / suspend — see deleteUserActionSchema).
+// The freed sequence_number goes into CompanyFreedSequence so a future
+// Company can reuse it (see claimFreedSequenceNumber in company-sequence.ts).
 router.delete("/:id", verifyToken, requireRole("admin"), async (req, res, next) => {
   try {
-    await prisma.company.delete({ where: { id: req.params.id as string } });
+    const id = req.params.id as string;
+    const parsed = deleteCompanySchema.safeParse(req.body ?? {});
+    if (!parsed.success) {
+      res.status(400).json({ error: "userActions inválido", details: parsed.error.issues });
+      return;
+    }
+    const { userActions } = parsed.data;
+    const actionByUserId = new Map(userActions.map((a) => [a.userId, a.action]));
+
+    const company = await prisma.company.findUnique({ where: { id } });
+    if (!company) {
+      res.status(404).json({ error: "Empresa não encontrada" });
+      return;
+    }
+
+    const members = await prisma.user.findMany({ where: { company_id: id } });
+    const [projectsCount, invoicesCount] = await Promise.all([
+      prisma.project.count({ where: { OR: [{ client_id: id }, { company_id: id }] } }),
+      prisma.invoice.count({ where: { company_id: id } }),
+    ]);
+
+    const usersSnapshot = members.map((u) => ({
+      id: u.id,
+      name: u.name,
+      email: u.email,
+      role: u.role,
+      is_active: u.is_active,
+      action: actionByUserId.get(u.id) ?? "unlink",
+    }));
+
+    await prisma.$transaction(async (tx) => {
+      await tx.companyArchive.create({
+        data: {
+          sequence_number: company.sequence_number,
+          original_company_id: company.id,
+          name: company.name,
+          snapshot: JSON.stringify(company),
+          users_snapshot: JSON.stringify(usersSnapshot),
+          projects_count: projectsCount,
+          invoices_count: invoicesCount,
+          deleted_by_user_id: req.user?.id,
+        },
+      });
+
+      for (const member of members) {
+        const action = actionByUserId.get(member.id) ?? "unlink";
+        if (action === "delete") {
+          await tx.user.delete({ where: { id: member.id } });
+        } else if (action === "suspend") {
+          await tx.user.update({
+            where: { id: member.id },
+            data: { company_id: null, is_active: false },
+          });
+        } else {
+          await tx.user.update({ where: { id: member.id }, data: { company_id: null } });
+        }
+      }
+
+      await tx.company.update({ where: { id }, data: { owner_user_id: null } });
+      await tx.company.delete({ where: { id } });
+      await tx.companyFreedSequence.create({ data: { sequence_number: company.sequence_number } });
+    });
+
     res.status(204).send();
   } catch (err) {
     next(err);

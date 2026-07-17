@@ -134,11 +134,9 @@ async function seedBaseUsers() {
     create: { email: "nomade@allka.com.vc", password_hash: hash, name: "Nômade Dev", role: "nomad", account_type: "nomades", is_active: true },
   });
 
-  await prisma.user.upsert({
-    where: { email: "parceiro@allka.com.vc" },
-    update: {},
-    create: { email: "parceiro@allka.com.vc", password_hash: hash, name: "Parceiro Dev", role: "partner", account_type: "parceiro", is_active: true },
-  });
+  // Não existe mais um usuário "parceiro" standalone — Partner é um upgrade
+  // da própria Agency (ver seedAgencia() abaixo, que dá um PartnerProfile
+  // ativo pra "Lamego Teste Agency" pra já ter dado de demo pronto).
 
   const CT_COMPANY_ID = "cmqgqm0u3000a13ogmj3z2i6c";
   await prisma.company.upsert({
@@ -154,7 +152,7 @@ async function seedBaseUsers() {
     create: { email: "company@allka.test", password_hash: hash, name: "Company Test", role: "company_admin", account_type: "empresas", company_id: CT_COMPANY_ID, is_active: true },
   });
 
-  console.log("[seed-realistic-demo] base users OK: admin · agencia · empresa · nomade · parceiro · company@allka.test");
+  console.log("[seed-realistic-demo] base users OK: admin · agencia · empresa · nomade · company@allka.test");
 }
 
 // ── Agency ───────────────────────────────────────────────────────────────────
@@ -175,7 +173,7 @@ async function seedAgencia() {
     update: { name: AGENCY_NAME, partner_level: "gold", wallet_balance: 28500, status: "ativo" },
     create: {
       id: "seed-agencia-dev-01",
-      user_id: userRecord.id,
+      owner_user_id: userRecord.id,
       name: AGENCY_NAME,
       cnpj: "12.345.678/0001-90",
       email: "contato@lamegoagency.com.br",
@@ -187,6 +185,21 @@ async function seedAgencia() {
   });
 
   await prisma.user.update({ where: { id: userRecord.id }, data: { name: AGENCY_NAME } });
+
+  // Dá pra "Lamego Teste Agency" um PartnerProfile já ativo (aceito) — dado
+  // de demo pronto pra testar o dashboard/nav de Partner sem precisar
+  // passar pelo fluxo de convite manualmente toda vez que a seed roda.
+  await prisma.partnerProfile.upsert({
+    where: { agency_id: agency.id },
+    update: { status: "active" },
+    create: {
+      agency_id: agency.id,
+      status: "active",
+      invited_at: past(60),
+      responded_at: past(58),
+      referral_code: "LAMEGO-DEV",
+    },
+  });
 
   const clients = [
     { id: "seed-agencia-cli-01", name: "Starbucks Coffee Brasil", cnpj: "08.883.874/0001-62", segment: "Alimentação" },

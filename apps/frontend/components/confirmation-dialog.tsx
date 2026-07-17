@@ -2,7 +2,7 @@
 import React from 'react'
 import { AlertTriangle, CheckCircle2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { SlidePanel } from '@/components/slide-panel'
+import { StandardModalDialog } from '@/components/standard-modal-dialog'
 
 interface ConfirmationDialogProps {
   /** Controls the visibility of the dialog */
@@ -64,12 +64,11 @@ export function ConfirmationDialog({
   }
 
   return (
-    <SlidePanel
+    <StandardModalDialog
       open={open}
       onClose={onClose}
       title={title}
-      widthMode="compact"
-      compactWidth={420}
+      size="compact"
       footer={
         <div className="flex gap-2">
           <Button
@@ -104,6 +103,6 @@ export function ConfirmationDialog({
         </div>
         <p className="text-sm text-slate-600 dark:text-slate-300 leading-relaxed">{message}</p>
       </div>
-    </SlidePanel>
+    </StandardModalDialog>
   )
 }

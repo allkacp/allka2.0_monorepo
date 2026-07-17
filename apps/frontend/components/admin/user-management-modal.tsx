@@ -129,15 +129,17 @@ export function UserManagementModal({ user, open, onOpenChange, onSave }: UserMa
   const getRoleLabel = (role: string) => {
     switch (role) {
       case "company_admin":
-        return "Admin Empresa"
+        return "Company Admin"
       case "company_user":
-        return "Usuário Empresa"
+        return "Company User"
       case "agency_admin":
-        return "Admin Agência"
+        return "Agency Admin"
       case "agency_user":
-        return "Usuário Agência"
+        return "Agency User"
+      case "nomad_admin":
+        return "Nomad Admin"
       case "nomad":
-        return "Nômade"
+        return "Nomad Admin"
       case "admin":
         return "Administrador"
       default:

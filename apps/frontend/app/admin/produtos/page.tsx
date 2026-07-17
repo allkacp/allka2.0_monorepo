@@ -125,7 +125,11 @@ import { NeonBadge } from "@/components/neon-badge";
 import { useSpecialties } from "@/lib/contexts/specialty-context";
 import type { Task } from "@/types/product"; // Assuming Task type is defined in types/product
 import { formatCurrency } from "@/lib/utils";
-import PageHeader from "@/components/page-header";
+import {
+  STANDARD_SHELL_PANEL_CLASS,
+  StandardPageBanner,
+} from "@/components/standard-page-shell";
+import { PinToTrayButton } from "@/components/pin-to-tray-button";
 
 // ── View mode for the product grid ───────────────────────────────────────────
 type ProdGridMode = 2 | 3 | 4 | 5 | "list";
@@ -2038,31 +2042,37 @@ export default function AdminProdutosPage() {
   const effectiveDeliveryDays = _autoDeliveryDays ?? (Number.parseInt(productFormData.deliveryDays) || 0);
 
   return (
-    <div className="flex-1 space-y-3">
-      <PageHeader
+    <div className={STANDARD_SHELL_PANEL_CLASS}>
+    <div className="h-full min-h-0 flex flex-col">
+    <div className="shrink-0 -mb-[11px]">
+      <StandardPageBanner
+        icon={Package}
         title="Cadastro de Produtos"
         description="Cadastre, edite e organize os produtos e serviços da plataforma"
         actions={
-          <TooltipProvider delayDuration={400}>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <button
-                  onClick={handleOpenProductSheet}
-                  className="group relative flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-border/60 hover:border-transparent overflow-hidden transition-all"
-                >
-                  <span className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none" style={{ background: "linear-gradient(135deg,#000000 0%,#1a2a6f 45%,#c81a7f 100%)" }} />
-                  <Plus className="relative z-10 h-3.5 w-3.5 shrink-0 text-[#7d1b6a] group-hover:text-white transition-colors" />
-                  <span className="relative z-10 text-xs font-semibold bg-clip-text text-transparent [background-image:linear-gradient(135deg,#1a2a6f_0%,#7d1b6a_55%,#c81a7f_100%)] group-hover:[background-image:none] group-hover:text-white transition-colors">
+          <>
+            <TooltipProvider delayDuration={400}>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <button
+                    onClick={handleOpenProductSheet}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-white/70 text-white bg-white/10 hover:bg-white/20 transition-colors text-xs font-semibold whitespace-nowrap"
+                  >
+                    <Plus className="h-3.5 w-3.5 shrink-0" />
                     Novo Produto
-                  </span>
-                </button>
-              </TooltipTrigger>
-              <TooltipContent side="bottom" sideOffset={6}>Criar novo produto</TooltipContent>
-            </Tooltip>
-          </TooltipProvider>
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent side="bottom" sideOffset={6}>Criar novo produto</TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+            <PinToTrayButton id="page-produtos" label="Cadastro de Produtos" icon={Package} path="/admin/produtos" />
+          </>
         }
       />
+    </div>
 
+    <div className="flex-1 min-h-0 overflow-y-auto">
+    <div className="space-y-3">
       {/* ── Stats Bar — gradient cards matching admin/empresas ── */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-1">
         <ProdStatCard label="Produtos" value={safeProducts.length} icon={Package} color="blue" />
@@ -8847,6 +8857,9 @@ export default function AdminProdutosPage() {
           </SheetFooter>
         </SheetContent>
       </Sheet>
+    </div>
+    </div>
+    </div>
     </div>
   );
 }

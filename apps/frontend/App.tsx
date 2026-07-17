@@ -6,6 +6,7 @@ import {
   useLocation,
   useNavigate,
 } from "react-router-dom";
+import { cn } from "@/lib/utils";
 import { CookieConsentBanner } from "@/components/cookie-consent-banner";
 import {
   TermAcceptanceGate,
@@ -30,6 +31,8 @@ import { PricingProvider } from "@/lib/contexts/pricing-context";
 import { ProductProvider } from "@/lib/contexts/product-context";
 import { ChatProvider } from "@/contexts/chat-context";
 import { ChatWidget } from "@/components/chat-widget";
+import { OpenScreensProvider } from "@/contexts/open-screens-context";
+import { OpenScreensTray } from "@/components/open-screens-tray";
 
 import { PartnerProvider } from "@/contexts/partner-context";
 import { EmpresaProvider } from "@/contexts/empresa-context";
@@ -60,7 +63,6 @@ const AdminUsuariosInternosPage = React.lazy(
   () => import("@/app/admin/usuarios-internos/page"),
 );
 const AdminEmpresasPage = React.lazy(() => import("@/app/admin/empresas/page"));
-const AdminAgenciasPage = React.lazy(() => import("@/app/admin/agencias/page"));
 const AdminNomadesPg = React.lazy(() => import("@/app/admin/nomades/page"));
 const AdminProjetosPage = React.lazy(() => import("@/app/admin/projetos/page"));
 const AdminProdutosPage = React.lazy(() => import("@/app/admin/produtos/page"));
@@ -169,9 +171,6 @@ const PartnerRelatoriosPage = React.lazy(
 const PartnerClientesPage = React.lazy(
   () => import("@/app/partner/clientes/page"),
 );
-const PartnerUsuariosPage = React.lazy(
-  () => import("@/app/partner/usuarios/page"),
-);
 
 // ─── Empresa Pages ──────────────────────────────────────────────────────────
 const CompanyDashboardPage = React.lazy(
@@ -231,7 +230,6 @@ const LoginPage = React.lazy(() => import("@/app/admin/login/page"));
 const NomadeLoginPage = React.lazy(() => import("@/app/nomades/login/page"));
 const EmpresaLoginPage = React.lazy(() => import("@/app/company/login/page"));
 const AgencyLoginPage = React.lazy(() => import("@/app/agencia/login/page"));
-const ParceiroLoginPage = React.lazy(() => import("@/app/parceiro/login/page"));
 const LiderLoginPage = React.lazy(() => import("@/app/lider/login/page"));
 
 // ─── Líder Pages ──────────────────────────────────────────────────────────────
@@ -266,11 +264,12 @@ function RequireAuth({ children }: { children: React.ReactNode }) {
     const loginPath =
       pathname.startsWith("/nomad") || pathname.startsWith("/nomades")
         ? "/nomad/login"
-        : pathname.startsWith("/agency") || pathname.startsWith("/agencia")
+        : pathname.startsWith("/agency") ||
+            pathname.startsWith("/agencia") ||
+            pathname.startsWith("/partner") ||
+            pathname.startsWith("/parceiro")
           ? "/agency/login"
-          : pathname.startsWith("/partner") || pathname.startsWith("/parceiro")
-            ? "/partner/login"
-            : pathname.startsWith("/leader") || pathname.startsWith("/lider")
+          : pathname.startsWith("/leader") || pathname.startsWith("/lider")
               ? "/leader/login"
               : pathname.startsWith("/company") ||
                   pathname.startsWith("/empresa")
@@ -301,7 +300,11 @@ function RequireAuth({ children }: { children: React.ReactNode }) {
     ];
     const prefix = portalPrefixes.find((p) => pathname.startsWith(p));
     if (prefix) {
-      const { account_type, role } = authUser;
+      const { account_type, role, partner_status } = authUser as {
+        account_type?: string;
+        role?: string;
+        partner_status?: string;
+      };
       // Admin can navigate anywhere
       const allowed =
         role === "admin" || account_type === "admin"
@@ -315,7 +318,9 @@ function RequireAuth({ children }: { children: React.ReactNode }) {
                 : prefix === "/company" || prefix === "/empresa"
                   ? account_type === "empresas"
                   : prefix === "/partner" || prefix === "/parceiro"
-                    ? account_type === "parceiro" || role === "partner"
+                    ? // Partner não é mais um account_type separado — é a
+                      // própria Agency com PartnerProfile.status "active"
+                      account_type === "agencias" && partner_status === "active"
                     : prefix === "/leader" || prefix === "/lider"
                       ? role === "lider"
                       : false;
@@ -331,11 +336,9 @@ function RequireAuth({ children }: { children: React.ReactNode }) {
                 ? "/company/dashboard"
                 : account_type === "agencias"
                   ? "/agency/dashboard"
-                  : account_type === "parceiro"
-                    ? "/partner/dashboard"
-                    : role === "lider"
-                      ? "/leader/dashboard"
-                      : "/login";
+                  : role === "lider"
+                    ? "/leader/dashboard"
+                    : "/login";
         return <Navigate to={home} replace />;
       }
     }
@@ -361,11 +364,9 @@ function ProfileAwareFallback() {
           ? "/company/dashboard"
           : account_type === "agencias"
             ? "/agency/dashboard"
-            : account_type === "parceiro"
-              ? "/partner/dashboard"
-              : role === "lider"
-                ? "/leader/dashboard"
-                : "/login";
+            : role === "lider"
+              ? "/leader/dashboard"
+              : "/login";
   return <Navigate to={home} replace />;
 }
 
@@ -428,6 +429,43 @@ class PageErrorBoundary extends React.Component<
 function AppLayout({ children }: { children: React.ReactNode }) {
   const [termsAccepted, setTermsAccepted] = useState<boolean>(true); // default true to avoid flash
   const [pendingTerms, setPendingTerms] = useState<PendingTerm[]>([]);
+  // Fundo único contínuo do shell (ver globals.css .admin-empresas-shell-bg)
+  // restrito às rotas do padrão "Tela Global com tabela principal" —
+  // Sidebar/Header/main/Footer recebem `transparent` pra não pintar o
+  // próprio fundo por cima, revelando o gradiente único.
+  const location = useLocation();
+  // Adicionar uma rota aqui só depois que a página correspondente já estiver
+  // com o wrapper STANDARD_SHELL_PANEL_CLASS aplicado (senão ativa o fundo
+  // gradiente sem o painel branco por baixo — visual quebrado).
+  const STANDARD_SHELL_ROUTES = [
+    "/admin/empresas",
+    "/admin/dashboard",
+    "/admin/usuarios",
+    "/admin/clientes",
+    "/admin/permissoes",
+    "/admin/permissions",
+    "/admin/projetos",
+    "/admin/tarefas",
+    "/admin/produtos",
+    "/admin/catalogo-produtos",
+    "/admin/precificacao",
+    "/admin/modelos-tarefas",
+    "/admin/campanhas-indicacao",
+    "/admin/niveis",
+    "/admin/niveis-nomades",
+    "/admin/programa-partner",
+    "/admin/financeiro",
+    "/admin/relatorios",
+    "/admin/allkademy",
+    "/admin/sistema",
+    "/admin/disponibilidade",
+    "/admin/especialidades",
+    "/admin/onboarding",
+    "/admin/configuracoes",
+  ];
+  const isEmpresasRoute = STANDARD_SHELL_ROUTES.some(
+    (r) => location.pathname === r || location.pathname.startsWith(r + "/"),
+  );
 
   useEffect(() => {
     let cancelled = false;
@@ -463,6 +501,7 @@ function AppLayout({ children }: { children: React.ReactNode }) {
     setTermsAccepted(true);
   };
   return (
+    <OpenScreensProvider>
     <ChatProvider>
       <PlatformUsersProvider>
         <SettingsProvider>
@@ -476,39 +515,53 @@ function AppLayout({ children }: { children: React.ReactNode }) {
                         <ProductProvider>
                           <ProjectBasketProvider>
                             <MobileLayoutWrapper>
-                              <div className="flex h-screen bg-gray-50 dark:bg-background overflow-visible font-sans">
+                              <div
+                                className={cn(
+                                  "flex h-screen overflow-visible font-sans",
+                                  isEmpresasRoute
+                                    ? "admin-empresas-shell-bg"
+                                    : "bg-gray-50 dark:bg-background",
+                                )}
+                              >
                                 <div
                                   className="lg:hidden fixed inset-0 z-50 bg-black/50 backdrop-blur-sm hidden"
                                   id="sidebar-overlay"
                                 />
                                 <div className="hidden lg:flex shrink-0 relative z-100">
-                                  <Sidebar />
+                                  <Sidebar transparent={isEmpresasRoute} />
                                 </div>
                                 <div
                                   className="lg:hidden fixed inset-y-0 left-0 z-50 transform -translate-x-full transition-transform duration-300 ease-in-out"
                                   id="mobile-sidebar"
                                 >
-                                  <Sidebar />
+                                  <Sidebar transparent={isEmpresasRoute} />
                                 </div>
                                 <div className="flex-1 flex flex-col overflow-visible min-w-0">
                                   <PageErrorBoundary>
                                     {/* Header visível apenas em desktop (lg+); mobile usa bottom nav */}
                                     <div className="hidden lg:block">
-                                      <Header />
+                                      <Header transparent={isEmpresasRoute} />
                                     </div>
                                     {/* Header mobile: compacto, sem sidebar toggle */}
                                     <div className="lg:hidden">
-                                      <Header />
+                                      <Header transparent={isEmpresasRoute} />
                                     </div>
                                   </PageErrorBoundary>
-                                  <main className="flex-1 overflow-auto bg-slate-200 dark:bg-background mx-0 py-4 px-4 sm:px-6 lg:px-14 lg:py-12 pb-mobile-nav">
+                                  <main
+                                    className={cn(
+                                      "flex-1 overflow-auto mx-0 py-4 px-4 sm:px-6 pb-mobile-nav",
+                                      isEmpresasRoute
+                                        ? "bg-transparent lg:pt-[20px] lg:pl-[20px] lg:pr-14 lg:!pb-[25px]"
+                                        : "bg-slate-200 dark:bg-background lg:px-14 lg:py-12",
+                                    )}
+                                  >
                                     <PageErrorBoundary>
                                       <Suspense fallback={<PageLoader />}>
                                         {children}
                                       </Suspense>
                                     </PageErrorBoundary>
                                   </main>
-                                  <Footer />
+                                  <Footer transparent={isEmpresasRoute} />
                                 </div>
                               </div>
                             </MobileLayoutWrapper>
@@ -526,6 +579,8 @@ function AppLayout({ children }: { children: React.ReactNode }) {
                             )}
                             {/* Chat widget flutuante */}
                             <ChatWidget />
+                            {/* Bandeja de telas abertas — logo abaixo do chat */}
+                            <OpenScreensTray />
                           </ProjectBasketProvider>
                         </ProductProvider>
                       </PricingProvider>
@@ -538,6 +593,7 @@ function AppLayout({ children }: { children: React.ReactNode }) {
         </SettingsProvider>
       </PlatformUsersProvider>
     </ChatProvider>
+    </OpenScreensProvider>
   );
 }
 
@@ -551,15 +607,16 @@ export default function App() {
       const loginPath =
         path.startsWith("/nomad") || path.startsWith("/nomades")
           ? "/nomad/login"
-          : path.startsWith("/agency") || path.startsWith("/agencia")
+          : path.startsWith("/agency") ||
+              path.startsWith("/agencia") ||
+              path.startsWith("/partner") ||
+              path.startsWith("/parceiro")
             ? "/agency/login"
-            : path.startsWith("/partner") || path.startsWith("/parceiro")
-              ? "/partner/login"
-              : path.startsWith("/leader") || path.startsWith("/lider")
-                ? "/leader/login"
-                : path.startsWith("/company") || path.startsWith("/empresa")
-                  ? "/company/login"
-                  : "/login";
+            : path.startsWith("/leader") || path.startsWith("/lider")
+              ? "/leader/login"
+              : path.startsWith("/company") || path.startsWith("/empresa")
+                ? "/company/login"
+                : "/login";
       if (!path.includes("/login")) navigate(loginPath, { replace: true });
     };
     window.addEventListener("allka:unauthorized", handler);
@@ -610,17 +667,15 @@ export default function App() {
             </Suspense>
           }
         />
+        {/* Partner não tem login próprio — é a mesma Agency, com upgrade
+            de status via convite (ver PartnerProfile). */}
         <Route
           path="/partner/login"
-          element={
-            <Suspense fallback={<PageLoader />}>
-              <ParceiroLoginPage />
-            </Suspense>
-          }
+          element={<Navigate to="/agency/login" replace />}
         />
         <Route
           path="/parceiro/login"
-          element={<Navigate to="/partner/login" replace />}
+          element={<Navigate to="/agency/login" replace />}
         />
         <Route
           path="/leader/login"
@@ -691,10 +746,6 @@ export default function App() {
                   <Route
                     path="/admin/empresas/:empresaId"
                     element={<AdminEmpresasPage />}
-                  />
-                  <Route
-                    path="/admin/agencias"
-                    element={<AdminAgenciasPage />}
                   />
                   <Route path="/admin/nomades" element={<AdminNomadesPg />} />
                   <Route
@@ -798,6 +849,10 @@ export default function App() {
                   />
                   <Route
                     path="/admin/clientes"
+                    element={<AdminClientesPage />}
+                  />
+                  <Route
+                    path="/admin/clientes/:clientId"
                     element={<AdminClientesPage />}
                   />
                   <Route
@@ -946,9 +1001,11 @@ export default function App() {
                     path="/company/usuarios"
                     element={<CompanyUsuariosPage />}
                   />
+                  {/* Partner não tem gestão de usuários própria — colaboradores
+                      são geridos pela própria Agency. */}
                   <Route
                     path="/partner/usuarios"
-                    element={<PartnerUsuariosPage />}
+                    element={<Navigate to="/agency/usuarios" replace />}
                   />
 
                   {/* ─── Agency (novo) ────────────────────────────────────── */}

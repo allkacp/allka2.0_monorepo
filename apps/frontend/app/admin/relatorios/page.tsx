@@ -50,8 +50,12 @@ import { ReportIndicatorLibrary } from "@/features/reports/components/report-ind
 import { ReportConfigsTable } from "@/features/reports/components/report-configs-table";
 import { ReportBuilderSheet } from "@/features/reports/components/report-builder-sheet";
 import type { ReportConfig } from "@/features/reports/types";
-import { PageHeader } from "@/components/page-header";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import {
+  STANDARD_SHELL_PANEL_CLASS,
+  StandardPageBanner,
+} from "@/components/standard-page-shell";
+import { PinToTrayButton } from "@/components/pin-to-tray-button";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -439,8 +443,11 @@ export default function AdminRelatoriosPage() {
   }
 
   return (
-    <div className="space-y-4">
-      <PageHeader
+    <div className={STANDARD_SHELL_PANEL_CLASS}>
+    <div className="h-full min-h-0 flex flex-col">
+      <div className="shrink-0 -mb-[11px]">
+      <StandardPageBanner
+        icon={BarChart3}
         title="Relatórios"
         description={`${totalReports} relatórios em ${CATEGORIES.length} categorias`}
         actions={<>
@@ -449,10 +456,9 @@ export default function AdminRelatoriosPage() {
               <TooltipTrigger asChild>
                 <button
                   onClick={loadData}
-                  className="group relative flex items-center justify-center h-8 w-8 rounded-lg border border-border/60 hover:border-transparent overflow-hidden transition-all"
+                  className="flex items-center justify-center h-8 w-8 rounded-lg border border-white/70 text-white bg-white/10 hover:bg-white/20 transition-colors"
                 >
-                  <span className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none" style={{ background: "linear-gradient(135deg,#000000 0%,#1a2a6f 45%,#c81a7f 100%)" }} />
-                  <RefreshCw className="relative z-10 h-4 w-4 text-[#7d1b6a] group-hover:text-white transition-colors" />
+                  <RefreshCw className="h-4 w-4" />
                 </button>
               </TooltipTrigger>
               <TooltipContent side="bottom" sideOffset={6}>Atualizar</TooltipContent>
@@ -464,22 +470,23 @@ export default function AdminRelatoriosPage() {
                 <TooltipTrigger asChild>
                   <button
                     onClick={() => { setEditingConfig(null); setBuilderOpen(true); }}
-                    className="group relative flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-border/60 hover:border-transparent overflow-hidden transition-all"
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-white/70 text-white bg-white/10 hover:bg-white/20 transition-colors text-xs font-semibold whitespace-nowrap"
                   >
-                    <span className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none" style={{ background: "linear-gradient(135deg,#000000 0%,#1a2a6f 45%,#c81a7f 100%)" }} />
-                    <Plus className="relative z-10 h-3.5 w-3.5 shrink-0 text-[#7d1b6a] group-hover:text-white transition-colors" />
-                    <span className="relative z-10 text-xs font-semibold bg-clip-text text-transparent [background-image:linear-gradient(135deg,#1a2a6f_0%,#7d1b6a_55%,#c81a7f_100%)] group-hover:[background-image:none] group-hover:text-white transition-colors">
-                      Nova configuração
-                    </span>
+                    <Plus className="h-3.5 w-3.5 shrink-0" />
+                    Nova configuração
                   </button>
                 </TooltipTrigger>
                 <TooltipContent side="bottom" sideOffset={6}>Criar nova configuração de relatório</TooltipContent>
               </Tooltip>
             </TooltipProvider>
           )}
+          <PinToTrayButton id="page-relatorios" label="Relatórios" icon={BarChart3} path="/admin/relatorios" />
         </>}
       />
+      </div>
 
+      <div className="flex-1 min-h-0 overflow-y-auto">
+      <div className="space-y-4">
       {/* ── KPI strip — estilo idêntico ao Financeiro ────────────────────────── */}
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
         <div className="relative rounded-xl overflow-hidden shadow-sm bg-gradient-to-br from-violet-500 to-purple-700 px-3 pt-2 pb-1.5">
@@ -745,6 +752,9 @@ export default function AdminRelatoriosPage() {
         editingConfig={editingConfig}
         onSaved={loadAdminConfigs}
       />
+    </div>
+    </div>
+    </div>
     </div>
   );
 }

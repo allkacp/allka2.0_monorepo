@@ -11,6 +11,28 @@ const API_BASE_URL =
 
 const TOKEN_KEY = "allka_token";
 
+// Erro estruturado — extends Error de propósito, então `catch (err) { err.message }`
+// (o padrão usado em toda a base hoje) continua funcionando sem mudança
+// nenhuma. Quem precisar dos campos extras (code/client/supportRequestAvailable
+// etc., vindos do corpo da resposta) usa `err instanceof ApiError` e lê
+// `err.code` / `err.data`.
+export class ApiError extends Error {
+  status: number;
+  code?: string;
+  details?: unknown;
+  /** Corpo completo (já parseado) da resposta de erro, quando veio JSON válido. */
+  data?: Record<string, any>;
+
+  constructor(message: string, status: number, data?: Record<string, any>) {
+    super(message);
+    this.name = "ApiError";
+    this.status = status;
+    this.code = data?.code;
+    this.details = data?.details;
+    this.data = data;
+  }
+}
+
 class ApiClient {
   // ─── Token Management ─────────────────────────────────────────────────────
   setToken(token: string) {
@@ -73,13 +95,14 @@ class ApiClient {
         }
       }
       let msg = `HTTP ${res.status}`;
+      let body: Record<string, any> | undefined;
       try {
-        const j = await res.json();
-        msg = j.error || j.message || msg;
+        body = await res.json();
+        msg = body?.error || body?.message || msg;
         // Append field-specific validation details when present
-        if (j.details && typeof j.details === "object") {
+        if (body?.details && typeof body.details === "object") {
           const fieldErrors = Object.entries(
-            j.details as Record<string, string[]>,
+            body.details as Record<string, string[]>,
           )
             .filter(([, v]) => Array.isArray(v) && v.length > 0)
             .map(([k, v]) => `${k}: ${(v as string[]).join(", ")}`)
@@ -87,7 +110,7 @@ class ApiClient {
           if (fieldErrors) msg += ` — ${fieldErrors}`;
         }
       } catch {}
-      throw new Error(msg);
+      throw new ApiError(msg, res.status, body);
     }
 
     if (res.status === 204) return undefined as T;
@@ -106,8 +129,8 @@ class ApiClient {
   private patch<T = any>(path: string, body?: unknown) {
     return this.request<T>("PATCH", path, body);
   }
-  private del<T = any>(path: string) {
-    return this.request<T>("DELETE", path);
+  private del<T = any>(path: string, body?: unknown) {
+    return this.request<T>("DELETE", path, body);
   }
 
   // ─── Auth ──────────────────────────────────────────────────────────────────
@@ -176,20 +199,6 @@ class ApiClient {
     return this.put(`/agency/users/${id}`, data);
   }
 
-  // Self-service Partner — colaboradores do próprio partner do usuário
-  // logado. Nunca aceita partner_id (o backend resolve pelo token).
-  async getPartnerUsers(filters?: Record<string, any>) {
-    return this.get("/partner/users", filters);
-  }
-
-  async createPartnerUser(data: Record<string, any>) {
-    return this.post("/partner/users", data);
-  }
-
-  async updatePartnerUser(id: string | number, data: Record<string, any>) {
-    return this.put(`/partner/users/${id}`, data);
-  }
-
   async getUser(id: string | number) {
     return this.get(`/users/${id}`);
   }
@@ -227,8 +236,15 @@ class ApiClient {
     return this.put(`/clients/${id}`, data);
   }
 
-  async deleteCompany(id: string | number) {
-    return this.del(`/clients/${id}`);
+  async deleteCompany(
+    id: string | number,
+    userActions?: { userId: string; action: "delete" | "unlink" | "suspend" }[],
+  ) {
+    return this.del(`/clients/${id}`, { userActions: userActions ?? [] });
+  }
+
+  async getCompanyArchives(sequenceNumber: number | string) {
+    return this.get(`/clients/archives/${sequenceNumber}`);
   }
 
   // ─── Company Payment Methods ───────────────────────────────────────────────
@@ -493,6 +509,20 @@ class ApiClient {
 
   async deleteAgency(id: string) {
     return this.del(`/agencies/${id}`);
+  }
+
+  // Convite de Partner — Partner não é mais um cadastro à parte, é um
+  // upgrade que uma Agency existente recebe e precisa aceitar/recusar.
+  async invitePartner(agencyId: string) {
+    return this.post(`/agencies/${agencyId}/partner-invite`, {});
+  }
+
+  async acceptPartnerInvite(agencyId: string) {
+    return this.post(`/agencies/${agencyId}/partner-invite/accept`, {});
+  }
+
+  async declinePartnerInvite(agencyId: string) {
+    return this.post(`/agencies/${agencyId}/partner-invite/decline`, {});
   }
 
   // ─── Partners ─────────────────────────────────────────────────────────────

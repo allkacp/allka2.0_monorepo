@@ -1,7 +1,7 @@
 // @ts-nocheck
 /**
- * ChatWidget — widget de chat flutuante estilo WhatsApp Web + Workana.
- * Posição: fixed bottom-right, z-50.
+ * ChatWidget — painel de chat estilo WhatsApp Web + Workana.
+ * Gatilho: ícone flutuante fixo no canto superior direito da tela.
  * Estado gerido pelo ChatContext.
  */
 import { useState, useRef, useEffect } from "react";
@@ -568,43 +568,25 @@ export function ChatWidget() {
         </div>
       )}
 
-      {/* ── Side tab trigger (always visible when drawer is closed) ─────── */}
-      {/* Posição vertical: ajuste CHAT_TAB_TOP_PERCENT para mover a aba (0–100) */}
+      {/* ── Trigger: fixed icon-only button, top-right corner ────────────── */}
       {!isVisible && (
         <button
           onClick={handleOpen}
-          title="Abrir chat"
-          className={cn(
-            "fixed right-0 z-50",
-            "flex flex-col items-center justify-center gap-1.5",
-            "py-3.5 px-2 rounded-l-xl",
-            "text-white shadow-lg border border-white/15",
-            "hover:px-2.5 transition-all duration-200",
-          )}
-          style={{
-            bottom: "20px",
-            background:
-              "var(--app-brand-gradient, linear-gradient(135deg, #000000 0%, #1a2a6f 45%, #c81a7f 100%))",
-          }}
+          className="group fixed top-[85px] right-[8px] z-50 flex items-center justify-center h-10 w-10 rounded-xl text-white/70 hover:text-white hover:bg-white/10 transition-colors"
         >
-          <MessageSquare className="h-3.5 w-3.5 shrink-0" />
-          <span
-            className="text-[10px] font-bold tracking-widest select-none"
-            style={{
-              writingMode: "vertical-rl",
-              textOrientation: "mixed",
-              transform: "rotate(180deg)",
-            }}
-          >
-            Chat
-          </span>
+          <MessageSquare className="h-5 w-5 shrink-0" />
 
           {/* Unread badge */}
           {totalUnread > 0 && (
-            <span className="absolute -top-1.5 -left-1.5 min-w-4.5 h-4.5 rounded-full bg-red-500 text-white text-[9px] font-bold flex items-center justify-center px-0.5 border-2 border-white pointer-events-none shadow">
+            <span className="absolute -top-1 -right-1 min-w-4.5 h-4.5 rounded-full bg-red-500 text-white text-[9px] font-bold flex items-center justify-center px-0.5 border-2 border-white pointer-events-none shadow">
               {totalUnread > 99 ? "99+" : totalUnread}
             </span>
           )}
+
+          {/* Tooltip */}
+          <span className="pointer-events-none absolute top-full right-0 mt-2 whitespace-nowrap rounded-lg bg-gray-900/95 px-2.5 py-1.5 text-[11px] text-white opacity-0 shadow-xl border border-white/10 transition-opacity duration-150 group-hover:opacity-100">
+            Chat
+          </span>
         </button>
       )}
     </>

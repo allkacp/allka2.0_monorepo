@@ -39,7 +39,7 @@ router.get("/withdrawals", verifyToken, async (req, res, next) => {
     if (nomade_id) where["nomade_id"] = nomade_id;
 
     // Nomad users can only see their own withdrawals
-    if (req.user?.role === "nomad") {
+    if (req.user?.role === "nomad" || req.user?.role === "nomad_admin") {
       where["nomade"] = { user_id: req.user.id };
     }
 

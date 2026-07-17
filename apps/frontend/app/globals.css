@@ -1155,41 +1155,10 @@
   }
   /* ─── /Allka Badge System ────────────────────────────────────────────────── */
 
-  /* Allka table — scrollbar estilizado */
-  .allka-table-scroll {
-    scrollbar-width: thin;
-    scrollbar-color: rgba(148, 163, 184, 0.4) transparent;
-  }
-  .allka-table-scroll::-webkit-scrollbar {
-    width: 5px;
-    height: 5px;
-  }
-  .allka-table-scroll::-webkit-scrollbar-track {
-    background: transparent;
-  }
-  .allka-table-scroll::-webkit-scrollbar-thumb {
-    background: rgba(148, 163, 184, 0.4);
-    border-radius: 9999px;
-  }
-  .allka-table-scroll::-webkit-scrollbar-thumb:hover {
-    background: rgba(100, 116, 139, 0.6);
-  }
-  .allka-table-scroll::-webkit-scrollbar-corner {
-    background: transparent;
-  }
-
-  /* Corpo real da tabela: rola horizontalmente mas SEM barra nativa visível —
-     a barra fica só nos espelhos (allka-table-scroll) do topo/rodapé. Sem
-     isso, a barra nativa do body some com a barra do espelho no rodapé,
-     dando a impressão de "duas barras de rolagem" empilhadas. */
-  .allka-table-scroll-body {
-    scrollbar-width: none;
-  }
-  .allka-table-scroll-body::-webkit-scrollbar {
-    display: none;
-    width: 0;
-    height: 0;
-  }
+  /* Allka table — scrollbar estilizado. Definição real fica fora de
+     @layer, perto do fim do arquivo (precisa vencer a regra global
+     `::-webkit-scrollbar` por ordem de cascata, não por especificidade —
+     ver comentário lá). Isto aqui só documenta a intenção original. */
 
 
   /* Hide scrollbar for mobile menu */
@@ -1241,6 +1210,23 @@
     .footer-positioned {
       left: var(--sidebar-width, 240px);
     }
+  }
+
+  /* Fundo único contínuo do shell — usado somente na rota /admin/empresas
+     (ativado condicionalmente em App.tsx via isEmpresasRoute). É a ÚNICA
+     declaração de gradiente para essa tela: Sidebar/Header/main/Footer
+     recebem prop `transparent` e deixam de pintar o próprio fundo, para que
+     este gradiente apareça contínuo atrás de todas as regiões. */
+  .admin-empresas-shell-bg {
+    background: linear-gradient(135deg, #071126 0%, #14245f 42%, #68236f 72%, #c51684 100%);
+  }
+
+  /* Foco roxo/magenta de marca para Input/Select/Textarea SÓ dentro da tela
+     de Novo Cadastro — sobrescreve --ring (consumido pelos componentes
+     compartilhados via focus-visible:ring-ring/50) apenas neste escopo, sem
+     tocar nos componentes globais nem no --ring do resto da plataforma. */
+  .admin-empresas-create {
+    --ring: var(--app-brand-active, #7d1b6a);
   }
 
   /* Added glassmorphism effect for modern app feel */
@@ -1972,6 +1958,47 @@
   scrollbar-width: none;
 }
 .empresas-table-body::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   Mesmo problema do bloco .empresas-table-* acima, só que pro par genérico
+   .allka-table-scroll / .allka-table-scroll-body usado em várias telas
+   (admin/clientes, agencia/clientes, company/clientes, partner/clientes,
+   etc.) — as regras equivalentes lá em cima (dentro de @layer utilities)
+   nunca venciam a regra global `::-webkit-scrollbar` (linha ~1520), porque
+   regra sem-layer sempre vence regra com-layer, não importa a
+   especificidade. Resultado visível: a scrollbar nativa "feia" aparecia por
+   cima/junto da barra espelho customizada, parecendo "duas barras".
+   Unlayered de propósito, igual ao bloco acima.
+   ───────────────────────────────────────────────────────────────────────────── */
+.allka-table-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(148, 163, 184, 0.4) transparent;
+}
+.allka-table-scroll::-webkit-scrollbar {
+  width: 5px;
+  height: 5px;
+}
+.allka-table-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+.allka-table-scroll::-webkit-scrollbar-thumb {
+  background: rgba(148, 163, 184, 0.4);
+  border-radius: 9999px;
+}
+.allka-table-scroll::-webkit-scrollbar-thumb:hover {
+  background: rgba(100, 116, 139, 0.6);
+}
+.allka-table-scroll::-webkit-scrollbar-corner {
+  background: transparent;
+}
+.allka-table-scroll-body {
+  scrollbar-width: none;
+}
+.allka-table-scroll-body::-webkit-scrollbar {
   display: none;
   width: 0;
   height: 0;

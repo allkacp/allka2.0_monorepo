@@ -326,7 +326,7 @@ export function getTaskStatusForRole(
 
   const isAdmin  = role === "admin";
   const isLider  = role === "lider";
-  const isNomad  = role === "nomad";
+  const isNomad  = role === "nomad" || role === "nomad_admin";
   const isAgency = role === "agency_admin" || role === "agency_user";
   // Client = company_admin, company_user, partner (parceiro não vê detalhes técnicos)
   const isClient = role === "company_admin" || role === "company_user" || role === "partner";

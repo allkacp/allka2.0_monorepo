@@ -3,7 +3,14 @@ import { useState, useEffect, useRef, useMemo } from "react";
 import { useItemsPerPage } from "@/lib/use-items-per-page";
 import { useNavigate, useParams } from "react-router-dom";
 import { ButtonLoader, PageLoader } from "@/components/ui/loading";
+import {
+  STANDARD_SHELL_PANEL_CLASS,
+  STANDARD_SHELL_TABLE_CARD_CLASS,
+  StandardPageBanner,
+} from "@/components/standard-page-shell";
 import { ExportButton } from "@/components/export-button";
+import { PinToTrayButton } from "@/components/pin-to-tray-button";
+import { useConsumePendingActivation } from "@/contexts/open-screens-context";
 import { IconToolbarButton } from "@/components/icon-toolbar-button";
 import { NeonBadge } from "@/components/neon-badge";
 import { Badge } from "@/components/ui/badge";
@@ -53,6 +60,7 @@ import { useTableScrollSync } from "@/hooks/useTableScrollSync";
 import type { User } from "@/types/user";
 import { UserViewSlidePanel } from "@/components/user-view-slide-panel";
 import { SlidePanel } from "@/components/slide-panel";
+import { StandardModalDialog } from "@/components/standard-modal-dialog";
 import {
   Accordion,
   AccordionContent,
@@ -112,7 +120,6 @@ import {
 import { useToast } from "@/components/ui/use-toast";
 import { useSidebar } from "@/contexts/sidebar-context";
 import { useAppFrameMetrics } from "@/hooks/useAppFrameMetrics";
-import { PageHeader } from "@/components/page-header";
 
 type ColKey = "codigo" | "usuario" | "contato" | "tipo_funcao" | "vinculo" | "status" | "ultimo_acesso";
 const ALL_COLUMNS: { key: ColKey; label: string; info: string }[] = [
@@ -159,6 +166,14 @@ function computeInactivityBucket(lastLogin?: string | null): string {
   if (diffDays < 60) return "inactive_30";
   if (diffDays < 90) return "inactive_60";
   return "inactive_90";
+}
+
+// Extrai o número de "User_00001" → 1, pra usar na URL em vez do id técnico
+// (CUID) — mesmo espírito do padrão já usado em admin/empresas (id local
+// sequencial na URL, não o _apiId).
+function userCodeToNum(code?: string | null): number | null {
+  const m = /(\d+)\s*$/.exec(code || "");
+  return m ? parseInt(m[1], 10) : null;
 }
 
 export default function UsuariosPage() {
@@ -212,22 +227,6 @@ export default function UsuariosPage() {
   const pageRef = useRef<HTMLDivElement>(null);
   const navigate = useNavigate();
   const { userId: urlUserId } = useParams<{ userId?: string }>();
-
-  // Deep-link: open user panel from URL param
-  useEffect(() => {
-    if (!urlUserId) return;
-    apiClient
-      .getUser(urlUserId)
-      .then((user: any) => {
-        setSelectedUser(user);
-        setIsViewDialogOpen(true);
-      })
-      .catch(() => {
-        setSelectedUser({ id: urlUserId } as any);
-        setIsViewDialogOpen(true);
-      });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [urlUserId]);
   const {
     sortKey: userSortKey,
     sortDir: userSortDir,
@@ -241,6 +240,7 @@ export default function UsuariosPage() {
   const [filteredUsers, setFilteredUsers] = useState<User[]>([]);
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
   const [isViewDialogOpen, setIsViewDialogOpen] = useState(false);
+  const [viewStartInEditMode, setViewStartInEditMode] = useState(false);
   const [isDeleteAlertOpen, setIsDeleteAlertOpen] = useState(false);
   const [isDeleteUserAlertOpen, setIsDeleteUserAlertOpen] = useState(false);
   const [isDeleteLoading, setIsDeleteLoading] = useState(false);
@@ -414,6 +414,41 @@ export default function UsuariosPage() {
     setFilteredUsers(mapped);
     setCurrentPage(1);
   }, [apiUsers]);
+
+  // Reabre a tela certa quando o usuário chega aqui clicando num pin de
+  // sub-tela na Bandeja de Telas (Novo Usuário, ou o "Ver/Editar" de um
+  // usuário específico).
+  useConsumePendingActivation((key) => {
+    if (key === "create") {
+      setShowCreateUser(true);
+    } else if (key.startsWith("view:") || key.startsWith("edit:")) {
+      const [mode, id] = key.split(":");
+      const found = users.find((u: any) => String(u.id) === id);
+      if (found) {
+        setSelectedUser(found);
+        setViewStartInEditMode(mode === "edit");
+        setIsViewDialogOpen(true);
+      }
+    }
+  });
+
+  // Deep-link: open user panel from URL param — o param é o número de
+  // User_00001 (ex.: "1"), não o id técnico, então resolve contra a lista
+  // já carregada em vez de chamar GET /users/:id com um valor que o
+  // backend não reconhece.
+  useEffect(() => {
+    if (!urlUserId) return;
+    if (usersLoading) return;
+    const num = parseInt(urlUserId, 10);
+    const found = Number.isFinite(num)
+      ? users.find((u: any) => userCodeToNum(u.user_code) === num)
+      : users.find((u: any) => u.id === urlUserId); // fallback pra links antigos com o id técnico
+    if (found) {
+      setSelectedUser(found);
+      setIsViewDialogOpen(true);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [urlUserId, usersLoading, users]);
 
   useEffect(() => {
     const filtered = users.filter((user) => {
@@ -886,8 +921,14 @@ export default function UsuariosPage() {
 
     switch (action) {
       case "view":
+        setViewStartInEditMode(false);
         setIsViewDialogOpen(true);
-        navigate(`/admin/usuarios/${user.id}`, { replace: true });
+        navigate(`/admin/usuarios/${userCodeToNum((user as any).user_code) ?? user.id}`, { replace: true });
+        break;
+      case "edit":
+        setViewStartInEditMode(true);
+        setIsViewDialogOpen(true);
+        navigate(`/admin/usuarios/${userCodeToNum((user as any).user_code) ?? user.id}`, { replace: true });
         break;
       case "block":
         setIsDeleteAlertOpen(true);
@@ -935,6 +976,7 @@ export default function UsuariosPage() {
         title: "Usuário excluído",
         description: `O usuário "${selectedUser.name}" foi excluído com sucesso.`,
       });
+      window.dispatchEvent(new Event("allka:admin-counts-changed"));
 
       // Close dialog and reset
       setIsDeleteUserAlertOpen(false);
@@ -1003,11 +1045,13 @@ export default function UsuariosPage() {
       case "company_user":
         return "Company User";
       case "agency_admin":
-        return "Admin Agência";
+        return "Agency Admin";
       case "agency_user":
-        return "Usuário Agência";
+        return "Agency User";
+      case "nomad_admin":
+        return "Nomad Admin";
       case "nomad":
-        return "Nômade";
+        return "Nomad Admin";
       case "admin":
         return "Administrador";
       case "financial":
@@ -1118,8 +1162,8 @@ export default function UsuariosPage() {
 
   // ── Sparkline ─────────────────────────────────────────────────────────────
   const Sparkline = ({ data, color }: { data: number[]; color: string }) => {
-    const w = 80,
-      h = 28;
+    const w = 56,
+      h = 16;
     const min = Math.min(...data),
       max = Math.max(...data);
     const range = max - min || 1;
@@ -1185,7 +1229,7 @@ export default function UsuariosPage() {
 
   const totalUsers = users.length;
   const activeUsers = users.filter((u) => u.is_active).length;
-  const adminUsers = users.filter((u) => u.is_admin).length;
+  const adminUsers = users.filter((u) => u.role === "admin" || u.account_type === "admin").length;
   const active90 = users.filter((u) => {
     const last = new Date(u.last_login || Date.now());
     const ago = new Date();
@@ -1294,21 +1338,21 @@ export default function UsuariosPage() {
             </Tooltip>
           </TooltipProvider>
         </div>
-        <div className="px-3 pt-2 pb-2">
-          <div className="flex items-center justify-between mb-1">
+        <div className="px-2.5 pt-1.5 pb-1.5">
+          <div className="flex items-center justify-between mb-0.5">
             <p className="text-[10px] font-semibold text-white/80 uppercase tracking-wider leading-tight truncate">
               {label}
             </p>
-            <div className="bg-white/20 rounded-md p-1 flex-shrink-0 ml-1">
-              <Icon className="h-3 w-3 text-white" />
+            <div className="bg-white/20 rounded-md p-0.5 flex-shrink-0 ml-1">
+              <Icon className="h-2.5 w-2.5 text-white" />
             </div>
           </div>
           <div className="flex items-end justify-between gap-2">
             <div>
-              <p className="text-2xl font-bold leading-none text-white">
+              <p className="text-lg font-bold leading-none text-white">
                 {value}
               </p>
-              <div className="inline-flex items-center gap-1 mt-1 px-1.5 py-0.5 rounded-md bg-white/20">
+              <div className="inline-flex items-center gap-1 mt-0.5 px-1.5 py-0.5 rounded-md bg-white/20">
                 {up ? (
                   <TrendingUp className="h-2.5 w-2.5 text-white" />
                 ) : (
@@ -1359,24 +1403,27 @@ export default function UsuariosPage() {
   }
 
   return (
-    <div className="space-y-5" ref={pageRef}>
-      <PageHeader
+    <div className={STANDARD_SHELL_PANEL_CLASS}>
+    <div className="relative h-full min-h-0 flex flex-col overflow-hidden" ref={pageRef}>
+      <div className="shrink-0 -mb-[11px]">
+      <StandardPageBanner
+        icon={Users}
         title="Usuários"
         description="Gerencie todos os usuários da plataforma"
         actions={<>
-          <ExportButton pageRef={pageRef} filename="usuarios" />
+          <div className="bg-white rounded-lg">
+            <ExportButton pageRef={pageRef} filename="usuarios" />
+          </div>
+          <PinToTrayButton id="page-usuarios" label="Usuários" icon={Users} path="/admin/usuarios" />
           <TooltipProvider delayDuration={400}>
             <Tooltip>
               <TooltipTrigger asChild>
                 <button
                   onClick={() => setShowCreateUser(true)}
-                  className="group relative flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-border/60 hover:border-transparent overflow-hidden transition-all"
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-white/70 text-white bg-white/10 hover:bg-white/20 transition-colors text-xs font-semibold whitespace-nowrap"
                 >
-                  <span className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none" style={{ background: "linear-gradient(135deg,#000000 0%,#1a2a6f 45%,#c81a7f 100%)" }} />
-                  <Plus className="relative z-10 h-3.5 w-3.5 shrink-0 text-[#7d1b6a] group-hover:text-white transition-colors" />
-                  <span className="relative z-10 text-xs font-semibold bg-clip-text text-transparent [background-image:linear-gradient(135deg,#1a2a6f_0%,#7d1b6a_55%,#c81a7f_100%)] group-hover:[background-image:none] group-hover:text-white transition-colors">
-                    Novo Usuário
-                  </span>
+                  <Plus className="h-3.5 w-3.5 shrink-0" />
+                  Novo Usuário
                 </button>
               </TooltipTrigger>
               <TooltipContent side="bottom" sideOffset={6}>Criar novo usuário</TooltipContent>
@@ -1384,7 +1431,10 @@ export default function UsuariosPage() {
           </TooltipProvider>
         </>}
       />
+      </div>
 
+      <div className="flex-1 min-h-0 overflow-y-auto">
+      <div className="space-y-5">
       {/* Stats Cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         <StatCard
@@ -1457,8 +1507,8 @@ export default function UsuariosPage() {
         />
       </div>
 
-      {/* Main Table Card — bg-white/border/rounded-xl matching admin/empresas */}
-      <div className="bg-white dark:bg-slate-900 border border-[#e8edf5] dark:border-slate-700 rounded-xl shadow-sm overflow-hidden">
+      {/* Main Table Card */}
+      <div className={STANDARD_SHELL_TABLE_CARD_CLASS}>
         {/* Row 1 — search + icon toolbar buttons */}
         <div className="flex items-center gap-2 flex-wrap px-[18px] py-3">
           <div ref={searchBoxRef} className="relative flex-1 min-w-[220px] max-w-sm">
@@ -1584,50 +1634,197 @@ export default function UsuariosPage() {
                   setDraggingFilterId(null);
                   setDragOverFilterId(null);
                 };
+                const guardedClose = () => {
+                  if (unsavedChanges) {
+                    setPendingClose(() => closeFn);
+                    return;
+                  }
+                  closeFn();
+                };
                 return (
-                  <div
-                    data-slot="sheet-content"
-                    data-state="open"
-                    className="fixed right-0 z-70 bg-white dark:bg-slate-900 shadow-2xl border-l border-slate-200 dark:border-slate-700 flex flex-col overflow-hidden data-[state=open]:animate-in data-[state=open]:slide-in-from-right data-[state=open]:fade-in-0 data-[state=closed]:animate-out data-[state=closed]:slide-out-to-right data-[state=closed]:fade-out-0 duration-300"
-                    style={{
-                      left: sidebarWidth - 2,
-                      top: headerHeight - 1,
-                      bottom: footerHeight - 1,
-                      width: `calc(100vw - ${sidebarWidth - 2}px)`,
-                    }}
-                  >
-                    <div className="relative bg-white dark:bg-slate-900 w-full h-full flex flex-col overflow-hidden">
-                      {/* Header — follows sidebar theme */}
-                      <div
-                        className="flex items-center justify-between px-5 py-3 flex-shrink-0"
-                        style={getHeaderStyle()}
-                      >
-                        <div>
-                          <h2 className="text-sm font-bold text-white">
-                            Filtros Avançados
-                          </h2>
-                          <p className="text-[11px] text-white/60 mt-0.5">
-                            {unsavedChanges
-                              ? "• Alterações não salvas"
-                              : selectedFilterId && !isEditingFilter
-                                ? "Filtro carregado"
-                                : "Configure e aplique filtros"}
-                          </p>
-                        </div>
+                  <StandardModalDialog
+                    open={isFilterModalOpen}
+                    onClose={guardedClose}
+                    title="Filtros Avançados"
+                    subtitle={
+                      unsavedChanges
+                        ? "• Alterações não salvas"
+                        : selectedFilterId && !isEditingFilter
+                          ? "Filtro carregado"
+                          : "Configure e aplique filtros"
+                    }
+                    footer={
+                      <div className="flex items-center justify-between w-full">
                         <button
                           onClick={() => {
-                            if (unsavedChanges) {
-                              setPendingClose(() => closeFn);
-                              return;
-                            }
-                            closeFn();
+                            setAdvancedFilters({
+                              name: "",
+                              email: "",
+                              cpf: "",
+                              phone: "",
+                              whatsapp: "",
+                              hasWhatsapp: "all",
+                              accountTypes: [],
+                              roles: [],
+                              statuses: [],
+                              registrationDateFrom: "",
+                              registrationDateTo: "",
+                              lastAccessDateFrom: "",
+                              lastAccessDateTo: "",
+                              lastUpdateDateFrom: "",
+                              lastUpdateDateTo: "",
+                              minScore: "",
+                              maxScore: "",
+                              userLevel: "all",
+                              rating: "all",
+                              hasCompany: "all",
+                              hasSpecialPermissions: "all",
+                              hasActiveWallet: "all",
+                              minBalance: "",
+                              maxBalance: "",
+                              hasFinancialActions: "all",
+                              profile: "all",
+                              plan: "all",
+                            });
+                            setUnsavedChanges(false);
                           }}
-                          className="text-white/70 hover:text-white hover:bg-white/20 rounded-lg p-1.5 transition-colors"
+                          className="text-[11px] text-slate-400 hover:text-red-500 transition-colors flex items-center gap-1"
                         >
-                          <X className="h-4 w-4" />
+                          <X className="h-3 w-3" /> Limpar filtros
                         </button>
+                        <div className="flex items-center gap-2">
+                          {showSaveInput ? (
+                            <div className="flex items-center gap-1.5">
+                              <input
+                                autoFocus
+                                type="text"
+                                value={filterNameInput}
+                                onChange={(e) =>
+                                  setFilterNameInput(e.target.value)
+                                }
+                                onKeyDown={(e) => {
+                                  if (
+                                    e.key === "Enter" &&
+                                    filterNameInput.trim()
+                                  ) {
+                                    const newId = `filter-${Date.now()}`;
+                                    setSavedFilters([
+                                      ...savedFilters,
+                                      {
+                                        id: newId,
+                                        name: filterNameInput.trim(),
+                                        filters: { ...advancedFilters },
+                                      },
+                                    ]);
+                                    setSelectedFilterId(newId);
+                                    setUnsavedChanges(false);
+                                    setShowSaveInput(false);
+                                    setFilterNameInput("");
+                                  }
+                                  if (e.key === "Escape") {
+                                    setShowSaveInput(false);
+                                    setFilterNameInput("");
+                                  }
+                                }}
+                                placeholder={`Filtro ${savedFilters.length + 1}`}
+                                className="h-7 px-2 rounded-md text-[11px] border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-1 focus:ring-blue-400 w-36"
+                              />
+                              <button
+                                disabled={!filterNameInput.trim()}
+                                onClick={() => {
+                                  const newId = `filter-${Date.now()}`;
+                                  setSavedFilters([
+                                    ...savedFilters,
+                                    {
+                                      id: newId,
+                                      name: filterNameInput.trim(),
+                                      filters: { ...advancedFilters },
+                                    },
+                                  ]);
+                                  setSelectedFilterId(newId);
+                                  setUnsavedChanges(false);
+                                  setShowSaveInput(false);
+                                  setFilterNameInput("");
+                                }}
+                                className="h-7 px-3 rounded-md text-[11px] font-medium bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-600 hover:to-emerald-700 disabled:opacity-40 text-white transition-all shadow-sm"
+                              >
+                                OK
+                              </button>
+                              <button
+                                onClick={() => {
+                                  setShowSaveInput(false);
+                                  setFilterNameInput("");
+                                }}
+                                className="h-7 w-7 flex items-center justify-center rounded-md border border-slate-200 dark:border-slate-700 text-slate-400 hover:text-red-500 hover:border-red-300 transition-colors"
+                              >
+                                <X className="h-3 w-3" />
+                              </button>
+                            </div>
+                          ) : selectedFilterId && unsavedChanges ? (
+                            <div className="flex items-center gap-1.5">
+                              <button
+                                onClick={() => {
+                                  setSavedFilters(
+                                    savedFilters.map((f) =>
+                                      f.id === selectedFilterId
+                                        ? {
+                                            ...f,
+                                            filters: { ...advancedFilters },
+                                          }
+                                        : f,
+                                    ),
+                                  );
+                                  setUnsavedChanges(false);
+                                }}
+                                className="h-7 px-3 rounded-md text-[11px] font-medium bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white transition-all shadow-sm"
+                              >
+                                Atualizar filtro
+                              </button>
+                              <button
+                                onClick={() => {
+                                  setFilterNameInput(
+                                    `Filtro ${savedFilters.length + 1}`,
+                                  );
+                                  setShowSaveInput(true);
+                                }}
+                                className="h-7 px-3 rounded-md text-[11px] font-medium border border-emerald-400 text-emerald-600 hover:bg-emerald-50 transition-colors"
+                              >
+                                Salvar como novo
+                              </button>
+                            </div>
+                          ) : (
+                            <button
+                              onClick={() => {
+                                setFilterNameInput(
+                                  `Filtro ${savedFilters.length + 1}`,
+                                );
+                                setShowSaveInput(true);
+                              }}
+                              className="h-7 px-3 rounded-md text-[11px] font-medium bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-600 hover:to-emerald-700 text-white transition-all shadow-sm"
+                            >
+                              Salvar filtro
+                            </button>
+                          )}
+                          <div className="w-px h-5 bg-slate-200 dark:bg-slate-700" />
+                          <button
+                            onClick={closeFn}
+                            className="h-7 px-3 rounded-md text-[11px] font-medium border border-slate-200 dark:border-slate-600 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+                          >
+                            Cancelar
+                          </button>
+                          <button
+                            onClick={() => {
+                              setIsFilterModalOpen(false);
+                              setShowSaveInput(false);
+                            }}
+                            className="h-7 px-4 rounded-md text-[11px] font-semibold btn-brand transition-all shadow-sm"
+                          >
+                            Aplicar Filtros
+                          </button>
+                        </div>
                       </div>
-
+                    }
+                  >
                       {/* Body */}
                       <div className="flex flex-1 overflow-hidden min-h-0">
                         {/* Left — Saved Filters (compact, drag-drop, inline rename) */}
@@ -2407,179 +2604,7 @@ export default function UsuariosPage() {
                           </Accordion>
                         </div>
                       </div>
-
-                      {/* Footer — compact, empresas-style */}
-                      <div className="flex items-center justify-between px-4 py-2.5 border-t border-slate-200 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-900/30 flex-shrink-0">
-                        <button
-                          onClick={() => {
-                            setAdvancedFilters({
-                              name: "",
-                              email: "",
-                              cpf: "",
-                              phone: "",
-                              whatsapp: "",
-                              hasWhatsapp: "all",
-                              accountTypes: [],
-                              roles: [],
-                              statuses: [],
-                              registrationDateFrom: "",
-                              registrationDateTo: "",
-                              lastAccessDateFrom: "",
-                              lastAccessDateTo: "",
-                              lastUpdateDateFrom: "",
-                              lastUpdateDateTo: "",
-                              minScore: "",
-                              maxScore: "",
-                              userLevel: "all",
-                              rating: "all",
-                              hasCompany: "all",
-                              hasSpecialPermissions: "all",
-                              hasActiveWallet: "all",
-                              minBalance: "",
-                              maxBalance: "",
-                              hasFinancialActions: "all",
-                              profile: "all",
-                              plan: "all",
-                            });
-                            setUnsavedChanges(false);
-                          }}
-                          className="text-[11px] text-slate-400 hover:text-red-500 transition-colors flex items-center gap-1"
-                        >
-                          <X className="h-3 w-3" /> Limpar filtros
-                        </button>
-                        <div className="flex items-center gap-2">
-                          {showSaveInput ? (
-                            <div className="flex items-center gap-1.5">
-                              <input
-                                autoFocus
-                                type="text"
-                                value={filterNameInput}
-                                onChange={(e) =>
-                                  setFilterNameInput(e.target.value)
-                                }
-                                onKeyDown={(e) => {
-                                  if (
-                                    e.key === "Enter" &&
-                                    filterNameInput.trim()
-                                  ) {
-                                    const newId = `filter-${Date.now()}`;
-                                    setSavedFilters([
-                                      ...savedFilters,
-                                      {
-                                        id: newId,
-                                        name: filterNameInput.trim(),
-                                        filters: { ...advancedFilters },
-                                      },
-                                    ]);
-                                    setSelectedFilterId(newId);
-                                    setUnsavedChanges(false);
-                                    setShowSaveInput(false);
-                                    setFilterNameInput("");
-                                  }
-                                  if (e.key === "Escape") {
-                                    setShowSaveInput(false);
-                                    setFilterNameInput("");
-                                  }
-                                }}
-                                placeholder={`Filtro ${savedFilters.length + 1}`}
-                                className="h-7 px-2 rounded-md text-[11px] border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-1 focus:ring-blue-400 w-36"
-                              />
-                              <button
-                                disabled={!filterNameInput.trim()}
-                                onClick={() => {
-                                  const newId = `filter-${Date.now()}`;
-                                  setSavedFilters([
-                                    ...savedFilters,
-                                    {
-                                      id: newId,
-                                      name: filterNameInput.trim(),
-                                      filters: { ...advancedFilters },
-                                    },
-                                  ]);
-                                  setSelectedFilterId(newId);
-                                  setUnsavedChanges(false);
-                                  setShowSaveInput(false);
-                                  setFilterNameInput("");
-                                }}
-                                className="h-7 px-3 rounded-md text-[11px] font-medium bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-600 hover:to-emerald-700 disabled:opacity-40 text-white transition-all shadow-sm"
-                              >
-                                OK
-                              </button>
-                              <button
-                                onClick={() => {
-                                  setShowSaveInput(false);
-                                  setFilterNameInput("");
-                                }}
-                                className="h-7 w-7 flex items-center justify-center rounded-md border border-slate-200 dark:border-slate-700 text-slate-400 hover:text-red-500 hover:border-red-300 transition-colors"
-                              >
-                                <X className="h-3 w-3" />
-                              </button>
-                            </div>
-                          ) : selectedFilterId && unsavedChanges ? (
-                            <div className="flex items-center gap-1.5">
-                              <button
-                                onClick={() => {
-                                  setSavedFilters(
-                                    savedFilters.map((f) =>
-                                      f.id === selectedFilterId
-                                        ? {
-                                            ...f,
-                                            filters: { ...advancedFilters },
-                                          }
-                                        : f,
-                                    ),
-                                  );
-                                  setUnsavedChanges(false);
-                                }}
-                                className="h-7 px-3 rounded-md text-[11px] font-medium bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white transition-all shadow-sm"
-                              >
-                                Atualizar filtro
-                              </button>
-                              <button
-                                onClick={() => {
-                                  setFilterNameInput(
-                                    `Filtro ${savedFilters.length + 1}`,
-                                  );
-                                  setShowSaveInput(true);
-                                }}
-                                className="h-7 px-3 rounded-md text-[11px] font-medium border border-emerald-400 text-emerald-600 hover:bg-emerald-50 transition-colors"
-                              >
-                                Salvar como novo
-                              </button>
-                            </div>
-                          ) : (
-                            <button
-                              onClick={() => {
-                                setFilterNameInput(
-                                  `Filtro ${savedFilters.length + 1}`,
-                                );
-                                setShowSaveInput(true);
-                              }}
-                              className="h-7 px-3 rounded-md text-[11px] font-medium bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-600 hover:to-emerald-700 text-white transition-all shadow-sm"
-                            >
-                              Salvar filtro
-                            </button>
-                          )}
-                          <div className="w-px h-5 bg-slate-200 dark:bg-slate-700" />
-                          <button
-                            onClick={closeFn}
-                            className="h-7 px-3 rounded-md text-[11px] font-medium border border-slate-200 dark:border-slate-600 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
-                          >
-                            Cancelar
-                          </button>
-                          <button
-                            onClick={() => {
-                              setIsFilterModalOpen(false);
-                              setShowSaveInput(false);
-                            }}
-                            className="h-7 px-4 rounded-md text-[11px] font-semibold btn-brand transition-all shadow-sm"
-                          >
-                            Aplicar Filtros
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
+                  </StandardModalDialog>
                 );
               })()}
 
@@ -2792,6 +2817,21 @@ export default function UsuariosPage() {
                               <Tooltip>
                                 <TooltipTrigger asChild>
                                   <button
+                                    onClick={() => handleUserAction(user, "edit")}
+                                    className="h-[26px] w-[26px] flex items-center justify-center rounded-[8px] bg-white dark:bg-slate-800 border border-[#e8edf5] dark:border-slate-700 text-[#2558FF] dark:text-slate-500 shadow-[0_4px_10px_rgba(15,23,42,0.06)] hover:bg-gradient-to-br hover:from-[#2558FF] hover:via-[#6E2C96] hover:to-[#D92293] hover:text-white dark:hover:text-[#0a1628] hover:border-transparent hover:shadow-[0_8px_18px_rgba(15,23,42,0.18)] hover:-translate-y-px transition-all duration-150"
+                                  >
+                                    <Pencil className="h-3.5 w-3.5" />
+                                  </button>
+                                </TooltipTrigger>
+                                <TooltipContent className="text-xs font-medium">
+                                  Editar
+                                </TooltipContent>
+                              </Tooltip>
+                            </TooltipProvider>
+                            <TooltipProvider delayDuration={400}>
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <button
                                     onClick={() => handleUserAction(user, "block")}
                                     className={`h-[26px] w-[26px] flex items-center justify-center rounded-[8px] bg-white dark:bg-slate-800 border border-[#e8edf5] dark:border-slate-700 shadow-[0_4px_10px_rgba(15,23,42,0.06)] hover:bg-gradient-to-br hover:from-[#2558FF] hover:via-[#6E2C96] hover:to-[#D92293] hover:text-white dark:hover:text-[#0a1628] hover:border-transparent hover:shadow-[0_8px_18px_rgba(15,23,42,0.18)] hover:-translate-y-px transition-all duration-150 ${
                                       user.is_active ? "text-amber-500 dark:text-amber-400" : "text-emerald-500 dark:text-emerald-400"
@@ -2837,7 +2877,10 @@ export default function UsuariosPage() {
                         {visibleCols.has("codigo") && (
                           <td className="py-3 px-4" style={{ borderRight: "1px solid rgba(148,163,184,0.15)" }}>
                             <span className="text-xs font-mono text-slate-500 dark:text-slate-400">
-                              {user.user_code || "—"}
+                              {(() => {
+                                const n = userCodeToNum(user.user_code);
+                                return n ? `User_${n}` : user.user_code || "—";
+                              })()}
                             </span>
                           </td>
                         )}
@@ -3143,14 +3186,15 @@ export default function UsuariosPage() {
             </div>
           )}
       </div>
+      </div>
+      </div>
 
       {/* Column config panel */}
-      <SlidePanel
+      <StandardModalDialog
         open={colConfigOpen}
         onClose={() => setColConfigOpen(false)}
         title="Configurar colunas"
         subtitle="Escolha quais colunas aparecem na tabela"
-        widthMode="full"
       >
         <div className="p-5 flex-1 overflow-y-auto space-y-2">
           {ALL_COLUMNS.map((col) => (
@@ -3165,65 +3209,49 @@ export default function UsuariosPage() {
             </label>
           ))}
         </div>
-      </SlidePanel>
+      </StandardModalDialog>
 
       {/* "+" info panel — real user data already loaded in the table, no extra fetch needed */}
       {/* Detalhes do usuário — modal centralizado (Dialog nativo cobre backdrop,
           fechar por X/clique-fora/Esc). safe() nunca deixa undefined/null/NaN
           vazar pra tela — sempre "—" como fallback. */}
-      <Dialog open={infoPanelOpen} onOpenChange={setInfoPanelOpen}>
-        <DialogContent
-          showCloseButton={false}
-          className="z-[100] sm:max-w-3xl lg:max-w-[min(1000px,calc(100vw-var(--sidebar-width,240px)-64px))] lg:left-[calc((100vw+var(--sidebar-width,240px))/2)] p-0 overflow-hidden flex flex-col max-h-[70vh]"
-          style={{ top: `calc(${infoModalHeaderHeight}px + (100vh - ${infoModalHeaderHeight}px) / 2)` }}
-        >
-          {infoPanelUser && (() => {
-            const safe = (v: unknown) => {
-              if (v === null || v === undefined) return "—";
-              if (typeof v === "number" && Number.isNaN(v)) return "—";
-              if (typeof v === "string" && v.trim() === "") return "—";
-              return v as React.ReactNode;
-            };
-            const safeBool = (v: unknown) => (v === true ? "Sim" : v === false ? "Não" : "—");
-            const safeDate = (v: unknown, withTime = false) => {
-              if (!v) return "—";
-              const d = new Date(v as string);
-              if (Number.isNaN(d.getTime())) return "—";
-              return withTime ? d.toLocaleString("pt-BR") : d.toLocaleDateString("pt-BR");
-            };
-            return (
-              <>
-                <DialogHeader className="app-brand-header relative shrink-0 flex flex-row items-center gap-3 px-6 py-2.5 min-h-[64px] text-white">
-                  <button
-                    type="button"
-                    onClick={() => setAvatarLightboxOpen(true)}
-                    className="shrink-0 rounded-full focus:outline-none focus:ring-2 focus:ring-white/50"
-                    title="Ver foto ampliada"
-                  >
-                    <Avatar className="h-11 w-11 shadow-md ring-2 ring-white/30 hover:ring-white/60 cursor-pointer transition-all">
-                      <AvatarFallback className="text-xs font-bold text-white bg-gradient-to-br from-blue-500 to-blue-700">
-                        {infoPanelUser.name.split(" ").map((n: string) => n[0]).join("").toUpperCase().slice(0, 2)}
-                      </AvatarFallback>
-                    </Avatar>
-                  </button>
-                  <div className="min-w-0 flex-1">
-                    <DialogTitle className="truncate text-white">Detalhes do usuário</DialogTitle>
-                    <DialogDescription className="truncate text-white/70">
-                      {safe(infoPanelUser.name)} · {safe(infoPanelUser.email)}
-                    </DialogDescription>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => setInfoPanelOpen(false)}
-                    className="absolute top-5 right-5 rounded-lg transition-all hover:bg-white/20 focus:outline-none focus:ring-2 focus:ring-white/40 p-1.5"
-                    title="Fechar"
-                    aria-label="Fechar"
-                  >
-                    <X className="size-6 text-white drop-shadow-md" />
-                    <span className="sr-only">Fechar</span>
-                  </button>
-                </DialogHeader>
-
+      {infoPanelUser && (() => {
+        const safe = (v: unknown) => {
+          if (v === null || v === undefined) return "—";
+          if (typeof v === "number" && Number.isNaN(v)) return "—";
+          if (typeof v === "string" && v.trim() === "") return "—";
+          return v as React.ReactNode;
+        };
+        const safeBool = (v: unknown) => (v === true ? "Sim" : v === false ? "Não" : "—");
+        const safeDate = (v: unknown, withTime = false) => {
+          if (!v) return "—";
+          const d = new Date(v as string);
+          if (Number.isNaN(d.getTime())) return "—";
+          return withTime ? d.toLocaleString("pt-BR") : d.toLocaleDateString("pt-BR");
+        };
+        return (
+          <StandardModalDialog
+            open={infoPanelOpen}
+            onClose={() => setInfoPanelOpen(false)}
+            title={
+              <div className="flex items-center gap-3">
+                <button
+                  type="button"
+                  onClick={() => setAvatarLightboxOpen(true)}
+                  className="shrink-0 rounded-full focus:outline-none focus:ring-2 focus:ring-white/50"
+                  title="Ver foto ampliada"
+                >
+                  <Avatar className="h-9 w-9 shadow-md ring-2 ring-white/30 hover:ring-white/60 cursor-pointer transition-all">
+                    <AvatarFallback className="text-xs font-bold text-white bg-gradient-to-br from-blue-500 to-blue-700">
+                      {infoPanelUser.name.split(" ").map((n: string) => n[0]).join("").toUpperCase().slice(0, 2)}
+                    </AvatarFallback>
+                  </Avatar>
+                </button>
+                <span>Detalhes do usuário</span>
+              </div>
+            }
+            subtitle={`${safe(infoPanelUser.name)} · ${safe(infoPanelUser.email)}`}
+          >
                 <div className="flex-1 overflow-y-auto p-4">
                   <div className="space-y-4">
                     <div>
@@ -3367,7 +3395,12 @@ export default function UsuariosPage() {
                         </div>
                         <div className="rounded-lg border border-slate-200 dark:border-slate-700 p-2">
                           <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide mb-1">ID público</p>
-                          <p className="text-sm font-mono text-slate-700 dark:text-slate-300">{safe(infoPanelUser.user_code)}</p>
+                          <p className="text-sm font-mono text-slate-700 dark:text-slate-300">
+                            {(() => {
+                              const n = userCodeToNum(infoPanelUser.user_code);
+                              return n ? `User_${n}` : safe(infoPanelUser.user_code);
+                            })()}
+                          </p>
                         </div>
                         <div className="rounded-lg border border-slate-200 dark:border-slate-700 p-2">
                           <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide mb-1">ID técnico</p>
@@ -3407,11 +3440,9 @@ export default function UsuariosPage() {
                     </div>
                   </div>
                 </div>
-              </>
-            );
-          })()}
-        </DialogContent>
-      </Dialog>
+          </StandardModalDialog>
+        );
+      })()}
 
       {/* Foto ampliada do usuário — lightbox simples sobre o modal de detalhes */}
       {avatarLightboxOpen &&
@@ -3493,24 +3524,23 @@ export default function UsuariosPage() {
         </div>
       </SlidePanel>
 
-      {isViewDialogOpen && (
-        <UserViewSlidePanel
-          open={isViewDialogOpen}
-          onClose={() => {
-            setIsViewDialogOpen(false);
-            setSelectedUser(null);
-            navigate("/admin/usuarios", { replace: true });
-          }}
-          onRefresh={refetchUsers}
-          user={selectedUser}
-        />
-      )}
+      <UserViewSlidePanel
+        open={isViewDialogOpen}
+        onClose={() => {
+          setIsViewDialogOpen(false);
+          navigate("/admin/usuarios", { replace: true });
+        }}
+        onRefresh={refetchUsers}
+        user={selectedUser}
+        startInEditMode={viewStartInEditMode}
+      />
 
       <UserCreateSlidePanel
         open={showCreateUser}
         onClose={() => setShowCreateUser(false)}
         onUserCreated={() => {
           refetchUsers();
+          window.dispatchEvent(new Event("allka:admin-counts-changed"));
           setShowCreateUser(false);
         }}
       />
@@ -3546,114 +3576,90 @@ export default function UsuariosPage() {
         destructive={false}
       />
 
-      {isDeleteUserAlertOpen &&
-        selectedUser &&
-        createPortal(
-          <div
-            className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/40"
-            onClick={() => {
-              if (!isDeleteLoading) setIsDeleteUserAlertOpen(false);
-            }}
-          >
-            <div
-              className="relative bg-white dark:bg-slate-900 rounded-2xl shadow-2xl w-full max-w-sm mx-4 overflow-hidden border border-slate-200 dark:border-slate-700"
-              onClick={(e) => e.stopPropagation()}
-            >
-              {/* Top accent bar */}
-              <div className="h-1 w-full bg-gradient-to-r from-red-500 to-rose-600" />
-
-              {/* Header */}
-              <div className="flex items-start justify-between px-6 pt-5 pb-0">
-                <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-red-50 dark:bg-red-900/20">
-                  <Trash2 className="h-5 w-5 text-red-500" />
-                </div>
-                <button
-                  onClick={() => {
-                    if (!isDeleteLoading) setIsDeleteUserAlertOpen(false);
-                  }}
-                  className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg p-1.5 transition-colors"
-                >
-                  <X className="h-4 w-4" />
-                </button>
+      {selectedUser && (
+        <StandardModalDialog
+          open={isDeleteUserAlertOpen}
+          onClose={() => {
+            if (!isDeleteLoading) setIsDeleteUserAlertOpen(false);
+          }}
+          title="Excluir Usuário"
+          size="compact"
+          footer={
+            <div className="flex gap-3 w-full">
+              <Button
+                variant="outline"
+                className="flex-1 h-9 text-sm border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800"
+                onClick={() => setIsDeleteUserAlertOpen(false)}
+                disabled={isDeleteLoading}
+              >
+                Cancelar
+              </Button>
+              <Button
+                className="flex-1 h-9 text-sm font-semibold text-white border-0 shadow-sm bg-gradient-to-r from-red-500 to-rose-600 hover:from-red-600 hover:to-rose-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                onClick={handleDeleteUser}
+                disabled={isDeleteLoading || !deletionReason.trim()}
+              >
+                {isDeleteLoading ? (
+                  <ButtonLoader text="Excluindo..." />
+                ) : (
+                  <>
+                    <Trash2 className="h-3.5 w-3.5 mr-1.5" />
+                    Excluir Definitivamente
+                  </>
+                )}
+              </Button>
+            </div>
+          }
+        >
+          <div className="px-6 py-5 space-y-4">
+            <div className="flex items-start gap-3">
+              <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-red-50 dark:bg-red-900/20">
+                <Trash2 className="h-5 w-5 text-red-500" />
               </div>
+              <p className="text-sm text-slate-500 dark:text-slate-400 leading-relaxed pt-2">
+                Tem certeza que deseja excluir este usuário? Esta ação é{" "}
+                <strong>irreversível</strong>.
+              </p>
+            </div>
 
-              {/* Content */}
-              <div className="px-6 pt-4 pb-4 space-y-4">
-                <div>
-                  <h2 className="text-base font-bold text-slate-900 dark:text-white mb-1.5">
-                    Excluir Usuário
-                  </h2>
-                  <p className="text-sm text-slate-500 dark:text-slate-400 leading-relaxed">
-                    Tem certeza que deseja excluir este usuário? Esta ação é{" "}
-                    <strong>irreversível</strong>.
-                  </p>
-                </div>
-
-                <div className="bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 rounded-xl p-3">
-                  <div className="text-sm font-semibold text-slate-900 dark:text-white">
-                    {selectedUser.name}
-                  </div>
-                  <div className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                    {selectedUser.email}
-                  </div>
-                </div>
-
-                <div className="space-y-1.5">
-                  <label className="text-sm font-semibold text-slate-700 dark:text-slate-300 flex items-center gap-1">
-                    Motivo da Exclusão <span className="text-red-500">*</span>
-                  </label>
-                  <Textarea
-                    placeholder="Descreva o motivo da exclusão para fins de auditoria (mínimo 10 caracteres)"
-                    value={deletionReason}
-                    onChange={(e) => {
-                      setDeletionReason(e.target.value);
-                      if (deletionReasonError) setDeletionReasonError("");
-                    }}
-                    disabled={isDeleteLoading}
-                    className="text-sm resize-none focus-visible:ring-red-500"
-                    rows={3}
-                  />
-                  {deletionReasonError && (
-                    <p className="text-xs text-red-500 flex items-center gap-1">
-                      <AlertCircle className="h-3 w-3" />
-                      {deletionReasonError}
-                    </p>
-                  )}
-                  <p className="text-xs text-slate-400">
-                    Caracteres: {deletionReason.length}/10 (mínimo)
-                  </p>
-                </div>
+            <div className="bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 rounded-xl p-3">
+              <div className="text-sm font-semibold text-slate-900 dark:text-white">
+                {selectedUser.name}
               </div>
-
-              {/* Footer */}
-              <div className="flex gap-3 px-6 pb-5">
-                <Button
-                  variant="outline"
-                  className="flex-1 h-9 text-sm border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800"
-                  onClick={() => setIsDeleteUserAlertOpen(false)}
-                  disabled={isDeleteLoading}
-                >
-                  Cancelar
-                </Button>
-                <Button
-                  className="flex-1 h-9 text-sm font-semibold text-white border-0 shadow-sm bg-gradient-to-r from-red-500 to-rose-600 hover:from-red-600 hover:to-rose-700 disabled:opacity-50 disabled:cursor-not-allowed"
-                  onClick={handleDeleteUser}
-                  disabled={isDeleteLoading || !deletionReason.trim()}
-                >
-                  {isDeleteLoading ? (
-                    <ButtonLoader text="Excluindo..." />
-                  ) : (
-                    <>
-                      <Trash2 className="h-3.5 w-3.5 mr-1.5" />
-                      Excluir Definitivamente
-                    </>
-                  )}
-                </Button>
+              <div className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                {selectedUser.email}
               </div>
             </div>
-          </div>,
-          document.body,
-        )}
+
+            <div className="space-y-1.5">
+              <label className="text-sm font-semibold text-slate-700 dark:text-slate-300 flex items-center gap-1">
+                Motivo da Exclusão <span className="text-red-500">*</span>
+              </label>
+              <Textarea
+                placeholder="Descreva o motivo da exclusão para fins de auditoria (mínimo 10 caracteres)"
+                value={deletionReason}
+                onChange={(e) => {
+                  setDeletionReason(e.target.value);
+                  if (deletionReasonError) setDeletionReasonError("");
+                }}
+                disabled={isDeleteLoading}
+                className="text-sm resize-none focus-visible:ring-red-500"
+                rows={3}
+              />
+              {deletionReasonError && (
+                <p className="text-xs text-red-500 flex items-center gap-1">
+                  <AlertCircle className="h-3 w-3" />
+                  {deletionReasonError}
+                </p>
+              )}
+              <p className="text-xs text-slate-400">
+                Caracteres: {deletionReason.length}/10 (mínimo)
+              </p>
+            </div>
+          </div>
+        </StandardModalDialog>
+      )}
+    </div>
     </div>
   );
 }

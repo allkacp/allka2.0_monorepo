@@ -20,9 +20,13 @@ model User {
   password_hash                  String
   name                           String
   role                           String    @default("company_user")
-  // company_user | company_admin | company_financial | agency_user | agency_admin | nomad | admin | partner
+  // company_user | company_admin | company_financial | agency_user | agency_admin | nomad | admin
+  // ("partner"/"partner_admin" não existem mais como role própria — Partner
+  // é um upgrade da própria Agency, ver PartnerProfile.)
   account_type                   String    @default("empresas")
-  // empresas | agencias | nomades | admin | parceiro
+  // empresas | agencias | nomades | admin
+  // ("parceiro" não existe mais — Partner não é um account_type próprio,
+  // é um status na Agency do usuário; ver PartnerProfile.agency_id.)
   is_active                      Boolean   @default(true)
   avatar                         String?   @db.LongText
   phone                          String?
@@ -30,13 +34,11 @@ model User {
   admin_profile_id               String?
   company_id                     String?
   company                        Company?  @relation("CompanyMembers", fields: [company_id], references: [id])
-  // ── Vínculo de subusuário (membro) com Agency/Partner — nullable:
-  // Admin, Nomad, Leader e usuários órfãos legados não têm nenhum dos
-  // três preenchido. Espelha o padrão já usado por company_id acima.
+  // ── Vínculo de subusuário (membro) com Agency — nullable: Admin, Nomad,
+  // Leader e usuários órfãos legados não têm isso preenchido. Espelha o
+  // padrão já usado por company_id acima.
   agency_id                      String?
   agency_link                    Agency?   @relation("AgencyMembers", fields: [agency_id], references: [id])
-  partner_id                     String?
-  partner_link                   PartnerProfile? @relation("PartnerMembers", fields: [partner_id], references: [id])
   last_login                     DateTime?
   // Pausa por inatividade (>=90 dias sem login) é um status derivado do
   // last_login, calculado no momento do login seguinte (ver POST
@@ -49,24 +51,66 @@ model User {
   created_at                     DateTime  @default(now())
   updated_at                     DateTime  @updatedAt
 
-  nomade              Nomade?
+  nomade                   Nomade?
   // Lado reverso de "eu sou o principal desta organização" — no máximo 1 de
   // cada, aplicado em código (mesmo padrão do comentário em Project sobre
-  // agency_id/company_id/partner_id: "no máximo um dos três preenchido").
-  owned_agency        Agency?            @relation("AgencyOwner")
-  owned_company       Company?           @relation("CompanyOwner")
-  owned_partner       PartnerProfile?    @relation("PartnerOwner")
-  term_acceptances    TermAcceptance[]
-  chat_participations ChatParticipant[]
-  sent_messages       ChatMessage[]      @relation("SentMessages")
-  course_enrollments  CourseEnrollment[]
-  lider_areas         LiderArea[]
-  tasks_como_lider    ProjectTask[]      @relation("TaskLiderResponsavel")
-  linked_coupons      Coupon[]
-  created_clients     Client[]           @relation("ClientCreatedBy")
-  created_projects    Project[]          @relation("ProjectCreatedBy")
+  // agency_id/company_id: "no máximo um dos dois preenchido").
+  owned_agency             Agency?            @relation("AgencyOwner")
+  owned_company            Company?           @relation("CompanyOwner")
+  term_acceptances         TermAcceptance[]
+  chat_participations      ChatParticipant[]
+  sent_messages            ChatMessage[]      @relation("SentMessages")
+  course_enrollments       CourseEnrollment[]
+  lider_areas              LiderArea[]
+  tasks_como_lider         ProjectTask[]      @relation("TaskLiderResponsavel")
+  linked_coupons           Coupon[]
+  created_clients          Client[]           @relation("ClientCreatedBy")
+  created_projects         Project[]          @relation("ProjectCreatedBy")
+  profile                  UserProfile?
+  deleted_company_archives CompanyArchive[]   @relation("CompanyArchiveDeletedBy")
 
   @@map("users")
+}
+
+// Dados pessoais/endereço complementares — separados de User de propósito:
+// User é lido em toda request autenticada (verifyToken) e não deve carregar
+// campos raramente usados; CPF/RG/data de nascimento são PII sensível (LGPD),
+// isolar numa tabela própria facilita auditoria/restrição de acesso depois.
+// 1:1 com User, opcional — a maioria dos usuários não preenche isso ainda.
+model UserProfile {
+  id      String @id @default(cuid())
+  user_id String @unique
+  user    User   @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  // Dados pessoais
+  social_name String?
+  birth_date  DateTime?
+  gender      String?
+  cpf         String?
+  rg          String?
+
+  // Contato adicional (além de User.email/phone)
+  whatsapp        String?
+  phone_secondary String?
+
+  // Endereço
+  zip_code     String?
+  street       String?
+  number       String?
+  complement   String?
+  neighborhood String?
+  city         String?
+  state        String?
+  country      String? @default("Brasil")
+
+  // Notas administrativas — visíveis só pra admin/partner no frontend
+  admin_notes    String? @db.LongText
+  internal_notes String? @db.LongText
+
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  @@map("user_profiles")
 }
 
 model LiderArea {
@@ -102,6 +146,15 @@ model Company {
   // ativo | inativo | prospecto | inadimplente
   segment                              String?
   address                              String?         @db.LongText
+  // Rua / Avenida — número/bairro/cidade/estado/CEP ficam em colunas
+  // próprias abaixo (mesmo padrão do Client, ver schema.prisma dele).
+  number                               String?
+  neighborhood                         String?
+  city                                 String?
+  state                                String?
+  zip_code                             String?
+  pix_key                              String?
+  pix_key_type                         String? // cpf | cnpj | email | phone | random
   description                          String?         @db.LongText
   logo                                 String?         @db.LongText
   website                              String?
@@ -147,6 +200,39 @@ model Company {
   @@map("companies")
 }
 
+// Snapshot histórico gravado sempre que uma Company é excluída — guarda os
+// dados cadastrais completos e um resumo (usuários vinculados + o que foi
+// feito com cada um, contagem de projetos/faturas) no momento da exclusão.
+// O sequence_number correspondente é liberado (ver CompanyFreedSequence) e
+// pode ser reaproveitado por uma Company nova no futuro; este registro é o
+// jeito de ainda sabermos "quem foi o emp_N antigo" depois disso acontecer.
+model CompanyArchive {
+  id                  String   @id @default(cuid())
+  sequence_number     Int
+  original_company_id String
+  name                String
+  snapshot            String   @db.LongText // JSON completo dos campos da Company
+  users_snapshot      String   @db.LongText // JSON: usuários vinculados + ação aplicada (deleted|unlinked|suspended)
+  projects_count      Int      @default(0)
+  invoices_count      Int      @default(0)
+  deleted_by_user_id  String?
+  deleted_by          User?    @relation("CompanyArchiveDeletedBy", fields: [deleted_by_user_id], references: [id], onDelete: SetNull)
+  deleted_at          DateTime @default(now())
+
+  @@index([sequence_number])
+  @@map("company_archives")
+}
+
+// Pool de sequence_number liberados por exclusão de Company, disponíveis
+// para reaproveitamento na criação da próxima Company (ver users.ts).
+model CompanyFreedSequence {
+  id              String   @id @default(cuid())
+  sequence_number Int      @unique
+  freed_at        DateTime @default(now())
+
+  @@map("company_freed_sequences")
+}
+
 model CompanyPaymentMethod {
   id             String   @id @default(cuid())
   company_id     String
@@ -176,23 +262,26 @@ model Client {
   id              String @id @default(cuid())
   sequence_number Int    @unique @default(autoincrement())
 
-  name        String
-  type        String  @default("pj")
+  name         String
+  type         String  @default("pj")
   // pj | pf
-  document    String? @unique
+  document     String? @unique
   // CNPJ (pj) ou CPF (pf) — único porque a tabela é nova, sem dado legado.
-  email       String?
-  phone       String?
-  website     String?
-  segment     String?
-  status      String  @default("active")
+  email        String?
+  phone        String?
+  website      String?
+  segment      String?
+  status       String  @default("active")
   // active | inactive
-  address     String?
-  city        String?
-  state       String?
-  zip_code    String?
-  notes       String? @db.LongText
-  description String? @db.LongText
+  address      String?
+  number       String?
+  neighborhood String?
+  city         String?
+  state        String?
+  zip_code     String?
+  avatar       String? @db.LongText
+  notes        String? @db.LongText
+  description  String? @db.LongText
 
   created_by_user_id String?
   created_by_user    User?   @relation("ClientCreatedBy", fields: [created_by_user_id], references: [id], onDelete: SetNull)
@@ -257,6 +346,10 @@ model Agency {
   owner_user_id  String   @unique @map("user_id")
   owner          User     @relation("AgencyOwner", fields: [owner_user_id], references: [id])
   members        User[]   @relation("AgencyMembers")
+  // Numeração emp_N exibida no admin/empresas — nullable porque, ao
+  // contrário de Company, não é atribuída automaticamente a toda Agency
+  // nova; hoje é setada manualmente caso a caso (ver seed/scripts admin).
+  sequence_number Int?    @unique
   name           String
   cnpj           String?  @unique
   email          String?
@@ -265,6 +358,14 @@ model Agency {
   // bronze | silver | gold | platinum | diamond
   wallet_balance Float    @default(0)
   status         String   @default("ativo")
+  address        String?
+  number         String?
+  neighborhood   String?
+  city           String?
+  state          String?
+  zip_code       String?
+  pix_key        String?
+  pix_key_type   String? // cpf | cnpj | email | phone | random
   created_at     DateTime @default(now())
   updated_at     DateTime @updatedAt
 
@@ -273,6 +374,9 @@ model Agency {
   reports           AgencyReport[]
   client_links      ClientLink[]
   projects_owned    Project[]
+  // Presente só quando esta Agency foi convidada/virou Partner (ver
+  // PartnerProfile acima) — nullable, a maioria das agências nunca tem um.
+  partner_profile   PartnerProfile?
 
   @@map("agencies")
 }
@@ -286,11 +390,24 @@ model Nomade {
   name                       String
   email                      String    @unique
   whatsapp                   String?
+  // Exigido pra prestar serviços pra nós — nômade precisa ter CNPJ válido
+  // (pessoa jurídica ou MEI) mesmo sendo cadastrado como pessoa física na
+  // plataforma. Nullable no banco (dados legados antes desta regra), mas
+  // obrigatório na validação de criação (ver POST /api/users em users.ts).
+  cnpj                       String?   @unique
   avatar                     String?   @db.LongText
   level                      String    @default("bronze")
   // bronze | silver | gold | platinum | diamond | leader
   status                     String    @default("aguardando_aprovacao")
   // ativo | inativo | aguardando_aprovacao | reprovado | pausado
+  address                    String?
+  number                     String?
+  neighborhood               String?
+  city                       String?
+  state                      String?
+  zip_code                   String?
+  pix_key                    String?
+  pix_key_type               String? // cpf | email | phone | random
   score                      Int       @default(0)
   tasks_completed_quarter    Int       @default(0)
   tasks_completed_total      Int       @default(0)
@@ -1237,25 +1354,41 @@ model AdminPermission {
 
 // ─── Partners & Campaigns ─────────────────────────────────────────────────────
 
+// Partner NÃO é um tipo de conta separado — é um upgrade que uma Agency já
+// existente recebe (convite do admin, aceito pela própria Agency). Por isso
+// esta entidade é 1:1 com Agency (agency_id), não com User: o mesmo usuário
+// da Agency continua logando normalmente, só ganha acesso extra quando
+// status = "active". Todas as relações financeiras/comissão/liderança
+// abaixo (PartnerCommission, AgencyLeadership, AgencyReport, etc.)
+// continuam apontando pro id desta entidade sem nenhuma mudança — só a
+// âncora de identidade (era User, agora é Agency) mudou.
 model PartnerProfile {
-  id                 String   @id @default(cuid())
-  // Coluna física continua "user_id" (@map) — mesmo padrão de Agency acima.
-  owner_user_id      String   @unique @map("user_id")
-  owner              User     @relation("PartnerOwner", fields: [owner_user_id], references: [id])
-  members            User[]   @relation("PartnerMembers")
-  balance            Float    @default(0)
-  total_earned       Float    @default(0)
-  total_withdrawn    Float    @default(0)
+  id                 String    @id @default(cuid())
+  agency_id          String    @unique
+  agency             Agency    @relation(fields: [agency_id], references: [id], onDelete: Cascade)
+  balance            Float     @default(0)
+  total_earned       Float     @default(0)
+  total_withdrawn    Float     @default(0)
   referral_link      String?
-  referral_code      String?  @unique
-  status             String   @default("pending")
-  // active | suspended | pending
+  referral_code      String?   @unique
+  status             String    @default("invited")
+  // invited | active | declined | suspended — ciclo de vida do convite:
+  // admin convida (invited) -> Agency aceita (active) ou recusa (declined);
+  // suspended é uma ação administrativa posterior, não parte do convite.
+  invited_at         DateTime?
+  responded_at       DateTime?
   pix_key            String?
   pix_key_type       String?
   // cpf | email | phone | random
+  address            String?
+  number             String?
+  neighborhood       String?
+  city               String?
+  state              String?
+  zip_code           String?
   linked_campaign_id String?
-  created_at         DateTime @default(now())
-  updated_at         DateTime @updatedAt
+  created_at         DateTime  @default(now())
+  updated_at         DateTime  @updatedAt
 
   commissions        PartnerCommission[]
   led_agencies       AgencyLeadership[]

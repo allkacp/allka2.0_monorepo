@@ -39,7 +39,7 @@ async function enrichWallets(wallets: any[]) {
     partnerIds.length
       ? prisma.partnerProfile.findMany({
           where: { id: { in: partnerIds } },
-          select: { id: true, owner: { select: { name: true, email: true } } },
+          select: { id: true, agency: { select: { name: true, email: true, owner: { select: { name: true, email: true } } } } },
         })
       : [],
   ]);
@@ -55,7 +55,11 @@ async function enrichWallets(wallets: any[]) {
       case "company": owner = cMap.get(w.owner_id); break;
       case "agency":  owner = aMap.get(w.owner_id); break;
       case "nomad":   owner = nMap.get(w.owner_id); break;
-      case "partner": { const p = pMap.get(w.owner_id); owner = p ? { name: p.owner?.name, email: p.owner?.email } : null; break; }
+      case "partner": {
+        const p = pMap.get(w.owner_id);
+        owner = p ? { name: p.agency?.owner?.name ?? p.agency?.name, email: p.agency?.owner?.email ?? p.agency?.email } : null;
+        break;
+      }
       case "platform": owner = { name: "Allka Plataforma", email: "admin@allka.com.vc" }; break;
       default: owner = null;
     }

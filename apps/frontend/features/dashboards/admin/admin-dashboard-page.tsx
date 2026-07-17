@@ -5,6 +5,9 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+import { STANDARD_SHELL_PANEL_CLASS } from "@/components/standard-page-shell";
+import { PinToTrayButton } from "@/components/pin-to-tray-button";
+import { useConsumePendingActivation } from "@/contexts/open-screens-context";
 // ─── Feature module imports ───────────────────────────────────────────────────
 import {
   generateDashboardData,
@@ -127,6 +130,8 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { MetricChartModal } from "@/components/admin/metric-chart-modal";
 import { SlidePanel } from "@/components/slide-panel";
+import { EmbeddedSlideScreen } from "@/components/embedded-slide-screen";
+import { StandardModalDialog } from "@/components/standard-modal-dialog";
 import { toPng } from "html-to-image";
 import jsPDF from "jspdf";
 import {
@@ -428,6 +433,7 @@ export function AdminDashboardPage() {
   const [showExportMenu, setShowExportMenu] = useState(false);
   const [layoutMode, setLayoutMode] = useState<"padrao" | "compacto">("padrao");
   const [isHeaderCompact, setIsHeaderCompact] = useState(false);
+  const dashboardScrollRef = useRef<HTMLDivElement>(null);
   const [saveDashboardOpen, setSaveDashboardOpen] = useState(false); // State for the save dashboard dialog
   const [isEditDashboardModalOpen, setIsEditDashboardModalOpen] =
     useState(false);
@@ -1134,6 +1140,14 @@ export function AdminDashboardPage() {
   if (detailsWidgetId) detailsWidgetStickyRef.current = detailsWidgetId;
   const visibleDetailsWidgetId = detailsWidgetId ?? detailsWidgetStickyRef.current;
   const [showHistoricalModal, setShowHistoricalModal] = useState(false);
+  // Reabre a tela certa quando o usuário chega aqui clicando num pin de
+  // sub-tela na Bandeja de Telas (ex.: pinnou "Histórico", navegou pra
+  // outra página, voltou clicando no pin — isso reabre o modal).
+  useConsumePendingActivation((key) => {
+    if (key === "historico") setShowHistoricalModal(true);
+    else if (key === "editar") setIsEditDashboardModalOpen(true);
+    else if (key.startsWith("widget:")) setDetailsWidgetId(key.slice(7));
+  });
   const [histModalKey, setHistModalKey] = useState<string>(""); // "YYYY-MM"
   const [histFormData, setHistFormData] = useState<Partial<ManualDataEntry>>(
     {},
@@ -1605,11 +1619,14 @@ export function AdminDashboardPage() {
   }, []);
 
   useEffect(() => {
-    const main = document.querySelector("main");
-    if (!main) return;
-    const handleScroll = () => setIsHeaderCompact(main.scrollTop > 48);
-    main.addEventListener("scroll", handleScroll, { passive: true });
-    return () => main.removeEventListener("scroll", handleScroll);
+    // A rolagem agora acontece dentro do painel branco (shell padrão), não
+    // mais no <main> da página — sem isso o compact-on-scroll do header
+    // nunca disparava (main.scrollTop sempre 0).
+    const scrollEl = dashboardScrollRef.current;
+    if (!scrollEl) return;
+    const handleScroll = () => setIsHeaderCompact(scrollEl.scrollTop > 48);
+    scrollEl.addEventListener("scroll", handleScroll, { passive: true });
+    return () => scrollEl.removeEventListener("scroll", handleScroll);
   }, []);
 
   const widgetLibrary: WidgetLibraryItem[] = [
@@ -6484,12 +6501,18 @@ export function AdminDashboardPage() {
     };
 
     return (
-      <SlidePanel
+      <EmbeddedSlideScreen
         open={!!detailsWidgetId}
         onClose={() => setDetailsWidgetId(null)}
         title={title}
         subtitle="Veja os detalhes e indicadores deste widget."
-        widthMode="full"
+        pin={{
+          id: `dashboard-widget-${visibleDetailsWidgetId}`,
+          label: title,
+          icon: LayoutGrid,
+          path: "/admin/dashboard",
+          activateKey: `widget:${visibleDetailsWidgetId}`,
+        }}
       >
         <div className="flex-1 overflow-y-auto px-[50px] py-[50px] bg-slate-200 dark:bg-slate-950/40">
           {/* Toolbar: ícone + descrição específica do widget | período | ações */}
@@ -6598,7 +6621,7 @@ export function AdminDashboardPage() {
             {renderContent()}
           </div>
         </div>
-      </SlidePanel>
+      </EmbeddedSlideScreen>
     );
   };
   // ─────────────────────────────────────────────────────────────────────────
@@ -11168,11 +11191,14 @@ export function AdminDashboardPage() {
   }
 
   return (
+    <div className={STANDARD_SHELL_PANEL_CLASS}>
+    <div className="relative h-full min-h-0 flex flex-col overflow-hidden">
+    <div className="flex-1 min-h-0 overflow-y-auto" ref={dashboardScrollRef}>
     <div className="container mx-auto space-y-4 px-0 py-0">
       {/* Sticky Dashboard Header */}
       <div
         className={cn(
-          "sticky top-[-3rem] z-20 -mx-14 px-14 transition-all duration-300",
+          "sticky top-0 z-20 transition-all duration-300",
           isHeaderCompact
             ? "bg-background/95 backdrop-blur-sm border-b border-border/40 shadow-sm"
             : "bg-transparent",
@@ -11185,15 +11211,21 @@ export function AdminDashboardPage() {
             isHeaderCompact ? "py-2" : "pt-0 pb-5",
           )}
         >
-          {/* ── Unified toolbar (inclui o título) ───────────────────────────── */}
-          <div className="flex-1 min-w-0 flex flex-wrap items-center gap-x-1 gap-y-2 bg-background border border-border/70 rounded-xl px-[13px] py-[10px] shadow-[0_4px_24px_-4px_rgba(0,0,0,0.10),0_1px_6px_-2px_rgba(0,0,0,0.06)]">
+          {/* ── Unified toolbar (inclui o título) — mesma paleta gradiente do banner padrão ── */}
+          <div
+            className="relative overflow-hidden flex-1 min-w-0 flex flex-wrap items-center gap-x-1 gap-y-2 rounded-xl px-[13px] py-[10px] shadow-[0_4px_24px_-4px_rgba(0,0,0,0.15)]"
+            style={{
+              background:
+                "linear-gradient(90deg, #0a1628 0%, #3b1f6e 50%, #c81a7f 100%)",
+            }}
+          >
 
             {/* Título + info */}
             <div className="flex items-center gap-1 shrink-0 mr-2">
               <div className="overflow-hidden">
                 <h1
                   className={cn(
-                    "font-bold text-slate-900 dark:text-white tracking-tight transition-all duration-300",
+                    "font-bold text-white tracking-tight transition-all duration-300",
                     isHeaderCompact ? "text-base" : "text-2xl sm:text-3xl lg:text-4xl xl:text-[46px]",
                   )}
                 >
@@ -11203,8 +11235,8 @@ export function AdminDashboardPage() {
               <TooltipProvider delayDuration={200}>
                 <Tooltip>
                   <TooltipTrigger asChild>
-                    <button className="flex items-center justify-center h-5 w-5 rounded-full hover:bg-muted transition-colors shrink-0 self-center">
-                      <Info className="h-3.5 w-3.5 text-muted-foreground" strokeWidth={2.5} />
+                    <button className="flex items-center justify-center h-5 w-5 rounded-full hover:bg-white/15 transition-colors shrink-0 self-center">
+                      <Info className="h-3.5 w-3.5 text-white/70" strokeWidth={2.5} />
                     </button>
                   </TooltipTrigger>
                   <TooltipContent side="bottom" className="max-w-[220px] p-3" sideOffset={6}>
@@ -11218,21 +11250,20 @@ export function AdminDashboardPage() {
             </div>
 
             {/* Divider */}
-            <div className="hidden xl:block w-px h-5 bg-border/60 mx-1 shrink-0" />
+            <div className="hidden xl:block w-px h-5 bg-white/20 mx-1 shrink-0" />
 
             {/* GLOBAL pill — hover shows gradient; hovering badge or info shows tooltip */}
             <TooltipProvider delayDuration={200}>
               <Tooltip>
                 <TooltipTrigger asChild>
                   <div className="flex items-center gap-1 shrink-0 cursor-default">
-                    <div className="group relative flex items-center gap-1.5 px-3 py-1.5 rounded-md border border-border/60 hover:border-transparent overflow-hidden transition-all">
-                      <span className="absolute inset-0 rounded-md opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none" style={{ background: "linear-gradient(135deg,#000000 0%,#1a2a6f 45%,#c81a7f 100%)" }} />
-                      <Globe className="relative z-10 h-3.5 w-3.5 shrink-0 text-[#7d1b6a] group-hover:text-white transition-colors" />
-                      <span className="relative z-10 text-[11px] font-medium uppercase tracking-wider leading-none bg-clip-text text-transparent [background-image:linear-gradient(135deg,#1a2a6f_0%,#7d1b6a_55%,#c81a7f_100%)] group-hover:[background-image:none] group-hover:text-white transition-colors">
+                    <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-md border border-white/70 bg-white/10 hover:bg-white/20 transition-colors">
+                      <Globe className="h-3.5 w-3.5 shrink-0 text-white" />
+                      <span className="text-[11px] font-medium uppercase tracking-wider leading-none text-white">
                         GLOBAL
                       </span>
                     </div>
-                    <Info className="h-3.5 w-3.5 text-muted-foreground" strokeWidth={2.5} />
+                    <Info className="h-3.5 w-3.5 text-white/70" strokeWidth={2.5} />
                   </div>
                 </TooltipTrigger>
                 <TooltipContent side="bottom" className="max-w-[240px] p-3" sideOffset={6}>
@@ -11250,7 +11281,7 @@ export function AdminDashboardPage() {
             </TooltipProvider>
 
             {/* Divider */}
-            <div className="hidden xl:block w-px h-5 bg-border/60 mx-1 shrink-0" />
+            <div className="hidden xl:block w-px h-5 bg-white/20 mx-1 shrink-0" />
 
             {/* Período: label + pill + info tooltip */}
             <TooltipProvider delayDuration={200}>
@@ -11258,16 +11289,15 @@ export function AdminDashboardPage() {
                 <TooltipTrigger asChild>
                   <div className="flex items-center gap-1 shrink-0 cursor-default">
                     <div className="flex items-center gap-1.5">
-                      <span className="text-xs font-medium text-slate-600 dark:text-slate-300">Período:</span>
+                      <span className="text-xs font-medium text-white/80">Período:</span>
                       <Popover open={isPeriodPickerOpen} onOpenChange={setIsPeriodPickerOpen}>
                 <PopoverTrigger asChild>
-                  <button className="group relative flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-border/60 hover:border-transparent overflow-hidden transition-all">
-                    <span className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none" style={{ background: "linear-gradient(135deg,#000000 0%,#1a2a6f 45%,#c81a7f 100%)" }} />
-                    <Calendar className="relative z-10 h-3 w-3 shrink-0 text-[#7d1b6a] group-hover:text-white transition-colors" />
-                    <span className="relative z-10 text-xs font-semibold max-w-[140px] truncate bg-clip-text text-transparent [background-image:linear-gradient(135deg,#1a2a6f_0%,#7d1b6a_55%,#c81a7f_100%)] group-hover:[background-image:none] group-hover:text-white transition-colors">
+                  <button className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-white/70 bg-white/10 hover:bg-white/20 transition-colors">
+                    <Calendar className="h-3 w-3 shrink-0 text-white" />
+                    <span className="text-xs font-semibold max-w-[140px] truncate text-white">
                       {globalPeriod.label}
                     </span>
-                    <ChevronDown className="relative z-10 h-3 w-3 shrink-0 text-[#c81a7f] group-hover:text-white transition-colors" />
+                    <ChevronDown className="h-3 w-3 shrink-0 text-white" />
                   </button>
                 </PopoverTrigger>
                 <PopoverContent className="w-48 p-0 overflow-hidden rounded-xl shadow-[0_8px_32px_-4px_rgba(0,0,0,0.18),0_2px_8px_-2px_rgba(0,0,0,0.10)] border border-border/60" align="start">
@@ -11360,7 +11390,7 @@ export function AdminDashboardPage() {
                 </PopoverContent>
                       </Popover>
                     </div>
-                    <Info className="h-3.5 w-3.5 text-muted-foreground" strokeWidth={2.5} />
+                    <Info className="h-3.5 w-3.5 text-white/70" strokeWidth={2.5} />
                   </div>
                 </TooltipTrigger>
                 <TooltipContent side="bottom" className="max-w-[240px] p-3" sideOffset={6}>
@@ -11378,7 +11408,7 @@ export function AdminDashboardPage() {
             </TooltipProvider>
 
             {/* Divider */}
-            <div className="hidden xl:block w-px h-5 bg-border/60 mx-1 shrink-0" />
+            <div className="hidden xl:block w-px h-5 bg-white/20 mx-1 shrink-0" />
 
             {/* Dashboard selector */}
             <TooltipProvider delayDuration={200}>
@@ -11387,13 +11417,12 @@ export function AdminDashboardPage() {
                   <div className="flex items-center gap-1 shrink-0 cursor-default">
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
-                        <button className="group relative flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-border/60 hover:border-transparent overflow-hidden transition-all max-w-[200px]">
-                          <span className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none" style={{ background: "linear-gradient(135deg,#000000 0%,#1a2a6f 45%,#c81a7f 100%)" }} />
-                          <LayoutGrid className="relative z-10 h-3.5 w-3.5 shrink-0 text-[#7d1b6a] group-hover:text-white transition-colors" />
-                          <span className="relative z-10 text-xs font-semibold truncate bg-clip-text text-transparent [background-image:linear-gradient(135deg,#1a2a6f_0%,#7d1b6a_55%,#c81a7f_100%)] group-hover:[background-image:none] group-hover:text-white transition-colors">
+                        <button className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-white/70 bg-white/10 hover:bg-white/20 transition-colors max-w-[200px]">
+                          <LayoutGrid className="h-3.5 w-3.5 shrink-0 text-white" />
+                          <span className="text-xs font-semibold truncate text-white">
                             {savedDashboards.find((d) => d.id === currentDashboardId)?.name ?? "Selecionar dashboard"}
                           </span>
-                          <ChevronDown className="relative z-10 h-3 w-3 shrink-0 ml-auto text-[#c81a7f] group-hover:text-white transition-colors" />
+                          <ChevronDown className="h-3 w-3 shrink-0 ml-auto text-white" />
                         </button>
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end" className="w-auto min-w-48 max-w-72 p-0 overflow-hidden rounded-xl shadow-[0_8px_32px_-4px_rgba(0,0,0,0.18),0_2px_8px_-2px_rgba(0,0,0,0.10)] border border-border/60">
@@ -11469,7 +11498,7 @@ export function AdminDashboardPage() {
                         </div>
                       </DropdownMenuContent>
                     </DropdownMenu>
-                    <Info className="h-3.5 w-3.5 text-muted-foreground" strokeWidth={2.5} />
+                    <Info className="h-3.5 w-3.5 text-white/70" strokeWidth={2.5} />
                   </div>
                 </TooltipTrigger>
                 <TooltipContent side="bottom" className="max-w-[220px] p-3" sideOffset={6}>
@@ -11487,7 +11516,7 @@ export function AdminDashboardPage() {
             </TooltipProvider>
 
             {/* Divider */}
-            <div className="hidden xl:block w-px h-5 bg-border/60 mx-1 shrink-0" />
+            <div className="hidden xl:block w-px h-5 bg-white/20 mx-1 shrink-0" />
 
             {/* Ações (Export/Histórico/Compartilhar/Editar) — colam à direita no desktop, quebram no mobile */}
             <div className="flex items-center gap-1 shrink-0 xl:ml-auto">
@@ -11500,10 +11529,9 @@ export function AdminDashboardPage() {
                     <TooltipTrigger asChild>
                       <button
                         disabled={isExporting}
-                        className="group relative flex items-center justify-center h-8 w-8 rounded-lg border border-border/60 hover:border-transparent overflow-hidden transition-all disabled:opacity-50"
+                        className="flex items-center justify-center h-8 w-8 rounded-lg border border-white/70 bg-white/10 hover:bg-white/20 transition-colors disabled:opacity-50"
                       >
-                        <span className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none" style={{ background: "linear-gradient(135deg,#000000 0%,#1a2a6f 45%,#c81a7f 100%)" }} />
-                        <Download className={cn("relative z-10 h-4 w-4 text-[#7d1b6a] group-hover:text-white transition-colors", isExporting && "animate-pulse")} />
+                        <Download className={cn("h-4 w-4 text-white", isExporting && "animate-pulse")} />
                       </button>
                     </TooltipTrigger>
                   </PopoverTrigger>
@@ -11534,10 +11562,9 @@ export function AdminDashboardPage() {
                 <TooltipTrigger asChild>
                   <button
                     onClick={() => openHistoricalModal()}
-                    className="group relative flex items-center justify-center h-8 w-8 rounded-lg border border-border/60 hover:border-transparent overflow-hidden transition-all"
+                    className="flex items-center justify-center h-8 w-8 rounded-lg border border-white/70 bg-white/10 hover:bg-white/20 transition-colors"
                   >
-                    <span className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none" style={{ background: "linear-gradient(135deg,#000000 0%,#1a2a6f 45%,#c81a7f 100%)" }} />
-                    <History className="relative z-10 h-4 w-4 text-[#7d1b6a] group-hover:text-white transition-colors" />
+                    <History className="h-4 w-4 text-white" />
                     {Object.keys(historicalData).length > 0 && (
                       <span className="absolute top-0.5 right-0.5 bg-amber-500 text-white rounded-full text-[8px] h-3.5 w-3.5 flex items-center justify-center">
                         {Object.keys(historicalData).length}
@@ -11555,10 +11582,9 @@ export function AdminDashboardPage() {
                 <TooltipTrigger asChild>
                   <button
                     onClick={openDashboardPublicShare}
-                    className="group relative flex items-center justify-center h-8 w-8 rounded-lg border border-border/60 hover:border-transparent overflow-hidden transition-all"
+                    className="flex items-center justify-center h-8 w-8 rounded-lg border border-white/70 bg-white/10 hover:bg-white/20 transition-colors"
                   >
-                    <span className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none" style={{ background: "linear-gradient(135deg,#000000 0%,#1a2a6f 45%,#c81a7f 100%)" }} />
-                    <Share2 className="relative z-10 h-4 w-4 text-[#7d1b6a] group-hover:text-white transition-colors" />
+                    <Share2 className="h-4 w-4 text-white" />
                   </button>
                 </TooltipTrigger>
                 <TooltipContent side="bottom" sideOffset={6}>Compartilhar</TooltipContent>
@@ -11577,11 +11603,10 @@ export function AdminDashboardPage() {
                       setIsEditingHeaderName(false);
                       setIsEditDashboardModalOpen(true);
                     }}
-                    className="group relative flex items-center gap-1.5 px-3 py-1.5 ml-1 rounded-lg border border-border/60 hover:border-transparent overflow-hidden transition-all"
+                    className="flex items-center gap-1.5 px-3 py-1.5 ml-1 rounded-lg border border-white/70 bg-white/10 hover:bg-white/20 transition-colors"
                   >
-                    <span className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none" style={{ background: "linear-gradient(135deg,#000000 0%,#1a2a6f 45%,#c81a7f 100%)" }} />
-                    <Pencil className="relative z-10 h-3.5 w-3.5 shrink-0 text-[#7d1b6a] group-hover:text-white transition-colors" />
-                    <span className="relative z-10 text-xs font-semibold bg-clip-text text-transparent [background-image:linear-gradient(135deg,#1a2a6f_0%,#7d1b6a_55%,#c81a7f_100%)] group-hover:[background-image:none] group-hover:text-white transition-colors">
+                    <Pencil className="h-3.5 w-3.5 shrink-0 text-white" />
+                    <span className="text-xs font-semibold text-white">
                       Editar
                     </span>
                   </button>
@@ -11589,6 +11614,7 @@ export function AdminDashboardPage() {
                 <TooltipContent side="bottom" sideOffset={6}>Personalizar widgets</TooltipContent>
               </Tooltip>
             </TooltipProvider>
+            <PinToTrayButton id="page-dashboard" label="Dashboard" icon={LayoutGrid} path="/admin/dashboard" />
 
             </div>{/* fim ações */}
 
@@ -11836,8 +11862,8 @@ export function AdminDashboardPage() {
         </DialogContent>
       </Dialog>
 
-      {/* ── Public Share Dialog ───────────────────────────────────────────── */}
-      <SlidePanel
+      {/* ── Public Share Dialog — popup padrão, não é uma "tela" (sem pin) ── */}
+      <StandardModalDialog
         open={showPublicShareDialog}
         onClose={() => setShowPublicShareDialog(false)}
         title={shareTarget?.type === "widget" ? "Compartilhar widget" : "Compartilhar dashboard"}
@@ -11846,9 +11872,9 @@ export function AdminDashboardPage() {
             ? shareTarget.title || "Gere ou copie o link público deste widget."
             : "Gere ou copie o link público deste dashboard."
         }
-        widthMode="full"
+        maxWidth="sm:max-w-2xl"
         footer={
-          <>
+          <div className="flex items-center justify-end gap-2 w-full">
             <Button
               variant="outline"
               onClick={() => setShowPublicShareDialog(false)}
@@ -11863,11 +11889,10 @@ export function AdminDashboardPage() {
               <Link2 className="h-4 w-4 mr-1.5" />
               Gerar Link
             </Button>
-          </>
+          </div>
         }
       >
-        <div className="flex-1 overflow-y-auto px-[50px] py-[50px] bg-slate-200 dark:bg-slate-950/40">
-          <div className="rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 shadow-sm p-6 space-y-4 max-w-2xl mx-auto">
+        <div className="p-6 space-y-4">
             <Tabs
               value={shareActiveTab}
               onValueChange={setShareActiveTab}
@@ -12075,9 +12100,8 @@ export function AdminDashboardPage() {
                 </Button>
               </div>
             )}
-          </div>
         </div>
-      </SlidePanel>
+      </StandardModalDialog>
       {/* ──────────────────────────────────────────────────────────────────── */}
 
       {selectedMetric && (
@@ -12095,12 +12119,18 @@ export function AdminDashboardPage() {
       {WidgetDetailsModal()}
 
       {/* ── Historical Data Modal ─────────────────────────────────────────── */}
-      <SlidePanel
+      <EmbeddedSlideScreen
         open={showHistoricalModal}
         onClose={() => setShowHistoricalModal(false)}
         title="Histórico do dashboard"
         subtitle="Acompanhe alterações e eventos recentes deste painel."
-        widthMode="full"
+        pin={{
+          id: "dashboard-historico",
+          label: "Histórico do Dashboard",
+          icon: History,
+          path: "/admin/dashboard",
+          activateKey: "historico",
+        }}
         footer={
           <>
             <Button
@@ -12503,7 +12533,7 @@ export function AdminDashboardPage() {
           )}
         </div>
         </div>
-      </SlidePanel>
+      </EmbeddedSlideScreen>
 
       {/* Edit Dashboard Panel — SlidePanel é sempre renderizado (não gated por
           isEditDashboardModalOpen aqui); é ele mesmo que decide quando
@@ -12530,7 +12560,7 @@ export function AdminDashboardPage() {
             (lib) => !draftWidgets.some((dw) => dw.type === lib.id),
           );
           return (
-            <SlidePanel
+            <EmbeddedSlideScreen
               open={isEditDashboardModalOpen}
               onClose={handleCloseEditPanel}
               title={isNewDashboardMode ? "Novo Dashboard" : "Editar dashboard"}
@@ -12539,7 +12569,13 @@ export function AdminDashboardPage() {
                   ? "Adicione widgets e dê um nome ao seu novo dashboard."
                   : "Atualize as configurações principais deste painel."
               }
-              widthMode="full"
+              pin={{
+                id: "dashboard-editar",
+                label: isNewDashboardMode ? "Novo Dashboard" : "Editar Dashboard",
+                icon: Pencil,
+                path: "/admin/dashboard",
+                activateKey: "editar",
+              }}
               footer={
                 <div className="flex items-center gap-4 w-full">
                   <div className="flex items-center gap-2">
@@ -13002,7 +13038,7 @@ export function AdminDashboardPage() {
                   )}
                 </div>
               </div>
-            </SlidePanel>
+            </EmbeddedSlideScreen>
           );
         })()}
       <ConfirmationDialog
@@ -13065,6 +13101,9 @@ export function AdminDashboardPage() {
         cancelText="Cancelar"
         destructive={true}
       />
+    </div>
+    </div>
+    </div>
     </div>
     // </CHANGE>
   );

@@ -31,6 +31,7 @@ import {
   FileSpreadsheet,
   CheckCircle as CheckCircleIcon,
   Pause,
+  Loader2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -66,12 +67,14 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { SlidePanel } from "@/components/slide-panel";
+import { EmbeddedSlideScreen } from "@/components/embedded-slide-screen";
 import { NeonBadge } from "@/components/neon-badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 import { CompanyStatusSelector } from "@/components/company-status-selector";
+import { apiClient } from "@/lib/api-client";
+import { UserViewSlidePanel } from "@/components/user-view-slide-panel";
 
 type CompanyType = "company" | "agency" | "nomad";
 type CompanyStatus = "active" | "inactive" | "pending";
@@ -95,6 +98,16 @@ interface Company {
   cnpj?: string;
   website?: string;
   address?: string;
+  street?: string;
+  number?: string;
+  neighborhood?: string;
+  city?: string;
+  state?: string;
+  zip_code?: string;
+  pix_key?: string;
+  pix_type?: string;
+  lat?: number;
+  lng?: number;
   plan?: string;
   activeUsers?: number;
   totalUsers?: number;
@@ -175,6 +188,43 @@ export function CompanyEditSlidePanel({
 
   const [editedCompany, setEditedCompany] = useState<Company | null>(null);
   const [currentPlan, setCurrentPlan] = useState("basic");
+  const [cepLoading, setCepLoading] = useState(false);
+  const [cepError, setCepError] = useState("");
+
+  // Busca o CEP no ViaCEP e preenche Rua/Bairro/Cidade/Estado automaticamente
+  // — mesmo padrão usado no cadastro (admin/clientes e "Novo Cadastro").
+  const handleCepChange = async (raw: string) => {
+    const digits = raw.replace(/\D/g, "").slice(0, 8);
+    const formatted = digits.length > 5 ? `${digits.slice(0, 5)}-${digits.slice(5)}` : digits;
+    setEditedCompany((prev) => (prev ? { ...prev, zip_code: formatted } : prev));
+    setCepError("");
+    if (digits.length !== 8) return;
+    setCepLoading(true);
+    try {
+      const res = await fetch(`https://viacep.com.br/ws/${digits}/json/`);
+      const data = await res.json();
+      if (data.erro) {
+        setCepError("CEP não encontrado");
+        return;
+      }
+      setEditedCompany((prev) =>
+        prev
+          ? {
+              ...prev,
+              zip_code: formatted,
+              street: data.logradouro || prev.street,
+              neighborhood: data.bairro || prev.neighborhood,
+              city: data.localidade || prev.city,
+              state: data.uf || prev.state,
+            }
+          : prev,
+      );
+    } catch {
+      setCepError("Erro ao buscar CEP");
+    } finally {
+      setCepLoading(false);
+    }
+  };
 
   // Dummy data and functions for export
   const [users, setUsers] = useState<UserForExport[]>([]);
@@ -302,22 +352,57 @@ export function CompanyEditSlidePanel({
     }
   };
 
+  // Usuários reais desta empresa — nada de mock. Empresa recém-criada deve
+  // mostrar só o admin principal (criado atomicamente junto), sem
+  // usuários/tarefas/horas fictícios. Reutilizado como onRefresh depois de
+  // editar um usuário no UserViewSlidePanel.
+  const fetchCompanyUsers = (targetCompany: Company) => {
+    const apiId = (targetCompany as any)._apiId || targetCompany.id;
+    apiClient
+      .getUsers({ company_id: apiId })
+      .then((res: any) => {
+        const raw = res?.data || [];
+        setRawCompanyUsers(raw);
+        const list = raw.map((u: any) => ({
+          id: u.id,
+          name: u.name || "",
+          email: u.email || "",
+          role: u.role === "company_admin" ? "Admin" : "User",
+          status: u.is_active ? "active" : "inactive",
+          last_login: u.last_login || null,
+          // "Master" aqui = admin fundador desta Company, criado
+          // atomicamente junto (Tarefa 9/11) — admin só desta conta, não
+          // confundir com o Admin geral/Master da plataforma (esse é
+          // sempre account_type === "admin", nunca "empresas").
+          isMaster: u.role === "company_admin",
+          phone: u.phone || "",
+          department: "",
+          tasksCompleted: 0,
+          hoursLogged: 0,
+          joinedAt: u.created_at,
+          lastIp: "",
+        }));
+        setCompanyUsers(list);
+      })
+      .catch(() => setCompanyUsers([]));
+  };
+
   useEffect(() => {
     if (company && open) {
       setEditedCompany(company);
       setCurrentPlan(company.partner_level || "basic");
-      // Seed mock users
-      setCompanyUsers([
-        { id: 1, name: "Ana Paula Silva",    email: "ana@empresa.com",     role: "Admin", status: "active",   last_login: "2026-05-27", isMaster: true,  phone: "+55 11 99888-1111", department: "Diretoria",      tasksCompleted: 312, hoursLogged: 1240, joinedAt: "2024-01-15", lastIp: "192.168.1.10" },
-        { id: 2, name: "Roberta Lima",       email: "roberta@empresa.com", role: "Admin", status: "active",   last_login: "2026-05-27", isMaster: false, phone: "+55 11 99888-2222", department: "Operações",      tasksCompleted: 218, hoursLogged: 892,  joinedAt: "2024-03-22", lastIp: "192.168.1.11" },
-        { id: 3, name: "João Carlos Silva",  email: "joao@empresa.com",    role: "User",  status: "active",   last_login: "2026-05-26", isMaster: false, phone: "+55 11 99888-3333", department: "Marketing",      tasksCompleted: 145, hoursLogged: 612,  joinedAt: "2024-06-10", lastIp: "192.168.1.12" },
-        { id: 4, name: "Fernanda Costa",     email: "fernanda@empresa.com",role: "User",  status: "inactive", last_login: "2026-05-20", isMaster: false, phone: "+55 11 99888-4444", department: "Financeiro",     tasksCompleted: 89,  hoursLogged: 380,  joinedAt: "2024-09-01", lastIp: "192.168.1.13" },
-        { id: 5, name: "Carlos Mendes",      email: "carlos@empresa.com",  role: "User",  status: "active",   last_login: "2026-05-27", isMaster: false, phone: "+55 11 99888-5555", department: "Atendimento",    tasksCompleted: 67,  hoursLogged: 245,  joinedAt: "2025-02-14", lastIp: "192.168.1.14" },
-      ]);
+      fetchCompanyUsers(company);
     }
   }, [company, open]);
 
   const [companyUsers, setCompanyUsers] = useState<any[]>([]);
+  // Objetos crus da API (perfil completo), guardados à parte de companyUsers
+  // (que é só o subconjunto de campos usado pelo card da lista) — o botão
+  // "Editar" de cada usuário precisa do objeto completo pra abrir o
+  // UserViewSlidePanel de verdade, o mesmo usado em admin/usuarios.
+  const [rawCompanyUsers, setRawCompanyUsers] = useState<any[]>([]);
+  const [editingCompanyUser, setEditingCompanyUser] = useState<any | null>(null);
+  const [companyUserEditOpen, setCompanyUserEditOpen] = useState(false);
 
   // Mock data for terms, projects, logs
   const terms = [
@@ -488,7 +573,7 @@ export function CompanyEditSlidePanel({
 
   if (!editedCompany) {
     return (
-      <SlidePanel open={open} onClose={handleClose} title="Editar Empresa" widthMode="full">
+      <EmbeddedSlideScreen open={open} onClose={handleClose} title="Editar Empresa">
         <div className="flex-1 p-6 space-y-4">
           <div className="flex items-center gap-4">
             <Skeleton className="h-16 w-16 rounded-full" />
@@ -504,18 +589,24 @@ export function CompanyEditSlidePanel({
             <Skeleton className="h-4 w-1/2 rounded" />
           </div>
         </div>
-      </SlidePanel>
+      </EmbeddedSlideScreen>
     );
   }
 
   return (
     <>
-      <SlidePanel
+      <EmbeddedSlideScreen
         open={open}
         onClose={handleClickCancel}
         title="Editar Empresa"
         subtitle={company.name}
-        widthMode="full"
+        pin={{
+          id: `empresas-edit-${company.id}`,
+          label: `Editar: ${company.name}`,
+          icon: Edit,
+          path: "/admin/empresas",
+          activateKey: `edit:${company.id}`,
+        }}
         footer={
           <div className="flex items-center justify-between gap-3 w-full">
             <DropdownMenu>
@@ -802,6 +893,23 @@ export function CompanyEditSlidePanel({
                       <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Localização</span>
                     </div>
                     <div className="p-4 grid grid-cols-3 gap-3">
+                      {/* CEP — primeiro campo, com autofill via ViaCEP */}
+                      <div className="col-span-3 space-y-1">
+                        <label className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide">CEP</label>
+                        <div className="relative max-w-[200px]">
+                          <Input
+                            value={editedCompany.zip_code || ""}
+                            onChange={(e) => handleCepChange(e.target.value)}
+                            className="h-8 text-sm font-mono pr-7"
+                            placeholder="00000-000"
+                            maxLength={9}
+                          />
+                          {cepLoading && (
+                            <Loader2 className="h-3.5 w-3.5 animate-spin text-slate-400 absolute right-2 top-1/2 -translate-y-1/2" />
+                          )}
+                        </div>
+                        {cepError && <p className="text-xs text-red-500">{cepError}</p>}
+                      </div>
                       {/* Rua */}
                       <div className="col-span-2 space-y-1">
                         <label className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide">Rua / Logradouro</label>
@@ -826,8 +934,8 @@ export function CompanyEditSlidePanel({
                       <div className="space-y-1">
                         <label className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide">Bairro</label>
                         <Input
-                          value={editedCompany.district || ""}
-                          onChange={(e) => setEditedCompany({ ...editedCompany, district: e.target.value })}
+                          value={editedCompany.neighborhood || ""}
+                          onChange={(e) => setEditedCompany({ ...editedCompany, neighborhood: e.target.value })}
                           className="h-8 text-sm"
                           placeholder="Bairro"
                         />
@@ -842,27 +950,16 @@ export function CompanyEditSlidePanel({
                           placeholder="São Paulo"
                         />
                       </div>
-                      {/* Estado / CEP */}
-                      <div className="grid grid-cols-2 gap-2 col-span-1">
-                        <div className="space-y-1">
-                          <label className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide">Estado</label>
-                          <Input
-                            value={editedCompany.state || ""}
-                            onChange={(e) => setEditedCompany({ ...editedCompany, state: e.target.value })}
-                            className="h-8 text-sm"
-                            placeholder="SP"
-                            maxLength={2}
-                          />
-                        </div>
-                        <div className="space-y-1">
-                          <label className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide">CEP</label>
-                          <Input
-                            value={editedCompany.cep || ""}
-                            onChange={(e) => setEditedCompany({ ...editedCompany, cep: e.target.value })}
-                            className="h-8 text-sm font-mono"
-                            placeholder="00000-000"
-                          />
-                        </div>
+                      {/* Estado */}
+                      <div className="space-y-1">
+                        <label className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide">Estado</label>
+                        <Input
+                          value={editedCompany.state || ""}
+                          onChange={(e) => setEditedCompany({ ...editedCompany, state: e.target.value.toUpperCase() })}
+                          className="h-8 text-sm"
+                          placeholder="SP"
+                          maxLength={2}
+                        />
                       </div>
                       {/* Map picker full width */}
                       <div className="col-span-3">
@@ -870,10 +967,10 @@ export function CompanyEditSlidePanel({
                           address={{
                             street: editedCompany.street || "",
                             number: editedCompany.number || "",
-                            district: editedCompany.district || "",
+                            district: editedCompany.neighborhood || "",
                             city: editedCompany.city || "",
                             state: editedCompany.state || "",
-                            zipcode: editedCompany.cep || "",
+                            zipcode: editedCompany.zip_code || "",
                             lat: editedCompany.lat || 0,
                             lng: editedCompany.lng || 0,
                           }}
@@ -882,10 +979,10 @@ export function CompanyEditSlidePanel({
                               ...prev,
                               street: address.street || "",
                               number: address.number || "",
-                              district: address.district || "",
+                              neighborhood: address.district || "",
                               city: address.city || "",
                               state: address.state || "",
-                              cep: address.zipcode || "",
+                              zip_code: address.zipcode || "",
                               lat: address.lat,
                               lng: address.lng,
                             }));
@@ -1211,14 +1308,19 @@ export function CompanyEditSlidePanel({
                           <div className="flex-1 min-w-0">
                             <div className="flex items-center gap-2 mb-0.5 flex-wrap">
                               <p className="text-sm font-bold text-slate-800">{user.name}</p>
-                              {user.isMaster && (
-                                <Badge variant="secondary" className="text-[10px] bg-linear-to-r from-amber-400 to-orange-500 text-white border-0 flex items-center gap-0.5 shadow-sm">
-                                  <Crown className="h-2.5 w-2.5" /> Master
+                              {user.isMaster ? (
+                                <Badge
+                                  variant="secondary"
+                                  className="text-[10px] bg-linear-to-r from-amber-400 to-orange-500 text-white border-0 flex items-center gap-0.5 shadow-sm"
+                                  title="Admin exclusivo desta empresa — diferente do Admin geral (Master) da plataforma"
+                                >
+                                  <Crown className="h-2.5 w-2.5" /> Admin Company
+                                </Badge>
+                              ) : (
+                                <Badge variant="secondary" className={`text-[10px] border-0 ${user.role === "Admin" ? "bg-violet-100 text-violet-700" : "bg-blue-100 text-blue-700"}`}>
+                                  {user.role === "Admin" ? <><Shield className="h-2.5 w-2.5 mr-0.5 inline" /> Admin</> : "Usuário"}
                                 </Badge>
                               )}
-                              <Badge variant="secondary" className={`text-[10px] border-0 ${user.role === "Admin" ? "bg-violet-100 text-violet-700" : "bg-blue-100 text-blue-700"}`}>
-                                {user.role === "Admin" ? <><Shield className="h-2.5 w-2.5 mr-0.5 inline" /> Admin</> : "Usuário"}
-                              </Badge>
                               <Badge variant="secondary" className={`text-[10px] border-0 flex items-center gap-0.5 ${isOnline ? "bg-emerald-100 text-emerald-700" : "bg-slate-100 text-slate-500"}`}>
                                 <span className={`h-1 w-1 rounded-full ${isOnline ? "bg-emerald-500" : "bg-slate-400"}`} /> {isOnline ? "Online" : "Inativo"}
                               </Badge>
@@ -1229,7 +1331,10 @@ export function CompanyEditSlidePanel({
                             <div className="flex items-center gap-3 text-[10px] text-slate-500 flex-wrap">
                               <span className="flex items-center gap-1"><Mail className="h-2.5 w-2.5" /> {user.email}</span>
                               {user.phone && <span className="flex items-center gap-1"><Phone className="h-2.5 w-2.5" /> {user.phone}</span>}
-                              <span className="flex items-center gap-1"><Clock className="h-2.5 w-2.5" /> Último acesso: {new Date(user.last_login).toLocaleDateString("pt-BR")}</span>
+                              <span className="flex items-center gap-1">
+                                <Clock className="h-2.5 w-2.5" />
+                                {user.last_login ? `Último acesso: ${new Date(user.last_login).toLocaleDateString("pt-BR")}` : "Nunca acessou"}
+                              </span>
                             </div>
                           </div>
 
@@ -1252,7 +1357,16 @@ export function CompanyEditSlidePanel({
                                 <Crown className="h-3 w-3 mr-1" /> Transferir
                               </Button>
                             )}
-                            <Button variant="outline" size="sm" className="h-7 px-2.5 text-xs">
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="h-7 px-2.5 text-xs"
+                              onClick={() => {
+                                const raw = rawCompanyUsers.find((u) => u.id === user.id);
+                                setEditingCompanyUser(raw || null);
+                                setCompanyUserEditOpen(true);
+                              }}
+                            >
                               <Edit className="h-3 w-3 mr-1" /> Editar
                             </Button>
                             {!user.isMaster && (
@@ -1907,7 +2021,7 @@ export function CompanyEditSlidePanel({
           </div>
         </Tabs>
       </div>
-      </SlidePanel>
+      </EmbeddedSlideScreen>
 
       {/* Dialogs de Confirmação */}
       <ConfirmationDialog
@@ -1931,6 +2045,19 @@ export function CompanyEditSlidePanel({
         onClose={() => setConfirmDialog({ open: false, action: null })}
         destructive={true}
       />
+
+      {companyUserEditOpen && (
+        <UserViewSlidePanel
+          open={companyUserEditOpen}
+          onClose={() => {
+            setCompanyUserEditOpen(false);
+            setEditingCompanyUser(null);
+          }}
+          onRefresh={() => editedCompany && fetchCompanyUsers(editedCompany)}
+          user={editingCompanyUser}
+          viewerRole="admin"
+        />
+      )}
 
       <AlertDialog
         open={statusChangeDialog.open}

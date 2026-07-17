@@ -358,12 +358,6 @@ const navigationConfig = {
           current: false,
         },
         {
-          name: "Agências",
-          href: "/admin/agencias",
-          icon: Building2,
-          current: false,
-        },
-        {
           name: "Permissões",
           href: "/admin/permissoes",
           icon: Shield,
@@ -591,7 +585,7 @@ const LEVEL_CONFIG_NOMAD_SIDEBAR = {
   diamond:  { label: "Diamond",  emoji: "💎", gradient: "from-violet-400 to-purple-600", bar: "bg-gradient-to-r from-violet-400 to-purple-600", text: "text-violet-300", bg: "bg-violet-500/20", border: "border-violet-400/30", nextLabel: null,       nextTasksRequired: null },
 };
 
-export function Sidebar() {
+export function Sidebar({ transparent = false }: { transparent?: boolean } = {}) {
   const [collapsed, setCollapsed] = useState(false);
   const [agencyModalOpen, setAgencyModalOpen] = useState(false);
   const [settingsModalOpen, setSettingsModalOpen] = useState(false);
@@ -601,6 +595,7 @@ export function Sidebar() {
   const [adminProjectCount, setAdminProjectCount] = useState<number | null>(null);
   const [adminCompanyCount, setAdminCompanyCount] = useState<number | null>(null);
   const [adminUserCount, setAdminUserCount] = useState<number | null>(null);
+  const [adminClientCount, setAdminClientCount] = useState<number | null>(null);
   const [draggedItem, setDraggedItem] = useState<number | null>(null);
   const [dragOverItem, setDragOverItem] = useState<number | null>(null);
   const [draggedSubitem, setDraggedSubitem] = useState<{
@@ -665,6 +660,18 @@ export function Sidebar() {
     } catch { setCurrentUserRole(null); }
   }, [accountType]);
   const isOrgAdmin = currentUserRole === "company_admin" || currentUserRole === "agency_admin" || currentUserRole === "partner_admin";
+
+  // Partner não é mais account_type separado — é a Agency com
+  // PartnerProfile.status "active". Usado só pra decidir se os itens de
+  // nav exclusivos de Partner (Agências lideradas/Comissões/Saques)
+  // aparecem anexados ao menu normal da Agency.
+  const [isPartnerActive, setIsPartnerActive] = useState(false);
+  useEffect(() => {
+    try {
+      const u = JSON.parse(localStorage.getItem("allka_user") || "{}");
+      setIsPartnerActive(u?.partner_status === "active");
+    } catch { setIsPartnerActive(false); }
+  }, [accountType]);
 
   const handleResizeMouseDown = (e: React.MouseEvent) => {
     if (collapsed) return;
@@ -733,18 +740,42 @@ export function Sidebar() {
   useEffect(() => {
     if (accountType !== "admin") return;
     let cancelled = false;
-    Promise.all([
-      apiClient.getProjects({ limit: "1" }).catch(() => null),
-      apiClient.getCompanies({ limit: "1" }).catch(() => null),
-      apiClient.getUsers({ limit: "1" }).catch(() => null),
-    ]).then(([projects, companies, users]: any[]) => {
-      if (cancelled) return;
-      if (projects?.total !== undefined) setAdminProjectCount(projects.total);
-      if (companies?.total !== undefined) setAdminCompanyCount(companies.total);
-      if (users?.total !== undefined) setAdminUserCount(users.total);
-    });
+    const refetchAdminCounts = () => {
+      Promise.all([
+        apiClient.getProjects({ limit: "1" }).catch(() => null),
+        apiClient.getCompanies({ limit: "1" }).catch(() => null),
+        apiClient.getAgencies({ limit: "1" }).catch(() => null),
+        apiClient.getNomades({ limit: "1" }).catch(() => null),
+        apiClient.getUsers({ limit: "1" }).catch(() => null),
+        apiClient.getClientRecords({ limit: "1" }).catch(() => null),
+      ]).then(([projects, companies, agencies, nomades, users, clients]: any[]) => {
+        if (cancelled) return;
+        if (projects?.total !== undefined) setAdminProjectCount(projects.total);
+        // "Empresas" no admin agrupa Company + Agency + Nomad (mesma lista
+        // unificada de /admin/empresas) — Partner não é mais um tipo à
+        // parte, é um upgrade da própria Agency (PartnerProfile), então não
+        // entra nesta soma (senão contaria a mesma Agency duas vezes).
+        if (companies?.total !== undefined) {
+          setAdminCompanyCount(
+            companies.total + (agencies?.total ?? 0) + (nomades?.total ?? 0),
+          );
+        }
+        if (users?.total !== undefined) setAdminUserCount(users.total);
+        if (clients?.total !== undefined) setAdminClientCount(clients.total);
+      });
+    };
+
+    refetchAdminCounts();
+
+    // Sidebar é montado uma vez só (acima do <Routes>, ver App.tsx) e nunca
+    // remonta ao navegar — sem isso, os badges ficam defasados depois de
+    // qualquer criação/exclusão feita em qualquer página, até um F5. Segue o
+    // mesmo padrão de CustomEvent em window já usado no app (ver
+    // "allka:profile-changed" em header.tsx/app-menu-drawer.tsx).
+    window.addEventListener("allka:admin-counts-changed", refetchAdminCounts);
     return () => {
       cancelled = true;
+      window.removeEventListener("allka:admin-counts-changed", refetchAdminCounts);
     };
   }, [accountType]);
 
@@ -782,6 +813,12 @@ export function Sidebar() {
                   badge: adminUserCount !== null ? String(adminUserCount) : undefined,
                 };
               }
+              if (sub.href === "/admin/clientes") {
+                return {
+                  ...sub,
+                  badge: adminClientCount !== null ? String(adminClientCount) : undefined,
+                };
+              }
               return sub;
             }),
           };
@@ -805,8 +842,16 @@ export function Sidebar() {
       return navigationConfig.lider;
     }
 
-    if (accountType === "agencias" || accountType === "parceiro") {
-      return hideTeamMenuForNonAdmin(navigationConfig[accountType] || []);
+    if (accountType === "agencias") {
+      const baseAgencyItems = hideTeamMenuForNonAdmin(navigationConfig.agencias || []);
+      // Partner é um upgrade da Agency (ver PartnerProfile) — quando ativo,
+      // anexa os itens exclusivos de Partner ao menu normal da Agency em
+      // vez de trocar de account_type/portal.
+      if (!isPartnerActive) return baseAgencyItems;
+      const partnerOnlyItems = navigationConfig.parceiro.filter(
+        (item) => item.href !== "/partner/dashboard" && item.href !== "/partner/usuarios",
+      );
+      return [...baseAgencyItems, ...partnerOnlyItems];
     }
 
     return navigationConfig[accountType] || [];
@@ -1170,20 +1215,23 @@ export function Sidebar() {
           ref={sidebarRootRef}
           data-sidebar-root
           className={cn(
-            "flex flex-col h-screen text-white transition-all duration-300 relative overflow-hidden brand-surface",
-            !appliedTheme.backgroundColor.includes("gradient") &&
+            "flex flex-col h-screen text-white transition-all duration-300 relative overflow-hidden",
+            !transparent && "brand-surface",
+            !transparent &&
+              !appliedTheme.backgroundColor.includes("gradient") &&
               !appliedTheme.backgroundColor.includes("custom-gradient:") &&
               appliedTheme.backgroundColor !== "bg-slate-900" &&
               appliedTheme.backgroundColor,
           )}
           style={{
-            ...getSidebarStyle(),
+            ...(transparent ? {} : getSidebarStyle()),
             width: collapsed ? 72 : ctxWidth,
             minWidth: collapsed ? 72 : ctxWidth,
           }}
         >
           {/* Background image overlay — rendered as first child so content stays fully visible */}
           {(() => {
+            if (transparent) return null;
             const imgStyle = getImageLayerStyle();
             if (!imgStyle) return null;
             return (
@@ -1203,10 +1251,10 @@ export function Sidebar() {
           )}
           <div
             className={cn(
-              "relative flex items-center border-b border-white/10 backdrop-blur-sm transition-all duration-300 group",
+              "relative flex items-center h-16 border-b border-white/10 backdrop-blur-sm transition-all duration-300 group",
               collapsed
-                ? "justify-center py-1 px-3 flex-col"
-                : "justify-between px-2 py-2 flex-row",
+                ? "justify-center px-3 flex-col"
+                : "justify-between px-2 flex-row",
             )}
           >
             <div className="relative flex items-center">

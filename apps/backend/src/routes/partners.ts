@@ -12,19 +12,17 @@ const router = Router();
 // (apps/frontend/app/parceiro/saques/page.tsx: "Valor mínimo: R$ 50,00").
 const MIN_WITHDRAWAL_AMOUNT = 50;
 
-function isPartnerUser(user?: { role?: string; account_type?: string }): boolean {
-  return user?.account_type === "parceiro" || user?.role === "partner";
-}
-
-// Mesmo usado em requireRole("admin") no restante do backend: aqui checamos
-// account_type OU role porque é assim que o resto do sistema identifica
-// parceiro (ver auth.ts:32, allkademy.ts:31, clients.ts:122, users.ts:184).
-function requirePartner(req: Request, res: Response, next: NextFunction): void {
+// Partner não é mais um account_type/role próprio — é um upgrade da Agency
+// do usuário (PartnerProfile.agency_id, status "active"). "É partner?"
+// agora significa "minha agência tem um PartnerProfile ativo", resolvido
+// via resolveMyPartnerId (que já faz esse lookup completo).
+async function requirePartner(req: Request, res: Response, next: NextFunction): Promise<void> {
   if (!req.user) {
     res.status(401).json({ error: "Não autenticado" });
     return;
   }
-  if (!isPartnerUser(req.user)) {
+  const partnerId = await resolveMyPartnerId(prisma, req.user.id);
+  if (!partnerId) {
     res.status(403).json({ error: "Permissão insuficiente" });
     return;
   }
@@ -72,14 +70,14 @@ function toAdminWithdrawalDTO(w: {
   processed_at: Date | null;
   partner: {
     balance: number;
-    owner: { name: string | null; email: string } | null;
+    agency: { owner: { name: string | null; email: string } | null } | null;
   };
 }) {
   return {
     id: w.id,
     partnerId: w.partner_profile_id,
-    partnerName: w.partner.owner?.name ?? "",
-    partnerEmail: w.partner.owner?.email ?? "",
+    partnerName: w.partner.agency?.owner?.name ?? "",
+    partnerEmail: w.partner.agency?.owner?.email ?? "",
     partnerBalance: w.partner.balance,
     amount: w.amount,
     pixKey: w.pix_key,
@@ -142,8 +140,10 @@ router.get("/", verifyToken, async (req, res, next) => {
     const where: Record<string, unknown> = {};
     if (status) where["status"] = status;
     if (search) {
-      where["owner"] = {
-        OR: [{ name: { contains: search } }, { email: { contains: search } }],
+      where["agency"] = {
+        owner: {
+          OR: [{ name: { contains: search } }, { email: { contains: search } }],
+        },
       };
     }
 
@@ -152,7 +152,13 @@ router.get("/", verifyToken, async (req, res, next) => {
       prisma.partnerProfile.findMany({
         where,
         include: {
-          owner: { select: { id: true, name: true, email: true, avatar: true } },
+          agency: {
+            select: {
+              id: true,
+              name: true,
+              owner: { select: { id: true, name: true, email: true, avatar: true } },
+            },
+          },
           _count: { select: { commissions: true } },
         },
         skip,
@@ -160,10 +166,15 @@ router.get("/", verifyToken, async (req, res, next) => {
         orderBy: { created_at: "desc" },
       }),
     ]);
-    // Resposta expõe o dono sob "user" (compat — ver apps/frontend/app/admin/
-    // clientes/page.tsx, admin/projetos/page.tsx, lider/clientes/page.tsx,
-    // que leem p.user?.name/.email da listagem).
-    const data = rawData.map(({ owner, ...rest }) => ({ ...rest, user: owner }));
+    // Resposta expõe o dono da agência sob "user" (compat — ver apps/frontend/
+    // app/admin/clientes/page.tsx, admin/projetos/page.tsx, lider/clientes/
+    // page.tsx, que leem p.user?.name/.email da listagem). Partner não tem
+    // usuário próprio — é sempre o dono da Agency vinculada.
+    const data = rawData.map(({ agency, ...rest }) => ({
+      ...rest,
+      user: agency?.owner,
+      agencyName: agency?.name,
+    }));
 
     res.json({ data, total, page, limit });
   } catch (err) {
@@ -178,7 +189,13 @@ router.get("/me", verifyToken, async (req, res, next) => {
     const partner = myPartnerId ? await prisma.partnerProfile.findUnique({
       where: { id: myPartnerId },
       include: {
-        owner: { select: { name: true, email: true } },
+        agency: {
+          select: {
+            name: true,
+            email: true,
+            owner: { select: { name: true, email: true } },
+          },
+        },
         commissions: {
           orderBy: { created_at: "desc" },
           take: 20,
@@ -274,10 +291,12 @@ router.get("/me", verifyToken, async (req, res, next) => {
     // campos soltos na raiz (snake_case) e "profile" nunca era populado.
     const profile = {
       id: partner.id,
-      userId: partner.owner_user_id,
-      name: (partner as any).owner?.name ?? "",
-      email: (partner as any).owner?.email ?? "",
-      avatarInitials: ((partner as any).owner?.name ?? "P")
+      agencyId: partner.agency_id,
+      // Nome/e-mail exibidos são os do dono da agência (Partner não tem
+      // usuário próprio — é a mesma pessoa que já loga como Agency).
+      name: (partner as any).agency?.owner?.name ?? (partner as any).agency?.name ?? "",
+      email: (partner as any).agency?.owner?.email ?? (partner as any).agency?.email ?? "",
+      avatarInitials: ((partner as any).agency?.owner?.name ?? (partner as any).agency?.name ?? "P")
         .split(" ")
         .filter(Boolean)
         .slice(0, 2)
@@ -443,7 +462,7 @@ router.get(
         prisma.partnerWithdrawal.count({ where }),
         prisma.partnerWithdrawal.findMany({
           where,
-          include: { partner: { include: { owner: { select: { name: true, email: true } } } } },
+          include: { partner: { include: { agency: { select: { owner: { select: { name: true, email: true } } } } } } },
           skip,
           take: limit,
           orderBy: { requested_at: "desc" },
@@ -481,7 +500,7 @@ router.put(
 
       const existing = await prisma.partnerWithdrawal.findUnique({
         where: { id },
-        include: { partner: { include: { owner: { select: { name: true, email: true } } } } },
+        include: { partner: { include: { agency: { select: { owner: { select: { name: true, email: true } } } } } } },
       });
       if (!existing) {
         res.status(404).json({ error: "Solicitação de saque não encontrada" });
@@ -546,7 +565,7 @@ router.put(
 
           return tx.partnerWithdrawal.findUnique({
             where: { id },
-            include: { partner: { include: { owner: { select: { name: true, email: true } } } } },
+            include: { partner: { include: { agency: { select: { owner: { select: { name: true, email: true } } } } } } },
           });
         }).catch((err) => {
           if (err instanceof Error && (err.message === "INSUFFICIENT_BALANCE" || err.message === "ALREADY_PROCESSED")) {
@@ -595,7 +614,11 @@ router.put(
 
       const withdrawal = await prisma.partnerWithdrawal.findUnique({
         where: { id },
-        include: { partner: { include: { owner: { select: { name: true, email: true } } } } },
+        include: {
+          partner: {
+            include: { agency: { select: { owner: { select: { name: true, email: true } } } } },
+          },
+        },
       });
       if (!withdrawal) {
         res.status(404).json({ error: "Solicitação de saque não encontrada" });
@@ -615,7 +638,7 @@ router.get("/:id", verifyToken, async (req, res, next) => {
     const partner = await prisma.partnerProfile.findUnique({
       where: { id: (req.params.id as string) },
       include: {
-        owner: { select: { id: true, name: true, email: true } },
+        agency: { select: { id: true, name: true, owner: { select: { id: true, name: true, email: true } } } },
         commissions: {
           orderBy: { created_at: "desc" },
           take: 50,
@@ -634,31 +657,9 @@ router.get("/:id", verifyToken, async (req, res, next) => {
   }
 });
 
-// POST /api/partners
-router.post(
-  "/",
-  verifyToken,
-  validate(
-    z.object({
-      owner_user_id: z.string().min(1),
-      referral_code: z.string().optional(),
-      pix_key: z.string().optional(),
-      pix_key_type: z.enum(["cpf", "email", "phone", "random"]).optional(),
-      linked_campaign_id: z.string().optional(),
-    })
-  ),
-  async (req, res, next) => {
-    try {
-      const partner = await prisma.partnerProfile.create({
-        data: req.body,
-        include: { owner: { select: { id: true, name: true, email: true } } },
-      });
-      res.status(201).json(partner);
-    } catch (err) {
-      next(err);
-    }
-  }
-);
+// Não existe mais POST /api/partners (criação direta de um PartnerProfile
+// "solto"): Partner sempre nasce de um convite feito a uma Agency já
+// existente — ver POST /api/agencies/:id/partner-invite em agencies.ts.
 
 // PUT /api/partners/:id
 router.put(
@@ -666,7 +667,11 @@ router.put(
   verifyToken,
   validate(
     z.object({
-      status: z.enum(["active", "suspended", "pending"]).optional(),
+      // invited/declined normalmente só mudam via os endpoints dedicados de
+      // convite (POST .../partner-invite/accept|decline) — este PUT genérico
+      // aceita o enum inteiro pra permitir ações administrativas diretas
+      // (ex.: suspender um Partner ativo), mas não é o fluxo de convite em si.
+      status: z.enum(["invited", "active", "declined", "suspended"]).optional(),
       pix_key: z.string().optional(),
       pix_key_type: z.enum(["cpf", "email", "phone", "random"]).optional(),
       referral_code: z.string().optional(),

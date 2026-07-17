@@ -440,7 +440,7 @@ router.get("/my-tasks", verifyToken, async (req, res, next) => {
     // For nomad users, return their own tasks
     // For admin/other users, return most recent pending tasks
     const where =
-      req.user?.role === "nomad"
+      req.user?.role === "nomad" || req.user?.role === "nomad_admin"
         ? {
             nomade: { user_id: req.user.id },
             status: { in: ["launched", "in_progress", "returned"] },

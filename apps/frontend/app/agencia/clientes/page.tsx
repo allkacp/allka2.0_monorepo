@@ -17,6 +17,8 @@ import {
   Settings2,
   Hash,
   MapPin,
+  Camera,
+  X,
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -29,6 +31,14 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from "@/components/ui/dialog";
 import { PageHeader } from "@/components/page-header";
 import { ExportButton } from "@/components/export-button";
 import { SlidePanel } from "@/components/slide-panel";
@@ -45,7 +55,7 @@ import {
 import { useSorting, SortableHeader } from "@/hooks/useSorting";
 import { useTableScrollSync } from "@/hooks/useTableScrollSync";
 import { useToast } from "@/components/ui/use-toast";
-import { apiClient } from "@/lib/api-client";
+import { apiClient, ApiError } from "@/lib/api-client";
 
 // Client é uma entidade real, separada de Company — servida por
 // /api/client-records (NÃO /api/clients, que é o legado sobre Company).
@@ -75,9 +85,12 @@ interface ClientRecord {
   segment: string | null;
   status: string;
   address: string | null;
+  number: string | null;
+  neighborhood: string | null;
   city: string | null;
   state: string | null;
   zip_code: string | null;
+  avatar: string | null;
   notes: string | null;
   description: string | null;
   created_by_user_id: string | null;
@@ -114,6 +127,15 @@ const avatarColors = [
 const avatarColor = (index: number) => avatarColors[Math.abs(index) % avatarColors.length];
 
 function ClientAvatar({ client, index }: { client: ClientRecord; index: number }) {
+  if (client.avatar) {
+    return (
+      <img
+        src={client.avatar}
+        alt={client.name}
+        className="w-10 h-10 rounded-full object-cover flex-shrink-0 shadow-sm"
+      />
+    );
+  }
   return (
     <div
       className={`w-10 h-10 rounded-full bg-gradient-to-br ${avatarColor(index)} flex items-center justify-center flex-shrink-0 shadow-sm`}
@@ -139,16 +161,17 @@ const STATUS_DOT_BG: Record<string, string> = {
   prospect: "bg-blue-500",
 };
 
-type ColKey = "cliente" | "segmento" | "contato" | "tipo" | "status" | "cadastro";
+type ColKey = "id" | "cliente" | "segmento" | "contato" | "tipo" | "status" | "cadastro";
 const ALL_COLUMNS: { key: ColKey; label: string; info: string }[] = [
-  { key: "cliente", label: "Cliente", info: "Nome, código sequencial e documento do cliente." },
+  { key: "id", label: "ID", info: "Código sequencial do cliente." },
+  { key: "cliente", label: "Cliente", info: "Nome e documento do cliente." },
   { key: "segmento", label: "Segmento", info: "Segmento de mercado informado no cadastro." },
   { key: "contato", label: "Contato", info: "E-mail, telefone e site do cliente." },
   { key: "tipo", label: "Tipo", info: "Pessoa Jurídica (PJ) ou Pessoa Física (PF)." },
   { key: "status", label: "Status", info: "Situação comercial do cliente." },
   { key: "cadastro", label: "Cadastro", info: "Data em que o cliente foi cadastrado." },
 ];
-const DEFAULT_VISIBLE: ColKey[] = ["cliente", "segmento", "contato", "tipo", "status", "cadastro"];
+const DEFAULT_VISIBLE: ColKey[] = ["id", "cliente", "segmento", "contato", "tipo", "status", "cadastro"];
 
 // Gradient stat-card treatment matching admin/clientes' STAT_COLOR_MAP
 const STAT_COLOR_MAP = {
@@ -212,9 +235,12 @@ const EMPTY_FORM = {
   segment: "",
   website: "",
   address: "",
+  number: "",
+  neighborhood: "",
   city: "",
   state: "",
   zip_code: "",
+  avatar: "",
   notes: "",
 };
 
@@ -254,6 +280,54 @@ export default function AgenciaClientesPage() {
   const [form, setForm] = useState(EMPTY_FORM);
   const [formError, setFormError] = useState("");
   const [saving, setSaving] = useState(false);
+  const [clientCepLoading, setClientCepLoading] = useState(false);
+  const [clientCepError, setClientCepError] = useState("");
+  const avatarInputRef = useRef<HTMLInputElement>(null);
+  const handleAvatarUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      setForm((f) => ({ ...f, avatar: event.target?.result as string }));
+    };
+    reader.readAsDataURL(file);
+    e.target.value = "";
+  };
+  const handleClientCepChange = async (raw: string) => {
+    const digits = raw.replace(/\D/g, "").slice(0, 8);
+    const formatted = digits.length > 5 ? `${digits.slice(0, 5)}-${digits.slice(5)}` : digits;
+    setForm((f) => ({ ...f, zip_code: formatted }));
+    setClientCepError("");
+    if (digits.length !== 8) return;
+    setClientCepLoading(true);
+    try {
+      const res = await fetch(`https://viacep.com.br/ws/${digits}/json/`);
+      const data = await res.json();
+      if (data.erro) {
+        setClientCepError("CEP não encontrado");
+        return;
+      }
+      setForm((f) => ({
+        ...f,
+        zip_code: formatted,
+        address: data.logradouro || f.address,
+        neighborhood: data.bairro || f.neighborhood,
+        city: data.localidade || f.city,
+        state: data.uf || f.state,
+      }));
+    } catch {
+      setClientCepError("Erro ao buscar CEP");
+    } finally {
+      setClientCepLoading(false);
+    }
+  };
+
+  // ── Duplicidade detectada na criação (CLIENT_ALREADY_REGISTERED_*) ──────
+  type DuplicateInfo =
+    | { kind: "same_agency"; client: ClientRecord }
+    | { kind: "other_agency" };
+  const [duplicateInfo, setDuplicateInfo] = useState<DuplicateInfo | null>(null);
+  const [supportInfoOpen, setSupportInfoOpen] = useState(false);
 
   const { sortKey, sortDir, handleSort, sortData, columnFilters, toggleColumnFilter, clearColumnFilter } =
     useSorting<ClientRecord>();
@@ -373,6 +447,7 @@ export default function AgenciaClientesPage() {
   function openCreate() {
     setForm(EMPTY_FORM);
     setFormError("");
+    setDuplicateInfo(null);
     setCreateOpen(true);
   }
   function closeCreate() {
@@ -396,9 +471,12 @@ export default function AgenciaClientesPage() {
         segment: form.segment || undefined,
         website: form.website || undefined,
         address: form.address || undefined,
+        number: form.number || undefined,
+        neighborhood: form.neighborhood || undefined,
         city: form.city || undefined,
         state: form.state || undefined,
         zip_code: form.zip_code || undefined,
+        avatar: form.avatar || undefined,
         notes: form.notes || undefined,
       });
       toast({ title: "Cliente criado com sucesso!" });
@@ -407,10 +485,32 @@ export default function AgenciaClientesPage() {
       setPage(1);
       load();
     } catch (err: any) {
-      setFormError(err?.message ?? "Erro ao criar cliente");
+      // Duplicidade detectada pelo backend (ver client-records.ts): abre um
+      // diálogo dedicado em vez do texto genérico de erro, e NÃO limpa o
+      // formulário nem fecha o painel de criação — o usuário pode ajustar
+      // os dados e tentar de novo, ou fechar o diálogo e decidir depois.
+      const code = err instanceof ApiError ? err.code : undefined;
+      if (code === "CLIENT_ALREADY_REGISTERED_SAME_AGENCY" && err?.data?.client) {
+        setDuplicateInfo({ kind: "same_agency", client: err.data.client as ClientRecord });
+      } else if (code === "CLIENT_ALREADY_REGISTERED_OTHER_AGENCY") {
+        setDuplicateInfo({ kind: "other_agency" });
+      } else {
+        setFormError(err?.message ?? "Erro ao criar cliente");
+      }
     } finally {
       setSaving(false);
     }
+  }
+
+  // "Ver cliente existente" — reaproveita o painel de "+"/mais informações
+  // já existente na tela (mesmo usado nas linhas da tabela), em vez de
+  // inventar uma tela nova de detalhe.
+  function handleViewExistingClient() {
+    if (duplicateInfo?.kind !== "same_agency") return;
+    const client = duplicateInfo.client;
+    setDuplicateInfo(null);
+    setCreateOpen(false);
+    openInfoPanel(client);
   }
 
   const PaginationControls = () => (
@@ -510,7 +610,7 @@ export default function AgenciaClientesPage() {
   );
 
   return (
-    <div ref={pageRef} className="p-4 sm:p-6 space-y-4">
+    <div ref={pageRef} className="space-y-4">
       <PageHeader
         title="Clientes"
         description="Clientes vinculados à sua agência"
@@ -666,8 +766,8 @@ export default function AgenciaClientesPage() {
                       <div className="inline-flex items-center gap-1">
                         <SortableHeader
                           label={col.label}
-                          field={col.key === "cliente" ? "name" : col.key === "cadastro" ? "created_at" : col.key}
-                          type={col.key === "cadastro" ? "date" : "text"}
+                          field={col.key === "id" ? "sequence_number" : col.key === "cliente" ? "name" : col.key === "cadastro" ? "created_at" : col.key}
+                          type={col.key === "cadastro" ? "date" : col.key === "id" ? "number" : "text"}
                           sortKey={sortKey as string}
                           sortDir={sortDir}
                           onSort={handleSort}
@@ -729,13 +829,17 @@ export default function AgenciaClientesPage() {
                       </div>
                     </td>
 
+                    {visibleCols.has("id") && (
+                      <td className="py-3 px-4 text-xs font-mono text-slate-500 dark:text-slate-400 whitespace-nowrap" style={{ borderRight: "1px solid rgba(148,163,184,0.15)" }}>
+                        {formatClientSequenceId(c.sequence_number)}
+                      </td>
+                    )}
                     {visibleCols.has("cliente") && (
                       <td className="py-3 px-4" style={{ borderRight: "1px solid rgba(148,163,184,0.15)" }}>
                         <div className="flex items-center gap-3">
                           <ClientAvatar client={c} index={i} />
                           <div className="min-w-0 flex-1">
                             <p className="font-bold text-sm text-slate-800 dark:text-slate-100 truncate">{c.name}</p>
-                            <p className="text-[11px] text-slate-400 font-mono">{formatClientSequenceId(c.sequence_number)}</p>
                             {c.document && <p className="text-xs text-slate-400 dark:text-slate-500 truncate">{c.document}</p>}
                           </div>
                         </div>
@@ -958,7 +1062,13 @@ export default function AgenciaClientesPage() {
                     <p className="flex items-start gap-1.5 text-sm text-slate-700 dark:text-slate-300">
                       <MapPin className="h-3.5 w-3.5 text-slate-400 flex-shrink-0 mt-0.5" />
                       <span>
-                        {[infoPanelClient.address, infoPanelClient.city, infoPanelClient.state, infoPanelClient.zip_code]
+                        {[
+                          [infoPanelClient.address, infoPanelClient.number].filter(Boolean).join(", "),
+                          infoPanelClient.neighborhood,
+                          infoPanelClient.city,
+                          infoPanelClient.state,
+                          infoPanelClient.zip_code,
+                        ]
                           .filter(Boolean)
                           .join(" · ") || "Não informado"}
                       </span>
@@ -1003,6 +1113,40 @@ export default function AgenciaClientesPage() {
         }
       >
         <div className="flex-1 overflow-y-auto p-5 space-y-4">
+          <div className="space-y-2">
+            <Label>Foto de perfil (opcional)</Label>
+            <div className="flex items-center gap-3">
+              <div className="relative h-14 w-14 flex-shrink-0">
+                {form.avatar ? (
+                  <img src={form.avatar} alt="Prévia" className="h-14 w-14 rounded-full object-cover shadow-sm" />
+                ) : (
+                  <div className="h-14 w-14 rounded-full bg-gradient-to-br from-blue-500 to-blue-700 flex items-center justify-center shadow-sm">
+                    <span className="text-sm font-bold text-white">{form.name ? clientInitials(form.name) : "?"}</span>
+                  </div>
+                )}
+                <button
+                  type="button"
+                  onClick={() => avatarInputRef.current?.click()}
+                  className="absolute -bottom-1 -right-1 bg-blue-600 hover:bg-blue-700 rounded-full p-1.5 text-white transition-colors border border-white dark:border-slate-900"
+                >
+                  <Camera className="h-3 w-3" />
+                </button>
+                <input
+                  ref={avatarInputRef}
+                  type="file"
+                  accept="image/*"
+                  onChange={handleAvatarUpload}
+                  className="hidden"
+                />
+              </div>
+              {form.avatar && (
+                <Button type="button" variant="outline" size="sm" onClick={() => setForm({ ...form, avatar: "" })}>
+                  <X className="h-3.5 w-3.5 mr-1" /> Remover
+                </Button>
+              )}
+            </div>
+          </div>
+
           <div className="space-y-2">
             <Label>Nome / Razão social *</Label>
             <Input
@@ -1073,29 +1217,69 @@ export default function AgenciaClientesPage() {
 
           <div className="pt-2 border-t border-slate-100 dark:border-slate-800 space-y-3">
             <h3 className="text-sm font-semibold text-slate-700 dark:text-slate-300">Endereço</h3>
-            <Input
-              placeholder="Rua / Avenida"
-              value={form.address}
-              onChange={(e) => setForm({ ...form, address: e.target.value })}
-            />
-            <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-2">
+              <Label>CEP</Label>
+              <div className="relative">
+                <Input
+                  placeholder="00000-000"
+                  value={form.zip_code}
+                  onChange={(e) => handleClientCepChange(e.target.value)}
+                  className="pr-7"
+                  maxLength={9}
+                />
+                {clientCepLoading && (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin text-slate-400 absolute right-2 top-1/2 -translate-y-1/2" />
+                )}
+              </div>
+              {clientCepError && (
+                <p className="text-xs text-red-500">{clientCepError}</p>
+              )}
+            </div>
+            <div className="grid grid-cols-3 gap-3">
+              <div className="col-span-2 space-y-2">
+                <Label>Rua / Avenida</Label>
+                <Input
+                  placeholder="Ex: Rua Paulo Lobo"
+                  value={form.address}
+                  onChange={(e) => setForm({ ...form, address: e.target.value })}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Número</Label>
+                <Input
+                  placeholder="Ex: 123"
+                  value={form.number}
+                  onChange={(e) => setForm({ ...form, number: e.target.value })}
+                />
+              </div>
+            </div>
+            <div className="space-y-2">
+              <Label>Bairro</Label>
               <Input
-                placeholder="Cidade"
-                value={form.city}
-                onChange={(e) => setForm({ ...form, city: e.target.value })}
-              />
-              <Input
-                placeholder="Estado (UF)"
-                maxLength={2}
-                value={form.state}
-                onChange={(e) => setForm({ ...form, state: e.target.value.toUpperCase() })}
+                placeholder="Ex: Cambuí"
+                value={form.neighborhood}
+                onChange={(e) => setForm({ ...form, neighborhood: e.target.value })}
               />
             </div>
-            <Input
-              placeholder="CEP"
-              value={form.zip_code}
-              onChange={(e) => setForm({ ...form, zip_code: e.target.value })}
-            />
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-2">
+                <Label>Cidade</Label>
+                <Input
+                  placeholder="Ex: Campinas"
+                  value={form.city}
+                  onChange={(e) => setForm({ ...form, city: e.target.value })}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Estado (UF)</Label>
+                <Input
+                  placeholder="SP"
+                  maxLength={2}
+                  value={form.state}
+                  onChange={(e) => setForm({ ...form, state: e.target.value.toUpperCase() })}
+                />
+              </div>
+            </div>
           </div>
 
           <div className="pt-2 border-t border-slate-100 dark:border-slate-800 space-y-2">
@@ -1111,6 +1295,96 @@ export default function AgenciaClientesPage() {
           {formError && <p className="text-xs text-red-600">{formError}</p>}
         </div>
       </SlidePanel>
+
+      {/* Duplicidade — mesma agência: mostra só os dados já visíveis pra
+          agência (nada de ID de vínculo) e oferece ver o cadastro existente
+          no mesmo painel de "+" já usado na tabela. */}
+      <Dialog
+        open={duplicateInfo?.kind === "same_agency"}
+        onOpenChange={(open) => { if (!open) setDuplicateInfo(null); }}
+      >
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Cliente já cadastrado</DialogTitle>
+            <DialogDescription>
+              Este cliente já está cadastrado na carteira da sua agência.
+            </DialogDescription>
+          </DialogHeader>
+          {duplicateInfo?.kind === "same_agency" && (
+            <div className="rounded-xl border border-slate-200 dark:border-slate-700 p-4">
+              <div className="flex items-center gap-3">
+                <ClientAvatar client={duplicateInfo.client} index={0} />
+                <div className="min-w-0 flex-1">
+                  <p className="font-bold text-sm text-slate-800 dark:text-slate-100 truncate">
+                    {duplicateInfo.client.name}
+                  </p>
+                  <p className="text-[11px] text-slate-400 font-mono">
+                    {formatClientSequenceId(duplicateInfo.client.sequence_number)}
+                  </p>
+                </div>
+              </div>
+              <div className="text-sm text-slate-600 dark:text-slate-300 space-y-1 mt-3">
+                {duplicateInfo.client.document && <p>Documento: {duplicateInfo.client.document}</p>}
+                {duplicateInfo.client.email && <p>E-mail: {duplicateInfo.client.email}</p>}
+                {duplicateInfo.client.phone && <p>Telefone: {duplicateInfo.client.phone}</p>}
+              </div>
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDuplicateInfo(null)}>
+              Fechar
+            </Button>
+            <Button onClick={handleViewExistingClient} className="btn-brand">
+              Ver cliente existente
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Duplicidade — outra organização: mensagem segura, sem nome/ID/dado
+          nenhum da outra Agency/Company/Partner. */}
+      <Dialog
+        open={duplicateInfo?.kind === "other_agency"}
+        onOpenChange={(open) => { if (!open) setDuplicateInfo(null); }}
+      >
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Não foi possível cadastrar</DialogTitle>
+            <DialogDescription>
+              Não foi possível cadastrar este cliente porque já existe um cadastro
+              correspondente na plataforma. Caso precise de ajuda, solicite uma
+              análise ao suporte.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDuplicateInfo(null)}>
+              Fechar
+            </Button>
+            <Button onClick={() => setSupportInfoOpen(true)} className="btn-brand">
+              Solicitar ajuda
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Aviso de que "Solicitar ajuda" ainda não envia chamado de verdade —
+          não implementar o chamado real nesta etapa. */}
+      <Dialog open={supportInfoOpen} onOpenChange={setSupportInfoOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Solicitar ajuda ao suporte</DialogTitle>
+            <DialogDescription>
+              Este recurso ainda está em construção. Em breve você poderá abrir,
+              diretamente por aqui, uma solicitação para a equipe Allka analisar
+              este cadastro. Por enquanto, entre em contato pelos canais de
+              suporte habituais.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button onClick={() => setSupportInfoOpen(false)}>Entendi</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

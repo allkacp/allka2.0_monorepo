@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useCallback, useRef, useEffect, useMemo } from "react";
+import { useNavigate, useParams } from "react-router-dom";
 import {
   Search,
   Building2,
@@ -19,6 +20,8 @@ import {
   Hash,
   MapPin,
   Link2,
+  Camera,
+  X,
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -31,9 +34,17 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { PageHeader } from "@/components/page-header";
+import {
+  STANDARD_SHELL_PANEL_CLASS,
+  STANDARD_SHELL_TABLE_CARD_CLASS,
+  StandardPageBanner,
+  StandardMetricCard,
+} from "@/components/standard-page-shell";
 import { ExportButton } from "@/components/export-button";
-import { SlidePanel } from "@/components/slide-panel";
+import { PinToTrayButton } from "@/components/pin-to-tray-button";
+import { EmbeddedSlideScreen } from "@/components/embedded-slide-screen";
+import { StandardModalDialog } from "@/components/standard-modal-dialog";
+import { useConsumePendingActivation } from "@/contexts/open-screens-context";
 import { IconToolbarButton } from "@/components/icon-toolbar-button";
 import { NeonBadge } from "@/components/neon-badge";
 import { useItemsPerPage } from "@/lib/use-items-per-page";
@@ -74,9 +85,12 @@ interface ClientRecord {
   segment: string | null;
   status: string;
   address: string | null;
+  number: string | null;
+  neighborhood: string | null;
   city: string | null;
   state: string | null;
   zip_code: string | null;
+  avatar: string | null;
   notes: string | null;
   description: string | null;
   created_by_user_id: string | null;
@@ -86,7 +100,7 @@ interface ClientRecord {
 }
 
 function formatClientSequenceId(seq: number): string {
-  return `cli_${String(seq).padStart(5, "0")}`;
+  return `cli_${seq}`;
 }
 function fmtDate(d: string) {
   return new Date(d).toLocaleDateString("pt-BR");
@@ -110,6 +124,15 @@ const avatarColors = [
 const avatarColor = (index: number) => avatarColors[Math.abs(index) % avatarColors.length];
 
 function ClientAvatar({ client, index }: { client: ClientRecord; index: number }) {
+  if (client.avatar) {
+    return (
+      <img
+        src={client.avatar}
+        alt={client.name}
+        className="w-10 h-10 rounded-full object-cover flex-shrink-0 shadow-sm"
+      />
+    );
+  }
   return (
     <div
       className={`w-10 h-10 rounded-full bg-gradient-to-br ${avatarColor(index)} flex items-center justify-center flex-shrink-0 shadow-sm`}
@@ -135,9 +158,10 @@ const STATUS_DOT_BG: Record<string, string> = {
   prospect: "bg-blue-500",
 };
 
-type ColKey = "cliente" | "segmento" | "contato" | "tipo" | "vinculo" | "status" | "cadastro";
+type ColKey = "id" | "cliente" | "segmento" | "contato" | "tipo" | "vinculo" | "status" | "cadastro";
 const ALL_COLUMNS: { key: ColKey; label: string; info: string }[] = [
-  { key: "cliente", label: "Cliente", info: "Nome, código sequencial e documento do cliente." },
+  { key: "id", label: "ID", info: "Código sequencial do cliente." },
+  { key: "cliente", label: "Cliente", info: "Nome e documento do cliente." },
   { key: "segmento", label: "Segmento", info: "Segmento de mercado informado no cadastro." },
   { key: "contato", label: "Contato", info: "E-mail, telefone e site do cliente." },
   { key: "tipo", label: "Tipo", info: "Pessoa Jurídica (PJ) ou Pessoa Física (PF)." },
@@ -145,59 +169,9 @@ const ALL_COLUMNS: { key: ColKey; label: string; info: string }[] = [
   { key: "status", label: "Status", info: "Situação comercial do cliente." },
   { key: "cadastro", label: "Cadastro", info: "Data em que o cliente foi cadastrado." },
 ];
-const DEFAULT_VISIBLE: ColKey[] = ["cliente", "segmento", "contato", "tipo", "vinculo", "status", "cadastro"];
+const DEFAULT_VISIBLE: ColKey[] = ["id", "cliente", "segmento", "contato", "tipo", "vinculo", "status", "cadastro"];
 
-const STAT_COLOR_MAP = {
-  blue: {
-    gradient: "from-blue-500 to-blue-700",
-    darkGradient: "dark:from-blue-800 dark:to-blue-950",
-    borderClass: "border-2 border-blue-300/70 dark:border-blue-800/70",
-  },
-  violet: {
-    gradient: "from-violet-500 to-purple-700",
-    darkGradient: "dark:from-violet-800 dark:to-purple-950",
-    borderClass: "border-2 border-violet-300/70 dark:border-violet-800/70",
-  },
-  emerald: {
-    gradient: "from-emerald-500 to-teal-600",
-    darkGradient: "dark:from-emerald-800 dark:to-teal-900",
-    borderClass: "border-2 border-emerald-300/70 dark:border-emerald-800/70",
-  },
-  orange: {
-    gradient: "from-orange-500 to-rose-600",
-    darkGradient: "dark:from-orange-800 dark:to-rose-900",
-    borderClass: "border-2 border-orange-300/70 dark:border-orange-800/70",
-  },
-} as const;
-
-function StatCard({
-  label,
-  value,
-  icon: Icon,
-  color,
-}: {
-  label: string;
-  value: number;
-  icon: React.ElementType;
-  color: keyof typeof STAT_COLOR_MAP;
-}) {
-  const colors = STAT_COLOR_MAP[color];
-  return (
-    <div
-      className={`relative rounded-xl overflow-hidden cursor-default transition-all duration-200 bg-gradient-to-br ${colors.gradient} ${colors.darkGradient} ${colors.borderClass} shadow-lg hover:shadow-xl`}
-    >
-      <div className="px-4 py-3.5">
-        <div className="flex items-center justify-between mb-1">
-          <span className="text-[11px] font-semibold text-white/80 uppercase tracking-wide">{label}</span>
-          <div className="bg-white/20 rounded-md p-1">
-            <Icon className="h-3.5 w-3.5 text-white" />
-          </div>
-        </div>
-        <div className="text-2xl font-bold text-white">{value}</div>
-      </div>
-    </div>
-  );
-}
+// Stat cards agora vêm do shell compartilhado (standard-page-shell.tsx).
 
 type LinkType = "none" | "agency" | "company" | "partner";
 
@@ -210,9 +184,12 @@ const EMPTY_FORM = {
   segment: "",
   website: "",
   address: "",
+  number: "",
+  neighborhood: "",
   city: "",
   state: "",
   zip_code: "",
+  avatar: "",
   notes: "",
   status: "active",
   linkType: "none" as LinkType,
@@ -240,12 +217,36 @@ export default function AdminClientesPage() {
   const [visibleCols, setVisibleCols] = useState<Set<ColKey>>(new Set(DEFAULT_VISIBLE));
   const [pageJumpValue, setPageJumpValue] = useState("");
 
+  const navigate = useNavigate();
+  const { clientId: urlClientId } = useParams<{ clientId?: string }>();
+
   const [infoPanelOpen, setInfoPanelOpen] = useState(false);
   const [infoPanelClient, setInfoPanelClient] = useState<ClientRecord | null>(null);
   const openInfoPanel = useCallback((client: ClientRecord) => {
     setInfoPanelClient(client);
     setInfoPanelOpen(true);
-  }, []);
+    navigate(`/admin/clientes/${client.sequence_number}`, { replace: true });
+  }, [navigate]);
+  const closeInfoPanel = useCallback(() => {
+    setInfoPanelOpen(false);
+    navigate("/admin/clientes", { replace: true });
+  }, [navigate]);
+
+  // Deep-link: abre o painel de info a partir do param da URL (número de
+  // sequence_number, ex.: "1") — mesmo padrão de /admin/usuarios/:userId.
+  useEffect(() => {
+    if (!urlClientId) return;
+    if (loading) return;
+    const num = parseInt(urlClientId, 10);
+    const found = Number.isFinite(num)
+      ? clients.find((c) => c.sequence_number === num)
+      : clients.find((c) => c.id === urlClientId); // fallback pra links antigos com o id técnico
+    if (found) {
+      setInfoPanelClient(found);
+      setInfoPanelOpen(true);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [urlClientId, loading, clients]);
 
   // ── Vínculo: opções carregadas uma vez (nomes reais pra tabela + formulário) ──
   const [linkOptions, setLinkOptions] = useState<{
@@ -285,6 +286,47 @@ export default function AdminClientesPage() {
   const [form, setForm] = useState(EMPTY_FORM);
   const [formError, setFormError] = useState("");
   const [saving, setSaving] = useState(false);
+  const [clientCepLoading, setClientCepLoading] = useState(false);
+  const [clientCepError, setClientCepError] = useState("");
+  const avatarInputRef = useRef<HTMLInputElement>(null);
+  const handleAvatarUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      setForm((f) => ({ ...f, avatar: event.target?.result as string }));
+    };
+    reader.readAsDataURL(file);
+    e.target.value = "";
+  };
+  const handleClientCepChange = async (raw: string) => {
+    const digits = raw.replace(/\D/g, "").slice(0, 8);
+    const formatted = digits.length > 5 ? `${digits.slice(0, 5)}-${digits.slice(5)}` : digits;
+    setForm((f) => ({ ...f, zip_code: formatted }));
+    setClientCepError("");
+    if (digits.length !== 8) return;
+    setClientCepLoading(true);
+    try {
+      const res = await fetch(`https://viacep.com.br/ws/${digits}/json/`);
+      const data = await res.json();
+      if (data.erro) {
+        setClientCepError("CEP não encontrado");
+        return;
+      }
+      setForm((f) => ({
+        ...f,
+        zip_code: formatted,
+        address: data.logradouro || f.address,
+        neighborhood: data.bairro || f.neighborhood,
+        city: data.localidade || f.city,
+        state: data.uf || f.state,
+      }));
+    } catch {
+      setClientCepError("Erro ao buscar CEP");
+    } finally {
+      setClientCepLoading(false);
+    }
+  };
 
   const { sortKey, sortDir, handleSort, sortData, columnFilters, toggleColumnFilter, clearColumnFilter } =
     useSorting<ClientRecord>();
@@ -428,9 +470,12 @@ export default function AdminClientesPage() {
       segment: c.segment || "",
       website: c.website || "",
       address: c.address || "",
+      number: c.number || "",
+      neighborhood: c.neighborhood || "",
       city: c.city || "",
       state: c.state || "",
       zip_code: c.zip_code || "",
+      avatar: c.avatar || "",
       notes: c.notes || "",
       status: c.status,
       linkType,
@@ -439,6 +484,16 @@ export default function AdminClientesPage() {
     setFormError("");
     setFormOpen(true);
   }
+
+  useConsumePendingActivation((key) => {
+    if (key === "create") {
+      openCreate();
+    } else if (key.startsWith("edit:")) {
+      const id = key.slice(5);
+      const found = clients.find((c) => c.id === id);
+      if (found) openEdit(found);
+    }
+  });
 
   function closeForm() {
     if (saving) return;
@@ -466,9 +521,12 @@ export default function AdminClientesPage() {
         segment: form.segment || undefined,
         website: form.website || undefined,
         address: form.address || undefined,
+        number: form.number || undefined,
+        neighborhood: form.neighborhood || undefined,
         city: form.city || undefined,
         state: form.state || undefined,
         zip_code: form.zip_code || undefined,
+        avatar: form.avatar || undefined,
         notes: form.notes || undefined,
         status: form.status,
       };
@@ -488,6 +546,7 @@ export default function AdminClientesPage() {
         setFormOpen(false);
         setPage(1);
         load();
+        window.dispatchEvent(new Event("allka:admin-counts-changed"));
       } else {
         const linkFields: Record<string, any> =
           form.linkType === "agency"
@@ -508,6 +567,7 @@ export default function AdminClientesPage() {
         const newTotal = countResp.total ?? 0;
         setPage(Math.max(1, Math.ceil(newTotal / pageSize)));
         load();
+        window.dispatchEvent(new Event("allka:admin-counts-changed"));
       }
     } catch (err: any) {
       setFormError(err?.message ?? "Erro ao salvar cliente");
@@ -616,28 +676,28 @@ export default function AdminClientesPage() {
     form.linkType === "agency" ? linkOptions.agency : form.linkType === "company" ? linkOptions.company : form.linkType === "partner" ? linkOptions.partner : [];
 
   return (
-    <div ref={pageRef} className="p-4 sm:p-6 space-y-4">
-      <PageHeader
+    <div className={STANDARD_SHELL_PANEL_CLASS}>
+    <div ref={pageRef} className="relative h-full min-h-0 flex flex-col overflow-hidden">
+      <div className="shrink-0 -mb-[11px]">
+      <StandardPageBanner
+        icon={Tag}
         title="Clientes"
         description="Todos os clientes reais da plataforma — vinculados a Agency, Company, Partner ou sem vínculo"
         actions={
           <>
-            <ExportButton pageRef={pageRef} filename="clientes" />
+            <div className="bg-white rounded-lg">
+              <ExportButton pageRef={pageRef} filename="clientes" />
+            </div>
+            <PinToTrayButton id="page-clientes" label="Clientes" icon={Tag} path="/admin/clientes" />
             <TooltipProvider delayDuration={400}>
               <Tooltip>
                 <TooltipTrigger asChild>
                   <button
                     onClick={openCreate}
-                    className="group relative flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-border/60 hover:border-transparent overflow-hidden transition-all"
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-white/70 text-white bg-white/10 hover:bg-white/20 transition-colors text-xs font-semibold whitespace-nowrap"
                   >
-                    <span
-                      className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none"
-                      style={{ background: "linear-gradient(135deg,#000000 0%,#1a2a6f 45%,#c81a7f 100%)" }}
-                    />
-                    <Plus className="relative z-10 h-3.5 w-3.5 shrink-0 text-[#7d1b6a] group-hover:text-white transition-colors" />
-                    <span className="relative z-10 text-xs font-semibold bg-clip-text text-transparent [background-image:linear-gradient(135deg,#1a2a6f_0%,#7d1b6a_55%,#c81a7f_100%)] group-hover:[background-image:none] group-hover:text-white transition-colors">
-                      Criar novo cliente
-                    </span>
+                    <Plus className="h-3.5 w-3.5 shrink-0" />
+                    Criar novo cliente
                   </button>
                 </TooltipTrigger>
                 <TooltipContent side="bottom" sideOffset={6}>Cadastrar novo cliente</TooltipContent>
@@ -646,15 +706,18 @@ export default function AdminClientesPage() {
           </>
         }
       />
-
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        <StatCard label="Total de Clientes" value={total} icon={Tag} color="blue" />
-        <StatCard label="Pessoa Jurídica" value={totalPj} icon={Building2} color="violet" />
-        <StatCard label="Pessoa Física" value={totalPf} icon={User} color="emerald" />
-        <StatCard label="Ativos" value={totalActive} icon={Tag} color="orange" />
       </div>
 
-      <div className="bg-white dark:bg-slate-900 border border-[#e8edf5] dark:border-slate-700 rounded-xl shadow-sm overflow-hidden">
+      <div className="flex-1 min-h-0 overflow-y-auto">
+      <div className="space-y-5">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        <StandardMetricCard label="Total de Clientes" value={total} icon={Tag} colorKey="blue" />
+        <StandardMetricCard label="Pessoa Jurídica" value={totalPj} icon={Building2} colorKey="violet" />
+        <StandardMetricCard label="Pessoa Física" value={totalPf} icon={User} colorKey="emerald" />
+        <StandardMetricCard label="Ativos" value={totalActive} icon={Tag} colorKey="orange" />
+      </div>
+
+      <div className={STANDARD_SHELL_TABLE_CARD_CLASS}>
         <div className="flex items-center gap-2 flex-wrap px-[18px] py-3">
           <div ref={searchBoxRef} className="relative flex-1 min-w-[220px] max-w-sm">
             <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -766,8 +829,8 @@ export default function AdminClientesPage() {
                       <div className="inline-flex items-center gap-1">
                         <SortableHeader
                           label={col.label}
-                          field={col.key === "cliente" ? "name" : col.key === "cadastro" ? "created_at" : col.key}
-                          type={col.key === "cadastro" ? "date" : "text"}
+                          field={col.key === "id" ? "sequence_number" : col.key === "cliente" ? "name" : col.key === "cadastro" ? "created_at" : col.key}
+                          type={col.key === "cadastro" ? "date" : col.key === "id" ? "number" : "text"}
                           sortKey={sortKey as string}
                           sortDir={sortDir}
                           onSort={handleSort}
@@ -844,13 +907,17 @@ export default function AdminClientesPage() {
                       </div>
                     </td>
 
+                    {visibleCols.has("id") && (
+                      <td className="py-3 px-4 text-xs font-mono text-slate-500 dark:text-slate-400 whitespace-nowrap" style={{ borderRight: "1px solid rgba(148,163,184,0.15)" }}>
+                        {formatClientSequenceId(c.sequence_number)}
+                      </td>
+                    )}
                     {visibleCols.has("cliente") && (
                       <td className="py-3 px-4" style={{ borderRight: "1px solid rgba(148,163,184,0.15)" }}>
                         <div className="flex items-center gap-3">
                           <ClientAvatar client={c} index={i} />
                           <div className="min-w-0 flex-1">
                             <p className="font-bold text-sm text-slate-800 dark:text-slate-100 truncate">{c.name}</p>
-                            <p className="text-[11px] text-slate-400 font-mono">{formatClientSequenceId(c.sequence_number)}</p>
                             {c.document && <p className="text-xs text-slate-400 dark:text-slate-500 truncate">{c.document}</p>}
                           </div>
                         </div>
@@ -969,14 +1036,15 @@ export default function AdminClientesPage() {
           </div>
         )}
       </div>
+      </div>
+      </div>
 
       {/* Filtros panel */}
-      <SlidePanel
+      <StandardModalDialog
         open={filterPanelOpen}
         onClose={() => setFilterPanelOpen(false)}
         title="Filtros"
         subtitle="Filtre a lista de clientes por status"
-        widthMode="full"
       >
         <div className="p-5 flex-1 overflow-y-auto space-y-3">
           <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Status</p>
@@ -999,15 +1067,14 @@ export default function AdminClientesPage() {
             </label>
           ))}
         </div>
-      </SlidePanel>
+      </StandardModalDialog>
 
       {/* Column config panel */}
-      <SlidePanel
+      <StandardModalDialog
         open={colConfigOpen}
         onClose={() => setColConfigOpen(false)}
         title="Configurar colunas"
         subtitle="Escolha quais colunas aparecem na tabela"
-        widthMode="full"
       >
         <div className="p-5 flex-1 overflow-y-auto space-y-2">
           {ALL_COLUMNS.map((col) => (
@@ -1017,12 +1084,12 @@ export default function AdminClientesPage() {
             </label>
           ))}
         </div>
-      </SlidePanel>
+      </StandardModalDialog>
 
       {/* "+" info panel */}
-      <SlidePanel
+      <StandardModalDialog
         open={infoPanelOpen}
-        onClose={() => setInfoPanelOpen(false)}
+        onClose={closeInfoPanel}
         title={
           infoPanelClient ? (
             <div className="flex items-center gap-3">
@@ -1040,7 +1107,6 @@ export default function AdminClientesPage() {
             ? `${formatClientSequenceId(infoPanelClient.sequence_number)} · ${infoPanelClient.address || "Endereço não informado"}`
             : undefined
         }
-        widthMode="full"
       >
         {infoPanelClient && (() => {
           const link = infoPanelClient.links[0];
@@ -1096,7 +1162,13 @@ export default function AdminClientesPage() {
                     <p className="flex items-start gap-1.5 text-sm text-slate-700 dark:text-slate-300">
                       <MapPin className="h-3.5 w-3.5 text-slate-400 flex-shrink-0 mt-0.5" />
                       <span>
-                        {[infoPanelClient.address, infoPanelClient.city, infoPanelClient.state, infoPanelClient.zip_code]
+                        {[
+                          [infoPanelClient.address, infoPanelClient.number].filter(Boolean).join(", "),
+                          infoPanelClient.neighborhood,
+                          infoPanelClient.city,
+                          infoPanelClient.state,
+                          infoPanelClient.zip_code,
+                        ]
                           .filter(Boolean)
                           .join(" · ") || "Não informado"}
                       </span>
@@ -1120,15 +1192,21 @@ export default function AdminClientesPage() {
           </div>
           );
         })()}
-      </SlidePanel>
+      </StandardModalDialog>
 
       {/* Criar / editar cliente */}
-      <SlidePanel
+      <EmbeddedSlideScreen
         open={formOpen}
         onClose={closeForm}
         title={editingId ? "Editar cliente" : "Criar novo cliente"}
         subtitle={editingId ? "Altere os dados e/ou o vínculo deste cliente" : "Defina os dados e o vínculo (opcional) deste cliente"}
-        widthMode="full"
+        pin={{
+          id: editingId ? `clientes-edit-${editingId}` : "clientes-create",
+          label: editingId ? `Editar: ${form.name || "Cliente"}` : "Criar novo cliente",
+          icon: editingId ? Pencil : Plus,
+          path: "/admin/clientes",
+          activateKey: editingId ? `edit:${editingId}` : "create",
+        }}
         footer={
           <div className="flex items-center justify-end gap-2">
             <Button variant="outline" onClick={closeForm} disabled={saving}>
@@ -1141,6 +1219,40 @@ export default function AdminClientesPage() {
         }
       >
         <div className="flex-1 overflow-y-auto p-5 space-y-4">
+          <div className="space-y-2">
+            <Label>Foto de perfil (opcional)</Label>
+            <div className="flex items-center gap-3">
+              <div className="relative h-14 w-14 flex-shrink-0">
+                {form.avatar ? (
+                  <img src={form.avatar} alt="Prévia" className="h-14 w-14 rounded-full object-cover shadow-sm" />
+                ) : (
+                  <div className="h-14 w-14 rounded-full bg-gradient-to-br from-blue-500 to-blue-700 flex items-center justify-center shadow-sm">
+                    <span className="text-sm font-bold text-white">{form.name ? clientInitials(form.name) : "?"}</span>
+                  </div>
+                )}
+                <button
+                  type="button"
+                  onClick={() => avatarInputRef.current?.click()}
+                  className="absolute -bottom-1 -right-1 bg-blue-600 hover:bg-blue-700 rounded-full p-1.5 text-white transition-colors border border-white dark:border-slate-900"
+                >
+                  <Camera className="h-3 w-3" />
+                </button>
+                <input
+                  ref={avatarInputRef}
+                  type="file"
+                  accept="image/*"
+                  onChange={handleAvatarUpload}
+                  className="hidden"
+                />
+              </div>
+              {form.avatar && (
+                <Button type="button" variant="outline" size="sm" onClick={() => setForm({ ...form, avatar: "" })}>
+                  <X className="h-3.5 w-3.5 mr-1" /> Remover
+                </Button>
+              )}
+            </div>
+          </div>
+
           <div className="space-y-2">
             <Label>Nome / Razão social *</Label>
             <Input
@@ -1225,29 +1337,69 @@ export default function AdminClientesPage() {
 
           <div className="pt-2 border-t border-slate-100 dark:border-slate-800 space-y-3">
             <h3 className="text-sm font-semibold text-slate-700 dark:text-slate-300">Endereço</h3>
-            <Input
-              placeholder="Rua / Avenida"
-              value={form.address}
-              onChange={(e) => setForm({ ...form, address: e.target.value })}
-            />
-            <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-2">
+              <Label>CEP</Label>
+              <div className="relative">
+                <Input
+                  placeholder="00000-000"
+                  value={form.zip_code}
+                  onChange={(e) => handleClientCepChange(e.target.value)}
+                  className="pr-7"
+                  maxLength={9}
+                />
+                {clientCepLoading && (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin text-slate-400 absolute right-2 top-1/2 -translate-y-1/2" />
+                )}
+              </div>
+              {clientCepError && (
+                <p className="text-xs text-red-500">{clientCepError}</p>
+              )}
+            </div>
+            <div className="grid grid-cols-3 gap-3">
+              <div className="col-span-2 space-y-2">
+                <Label>Rua / Avenida</Label>
+                <Input
+                  placeholder="Ex: Rua Paulo Lobo"
+                  value={form.address}
+                  onChange={(e) => setForm({ ...form, address: e.target.value })}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Número</Label>
+                <Input
+                  placeholder="Ex: 123"
+                  value={form.number}
+                  onChange={(e) => setForm({ ...form, number: e.target.value })}
+                />
+              </div>
+            </div>
+            <div className="space-y-2">
+              <Label>Bairro</Label>
               <Input
-                placeholder="Cidade"
-                value={form.city}
-                onChange={(e) => setForm({ ...form, city: e.target.value })}
-              />
-              <Input
-                placeholder="Estado (UF)"
-                maxLength={2}
-                value={form.state}
-                onChange={(e) => setForm({ ...form, state: e.target.value.toUpperCase() })}
+                placeholder="Ex: Cambuí"
+                value={form.neighborhood}
+                onChange={(e) => setForm({ ...form, neighborhood: e.target.value })}
               />
             </div>
-            <Input
-              placeholder="CEP"
-              value={form.zip_code}
-              onChange={(e) => setForm({ ...form, zip_code: e.target.value })}
-            />
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-2">
+                <Label>Cidade</Label>
+                <Input
+                  placeholder="Ex: Campinas"
+                  value={form.city}
+                  onChange={(e) => setForm({ ...form, city: e.target.value })}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Estado (UF)</Label>
+                <Input
+                  placeholder="SP"
+                  maxLength={2}
+                  value={form.state}
+                  onChange={(e) => setForm({ ...form, state: e.target.value.toUpperCase() })}
+                />
+              </div>
+            </div>
           </div>
 
           <div className="pt-2 border-t border-slate-100 dark:border-slate-800 space-y-2">
@@ -1304,7 +1456,8 @@ export default function AdminClientesPage() {
 
           {formError && <p className="text-xs text-red-600">{formError}</p>}
         </div>
-      </SlidePanel>
+      </EmbeddedSlideScreen>
+    </div>
     </div>
   );
 }

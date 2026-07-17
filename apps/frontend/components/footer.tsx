@@ -22,7 +22,7 @@ const gradientMap: Record<string, string> = {
   "bg-gradient-to-tr from-black via-slate-900 to-gray-900": "linear-gradient(to top right, #000000, #0f172a, #111827)",
 }
 
-export function Footer() {
+export function Footer({ transparent = false }: { transparent?: boolean } = {}) {
   const { sidebarSettings, previewTheme } = useSidebar()
   const appliedTheme = previewTheme || sidebarSettings
   const bg = appliedTheme.backgroundColor
@@ -63,9 +63,10 @@ export function Footer() {
       className={cn(
         /* Oculto em mobile/tablet — o espaço é gerenciado pelo bottom nav */
         "hidden lg:block fixed bottom-0 z-90 footer-positioned",
-        !isGradientOrDefault && bg,
+        !transparent && !isGradientOrDefault && bg,
+        transparent && "border-t border-white/10",
       )}
-      style={getFooterStyle()}
+      style={transparent ? { background: "transparent" } : getFooterStyle()}
     >
       <div className="container mx-auto px-4 py-1">
         <p className="text-center text-xs text-white/60">&copy; 2026 ALLKA by Lamego. Todos os direitos reservados.</p>

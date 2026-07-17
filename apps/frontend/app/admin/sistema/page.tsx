@@ -28,8 +28,12 @@ import {
   AlertCircle, CheckCircle, FileText, Search,
   Eye, Filter, ChevronLeft, ChevronRight,
 } from "lucide-react";
-import { PageHeader } from "@/components/page-header";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import {
+  STANDARD_SHELL_PANEL_CLASS,
+  StandardPageBanner,
+} from "@/components/standard-page-shell";
+import { PinToTrayButton } from "@/components/pin-to-tray-button";
 import { SlidePanel } from "@/components/slide-panel";
 import { IconToolbarButton } from "@/components/icon-toolbar-button";
 import { NeonBadge } from "@/components/neon-badge";
@@ -757,8 +761,11 @@ export default function AdminSistemaPage() {
   const overallOk = operationalCount === services.length;
 
   return (
-    <div className="space-y-6">
-      <PageHeader
+    <div className={STANDARD_SHELL_PANEL_CLASS}>
+    <div className="h-full min-h-0 flex flex-col">
+      <div className="shrink-0 -mb-[11px]">
+      <StandardPageBanner
+        icon={Server}
         title="Sistema"
         description="Monitoramento, conectores e configurações da infraestrutura"
         actions={<>
@@ -768,18 +775,21 @@ export default function AdminSistemaPage() {
                 <button
                   onClick={refreshMetrics}
                   disabled={refreshing}
-                  className="group relative flex items-center justify-center h-8 w-8 rounded-lg border border-border/60 hover:border-transparent overflow-hidden transition-all disabled:opacity-50"
+                  className="flex items-center justify-center h-8 w-8 rounded-lg border border-white/70 text-white bg-white/10 hover:bg-white/20 transition-colors disabled:opacity-50"
                 >
-                  <span className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none" style={{ background: "linear-gradient(135deg,#000000 0%,#1a2a6f 45%,#c81a7f 100%)" }} />
-                  <RefreshCw className={`relative z-10 h-4 w-4 text-[#7d1b6a] group-hover:text-white transition-colors ${refreshing ? "animate-spin" : ""}`} />
+                  <RefreshCw className={`h-4 w-4 ${refreshing ? "animate-spin" : ""}`} />
                 </button>
               </TooltipTrigger>
               <TooltipContent side="bottom" sideOffset={6}>Atualizar</TooltipContent>
             </Tooltip>
           </TooltipProvider>
+          <PinToTrayButton id="page-sistema" label="Sistema" icon={Server} path="/admin/sistema" />
         </>}
       />
+      </div>
 
+      <div className="flex-1 min-h-0 overflow-y-auto">
+      <div className="space-y-6">
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
         {[
           { label: "Status Geral",    value: overallOk ? "Operacional" : "Atenção", icon: Server,       color: overallOk ? "text-emerald-500" : "text-amber-500",  bg: overallOk ? "bg-emerald-50 dark:bg-emerald-950/30" : "bg-amber-50 dark:bg-amber-950/30" },
@@ -1493,6 +1503,9 @@ export default function AdminSistemaPage() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+    </div>
+    </div>
+    </div>
     </div>
   );
 }

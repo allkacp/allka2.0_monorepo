@@ -10,19 +10,32 @@ export type DbClient = PrismaClient | Prisma.TransactionClient;
 
 // ─── Resolução de escopo por vínculo de membro ──────────────────────────────
 // Fonte da verdade pra "qual organização este usuário enxerga" é sempre
-// User.agency_id / User.partner_id (vínculo de membro, preenchido tanto pro
-// usuário principal quanto por futuros subusuários) — nunca a relação de
-// propriedade (Agency/PartnerProfile.owner_user_id, exposta via
-// User.owned_agency/owned_partner). Propriedade define quem é o
-// administrador principal; vínculo de membro define quem enxerga os dados.
+// User.agency_id (vínculo de membro, preenchido tanto pro usuário principal
+// quanto por futuros subusuários) — nunca a relação de propriedade
+// (Agency.owner_user_id, exposta via User.owned_agency). Propriedade define
+// quem é o administrador principal; vínculo de membro define quem enxerga
+// os dados.
 export async function resolveMyAgencyId(db: DbClient, userId: string): Promise<string | null> {
   const user = await db.user.findUnique({ where: { id: userId }, select: { agency_id: true } });
   return user?.agency_id ?? null;
 }
 
+// Partner não é mais um account_type/User separado — é um upgrade da
+// própria Agency (PartnerProfile.agency_id, ver schema.prisma). "Meu
+// partner id" agora é: a Agency à qual este usuário pertence tem um
+// PartnerProfile com status "active"? Se sim, retorna o id desse
+// PartnerProfile; caso contrário (sem agência, sem convite, convite ainda
+// pendente/recusado/suspenso), retorna null — o usuário simplesmente não
+// tem as capacidades extras de Partner, mas continua acessando normalmente
+// como Agency.
 export async function resolveMyPartnerId(db: DbClient, userId: string): Promise<string | null> {
-  const user = await db.user.findUnique({ where: { id: userId }, select: { partner_id: true } });
-  return user?.partner_id ?? null;
+  const agencyId = await resolveMyAgencyId(db, userId);
+  if (!agencyId) return null;
+  const partner = await db.partnerProfile.findUnique({
+    where: { agency_id: agencyId },
+    select: { id: true, status: true },
+  });
+  return partner && partner.status === "active" ? partner.id : null;
 }
 
 export type ProjectScope =
@@ -61,17 +74,12 @@ export async function getProjectScope(
     return { kind: "company", companyId: user.company_id };
   }
 
-  if (accountType === "parceiro") {
-    const partnerId = await resolveMyPartnerId(db, userId);
-    if (!partnerId) return { kind: "partner_unlinked" };
-    const profile = await db.partnerProfile.findUnique({
-      where: { id: partnerId },
-      select: { referred_companies: { select: { id: true } } },
-    });
-    const companyIds = profile?.referred_companies?.map((c) => c.id) ?? [];
-    if (companyIds.length === 0) return { kind: "partner_unlinked" };
-    return { kind: "partner", companyIds };
-  }
+  // "parceiro" nunca é mais o account_type de um usuário — Partner é um
+  // upgrade da própria Agency, não um login separado (ver PartnerProfile no
+  // schema.prisma). O escopo "partner" (projetos dos clients referidos)
+  // permanece como tipo de ProjectScope pra uso futuro caso essa visão
+  // precise ser somada ao escopo "agency" acima, mas não é mais alcançado
+  // por account_type — nenhum usuário tem esse valor.
 
   return { kind: "open" };
 }
@@ -120,9 +128,12 @@ export function isLeaderUser(user?: { role?: string; account_type?: string }): b
 }
 
 export type NewProjectScope =
-  | { kind: "agency"; agencyId: string }
+  // partnerId opcional: se a Agency também for Partner ativo, ela enxerga
+  // também os projetos donos via partner_id (referidos/de comissão) além
+  // dos próprios — não existe mais um kind "partner" isolado, porque
+  // Partner nunca é um account_type separado (é sempre a mesma Agency).
+  | { kind: "agency"; agencyId: string; partnerId?: string }
   | { kind: "company"; companyId: string }
-  | { kind: "partner"; partnerId: string }
   | { kind: "none" };
 
 export async function resolveProjectNewScope(
@@ -132,23 +143,24 @@ export async function resolveProjectNewScope(
 ): Promise<NewProjectScope> {
   if (accountType === "agencias") {
     const agencyId = await resolveMyAgencyId(db, userId);
-    return agencyId ? { kind: "agency", agencyId } : { kind: "none" };
+    if (!agencyId) return { kind: "none" };
+    const partnerId = await resolveMyPartnerId(db, userId);
+    return { kind: "agency", agencyId, partnerId: partnerId ?? undefined };
   }
   if (accountType === "empresas") {
     const user = await db.user.findUnique({ where: { id: userId }, select: { company_id: true } });
     return user?.company_id ? { kind: "company", companyId: user.company_id } : { kind: "none" };
   }
-  if (accountType === "parceiro") {
-    const partnerId = await resolveMyPartnerId(db, userId);
-    return partnerId ? { kind: "partner", partnerId } : { kind: "none" };
-  }
   return { kind: "none" };
 }
 
 export function newScopeToWhere(scope: NewProjectScope): Record<string, unknown> | null {
-  if (scope.kind === "agency") return { agency_id: scope.agencyId };
+  if (scope.kind === "agency") {
+    return scope.partnerId
+      ? { OR: [{ agency_id: scope.agencyId }, { partner_id: scope.partnerId }] }
+      : { agency_id: scope.agencyId };
+  }
   if (scope.kind === "company") return { company_id: scope.companyId };
-  if (scope.kind === "partner") return { partner_id: scope.partnerId };
   return null;
 }
 
@@ -168,9 +180,13 @@ export async function projectVisibleToUser(
   const scope = await getProjectScope(db, user.id, user.account_type ?? "");
   if (projectInScope(scope, project)) return true;
   const newScope = await resolveProjectNewScope(db, user.id, user.account_type ?? "");
-  if (newScope.kind === "agency") return project.agency_id === newScope.agencyId;
+  if (newScope.kind === "agency") {
+    return (
+      project.agency_id === newScope.agencyId ||
+      (!!newScope.partnerId && project.partner_id === newScope.partnerId)
+    );
+  }
   if (newScope.kind === "company") return project.company_id === newScope.companyId;
-  if (newScope.kind === "partner") return project.partner_id === newScope.partnerId;
   return false;
 }
 

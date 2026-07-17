@@ -33,10 +33,39 @@ const enrichedSelect = {
   created_at: true,
   updated_at: true,
   company: { select: { id: true, name: true } },
-  owned_agency: { select: { id: true, name: true } },
-  owned_partner: { select: { id: true, status: true } },
+  // partner_profile aninhado: Partner não é mais um vínculo próprio do
+  // User (owned_partner não existe mais) — é um upgrade da Agency que este
+  // usuário é dono, então o status de Partner vem daqui.
+  owned_agency: {
+    select: {
+      id: true,
+      name: true,
+      partner_profile: { select: { id: true, status: true } },
+    },
+  },
   nomade: { select: { id: true, name: true } },
   lider_areas: { select: { id: true, area_nome: true, ativo: true } },
+  profile: {
+    select: {
+      social_name: true,
+      birth_date: true,
+      gender: true,
+      cpf: true,
+      rg: true,
+      whatsapp: true,
+      phone_secondary: true,
+      zip_code: true,
+      street: true,
+      number: true,
+      complement: true,
+      neighborhood: true,
+      city: true,
+      state: true,
+      country: true,
+      admin_notes: true,
+      internal_notes: true,
+    },
+  },
   // LGPD: consentimento real = ao menos 1 aceite (term_acceptances) de um
   // Term atualmente ativo. Não é flag fake — reflete o banco.
   term_acceptances: {
@@ -75,11 +104,6 @@ function mapUser(u: EnrichedUser) {
     has_profile_link = !!u.company;
     profile_link_type = "company";
     profile_link_name = u.company?.name ?? null;
-  } else if (u.account_type === "parceiro") {
-    has_profile_link = !!u.owned_partner;
-    profile_link_type = "partner";
-    profile_link_name = u.owned_partner ? u.name : null;
-    profile_link_status = u.owned_partner?.status ?? null;
   } else if (u.account_type === "lider") {
     has_profile_link = activeLiderAreas.length > 0;
     profile_link_type = "leader";
@@ -123,9 +147,11 @@ function mapUser(u: EnrichedUser) {
     agency_id: u.owned_agency?.id ?? null,
     agency_name: u.owned_agency?.name ?? null,
     company_name: u.company?.name ?? null,
-    partner_profile_id: u.owned_partner?.id ?? null,
-    partner_status: u.owned_partner?.status ?? null,
-    partner_name: u.owned_partner ? u.name : null,
+    // Partner agora é um status da própria Agency (não um account_type
+    // separado) — só populado quando o usuário é dono de uma agência que
+    // tem um PartnerProfile.
+    partner_profile_id: u.owned_agency?.partner_profile?.id ?? null,
+    partner_status: u.owned_agency?.partner_profile?.status ?? null,
     nomad_id: u.nomade?.id ?? null,
     nomad_name: u.nomade?.name ?? null,
     leader_areas: activeLiderAreas.map((a) => a.area_nome),
@@ -138,6 +164,9 @@ function mapUser(u: EnrichedUser) {
     lgpd_consent_label: has_lgpd_consent
       ? "Consentimento LGPD registrado"
       : "Consentimento LGPD pendente",
+    // Dados pessoais/endereço (UserProfile) — achatados pro nível raiz,
+    // mesmo padrão de GET /api/users (ver flattenProfile em users.ts).
+    ...(u.profile || {}),
   };
 }
 
