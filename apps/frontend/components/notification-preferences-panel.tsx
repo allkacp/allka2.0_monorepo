@@ -1,12 +1,13 @@
 // @ts-nocheck
 import { useState } from "react"
+import { useLocation } from "react-router-dom"
 import {
   Bell, Mail, MessageSquare, Smartphone, CheckCircle2, AlertCircle,
   UserPlus, Settings, FolderOpen, CheckCheck, Zap, Info, Plus,
   Users, Play, Pause, Trash2, Edit,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
-import { ModalBrandHeader } from "@/components/ui/modal-brand-header"
+import { HeaderSlideScreen } from "@/components/header-slide-screen"
 import { Switch } from "@/components/ui/switch"
 import { Badge } from "@/components/ui/badge"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
@@ -101,6 +102,7 @@ interface NotificationPreferencesPanelProps {
 export function NotificationPreferencesPanel({
   open = false, onClose, embedded = false, initialTab = "inbox",
 }: NotificationPreferencesPanelProps) {
+  const location = useLocation()
   const [saving, setSaving] = useState(false)
   const [showSuccess, setShowSuccess] = useState(false)
   const [readSet, setReadSet] = useState<Set<string>>(
@@ -124,8 +126,6 @@ export function NotificationPreferencesPanel({
     setShowSuccess(true)
     setTimeout(() => { setShowSuccess(false); if (!embedded) onClose?.() }, 1500)
   }
-
-  if (!embedded && !open) return null
 
   /* ── Tab bodies ──────────────────────────────────────────────────────── */
 
@@ -166,20 +166,30 @@ export function NotificationPreferencesPanel({
       </div>
     </div>
   ) : (
-    /* ── Modal / slide-in panel ─────────────────────────────────────────── */
-    <>
-      <div className="fixed inset-0 bg-black/40 z-40" onClick={onClose} />
-      <div
-        className="fixed top-0 bottom-0 right-0 z-50 flex flex-col bg-white dark:bg-slate-900 shadow-2xl"
-        style={{ left: "var(--sidebar-width, 240px)" }}
-      >
-        <ModalBrandHeader
-          title="Central de Notificações"
-          subtitle="Notificações e preferências da plataforma"
-          icon={<Bell />}
-          onClose={onClose}
-        />
-
+    /* ── Tela Slide ─────────────────────────────────────────────────────── */
+    <HeaderSlideScreen
+      open={open}
+      onClose={onClose}
+      title="Central de Notificações"
+      subtitle="Notificações e preferências da plataforma"
+      pin={{
+        id: "global-notificacoes",
+        label: "Notificações",
+        icon: Bell,
+        path: location.pathname,
+        activateKey: "open-notificacoes",
+      }}
+      footer={
+        <div className="flex items-center gap-3">
+          <Button variant="outline" onClick={onClose} disabled={saving} className="h-9 text-sm">Cancelar</Button>
+          <Button onClick={handleSave} disabled={saving} className="h-9 text-sm btn-brand border-0">
+            {saving ? "Salvando..." : "Salvar Preferências"}
+          </Button>
+          <p className="text-xs text-slate-400 ml-auto">{totalActive} de {totalPrefs} notificações ativas</p>
+        </div>
+      }
+    >
+      <div className="flex flex-col flex-1 min-h-0 w-full">
         {showSuccess && (
           <div className="mx-5 mt-3 mb-1 p-3 bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800 rounded-xl flex items-center gap-3 shrink-0">
             <CheckCircle2 className="h-4 w-4 text-emerald-600 shrink-0" />
@@ -238,17 +248,8 @@ export function NotificationPreferencesPanel({
             <GroupsTab />
           </TabsContent>
         </Tabs>
-
-        {/* Footer */}
-        <div className="border-t border-slate-100 dark:border-slate-800 px-5 py-4 shrink-0 flex items-center gap-3">
-          <Button variant="outline" onClick={onClose} disabled={saving} className="h-9 text-sm">Cancelar</Button>
-          <Button onClick={handleSave} disabled={saving} className="h-9 text-sm btn-brand border-0">
-            {saving ? "Salvando..." : "Salvar Preferências"}
-          </Button>
-          <p className="text-xs text-slate-400 ml-auto">{totalActive} de {totalPrefs} notificações ativas</p>
-        </div>
       </div>
-    </>
+    </HeaderSlideScreen>
   )
 }
 

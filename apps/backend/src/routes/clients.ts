@@ -25,6 +25,7 @@ const createSchema = z.object({
   description: z.string().optional(),
   logo: z.string().optional(),
   website: z.string().optional(),
+  observations: z.string().optional(),
   // Commercial contact
   commercial_contact_name: z.string().optional(),
   commercial_contact_role: z.string().optional(),

@@ -324,9 +324,18 @@ router.get("/", verifyToken, async (req, res, next) => {
       if (scope.kind === "agency" && user.role === "agency_user") {
         where["created_by_user_id"] = user.id;
       }
+    } else {
+      // Admin e Leader: sem escopo próprio, mas podem pedir explicitamente
+      // os clientes vinculados a UMA agency/company/partner (ex.: seletor de
+      // "Cliente" na criação de projeto, depois de escolher a Empresa) —
+      // sem isso, Admin sempre via TODOS os clientes da plataforma ali.
+      const filterAgencyId = req.query.agency_id as string | undefined;
+      const filterCompanyId = req.query.company_id as string | undefined;
+      const filterPartnerId = req.query.partner_id as string | undefined;
+      if (filterAgencyId) where["links"] = { some: { agency_id: filterAgencyId } };
+      else if (filterCompanyId) where["links"] = { some: { company_id: filterCompanyId } };
+      else if (filterPartnerId) where["links"] = { some: { partner_id: filterPartnerId } };
     }
-    // Admin e Leader: sem filtro extra, veem tudo. Leader é somente-leitura
-    // (não há POST/PUT/DELETE nesta rota ainda de qualquer forma).
 
     const [total, data] = await Promise.all([
       prisma.client.count({ where }),

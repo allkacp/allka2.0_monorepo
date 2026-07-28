@@ -3,7 +3,11 @@
 
 import { useState, useEffect } from "react";
 import { AlertTriangle, Loader2, User, Mail, Briefcase, Phone, Tag } from "lucide-react";
-import { PageHeader } from "@/components/page-header";
+import {
+  STANDARD_SHELL_PANEL_CLASS,
+  StandardPageBanner,
+} from "@/components/standard-page-shell";
+import { PinToTrayButton } from "@/components/pin-to-tray-button";
 
 const API_BASE =
   (typeof import.meta !== "undefined" &&
@@ -71,9 +75,21 @@ export default function LiderPerfilPage() {
   }, []);
 
   return (
-    <div>
-      <PageHeader title="Meu Perfil" description="Informações da sua conta e áreas de atuação" />
+    <div className={STANDARD_SHELL_PANEL_CLASS}>
+    <div className="relative h-full min-h-0 flex flex-col">
+      <div className="shrink-0 -mb-[11px]">
+      <StandardPageBanner
+        icon={User}
+        title="Meu Perfil"
+        description="Informações da sua conta e áreas de atuação"
+        actions={
+          <PinToTrayButton id="page-leader-perfil" label="Meu Perfil" icon={User} path="/leader/perfil" />
+        }
+      />
+      </div>
 
+      <div className="flex-1 min-h-0 overflow-y-auto">
+      <div className="p-4 sm:p-6">
       {error && (
         <div className="flex items-center gap-2 text-red-500 text-sm mb-4">
           <AlertTriangle className="h-4 w-4" />
@@ -152,6 +168,9 @@ export default function LiderPerfilPage() {
           </div>
         </div>
       ) : null}
+      </div>
+      </div>
+    </div>
     </div>
   );
 }

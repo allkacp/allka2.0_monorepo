@@ -31,11 +31,7 @@ import {
   Scale,
   BarChart3,
 } from "lucide-react";
-import {
-  Sheet,
-  SheetContent,
-  SheetTitle,
-} from "@/components/ui/sheet";
+import { StandardModalDialog } from "@/components/standard-modal-dialog";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -817,45 +813,40 @@ const PrecificacaoPage = () => {
         </TabsContent>
       </Tabs>
 
-      {/* Pricing Component Sheet - Modal único para adicionar/editar */}
-      <Sheet open={isOpen} onOpenChange={setIsOpen}>
-        <SheetContent
-          side="right"
-          hideOverlay={true}
-          className="p-0 border-l-0 shadow-2xl max-w-none w-full z-[70] [&>button:last-child]:top-3 [&>button:last-child]:right-3 [&>button:last-child]:p-1.5 [&>button:last-child]:hover:bg-white/20 [&>button:last-child_svg]:size-4"
-          style={{
-            left: `${sidebarWidth - 2}px`,
-            top: `${headerHeight - 1}px`,
-            bottom: `${footerHeight - 1}px`,
-            height: "auto",
-            width: `calc(100vw - ${sidebarWidth - 2}px)`,
-          }}
-        >
-          <div className="h-full flex flex-col">
-            {/* Header */}
-            <div
-              className="flex items-center justify-between px-5 py-3 flex-shrink-0"
-              style={{
-                background:
-                  "var(--brand-gradient, linear-gradient(to right, #0a1628, #1e3a8a, #0a1628))",
-              }}
+      {/* Pricing Component Dialog - Popup 1 único para adicionar/editar */}
+      <StandardModalDialog
+        open={isOpen}
+        onClose={() => setIsOpen(false)}
+        title={
+          <>
+            {editingItem ? "Editar" : "Adicionar"}{" "}
+            {selectedType === "commission"
+              ? "Comissão"
+              : selectedType === "fee"
+                ? "Taxa"
+                : "Imposto"}
+          </>
+        }
+        subtitle="Preencha as informações do componente de precificação"
+        footer={
+          <div className="flex justify-end gap-2.5">
+            <Button
+              variant="outline"
+              onClick={() => setIsOpen(false)}
+              className="px-5 h-9 text-sm"
             >
-              <div className="min-w-0 flex-1 text-sm font-bold text-white truncate">
-                <SheetTitle className="text-sm font-bold text-white truncate">
-                  {editingItem ? "Editar" : "Adicionar"}{" "}
-                  {selectedType === "commission"
-                    ? "Comissão"
-                    : selectedType === "fee"
-                      ? "Taxa"
-                      : "Imposto"}
-                </SheetTitle>
-                <p className="text-[11px] font-normal text-white/60 mt-0.5 truncate">
-                  Preencha as informações do componente de precificação
-                </p>
-              </div>
-            </div>
-
-            {/* Formulário com cards */}
+              Cancelar
+            </Button>
+            <Button
+              onClick={handleSave}
+              className="px-5 h-9 text-sm btn-brand shadow-lg"
+            >
+              <Plus className="w-3.5 h-3.5 mr-1.5" />
+              {editingItem ? "Atualizar" : "Adicionar"}
+            </Button>
+          </div>
+        }
+      >
             <div className="flex-1 overflow-y-auto p-6">
               <div className="max-w-4xl mx-auto space-y-4">
                 {/* Card de Informações Básicas */}
@@ -1167,27 +1158,7 @@ const PrecificacaoPage = () => {
                 </div>
               </div>
             </div>
-
-            {/* Footer com botões */}
-            <div className="border-t bg-white dark:bg-gray-800 px-6 py-3 flex justify-end gap-2.5 shadow-lg">
-              <Button
-                variant="outline"
-                onClick={() => setIsOpen(false)}
-                className="px-5 h-9 text-sm"
-              >
-                Cancelar
-              </Button>
-              <Button
-                onClick={handleSave}
-                className="px-5 h-9 text-sm btn-brand shadow-lg"
-              >
-                <Plus className="w-3.5 h-3.5 mr-1.5" />
-                {editingItem ? "Atualizar" : "Adicionar"}
-              </Button>
-            </div>
-          </div>
-        </SheetContent>
-      </Sheet>
+      </StandardModalDialog>
 
       {/* AlertDialog para confirmação de exclusão */}
       <AlertDialog

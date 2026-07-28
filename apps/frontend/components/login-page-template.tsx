@@ -32,12 +32,15 @@ export interface LoginRoleConfig {
 
 // ─── Access Types ───────────────────────────────────────────────────────────
 
+// Partner não tem login próprio — é a mesma Agency, com upgrade de status
+// via convite (ver PartnerProfile e as rotas /partner/login e /parceiro/login
+// em App.tsx, que só redirecionam pra /agency/login). Por isso não aparece
+// aqui nem em PORTAL_LINKS abaixo — juntado com Agency.
 const ACCESS_TYPES = [
   { id: "ADMIN", label: "Admin", redirectPath: "/admin/dashboard" },
   { id: "AGENCY", label: "Agency", redirectPath: "/agency/dashboard" },
   { id: "NOMAD", label: "Nomad", redirectPath: "/nomad/dashboard" },
   { id: "COMPANY", label: "Company", redirectPath: "/company/dashboard" },
-  { id: "PARTNER", label: "Partner", redirectPath: "/partner/dashboard" },
   { id: "LEADER", label: "Leader", redirectPath: "/leader/dashboard" },
 ] as const;
 
@@ -64,11 +67,6 @@ const PORTAL_LINKS = [
     id: "COMPANY",
     loginPath: "/company/login",
     labels: { pt: "Company", en: "Company", es: "Company", zh: "Company" },
-  },
-  {
-    id: "PARTNER",
-    loginPath: "/parceiro/login",
-    labels: { pt: "Partner", en: "Partner", es: "Partner", zh: "Partner" },
   },
   {
     id: "LEADER",

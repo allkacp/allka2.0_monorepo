@@ -3,11 +3,15 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { useSearchParams } from "react-router-dom";
-import { AlertTriangle, Loader2, ChevronLeft, ChevronRight } from "lucide-react";
+import { AlertTriangle, Loader2, ChevronLeft, ChevronRight, History } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { PageHeader } from "@/components/page-header";
 import { useItemsPerPage } from "@/lib/use-items-per-page";
 import { ItemsPerPageSelect } from "@/components/items-per-page-select";
+import {
+  STANDARD_SHELL_PANEL_CLASS,
+  StandardPageBanner,
+} from "@/components/standard-page-shell";
+import { PinToTrayButton } from "@/components/pin-to-tray-button";
 
 const API_BASE =
   (typeof import.meta !== "undefined" &&
@@ -103,12 +107,21 @@ export default function LiderHistoricoPage() {
   useEffect(() => { load(); }, [load]);
 
   return (
-    <div>
-      <PageHeader
+    <div className={STANDARD_SHELL_PANEL_CLASS}>
+    <div className="relative h-full min-h-0 flex flex-col">
+      <div className="shrink-0 -mb-[11px]">
+      <StandardPageBanner
+        icon={History}
         title={isAprovacoes ? "Aprovações Feitas Hoje" : "Histórico"}
         description={`${total} tarefa${total !== 1 ? "s" : ""} ${isAprovacoes ? "aprovadas" : "no total"}`}
+        actions={
+          <PinToTrayButton id="page-leader-historico" label={isAprovacoes ? "Aprovações Feitas Hoje" : "Histórico"} icon={History} path="/leader/historico" />
+        }
       />
+      </div>
 
+      <div className="flex-1 min-h-0 overflow-y-auto">
+      <div className="p-4 sm:p-6">
       {error && (
         <div className="flex items-center gap-2 text-red-500 text-sm mb-4">
           <AlertTriangle className="h-4 w-4" />
@@ -204,6 +217,9 @@ export default function LiderHistoricoPage() {
           </div>
         )}
       </div>
+      </div>
+      </div>
+    </div>
     </div>
   );
 }

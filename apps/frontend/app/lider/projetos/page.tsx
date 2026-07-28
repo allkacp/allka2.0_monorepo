@@ -14,10 +14,14 @@ import {
   TrendingUp,
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
-import { PageHeader } from "@/components/page-header";
 import { ExportButton } from "@/components/export-button";
 import { useItemsPerPage } from "@/lib/use-items-per-page";
 import { ItemsPerPageSelect } from "@/components/items-per-page-select";
+import {
+  STANDARD_SHELL_PANEL_CLASS,
+  StandardPageBanner,
+} from "@/components/standard-page-shell";
+import { PinToTrayButton } from "@/components/pin-to-tray-button";
 
 const API_BASE =
   (typeof import.meta !== "undefined" && (import.meta as any).env?.VITE_API_URL) || "/api";
@@ -126,13 +130,26 @@ export default function LiderProjetosPage() {
   ).length;
 
   return (
-    <div ref={pageRef} className="p-4 sm:p-6 space-y-4">
-      <PageHeader
+    <div className={STANDARD_SHELL_PANEL_CLASS}>
+    <div className="relative h-full min-h-0 flex flex-col" ref={pageRef}>
+      <div className="shrink-0 -mb-[11px]">
+      <StandardPageBanner
+        icon={FolderOpen}
         title="Projetos"
         description="Visão geral de todos os projetos da plataforma"
-        actions={<ExportButton pageRef={pageRef} filename="projetos-lider" />}
+        actions={
+          <>
+            <div className="bg-white rounded-lg">
+              <ExportButton pageRef={pageRef} filename="projetos-lider" />
+            </div>
+            <PinToTrayButton id="page-leader-projetos" label="Projetos" icon={FolderOpen} path="/leader/projetos" />
+          </>
+        }
       />
+      </div>
 
+      <div className="flex-1 min-h-0 overflow-y-auto">
+      <div className="p-4 sm:p-6 space-y-4">
       {/* Stat cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         {[
@@ -261,6 +278,9 @@ export default function LiderProjetosPage() {
           </button>
         </div>
       )}
+      </div>
+      </div>
+    </div>
     </div>
   );
 }

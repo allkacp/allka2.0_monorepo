@@ -5,6 +5,10 @@
 export interface MockCompanyItem {
   id: string | number;
   name: string;
+  /** Company (cliente) ou Agency (inclui as com status de Partner) — quando
+   * ausente, assume "company" (mantém retrocompatibilidade com todo código
+   * que já populava isto sem essa distinção). */
+  orgType?: "company" | "agency";
 }
 
 export interface MockClientItem {

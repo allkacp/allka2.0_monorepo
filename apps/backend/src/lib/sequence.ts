@@ -52,7 +52,7 @@ export async function getNextSequenceValue(db: DbClient, key: string): Promise<n
 }
 
 export function formatProjectCode(seq: number): string {
-  return "proj_" + String(seq).padStart(5, "0");
+  return "proj_" + String(seq);
 }
 
 export function formatTaskCode(seq: number): string {

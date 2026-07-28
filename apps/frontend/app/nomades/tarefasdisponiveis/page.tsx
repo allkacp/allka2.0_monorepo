@@ -1,7 +1,7 @@
 // @ts-nocheck
 import { useState } from "react"
 import {
-  Search, Filter, Clock, Star, Wallet, MapPin, ChevronDown, X, Bookmark, BookmarkCheck,
+  Search, Filter, Clock, Star, Wallet, MapPin, ChevronDown, X, Bookmark, BookmarkCheck, ListChecks,
 } from "lucide-react"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
@@ -10,6 +10,11 @@ import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet"
 import { PageHeader } from "@/components/page-header"
 import { useSidebar } from "@/contexts/sidebar-context"
 import { useAppFrameMetrics } from "@/hooks/useAppFrameMetrics"
+import {
+  STANDARD_SHELL_PANEL_CLASS,
+  StandardPageBanner,
+} from "@/components/standard-page-shell"
+import { PinToTrayButton } from "@/components/pin-to-tray-button"
 
 const CATEGORIAS = ["Todos", "Design", "Conteúdo", "Desenvolvimento", "Marketing", "Gestão"]
 
@@ -175,11 +180,26 @@ export default function TarefasDisponiveisPage() {
   })
 
   return (
-    <div className="space-y-6">
-      <PageHeader
+    <div className={STANDARD_SHELL_PANEL_CLASS}>
+    <div className="relative h-full min-h-0 flex flex-col">
+      <div className="shrink-0 -mb-[11px]">
+      <StandardPageBanner
+        icon={ListChecks}
         title="Tarefas Disponíveis"
-        subtitle={`${AVAILABLE_TASKS.length} tarefas abertas para candidatura`}
+        description={`${AVAILABLE_TASKS.length} tarefas abertas para candidatura`}
+        actions={
+          <PinToTrayButton
+            id="page-nomades-tarefasdisponiveis"
+            label="Tarefas Disponíveis"
+            icon={ListChecks}
+            path="/nomades/tarefasdisponiveis"
+          />
+        }
       />
+      </div>
+
+      <div className="flex-1 min-h-0 overflow-y-auto">
+      <div className="p-4 sm:p-6 space-y-5">
 
       {/* Filters */}
       <div className="flex flex-col sm:flex-row gap-3">
@@ -510,6 +530,9 @@ export default function TarefasDisponiveisPage() {
           )}
         </SheetContent>
       </Sheet>
+      </div>
+      </div>
+    </div>
     </div>
   )
 }

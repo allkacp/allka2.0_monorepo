@@ -51,6 +51,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+import { STANDARD_SHELL_PANEL_CLASS } from "@/components/standard-page-shell";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -1541,7 +1542,20 @@ export default function NomadeDashboardPage() {
   if (loading) return <PageLoader text="Carregando painel…" />;
 
   return (
-    <>
+    <div className={STANDARD_SHELL_PANEL_CLASS}>
+    <div className="relative h-full min-h-0 flex flex-col overflow-hidden">
+      {/* Tela Slide (CustomizePanel) — precisa ficar DENTRO do container
+          relative acima, senão o position:fixed dela não tem contra o que
+          se ancorar e escapa do painel inteiro. */}
+      {showCustomize && (
+        <CustomizePanel
+          widgets={widgets}
+          onClose={() => setShowCustomize(false)}
+          onSave={handleSaveCustomize}
+        />
+      )}
+
+      <div className="flex-1 min-h-0 overflow-y-auto">
       <div className="p-6 space-y-6" ref={dashboardRef}>
         {/* Dashboard Header — unified toolbar */}
         <div className="flex flex-wrap items-center gap-x-1 gap-y-2 bg-background border border-border/70 rounded-xl px-[13px] py-[10px] shadow-[0_4px_24px_-4px_rgba(0,0,0,0.10),0_1px_6px_-2px_rgba(0,0,0,0.06)]">
@@ -1626,15 +1640,8 @@ export default function NomadeDashboardPage() {
           {sortedWidgets.filter((w) => w.visible).map((w) => renderWidget(w))}
         </div>
       </div>
-
-      {/* Customize panel */}
-      {showCustomize && (
-        <CustomizePanel
-          widgets={widgets}
-          onClose={() => setShowCustomize(false)}
-          onSave={handleSaveCustomize}
-        />
-      )}
-    </>
+      </div>
+    </div>
+    </div>
   );
 }

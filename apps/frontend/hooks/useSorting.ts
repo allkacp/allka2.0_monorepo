@@ -79,8 +79,10 @@ function compareValues(aVal: any, bVal: any, dir: SortDirection): number {
     return dir === "asc" ? diff : -diff
   }
 
-  // Strings (locale-aware, case-insensitive)
-  const cmp = aStr.localeCompare(bStr, "pt-BR", { sensitivity: "base" })
+  // Strings (locale-aware, case-insensitive, numeric-aware — "user_2" antes
+  // de "user_10", não ordem de caractere; sem isso "User_10" vinha antes de
+  // "User_2" em qualquer coluna com número embutido, ex.: user_code)
+  const cmp = aStr.localeCompare(bStr, "pt-BR", { sensitivity: "base", numeric: true })
   return dir === "asc" ? cmp : -cmp
 }
 

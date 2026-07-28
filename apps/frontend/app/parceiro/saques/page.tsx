@@ -15,10 +15,14 @@ import {
 import { useSorting, SortableHeader } from "@/hooks/useSorting";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { PageHeader } from "@/components/page-header";
 import { Label } from "@/components/ui/label";
 import { useItemsPerPage } from "@/lib/use-items-per-page";
 import { ItemsPerPageSelect } from "@/components/items-per-page-select";
+import {
+  STANDARD_SHELL_PANEL_CLASS,
+  StandardPageBanner,
+} from "@/components/standard-page-shell";
+import { PinToTrayButton } from "@/components/pin-to-tray-button";
 
 function fmtBRL(n: number) {
   return n.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
@@ -114,10 +118,21 @@ export default function PartnerSaques() {
   };
 
   return (
-    <div className="p-4 sm:p-6 space-y-6">
-      {/* Header */}
-      <PageHeader title="Saques" description="Solicite a transferência do seu saldo para sua chave PIX" />
+    <div className={STANDARD_SHELL_PANEL_CLASS}>
+    <div className="relative h-full min-h-0 flex flex-col">
+      <div className="shrink-0 -mb-[11px]">
+      <StandardPageBanner
+        icon={Wallet}
+        title="Saques"
+        description="Solicite a transferência do seu saldo para sua chave PIX"
+        actions={
+          <PinToTrayButton id="page-partner-saques" label="Saques" icon={Wallet} path="/partner/saques" />
+        }
+      />
+      </div>
 
+      <div className="flex-1 min-h-0 overflow-y-auto">
+      <div className="p-4 sm:p-6 space-y-6">
       <div className="grid grid-cols-3 gap-5">
         {/* Left: Balance + Form */}
         <div className="col-span-1 space-y-4">
@@ -329,6 +344,9 @@ export default function PartnerSaques() {
           </div>
         </div>
       </div>
+      </div>
+      </div>
+    </div>
     </div>
   );
 }

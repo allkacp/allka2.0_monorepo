@@ -15,7 +15,11 @@ import { useSorting, SortableHeader } from "@/hooks/useSorting";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { PageLoader } from "@/components/ui/loading";
-import { PageHeader } from "@/components/page-header";
+import {
+  STANDARD_SHELL_PANEL_CLASS,
+  StandardPageBanner,
+} from "@/components/standard-page-shell";
+import { PinToTrayButton } from "@/components/pin-to-tray-button";
 
 function fmtBRL(n: number) {
   return n.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
@@ -123,12 +127,26 @@ export default function AgenciaFinanceiro() {
     .reduce((s, i) => s + i.amount, 0);
 
   return (
-    <div className="p-4 sm:p-6 space-y-6">
-      <PageHeader
-        title="Financeiro"
-        description="Consumo mensal, descontos do plano e histórico de faturas"
-      />
+    <div className={STANDARD_SHELL_PANEL_CLASS}>
+      <div className="relative h-full min-h-0 flex flex-col">
+        <div className="shrink-0 -mb-[11px]">
+          <StandardPageBanner
+            icon={CreditCard}
+            title="Financeiro"
+            description="Consumo mensal, descontos do plano e histórico de faturas"
+            actions={
+              <PinToTrayButton
+                id="page-agencia-financeiro"
+                label="Financeiro"
+                icon={CreditCard}
+                path="/agency/financeiro"
+              />
+            }
+          />
+        </div>
 
+        <div className="flex-1 min-h-0 overflow-y-auto">
+        <div className="p-4 sm:p-6 space-y-6">
       {/* Plan highlight */}
       <div className="bg-white rounded-xl border border-slate-100 shadow-sm p-5">
         <div className="flex flex-col sm:flex-row gap-4 sm:items-center sm:justify-between">
@@ -341,6 +359,9 @@ export default function AgenciaFinanceiro() {
               </tbody>
             </table>
           </div>
+        </div>
+      </div>
+        </div>
         </div>
       </div>
     </div>

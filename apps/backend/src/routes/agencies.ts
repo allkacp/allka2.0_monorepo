@@ -17,6 +17,27 @@ const createSchema = z.object({
     .default("bronze"),
   status: z.string().default("ativo"),
   owner_user_id: z.string().min(1),
+  // Colunas já existentes no model Agency (schema.prisma) mas nunca
+  // aceitas por este endpoint — o formulário de edição (admin/empresas >
+  // Editar Empresa) já coleta tudo isso e sempre coletou, só que o PUT
+  // descartava tudo antes de chegar no Prisma (zod só deixava passar os 5
+  // campos originais). Dados de endereço/PIX nunca eram persistidos pra
+  // Agency, mesmo o usuário preenchendo e clicando em Salvar.
+  address: z.string().optional(),
+  number: z.string().optional(),
+  neighborhood: z.string().optional(),
+  city: z.string().optional(),
+  state: z.string().optional(),
+  zip_code: z.string().optional(),
+  pix_key: z.string().optional(),
+  pix_key_type: z.enum(["cpf", "cnpj", "email", "phone", "random"]).optional(),
+  // Paridade com Company — adicionados 2026-07-20 junto com as colunas
+  // no schema.prisma (ver comentário lá).
+  segment: z.string().optional(),
+  description: z.string().optional(),
+  logo: z.string().optional(),
+  website: z.string().optional(),
+  observations: z.string().optional(),
 });
 
 const updateSchema = createSchema.partial().omit({ owner_user_id: true });
@@ -170,7 +191,19 @@ router.put("/:id", verifyToken, requireRole("admin"), validate(updateSchema), as
 // DELETE /api/agencies/:id — admin only
 router.delete("/:id", verifyToken, requireRole("admin"), async (req, res, next) => {
   try {
-    await prisma.agency.delete({ where: { id: (req.params.id as string) } });
+    const id = req.params.id as string;
+    await prisma.$transaction(async (tx) => {
+      const agency = await tx.agency.delete({ where: { id } });
+      // Libera o número emp_N pro pool compartilhado com Company (ver
+      // claimNextOrgSequenceNumber) — mesma lógica de exclusão de Company
+      // em clients.ts, só que sem o fluxo de arquivamento de membros
+      // (agências não têm o mesmo processo de archive que empresas).
+      if (agency.sequence_number !== null) {
+        await tx.companyFreedSequence.create({
+          data: { sequence_number: agency.sequence_number },
+        });
+      }
+    });
     res.status(204).send();
   } catch (err) {
     next(err);

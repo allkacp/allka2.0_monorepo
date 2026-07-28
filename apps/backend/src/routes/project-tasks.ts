@@ -406,8 +406,13 @@ router.get(
         return;
       }
 
+      // Aceita tanto o id (cuid) quanto o task_code amigável (T000001) —
+      // a URL do admin/tarefas usa o task_code, não o id cru.
       const task = await prisma.projectTask.findFirst({
-        where: applyScope({ id: req.params.id as string }, scopeWhere),
+        where: applyScope(
+          { OR: [{ id: req.params.id as string }, { task_code: req.params.id as string }] },
+          scopeWhere,
+        ),
         include: {
           project: {
             include: {
@@ -723,6 +728,19 @@ router.get(
             // Normalize text field
             if (!q.question_text) {
               q.question_text = q.text ?? q.label ?? `Pergunta ${idx + 1}`;
+            }
+            // Normalize vocabulário antigo de `type` (usado em alguns catálogos
+            // seedados: "text"/"textarea"/"multiselect") pro vocabulário que o
+            // TaskLaunchDrawer realmente reconhece pra escolher o input certo
+            // ("text_short"/"text_long"/"multiple_choice") — sem isso, essas
+            // perguntas renderizavam sem NENHUM campo de resposta.
+            const TYPE_ALIASES: Record<string, string> = {
+              text: "text_short",
+              textarea: "text_long",
+              multiselect: "multiple_choice",
+            };
+            if (typeof q.type === "string" && TYPE_ALIASES[q.type]) {
+              q.type = TYPE_ALIASES[q.type];
             }
             return q;
           }

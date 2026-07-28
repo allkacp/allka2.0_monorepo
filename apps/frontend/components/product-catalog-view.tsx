@@ -51,7 +51,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { SlidePanel } from "@/components/slide-panel";
+import { StandardModalDialog } from "@/components/standard-modal-dialog";
 import { CopyLinkButton } from "@/components/copy-link-button";
 import {
   Tooltip,
@@ -600,7 +600,7 @@ export function ProductCatalogView({
   };
 
   return (
-    <div className={cn("flex flex-col h-full", mode === "page" && "min-h-0")}>
+    <div className={cn("relative flex flex-col h-full", mode === "page" && "min-h-0")}>
       {/* ── Toolbar ─────────────────────────────────────────── */}
       <div
         className={cn(
@@ -1714,7 +1714,7 @@ export function ProductCatalogView({
             setShowFieldPicker(false);
           };
           return (
-            <SlidePanel
+            <StandardModalDialog
               open={isFilterModalOpen}
               onClose={() => {
                 setIsFilterModalOpen(false);
@@ -1723,7 +1723,6 @@ export function ProductCatalogView({
               }}
               title="Filtros Avançados"
               subtitle="Configure e aplique filtros no catálogo"
-              widthMode="full"
               footer={
                 <div className="flex items-center justify-between w-full">
                   <button
@@ -2143,7 +2142,7 @@ export function ProductCatalogView({
                   </div>
                 )}
               </div>
-            </SlidePanel>
+            </StandardModalDialog>
           );
         })()}
 

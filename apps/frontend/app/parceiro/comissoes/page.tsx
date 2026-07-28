@@ -7,9 +7,13 @@ import { TrendingUp, Search, ChevronLeft, ChevronRight } from "lucide-react";
 import { useSorting, SortableHeader } from "@/hooks/useSorting";
 import { Input } from "@/components/ui/input";
 import { PageLoader } from "@/components/ui/loading";
-import { PageHeader } from "@/components/page-header";
 import { useItemsPerPage } from "@/lib/use-items-per-page";
 import { ItemsPerPageSelect } from "@/components/items-per-page-select";
+import {
+  STANDARD_SHELL_PANEL_CLASS,
+  StandardPageBanner,
+} from "@/components/standard-page-shell";
+import { PinToTrayButton } from "@/components/pin-to-tray-button";
 
 function fmtBRL(n: number) {
   return n.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
@@ -84,10 +88,21 @@ export default function PartnerComissoes() {
   }
 
   return (
-    <div className="p-4 sm:p-6 space-y-5">
-      {/* Header */}
-      <PageHeader title="Comissões" description="Histórico de todas as suas comissões geradas" />
+    <div className={STANDARD_SHELL_PANEL_CLASS}>
+    <div className="relative h-full min-h-0 flex flex-col">
+      <div className="shrink-0 -mb-[11px]">
+      <StandardPageBanner
+        icon={TrendingUp}
+        title="Comissões"
+        description="Histórico de todas as suas comissões geradas"
+        actions={
+          <PinToTrayButton id="page-partner-comissoes" label="Comissões" icon={TrendingUp} path="/partner/comissoes" />
+        }
+      />
+      </div>
 
+      <div className="flex-1 min-h-0 overflow-y-auto">
+      <div className="p-4 sm:p-6 space-y-5">
       {/* Summary Cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         <div className="rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 p-4 shadow-sm">
@@ -340,6 +355,9 @@ export default function PartnerComissoes() {
           </button>
         </div>
       )}
+      </div>
+      </div>
+    </div>
     </div>
   );
 }

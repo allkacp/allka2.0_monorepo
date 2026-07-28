@@ -33,11 +33,17 @@ import { ChatProvider } from "@/contexts/chat-context";
 import { ChatWidget } from "@/components/chat-widget";
 import { OpenScreensProvider } from "@/contexts/open-screens-context";
 import { OpenScreensTray } from "@/components/open-screens-tray";
+import { AlertsHeaderIcon } from "@/components/alerts-header-icon";
+import { HeaderFloatingTools } from "@/components/header-floating-tools";
+import { PinActivationListener } from "@/components/pin-activation-listener";
+import { isStandardShellRoute } from "@/components/standard-page-shell";
 
 import { PartnerProvider } from "@/contexts/partner-context";
 import { EmpresaProvider } from "@/contexts/empresa-context";
 import { AgenciaProvider } from "@/contexts/agencia-context";
 import { ProjectBasketProvider } from "@/contexts/project-basket-context";
+import { NotificationsPanelProvider } from "@/contexts/notifications-panel-context";
+import { GlobalHeaderPanelProvider } from "@/contexts/global-header-panel-context";
 
 function RedirectToAgency() {
   const location = useLocation();
@@ -437,35 +443,7 @@ function AppLayout({ children }: { children: React.ReactNode }) {
   // Adicionar uma rota aqui só depois que a página correspondente já estiver
   // com o wrapper STANDARD_SHELL_PANEL_CLASS aplicado (senão ativa o fundo
   // gradiente sem o painel branco por baixo — visual quebrado).
-  const STANDARD_SHELL_ROUTES = [
-    "/admin/empresas",
-    "/admin/dashboard",
-    "/admin/usuarios",
-    "/admin/clientes",
-    "/admin/permissoes",
-    "/admin/permissions",
-    "/admin/projetos",
-    "/admin/tarefas",
-    "/admin/produtos",
-    "/admin/catalogo-produtos",
-    "/admin/precificacao",
-    "/admin/modelos-tarefas",
-    "/admin/campanhas-indicacao",
-    "/admin/niveis",
-    "/admin/niveis-nomades",
-    "/admin/programa-partner",
-    "/admin/financeiro",
-    "/admin/relatorios",
-    "/admin/allkademy",
-    "/admin/sistema",
-    "/admin/disponibilidade",
-    "/admin/especialidades",
-    "/admin/onboarding",
-    "/admin/configuracoes",
-  ];
-  const isEmpresasRoute = STANDARD_SHELL_ROUTES.some(
-    (r) => location.pathname === r || location.pathname.startsWith(r + "/"),
-  );
+  const isEmpresasRoute = isStandardShellRoute(location.pathname);
 
   useEffect(() => {
     let cancelled = false;
@@ -513,7 +491,9 @@ function AppLayout({ children }: { children: React.ReactNode }) {
                     <SpecialtyProvider>
                       <PricingProvider>
                         <ProductProvider>
+                          <GlobalHeaderPanelProvider>
                           <ProjectBasketProvider>
+                          <NotificationsPanelProvider>
                             <MobileLayoutWrapper>
                               <div
                                 className={cn(
@@ -581,7 +561,13 @@ function AppLayout({ children }: { children: React.ReactNode }) {
                             <ChatWidget />
                             {/* Bandeja de telas abertas — logo abaixo do chat */}
                             <OpenScreensTray />
+                            {/* Alertas, modo escuro e tamanho de fonte — logo abaixo da bandeja */}
+                            <AlertsHeaderIcon />
+                            <HeaderFloatingTools />
+                            <PinActivationListener />
+                          </NotificationsPanelProvider>
                           </ProjectBasketProvider>
+                          </GlobalHeaderPanelProvider>
                         </ProductProvider>
                       </PricingProvider>
                     </SpecialtyProvider>

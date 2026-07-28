@@ -39,7 +39,7 @@ import {
 } from "lucide-react";
 import { apiClient } from "@/lib/api-client";
 import { Button } from "@/components/ui/button";
-import { Sheet, SheetContent } from "@/components/ui/sheet";
+import { EmbeddedSlideScreen } from "@/components/embedded-slide-screen";
 import { CopyLinkButton } from "@/components/copy-link-button";
 import {
   Select,
@@ -63,8 +63,6 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
-import { useSidebar } from "@/contexts/sidebar-context";
-import { useAppFrameMetrics } from "@/hooks/useAppFrameMetrics";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -113,7 +111,7 @@ const STAGE_STATUS_CFG: Record<
     icon: PlayCircle,
   },
   CONCLUIDA: {
-    label: "Conclu\u00edda",
+    label: "Concluída",
     color: "text-emerald-700",
     bg: "bg-emerald-50",
     border: "border-emerald-200",
@@ -121,7 +119,7 @@ const STAGE_STATUS_CFG: Record<
     icon: CheckCircle2,
   },
   BLOQUEADA: {
-    label: "Bloqueada",
+    label: "Bloq",
     color: "text-amber-700",
     bg: "bg-amber-50",
     border: "border-amber-200",
@@ -134,10 +132,10 @@ const STAGE_STATUS_CFG: Record<
 
 const TABS = [
   { key: "dados", label: "Dados Gerais", icon: FileText },
-  { key: "briefing", label: "Question\u00e1rio", icon: MessageSquare },
+  { key: "briefing", label: "Questionário", icon: MessageSquare },
   { key: "etapas", label: "Etapas", icon: List },
-  { key: "comentarios", label: "Coment\u00e1rios", icon: MessageSquare },
-  { key: "aprovacao", label: "Itens p/ Aprova\u00e7\u00e3o", icon: ThumbsUp },
+  { key: "comentarios", label: "Comentários", icon: MessageSquare },
+  { key: "aprovacao", label: "Itens p/ Aprovação", icon: ThumbsUp },
   { key: "entregas", label: "Hist. Entrega", icon: Rocket },
   { key: "historico", label: "Hist. Status", icon: History },
   { key: "acessos", label: "Acessos", icon: Lock },
@@ -149,7 +147,7 @@ type TabKey = (typeof TABS)[number]["key"];
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
 function fmtDate(iso?: string | null) {
-  if (!iso) return "\u2014";
+  if (!iso) return "\—";
   return new Date(iso).toLocaleDateString("pt-BR", {
     day: "2-digit",
     month: "2-digit",
@@ -158,7 +156,7 @@ function fmtDate(iso?: string | null) {
 }
 
 function fmtDateTime(iso?: string | null) {
-  if (!iso) return "\u2014";
+  if (!iso) return "\—";
   return new Date(iso).toLocaleString("pt-BR", {
     day: "2-digit",
     month: "2-digit",
@@ -185,26 +183,26 @@ function initials(name: string) {
 // ─── Status label / style helpers ────────────────────────────────────────────
 
 const TASK_STATUS_LABELS: Record<string, string> = {
-  PARA_LANCAMENTO: "Para lan\u00e7amento",
-  EM_LANCAMENTO: "Em lan\u00e7amento",
-  AGUARDANDO_INFORMACOES: "Aguard. informa\u00e7\u00f5es",
+  PARA_LANCAMENTO: "Para lançamento",
+  EM_LANCAMENTO: "Em lançamento",
+  AGUARDANDO_INFORMACOES: "Aguard. informações",
   AGUARDANDO_ETAPA: "Aguardando etapa",
-  LIBERADA_PARA_EXECUCAO: "Enviada p/ execu\u00e7\u00e3o",
-  EM_EXECUCAO: "Em execu\u00e7\u00e3o",
-  EM_REVISAO: "Em revis\u00e3o",
+  LIBERADA_PARA_EXECUCAO: "Enviada p/ execução",
+  EM_EXECUCAO: "Em execução",
+  EM_REVISAO: "Em revisão",
   MELHORIAS_FINAIS: "Melhorias finais",
-  EM_APROVACAO: "Aprova\u00e7\u00e3o - Ag\u00eancia",
-  APROVACAO_PENDENTE_CLIENTE: "Aprova\u00e7\u00e3o - Cliente",
+  EM_APROVACAO: "Aprovação - Agência",
+  APROVACAO_PENDENTE_CLIENTE: "Aprovação - Cliente",
   APROVADA: "Aprovada",
   REPROVADA: "Reprovada",
-  CONCLUIDA: "Conclu\u00edda",
+  CONCLUIDA: "Concluída",
   PAUSADA: "Pausada",
   CANCELADA: "Cancelada",
-  AGUARDANDO_NOMADE: "Aguard. n\u00f4made",
+  AGUARDANDO_NOMADE: "Aguard. nômade",
   ENTREGA_PENDENTE: "Entrega pendente",
   ENTREGA_ATRASADA: "Entrega atrasada",
-  QUALIFICACAO_PENDENTE: "Qualifica\u00e7\u00e3o pendente",
-  NAO_SEGUIU_ORIENTACOES: "N\u00e3o seguiu orienta\u00e7\u00f5es",
+  QUALIFICACAO_PENDENTE: "Qualificação pendente",
+  NAO_SEGUIU_ORIENTACOES: "Não seguiu orientações",
 };
 
 function getStatusLabel(status: string | null | undefined): string {
@@ -333,7 +331,7 @@ function InfoCard({
         </p>
       </div>
       <div className="text-sm font-semibold text-slate-800 dark:text-slate-200 leading-snug">
-        {value || <span className="text-slate-300">\u2014</span>}
+        {value || <span className="text-slate-300">\—</span>}
       </div>
     </div>
   );
@@ -404,7 +402,7 @@ function PauseModal({
             )}
           />
           <p className="text-xs text-slate-400">
-            O motivo ser\u00e1 registrado no hist\u00f3rico da etapa.
+            O motivo será registrado no histórico da etapa.
           </p>
         </div>
         <DialogFooter className="gap-2">
@@ -441,6 +439,7 @@ export function TarefaDetailDrawer({
   onStatusChange,
   updatingId,
   onLaunch,
+  startInEditMode = false,
 }: {
   tarefa: any | null;
   open: boolean;
@@ -448,9 +447,8 @@ export function TarefaDetailDrawer({
   onStatusChange: (t: any, s: string) => void;
   updatingId: string | null;
   onLaunch?: (tarefa: any) => void;
+  startInEditMode?: boolean;
 }) {
-  const { sidebarWidth } = useSidebar();
-  const { headerHeight, footerHeight } = useAppFrameMetrics();
   const [tab, setTab] = useState<TabKey>("dados");
   const [isEditMode, setIsEditMode] = useState(false);
   const [editStatus, setEditStatus] = useState<string>("");
@@ -475,9 +473,10 @@ export function TarefaDetailDrawer({
       setStages([]);
       setBriefingData(null);
       setAttachments([]);
-      setIsEditMode(false);
+      setIsEditMode(startInEditMode);
       setEditStatus(tarefa.status);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, tarefa?.id]);
 
   // Lazy-load on tab change
@@ -584,19 +583,19 @@ export function TarefaDetailDrawer({
 
   return (
     <>
-      <Sheet open={open} onOpenChange={(v) => !v && onClose()}>
-        <SheetContent
-          side="right"
-          hideOverlay={true}
-          className="p-0 flex flex-col overflow-hidden border-l border-slate-200 dark:border-slate-700 w-auto! max-w-none!"
-          style={{
-            left: `${sidebarWidth - 2}px`,
-            width: `calc(100vw - ${sidebarWidth - 2}px)`,
-            maxWidth: `calc(100vw - ${sidebarWidth - 2}px)`,
-            top: `${headerHeight - 1}px`,
-            bottom: `${footerHeight - 1}px`,
-          }}
-        >
+      <EmbeddedSlideScreen
+        open={open}
+        onClose={onClose}
+        hideHeader
+        pin={{
+          id: `tarefas-view-${tarefa.id}`,
+          label: tarefa.title ? `Tarefa: ${tarefa.title}` : "Detalhes da tarefa",
+          icon: CheckSquare2,
+          path: "/admin/tarefas",
+          activateKey: `view:${tarefa.id}`,
+        }}
+      >
+        <div className="flex flex-col flex-1 min-h-0 overflow-hidden w-full">
           {/* ── Gradient Header ────────────────────────────────────────── */}
           <div
             className="px-6 py-5 shrink-0"
@@ -769,17 +768,17 @@ export function TarefaDetailDrawer({
                 },
                 {
                   icon: User,
-                  title: "Ag\u00eancia",
+                  title: "Agência",
                   value: tarefa.responsavel_agencia?.name,
                 },
                 {
                   icon: User,
-                  title: "N\u00f4made",
+                  title: "Nômade",
                   value: tarefa.nomade_responsavel?.name,
                 },
                 {
                   icon: User,
-                  title: "L\u00edder",
+                  title: "Líder",
                   value: tarefa.project?.consultant,
                 },
                 {
@@ -943,7 +942,7 @@ export function TarefaDetailDrawer({
                         <p className="text-xs text-slate-500 capitalize mt-0.5">
                           {tarefa.project?.status?.replace(/-/g, " ")}
                           {tarefa.project?.type
-                            ? ` \u00b7 ${tarefa.project.type}`
+                            ? ` \· ${tarefa.project.type}`
                             : ""}
                         </p>
                       </div>
@@ -975,7 +974,7 @@ export function TarefaDetailDrawer({
                         </div>
                         <div className="min-w-0">
                           <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-0.5">
-                            Consultor / L\u00edder
+                            Consultor / Líder
                           </p>
                           <p className="text-sm font-semibold text-slate-700 dark:text-slate-300">
                             {tarefa.project.consultant}
@@ -1012,7 +1011,7 @@ export function TarefaDetailDrawer({
 
                   {/* Responsáveis */}
                   <div className="rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/30 p-4">
-                    <SectionTitle>Respons\u00e1veis</SectionTitle>
+                    <SectionTitle>Responsáveis</SectionTitle>
                     <div className="space-y-2.5">
                       {tarefa.responsavel_agencia && (
                         <div className="flex items-center gap-2.5">
@@ -1023,7 +1022,7 @@ export function TarefaDetailDrawer({
                           </div>
                           <div className="min-w-0">
                             <p className="text-[10px] text-blue-500 font-bold uppercase tracking-wide leading-none">
-                              Ag\u00eancia
+                              Agência
                             </p>
                             <p className="text-xs font-semibold text-slate-700 dark:text-slate-300 truncate">
                               {tarefa.responsavel_agencia.name}
@@ -1040,7 +1039,7 @@ export function TarefaDetailDrawer({
                           </div>
                           <div className="min-w-0">
                             <p className="text-[10px] text-purple-500 font-bold uppercase tracking-wide leading-none">
-                              N\u00f4made
+                              Nômade
                             </p>
                             <p className="text-xs font-semibold text-slate-700 dark:text-slate-300 truncate">
                               {tarefa.nomade_responsavel.name}
@@ -1051,7 +1050,7 @@ export function TarefaDetailDrawer({
                       {!tarefa.responsavel_agencia &&
                         !tarefa.nomade_responsavel && (
                           <p className="text-xs text-slate-400">
-                            Nenhum respons\u00e1vel atribu\u00eddo
+                            Nenhum responsável atribuído
                           </p>
                         )}
                     </div>
@@ -1064,7 +1063,7 @@ export function TarefaDetailDrawer({
                   <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
                     {[
                       {
-                        label: "In\u00edcio previsto",
+                        label: "Início previsto",
                         date: tarefa.start_date,
                       },
                       {
@@ -1073,18 +1072,18 @@ export function TarefaDetailDrawer({
                         highlight: overdue,
                       },
                       {
-                        label: "Prazo de execu\u00e7\u00e3o",
+                        label: "Prazo de execução",
                         date: tarefa.data_inicio_execucao,
                       },
                       {
-                        label: "Data de lan\u00e7amento",
+                        label: "Data de lançamento",
                         date: tarefa.data_lancamento,
                       },
                       {
-                        label: "Lib. p/ execu\u00e7\u00e3o",
+                        label: "Lib. p/ execução",
                         date: tarefa.data_liberacao_execucao,
                       },
-                      { label: "Conclus\u00e3o", date: tarefa.completed_at },
+                      { label: "Conclusão", date: tarefa.completed_at },
                     ].map(({ label, date, highlight }) => (
                       <div
                         key={label}
@@ -1108,7 +1107,7 @@ export function TarefaDetailDrawer({
                               : "text-slate-300",
                           )}
                         >
-                          {date ? fmtDate(date) : "\u2014"}
+                          {date ? fmtDate(date) : "\—"}
                         </p>
                       </div>
                     ))}
@@ -1118,7 +1117,7 @@ export function TarefaDetailDrawer({
                 {/* Observations */}
                 {tarefa.observations && (
                   <div className="space-y-2">
-                    <SectionTitle>Observa\u00e7\u00f5es internas</SectionTitle>
+                    <SectionTitle>Observações internas</SectionTitle>
                     <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700 rounded-xl p-4">
                       <p className="text-sm text-slate-700 dark:text-slate-300 leading-relaxed">
                         {tarefa.observations}
@@ -1158,7 +1157,7 @@ export function TarefaDetailDrawer({
                               const answer = briefingData.answers?.find(
                                 (a: any) =>
                                   a.question_key ===
-                                  (q.key || q.id || String(i)),
+                                  (q.question_key || q.key || q.id || String(i)),
                               );
                               return (
                                 <div
@@ -1170,11 +1169,12 @@ export function TarefaDetailDrawer({
                                       {i + 1}
                                     </span>
                                     <p className="text-sm font-semibold text-slate-700 dark:text-slate-300">
-                                      {q.text ||
+                                      {q.question_text ||
+                                        q.text ||
                                         q.label ||
                                         q.question ||
                                         q.title ||
-                                        JSON.stringify(q)}
+                                        `Pergunta ${i + 1}`}
                                     </p>
                                   </div>
                                   {answer ? (
@@ -1347,7 +1347,7 @@ export function TarefaDetailDrawer({
                                     />
                                     {stage.obrigatoria && (
                                       <span className="text-[10px] bg-slate-100 text-slate-600 border border-slate-200 px-1.5 py-0.5 rounded-full font-semibold">
-                                        Obrigat\u00f3ria
+                                        Obrigatória
                                       </span>
                                     )}
                                     {stage.briefing_necessario && (
@@ -1395,7 +1395,7 @@ export function TarefaDetailDrawer({
                                         }
                                       >
                                         <Rocket className="h-3.5 w-3.5" />{" "}
-                                        Lan\u00e7ar etapa
+                                        Lançar etapa
                                       </DropdownMenuItem>
                                     )}
                                     {stage.status === "EM_ANDAMENTO" && (
@@ -1445,7 +1445,7 @@ export function TarefaDetailDrawer({
                                           }
                                         >
                                           <PlayCircle className="h-3.5 w-3.5" />{" "}
-                                          Retomar execu\u00e7\u00e3o
+                                          Retomar execução
                                         </DropdownMenuItem>
                                         <DropdownMenuItem
                                           className="text-xs gap-2 text-slate-600"
@@ -1475,14 +1475,14 @@ export function TarefaDetailDrawer({
                                       disabled
                                     >
                                       <History className="h-3.5 w-3.5" /> Ver
-                                      hist\u00f3rico
+                                      histórico
                                     </DropdownMenuItem>
                                     <DropdownMenuItem
                                       className="text-xs gap-2"
                                       disabled
                                     >
                                       <ThumbsUp className="h-3.5 w-3.5" />{" "}
-                                      Adicionar item p/ aprova\u00e7\u00e3o
+                                      Adicionar item p/ aprovação
                                     </DropdownMenuItem>
                                   </DropdownMenuContent>
                                 </DropdownMenu>
@@ -1502,7 +1502,7 @@ export function TarefaDetailDrawer({
               <div className="p-6">
                 <EmptyState
                   icon={MessageSquare}
-                  message="Coment\u00e1rios ser\u00e3o exibidos aqui quando dispon\u00edveis via API."
+                  message="Comentários serão exibidos aqui quando disponíveis via API."
                 />
               </div>
             )}
@@ -1512,7 +1512,7 @@ export function TarefaDetailDrawer({
               <div className="p-6">
                 <EmptyState
                   icon={ThumbsUp}
-                  message="Itens para aprova\u00e7\u00e3o ser\u00e3o exibidos aqui."
+                  message="Itens para aprovação serão exibidos aqui."
                 />
               </div>
             )}
@@ -1540,7 +1540,7 @@ export function TarefaDetailDrawer({
                     ) : (
                       <div className="space-y-3">
                         <SectionTitle>
-                          Hist\u00f3rico de entregas ({deliveries.length})
+                          Histórico de entregas ({deliveries.length})
                         </SectionTitle>
                         {deliveries.map((d: any) => (
                           <div
@@ -1598,37 +1598,37 @@ export function TarefaDetailDrawer({
                         color: "bg-slate-200 text-slate-600",
                       },
                       {
-                        label: "Lan\u00e7amento",
+                        label: "Lançamento",
                         date: tarefa.data_lancamento,
                         icon: Rocket,
                         color: "bg-indigo-100 text-indigo-700",
                       },
                       {
-                        label: "Lib. p/ execu\u00e7\u00e3o",
+                        label: "Lib. p/ execução",
                         date: tarefa.data_liberacao_execucao,
                         icon: ArrowRight,
                         color: "bg-cyan-100 text-cyan-700",
                       },
                       {
-                        label: "In\u00edcio execu\u00e7\u00e3o",
+                        label: "Início execução",
                         date: tarefa.data_inicio_execucao,
                         icon: PlayCircle,
                         color: "bg-blue-100 text-blue-700",
                       },
                       {
-                        label: "Conclus\u00e3o",
+                        label: "Conclusão",
                         date: tarefa.data_conclusao,
                         icon: CheckCircle2,
                         color: "bg-emerald-100 text-emerald-700",
                       },
                       {
-                        label: "Conclu\u00eddo em",
+                        label: "Concluído em",
                         date: tarefa.completed_at,
                         icon: CheckCircle2,
                         color: "bg-teal-100 text-teal-700",
                       },
                       {
-                        label: "\u00dalt. atualiza\u00e7\u00e3o",
+                        label: "Últ. atualização",
                         date: tarefa.updated_at,
                         icon: RefreshCw,
                         color: "bg-slate-100 text-slate-500",
@@ -1659,7 +1659,7 @@ export function TarefaDetailDrawer({
                               date ? "text-slate-500" : "text-slate-300",
                             )}
                           >
-                            {date ? fmtDateTime(date) : "\u2014"}
+                            {date ? fmtDateTime(date) : "\—"}
                           </span>
                         </div>
                       </div>
@@ -1671,7 +1671,7 @@ export function TarefaDetailDrawer({
                   <div className="space-y-2">
                     {[
                       {
-                        label: "In\u00edcio previsto",
+                        label: "Início previsto",
                         date: tarefa.start_date,
                       },
                       {
@@ -1679,7 +1679,7 @@ export function TarefaDetailDrawer({
                         date: tarefa.due_date,
                         highlight: overdue,
                       },
-                      { label: "Conclu\u00eddo em", date: tarefa.completed_at },
+                      { label: "Concluído em", date: tarefa.completed_at },
                     ].map(({ label, date, highlight }) => (
                       <div
                         key={label}
@@ -1696,7 +1696,7 @@ export function TarefaDetailDrawer({
                               : "text-slate-300",
                           )}
                         >
-                          {date ? fmtDate(date) : "\u2014"}
+                          {date ? fmtDate(date) : "\—"}
                         </span>
                       </div>
                     ))}
@@ -1712,18 +1712,18 @@ export function TarefaDetailDrawer({
                   <div className="flex items-center gap-2.5">
                     <AlertTriangle className="h-4 w-4 text-amber-600 shrink-0" />
                     <p className="text-sm font-semibold text-amber-800 dark:text-amber-300">
-                      Informa\u00e7\u00f5es sensíveis
+                      Informações sensíveis
                     </p>
                   </div>
                   <p className="text-xs text-amber-700 dark:text-amber-400 mt-1 leading-relaxed">
-                    Credenciais e acessos n\u00e3o s\u00e3o exibidos diretamente
-                    por seguran\u00e7a. Utilize a se\u00e7\u00e3o de acessos do
-                    projeto para visualiz\u00e1-los com prote\u00e7\u00e3o.
+                    Credenciais e acessos não são exibidos diretamente
+                    por segurança. Utilize a seção de acessos do
+                    projeto para visualizá-los com proteção.
                   </p>
                 </div>
                 <EmptyState
                   icon={Lock}
-                  message="Acessos e credenciais ser\u00e3o exibidos aqui via integra\u00e7\u00e3o segura."
+                  message="Acessos e credenciais serão exibidos aqui via integração segura."
                 />
               </div>
             )}
@@ -1809,8 +1809,8 @@ export function TarefaDetailDrawer({
             {/* spacer */}
             <div className="h-6" />
           </div>
-        </SheetContent>
-      </Sheet>
+        </div>
+      </EmbeddedSlideScreen>
 
       {/* Pause Modal */}
       <PauseModal

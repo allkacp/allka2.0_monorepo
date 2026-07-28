@@ -5,7 +5,7 @@ import { prisma } from "../lib/prisma";
 import { verifyToken, requireRole } from "../middleware/auth";
 import { validate, parsePagination } from "../middleware/validate";
 import { generateNextUserCode } from "../lib/user-code";
-import { claimFreedSequenceNumber } from "../lib/company-sequence";
+import { claimNextOrgSequenceNumber } from "../lib/company-sequence";
 
 const router = Router();
 
@@ -92,6 +92,20 @@ const nomadFieldsSchema = {
   nomad_pix_key_type: z.enum(["cpf", "email", "phone", "random"]).optional(),
 };
 
+// Líder de Área é pessoa física prestando serviço à plataforma, mesmo
+// padrão do Nomad — precisa de CNPJ próprio pra faturar (não é uma
+// organização como Agency/Company, ver comentário em LiderArea no
+// schema.prisma). Adicionado 2026-07-21.
+const liderFieldsSchema = {
+  lider_cnpj: z.string().optional(),
+  lider_address: z.string().optional(),
+  lider_number: z.string().optional(),
+  lider_neighborhood: z.string().optional(),
+  lider_city: z.string().optional(),
+  lider_state: z.string().optional(),
+  lider_zip_code: z.string().optional(),
+};
+
 // Partner não é mais criado por aqui — não existe account_type "parceiro".
 // Partner nasce de um convite feito a uma Agency já existente (ver
 // POST /api/agencies/:id/partner-invite em agencies.ts), nunca de um
@@ -121,6 +135,7 @@ const createUserSchema = z.object({
   ...companyFieldsSchema,
   ...agencyFieldsSchema,
   ...nomadFieldsSchema,
+  ...liderFieldsSchema,
 });
 
 const updateUserSchema = createUserSchema
@@ -185,6 +200,7 @@ router.get("/", verifyToken, async (req, res, next) => {
     const { page, limit, skip } = parsePagination(req.query);
     const search = req.query.search as string | undefined;
     const company_id = req.query.company_id as string | undefined;
+    const agency_id = req.query.agency_id as string | undefined;
     const account_type = req.query.account_type as string | undefined;
     const role = req.query.role as string | undefined;
 
@@ -196,6 +212,7 @@ router.get("/", verifyToken, async (req, res, next) => {
       ];
     }
     if (company_id) where["company_id"] = company_id;
+    if (agency_id) where["agency_id"] = agency_id;
     if (account_type) where["account_type"] = account_type;
     if (role) where["role"] = role;
 
@@ -281,6 +298,7 @@ router.post(
         ...Object.keys(companyFieldsSchema),
         ...Object.keys(agencyFieldsSchema),
         ...Object.keys(nomadFieldsSchema),
+        ...Object.keys(liderFieldsSchema),
       ]) {
         if (key in rest) {
           ef[key] = (rest as Record<string, unknown>)[key];
@@ -294,6 +312,12 @@ router.post(
       // nomad_cnpj só se aplica a account_type === "nomades").
       if (account_type === "nomades" && !(ef.nomad_cnpj as string | undefined)?.trim()) {
         res.status(400).json({ error: "CNPJ é obrigatório para cadastrar um nômade" });
+        return;
+      }
+      // Mesma regra do Nomad — Líder de Área também é pessoa física
+      // prestando serviço à plataforma (ver comentário em liderFieldsSchema).
+      if (account_type === "lider" && !(ef.lider_cnpj as string | undefined)?.trim()) {
+        res.status(400).json({ error: "CNPJ é obrigatório para cadastrar um líder de área" });
         return;
       }
 
@@ -346,6 +370,7 @@ router.post(
             existing ??
             (await tx.agency.create({
               data: {
+                sequence_number: await claimNextOrgSequenceNumber(tx),
                 owner_user_id: created.id,
                 name: organization_name || (rest.name as string) || "Nova Agência",
                 email: rest.email as string | undefined,
@@ -398,6 +423,13 @@ router.post(
                 ativo: true,
                 categorias_permitidas: JSON.stringify([]),
                 produtos_permitidos: JSON.stringify([]),
+                cnpj: (ef.lider_cnpj as string) || undefined,
+                address: (ef.lider_address as string) || undefined,
+                number: (ef.lider_number as string) || undefined,
+                neighborhood: (ef.lider_neighborhood as string) || undefined,
+                city: (ef.lider_city as string) || undefined,
+                state: (ef.lider_state as string) || undefined,
+                zip_code: (ef.lider_zip_code as string) || undefined,
               },
             });
           }
@@ -406,12 +438,9 @@ router.post(
           // owner_user_id marca o usuário principal (propriedade); company_id
           // no User marca o vínculo de membro (escopo) — o mesmo usuário
           // recebe os dois, já que é ele quem acabou de fundar a empresa.
-          const freedSequenceNumber = await claimFreedSequenceNumber(tx);
           const company = await tx.company.create({
             data: {
-              ...(freedSequenceNumber !== undefined
-                ? { sequence_number: freedSequenceNumber }
-                : {}),
+              sequence_number: await claimNextOrgSequenceNumber(tx),
               owner_user_id: created.id,
               name: organization_name || (rest.name as string) || "Nova Empresa",
               email: rest.email as string | undefined,

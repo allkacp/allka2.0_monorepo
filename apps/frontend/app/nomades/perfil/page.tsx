@@ -19,6 +19,11 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip"
 import { ConfirmationDialog } from "@/components/confirmation-dialog"
+import {
+  STANDARD_SHELL_PANEL_CLASS,
+  StandardPageBanner,
+} from "@/components/standard-page-shell"
+import { PinToTrayButton } from "@/components/pin-to-tray-button"
 
 const NIVEL_BADGE: Record<string, string> = {
   Bronze:   "bg-amber-100 text-amber-700 border-amber-200",
@@ -106,22 +111,25 @@ export default function NomadesPerfilPage() {
   }
 
   return (
-    <div className="space-y-6">
-      <PageHeader
-        title="Meu Perfil"
-        subtitle="Gerencie suas informações, habilidades e preferências"
-        actions={
-          editMode ? (
+    <div className={STANDARD_SHELL_PANEL_CLASS}>
+    <div className="relative h-full min-h-0 flex flex-col">
+    <div className="shrink-0 -mb-[11px]">
+    <StandardPageBanner
+      icon={User}
+      title="Meu Perfil"
+      description="Gerencie suas informações, habilidades e preferências"
+      actions={
+        <>
+          {editMode ? (
             <div className="flex gap-2">
               <TooltipProvider delayDuration={400}>
                 <Tooltip>
                   <TooltipTrigger asChild>
                     <button
                       onClick={handleCancel}
-                      className="group relative flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-border/60 hover:border-transparent overflow-hidden transition-all"
+                      className="flex items-center justify-center h-8 w-8 rounded-lg border border-white/70 text-white bg-white/10 hover:bg-white/20 transition-colors"
                     >
-                      <span className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none" style={{ background: "linear-gradient(135deg,#000000 0%,#1a2a6f 45%,#c81a7f 100%)" }} />
-                      <span className="relative z-10 text-xs font-semibold bg-clip-text text-transparent [background-image:linear-gradient(135deg,#1a2a6f_0%,#7d1b6a_55%,#c81a7f_100%)] group-hover:[background-image:none] group-hover:text-white transition-colors">
+                      <span className="text-xs font-semibold">
                         Cancelar
                       </span>
                     </button>
@@ -134,13 +142,9 @@ export default function NomadesPerfilPage() {
                   <TooltipTrigger asChild>
                     <button
                       onClick={handleSave}
-                      className="group relative flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-border/60 hover:border-transparent overflow-hidden transition-all"
+                      className="flex items-center justify-center h-8 w-8 rounded-lg border border-white/70 text-white bg-white/10 hover:bg-white/20 transition-colors"
                     >
-                      <span className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none" style={{ background: "linear-gradient(135deg,#000000 0%,#1a2a6f 45%,#c81a7f 100%)" }} />
-                      <Check className="relative z-10 h-3.5 w-3.5 shrink-0 text-[#7d1b6a] group-hover:text-white transition-colors" />
-                      <span className="relative z-10 text-xs font-semibold bg-clip-text text-transparent [background-image:linear-gradient(135deg,#1a2a6f_0%,#7d1b6a_55%,#c81a7f_100%)] group-hover:[background-image:none] group-hover:text-white transition-colors">
-                        Salvar
-                      </span>
+                      <Check className="h-3.5 w-3.5 shrink-0" />
                     </button>
                   </TooltipTrigger>
                   <TooltipContent side="bottom" sideOffset={6}>Salvar alterações</TooltipContent>
@@ -153,21 +157,23 @@ export default function NomadesPerfilPage() {
                 <TooltipTrigger asChild>
                   <button
                     onClick={() => setEditMode(true)}
-                    className="group relative flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-border/60 hover:border-transparent overflow-hidden transition-all"
+                    className="flex items-center justify-center h-8 w-8 rounded-lg border border-white/70 text-white bg-white/10 hover:bg-white/20 transition-colors"
                   >
-                    <span className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none" style={{ background: "linear-gradient(135deg,#000000 0%,#1a2a6f 45%,#c81a7f 100%)" }} />
-                    <Edit2 className="relative z-10 h-3.5 w-3.5 shrink-0 text-[#7d1b6a] group-hover:text-white transition-colors" />
-                    <span className="relative z-10 text-xs font-semibold bg-clip-text text-transparent [background-image:linear-gradient(135deg,#1a2a6f_0%,#7d1b6a_55%,#c81a7f_100%)] group-hover:[background-image:none] group-hover:text-white transition-colors">
-                      Editar perfil
-                    </span>
+                    <Edit2 className="h-3.5 w-3.5 shrink-0" />
                   </button>
                 </TooltipTrigger>
                 <TooltipContent side="bottom" sideOffset={6}>Editar informações do perfil</TooltipContent>
               </Tooltip>
             </TooltipProvider>
-          )
-        }
-      />
+          )}
+          <PinToTrayButton id="page-nomades-perfil" label="Perfil" icon={User} path="/nomades/perfil" />
+        </>
+      }
+    />
+    </div>
+
+    <div className="flex-1 min-h-0 overflow-y-auto">
+    <div className="p-4 sm:p-6 space-y-5">
 
       {saved && (
         <div className="rounded-lg bg-emerald-50 border border-emerald-200 px-4 py-2.5 text-sm text-emerald-700 flex items-center gap-2">
@@ -423,6 +429,9 @@ export default function NomadesPerfilPage() {
         onConfirm={() => setConfirmReset(false)}
         variant="destructive"
       />
+    </div>
+    </div>
+    </div>
     </div>
   )
 }

@@ -8,9 +8,13 @@ import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet"
-import { PageHeader } from "@/components/page-header"
 import { useSidebar } from "@/contexts/sidebar-context"
 import { useAppFrameMetrics } from "@/hooks/useAppFrameMetrics"
+import {
+  STANDARD_SHELL_PANEL_CLASS,
+  StandardPageBanner,
+} from "@/components/standard-page-shell"
+import { PinToTrayButton } from "@/components/pin-to-tray-button"
 
 const STATUS_CFG: Record<string, { label: string; cls: string; Icon: any }> = {
   em_andamento: { label: "Em andamento", cls: "bg-blue-100 text-blue-700 border-blue-200",    Icon: Clock },
@@ -116,11 +120,21 @@ export default function MinhasTarefasPage() {
   const shown    = tab === "ativas" ? active : finished
 
   return (
-    <div className="space-y-6">
-      <PageHeader
-        title="Minhas Tarefas"
-        subtitle={`${active.length} ativas · ${finished.length} concluídas`}
-      />
+    <div className={STANDARD_SHELL_PANEL_CLASS}>
+    <div className="relative h-full min-h-0 flex flex-col">
+    <div className="shrink-0 -mb-[11px]">
+    <StandardPageBanner
+      icon={CheckCircle2}
+      title="Minhas Tarefas"
+      description={`${active.length} ativas · ${finished.length} concluídas`}
+      actions={
+        <PinToTrayButton id="page-nomades-minhastarefas" label="Minhas Tarefas" icon={CheckCircle2} path="/nomades/minhastarefas" />
+      }
+    />
+    </div>
+
+    <div className="flex-1 min-h-0 overflow-y-auto">
+    <div className="p-4 sm:p-6 space-y-5">
 
       <Tabs value={tab} onValueChange={setTab}>
         <TabsList>
@@ -304,6 +318,9 @@ export default function MinhasTarefasPage() {
           })()}
         </SheetContent>
       </Sheet>
+    </div>
+    </div>
+    </div>
     </div>
   )
 }

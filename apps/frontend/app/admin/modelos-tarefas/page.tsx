@@ -73,7 +73,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Sheet, SheetContent } from "@/components/ui/sheet";
+import { EmbeddedSlideScreen } from "@/components/embedded-slide-screen";
+import { StandardModalDialog } from "@/components/standard-modal-dialog";
 import { CopyLinkButton } from "@/components/copy-link-button";
 import {
   Tooltip,
@@ -100,7 +101,6 @@ import {
   StandardPageBanner,
 } from "@/components/standard-page-shell";
 import { PinToTrayButton } from "@/components/pin-to-tray-button";
-import { SlidePanel } from "@/components/slide-panel";
 import { IconToolbarButton } from "@/components/icon-toolbar-button";
 import { NeonBadge } from "@/components/neon-badge";
 import { useTableScrollSync } from "@/hooks/useTableScrollSync";
@@ -437,6 +437,7 @@ function ModelDetailDrawer({
   onClose,
   onStatusChange,
   onDuplicate,
+  onEdit,
   updatingId,
 }: {
   model: CatalogTask | null;
@@ -445,9 +446,9 @@ function ModelDetailDrawer({
   onClose: () => void;
   onStatusChange: (model: CatalogTask, status: ModelStatus) => void;
   onDuplicate: (model: CatalogTask) => void;
+  onEdit: (model: CatalogTask) => void;
   updatingId: string | null;
 }) {
-  const { sidebarWidth, headerHeight, footerHeight } = useAppFrameMetrics();
   const [activeTab, setActiveTab] = useState("overview");
   const [detail, setDetail] = useState<CatalogTask | null>(null);
   const [loadingDetail, setLoadingDetail] = useState(false);
@@ -491,19 +492,8 @@ function ModelDetailDrawer({
     briefing.length + rules.length + reqFiles.length + conclusionRules.length;
 
   return (
-    <Sheet open={open} onOpenChange={(v) => !v && onClose()}>
-      <SheetContent
-        side="right"
-        hideOverlay
-        className="p-0 flex flex-col gap-0 z-[70] [&>button:last-child]:top-3 [&>button:last-child]:right-3 [&>button:last-child]:p-1.5 [&>button:last-child]:hover:bg-white/20 [&>button:last-child_svg]:size-4"
-        style={{
-          left: `${sidebarWidth - 2}px`,
-          top: `${headerHeight - 1}px`,
-          bottom: `${footerHeight - 1}px`,
-          height: "auto",
-          width: `calc(100vw - ${sidebarWidth - 2}px)`,
-        }}
-      >
+    <EmbeddedSlideScreen open={open} onClose={onClose} hideHeader>
+      <div className="flex flex-col flex-1 min-h-0 w-full">
         {/* Header */}
         <div
           className="flex items-center justify-between px-5 py-3 flex-shrink-0"
@@ -519,6 +509,12 @@ function ModelDetailDrawer({
               {model.subcategory ? ` · ${model.subcategory}` : ""}
             </p>
           </div>
+          <button
+            onClick={onClose}
+            className="text-white/80 hover:text-white hover:bg-white/20 rounded-lg p-1.5 transition-all shrink-0"
+          >
+            <X className="h-4 w-4" />
+          </button>
         </div>
 
         {/* Identity bar */}
@@ -1120,17 +1116,15 @@ function ModelDetailDrawer({
               <Button
                 size="sm"
                 className="h-9 gap-1.5 btn-brand border-0 shadow-md"
-                onClick={() => {
-                  /* TODO: open edit panel */
-                }}
+                onClick={() => onEdit(model)}
               >
                 <Pencil className="h-3.5 w-3.5" /> Editar modelo
               </Button>
             </div>
           </div>
         </div>
-      </SheetContent>
-    </Sheet>
+      </div>
+    </EmbeddedSlideScreen>
   );
 }
 
@@ -1293,6 +1287,7 @@ export default function AdminModelosTarefasPage() {
   // Create sheet
   const [createOpen, setCreateOpen] = useState(false);
   const [creating, setCreating] = useState(false);
+  const [editingModel, setEditingModel] = useState<CatalogTask | null>(null);
   const [createForm, setCreateForm] = useState({
     name: "",
     category: "",
@@ -1361,6 +1356,39 @@ export default function AdminModelosTarefasPage() {
     });
     setCreateLists(EMPTY_LISTS);
     setListInputs({ steps: "", checklist: "", briefing_questions: "", required_files: "", execution_rules: "", conclusion_rules: "" });
+    setEditingModel(null);
+  };
+
+  const openEditModel = (model: CatalogTask) => {
+    setEditingModel(model);
+    setCreateForm({
+      name: model.name || "",
+      category: model.category || "",
+      subcategory: model.subcategory || "",
+      task_type: model.task_type || "execution",
+      description: model.description || "",
+      objective: model.objective || "",
+      default_deadline_days:
+        model.default_deadline_days != null ? String(model.default_deadline_days) : "",
+      default_priority: model.default_priority || "medium",
+      complexity: model.complexity || "basic",
+      estimated_hours: model.estimated_hours != null ? String(model.estimated_hours) : "",
+      responsible_type: model.responsible_type || "",
+      requires_access: !!model.requires_access,
+      requires_briefing: !!model.requires_briefing,
+      requires_files: !!model.requires_files,
+      internal_guidance: model.internal_guidance || "",
+      notes: model.notes || "",
+    });
+    setCreateLists({
+      steps: parseStrings(model.steps),
+      checklist: parseStrings(model.checklist),
+      briefing_questions: parseStrings(model.briefing_questions),
+      required_files: parseStrings(model.required_files),
+      execution_rules: parseStrings(model.execution_rules),
+      conclusion_rules: parseStrings(model.conclusion_rules),
+    });
+    setCreateOpen(true);
   };
 
   // Fetch
@@ -1727,12 +1755,12 @@ export default function AdminModelosTarefasPage() {
     </TooltipProvider>
   );
 
-  // Create new model
+  // Create or update model (shared Tela Slide, editingModel decides which)
   const handleCreateModel = async () => {
     if (!createForm.name.trim() || !createForm.category.trim()) return;
     setCreating(true);
     try {
-      const created = await apiClient.createCatalogTask({
+      const payload: Record<string, any> = {
         name: createForm.name.trim(),
         category: createForm.category.trim(),
         subcategory: createForm.subcategory.trim() || undefined,
@@ -1771,18 +1799,29 @@ export default function AdminModelosTarefasPage() {
           : undefined,
         internal_guidance: createForm.internal_guidance.trim() || undefined,
         notes: createForm.notes.trim() || undefined,
-        status: "em_revisao",
-        is_active: false,
-      });
+      };
+      let savedId: string | undefined;
+      if (editingModel) {
+        await apiClient.updateCatalogTask(editingModel.id, payload);
+        savedId = editingModel.id;
+      } else {
+        const created = await apiClient.createCatalogTask({
+          ...payload,
+          status: "em_revisao",
+          is_active: false,
+        });
+        savedId = created?.id;
+      }
       setCreateOpen(false);
+      setEditingModel(null);
       resetCreateForm();
       await fetchModels();
-      // Open drawer for new model
-      if (created?.id) {
-        const full = await apiClient.getCatalogTask(created.id);
+      // Open drawer for the saved model
+      if (savedId) {
+        const full = await apiClient.getCatalogTask(savedId);
         setSelectedModel(full as CatalogTask);
         setDrawerOpen(true);
-        navigate(`/admin/modelos-tarefas/${created.id}`, { replace: true });
+        navigate(`/admin/modelos-tarefas/${savedId}`, { replace: true });
       }
     } catch (e) {
       console.error(e);
@@ -1866,7 +1905,7 @@ export default function AdminModelosTarefasPage() {
   return (
     <TooltipProvider>
       <div className={STANDARD_SHELL_PANEL_CLASS}>
-      <div className="h-full min-h-0 flex flex-col">
+      <div className="relative h-full min-h-0 flex flex-col">
       <div className="shrink-0 -mb-[11px]">
         <StandardPageBanner
           icon={ClipboardList}
@@ -2246,6 +2285,22 @@ export default function AdminModelosTarefasPage() {
                                 <TooltipContent className="text-xs font-medium">Ver detalhes</TooltipContent>
                               </Tooltip>
                             </TooltipProvider>
+                            <TooltipProvider delayDuration={400}>
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      openEditModel(model);
+                                    }}
+                                    className="h-[26px] w-[26px] flex items-center justify-center rounded-[8px] bg-white dark:bg-slate-800 border border-[#e8edf5] dark:border-slate-700 text-[#6E2C96] dark:text-slate-500 shadow-[0_4px_10px_rgba(15,23,42,0.06)] hover:bg-gradient-to-br hover:from-[#2558FF] hover:via-[#6E2C96] hover:to-[#D92293] hover:text-white dark:hover:text-[#0a1628] hover:border-transparent hover:shadow-[0_8px_18px_rgba(15,23,42,0.18)] hover:-translate-y-px transition-all duration-150"
+                                  >
+                                    <Pencil className="h-3.5 w-3.5" />
+                                  </button>
+                                </TooltipTrigger>
+                                <TooltipContent className="text-xs font-medium">Editar modelo</TooltipContent>
+                              </Tooltip>
+                            </TooltipProvider>
                             <DropdownMenu>
                               <DropdownMenuTrigger asChild>
                                 <button className="h-[26px] w-[26px] flex items-center justify-center rounded-[8px] bg-white dark:bg-slate-800 border border-[#e8edf5] dark:border-slate-700 text-slate-400 dark:text-slate-500 shadow-[0_4px_10px_rgba(15,23,42,0.06)] hover:bg-gradient-to-br hover:from-[#2558FF] hover:via-[#6E2C96] hover:to-[#D92293] hover:text-white dark:hover:text-[#0a1628] hover:border-transparent hover:shadow-[0_8px_18px_rgba(15,23,42,0.18)] hover:-translate-y-px transition-all duration-150">
@@ -2518,16 +2573,13 @@ export default function AdminModelosTarefasPage() {
         )}
       </div>
       </div>
-      </div>
-      </div>
 
       {/* Filtros panel */}
-      <SlidePanel
+      <StandardModalDialog
         open={filtersPanelOpen}
         onClose={() => setFiltersPanelOpen(false)}
         title="Filtros"
         subtitle="Refine os modelos de tarefas exibidos."
-        widthMode="full"
         footer={
           filterActiveCount > 0 ? (
             <button
@@ -2808,15 +2860,14 @@ export default function AdminModelosTarefasPage() {
           </div>
         </div>
         </div>
-      </SlidePanel>
+      </StandardModalDialog>
 
       {/* Column config panel */}
-      <SlidePanel
+      <StandardModalDialog
         open={colConfigOpen}
         onClose={() => setColConfigOpen(false)}
         title="Configurar colunas"
         subtitle={`${visibleCols.size} de ${ALL_COLUMNS.length} visíveis`}
-        widthMode="full"
         footer={
           <div className="flex items-center justify-end gap-3">
             <button
@@ -2865,11 +2916,11 @@ export default function AdminModelosTarefasPage() {
             ))}
           </div>
         </div>
-      </SlidePanel>
+      </StandardModalDialog>
 
       {/* "+" info panel — real fields already present on the row object
           (no fetch needed: getCatalogTasks already returns product_links). */}
-      <SlidePanel
+      <EmbeddedSlideScreen
         open={infoPanelOpen}
         onClose={() => setInfoPanelOpen(false)}
         title={infoPanelModel?.name}
@@ -2877,7 +2928,6 @@ export default function AdminModelosTarefasPage() {
           infoPanelModel &&
           `${formatModelCode(codeOrdinals.get(infoPanelModel.id))} · ${infoPanelModel.category}${infoPanelModel.subcategory ? ` · ${infoPanelModel.subcategory}` : ""}`
         }
-        widthMode="full"
       >
         {infoPanelModel && (
           <div className="flex-1 overflow-y-auto p-6">
@@ -2999,7 +3049,7 @@ export default function AdminModelosTarefasPage() {
           </div>
           </div>
         )}
-      </SlidePanel>
+      </EmbeddedSlideScreen>
 
       {/* Detail Drawer */}
       <ModelDetailDrawer
@@ -3012,29 +3062,23 @@ export default function AdminModelosTarefasPage() {
         }}
         onStatusChange={handleStatusChange}
         onDuplicate={handleDuplicate}
+        onEdit={(m) => {
+          setDrawerOpen(false);
+          openEditModel(m);
+        }}
         updatingId={updatingId}
       />
 
-      {/* Create Sheet */}
-      <Sheet
+      {/* Create/Edit Sheet */}
+      <EmbeddedSlideScreen
         open={createOpen}
-        onOpenChange={(v) => {
-          setCreateOpen(v);
-          if (!v) resetCreateForm();
+        onClose={() => {
+          setCreateOpen(false);
+          resetCreateForm();
         }}
+        hideHeader
       >
-        <SheetContent
-          side="right"
-          hideOverlay
-          className="p-0 flex flex-col gap-0 z-[70] [&>button:last-child]:top-3 [&>button:last-child]:right-3 [&>button:last-child]:p-1.5 [&>button:last-child]:hover:bg-white/20 [&>button:last-child_svg]:size-4"
-          style={{
-            left: `${sidebarWidth - 2}px`,
-            top: `${headerHeight - 1}px`,
-            bottom: `${footerHeight - 1}px`,
-            height: "auto",
-            width: `calc(100vw - ${sidebarWidth - 2}px)`,
-          }}
-        >
+        <div className="flex flex-col flex-1 min-h-0 w-full">
           <div
             className="flex items-center justify-between px-5 py-3 flex-shrink-0"
             style={{
@@ -3043,11 +3087,22 @@ export default function AdminModelosTarefasPage() {
             }}
           >
             <div className="min-w-0 flex-1 text-sm font-bold text-white truncate">
-              {createForm.name || "Novo Modelo de Tarefa"}
+              {createForm.name || (editingModel ? "Editar Modelo" : "Novo Modelo de Tarefa")}
               <p className="text-[11px] font-normal text-white/60 mt-0.5 truncate">
-                Criando modelo de tarefa reutilizável · código gerado automaticamente
+                {editingModel
+                  ? "Editando modelo de tarefa reutilizável"
+                  : "Criando modelo de tarefa reutilizável · código gerado automaticamente"}
               </p>
             </div>
+            <button
+              onClick={() => {
+                setCreateOpen(false);
+                resetCreateForm();
+              }}
+              className="text-white/80 hover:text-white hover:bg-white/20 rounded-lg p-1.5 transition-all shrink-0"
+            >
+              <X className="h-4 w-4" />
+            </button>
           </div>
 
           <div className="flex-1 overflow-auto">
@@ -3519,11 +3574,13 @@ export default function AdminModelosTarefasPage() {
               ) : (
                 <Plus className="h-3.5 w-3.5" />
               )}
-              Criar modelo
+              {editingModel ? "Salvar alterações" : "Criar modelo"}
             </Button>
           </div>
-        </SheetContent>
-      </Sheet>
+        </div>
+      </EmbeddedSlideScreen>
+      </div>
+      </div>
     </TooltipProvider>
   );
 }

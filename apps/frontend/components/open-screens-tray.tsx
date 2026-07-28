@@ -24,7 +24,13 @@ export function OpenScreensTray() {
   const location = useLocation();
 
   return (
-    <div className="fixed top-[125px] right-[8px] z-50">
+    // z-65: acima do z-index padrão (60) de HeaderSlideScreen (Cesta/
+    // Notificações/Alertas) e da sua área clicável de fechar (60-1=59) —
+    // "sempre visível" incluía sempre CLICÁVEL, mas em z-50 o primeiro
+    // clique num ícone da bandeja com um desses painéis aberto era
+    // interceptado pela área de fechar por cima, fechando o painel em vez
+    // de ativar a tela pinada (só o segundo clique funcionava).
+    <div className="fixed top-[125px] right-[8px] z-65">
       <Popover open={open} onOpenChange={setOpen}>
         <PopoverTrigger asChild>
           <button

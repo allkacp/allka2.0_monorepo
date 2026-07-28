@@ -4,9 +4,13 @@
 import { useState, useEffect, useCallback } from "react";
 import { AlertTriangle, Loader2, ChevronLeft, ChevronRight, Users } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { PageHeader } from "@/components/page-header";
 import { useItemsPerPage } from "@/lib/use-items-per-page";
 import { ItemsPerPageSelect } from "@/components/items-per-page-select";
+import {
+  STANDARD_SHELL_PANEL_CLASS,
+  StandardPageBanner,
+} from "@/components/standard-page-shell";
+import { PinToTrayButton } from "@/components/pin-to-tray-button";
 
 const API_BASE =
   (typeof import.meta !== "undefined" &&
@@ -102,12 +106,21 @@ export default function LiderNomadesPage() {
   useEffect(() => { load(); }, [load]);
 
   return (
-    <div>
-      <PageHeader
+    <div className={STANDARD_SHELL_PANEL_CLASS}>
+    <div className="relative h-full min-h-0 flex flex-col">
+      <div className="shrink-0 -mb-[11px]">
+      <StandardPageBanner
+        icon={Users}
         title="Nômades da Área"
         description={`${total} nômade${total !== 1 ? "s" : ""} ativos na sua área`}
+        actions={
+          <PinToTrayButton id="page-leader-nomades" label="Nômades da Área" icon={Users} path="/leader/nomades" />
+        }
       />
+      </div>
 
+      <div className="flex-1 min-h-0 overflow-y-auto">
+      <div className="p-4 sm:p-6">
       {error && (
         <div className="flex items-center gap-2 text-red-500 text-sm mb-4">
           <AlertTriangle className="h-4 w-4" />
@@ -194,6 +207,9 @@ export default function LiderNomadesPage() {
           </div>
         </div>
       )}
+      </div>
+      </div>
+    </div>
     </div>
   );
 }

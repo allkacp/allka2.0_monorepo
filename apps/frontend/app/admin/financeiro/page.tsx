@@ -46,6 +46,7 @@ import { useSorting, SortableHeader } from "@/hooks/useSorting";
 import { useTableScrollSync } from "@/hooks/useTableScrollSync";
 import { IconToolbarButton } from "@/components/icon-toolbar-button";
 import { SlidePanel } from "@/components/slide-panel";
+import { StandardModalDialog } from "@/components/standard-modal-dialog";
 import type { DateRange } from "react-day-picker";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import {
@@ -1902,6 +1903,7 @@ export default function AdminFinanceiroPage() {
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
                 <Input
                   placeholder="Buscar parceiro, e-mail, PIX..."
+                  autoComplete="new-password"
                   value={pwSearch}
                   onChange={(e) => { setPwSearch(e.target.value); setPwPage(1); }}
                   className="pl-9 h-9 text-sm bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 rounded-lg focus-visible:ring-blue-500 w-full"
@@ -3073,41 +3075,25 @@ export default function AdminFinanceiroPage() {
 
       {/* ── Modal Filtros Avançados — mesmo estilo de Projetos ─────── */}
       {filterOpen && (
-        <div
-          data-slot="sheet-content"
-          data-state="open"
-          className="fixed right-0 z-70 bg-white dark:bg-slate-900 shadow-2xl border-l border-slate-200 dark:border-slate-700 flex flex-col overflow-hidden data-[state=open]:animate-in data-[state=open]:slide-in-from-right data-[state=open]:fade-in-0 duration-300"
-          style={{
-            left: sidebarWidth - 2,
-            top: headerHeight - 1,
-            bottom: footerHeight - 1,
-            width: `calc(100vw - ${sidebarWidth - 2}px)`,
-          }}
-        >
-          <div className="bg-white dark:bg-slate-900 w-full h-full flex flex-col overflow-hidden">
-
-            {/* Header */}
-            <div
-              className="flex items-center justify-between px-5 py-3 flex-shrink-0"
-              style={{
-                background:
-                  "var(--brand-gradient, linear-gradient(to right, #0a1628, #1e3a8a, #0a1628))",
-              }}
-            >
-              <div className="min-w-0 flex-1 text-sm font-bold text-white truncate">
-                Filtros Avançados
-                <p className="text-[11px] font-normal text-white/60 mt-0.5 truncate">Configure os filtros para refinar os resultados</p>
-              </div>
-              <button
-                onClick={() => setFilterOpen(false)}
-                className="text-white/70 hover:text-white hover:bg-white/20 rounded-lg p-1.5 transition-colors flex-shrink-0"
-              >
-                <X className="h-4 w-4" />
+        <StandardModalDialog
+          open={filterOpen}
+          onClose={() => setFilterOpen(false)}
+          title="Filtros Avançados"
+          subtitle="Configure os filtros para refinar os resultados"
+          footer={
+            <div className="flex items-center justify-between gap-2 w-full">
+              <button onClick={clearAllFilters} className="text-xs text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 hover:underline transition-colors">
+                Limpar filtros
               </button>
+              <div className="flex gap-2">
+                <Button variant="outline" size="sm" className="h-8 text-xs" onClick={() => setFilterOpen(false)}>Cancelar</Button>
+                <Button size="sm" className="h-8 text-xs btn-brand" onClick={applyFilters}>Aplicar Filtros</Button>
+              </div>
             </div>
-
+          }
+        >
             {/* Body */}
-            <div className="flex flex-1 min-h-0">
+            <div className="flex flex-1 min-h-0 w-full">
               {/* Left: saved filters */}
               <div className="w-44 shrink-0 border-r border-slate-100 dark:border-slate-800 flex flex-col bg-slate-50 dark:bg-slate-800/50">
                 <div className="px-3 py-2.5 border-b border-slate-100 dark:border-slate-800">
@@ -3404,28 +3390,15 @@ export default function AdminFinanceiroPage() {
                 </div>
               </div>
             </div>
-
-            {/* Footer */}
-            <div className="flex items-center justify-between gap-2 px-4 py-3 border-t border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/50 shrink-0">
-              <button onClick={clearAllFilters} className="text-xs text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 hover:underline transition-colors">
-                Limpar filtros
-              </button>
-              <div className="flex gap-2">
-                <Button variant="outline" size="sm" className="h-8 text-xs" onClick={() => setFilterOpen(false)}>Cancelar</Button>
-                <Button size="sm" className="h-8 text-xs btn-brand" onClick={applyFilters}>Aplicar Filtros</Button>
-              </div>
-            </div>
-          </div>
-        </div>
+        </StandardModalDialog>
       )}
 
       {/* ── Configurar colunas — Faturas ────────────────────────────── */}
-      <SlidePanel
+      <StandardModalDialog
         open={columnsPanelOpen}
         onClose={() => setColumnsPanelOpen(false)}
         title="Configurar colunas"
         subtitle={`${invVisibleCols.size} de ${INVOICE_COLUMNS.length} visíveis`}
-        widthMode="full"
         footer={
           <div className="flex items-center justify-end gap-3">
             <button
@@ -3478,14 +3451,13 @@ export default function AdminFinanceiroPage() {
             ))}
           </div>
         </div>
-      </SlidePanel>
+      </StandardModalDialog>
 
-      {/* ── Sheet Nova / Editar Fatura ─────────────────────────────── */}
-      <SlidePanel
+      {/* ── Dialog Nova / Editar Fatura ─────────────────────────────── */}
+      <StandardModalDialog
         open={sheetOpen}
         onClose={() => setSheetOpen(false)}
         title={editingInvoice ? "Editar Fatura" : "Nova Fatura"}
-        widthMode="full"
         footer={
           <div className="flex justify-end gap-2">
             <Button variant="outline" onClick={() => setSheetOpen(false)}>Cancelar</Button>
@@ -3543,7 +3515,7 @@ export default function AdminFinanceiroPage() {
             </div>
         </div>
         </div>
-      </SlidePanel>
+      </StandardModalDialog>
 
       {/* ── Confirmar exclusão fatura ──────────────────────────────── */}
       <ConfirmationDialog
@@ -3556,12 +3528,11 @@ export default function AdminFinanceiroPage() {
         onConfirm={handleDeleteInvoice}
       />
 
-      {/* ── Sheet Nova / Editar Despesa ────────────────────────────── */}
-      <SlidePanel
+      {/* ── Dialog Nova / Editar Despesa ────────────────────────────── */}
+      <StandardModalDialog
         open={expSheetOpen}
         onClose={() => setExpSheetOpen(false)}
         title={editingExpense ? "Editar Despesa" : "Nova Despesa"}
-        widthMode="full"
         footer={
           <div className="flex justify-end gap-2">
             <Button variant="outline" onClick={() => setExpSheetOpen(false)}>Cancelar</Button>
@@ -3677,7 +3648,7 @@ export default function AdminFinanceiroPage() {
             </div>
         </div>
         </div>
-      </SlidePanel>
+      </StandardModalDialog>
 
       {/* ── Confirmar exclusão despesa ─────────────────────────────── */}
       <ConfirmationDialog

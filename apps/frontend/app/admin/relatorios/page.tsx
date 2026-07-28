@@ -49,6 +49,8 @@ import { ReportPermissionsDialog } from "@/features/reports/report-permissions-d
 import { ReportIndicatorLibrary } from "@/features/reports/components/report-indicator-library";
 import { ReportConfigsTable } from "@/features/reports/components/report-configs-table";
 import { ReportBuilderSheet } from "@/features/reports/components/report-builder-sheet";
+import { exportReportSummaryPDF } from "@/features/reports/report-export";
+import { EmbeddedSlideScreen } from "@/components/embedded-slide-screen";
 import type { ReportConfig } from "@/features/reports/types";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import {
@@ -174,7 +176,7 @@ function StatBadge({ value, label, loading }) {
 
 // ─── Category section ────────────────────────────────────────────────────────
 
-function CategorySection({ category, stats, statsLoading, search, dateRange, onOpenPermissions }) {
+function CategorySection({ category, stats, statsLoading, search, dateRange, onOpenPermissions, onView }) {
   const [collapsed, setCollapsed] = useState(false);
 
   const visibleReports = useMemo(() => {
@@ -230,7 +232,7 @@ function CategorySection({ category, stats, statsLoading, search, dateRange, onO
       {!collapsed && (
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-3 pl-0">
           {visibleReports.map((report) => (
-            <ReportCard key={report.id} report={report} category={category} dateRange={dateRange} onOpenPermissions={onOpenPermissions} />
+            <ReportCard key={report.id} report={report} category={category} dateRange={dateRange} onOpenPermissions={onOpenPermissions} onView={onView} />
           ))}
         </div>
       )}
@@ -240,14 +242,30 @@ function CategorySection({ category, stats, statsLoading, search, dateRange, onO
 
 // ─── Report card ──────────────────────────────────────────────────────────────
 
-function ReportCard({ report, category, dateRange, onOpenPermissions }) {
+function dateRangeLabel(dateRange) {
+  return dateRange === "7"   ? "7 dias"
+    : dateRange === "30"  ? "30 dias"
+    : dateRange === "90"  ? "90 dias"
+    : dateRange === "365" ? "1 ano"
+    : "Personalizado";
+}
+
+function ReportCard({ report, category, dateRange, onOpenPermissions, onView }) {
   const [downloading, setDownloading] = useState(false);
 
   async function handleDownload(format) {
     setDownloading(true);
-    // Simulate — in a real scenario this would call an export endpoint
-    await new Promise((r) => setTimeout(r, 800));
-    setDownloading(false);
+    try {
+      await exportReportSummaryPDF(report, {
+        categoryName: category.name,
+        dateRangeLabel: dateRangeLabel(dateRange),
+        generatedAt: new Date().toLocaleDateString("pt-BR"),
+      });
+    } catch (e) {
+      console.error("[Relatorios] export:", e);
+    } finally {
+      setDownloading(false);
+    }
   }
 
   return (
@@ -283,11 +301,7 @@ function ReportCard({ report, category, dateRange, onOpenPermissions }) {
           </span>
         ))}
         <span className="ml-auto text-[10px] text-slate-400">
-          {dateRange === "7"   ? "7 dias"
-          : dateRange === "30"  ? "30 dias"
-          : dateRange === "90"  ? "90 dias"
-          : dateRange === "365" ? "1 ano"
-          : "Personalizado"}
+          {dateRangeLabel(dateRange)}
         </span>
       </div>
 
@@ -296,6 +310,7 @@ function ReportCard({ report, category, dateRange, onOpenPermissions }) {
         <Button
           size="sm"
           className="flex-1 h-7 text-[11px] gap-1"
+          onClick={() => onView({ report, category })}
         >
           <Eye className="h-3 w-3" />
           Visualizar
@@ -335,6 +350,10 @@ export default function AdminRelatoriosPage() {
   // ── permissions dialog (legacy catalog) ───────────────────────────────────
   const [permDialogReport, setPermDialogReport] = useState(null);
   const [allConfigs, setAllConfigs] = useState({});
+
+  // ── report preview (Tela Slide) ────────────────────────────────────────────
+  const [viewingReport, setViewingReport] = useState(null);
+  const [previewDownloading, setPreviewDownloading] = useState(false);
 
   // ── admin report configs (new CRUD) ───────────────────────────────────────
   const [adminConfigs, setAdminConfigs] = useState([]);
@@ -444,7 +463,7 @@ export default function AdminRelatoriosPage() {
 
   return (
     <div className={STANDARD_SHELL_PANEL_CLASS}>
-    <div className="h-full min-h-0 flex flex-col">
+    <div className="relative h-full min-h-0 flex flex-col">
       <div className="shrink-0 -mb-[11px]">
       <StandardPageBanner
         icon={BarChart3}
@@ -710,6 +729,7 @@ export default function AdminRelatoriosPage() {
                     search={search}
                     dateRange={dateRange}
                     onOpenPermissions={(report) => setPermDialogReport(report)}
+                    onView={(v) => setViewingReport(v)}
                   />
                 ))
               )}
@@ -733,6 +753,80 @@ export default function AdminRelatoriosPage() {
           />
         )}
       </div>
+
+      {/* Visualizar — preview do relatório (Tela Slide) */}
+      <EmbeddedSlideScreen
+        open={!!viewingReport}
+        onClose={() => setViewingReport(null)}
+        title={viewingReport?.report?.name}
+        subtitle={viewingReport?.category?.name}
+        footer={
+          viewingReport && (
+            <div className="flex items-center justify-between w-full">
+              <div className="flex items-center gap-1.5">
+                {viewingReport.report.formats.map((f) => (
+                  <span
+                    key={f}
+                    className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] font-medium bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-400"
+                  >
+                    <FileText className="h-2.5 w-2.5" />
+                    {f}
+                  </span>
+                ))}
+              </div>
+              <Button
+                size="sm"
+                disabled={previewDownloading}
+                onClick={async () => {
+                  setPreviewDownloading(true);
+                  try {
+                    await exportReportSummaryPDF(viewingReport.report, {
+                      categoryName: viewingReport.category.name,
+                      dateRangeLabel: dateRangeLabel(dateRange),
+                      generatedAt: new Date().toLocaleDateString("pt-BR"),
+                    });
+                  } catch (e) {
+                    console.error("[Relatorios] export:", e);
+                  } finally {
+                    setPreviewDownloading(false);
+                  }
+                }}
+                className="gap-1.5"
+              >
+                {previewDownloading ? (
+                  <RefreshCw className="h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <Download className="h-3.5 w-3.5" />
+                )}
+                Baixar
+              </Button>
+            </div>
+          )
+        }
+      >
+        {viewingReport && (
+          <div className="flex-1 overflow-y-auto p-6 w-full">
+            <div className="max-w-2xl mx-auto space-y-5">
+              <div className="flex items-center gap-3">
+                <div className={`p-2.5 rounded-lg ${viewingReport.category.lightBg} ${viewingReport.category.border} border shrink-0`}>
+                  <viewingReport.report.icon className={`h-4 w-4 ${viewingReport.category.lightText}`} />
+                </div>
+                <div className="min-w-0">
+                  <p className="text-sm font-semibold text-slate-800 dark:text-slate-100">{viewingReport.report.name}</p>
+                  <p className="text-xs text-slate-400">{viewingReport.category.name} · {dateRangeLabel(dateRange)}</p>
+                </div>
+              </div>
+              <div className="p-4 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700">
+                <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide mb-2">Descrição</p>
+                <p className="text-sm text-slate-600 dark:text-slate-300 leading-relaxed">{viewingReport.report.desc}</p>
+              </div>
+              <p className="text-xs text-slate-400">
+                Este é um resumo do relatório do catálogo. Use "Baixar" para exportar em PDF.
+              </p>
+            </div>
+          </div>
+        )}
+      </EmbeddedSlideScreen>
 
       {/* Dialogs */}
       <ReportPermissionsDialog

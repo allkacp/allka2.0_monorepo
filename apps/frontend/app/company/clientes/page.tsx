@@ -31,8 +31,12 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { PageHeader } from "@/components/page-header";
+import {
+  STANDARD_SHELL_PANEL_CLASS,
+  StandardPageBanner,
+} from "@/components/standard-page-shell";
 import { ExportButton } from "@/components/export-button";
+import { PinToTrayButton } from "@/components/pin-to-tray-button";
 import { SlidePanel } from "@/components/slide-panel";
 import { IconToolbarButton } from "@/components/icon-toolbar-button";
 import { NeonBadge } from "@/components/neon-badge";
@@ -562,28 +566,28 @@ export default function CompanyClientesPage() {
   );
 
   return (
-    <div ref={pageRef} className="space-y-4">
-      <PageHeader
+    <div className={STANDARD_SHELL_PANEL_CLASS}>
+    <div ref={pageRef} className="relative h-full min-h-0 flex flex-col overflow-hidden">
+      <div className="shrink-0 -mb-[11px]">
+      <StandardPageBanner
+        icon={Tag}
         title="Clientes"
         description="Clientes vinculados à sua empresa"
         actions={
           <>
-            <ExportButton pageRef={pageRef} filename="clientes-company" />
+            <div className="bg-white rounded-lg">
+              <ExportButton pageRef={pageRef} filename="clientes-company" />
+            </div>
+            <PinToTrayButton id="page-company-clientes" label="Clientes" icon={Tag} path="/company/clientes" />
             <TooltipProvider delayDuration={400}>
               <Tooltip>
                 <TooltipTrigger asChild>
                   <button
                     onClick={openCreate}
-                    className="group relative flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-border/60 hover:border-transparent overflow-hidden transition-all"
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-white/70 text-white bg-white/10 hover:bg-white/20 transition-colors text-xs font-semibold whitespace-nowrap"
                   >
-                    <span
-                      className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none"
-                      style={{ background: "linear-gradient(135deg,#000000 0%,#1a2a6f 45%,#c81a7f 100%)" }}
-                    />
-                    <Plus className="relative z-10 h-3.5 w-3.5 shrink-0 text-[#7d1b6a] group-hover:text-white transition-colors" />
-                    <span className="relative z-10 text-xs font-semibold bg-clip-text text-transparent [background-image:linear-gradient(135deg,#1a2a6f_0%,#7d1b6a_55%,#c81a7f_100%)] group-hover:[background-image:none] group-hover:text-white transition-colors">
-                      Criar novo cliente
-                    </span>
+                    <Plus className="h-3.5 w-3.5 shrink-0" />
+                    Criar novo cliente
                   </button>
                 </TooltipTrigger>
                 <TooltipContent side="bottom" sideOffset={6}>Cadastrar novo cliente</TooltipContent>
@@ -592,7 +596,10 @@ export default function CompanyClientesPage() {
           </>
         }
       />
+      </div>
 
+      <div className="flex-1 min-h-0 overflow-y-auto">
+      <div className="space-y-5">
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         <StatCard label="Total de Clientes" value={total} icon={Tag} color="blue" />
         <StatCard label="Pessoa Jurídica" value={totalPj} icon={Building2} color="violet" />
@@ -607,6 +614,7 @@ export default function CompanyClientesPage() {
             <Input
               className="pl-8 h-9 text-sm"
               placeholder="Nome, ID, e-mail ou documento..."
+              autoComplete="new-password"
               value={searchInput}
               onFocus={() => setSearchFocused(true)}
               onChange={(e) => handleSearchChange(e.target.value)}
@@ -885,6 +893,8 @@ export default function CompanyClientesPage() {
             {totalPages > 1 && <PaginationControls />}
           </div>
         )}
+      </div>
+      </div>
       </div>
 
       {/* Filtros panel */}
@@ -1239,6 +1249,7 @@ export default function CompanyClientesPage() {
           {formError && <p className="text-xs text-red-600">{formError}</p>}
         </div>
       </SlidePanel>
+    </div>
     </div>
   );
 }

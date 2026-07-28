@@ -16,6 +16,88 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 
+// Rotas que usam o padrão "Tela Global com tabela principal" — <main> ganha
+// padding menor/próprio (ver AppLayout em App.tsx) em vez do padding
+// genérico. Qualquer overlay que precise encaixar EXATAMENTE no retângulo
+// do painel branco da página (ex: HeaderSlideScreen) precisa saber disso
+// pra usar o mesmo padding, senão o gradiente de fundo vaza nas bordas.
+export const STANDARD_SHELL_ROUTES = [
+  "/admin/empresas",
+  "/admin/dashboard",
+  "/admin/usuarios",
+  "/admin/clientes",
+  "/admin/permissoes",
+  "/admin/permissions",
+  "/admin/projetos",
+  "/admin/tarefas",
+  "/admin/produtos",
+  "/admin/catalogo-produtos",
+  "/admin/precificacao",
+  "/admin/modelos-tarefas",
+  "/admin/campanhas-indicacao",
+  "/admin/niveis",
+  "/admin/niveis-nomades",
+  "/admin/programa-partner",
+  "/admin/financeiro",
+  "/admin/relatorios",
+  "/admin/allkademy",
+  "/admin/sistema",
+  "/admin/disponibilidade",
+  "/admin/especialidades",
+  "/admin/onboarding",
+  "/admin/configuracoes",
+  "/agency/dashboard",
+  "/agency/projetos",
+  "/agency/tarefas",
+  "/agency/catalogo",
+  "/agency/financeiro",
+  "/agency/relatorios",
+  "/agency/clientes",
+  "/agency/usuarios",
+  "/partner/dashboard",
+  "/partner/agencias",
+  "/partner/projetos",
+  "/partner/comissoes",
+  "/partner/saques",
+  "/partner/relatorios",
+  "/partner/clientes",
+  "/company/dashboard",
+  "/company/projetos",
+  "/company/tarefas",
+  "/company/faturas",
+  "/company/produtos",
+  "/company/relatorios",
+  "/company/clientes",
+  "/company/usuarios",
+  "/nomad/dashboard",
+  "/nomad/relatorios",
+  "/nomades/programa",
+  "/nomades/habilitacoes",
+  "/nomades/ganhos",
+  "/nomades/tarefasdisponiveis",
+  "/nomades/minhastarefas",
+  "/nomades/historico",
+  "/nomades/perfil",
+  "/nomades/relatorios",
+  "/leader/dashboard",
+  "/leader/qualificacao",
+  "/leader/tarefas",
+  "/leader/devolvidas",
+  "/leader/historico",
+  "/leader/perfil",
+  "/leader/relatorios",
+  "/leader/nomades",
+  "/leader/catalogo",
+  "/leader/projetos",
+  "/leader/clientes",
+];
+
+export function isStandardShellRoute(pathname: string): boolean {
+  return STANDARD_SHELL_ROUTES.some(
+    (r) => pathname === r || pathname.startsWith(r + "/"),
+  );
+}
+
 // Painel branco flutuante — wrapper mais externo da tela.
 export const STANDARD_SHELL_PANEL_CLASS =
   "admin-empresas-panel w-full h-full rounded-2xl lg:rounded-[1.5rem] border border-slate-200/70 dark:border-slate-700/60 bg-white dark:bg-slate-900 shadow-[0_20px_50px_-12px_rgba(15,23,42,0.18),0_4px_16px_-4px_rgba(15,23,42,0.10)] p-3 sm:p-5 lg:p-[12px] overflow-hidden";

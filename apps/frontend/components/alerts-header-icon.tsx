@@ -7,6 +7,8 @@ import { cn } from "@/lib/utils"
 import { useNavigate } from "react-router-dom"
 import { apiClient } from "@/lib/api-client"
 import { useAccountType } from "@/contexts/account-type-context"
+import { useGlobalHeaderPanel } from "@/contexts/global-header-panel-context"
+import { HeaderSlideScreen } from "@/components/header-slide-screen"
 
 // Unified display alert — normalized from both ApiAlert and AgencyAlert
 interface DisplayAlert {
@@ -74,7 +76,9 @@ const severityLabel: Record<DisplayAlert["severity"], string> = {
 export function AlertsHeaderIcon() {
   const [displayAlerts, setDisplayAlerts] = useState<DisplayAlert[]>([])
   const [dismissed, setDismissed] = useState<string[]>([])
-  const [modalOpen, setModalOpen] = useState(false)
+  const { isActive, openPanel, closePanel } = useGlobalHeaderPanel()
+  const modalOpen = isActive("alerts")
+  const setModalOpen = (v: boolean) => (v ? openPanel("alerts") : closePanel("alerts"))
   const [tooltipVisible, setTooltipVisible] = useState(false)
   const navigate = useNavigate()
   const { accountType } = useAccountType()
@@ -135,27 +139,26 @@ export function AlertsHeaderIcon() {
 
   return (
     <>
-      {/* Alert icon button */}
-      <div className="relative" onMouseEnter={() => setTooltipVisible(true)} onMouseLeave={() => setTooltipVisible(false)}>
+      {/* Alert icon — floating, fixo abaixo da Bandeja de Telas */}
+      <div
+        className="fixed top-[165px] right-[8px] z-50 group"
+        onMouseEnter={() => setTooltipVisible(true)}
+        onMouseLeave={() => setTooltipVisible(false)}
+      >
         <button
+          type="button"
           onClick={() => hasAlerts && setModalOpen(true)}
-          className={cn(
-            "relative flex items-center justify-center rounded-xl transition-all duration-200 bg-white/10 border border-white/15 hover:bg-white/20",
-            "h-9 w-9",
-            hasAlerts
-              ? "cursor-pointer text-white/80"
-              : "cursor-default text-white/50",
-          )}
           aria-label="Alertas do sistema"
+          className={cn(
+            "relative flex items-center justify-center h-10 w-10 transition-colors",
+            hasAlerts ? "cursor-pointer text-white/70 hover:text-white" : "cursor-default text-white/40",
+          )}
         >
           <AlertTriangle
-            className={cn(
-              "transition-all duration-200",
-              hasAlerts ? "h-5 w-5 sm:h-6 sm:w-6 animate-pulse" : "h-4 w-4 sm:h-5 sm:w-5",
-            )}
+            className={cn("h-5 w-5 shrink-0", hasAlerts && "animate-pulse")}
           />
           {hasAlerts && (
-            <span className="absolute -top-1 -right-1 flex h-4 w-4 sm:h-5 sm:w-5 items-center justify-center rounded-full bg-red-500 text-[10px] font-bold text-white leading-none">
+            <span className="absolute top-1 right-1 flex h-4 w-4 items-center justify-center rounded-full bg-red-500 text-[9px] font-bold text-white leading-none pointer-events-none">
               {activeAlerts.length}
             </span>
           )}
@@ -163,82 +166,66 @@ export function AlertsHeaderIcon() {
 
         {/* Tooltip */}
         {tooltipVisible && (
-          <div
-            className={cn(
-              "absolute top-full right-0 mt-2 z-100 w-max max-w-xs rounded-lg px-3 py-2 text-xs shadow-lg pointer-events-none",
-              "animate-in fade-in-0 zoom-in-95 duration-150",
-              hasAlerts
-                ? "bg-red-600 text-white"
-                : "bg-gray-800 text-gray-100 dark:bg-gray-700",
-            )}
-          >
+          <span className="pointer-events-none absolute top-full right-0 mt-2 whitespace-nowrap rounded-lg bg-gray-900/95 px-2.5 py-1.5 text-[11px] text-white opacity-100 shadow-xl border border-white/10 z-50">
             {hasAlerts ? (
-              <span>
+              <>
                 <strong>{activeAlerts.length} alerta{activeAlerts.length > 1 ? "s" : ""}</strong>
-                {highCount > 0 && <span className="text-red-200"> ({highCount} crítico{highCount > 1 ? "s" : ""})</span>}
-                <br />
-                <span className="opacity-90">Clique para visualizar</span>
-              </span>
+                {highCount > 0 && <span className="text-red-300"> ({highCount} crítico{highCount > 1 ? "s" : ""})</span>}
+              </>
             ) : (
-              <span>Nenhum alerta no momento</span>
+              "Nenhum alerta no momento"
             )}
-            {/* Tooltip arrow */}
-            <div
-              className={cn(
-                "absolute -top-1 right-3 h-2 w-2 rotate-45",
-                hasAlerts ? "bg-red-600" : "bg-gray-800 dark:bg-gray-700",
-              )}
-            />
-          </div>
+          </span>
         )}
       </div>
 
-      {/* Modal */}
-      {modalOpen && (
-        <div className="fixed inset-0 z-200 flex items-center justify-center pointer-events-none">
-          {/* Overlay */}
-          <div
-            className="absolute inset-0 bg-black/50 backdrop-blur-sm pointer-events-auto animate-in fade-in-0 duration-200"
-            onClick={() => setModalOpen(false)}
-          />
-
-          {/* Modal panel */}
-          <div
-            className={cn(
-              "relative pointer-events-auto w-full max-w-lg mx-4 rounded-2xl shadow-2xl",
-              "bg-white dark:bg-card border border-gray-200 dark:border-gray-700",
-              "animate-in fade-in-0 zoom-in-95 duration-200",
+      {/* Tela Slide */}
+      <HeaderSlideScreen
+        open={modalOpen}
+        onClose={() => setModalOpen(false)}
+        title={isAgency ? "Alertas da Agency" : "Alertas do Sistema"}
+        subtitle={
+          <>
+            {activeAlerts.length} ite{activeAlerts.length !== 1 ? "ns" : "m"} requer{activeAlerts.length !== 1 ? "em" : ""} atenção
+            {highCount > 0 && (
+              <span className="ml-1 text-red-300 font-medium">• {highCount} crítico{highCount > 1 ? "s" : ""}</span>
             )}
-            style={{ marginLeft: "calc(var(--sidebar-width, 220px) / 2)" }}
-          >
-            {/* Header */}
-            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200 dark:border-gray-700">
-              <div className="flex items-center gap-3">
-                <div className="flex h-9 w-9 items-center justify-center rounded-full bg-red-100 dark:bg-red-950/50">
-                  <AlertTriangle className="h-5 w-5 text-red-600 dark:text-red-400 animate-pulse" />
-                </div>
-                <div>
-                  <h2 className="text-base font-semibold text-gray-900 dark:text-white">
-                    {isAgency ? "Alertas da Agency" : "Alertas do Sistema"}
-                  </h2>
-                  <p className="text-xs text-gray-500 dark:text-gray-400">
-                    {activeAlerts.length} ite{activeAlerts.length !== 1 ? "ns" : "m"} requer{activeAlerts.length !== 1 ? "em" : ""} atenção
-                    {highCount > 0 && (
-                      <span className="ml-1 text-red-500 font-medium">• {highCount} crítico{highCount > 1 ? "s" : ""}</span>
-                    )}
-                  </p>
-                </div>
-              </div>
-              <button
-                onClick={() => setModalOpen(false)}
-                className="flex h-8 w-8 items-center justify-center rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+          </>
+        }
+        footer={
+          activeAlerts.length > 0 && (
+            <div className="flex items-center justify-end gap-2">
+              <Button
+                variant="ghost"
+                size="sm"
+                className="text-xs text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
+                onClick={async () => {
+                  setDismissed(displayAlerts.map((a) => a.id))
+                  setModalOpen(false)
+                  if (!isAgency) {
+                    try { await apiClient.markAllSystemAlertsRead() } catch {}
+                  }
+                }}
               >
-                <X className="h-4 w-4" />
-              </button>
+                Dispensar todos
+              </Button>
+              <Button
+                variant="default"
+                size="sm"
+                className="text-xs gap-1.5 btn-brand"
+                onClick={() => {
+                  setModalOpen(false)
+                  navigate(isAgency ? "/agency/tarefas" : "/admin/alertas")
+                }}
+              >
+                <ExternalLink className="h-3.5 w-3.5" />
+                {isAgency ? "Ver Tarefas" : "Central de Atenções"}
+              </Button>
             </div>
-
-            {/* Alerts list */}
-            <div className="px-6 py-4 space-y-3 max-h-[60vh] overflow-y-auto">
+          )
+        }
+      >
+          <div className="flex-1 overflow-y-auto p-6 space-y-3 w-full">
               {activeAlerts.length === 0 ? (
                 <p className="text-center text-sm text-gray-500 dark:text-gray-400 py-6">
                   Nenhum alerta ativo no momento.
@@ -312,41 +299,7 @@ export function AlertsHeaderIcon() {
                 })
               )}
             </div>
-
-            {/* Footer */}
-            {activeAlerts.length > 0 && (
-              <div className="px-6 py-3 border-t border-gray-200 dark:border-gray-700 flex items-center justify-end gap-2">
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="text-xs text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
-                  onClick={async () => {
-                    setDismissed(displayAlerts.map((a) => a.id))
-                    setModalOpen(false)
-                    if (!isAgency) {
-                      try { await apiClient.markAllSystemAlertsRead() } catch {}
-                    }
-                  }}
-                >
-                  Dispensar todos
-                </Button>
-                <Button
-                  variant="default"
-                  size="sm"
-                  className="text-xs gap-1.5 btn-brand"
-                  onClick={() => {
-                    setModalOpen(false)
-                    navigate(isAgency ? "/agency/tarefas" : "/admin/alertas")
-                  }}
-                >
-                  <ExternalLink className="h-3.5 w-3.5" />
-                  {isAgency ? "Ver Tarefas" : "Central de Atenções"}
-                </Button>
-              </div>
-            )}
-          </div>
-        </div>
-      )}
+      </HeaderSlideScreen>
     </>
   )
 }

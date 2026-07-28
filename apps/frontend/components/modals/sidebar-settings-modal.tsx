@@ -600,6 +600,7 @@ export function SidebarSettingsModal({
         hideOverlay={true}
         className="p-0 h-screen bg-white shadow-2xl flex flex-col gap-0"
         style={{
+          top: 0,
           left: `${sidebarWidth}px`,
           width: `calc(100vw - ${sidebarWidth}px)`,
           maxWidth: `calc(100vw - ${sidebarWidth}px)`,

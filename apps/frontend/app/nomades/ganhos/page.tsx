@@ -3,7 +3,6 @@ import { useState } from "react"
 import { Wallet, TrendingUp, Target, Star, Download, ChevronLeft, ChevronRight } from "lucide-react"
 import { useSorting, SortableHeader } from "@/hooks/useSorting"
 import { Button } from "@/components/ui/button"
-import { PageHeader } from "@/components/page-header"
 import { useItemsPerPage } from "@/lib/use-items-per-page"
 import { ItemsPerPageSelect } from "@/components/items-per-page-select"
 import {
@@ -12,6 +11,11 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip"
+import {
+  STANDARD_SHELL_PANEL_CLASS,
+  StandardPageBanner,
+} from "@/components/standard-page-shell"
+import { PinToTrayButton } from "@/components/pin-to-tray-button"
 
 const fmtBRL = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })
 
@@ -78,30 +82,35 @@ export default function NomadesGanhosPage() {
   const extraIfGold = totalEarned * 0.05
 
   return (
-    <div className="space-y-6">
-      <PageHeader
-        title="Ganhos"
-        subtitle="Histórico completo de pagamentos e bônus de nível"
-        actions={
+    <div className={STANDARD_SHELL_PANEL_CLASS}>
+    <div className="relative h-full min-h-0 flex flex-col">
+    <div className="shrink-0 -mb-[11px]">
+    <StandardPageBanner
+      icon={Wallet}
+      title="Ganhos"
+      description="Histórico completo de pagamentos e bônus de nível"
+      actions={
+        <>
           <TooltipProvider delayDuration={400}>
             <Tooltip>
               <TooltipTrigger asChild>
                 <button
-                  className="group relative flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-border/60 hover:border-transparent overflow-hidden transition-all"
+                  className="flex items-center justify-center h-8 w-8 rounded-lg border border-white/70 text-white bg-white/10 hover:bg-white/20 transition-colors"
                 >
-                  <span className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none" style={{ background: "linear-gradient(135deg,#000000 0%,#1a2a6f 45%,#c81a7f 100%)" }} />
-                  <Download className="relative z-10 h-3.5 w-3.5 shrink-0 text-[#7d1b6a] group-hover:text-white transition-colors" />
-                  <span className="relative z-10 text-xs font-semibold bg-clip-text text-transparent [background-image:linear-gradient(135deg,#1a2a6f_0%,#7d1b6a_55%,#c81a7f_100%)] group-hover:[background-image:none] group-hover:text-white transition-colors">
-                    Exportar
-                  </span>
+                  <Download className="h-3.5 w-3.5 shrink-0" />
                 </button>
               </TooltipTrigger>
               <TooltipContent side="bottom" sideOffset={6}>Exportar ganhos</TooltipContent>
             </Tooltip>
           </TooltipProvider>
-        }
-      />
+          <PinToTrayButton id="page-nomades-ganhos" label="Ganhos" icon={Wallet} path="/nomades/ganhos" />
+        </>
+      }
+    />
+    </div>
 
+    <div className="flex-1 min-h-0 overflow-y-auto">
+    <div className="p-4 sm:p-6 space-y-5">
       {/* Stats */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <div className="rounded-xl bg-linear-to-br from-violet-600 to-violet-700 p-4 text-white shadow-sm">
@@ -257,6 +266,9 @@ export default function NomadesGanhosPage() {
           )}
         </div>
       </div>
+    </div>
+    </div>
+    </div>
     </div>
   )
 }

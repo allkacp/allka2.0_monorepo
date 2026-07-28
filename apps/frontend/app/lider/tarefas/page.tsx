@@ -24,7 +24,6 @@ import { Input } from "@/components/ui/input";
 import { Card } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 import { TarefaDetailDrawer } from "@/components/tarefa-detail-drawer";
-import { PageHeader } from "@/components/page-header";
 import { useItemsPerPage } from "@/lib/use-items-per-page";
 import { ItemsPerPageSelect } from "@/components/items-per-page-select";
 import {
@@ -33,6 +32,11 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+import {
+  STANDARD_SHELL_PANEL_CLASS,
+  StandardPageBanner,
+} from "@/components/standard-page-shell";
+import { PinToTrayButton } from "@/components/pin-to-tray-button";
 
 const FILTER_CONFIG: Record<string, { status: string; title: string; description: string }> = {
   briefings: {
@@ -247,30 +251,47 @@ export default function LiderTarefasPage() {
   };
 
   return (
-    <div className="space-y-5 p-4 md:p-6">
-      {/* ── Header ──────────────────────────────────────────────────────── */}
-      <PageHeader
+    <div className={STANDARD_SHELL_PANEL_CLASS}>
+    <div className="relative h-full min-h-0 flex flex-col">
+      {/* Tela Slide (EmbeddedSlideScreen) — precisa ficar DENTRO do
+          container relative acima. */}
+      <TarefaDetailDrawer
+        tarefa={drawerTask}
+        open={drawerOpen}
+        onClose={() => setDrawerOpen(false)}
+        onStatusChange={() => load()}
+        updatingId={null}
+      />
+
+      <div className="shrink-0 -mb-[11px]">
+      <StandardPageBanner
+        icon={PlayCircle}
         title={pageTitle}
         description={pageDescription}
         actions={
-          <TooltipProvider delayDuration={400}>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <button
-                  onClick={load}
-                  disabled={loading}
-                  className="group relative flex items-center justify-center h-8 w-8 rounded-lg border border-border/60 hover:border-transparent overflow-hidden transition-all disabled:opacity-50"
-                >
-                  <span className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none" style={{ background: "linear-gradient(135deg,#000000 0%,#1a2a6f 45%,#c81a7f 100%)" }} />
-                  <RefreshCw className={cn("relative z-10 h-4 w-4 text-[#7d1b6a] group-hover:text-white transition-colors", loading && "animate-spin")} />
-                </button>
-              </TooltipTrigger>
-              <TooltipContent side="bottom" sideOffset={6}>Atualizar</TooltipContent>
-            </Tooltip>
-          </TooltipProvider>
+          <>
+            <TooltipProvider delayDuration={400}>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <button
+                    onClick={load}
+                    disabled={loading}
+                    className="flex items-center justify-center h-8 w-8 rounded-lg border border-white/70 text-white bg-white/10 hover:bg-white/20 transition-colors disabled:opacity-50"
+                  >
+                    <RefreshCw className={cn("h-4 w-4", loading && "animate-spin")} />
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent side="bottom" sideOffset={6}>Atualizar</TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+            <PinToTrayButton id="page-leader-tarefas" label={pageTitle} icon={PlayCircle} path="/leader/tarefas" />
+          </>
         }
       />
+      </div>
 
+      <div className="flex-1 min-h-0 overflow-y-auto">
+      <div className="space-y-5 p-4 md:p-6">
       {/* ── Stat cards ──────────────────────────────────────────────────── */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
         <StatCard
@@ -578,14 +599,9 @@ export default function LiderTarefasPage() {
           </div>
         )}
       </Card>
-
-      <TarefaDetailDrawer
-        tarefa={drawerTask}
-        open={drawerOpen}
-        onClose={() => setDrawerOpen(false)}
-        onStatusChange={() => load()}
-        updatingId={null}
-      />
+      </div>
+      </div>
+    </div>
     </div>
   );
 }

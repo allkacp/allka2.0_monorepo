@@ -5,6 +5,11 @@ import { useLocation } from "react-router-dom";
 import { PageLoader } from "@/components/ui/loading";
 import { AreaChart, Area, ResponsiveContainer } from "recharts";
 import { ExportButton } from "@/components/export-button";
+import { PinToTrayButton } from "@/components/pin-to-tray-button";
+import {
+  STANDARD_SHELL_PANEL_CLASS,
+  StandardPageBanner,
+} from "@/components/standard-page-shell";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -1584,44 +1589,49 @@ export default function EmpresaProjetosPage() {
   }
 
   return (
-    <div className="space-y-5" ref={pageRef}>
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold text-slate-900 dark:text-white tracking-tight">
-            Gestão de Projetos
-          </h1>
-          <p className="text-sm text-slate-500 dark:text-slate-400 mt-0.5">
-            Centralize, acompanhe e otimize todos os seus projetos em um só
-            lugar.
-          </p>
-          {profile && (
-            <div className="flex items-center gap-2 mt-2">
-              <div className="flex items-center gap-1.5 bg-blue-50 border border-blue-200 rounded-full px-3 py-1">
-                <Building2 className="h-3.5 w-3.5 text-blue-500 shrink-0" />
-                <span className="text-xs font-semibold text-blue-700">
-                  {profile.name}
-                </span>
-                {profile.cnpj && (
-                  <span className="text-xs text-blue-400 font-normal">
-                    · CNPJ {profile.cnpj}
-                  </span>
-                )}
-              </div>
+    <div className={STANDARD_SHELL_PANEL_CLASS}>
+    <div className="relative h-full min-h-0 flex flex-col overflow-hidden" ref={pageRef}>
+      <div className="shrink-0 -mb-[11px]">
+      <StandardPageBanner
+        icon={FolderOpen}
+        title="Gestão de Projetos"
+        description="Centralize, acompanhe e otimize todos os seus projetos em um só lugar."
+        actions={
+          <>
+            <div className="bg-white rounded-lg">
+              <ExportButton pageRef={pageRef} filename="projetos" />
             </div>
-          )}
-        </div>
-        <div className="flex items-center gap-2">
-          <ExportButton pageRef={pageRef} filename="projetos" />
-          <Button
-            onClick={() => setShowProjectCreate(true)}
-            className="h-9 gap-2 btn-brand shadow-md border-0"
-          >
-            <Plus className="h-4 w-4" />
-            Contratar Projetos
-          </Button>
-        </div>
+            <PinToTrayButton id="page-company-projetos" label="Gestão de Projetos" icon={FolderOpen} path="/company/projetos" />
+            <button
+              onClick={() => setShowProjectCreate(true)}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-white/70 text-white bg-white/10 hover:bg-white/20 transition-colors text-xs font-semibold whitespace-nowrap"
+            >
+              <Plus className="h-3.5 w-3.5 shrink-0" />
+              Contratar Projetos
+            </button>
+          </>
+        }
+      />
       </div>
 
+      {profile && (
+        <div className="shrink-0 flex items-center gap-2 mb-3">
+          <div className="flex items-center gap-1.5 bg-blue-50 border border-blue-200 rounded-full px-3 py-1">
+            <Building2 className="h-3.5 w-3.5 text-blue-500 shrink-0" />
+            <span className="text-xs font-semibold text-blue-700">
+              {profile.name}
+            </span>
+            {profile.cnpj && (
+              <span className="text-xs text-blue-400 font-normal">
+                · CNPJ {profile.cnpj}
+              </span>
+            )}
+          </div>
+        </div>
+      )}
+
+      <div className="flex-1 min-h-0 overflow-y-auto">
+      <div className="space-y-5">
       {/* Stats Cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         <div className="relative rounded-xl overflow-hidden shadow-sm bg-gradient-to-br from-blue-500 to-blue-700 px-3 pt-2 pb-1.5">
@@ -2601,7 +2611,7 @@ export default function EmpresaProjetosPage() {
                                 }}
                               >
                                 <span className="font-mono text-xs text-slate-400">
-                                  proj_{String(project.seq ?? "?????").padStart(5, "0")}
+                                  proj_{project.seq ?? "?"}
                                 </span>
                               </td>
                             )}
@@ -4623,6 +4633,9 @@ export default function EmpresaProjetosPage() {
           }}
         />
       </div>
+      </div>
+      </div>
+    </div>
     </div>
   );
 }

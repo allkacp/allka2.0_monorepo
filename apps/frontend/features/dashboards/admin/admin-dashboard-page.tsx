@@ -5,8 +5,9 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-import { STANDARD_SHELL_PANEL_CLASS } from "@/components/standard-page-shell";
 import { PinToTrayButton } from "@/components/pin-to-tray-button";
+import { DashboardShellFrame } from "@/features/dashboards/shared/dashboard-shell-frame";
+import { useDashboardScrollCompact } from "@/hooks/useDashboardScrollCompact";
 import { useConsumePendingActivation } from "@/contexts/open-screens-context";
 // ─── Feature module imports ───────────────────────────────────────────────────
 import {
@@ -432,8 +433,7 @@ export function AdminDashboardPage() {
   const [viewMode, setViewMode] = useState<"conclude" | "default">("default");
   const [showExportMenu, setShowExportMenu] = useState(false);
   const [layoutMode, setLayoutMode] = useState<"padrao" | "compacto">("padrao");
-  const [isHeaderCompact, setIsHeaderCompact] = useState(false);
-  const dashboardScrollRef = useRef<HTMLDivElement>(null);
+  const { isHeaderCompact, dashboardScrollRef } = useDashboardScrollCompact();
   const [saveDashboardOpen, setSaveDashboardOpen] = useState(false); // State for the save dashboard dialog
   const [isEditDashboardModalOpen, setIsEditDashboardModalOpen] =
     useState(false);
@@ -1616,17 +1616,6 @@ export function AdminDashboardPage() {
 
   useEffect(() => {
     // intentionally empty - mounted
-  }, []);
-
-  useEffect(() => {
-    // A rolagem agora acontece dentro do painel branco (shell padrão), não
-    // mais no <main> da página — sem isso o compact-on-scroll do header
-    // nunca disparava (main.scrollTop sempre 0).
-    const scrollEl = dashboardScrollRef.current;
-    if (!scrollEl) return;
-    const handleScroll = () => setIsHeaderCompact(scrollEl.scrollTop > 48);
-    scrollEl.addEventListener("scroll", handleScroll, { passive: true });
-    return () => scrollEl.removeEventListener("scroll", handleScroll);
   }, []);
 
   const widgetLibrary: WidgetLibraryItem[] = [
@@ -11191,10 +11180,7 @@ export function AdminDashboardPage() {
   }
 
   return (
-    <div className={STANDARD_SHELL_PANEL_CLASS}>
-    <div className="relative h-full min-h-0 flex flex-col overflow-hidden">
-    <div className="flex-1 min-h-0 overflow-y-auto" ref={dashboardScrollRef}>
-    <div className="container mx-auto space-y-4 px-0 py-0">
+    <DashboardShellFrame ref={dashboardScrollRef}>
       {/* Sticky Dashboard Header */}
       <div
         className={cn(
@@ -13101,10 +13087,7 @@ export function AdminDashboardPage() {
         cancelText="Cancelar"
         destructive={true}
       />
-    </div>
-    </div>
-    </div>
-    </div>
+    </DashboardShellFrame>
     // </CHANGE>
   );
 }

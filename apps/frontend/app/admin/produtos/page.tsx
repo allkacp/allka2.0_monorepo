@@ -1,5 +1,7 @@
 // @ts-nocheck
 import { SheetFooter } from "@/components/ui/sheet";
+import { EmbeddedSlideScreen } from "@/components/embedded-slide-screen";
+import { StandardModalDialog } from "@/components/standard-modal-dialog";
 import {
   InlineLoader,
   ButtonLoader,
@@ -2043,7 +2045,7 @@ export default function AdminProdutosPage() {
 
   return (
     <div className={STANDARD_SHELL_PANEL_CLASS}>
-    <div className="h-full min-h-0 flex flex-col">
+    <div className="relative h-full min-h-0 flex flex-col">
     <div className="shrink-0 -mb-[11px]">
       <StandardPageBanner
         icon={Package}
@@ -3123,30 +3125,127 @@ export default function AdminProdutosPage() {
             setShowFieldPicker(false);
           };
           return (
-            <div
-              data-slot="sheet-content"
-              data-state="open"
-              className="fixed right-0 z-70 bg-white dark:bg-slate-900 shadow-2xl border-l border-slate-200 dark:border-slate-700 flex flex-col overflow-hidden data-[state=open]:animate-in data-[state=open]:slide-in-from-right data-[state=open]:fade-in-0 duration-300"
-              style={{
-                left: sidebarWidth - 2,
-                top: headerHeight - 1,
-                bottom: footerHeight - 1,
-                width: `calc(100vw - ${sidebarWidth - 2}px)`,
+            <StandardModalDialog
+              open={isFilterModalOpen}
+              onClose={() => {
+                setIsFilterModalOpen(false);
+                setSelectedFilterId(null);
+                setShowFieldPicker(false);
               }}
+              title="Filtros Avançados"
+              subtitle="Configure e aplique filtros"
+              footer={
+                <div className="flex items-center justify-between w-full">
+                  <button
+                    onClick={clearFilters}
+                    className="text-[11px] text-slate-400 hover:text-red-500 transition-colors flex items-center gap-1"
+                  >
+                    <X className="h-3 w-3" /> Limpar filtros
+                  </button>
+                  <div className="flex items-center gap-2">
+                    {showSaveInput ? (
+                      <div className="flex items-center gap-1.5">
+                        <input
+                          autoFocus
+                          type="text"
+                          value={filterNameInput}
+                          onChange={(e) => setFilterNameInput(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter" && filterNameInput.trim()) {
+                              const newId = `filter-${Date.now()}`;
+                              setSavedFilters([
+                                ...savedFilters,
+                                {
+                                  id: newId,
+                                  name: filterNameInput.trim(),
+                                  filters: {
+                                    filterCategories,
+                                    filterAreas,
+                                    filterStatus,
+                                    sortBy,
+                                  },
+                                },
+                              ]);
+                              setSelectedFilterId(newId);
+                              setShowSaveInput(false);
+                              setFilterNameInput("");
+                            }
+                            if (e.key === "Escape") {
+                              setShowSaveInput(false);
+                              setFilterNameInput("");
+                            }
+                          }}
+                          placeholder={`Filtro ${savedFilters.length + 1}`}
+                          className="h-7 px-2 rounded-md text-[11px] border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-1 focus:ring-blue-400 w-36"
+                        />
+                        <button
+                          disabled={!filterNameInput.trim()}
+                          onClick={() => {
+                            const newId = `filter-${Date.now()}`;
+                            setSavedFilters([
+                              ...savedFilters,
+                              {
+                                id: newId,
+                                name: filterNameInput.trim(),
+                                filters: {
+                                  filterCategories,
+                                  filterAreas,
+                                  filterStatus,
+                                  sortBy,
+                                },
+                              },
+                            ]);
+                            setSelectedFilterId(newId);
+                            setShowSaveInput(false);
+                            setFilterNameInput("");
+                          }}
+                          className="h-7 px-3 rounded-md text-[11px] font-medium bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-600 hover:to-emerald-700 disabled:opacity-40 text-white transition-all shadow-sm"
+                        >
+                          OK
+                        </button>
+                        <button
+                          onClick={() => {
+                            setShowSaveInput(false);
+                            setFilterNameInput("");
+                          }}
+                          className="h-7 w-7 flex items-center justify-center rounded-md border border-slate-200 dark:border-slate-700 text-slate-400 hover:text-red-500 hover:border-red-300 transition-colors"
+                        >
+                          <X className="h-3 w-3" />
+                        </button>
+                      </div>
+                    ) : (
+                      <button
+                        onClick={() => {
+                          setFilterNameInput(
+                            `Filtro ${savedFilters.length + 1}`,
+                          );
+                          setShowSaveInput(true);
+                        }}
+                        className="h-7 px-3 rounded-md text-[11px] font-medium bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-600 hover:to-emerald-700 text-white transition-all shadow-sm"
+                      >
+                        Salvar filtro
+                      </button>
+                    )}
+                    <div className="w-px h-5 bg-slate-200 dark:bg-slate-700" />
+                    <button
+                      onClick={() => {
+                        setIsFilterModalOpen(false);
+                        setShowFieldPicker(false);
+                      }}
+                      className="h-7 px-3 rounded-md text-[11px] font-medium border border-slate-200 dark:border-slate-600 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+                    >
+                      Cancelar
+                    </button>
+                    <button
+                      onClick={applyAndClose}
+                      className="h-7 px-4 rounded-md text-[11px] font-semibold btn-brand transition-all shadow-sm"
+                    >
+                      Aplicar Filtros
+                    </button>
+                  </div>
+                </div>
+              }
             >
-              <div className="relative bg-white dark:bg-slate-900 w-full h-full flex flex-col overflow-hidden">
-                {/* Header */}
-                <ModalBrandHeader
-                  title="Filtros Avançados"
-                  subtitle="Configure e aplique filtros"
-                  icon={<Filter />}
-                  onClose={() => {
-                    setIsFilterModalOpen(false);
-                    setSelectedFilterId(null);
-                    setShowFieldPicker(false);
-                  }}
-                />
-
                 {/* Body */}
                 <div className="flex flex-1 overflow-hidden min-h-0">
                   {/* Left — Saved Filters */}
@@ -3447,119 +3546,7 @@ export default function AdminProdutosPage() {
                     )}
                   </div>
                 </div>
-
-                {/* Footer */}
-                <div className="flex items-center justify-between px-4 py-2.5 border-t border-slate-200 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-900/30 flex-shrink-0">
-                  <button
-                    onClick={clearFilters}
-                    className="text-[11px] text-slate-400 hover:text-red-500 transition-colors flex items-center gap-1"
-                  >
-                    <X className="h-3 w-3" /> Limpar filtros
-                  </button>
-                  <div className="flex items-center gap-2">
-                    {showSaveInput ? (
-                      <div className="flex items-center gap-1.5">
-                        <input
-                          autoFocus
-                          type="text"
-                          value={filterNameInput}
-                          onChange={(e) => setFilterNameInput(e.target.value)}
-                          onKeyDown={(e) => {
-                            if (e.key === "Enter" && filterNameInput.trim()) {
-                              const newId = `filter-${Date.now()}`;
-                              setSavedFilters([
-                                ...savedFilters,
-                                {
-                                  id: newId,
-                                  name: filterNameInput.trim(),
-                                  filters: {
-                                    filterCategories,
-                                    filterAreas,
-                                    filterStatus,
-                                    sortBy,
-                                  },
-                                },
-                              ]);
-                              setSelectedFilterId(newId);
-                              setShowSaveInput(false);
-                              setFilterNameInput("");
-                            }
-                            if (e.key === "Escape") {
-                              setShowSaveInput(false);
-                              setFilterNameInput("");
-                            }
-                          }}
-                          placeholder={`Filtro ${savedFilters.length + 1}`}
-                          className="h-7 px-2 rounded-md text-[11px] border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-1 focus:ring-blue-400 w-36"
-                        />
-                        <button
-                          disabled={!filterNameInput.trim()}
-                          onClick={() => {
-                            const newId = `filter-${Date.now()}`;
-                            setSavedFilters([
-                              ...savedFilters,
-                              {
-                                id: newId,
-                                name: filterNameInput.trim(),
-                                filters: {
-                                  filterCategories,
-                                  filterAreas,
-                                  filterStatus,
-                                  sortBy,
-                                },
-                              },
-                            ]);
-                            setSelectedFilterId(newId);
-                            setShowSaveInput(false);
-                            setFilterNameInput("");
-                          }}
-                          className="h-7 px-3 rounded-md text-[11px] font-medium bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-600 hover:to-emerald-700 disabled:opacity-40 text-white transition-all shadow-sm"
-                        >
-                          OK
-                        </button>
-                        <button
-                          onClick={() => {
-                            setShowSaveInput(false);
-                            setFilterNameInput("");
-                          }}
-                          className="h-7 w-7 flex items-center justify-center rounded-md border border-slate-200 dark:border-slate-700 text-slate-400 hover:text-red-500 hover:border-red-300 transition-colors"
-                        >
-                          <X className="h-3 w-3" />
-                        </button>
-                      </div>
-                    ) : (
-                      <button
-                        onClick={() => {
-                          setFilterNameInput(
-                            `Filtro ${savedFilters.length + 1}`,
-                          );
-                          setShowSaveInput(true);
-                        }}
-                        className="h-7 px-3 rounded-md text-[11px] font-medium bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-600 hover:to-emerald-700 text-white transition-all shadow-sm"
-                      >
-                        Salvar filtro
-                      </button>
-                    )}
-                    <div className="w-px h-5 bg-slate-200 dark:bg-slate-700" />
-                    <button
-                      onClick={() => {
-                        setIsFilterModalOpen(false);
-                        setShowFieldPicker(false);
-                      }}
-                      className="h-7 px-3 rounded-md text-[11px] font-medium border border-slate-200 dark:border-slate-600 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
-                    >
-                      Cancelar
-                    </button>
-                    <button
-                      onClick={applyAndClose}
-                      className="h-7 px-4 rounded-md text-[11px] font-semibold btn-brand transition-all shadow-sm"
-                    >
-                      Aplicar Filtros
-                    </button>
-                  </div>
-                </div>
-              </div>
-            </div>
+            </StandardModalDialog>
           );
         })()}
 
@@ -3861,28 +3848,32 @@ export default function AdminProdutosPage() {
       </Sheet>
 
       {/* Task Detail Sheet */}
-      <Sheet open={isTaskModalOpen} onOpenChange={setIsTaskModalOpen}>
-        <SheetContent
-          side="right"
-          hideOverlay
-          className="p-0 flex flex-col"
-          style={{
-            left: `${sidebarWidth}px`,
-            width: `calc(100vw - ${sidebarWidth}px)`,
-            top: `${headerHeight - 1}px`,
-            bottom: `${footerHeight - 1}px`,
-          }}
-        >
-          <ModalBrandHeader
-            title="Detalhes da Tarefa"
-            subtitle={
-              selectedTask
-                ? selectedTask.name
-                : "Informações completas sobre a tarefa"
-            }
-            icon={<ListChecks />}
-          />
-
+      <EmbeddedSlideScreen
+        open={isTaskModalOpen}
+        onClose={() => setIsTaskModalOpen(false)}
+        title="Detalhes da Tarefa"
+        subtitle={
+          selectedTask
+            ? selectedTask.name
+            : "Informações completas sobre a tarefa"
+        }
+        footer={
+          <div className="flex items-center gap-2">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setIsTaskModalOpen(false)}
+            >
+              Fechar
+            </Button>
+            <Button size="sm" className="ml-auto btn-brand">
+              <Edit className="h-4 w-4 mr-2" />
+              Editar Tarefa
+            </Button>
+          </div>
+        }
+      >
+        <div className="flex flex-col flex-1 min-h-0 w-full">
           {selectedTask && (
             <ScrollArea className="flex-1 min-h-0">
               <div className="p-6 space-y-6">
@@ -4113,22 +4104,8 @@ export default function AdminProdutosPage() {
               </div>
             </ScrollArea>
           )}
-
-          <div className="flex-shrink-0 px-6 py-4 border-t bg-muted/20 flex items-center gap-2">
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => setIsTaskModalOpen(false)}
-            >
-              Fechar
-            </Button>
-            <Button size="sm" className="ml-auto btn-brand">
-              <Edit className="h-4 w-4 mr-2" />
-              Editar Tarefa
-            </Button>
-          </div>
-        </SheetContent>
-      </Sheet>
+        </div>
+      </EmbeddedSlideScreen>
 
       {/* Questionnaire Sheet */}
       <Sheet
@@ -4486,25 +4463,15 @@ export default function AdminProdutosPage() {
       </Dialog>
 
       {/* Sheet: View product (read-only) */}
-      <Sheet
+      <EmbeddedSlideScreen
         open={isViewSheetOpen}
-        onOpenChange={(v) => {
-          setIsViewSheetOpen(v);
-          if (!v) navigate("/admin/produtos", { replace: true });
+        onClose={() => {
+          setIsViewSheetOpen(false);
+          navigate("/admin/produtos", { replace: true });
         }}
+        hideHeader
       >
-        <SheetContent
-          side="right"
-          hideOverlay
-          className="p-0 flex flex-col z-[70] [&>button:last-child]:top-3 [&>button:last-child]:right-3 [&>button:last-child]:p-1.5 [&>button:last-child]:hover:bg-white/20 [&>button:last-child_svg]:size-4"
-          style={{
-            left: `${sidebarWidth - 2}px`,
-            top: `${headerHeight - 1}px`,
-            bottom: `${footerHeight - 1}px`,
-            height: "auto",
-            width: `calc(100vw - ${sidebarWidth - 2}px)`,
-          }}
-        >
+        <div className="flex flex-col flex-1 min-h-0 w-full">
           {selectedProduct && (
             <>
               <div
@@ -4520,6 +4487,15 @@ export default function AdminProdutosPage() {
                 </div>
                 <div className="flex items-center gap-2 flex-shrink-0">
                   <CopyLinkButton />
+                  <button
+                    onClick={() => {
+                      setIsViewSheetOpen(false);
+                      navigate("/admin/produtos", { replace: true });
+                    }}
+                    className="text-white/80 hover:text-white hover:bg-white/20 rounded-lg p-1.5 transition-all shrink-0"
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
                 </div>
               </div>
 
@@ -6455,8 +6431,8 @@ export default function AdminProdutosPage() {
               </div>
             </>
           )}
-        </SheetContent>
-      </Sheet>
+        </div>
+      </EmbeddedSlideScreen>
 
       {/* Circuito Pré-Habilitação — Preview Admin */}
       <CircuitoPreHabilitacaoModal
@@ -6467,19 +6443,60 @@ export default function AdminProdutosPage() {
       />
 
       {/* Sheet for creating/editing products */}
-      <Sheet open={isProductSheetOpen} onOpenChange={setIsProductSheetOpen}>
-        <SheetContent
-          side="right"
-          hideOverlay
-          className="p-0 flex flex-col z-[70] [&>button:last-child]:top-3 [&>button:last-child]:right-3 [&>button:last-child]:p-1.5 [&>button:last-child]:hover:bg-white/20 [&>button:last-child_svg]:size-4"
-          style={{
-            left: `${sidebarWidth - 2}px`,
-            top: `${headerHeight - 1}px`,
-            bottom: `${footerHeight - 1}px`,
-            height: "auto",
-            width: `calc(100vw - ${sidebarWidth - 2}px)`,
-          }}
-        >
+      <EmbeddedSlideScreen
+        open={isProductSheetOpen}
+        onClose={() => setIsProductSheetOpen(false)}
+        hideHeader
+        footer={
+          <div className="flex items-center gap-2 w-full">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={resetForm}
+              className="gap-1.5 text-xs"
+            >
+              <X className="h-3.5 w-3.5" />
+              Cancelar
+            </Button>
+            <div className="ml-auto flex items-center gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleSaveDraft}
+                className="gap-1.5 text-xs"
+              >
+                <FileText className="h-3.5 w-3.5" />
+                Rascunho
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleScheduleLaunch}
+                className="gap-1.5 text-xs"
+              >
+                <Clock className="h-3.5 w-3.5" />
+                Agendar
+              </Button>
+              <Button
+                size="sm"
+                onClick={handleSaveProduct}
+                disabled={isSavingProduct}
+                className="btn-brand gap-1.5 text-xs"
+              >
+                {isSavingProduct ? (
+                  <ButtonLoader text="Salvando…" />
+                ) : (
+                  <>
+                    <CheckCircle2 className="h-3.5 w-3.5" />
+                    Salvar Produto
+                  </>
+                )}
+              </Button>
+            </div>
+          </div>
+        }
+      >
+        <div className="flex flex-col flex-1 min-h-0 w-full">
           <div
             className="flex items-center justify-between px-5 py-3 flex-shrink-0"
             style={{ background: "var(--brand-gradient, linear-gradient(to right, #0a1628, #1e3a8a, #0a1628))" }}
@@ -6493,6 +6510,12 @@ export default function AdminProdutosPage() {
                   : "Cadastro de novo produto"}
               </p>
             </div>
+            <button
+              onClick={() => setIsProductSheetOpen(false)}
+              className="text-white/80 hover:text-white hover:bg-white/20 rounded-lg p-1.5 transition-all shrink-0"
+            >
+              <X className="h-4 w-4" />
+            </button>
           </div>
 
           <div className="flex-1 overflow-auto">
@@ -8808,55 +8831,8 @@ export default function AdminProdutosPage() {
               </Tabs>
             </div>
           </div>
-
-          <SheetFooter className="flex-shrink-0 px-6 py-4 border-t bg-muted/20 flex-row items-center gap-2">
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={resetForm}
-              className="gap-1.5 text-xs"
-            >
-              <X className="h-3.5 w-3.5" />
-              Cancelar
-            </Button>
-            <div className="ml-auto flex items-center gap-2">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={handleSaveDraft}
-                className="gap-1.5 text-xs"
-              >
-                <FileText className="h-3.5 w-3.5" />
-                Rascunho
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={handleScheduleLaunch}
-                className="gap-1.5 text-xs"
-              >
-                <Clock className="h-3.5 w-3.5" />
-                Agendar
-              </Button>
-              <Button
-                size="sm"
-                onClick={handleSaveProduct}
-                disabled={isSavingProduct}
-                className="btn-brand gap-1.5 text-xs"
-              >
-                {isSavingProduct ? (
-                  <ButtonLoader text="Salvando…" />
-                ) : (
-                  <>
-                    <CheckCircle2 className="h-3.5 w-3.5" />
-                    Salvar Produto
-                  </>
-                )}
-              </Button>
-            </div>
-          </SheetFooter>
-        </SheetContent>
-      </Sheet>
+        </div>
+      </EmbeddedSlideScreen>
     </div>
     </div>
     </div>

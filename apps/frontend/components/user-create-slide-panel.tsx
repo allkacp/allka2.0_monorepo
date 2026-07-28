@@ -14,6 +14,8 @@ import {
   Eye,
   EyeOff,
   AlertCircle,
+  UserPlus,
+  Loader2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -30,7 +32,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
-import { StandardModalDialog } from "@/components/standard-modal-dialog";
+import { EmbeddedSlideScreen } from "@/components/embedded-slide-screen";
 import { useToast } from "@/hooks/use-toast";
 import { apiClient } from "@/lib/api-client";
 import { DEFAULT_COMPANY_PERMISSIONS } from "@/types/user";
@@ -99,7 +101,13 @@ export function UserCreateSlidePanel({
     username: "",
     password: "",
     account_type: isAgencyContext ? "agencias" : "empresas",
-    role: isAgencyContext ? "agency_user" : "company_user",
+    role: companyId
+      ? isAgencyContext
+        ? "agency_consultant"
+        : "company_manager"
+      : isAgencyContext
+        ? "agency_user"
+        : "company_user",
     // Nome da organização (Agency/Company/Partner) sendo fundada — distinto
     // do nome da pessoa acima. Só usado quando !companyId (fundando uma
     // organização nova, não entrando numa já existente) — Tarefa 11.
@@ -117,6 +125,10 @@ export function UserCreateSlidePanel({
     city: "",
     state: "",
     notes: "",
+    // Líder de Área é pessoa física prestando serviço à plataforma (mesmo
+    // padrão do Nomad) — precisa de CNPJ próprio pra faturar. Endereço
+    // reaproveita os campos de Etapa 2 acima (cep/street/number/city/state).
+    liderCnpj: "",
     // Etapa 3 - Permissões
     permissions: [] as string[],
   });
@@ -127,6 +139,8 @@ export function UserCreateSlidePanel({
   // Impede duplo-envio enquanto a criação está em andamento (Tarefa 11) —
   // gap pré-existente: o botão não tinha nenhuma trava contra clique duplo.
   const [isCreating, setIsCreating] = useState(false);
+  const [cepLoading, setCepLoading] = useState(false);
+  const [cepError, setCepError] = useState("");
 
   // Vínculo com empresas
   const [availableCompanies, setAvailableCompanies] = useState<
@@ -186,7 +200,13 @@ export function UserCreateSlidePanel({
       username: "",
       password: "",
       account_type: isAgencyContext ? "agencias" : "empresas",
-      role: isAgencyContext ? "agency_user" : "company_user",
+      role: companyId
+      ? isAgencyContext
+        ? "agency_consultant"
+        : "company_manager"
+      : isAgencyContext
+        ? "agency_user"
+        : "company_user",
       organizationName: "",
       is_active: true,
       plan: "free",
@@ -200,6 +220,7 @@ export function UserCreateSlidePanel({
       city: "",
       state: "",
       notes: "",
+      liderCnpj: "",
       permissions: [],
     });
     setAvatarPreview(null);
@@ -208,6 +229,7 @@ export function UserCreateSlidePanel({
     setLinkedCompanyIds(companyId ? [String(companyId)] : []);
     setNoCompanyLink(false);
     setCompanySearch("");
+    setCepError("");
   };
 
   const validateStep1 = () => {
@@ -226,6 +248,12 @@ export function UserCreateSlidePanel({
       !newUser.organizationName.trim()
     )
       newErrors.organizationName = "Nome da organização é obrigatório";
+    if (
+      !companyId &&
+      newUser.account_type === "lider" &&
+      !newUser.liderCnpj.trim()
+    )
+      newErrors.liderCnpj = "CNPJ é obrigatório para Líder de Área";
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
@@ -250,6 +278,35 @@ export function UserCreateSlidePanel({
     }
   };
 
+  const handleCepChange = async (raw: string) => {
+    const digits = raw.replace(/\D/g, "").slice(0, 8);
+    const formatted =
+      digits.length > 5 ? `${digits.slice(0, 5)}-${digits.slice(5)}` : digits;
+    setNewUser((u) => ({ ...u, cep: formatted }));
+    setCepError("");
+    if (digits.length !== 8) return;
+    setCepLoading(true);
+    try {
+      const res = await fetch(`https://viacep.com.br/ws/${digits}/json/`);
+      const data = await res.json();
+      if (data.erro) {
+        setCepError("CEP não encontrado");
+        return;
+      }
+      setNewUser((u) => ({
+        ...u,
+        cep: formatted,
+        street: data.logradouro || u.street,
+        city: data.localidade || u.city,
+        state: data.uf || u.state,
+      }));
+    } catch {
+      setCepError("Erro ao buscar CEP");
+    } finally {
+      setCepLoading(false);
+    }
+  };
+
   const handleCreateUser = async () => {
     if (isCreating) return;
     setCreateError(null);
@@ -270,6 +327,16 @@ export function UserCreateSlidePanel({
         payload.company_id = linkedCompanyIds[0];
       } else if (newUser.organizationName.trim()) {
         payload.organization_name = newUser.organizationName.trim();
+      }
+      if (!companyId && newUser.account_type === "lider") {
+        payload.lider_cnpj = newUser.liderCnpj.trim() || undefined;
+        // Reaproveita o endereço pessoal coletado na Etapa 2 como endereço
+        // comercial do Líder — mesma justificativa do comentário no form.
+        payload.lider_address = newUser.street || undefined;
+        payload.lider_number = newUser.number || undefined;
+        payload.lider_city = newUser.city || undefined;
+        payload.lider_state = newUser.state || undefined;
+        payload.lider_zip_code = newUser.cep || undefined;
       }
       const created = await apiClient.createUser(payload);
 
@@ -306,11 +373,18 @@ export function UserCreateSlidePanel({
   };
 
   return (
-    <StandardModalDialog
+    <EmbeddedSlideScreen
       open={open}
       onClose={handleClose}
       title="Criar Novo Usuário"
       subtitle={`Etapa ${currentStep} de 3`}
+      pin={{
+        id: "usuarios-create",
+        label: "Criar Novo Usuário",
+        icon: UserPlus,
+        path: "/admin/usuarios",
+        activateKey: "create",
+      }}
       footer={
         <>
           {createError && (
@@ -461,7 +535,7 @@ export function UserCreateSlidePanel({
                     <Label>Tipo de Usuário *</Label>
                     {companyId ? (
                       <div className="flex items-center gap-2 h-9 rounded-md border border-input bg-muted px-3 text-sm text-muted-foreground">
-                        <span>{isAgencyContext ? "Agências" : "Empresas"}</span>
+                        <span>{isAgencyContext ? "Agency" : "Company"}</span>
                         <span className="ml-auto text-xs text-slate-400">
                           {isAgencyContext ? "Vinculado à agência" : "Vinculado à empresa"}
                         </span>
@@ -488,11 +562,11 @@ export function UserCreateSlidePanel({
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="empresas">Empresas</SelectItem>
-                          <SelectItem value="agencias">Agências</SelectItem>
-                          <SelectItem value="nomades">Nômades</SelectItem>
-                          <SelectItem value="lider">Líder de Área</SelectItem>
                           <SelectItem value="admin">Admin</SelectItem>
+                          <SelectItem value="lider">Leader</SelectItem>
+                          <SelectItem value="agencias">Agency</SelectItem>
+                          <SelectItem value="empresas">Company</SelectItem>
+                          <SelectItem value="nomades">Nomad</SelectItem>
                         </SelectContent>
                       </Select>
                     )}
@@ -502,6 +576,48 @@ export function UserCreateSlidePanel({
                       </p>
                     )}
                   </div>
+                  {companyId && (
+                    <div className="space-y-2">
+                      <Label>Função *</Label>
+                      <Select
+                        value={newUser.role}
+                        onValueChange={(value) =>
+                          setNewUser({ ...newUser, role: value })
+                        }
+                      >
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {/* Consultor é papel de Agency (presta consultoria pro
+                              cliente) — Company não tem esse conceito. */}
+                          {isAgencyContext && (
+                            <SelectItem value="agency_consultant">
+                              Consultor
+                            </SelectItem>
+                          )}
+                          <SelectItem value={`${isAgencyContext ? "agency" : "company"}_financial`}>
+                            Financeiro
+                          </SelectItem>
+                          <SelectItem value={`${isAgencyContext ? "agency" : "company"}_admin`}>
+                            Admin
+                          </SelectItem>
+                          <SelectItem value={`${isAgencyContext ? "agency" : "company"}_manager`}>
+                            Gerenciador
+                          </SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <p className="text-[11px] text-slate-400">
+                        {newUser.role.endsWith("_consultant")
+                          ? "Fica disponível para ser escolhido como responsável em projetos."
+                          : newUser.role.endsWith("_financial")
+                            ? "Acesso às informações financeiras desta conta."
+                            : newUser.role.endsWith("_admin")
+                              ? "Administrador desta conta — mesmo nível do usuário principal."
+                              : "Gerencia operações do dia a dia, sem acesso financeiro completo."}
+                      </p>
+                    </div>
+                  )}
                   {!companyId &&
                     (newUser.account_type === "agencias" ||
                       newUser.account_type === "empresas") && (
@@ -529,6 +645,27 @@ export function UserCreateSlidePanel({
                         </p>
                       </div>
                     )}
+                  {!companyId && newUser.account_type === "lider" && (
+                    <div className="space-y-2 rounded-lg border border-amber-200 dark:border-amber-400/20 bg-amber-50 dark:bg-amber-500/10 p-3">
+                      <Label>CNPJ *</Label>
+                      <Input
+                        placeholder="00.000.000/0000-00"
+                        value={newUser.liderCnpj}
+                        onChange={(e) =>
+                          setNewUser({ ...newUser, liderCnpj: e.target.value })
+                        }
+                        className={errors.liderCnpj ? "border-red-500" : ""}
+                      />
+                      {errors.liderCnpj && (
+                        <p className="text-xs text-red-500">{errors.liderCnpj}</p>
+                      )}
+                      <p className="text-[11px] text-amber-700 dark:text-amber-300">
+                        Líder de Área precisa de CNPJ próprio pra faturar a plataforma
+                        (mesma regra do Nômade). O endereço da Etapa 2 (CEP/Rua/Número/
+                        Cidade/Estado) é reaproveitado como endereço comercial.
+                      </p>
+                    </div>
+                  )}
                   <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-2">
                       <Label>Status da Conta *</Label>
@@ -780,13 +917,20 @@ export function UserCreateSlidePanel({
                     <div className="space-y-3">
                       <div className="space-y-2">
                         <Label>CEP</Label>
-                        <Input
-                          placeholder="01310-100"
-                          value={newUser.cep}
-                          onChange={(e) =>
-                            setNewUser({ ...newUser, cep: e.target.value })
-                          }
-                        />
+                        <div className="relative">
+                          <Input
+                            placeholder="01310-100"
+                            value={newUser.cep}
+                            onChange={(e) => handleCepChange(e.target.value)}
+                            maxLength={9}
+                          />
+                          {cepLoading && (
+                            <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 animate-spin text-slate-400" />
+                          )}
+                        </div>
+                        {cepError && (
+                          <p className="text-xs text-red-500">{cepError}</p>
+                        )}
                       </div>
                       <div className="space-y-2">
                         <Label>Rua</Label>
@@ -971,6 +1115,6 @@ export function UserCreateSlidePanel({
             </div>
           </ScrollArea>
         </div>
-    </StandardModalDialog>
+    </EmbeddedSlideScreen>
   );
 }

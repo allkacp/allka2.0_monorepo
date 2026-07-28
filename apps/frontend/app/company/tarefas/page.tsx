@@ -4,13 +4,17 @@
 import { useState } from "react";
 import { useLocation } from "react-router-dom";
 import { useEmpresa } from "@/contexts/empresa-context";
-import { Search } from "lucide-react";
+import { Search, ListChecks } from "lucide-react";
 import { useSorting, SortableHeader } from "@/hooks/useSorting";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { PageLoader } from "@/components/ui/loading";
-import { PageHeader } from "@/components/page-header";
+import {
+  STANDARD_SHELL_PANEL_CLASS,
+  StandardPageBanner,
+} from "@/components/standard-page-shell";
+import { PinToTrayButton } from "@/components/pin-to-tray-button";
 
 function fmtBRL(n: number) {
   return n.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
@@ -69,8 +73,19 @@ export default function EmpresaTarefas() {
   }
 
   return (
-    <div className="p-6 space-y-6">
-      <PageHeader title="Tarefas" description="Acompanhe o andamento das tarefas dos seus projetos" />
+    <div className={STANDARD_SHELL_PANEL_CLASS}>
+    <div className="relative h-full min-h-0 flex flex-col overflow-hidden">
+    <div className="h-full min-h-0 flex flex-col overflow-y-auto p-6 space-y-6">
+      <div className="shrink-0 -mb-[11px]">
+      <StandardPageBanner
+        icon={ListChecks}
+        title="Tarefas"
+        description="Acompanhe o andamento das tarefas dos seus projetos"
+        actions={
+          <PinToTrayButton id="page-company-tarefas" label="Tarefas" icon={ListChecks} path="/company/tarefas" />
+        }
+      />
+      </div>
 
       {/* Summary */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
@@ -283,6 +298,8 @@ export default function EmpresaTarefas() {
           </div>
         )}
       </div>
+    </div>
+    </div>
     </div>
   );
 }

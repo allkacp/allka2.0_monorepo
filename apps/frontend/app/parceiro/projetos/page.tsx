@@ -25,6 +25,11 @@ import { useItemsPerPage } from "@/lib/use-items-per-page";
 import { ItemsPerPageSelect } from "@/components/items-per-page-select";
 import { apiClient } from "@/lib/api-client";
 import { useToast } from "@/components/ui/use-toast";
+import {
+  STANDARD_SHELL_PANEL_CLASS,
+  StandardPageBanner,
+} from "@/components/standard-page-shell";
+import { PinToTrayButton } from "@/components/pin-to-tray-button";
 
 function fmtBRL(n: number) {
   return (n ?? 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
@@ -160,8 +165,26 @@ export default function PartnerProjetos() {
   }
 
   return (
-    <div className="p-4 sm:p-6 space-y-5">
-      {/* Header */}
+    <div className={STANDARD_SHELL_PANEL_CLASS}>
+    <div className="relative h-full min-h-0 flex flex-col overflow-hidden">
+      <div className="shrink-0 -mb-[11px]">
+        <StandardPageBanner
+          icon={FolderOpen}
+          title="Projetos"
+          description="Projetos próprios e projetos indicados através do seu link de parceiro"
+          actions={
+            <PinToTrayButton
+              id="page-parceiro-projetos"
+              label="Projetos"
+              icon={FolderOpen}
+              path="/partner/projetos"
+            />
+          }
+        />
+      </div>
+
+      <div className="flex-1 min-h-0 overflow-y-auto">
+      <div className="space-y-5">
       {/* Meus Projetos — projetos próprios do Partner, separado do relatório de comissão abaixo */}
       <div className="rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 shadow-sm overflow-hidden">
         <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100 dark:border-slate-800">
@@ -437,7 +460,7 @@ export default function PartnerProjetos() {
                   >
                     <td className="px-4 py-3" style={{ borderRight: "1px solid rgba(148,163,184,0.15)" }}>
                       <span className="font-mono text-xs text-slate-400">
-                        proj_{String((p as any).seq ?? "?????").padStart(5, "0")}
+                        proj_{(p as any).seq ?? "?"}
                       </span>
                     </td>
                     <td className="px-5 py-3 font-medium text-slate-700 dark:text-slate-200">
@@ -515,6 +538,9 @@ export default function PartnerProjetos() {
           </button>
         </div>
       )}
+    </div>
+    </div>
+    </div>
     </div>
   );
 }

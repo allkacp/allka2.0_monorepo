@@ -12,7 +12,8 @@ import { useToast } from "@/components/ui/use-toast";
 import { useSorting, SortableHeader } from "@/hooks/useSorting";
 import { useTableScrollSync } from "@/hooks/useTableScrollSync";
 import { ExportButton } from "@/components/export-button";
-import { SlidePanel } from "@/components/slide-panel";
+import { EmbeddedSlideScreen } from "@/components/embedded-slide-screen";
+import { StandardModalDialog } from "@/components/standard-modal-dialog";
 import {
   STANDARD_SHELL_PANEL_CLASS,
   StandardPageBanner,
@@ -501,7 +502,7 @@ export default function AdminEspecialidadesPage() {
 
   return (
     <div className={STANDARD_SHELL_PANEL_CLASS}>
-    <div className="h-full min-h-0 flex flex-col" ref={pageRef}>
+    <div className="relative h-full min-h-0 flex flex-col" ref={pageRef}>
       <div className="shrink-0 -mb-[11px]">
       <StandardPageBanner
         icon={Sparkles}
@@ -848,13 +849,13 @@ export default function AdminEspecialidadesPage() {
       </div>
 
       {/* Filtros panel */}
-      <SlidePanel
+      <StandardModalDialog
         open={filterPanelOpen}
         onClose={() => setFilterPanelOpen(false)}
         title="Filtros"
         subtitle="Filtre a lista de especialidades por status"
-        widthMode="compact"
-        compactWidth={360}
+        size="compact"
+        maxWidthPx={360}
       >
         <div className="p-5 flex-1 overflow-y-auto space-y-3">
           <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Status</p>
@@ -877,16 +878,16 @@ export default function AdminEspecialidadesPage() {
             </label>
           ))}
         </div>
-      </SlidePanel>
+      </StandardModalDialog>
 
       {/* Column config panel */}
-      <SlidePanel
+      <StandardModalDialog
         open={colConfigOpen}
         onClose={() => setColConfigOpen(false)}
         title="Configurar colunas"
         subtitle="Escolha quais colunas aparecem na tabela"
-        widthMode="compact"
-        compactWidth={360}
+        size="compact"
+        maxWidthPx={360}
       >
         <div className="p-5 flex-1 overflow-y-auto space-y-2">
           {ALL_COLUMNS.map((col) => (
@@ -896,10 +897,10 @@ export default function AdminEspecialidadesPage() {
             </label>
           ))}
         </div>
-      </SlidePanel>
+      </StandardModalDialog>
 
       {/* Create / Edit / View Slide Panel */}
-      <SlidePanel
+      <EmbeddedSlideScreen
         open={panelOpen}
         onClose={() => setPanelOpen(false)}
         title={viewMode ? "Detalhes da Especialidade" : editItem ? "Editar Especialidade" : "Nova Especialidade"}
@@ -1087,7 +1088,7 @@ export default function AdminEspecialidadesPage() {
             </div>
           </div>
         </div>
-      </SlidePanel>
+      </EmbeddedSlideScreen>
 
       {/* Confirm delete */}
       <ConfirmationDialog

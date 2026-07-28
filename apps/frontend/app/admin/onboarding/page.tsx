@@ -16,18 +16,16 @@ import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
-import { Dialog, DialogContent, DialogClose } from "@/components/ui/dialog";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { EmbeddedSlideScreen } from "@/components/embedded-slide-screen";
 import { ConfirmationDialog } from "@/components/confirmation-dialog";
 import { useToast } from "@/components/ui/use-toast";
 import { ExportButton } from "@/components/export-button";
-import { ModalBrandHeader } from "@/components/ui/modal-brand-header";
 import {
   Rocket, Plus, Pencil, Trash2, Eye, GripVertical, FileText, Video,
   ImageIcon, CheckCircle2, Users, Building2, UserCheck, Briefcase,
   ArrowUp, ArrowDown, Play, LayoutList, ToggleLeft, ToggleRight, Check,
   ClipboardCheck, Trophy, AlertCircle, X, BarChart2, TrendingDown,
-  Clock, UserX, ChevronRight, Link2, AlignLeft, Film, Download, ChevronDown, Search,
+  Clock, UserX, ChevronRight, AlignLeft, Film, Search,
 } from "lucide-react";
 
 // === Constants ================================================================
@@ -995,7 +993,7 @@ export default function AdminOnboardingPage() {
 
   return (
     <div className={STANDARD_SHELL_PANEL_CLASS}>
-    <div className="h-full min-h-0 flex flex-col">
+    <div className="relative h-full min-h-0 flex flex-col">
       <div className="shrink-0 -mb-[11px]">
       <StandardPageBanner
         icon={Rocket}
@@ -1130,22 +1128,24 @@ export default function AdminOnboardingPage() {
 
       {/* Create / Edit Circuit — slide panel from sidebar */}
       {sheetOpen && (() => {
-        const left = typeof sidebarWidth === "number" ? sidebarWidth : parseInt(sidebarWidth) || 240;
         return (
-          <div
-            data-slot="sheet-content"
-            data-state="open"
-            className="fixed top-0 z-80 h-screen bg-background flex flex-col shadow-2xl border-l border-border overflow-hidden animate-in slide-in-from-right fade-in-0 duration-300"
-            style={{ left: `${left}px`, width: `calc(100vw - ${left}px)` }}>
-
-              {/* Brand header */}
-              <ModalBrandHeader
-                title={editCircuit ? "Editar Circuito" : "Novo Circuito"}
-                subtitle={editCircuit ? "Atualize as informacoes do circuito" : "Configure um novo circuito de onboarding"}
-                icon={<FormIcon />}
-                onClose={() => setSheetOpen(false)}
-              />
-
+          <EmbeddedSlideScreen
+            open={sheetOpen}
+            onClose={() => setSheetOpen(false)}
+            title={editCircuit ? "Editar Circuito" : "Novo Circuito"}
+            subtitle={editCircuit ? "Atualize as informacoes do circuito" : "Configure um novo circuito de onboarding"}
+            footer={
+              <div className="flex items-center gap-3 w-full">
+                <Button variant="outline" className="h-9 px-6 text-sm" onClick={() => setSheetOpen(false)}>Cancelar</Button>
+                {formElements.length > 0 && (
+                  <span className="text-xs text-slate-400 flex-1">{formElements.length} etapa{formElements.length !== 1 ? "s" : ""} configurada{formElements.length !== 1 ? "s" : ""}</span>
+                )}
+                <Button className="h-9 px-8 btn-brand border-0 shadow-md" onClick={handleSave}>
+                  {editCircuit ? "Salvar Alteracoes" : "Criar Circuito"}
+                </Button>
+              </div>
+            }
+          >
               {/* Body */}
               <div className="flex-1 overflow-y-auto bg-slate-100 dark:bg-slate-900 px-8 py-6 space-y-3">
 
@@ -1335,18 +1335,7 @@ export default function AdminOnboardingPage() {
                     )}
                   </div>
                 </div>
-
-              {/* Footer */}
-              <div className="shrink-0 px-8 py-4 bg-white dark:bg-slate-800 border-t border-slate-200 dark:border-slate-700 flex items-center gap-3">
-                <Button variant="outline" className="h-9 px-6 text-sm" onClick={() => setSheetOpen(false)}>Cancelar</Button>
-                {formElements.length > 0 && (
-                  <span className="text-xs text-slate-400 flex-1">{formElements.length} etapa{formElements.length !== 1 ? "s" : ""} configurada{formElements.length !== 1 ? "s" : ""}</span>
-                )}
-                <Button className="h-9 px-8 btn-brand border-0 shadow-md" onClick={handleSave}>
-                  {editCircuit ? "Salvar Alteracoes" : "Criar Circuito"}
-                </Button>
               </div>
-            </div>
 
         {/* Quiz builder for the create/edit panel */}
         <QuizBuilder
@@ -1354,7 +1343,7 @@ export default function AdminOnboardingPage() {
           onClose={() => setFormQuizBuilderOpen(false)}
           onSave={formSaveQuiz}
         />
-        </div>
+          </EmbeddedSlideScreen>
       );
       })()}
 
@@ -1384,35 +1373,61 @@ export default function AdminOnboardingPage() {
         };
         const STEP_ICON = { slide: FileText, video: Film, text: AlignLeft, quiz: ClipboardCheck };
 
-        const left = typeof sidebarWidth === "number" ? sidebarWidth : parseInt(sidebarWidth) || 240;
         return (
-          <div
-            data-slot="sheet-content"
-            data-state="open"
-            className="fixed top-0 z-80 h-screen bg-background flex flex-col shadow-2xl border-l border-border overflow-hidden animate-in slide-in-from-right fade-in-0 duration-300"
-            style={{ left: `${left}px`, width: `calc(100vw - ${left}px)` }}>
-
+          <EmbeddedSlideScreen
+            open={!!previewCircuit}
+            onClose={() => setPreviewCircuit(null)}
+            hideHeader
+            footer={
+              <div className="flex items-center justify-between w-full">
+                <div className="flex items-center gap-2">
+                  <NeonBadge color="slate" className="text-[10px] h-5 px-2 py-0">
+                    {sorted.length} etapa{sorted.length !== 1 ? "s" : ""}
+                  </NeonBadge>
+                  {sorted.filter(e => e.type === "quiz").length > 0 && (
+                    <NeonBadge color="purple" className="text-[10px] h-5 px-2 py-0">
+                      {sorted.filter(e => e.type === "quiz").length} teste{sorted.filter(e => e.type === "quiz").length > 1 ? "s" : ""}
+                    </NeonBadge>
+                  )}
+                </div>
+                <Button variant="outline" className="h-9 px-5 text-sm" onClick={() => setPreviewCircuit(null)}>
+                  Fechar
+                </Button>
+              </div>
+            }
+          >
+            <div className="flex flex-col flex-1 min-h-0 w-full">
               {/* Brand header */}
-              <ModalBrandHeader
-                title={previewCircuit.name}
-                subtitle={previewCircuit.description || "Preview do Circuito"}
-                icon={<PIcon />}
-                onClose={() => setPreviewCircuit(null)}
-                right={
-                  <div className="flex items-center gap-3">
-                    <div className="flex items-center gap-1.5">
-                      <LayoutList className="h-3.5 w-3.5 text-white/70" />
-                      <span className="text-sm font-semibold text-white">{sorted.length}</span>
-                      <span className="text-xs text-white/60">etapas</span>
-                    </div>
-                    <div className="flex items-center gap-1.5">
-                      <Users className="h-3.5 w-3.5 text-white/70" />
-                      <span className="text-sm font-semibold text-white">{previewCircuit.totalUsers}</span>
-                      <span className="text-xs text-white/60">usuarios</span>
-                    </div>
+              <div
+                className="flex items-center justify-between px-5 py-3 flex-shrink-0"
+                style={{ background: "var(--brand-gradient, linear-gradient(to right, #0a1628, #1e3a8a, #0a1628))" }}
+              >
+                <div className="min-w-0 flex-1 flex items-center gap-3">
+                  <PIcon className="h-5 w-5 text-white/80 shrink-0" />
+                  <div className="min-w-0">
+                    <div className="text-sm font-bold text-white truncate">{previewCircuit.name}</div>
+                    <p className="text-[11px] font-normal text-white/60 mt-0.5 truncate">{previewCircuit.description || "Preview do Circuito"}</p>
                   </div>
-                }
-              />
+                </div>
+                <div className="flex items-center gap-3 shrink-0">
+                  <div className="flex items-center gap-1.5">
+                    <LayoutList className="h-3.5 w-3.5 text-white/70" />
+                    <span className="text-sm font-semibold text-white">{sorted.length}</span>
+                    <span className="text-xs text-white/60">etapas</span>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <Users className="h-3.5 w-3.5 text-white/70" />
+                    <span className="text-sm font-semibold text-white">{previewCircuit.totalUsers}</span>
+                    <span className="text-xs text-white/60">usuarios</span>
+                  </div>
+                  <button
+                    onClick={() => setPreviewCircuit(null)}
+                    className="text-white/80 hover:text-white hover:bg-white/20 rounded-lg p-1.5 transition-all shrink-0"
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
+                </div>
+              </div>
 
               {/* Body */}
               <div className="flex-1 overflow-y-auto bg-slate-50 dark:bg-slate-900">
@@ -1533,24 +1548,8 @@ export default function AdminOnboardingPage() {
                   </div>
                 )}
               </div>
-
-              {/* Footer */}
-              <div className="shrink-0 px-7 py-4 bg-white dark:bg-slate-800 border-t border-slate-200 dark:border-slate-700 flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <NeonBadge color="slate" className="text-[10px] h-5 px-2 py-0">
-                    {sorted.length} etapa{sorted.length !== 1 ? "s" : ""}
-                  </NeonBadge>
-                  {sorted.filter(e => e.type === "quiz").length > 0 && (
-                    <NeonBadge color="purple" className="text-[10px] h-5 px-2 py-0">
-                      {sorted.filter(e => e.type === "quiz").length} teste{sorted.filter(e => e.type === "quiz").length > 1 ? "s" : ""}
-                    </NeonBadge>
-                  )}
-                </div>
-                <Button variant="outline" className="h-9 px-5 text-sm" onClick={() => setPreviewCircuit(null)}>
-                  Fechar
-                </Button>
-              </div>
-          </div>
+            </div>
+          </EmbeddedSlideScreen>
         );
       })()}
 

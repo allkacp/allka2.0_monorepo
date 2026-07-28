@@ -2,6 +2,7 @@
 import { useEffect, useState } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { useSidebar } from "@/contexts/sidebar-context";
+import { HeaderSlideScreen } from "@/components/header-slide-screen";
 import {
   X,
   Briefcase,
@@ -144,7 +145,6 @@ export function ProjectBasketDrawer() {
   const navigate = useNavigate();
   const location = useLocation();
   const [projectPanelOpen, setProjectPanelOpen] = useState(false);
-  const [isClosing, setIsClosing] = useState(false);
   /** Loading state when preparing/opening the project creation drawer */
   const [isPreparingProject, setIsPreparingProject] = useState(false);
   const [prepareError, setPrepareError] = useState<string | null>(null);
@@ -210,18 +210,13 @@ export function ProjectBasketDrawer() {
   const hasItems = basket.items.length > 0;
 
   const handleClose = () => {
-    setIsClosing(true);
-    setTimeout(() => {
-      setIsClosing(false);
-      basket.setOpen(false);
-    }, 420);
+    basket.setOpen(false);
   };
 
   // Fecha ao navegar para outra página
   useEffect(() => {
     if (basket.isOpen) {
       basket.setOpen(false);
-      setIsClosing(false);
     }
   }, [location.pathname]);
 
@@ -230,40 +225,25 @@ export function ProjectBasketDrawer() {
   const getCategoryGradient = (cat: string) =>
     CATEGORY_GRADIENTS[cat] || "from-slate-500 to-slate-700";
 
-  const isVisible = basket.isOpen || isClosing;
-
   return (
     <>
-      {/* ── Overlay — offset pela sidebar ──────────────────────── */}
-      {isVisible && (
-        <div
-          className={cn(
-            "fixed top-0 bottom-0 right-0 z-40 bg-black/20 backdrop-blur-[2px] transition-opacity duration-420",
-            isClosing ? "opacity-0" : "opacity-100",
-          )}
-          style={{ left: `${sidebarWidth}px` }}
-          onClick={handleClose}
-        />
-      )}
-
-      {/* ── Drawer — de left:sidebarWidth até a direita ────────── */}
-      {isVisible && (
-        <div
-          className={cn(
-            "fixed top-0 right-0 z-50 flex flex-col",
-            "bg-background shadow-2xl",
-            "h-[calc(100vh-24px)]",
-            "transition-transform duration-420 ease-[cubic-bezier(0.32,0.72,0,1)]",
-            isClosing ? "translate-x-full" : "translate-x-0",
-          )}
-          style={{
-            left: `${sidebarWidth}px`,
-            width: `calc(100vw - ${sidebarWidth}px)`,
-          }}
-        >
+      {/* ── Tela Slide ──────────────────────────────────────────── */}
+      <HeaderSlideScreen
+        open={basket.isOpen}
+        onClose={handleClose}
+        hideHeader
+        pin={{
+          id: "global-cesta",
+          label: "Cesta do Projeto",
+          icon: Briefcase,
+          path: location.pathname,
+          activateKey: "open-cesta",
+        }}
+      >
+        <div className="flex flex-col flex-1 min-h-0 w-full">
           {/* ── Header ─────────────────────────────────────────────── */}
           <div
-            className="shrink-0 px-6 py-5 relative overflow-hidden"
+            className="shrink-0 mb-3 sm:mb-4 px-6 py-5 relative overflow-hidden rounded-2xl lg:rounded-[1.25rem] shadow-[0_4px_24px_-4px_rgba(0,0,0,0.15)]"
             style={{
               background:
                 "var(--app-brand-gradient, linear-gradient(135deg, #000000 0%, #1a2a6f 45%, #c81a7f 100%))",
@@ -959,7 +939,7 @@ export function ProjectBasketDrawer() {
             </div>
           )}
         </div>
-      )}
+      </HeaderSlideScreen>
       {/* ── Project creation panel (same flow as Admin > Projetos > Novo Projeto) ── */}
       <ProjectCreateNewPanel
         open={projectPanelOpen}

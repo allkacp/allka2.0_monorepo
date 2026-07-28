@@ -13,6 +13,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { ModalBrandHeader } from "@/components/ui/modal-brand-header";
+import { EmbeddedSlideScreen } from "@/components/embedded-slide-screen";
 import {
   Select,
   SelectContent,
@@ -43,8 +44,6 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { useSidebar } from "@/contexts/sidebar-context";
-import { useAppFrameMetrics } from "@/hooks/useAppFrameMetrics";
 import { apiClient } from "@/lib/api-client";
 import { TaskLaunchDrawer } from "@/components/task-launch-drawer";
 import { cn } from "@/lib/utils";
@@ -971,8 +970,6 @@ export function ProjectViewSlidePanel({
   onExport,
   onCancel,
 }: ProjectViewSlidePanelProps) {
-  const { sidebarWidth } = useSidebar();
-  const { headerHeight, footerHeight } = useAppFrameMetrics();
   const [activeTab, setActiveTab] = useState("visao-geral");
 
   // ── Products state ────────────────────────────────────────────────────────
@@ -1225,27 +1222,22 @@ export function ProjectViewSlidePanel({
   // ─── Render ───────────────────────────────────────────────────────────────
   return (
     <TooltipProvider>
-      <Sheet
+      <EmbeddedSlideScreen
         open={open}
-        onOpenChange={(o) => {
-          if (!o) onClose();
+        onClose={onClose}
+        hideHeader
+        pin={{
+          id: `projetos-view-${project.id ?? "none"}`,
+          label: project.name ? `Projeto: ${project.name}` : "Detalhes do projeto",
+          icon: FolderOpen,
+          path: "/admin/tarefas",
+          activateKey: `view:${project.id ?? ""}`,
         }}
       >
-        <SheetContent
-          side="right"
-          hideOverlay={true}
-          className="p-0 flex flex-col gap-0 !w-auto !max-w-none"
-          style={{
-            left: `${sidebarWidth}px`,
-            width: `calc(100vw - ${sidebarWidth}px)`,
-            maxWidth: `calc(100vw - ${sidebarWidth}px)`,
-            top: `${headerHeight - 1}px`,
-            bottom: `${footerHeight - 1}px`,
-          }}
-        >
-          <div className="relative flex flex-col h-full overflow-hidden">
+          <div className="relative flex flex-col flex-1 min-h-0 overflow-hidden w-full">
             {/* ── Header ── */}
             <ModalBrandHeader
+              onClose={onClose}
               left={
                 <div className="flex items-center gap-4 flex-1 min-w-0">
                   <div className="h-16 w-16 rounded-xl bg-white/15 border-2 border-white/30 flex items-center justify-center flex-shrink-0">
@@ -2842,8 +2834,7 @@ export function ProjectViewSlidePanel({
               </Tabs>
             </div>
           </div>
-        </SheetContent>
-      </Sheet>
+      </EmbeddedSlideScreen>
 
       {/* ── Product Link Modal ── */}
       {addProductOpen && (

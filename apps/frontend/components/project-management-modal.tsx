@@ -21,6 +21,7 @@ import {
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet";
+import { EmbeddedSlideScreen } from "@/components/embedded-slide-screen";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
@@ -640,6 +641,8 @@ export function ProjectManagementModal({
 
   // Product tasks modal filters
   const [productTaskSearchTerm, setProductTaskSearchTerm] = useState("");
+  const [productTaskStatusFilter, setProductTaskStatusFilter] =
+    useState<string>("all");
   const [productTaskSortBy, setProductTaskSortBy] = useState("nome");
   const [productTaskSortOrder, setProductTaskSortOrder] = useState<
     "asc" | "desc"
@@ -1272,22 +1275,19 @@ export function ProjectManagementModal({
 
   return (
     <>
-      <Sheet open={open} onOpenChange={onOpenChange}>
-        <SheetContent
-          side="right"
-          hideOverlay={true}
-          className="p-0 flex flex-col gap-0 !w-auto !max-w-none overflow-hidden z-[70] [&>button:last-child]:top-3 [&>button:last-child]:right-3 [&>button:last-child]:p-1.5 [&>button:last-child]:hover:bg-white/20 [&>button:last-child_svg]:size-4"
-          style={{
-            left: `${sidebarWidth - 2}px`,
-            top: `${headerHeight - 1}px`,
-            bottom: `${footerHeight - 1}px`,
-            height: "auto",
-            width: `calc(100vw - ${sidebarWidth - 2}px)`,
-            maxWidth: `calc(100vw - ${sidebarWidth - 2}px)`,
-          }}
-          onInteractOutside={(e) => e.preventDefault()}
-        >
-          <div className="relative flex flex-col h-full overflow-hidden">
+      <EmbeddedSlideScreen
+        open={open}
+        onClose={() => onOpenChange(false)}
+        hideHeader
+        pin={{
+          id: `projetos-view-${project?.id ?? "none"}`,
+          label: dadosProjForm.nomeProjeto ? `Projeto: ${dadosProjForm.nomeProjeto}` : "Detalhes do projeto",
+          icon: FolderKanban,
+          path: "/admin/projetos",
+          activateKey: `view:${project?.id ?? ""}`,
+        }}
+      >
+          <div className="relative flex flex-col flex-1 min-h-0 overflow-hidden w-full">
             {/* Hidden file input */}
             <input
               ref={fileInputRef}
@@ -5171,30 +5171,35 @@ export function ProjectManagementModal({
               </Tabs>
             </div>
           </div>
-        </SheetContent>
-      </Sheet>
+      </EmbeddedSlideScreen>
 
       {/* Product Tasks Modal */}
-      <Sheet
-        open={showProductTasksModal}
-        onOpenChange={setShowProductTasksModal}
-      >
-        <SheetContent
-          side="right"
-          className="left-[var(--sidebar-width,64px)] w-[calc(100vw-var(--sidebar-width,64px))] sm:max-w-[calc(100vw-var(--sidebar-width,64px))] h-full p-0 flex flex-col overflow-hidden"
+      {showProductTasksModal && (
+        <EmbeddedSlideScreen
+          open={showProductTasksModal}
+          onClose={() => setShowProductTasksModal(false)}
+          hideHeader
+          pin={{
+            id: `projetos-produto-${project?.id ?? "none"}-${selectedProduct?.id ?? "none"}`,
+            label: selectedProduct?.nome ? `Produto: ${selectedProduct.nome}` : "Tarefas do produto",
+            icon: Package,
+            path: "/admin/projetos",
+            activateKey: `view:${project?.id ?? ""}`,
+          }}
         >
+          <div className="flex flex-col flex-1 min-h-0 w-full">
           {/* Header */}
-          <SheetHeader className="shrink-0 px-8 py-5 min-h-[100px] flex items-center bg-gradient-to-br from-slate-800 via-slate-900 to-slate-950 text-white border-b border-white/10 shadow-lg">
+          <div className="shrink-0 px-8 py-5 min-h-[100px] flex items-center bg-gradient-to-br from-slate-800 via-slate-900 to-slate-950 text-white border-b border-white/10 shadow-lg w-full">
             {selectedProduct && (
-              <div className="flex items-start justify-between gap-6">
+              <div className="flex items-start justify-between gap-6 w-full">
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-3 mb-1">
                     <div className="w-8 h-8 rounded-lg bg-white/10 flex items-center justify-center shrink-0">
                       <Package className="h-4 w-4 text-white/80" />
                     </div>
-                    <SheetTitle className="text-lg text-white font-bold leading-tight">
+                    <h2 className="text-lg text-white font-bold leading-tight">
                       {selectedProduct.nome}
-                    </SheetTitle>
+                    </h2>
                     <span
                       className={`inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-semibold ${
                         selectedProduct.tipo === "Mensal"
@@ -5272,7 +5277,7 @@ export function ProjectManagementModal({
                 </button>
               </div>
             )}
-          </SheetHeader>
+          </div>
 
           {/* Content */}
           <div className="flex-1 overflow-y-auto bg-slate-200">
@@ -5755,17 +5760,36 @@ export function ProjectManagementModal({
                                       <span className="text-[9px] text-slate-400 font-mono">
                                         #{uniqueTaskId}
                                       </span>
-                                      <div
-                                        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[11px] font-semibold border ${getStatusBadgeColor(tarefa.status)}`}
-                                      >
-                                        <span
-                                          className={`h-1.5 w-1.5 rounded-full flex-shrink-0 ${getStatusDotClass(tarefa.status)}`}
-                                        />
-                                        {tarefa.status}
-                                      </div>
+                                      {tarefa.status === "Para lançamento" ? (
+                                        <button
+                                          onClick={() => openLaunchDrawer(tarefa)}
+                                          title={
+                                            tarefa.rawStatus === "EM_LANCAMENTO" ||
+                                            tarefa.rawStatus === "AGUARDANDO_INFORMACOES"
+                                              ? "Clique para continuar o lançamento"
+                                              : "Clique para lançar a tarefa"
+                                          }
+                                          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[11px] font-semibold border cursor-pointer hover:opacity-80 hover:ring-2 hover:ring-orange-300 transition-all ${getStatusBadgeColor(tarefa.status)}`}
+                                        >
+                                          <span
+                                            className={`h-1.5 w-1.5 rounded-full flex-shrink-0 ${getStatusDotClass(tarefa.status)}`}
+                                          />
+                                          {tarefa.status}
+                                        </button>
+                                      ) : (
+                                        <div
+                                          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[11px] font-semibold border ${getStatusBadgeColor(tarefa.status)}`}
+                                        >
+                                          <span
+                                            className={`h-1.5 w-1.5 rounded-full flex-shrink-0 ${getStatusDotClass(tarefa.status)}`}
+                                          />
+                                          {tarefa.status}
+                                        </div>
+                                      )}
                                       <button
+                                        onClick={() => openTaskDrawer(tarefa)}
                                         className="h-7 w-7 rounded-lg flex items-center justify-center text-slate-400 hover:text-blue-600 hover:bg-blue-50 transition-colors"
-                                        title="Visualizar Tarefa"
+                                        title="Visualizar detalhes da tarefa"
                                       >
                                         <Eye className="h-3.5 w-3.5" />
                                       </button>
@@ -5837,7 +5861,17 @@ export function ProjectManagementModal({
                                         return (
                                           <div
                                             key={uniqueTaskId}
-                                            className="bg-white rounded-lg border border-slate-200 p-3 shadow-sm hover:shadow-md transition-shadow"
+                                            onClick={() =>
+                                              tarefa.status === "Para lançamento"
+                                                ? openLaunchDrawer(tarefa)
+                                                : openTaskDrawer(tarefa)
+                                            }
+                                            title={
+                                              tarefa.status === "Para lançamento"
+                                                ? "Clique para lançar a tarefa"
+                                                : "Visualizar detalhes da tarefa"
+                                            }
+                                            className="bg-white rounded-lg border border-slate-200 p-3 shadow-sm hover:shadow-md hover:ring-2 hover:ring-blue-200 cursor-pointer transition-shadow"
                                             style={{
                                               borderLeft: `3px solid ${getStatusBorderColor(tarefa.status)}`,
                                             }}
@@ -5885,8 +5919,9 @@ export function ProjectManagementModal({
                 })()}
             </div>
           </div>
-        </SheetContent>
-      </Sheet>
+          </div>
+        </EmbeddedSlideScreen>
+      )}
 
       {/* Add File Dialog */}
       <Dialog open={showAddFileDialog} onOpenChange={setShowAddFileDialog}>

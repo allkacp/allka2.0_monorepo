@@ -1,5 +1,5 @@
 ﻿// @ts-nocheck
-import { useState, useMemo } from "react";
+import { useState, useMemo, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { useSidebar } from "@/contexts/sidebar-context";
 import { Card } from "@/components/ui/card";
@@ -49,14 +49,12 @@ import {
   Youtube,
   Facebook,
   Linkedin,
-  ExternalLink,
   Zap,
   LayoutGrid,
   ChevronRight,
   AlertCircle,
   FileText,
   Send,
-  History,
   Settings,
   Phone,
   PhoneOff,
@@ -468,6 +466,13 @@ export default function AdminConfiguracoesPage() {
     primaryColor: "#3B82F6",
     secondaryColor: "#10B981",
   });
+  const [logoFile, setLogoFile] = useState(null); // { name, previewUrl } | null
+  const logoInputRef = useRef(null);
+  function handleLogoFileChange(e) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setLogoFile({ name: file.name, previewUrl: URL.createObjectURL(file) });
+  }
 
   function save(section) {
     toast({ title: `${section} salvo com sucesso` });
@@ -683,7 +688,7 @@ export default function AdminConfiguracoesPage() {
 
   return (
     <div className={STANDARD_SHELL_PANEL_CLASS}>
-    <div className="h-full min-h-0 flex flex-col">
+    <div className="relative h-full min-h-0 flex flex-col">
       <div className="shrink-0 -mb-[11px]">
       <StandardPageBanner
         icon={Settings}
@@ -696,7 +701,7 @@ export default function AdminConfiguracoesPage() {
       </div>
 
       <div className="flex-1 min-h-0 overflow-y-auto">
-      <div className="space-y-6">
+      <div className="space-y-4">
       <Tabs defaultValue="general" className="space-y-4">
         <TabsList className="h-auto flex-wrap gap-0.5 text-xs">
           <TabsTrigger value="general" className="text-xs px-3 h-8">
@@ -1892,13 +1897,32 @@ export default function AdminConfiguracoesPage() {
           </SectionCard>
 
           <SectionCard icon={Palette} title="Logo da Plataforma">
-            <div className="border-2 border-dashed border-slate-200 dark:border-slate-700 rounded-xl p-8 flex flex-col items-center gap-3 text-slate-400">
-              <Palette className="h-8 w-8 opacity-30" />
+            <input
+              ref={logoInputRef}
+              type="file"
+              accept="image/png,image/jpeg,image/svg+xml"
+              className="hidden"
+              onChange={handleLogoFileChange}
+            />
+            <div
+              onClick={() => logoInputRef.current?.click()}
+              className="border-2 border-dashed border-slate-200 dark:border-slate-700 rounded-xl p-8 flex flex-col items-center gap-3 text-slate-400 cursor-pointer hover:border-slate-300 dark:hover:border-slate-600 transition-colors"
+            >
+              {logoFile ? (
+                <img src={logoFile.previewUrl} alt={logoFile.name} className="h-16 object-contain" />
+              ) : (
+                <Palette className="h-8 w-8 opacity-30" />
+              )}
               <p className="text-sm">
-                Clique para fazer upload ou arraste uma imagem
+                {logoFile ? logoFile.name : "Clique para fazer upload ou arraste uma imagem"}
               </p>
               <p className="text-xs">PNG, JPG ou SVG · Máx 2MB</p>
-              <Button size="sm" variant="outline" className="h-8 text-xs">
+              <Button
+                size="sm"
+                variant="outline"
+                className="h-8 text-xs"
+                onClick={(e) => { e.stopPropagation(); logoInputRef.current?.click(); }}
+              >
                 Escolher arquivo
               </Button>
             </div>

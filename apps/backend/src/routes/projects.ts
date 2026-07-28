@@ -250,10 +250,21 @@ router.get("/", verifyToken, async (req, res, next) => {
 // GET /api/projects/:id
 router.get("/:id", verifyToken, async (req, res, next) => {
   try {
-    const project = await prisma.project.findUnique({
-      where: { id: req.params.id as string },
+    const idParam = req.params.id as string;
+    // Aceita tanto o cuid real quanto o número amigável da URL (proj_N,
+    // ex: /admin/projetos/3) — evita depender da lista já carregada no
+    // frontend pra resolver link direto/bookmark/refresh (mesma ideia do
+    // sequence_number em Company/Agency, só que aqui embutido em
+    // project_code em vez de coluna própria).
+    const isNumericSeq = /^\d+$/.test(idParam);
+    const project = await prisma.project.findFirst({
+      where: isNumericSeq
+        ? { project_code: `proj_${idParam}` }
+        : { id: idParam },
       include: {
         client: true,
+        agency_owner: { select: { id: true, name: true } },
+        company_owner: { select: { id: true, name: true } },
         products: {
           include: {
             product: {

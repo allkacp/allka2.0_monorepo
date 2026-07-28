@@ -1,7 +1,6 @@
 // @ts-nocheck
 import { useState, useMemo, useEffect } from "react";
 import {
-  X,
   Shield,
   Users,
   Building2,
@@ -27,9 +26,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-import { useAppFrameMetrics } from "@/hooks/useAppFrameMetrics";
-import { cn } from "@/lib/utils";
-import { ModalBrandHeader } from "@/components/ui/modal-brand-header";
+import { EmbeddedSlideScreen } from "@/components/embedded-slide-screen";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 type Scope = "none" | "own" | "all";
@@ -182,50 +179,45 @@ interface PermissionProfileSlidePanelProps {
   onSave: (profile: any) => void;
 }
 
+function buildFormData(profile: any): FormData {
+  if (profile) {
+    const perms: Record<string, ModulePerm> = {};
+    MODULES.forEach((m) => {
+      const old = profile.permissions?.[m.key] || {};
+      perms[m.key] = {
+        view: old.view ? "all" : "none",
+        create: old.create ? "all" : "none",
+        edit: old.edit ? "all" : "none",
+        delete: old.delete ? "all" : "none",
+      };
+    });
+    return {
+      name: profile.name || "",
+      description: profile.description || "",
+      permissions: perms,
+    };
+  }
+  return { name: "", description: "", permissions: buildEmpty() };
+}
+
 export function PermissionProfileSlidePanel({
   open,
   onClose,
   profile,
   onSave,
 }: PermissionProfileSlidePanelProps) {
-  const { sidebarWidth, headerHeight, footerHeight } = useAppFrameMetrics();
-  const [isClosing, setIsClosing] = useState(false);
-  const [isMounted, setIsMounted] = useState(false);
-  useEffect(() => {
-    if (open) {
-      const id = requestAnimationFrame(() => setIsMounted(true));
-      return () => cancelAnimationFrame(id);
-    }
-    if (!isClosing) setIsMounted(false);
-  }, [open, isClosing]);
+  const [formData, setFormData] = useState<FormData>(() => buildFormData(profile));
 
-  const [formData, setFormData] = useState<FormData>(() => {
-    if (profile) {
-      const perms: Record<string, ModulePerm> = {};
-      MODULES.forEach((m) => {
-        const old = profile.permissions?.[m.key] || {};
-        perms[m.key] = {
-          view: old.view ? "all" : "none",
-          create: old.create ? "all" : "none",
-          edit: old.edit ? "all" : "none",
-          delete: old.delete ? "all" : "none",
-        };
-      });
-      return {
-        name: profile.name || "",
-        description: profile.description || "",
-        permissions: perms,
-      };
-    }
-    return { name: "", description: "", permissions: buildEmpty() };
-  });
+  // EmbeddedSlideScreen mantém esta instância montada entre aberturas — sem
+  // isto, editar o perfil A e depois o B reaproveitaria o formData de A
+  // (antes disso não acontecia só porque o painel antigo desmontava/
+  // remontava a cada fechamento).
+  useEffect(() => {
+    if (open) setFormData(buildFormData(profile));
+  }, [open, profile]);
 
   const handleClose = () => {
-    setIsClosing(true);
-    setTimeout(() => {
-      setIsClosing(false);
-      onClose();
-    }, 420);
+    onClose();
   };
 
   const setScope = (module: string, action: keyof ModulePerm, scope: Scope) => {
@@ -277,29 +269,66 @@ export function PermissionProfileSlidePanel({
     return { active, total_all, total: MODULES.length * ACTIONS.length };
   }, [formData.permissions]);
 
-  if (!open && !isClosing) return null;
-
   return (
     <TooltipProvider>
-      <div
-        data-slot="sheet-content"
-        data-state={isClosing ? "closed" : "open"}
-        style={{
-          left: `${sidebarWidth - 2}px`,
-          width: `calc(100vw - ${sidebarWidth - 2}px)`,
-          top: `${headerHeight - 1}px`,
-          bottom: `${footerHeight - 1}px`,
+      <EmbeddedSlideScreen
+        open={open}
+        onClose={handleClose}
+        title={profile?.id ? "Editar Perfil de Acesso" : "Novo Perfil de Acesso"}
+        subtitle={`${summary.active}/${summary.total} permissões ativas${summary.total_all > 0 ? ` · ${summary.total_all}× acesso total` : ""}`}
+        pin={{
+          id: `permissoes-${profile?.id ?? "novo"}`,
+          label: profile?.id ? `Editar Perfil: ${profile.name}` : "Novo Perfil de Acesso",
+          icon: Shield,
+          path: "/admin/permissoes",
+          activateKey: profile?.id ? `edit:${profile.id}` : "create",
         }}
-        className="fixed z-50 bg-background shadow-2xl flex flex-col overflow-hidden border-l border-border data-[state=open]:animate-in data-[state=open]:slide-in-from-right data-[state=open]:fade-in-0 data-[state=closed]:animate-out data-[state=closed]:slide-out-to-right data-[state=closed]:fade-out-0"
+        footer={
+          <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                onClick={handleClose}
+                className="h-8 text-sm px-4"
+              >
+                Cancelar
+              </Button>
+              <Button
+                onClick={() => {
+                  onSave(formData);
+                  handleClose();
+                }}
+                disabled={!formData.name.trim()}
+                className="h-8 text-sm px-5 text-white border-0"
+                style={{
+                  background: !formData.name.trim()
+                    ? undefined
+                    : "linear-gradient(135deg, #1e3a8a, #312e81)",
+                }}
+              >
+                Salvar Perfil
+              </Button>
+            </div>
+            <div className="flex items-center gap-2">
+              <Badge
+                variant="outline"
+                className="text-xs text-slate-600 font-normal"
+              >
+                {summary.active} permissões ativas
+              </Badge>
+              {summary.total_all > 0 && (
+                <Badge
+                  variant="outline"
+                  className="text-xs text-emerald-700 border-emerald-200 bg-emerald-50 font-normal"
+                >
+                  {summary.total_all}× acesso total
+                </Badge>
+              )}
+            </div>
+          </div>
+        }
       >
-        {/* ── Header ── */}
-        <ModalBrandHeader
-          title={profile?.id ? "Editar Perfil de Acesso" : "Novo Perfil de Acesso"}
-          subtitle={`${summary.active}/${summary.total} permissões ativas${summary.total_all > 0 ? ` · ${summary.total_all}× acesso total` : ""}`}
-          icon={<Shield />}
-          onClose={handleClose}
-        />
-
+      <div className="flex flex-col flex-1 min-h-0 overflow-hidden w-full">
         {/* ── Basic Info ── */}
         <div className="px-5 py-3 border-b bg-slate-50 shrink-0">
           <div className="flex gap-3">
@@ -491,51 +520,8 @@ export function PermissionProfileSlidePanel({
             </tbody>
           </table>
         </div>
-
-        {/* ── Footer ── */}
-        <div className="border-t px-5 py-3 bg-slate-50 flex items-center gap-3 shrink-0">
-          <div className="flex items-center gap-2">
-            <Button
-              variant="outline"
-              onClick={handleClose}
-              className="h-8 text-sm px-4"
-            >
-              Cancelar
-            </Button>
-            <Button
-              onClick={() => {
-                onSave(formData);
-                handleClose();
-              }}
-              disabled={!formData.name.trim()}
-              className="h-8 text-sm px-5 text-white border-0"
-              style={{
-                background: !formData.name.trim()
-                  ? undefined
-                  : "linear-gradient(135deg, #1e3a8a, #312e81)",
-              }}
-            >
-              Salvar Perfil
-            </Button>
-          </div>
-          <div className="flex items-center gap-2">
-            <Badge
-              variant="outline"
-              className="text-xs text-slate-600 font-normal"
-            >
-              {summary.active} permissões ativas
-            </Badge>
-            {summary.total_all > 0 && (
-              <Badge
-                variant="outline"
-                className="text-xs text-emerald-700 border-emerald-200 bg-emerald-50 font-normal"
-              >
-                {summary.total_all}× acesso total
-              </Badge>
-            )}
-          </div>
-        </div>
       </div>
+      </EmbeddedSlideScreen>
     </TooltipProvider>
   );
 }

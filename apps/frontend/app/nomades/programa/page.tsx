@@ -5,7 +5,11 @@ import {
   ChevronDown, ChevronUp, Gift, Lock,
 } from "lucide-react"
 import { Progress } from "@/components/ui/progress"
-import { PageHeader } from "@/components/page-header"
+import {
+  STANDARD_SHELL_PANEL_CLASS,
+  StandardPageBanner,
+} from "@/components/standard-page-shell"
+import { PinToTrayButton } from "@/components/pin-to-tray-button"
 
 // ─── Mock nomade current stats ────────────────────────────────────────────────
 const NOMADE = {
@@ -226,11 +230,23 @@ export default function NomadesProgramaPage() {
   const currentLevel = LEVELS.find((l) => l.name === NOMADE.nivel)!
 
   return (
-    <div className="space-y-6">
-      <PageHeader
-        title="Programa Nômade"
-        subtitle="Acompanhe sua evolução e descubra os benefícios de cada nível"
-      />
+    <div className={STANDARD_SHELL_PANEL_CLASS}>
+    <div className="relative h-full min-h-0 flex flex-col">
+    <div className="shrink-0 -mb-[11px]">
+    <StandardPageBanner
+      icon={Award}
+      title="Programa Nômade"
+      description="Acompanhe sua evolução e descubra os benefícios de cada nível"
+      actions={
+        <>
+          <PinToTrayButton id="page-nomades-programa" label="Programa Nômade" icon={Award} path="/nomades/programa" />
+        </>
+      }
+    />
+    </div>
+
+    <div className="flex-1 min-h-0 overflow-y-auto">
+    <div className="p-4 sm:p-6 space-y-5">
 
       {/* Hero banner */}
       <div className="rounded-2xl bg-linear-to-br from-slate-800 via-slate-700 to-slate-600 p-6 text-white shadow-md">
@@ -428,6 +444,10 @@ export default function NomadesProgramaPage() {
           )
         })}
       </div>
+
+    </div>
+    </div>
+    </div>
     </div>
   )
 }

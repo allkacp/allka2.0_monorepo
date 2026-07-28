@@ -12,6 +12,7 @@ import { ButtonLoader, PageLoader } from "@/components/ui/loading";
 import { AreaChart, Area, ResponsiveContainer } from "recharts";
 import { ExportButton } from "@/components/export-button";
 import { PinToTrayButton } from "@/components/pin-to-tray-button";
+import { useConsumePendingActivation } from "@/contexts/open-screens-context";
 import {
   STANDARD_SHELL_PANEL_CLASS,
   StandardPageBanner,
@@ -43,6 +44,9 @@ import { ProjectCreateNewPanel } from "@/components/project-create-new-panel";
 import { AdvancedDateFilter } from "@/components/advanced-date-filter";
 import { ItemsPerPageSelect } from "@/components/items-per-page-select";
 import { SlidePanel } from "@/components/slide-panel";
+import { EmbeddedSlideScreen } from "@/components/embedded-slide-screen";
+import { StandardModalDialog } from "@/components/standard-modal-dialog";
+import { ConfirmationDialog } from "@/components/confirmation-dialog";
 import { IconToolbarButton } from "@/components/icon-toolbar-button";
 import { useTableScrollSync } from "@/hooks/useTableScrollSync";
 import {
@@ -94,6 +98,7 @@ import {
   Download,
   ImageDown,
   CheckCircle,
+  CheckCircle2,
   Lock,
   CreditCard,
   ArrowRight,
@@ -145,6 +150,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { useProjects } from "@/hooks/useProjects";
+import { usePartner } from "@/contexts/partner-context";
 import { apiClient } from "@/lib/api-client";
 import { adaptApiProject, type FrontendProject } from "@/lib/project-adapter";
 import {
@@ -170,6 +176,83 @@ export default function AdminProjetosPage({
     refetch: refetchProjects,
     setProjects: setApiProjects,
   } = useProjects(scope === "agency" && agencyName ? { agencyName } : {});
+
+  // ── Partner "Projetos Indicados" — quando esta Agency já é Partner ativo,
+  // ela ganha uma segunda aba nesta MESMA página com o relatório de comissão
+  // sobre projetos que empresas contrataram através do seu link de indicação.
+  // Nunca renderizado para admin ou agency não-partner (ver showPartnerReferrals).
+  const partner = usePartner();
+  const showPartnerReferrals = scope === "agency" && !!partner?.profile;
+  const [projectsTab, setProjectsTab] = useState<"mine" | "indicados">("mine");
+  const [partnerRefSearch, setPartnerRefSearch] = useState("");
+  const [partnerRefStatusFilter, setPartnerRefStatusFilter] = useState<string>("all");
+  const [partnerRefCurrentPage, setPartnerRefCurrentPage] = useState(1);
+  const [partnerRefItemsPerPage, setPartnerRefItemsPerPage] = useItemsPerPage(
+    "agencia-projetos-indicados",
+    10,
+  );
+  const {
+    sortKey: partnerRefSortKey,
+    sortDir: partnerRefSortDir,
+    handleSort: partnerRefHandleSort,
+    sortData: partnerRefSortData,
+    columnFilters: partnerRefColumnFilters,
+    toggleColumnFilter: partnerRefToggleColumnFilter,
+    clearColumnFilter: partnerRefClearColumnFilter,
+  } = useSorting();
+
+  const partnerRefProjects = partner?.projects ?? [];
+  const partnerRefFiltered = partnerRefProjects.filter((p: any) => {
+    if (
+      partnerRefSearch &&
+      !p.projectName?.toLowerCase().includes(partnerRefSearch.toLowerCase()) &&
+      !p.companyName?.toLowerCase().includes(partnerRefSearch.toLowerCase())
+    )
+      return false;
+    if (partnerRefStatusFilter !== "all" && p.status !== partnerRefStatusFilter)
+      return false;
+    return true;
+  });
+  const partnerRefSorted = partnerRefSortData(partnerRefFiltered);
+  const partnerRefTotalItems = partnerRefSorted.length;
+  const partnerRefTotalPages = Math.max(
+    1,
+    Math.ceil(partnerRefTotalItems / partnerRefItemsPerPage),
+  );
+  const partnerRefSafeCurrentPage = Math.min(
+    partnerRefCurrentPage,
+    partnerRefTotalPages,
+  );
+  const partnerRefPaginated = partnerRefSorted.slice(
+    (partnerRefSafeCurrentPage - 1) * partnerRefItemsPerPage,
+    partnerRefSafeCurrentPage * partnerRefItemsPerPage,
+  );
+  const partnerRefTotalValue = partnerRefProjects.reduce(
+    (s: number, p: any) => s + (p.projectValue ?? 0),
+    0,
+  );
+  const partnerRefTotalCommission = partnerRefProjects.reduce(
+    (s: number, p: any) => s + (p.commissionGenerated ?? 0),
+    0,
+  );
+  const partnerRefStatusConfig: Record<string, { label: string; color: string; icon: any }> = {
+    active: { label: "Ativo", color: "bg-emerald-100 text-emerald-700", icon: Clock },
+    completed: { label: "Concluído", color: "bg-slate-100 text-slate-600", icon: CheckCircle2 },
+    cancelled: { label: "Cancelado", color: "bg-red-100 text-red-700", icon: XCircle },
+  };
+  const partnerRefCommStatusConfig: Record<string, { label: string; color: string }> = {
+    pending: { label: "Pendente", color: "bg-amber-100 text-amber-700" },
+    confirmed: { label: "Confirmado", color: "bg-blue-100 text-blue-700" },
+    paid: { label: "Pago", color: "bg-emerald-100 text-emerald-700" },
+  };
+  function fmtPartnerRefBRL(n: number) {
+    return (n ?? 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+  }
+  function fmtPartnerRefDate(s: string) {
+    if (!s) return "—";
+    return new Date(s + "T00:00:00").toLocaleDateString("pt-BR");
+  }
+
   const [searchTerm, setSearchTerm] = useState(initialSearch);
   const [filterStatus, setFilterStatus] = useState("all");
   const [filterType, setFilterType] = useState("all");
@@ -230,7 +313,6 @@ export default function AdminProjetosPage({
   const [showCancelWizard, setShowCancelWizard] = useState(false);
   const [projectToCancel, setProjectToCancel] =
     useState<FrontendProject | null>(null);
-  const [cancelStep, setCancelStep] = useState<1 | 2 | 3>(1);
   const [cancelReason, setCancelReason] = useState("");
 
   // ── New state: table + filters ──────────────────────────────────────────
@@ -1369,7 +1451,7 @@ export default function AdminProjetosPage({
     setSelectedProject(project);
     setModalMode("edit");
     setModalOpen(true);
-    navigate(`${projectRouteBase}/${project.id}`, { replace: true });
+    navigate(`${projectRouteBase}/${project.seq ?? project.id}`, { replace: true });
   };
 
   const handleViewProject = (project: FrontendProject) => {
@@ -1377,7 +1459,7 @@ export default function AdminProjetosPage({
     setModalMode("view");
     setModalOpen(true);
     if (project.id)
-      navigate(`${projectRouteBase}/${project.id}`, { replace: true });
+      navigate(`${projectRouteBase}/${project.seq ?? project.id}`, { replace: true });
   };
 
   // ── Deep-link: open project from URL param or legacy location.state ────────
@@ -1423,7 +1505,7 @@ export default function AdminProjetosPage({
         setInitialProjectTab(tab);
         handleViewProject(full);
         navigate(
-          `${projectRouteBase}/${projectId}${tab !== "dashboard" ? `?tab=${tab}` : ""}`,
+          `${projectRouteBase}/${full.seq ?? projectId}${tab !== "dashboard" ? `?tab=${tab}` : ""}`,
           { replace: true },
         );
       })
@@ -1482,7 +1564,6 @@ export default function AdminProjetosPage({
 
   const handleStartCancelProject = (project: FrontendProject) => {
     setProjectToCancel(project);
-    setCancelStep(1);
     setCancelReason("");
     setShowCancelWizard(true);
   };
@@ -1515,7 +1596,6 @@ export default function AdminProjetosPage({
     setProjectToCancel(null);
     setIsCancellingProject(false);
     setCancelReason("");
-    setCancelStep(1);
   };
 
   const handleConfirmCloneAndOpen = () => {
@@ -1608,6 +1688,46 @@ export default function AdminProjetosPage({
     }
     setShowProjectCreate(true);
   };
+
+  // Reabre o rascunho salvo automaticamente ao pinar "Novo Projeto" (ver
+  // saveDraftForPin em project-create-new-panel.tsx) — variante de
+  // handleContinueDraft que recebe só o id (vindo da URL, ?resumeDraft=),
+  // não o FrontendProject inteiro (a lista pode nem ter esse item ainda,
+  // já que é um rascunho recém-criado só pra preservar estado do pin).
+  const resumeDraftById = (id: string) => {
+    try {
+      const raw = localStorage.getItem(`allka-draft-${id}`);
+      if (raw) {
+        const draft = JSON.parse(raw);
+        setProjectCreateData(draft.formData ?? null);
+        setDraftPanelProducts(draft.selectedProducts ?? []);
+        setDraftPanelQuantities(draft.productQuantities ?? {});
+        setDraftPanelCommissions(draft.productCommissions ?? {});
+        setDraftPanelProjectId(draft.projectId ?? id);
+        setDraftResumeToCheckout(false);
+        setShowProjectCreate(true);
+        return;
+      }
+    } catch (_) {}
+    // Sem rascunho no localStorage (cache limpo, outro navegador) — ainda
+    // abre a tela escopada nesse id, pro próprio painel tentar carregar o
+    // que der do backend via a prop draftProjectId.
+    setProjectCreateData(null);
+    setDraftPanelProjectId(id);
+    setShowProjectCreate(true);
+  };
+
+  useConsumePendingActivation((key) => {
+    if (key === "create" || key === "clone") {
+      const resumeId = searchParams.get("resumeDraft");
+      if (resumeId) {
+        resumeDraftById(resumeId);
+      } else {
+        setProjectCreateData(null);
+        setShowProjectCreate(true);
+      }
+    }
+  });
 
   const handleGoToPayment = (project: FrontendProject) => {
     const draft = loadDraftFromStorage(project);
@@ -1903,7 +2023,7 @@ export default function AdminProjetosPage({
 
   return (
     <div className={STANDARD_SHELL_PANEL_CLASS}>
-    <div className="h-full min-h-0 flex flex-col" ref={pageRef}>
+    <div className="relative h-full min-h-0 flex flex-col" ref={pageRef}>
       <div className="shrink-0 -mb-[11px]">
       <StandardPageBanner
         icon={FolderOpen}
@@ -1935,7 +2055,307 @@ export default function AdminProjetosPage({
       </div>
 
       <div className="flex-1 min-h-0 overflow-y-auto">
-      <div className="space-y-5">
+      {showPartnerReferrals && (
+        <div className="flex items-center gap-1.5 mb-4">
+          <button
+            onClick={() => setProjectsTab("mine")}
+            className={`px-3.5 py-1.5 text-xs rounded-full font-semibold transition-colors ${
+              projectsTab === "mine"
+                ? "bg-blue-600 text-white shadow-sm"
+                : "bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-500 hover:border-slate-300"
+            }`}
+          >
+            Meus Projetos
+          </button>
+          <button
+            onClick={() => setProjectsTab("indicados")}
+            className={`px-3.5 py-1.5 text-xs rounded-full font-semibold transition-colors ${
+              projectsTab === "indicados"
+                ? "bg-blue-600 text-white shadow-sm"
+                : "bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-500 hover:border-slate-300"
+            }`}
+          >
+            Projetos Indicados
+          </button>
+        </div>
+      )}
+
+      {showPartnerReferrals && projectsTab === "indicados" && (
+        <div className="space-y-5 mb-5">
+          {/* Stats */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+            <div className="rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 p-4 shadow-sm">
+              <p className="text-xs text-slate-500 font-semibold uppercase tracking-wide">
+                Total de Projetos
+              </p>
+              <p className="text-2xl font-bold text-slate-800 dark:text-slate-100 mt-1">
+                {partnerRefProjects.length}
+              </p>
+            </div>
+            <div className="rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 p-4 shadow-sm">
+              <p className="text-xs text-slate-500 font-semibold uppercase tracking-wide">
+                Valor Total
+              </p>
+              <p className="text-2xl font-bold text-slate-800 dark:text-slate-100 mt-1">
+                {fmtPartnerRefBRL(partnerRefTotalValue)}
+              </p>
+            </div>
+            <div className="rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 p-4 shadow-sm">
+              <p className="text-xs text-slate-500 font-semibold uppercase tracking-wide">
+                Comissões Geradas
+              </p>
+              <p className="text-2xl font-bold text-emerald-600 mt-1">
+                {fmtPartnerRefBRL(partnerRefTotalCommission)}
+              </p>
+            </div>
+          </div>
+
+          {/* Filters + Items per page */}
+          <div className="flex flex-wrap items-center gap-3">
+            <div className="relative w-64">
+              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400" />
+              <Input
+                placeholder="Buscar projeto ou empresa..."
+                value={partnerRefSearch}
+                onChange={(e) => {
+                  setPartnerRefSearch(e.target.value);
+                  setPartnerRefCurrentPage(1);
+                }}
+                className="pl-8 h-8 text-sm"
+              />
+            </div>
+            {(["all", "active", "completed", "cancelled"] as const).map((s) => (
+              <button
+                key={s}
+                onClick={() => {
+                  setPartnerRefStatusFilter(s);
+                  setPartnerRefCurrentPage(1);
+                }}
+                className={`px-3 py-1.5 text-xs rounded-lg font-medium transition-colors ${
+                  partnerRefStatusFilter === s
+                    ? "bg-blue-600 text-white shadow-sm"
+                    : "bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-500 hover:border-slate-300"
+                }`}
+              >
+                {s === "all"
+                  ? "Todos"
+                  : s === "active"
+                    ? "Ativos"
+                    : s === "completed"
+                      ? "Concluídos"
+                      : "Cancelados"}
+              </button>
+            ))}
+            <div className="ml-auto flex items-center gap-2 shrink-0">
+              <ItemsPerPageSelect
+                value={partnerRefItemsPerPage.toString()}
+                onValueChange={(v) => {
+                  setPartnerRefItemsPerPage(Number(v));
+                  setPartnerRefCurrentPage(1);
+                }}
+                variant="top"
+              />
+              {partnerRefTotalItems > 0 && (
+                <span className="text-xs text-slate-400 whitespace-nowrap">
+                  {partnerRefTotalItems} projeto{partnerRefTotalItems !== 1 ? "s" : ""}
+                </span>
+              )}
+            </div>
+          </div>
+
+          {/* Table */}
+          <div className="rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 shadow-sm overflow-hidden">
+            <div className="overflow-x-auto allka-table-scroll">
+              <table className="w-full text-sm min-w-150">
+                <thead>
+                  <tr className="border-b border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/60">
+                    <th className="text-left px-4 py-2.5 text-xs font-semibold text-slate-500 uppercase tracking-wide w-28">
+                      ID
+                    </th>
+                    <th className="text-left px-5 py-2.5 text-xs font-semibold text-slate-500 uppercase tracking-wide">
+                      <SortableHeader
+                        label="Projeto"
+                        field="projectName"
+                        type="text"
+                        sortKey={partnerRefSortKey ? String(partnerRefSortKey) : null}
+                        sortDir={partnerRefSortDir}
+                        onSort={partnerRefHandleSort}
+                      />
+                    </th>
+                    <th className="text-left px-4 py-2.5 text-xs font-semibold text-slate-500 uppercase tracking-wide">
+                      <SortableHeader
+                        label="Empresa"
+                        field="companyName"
+                        type="text"
+                        sortKey={partnerRefSortKey ? String(partnerRefSortKey) : null}
+                        sortDir={partnerRefSortDir}
+                        onSort={partnerRefHandleSort}
+                      />
+                    </th>
+                    <th className="text-left px-4 py-2.5 text-xs font-semibold text-slate-500 uppercase tracking-wide">
+                      <SortableHeader
+                        label="Categoria"
+                        field="serviceCategory"
+                        type="status"
+                        sortKey={partnerRefSortKey ? String(partnerRefSortKey) : null}
+                        sortDir={partnerRefSortDir}
+                        onSort={partnerRefHandleSort}
+                        columnFilters={partnerRefColumnFilters}
+                        onFilter={partnerRefToggleColumnFilter}
+                        onClearFilter={partnerRefClearColumnFilter}
+                        filterValues={[
+                          "Branding",
+                          "Social Media",
+                          "Produção de Vídeo",
+                          "Conteúdo",
+                        ]}
+                      />
+                    </th>
+                    <th className="text-right px-4 py-2.5 text-xs font-semibold text-slate-500 uppercase tracking-wide">
+                      <SortableHeader
+                        label="Valor"
+                        field="projectValue"
+                        type="number"
+                        sortKey={partnerRefSortKey ? String(partnerRefSortKey) : null}
+                        sortDir={partnerRefSortDir}
+                        onSort={partnerRefHandleSort}
+                      />
+                    </th>
+                    <th className="text-right px-4 py-2.5 text-xs font-semibold text-slate-500 uppercase tracking-wide">
+                      <SortableHeader
+                        label="Comissão"
+                        field="commissionGenerated"
+                        type="number"
+                        sortKey={partnerRefSortKey ? String(partnerRefSortKey) : null}
+                        sortDir={partnerRefSortDir}
+                        onSort={partnerRefHandleSort}
+                      />
+                    </th>
+                    <th className="text-left px-4 py-2.5 text-xs font-semibold text-slate-500 uppercase tracking-wide">
+                      <SortableHeader
+                        label="Status"
+                        field="status"
+                        type="status"
+                        sortKey={partnerRefSortKey ? String(partnerRefSortKey) : null}
+                        sortDir={partnerRefSortDir}
+                        onSort={partnerRefHandleSort}
+                        columnFilters={partnerRefColumnFilters}
+                        onFilter={partnerRefToggleColumnFilter}
+                        onClearFilter={partnerRefClearColumnFilter}
+                        filterValues={["active", "completed", "cancelled"]}
+                      />
+                    </th>
+                    <th className="text-left px-4 py-2.5 text-xs font-semibold text-slate-500 uppercase tracking-wide">
+                      <SortableHeader
+                        label="Contratado"
+                        field="startDate"
+                        type="date"
+                        sortKey={partnerRefSortKey ? String(partnerRefSortKey) : null}
+                        sortDir={partnerRefSortDir}
+                        onSort={partnerRefHandleSort}
+                      />
+                    </th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                  {partnerRefPaginated.map((p: any, idx: number) => {
+                    const sc = partnerRefStatusConfig[p.status] ?? {
+                      label: p.status ?? "—",
+                      color: "bg-slate-100 text-slate-600",
+                      icon: FolderOpen,
+                    };
+                    const cc = partnerRefCommStatusConfig[p.commissionStatus] ?? {
+                      label: p.commissionStatus ?? "—",
+                      color: "bg-slate-100 text-slate-600",
+                    };
+                    return (
+                      <tr
+                        key={p.id}
+                        className={idx % 2 === 1 ? "bg-slate-50/50 dark:bg-slate-900/30" : ""}
+                      >
+                        <td className="px-4 py-3" style={{ borderRight: "1px solid rgba(148,163,184,0.15)" }}>
+                          <span className="font-mono text-xs text-slate-400">
+                            proj_{(p as any).seq ?? "?"}
+                          </span>
+                        </td>
+                        <td className="px-5 py-3 font-medium text-slate-700 dark:text-slate-200">
+                          {p.projectName}
+                        </td>
+                        <td className="px-4 py-3 text-slate-500 dark:text-slate-400">
+                          {p.companyName}
+                        </td>
+                        <td className="px-4 py-3 text-slate-400 text-xs">
+                          {p.serviceCategory}
+                        </td>
+                        <td className="px-4 py-3 text-right tabular-nums font-medium text-slate-700 dark:text-slate-200">
+                          {fmtPartnerRefBRL(p.projectValue)}
+                        </td>
+                        <td className="px-4 py-3 text-right">
+                          <span className="tabular-nums font-semibold text-emerald-600">
+                            {fmtPartnerRefBRL(p.commissionGenerated)}
+                          </span>
+                          <span className={`ml-2 text-[10px] px-1 py-0.5 rounded font-semibold ${cc.color}`}>
+                            {cc.label}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3">
+                          <span className={`text-xs px-1.5 py-0.5 rounded font-semibold ${sc.color}`}>
+                            {sc.label}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3 text-xs text-slate-400">
+                          {fmtPartnerRefDate(p.contractedAt)}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                  {partnerRefFiltered.length === 0 && (
+                    <tr>
+                      <td colSpan={8} className="px-5 py-10 text-center text-sm text-slate-400">
+                        <FolderOpen className="h-8 w-8 mx-auto text-slate-300 mb-2" />
+                        Nenhum projeto encontrado
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          {/* Pagination */}
+          {partnerRefTotalPages > 1 && (
+            <div className="flex items-center justify-between">
+              <button
+                onClick={() => setPartnerRefCurrentPage((p) => Math.max(1, p - 1))}
+                disabled={partnerRefSafeCurrentPage === 1}
+                className="flex items-center gap-1 px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 text-sm disabled:opacity-40 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"
+              >
+                <ChevronLeft className="h-4 w-4" />
+                Anterior
+              </button>
+              <span className="text-sm text-slate-500">
+                Página {partnerRefSafeCurrentPage} de {partnerRefTotalPages}
+              </span>
+              <button
+                onClick={() => setPartnerRefCurrentPage((p) => Math.min(partnerRefTotalPages, p + 1))}
+                disabled={partnerRefSafeCurrentPage === partnerRefTotalPages}
+                className="flex items-center gap-1 px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 text-sm disabled:opacity-40 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"
+              >
+                Próxima
+                <ChevronRight className="h-4 w-4" />
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+
+      <div
+        className={
+          showPartnerReferrals && projectsTab === "indicados"
+            ? "hidden"
+            : "space-y-5"
+        }
+      >
       {/* Stats Cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         <div className="relative rounded-xl overflow-hidden shadow-lg hover:shadow-xl transition-all duration-200 bg-gradient-to-br from-blue-500 to-blue-700 dark:from-blue-800 dark:to-blue-950 border-2 border-blue-300/70 dark:border-blue-800/70 px-3 pt-2 pb-1.5">
@@ -2511,11 +2931,26 @@ export default function AdminProjetosPage({
               </div>
 
               {/* ── Slide-over: todos os projetos pendentes ── */}
-              {showPendingModal && (
-                <div
-                  className="fixed right-0 flex flex-col z-[80] shadow-2xl border-l border-border animate-in slide-in-from-right duration-300 ease-out overflow-hidden bg-background"
-                  style={{ left: `${sidebarWidth - 2}px`, top: `${headerHeight - 1}px`, bottom: `${footerHeight - 1}px` }}
-                >
+              <EmbeddedSlideScreen
+                open={showPendingModal}
+                onClose={() => { setShowPendingModal(false); setPendingPanelSearch(""); }}
+                hideHeader
+                pin={{
+                  id: "projetos-pendentes",
+                  label: "Projetos pendentes",
+                  icon: AlertTriangle,
+                  path: "/admin/projetos",
+                  activateKey: "pendentes",
+                }}
+                footer={
+                  <p className="text-xs text-slate-400 text-center w-full">
+                    {filteredPending.length === pendingProjects.length
+                      ? `${pendingProjects.length} projeto${pendingProjects.length !== 1 ? "s" : ""} pendente${pendingProjects.length !== 1 ? "s" : ""}`
+                      : `${filteredPending.length} de ${pendingProjects.length} projetos pendentes`}
+                  </p>
+                }
+              >
+                <div className="flex flex-col flex-1 min-h-0 overflow-hidden w-full">
                   {/* Panel header — gradiente da sidebar */}
                   <div
                     className="shrink-0 px-6 pt-6 pb-4"
@@ -2618,17 +3053,8 @@ export default function AdminProjetosPage({
                       </div>
                     )}
                   </div>
-
-                  {/* Panel footer — branco */}
-                  <div className="shrink-0 border-t border-slate-100 px-5 py-3 bg-slate-50">
-                    <p className="text-xs text-slate-400 text-center">
-                      {filteredPending.length === pendingProjects.length
-                        ? `${pendingProjects.length} projeto${pendingProjects.length !== 1 ? "s" : ""} pendente${pendingProjects.length !== 1 ? "s" : ""}`
-                        : `${filteredPending.length} de ${pendingProjects.length} projetos pendentes`}
-                    </p>
-                  </div>
                 </div>
-              )}
+              </EmbeddedSlideScreen>
             </>
           );
         })()}
@@ -2706,12 +3132,11 @@ export default function AdminProjetosPage({
                     onClick={() => setColConfigOpen(true)}
                   />
                 </div>
-                <SlidePanel
+                <StandardModalDialog
                   open={colConfigOpen}
                   onClose={() => setColConfigOpen(false)}
                   title="Configurar colunas"
                   subtitle="Escolha quais colunas aparecem na tabela"
-                  widthMode="full"
                 >
                   <div className="p-5 flex-1 overflow-y-auto space-y-2">
                     <div className="flex items-center justify-between mb-1">
@@ -2745,7 +3170,7 @@ export default function AdminProjetosPage({
                       </label>
                     ))}
                   </div>
-                </SlidePanel>
+                </StandardModalDialog>
               </div>
 
               {/* Row 2 — items-per-page + count + scrollbar mirror + numbered pagination */}
@@ -3008,6 +3433,23 @@ export default function AdminProjetosPage({
                                           variant="ghost"
                                           size="sm"
                                           onClick={() =>
+                                            handleEditProject(project)
+                                          }
+                                          className="h-[26px] w-[26px] rounded-[8px] bg-white dark:bg-slate-800 border border-[#e8edf5] dark:border-slate-700 text-violet-500 dark:text-slate-500 shadow-[0_4px_10px_rgba(15,23,42,0.06)] hover:bg-gradient-to-br hover:from-[#2558FF] hover:via-[#6E2C96] hover:to-[#D92293] hover:text-white dark:hover:text-[#0a1628] hover:border-transparent hover:shadow-[0_8px_18px_rgba(15,23,42,0.18)] hover:-translate-y-px transition-all duration-150"
+                                        >
+                                          <Pencil className="h-3.5 w-3.5" />
+                                        </Button>
+                                      </TooltipTrigger>
+                                      <TooltipContent className="text-xs">
+                                        Editar projeto
+                                      </TooltipContent>
+                                    </Tooltip>
+                                    <Tooltip>
+                                      <TooltipTrigger asChild>
+                                        <Button
+                                          variant="ghost"
+                                          size="sm"
+                                          onClick={() =>
                                             handleStartCancelProject(project)
                                           }
                                           className="h-[26px] w-[26px] rounded-[8px] bg-white dark:bg-slate-800 border border-[#e8edf5] dark:border-slate-700 text-red-500 dark:text-red-400 shadow-[0_4px_10px_rgba(15,23,42,0.06)] hover:bg-red-600 hover:text-white hover:border-transparent hover:shadow-[0_8px_18px_rgba(220,38,38,0.25)] hover:-translate-y-px transition-all duration-150"
@@ -3037,6 +3479,23 @@ export default function AdminProjetosPage({
                                       </TooltipTrigger>
                                       <TooltipContent className="text-xs">
                                         Visualizar
+                                      </TooltipContent>
+                                    </Tooltip>
+                                    <Tooltip>
+                                      <TooltipTrigger asChild>
+                                        <Button
+                                          variant="ghost"
+                                          size="sm"
+                                          onClick={() =>
+                                            handleEditProject(project)
+                                          }
+                                          className="h-[26px] w-[26px] rounded-[8px] bg-white dark:bg-slate-800 border border-[#e8edf5] dark:border-slate-700 text-violet-500 dark:text-slate-500 shadow-[0_4px_10px_rgba(15,23,42,0.06)] hover:bg-gradient-to-br hover:from-[#2558FF] hover:via-[#6E2C96] hover:to-[#D92293] hover:text-white dark:hover:text-[#0a1628] hover:border-transparent hover:shadow-[0_8px_18px_rgba(15,23,42,0.18)] hover:-translate-y-px transition-all duration-150"
+                                        >
+                                          <Pencil className="h-3.5 w-3.5" />
+                                        </Button>
+                                      </TooltipTrigger>
+                                      <TooltipContent className="text-xs">
+                                        Editar projeto
                                       </TooltipContent>
                                     </Tooltip>
                                     <Tooltip>
@@ -3089,7 +3548,7 @@ export default function AdminProjetosPage({
                                 }}
                               >
                                 <span className="font-mono text-[11px] text-slate-400 tracking-wide">
-                                  proj_{String(project.seq ?? "?????").padStart(5, "0")}
+                                  proj_{project.seq ?? "?"}
                                 </span>
                               </td>
                             )}
@@ -3424,37 +3883,42 @@ export default function AdminProjetosPage({
             </div>
 
             {/* ── Advanced Filters Modal ── */}
-            {isFilterModalOpen && (
-              <div
-                data-slot="sheet-content"
-                data-state="open"
-                className="fixed right-0 z-70 bg-white dark:bg-slate-900 shadow-2xl border-l border-slate-200 dark:border-slate-700 flex flex-col overflow-hidden data-[state=open]:animate-in data-[state=open]:slide-in-from-right data-[state=open]:fade-in-0 duration-300"
-                style={{
-                  left: sidebarWidth - 2,
-                  top: headerHeight - 1,
-                  bottom: footerHeight - 1,
-                  width: `calc(100vw - ${sidebarWidth - 2}px)`,
-                }}
-              >
-                <div className="bg-white w-full h-full flex flex-col overflow-hidden">
-                  {/* Modal header */}
-                  <div className="app-brand-header relative flex-shrink-0 px-5 min-h-[72px] flex items-center">
-                    <div className="flex-1">
-                      <h2 className="text-white font-bold text-base">
-                        Filtros Avançados
-                      </h2>
-                      <p className="text-blue-200 text-xs mt-0.5">
-                        Configure os filtros para refinar os resultados
-                      </p>
-                    </div>
-                    <button
+            <StandardModalDialog
+              open={isFilterModalOpen}
+              onClose={() => setIsFilterModalOpen(false)}
+              title="Filtros Avançados"
+              subtitle="Configure os filtros para refinar os resultados"
+              footer={
+                <div className="flex items-center justify-between gap-2 w-full">
+                  <button
+                    onClick={clearAllFilters}
+                    className="text-xs text-slate-500 hover:text-slate-700 hover:underline"
+                  >
+                    Limpar filtros
+                  </button>
+                  <div className="flex gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="h-8 text-xs"
                       onClick={() => setIsFilterModalOpen(false)}
-                      className="absolute right-4 top-4 rounded-lg p-1.5 hover:bg-white/20 transition-colors"
                     >
-                      <X className="h-5 w-5 text-white" />
-                    </button>
+                      Cancelar
+                    </Button>
+                    <Button
+                      size="sm"
+                      className="h-8 text-xs btn-brand"
+                      onClick={() => {
+                        setCurrentPage(1);
+                        setIsFilterModalOpen(false);
+                      }}
+                    >
+                      Aplicar Filtros
+                    </Button>
                   </div>
-
+                </div>
+              }
+            >
                   {/* Modal body */}
                   <div className="flex flex-1 min-h-0">
                     {/* Left: Saved filters */}
@@ -4197,39 +4661,7 @@ export default function AdminProjetosPage({
                       </div>
                     </div>
                   </div>
-
-                  {/* Modal footer */}
-                  <div className="flex items-center justify-between gap-2 px-4 py-3 border-t border-slate-100 bg-slate-50 flex-shrink-0">
-                    <button
-                      onClick={clearAllFilters}
-                      className="text-xs text-slate-500 hover:text-slate-700 hover:underline"
-                    >
-                      Limpar filtros
-                    </button>
-                    <div className="flex gap-2">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="h-8 text-xs"
-                        onClick={() => setIsFilterModalOpen(false)}
-                      >
-                        Cancelar
-                      </Button>
-                      <Button
-                        size="sm"
-                        className="h-8 text-xs btn-brand"
-                        onClick={() => {
-                          setCurrentPage(1);
-                          setIsFilterModalOpen(false);
-                        }}
-                      >
-                        Aplicar Filtros
-                      </Button>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            )}
+            </StandardModalDialog>
           </>
         ) : (
           <div className="flex-1 overflow-auto flex flex-col">
@@ -4761,7 +5193,7 @@ export default function AdminProjetosPage({
           </div>
         )}
 
-        <SlidePanel
+        <StandardModalDialog
           open={showCloneDialog}
           onClose={() => {
             setShowCloneDialog(false);
@@ -4770,7 +5202,6 @@ export default function AdminProjetosPage({
           }}
           title="Duplicar Projeto"
           subtitle="Selecione o que deseja incluir na cópia"
-          widthMode="full"
           footer={
             <div className="flex items-center justify-end gap-2">
               <Button
@@ -4927,174 +5358,39 @@ export default function AdminProjetosPage({
                 </p>
               </div>
             </div>
-        </SlidePanel>
+        </StandardModalDialog>
 
-        {/* Cancel Project Wizard */}
-        <Dialog open={showCancelWizard} onOpenChange={setShowCancelWizard}>
-          <DialogContent className="sm:max-w-md">
-            {cancelStep === 1 && (
-              <>
-                <DialogHeader>
-                  <DialogTitle>Cancelar Projeto</DialogTitle>
-                </DialogHeader>
-                <div className="space-y-4 py-4">
-                  <div className="bg-yellow-50 border border-yellow-200 p-4 rounded-lg">
-                    <p className="text-sm text-yellow-900 font-medium mb-2">
-                      Tem certeza que deseja cancelar este projeto?
-                    </p>
-                    <p className="text-sm text-yellow-800">
-                      <strong>Projeto:</strong> {projectToCancel?.name}
-                    </p>
-                  </div>
-                  <p className="text-sm text-gray-600">
-                    Ao cancelar, todas as cobranças futuras serão suspensas e o
-                    projeto será marcado como inativo.
-                  </p>
-                  <p className="text-sm text-gray-700 font-medium">
-                    Por que você quer cancelar este projeto?
-                  </p>
-                  <textarea
-                    value={cancelReason}
-                    onChange={(e) => setCancelReason(e.target.value)}
-                    placeholder="Nos ajude a entender o motivo (opcional)"
-                    className="w-full h-20 p-3 border border-gray-300 rounded-lg text-sm resize-none"
-                  />
-                </div>
-                <DialogFooter>
-                  <Button
-                    variant="outline"
-                    onClick={() => {
-                      setShowCancelWizard(false);
-                      setProjectToCancel(null);
-                      setCancelReason("");
-                    }}
-                  >
-                    Desistir
-                  </Button>
-                  <Button
-                    onClick={() => setCancelStep(2)}
-                    className="bg-orange-500 hover:bg-orange-600"
-                  >
-                    Continuar Cancelamento
-                  </Button>
-                </DialogFooter>
-              </>
-            )}
-
-            {cancelStep === 2 && (
-              <>
-                <DialogHeader>
-                  <DialogTitle>Esperamos que continue conosco!</DialogTitle>
-                </DialogHeader>
-                <div className="space-y-4 py-4">
-                  <div className="bg-blue-50 border border-blue-200 p-4 rounded-lg space-y-3">
-                    <p className="text-sm text-blue-900 font-medium">
-                      Antes de cancelar, saiba que você pode:
-                    </p>
-                    <ul className="text-sm text-blue-800 space-y-2">
-                      <li className="flex items-start gap-2">
-                        <span className="text-blue-600 font-bold">•</span>
-                        <span>
-                          <strong>Pausar o projeto</strong> temporariamente sem
-                          cancelar
-                        </span>
-                      </li>
-                      <li className="flex items-start gap-2">
-                        <span className="text-blue-600 font-bold">•</span>
-                        <span>
-                          <strong>Ajustar o orçamento</strong> para melhor se
-                          adequar às suas necessidades
-                        </span>
-                      </li>
-                      <li className="flex items-start gap-2">
-                        <span className="text-blue-600 font-bold">•</span>
-                        <span>
-                          <strong>Conversar com nosso time</strong> sobre
-                          alternativas
-                        </span>
-                      </li>
-                    </ul>
-                  </div>
-                  <p className="text-sm text-gray-600">
-                    Tem certeza que quer cancelar mesmo? Esta ação não pode ser
-                    desfeita.
-                  </p>
-                </div>
-                <DialogFooter>
-                  <Button
-                    variant="outline"
-                    onClick={() => {
-                      setShowCancelWizard(false);
-                      setProjectToCancel(null);
-                      setCancelReason("");
-                      setCancelStep(1);
-                    }}
-                  >
-                    Desistir do Cancelamento
-                  </Button>
-                  <Button
-                    onClick={() => setCancelStep(3)}
-                    className="bg-orange-500 hover:bg-orange-600"
-                  >
-                    Continuar Cancelamento
-                  </Button>
-                </DialogFooter>
-              </>
-            )}
-
-            {cancelStep === 3 && (
-              <>
-                <DialogHeader>
-                  <DialogTitle>Última chance para reconsiderar</DialogTitle>
-                </DialogHeader>
-                <div className="space-y-4 py-4">
-                  <div className="bg-red-50 border border-red-200 p-4 rounded-lg">
-                    <p className="text-sm text-red-900 font-medium mb-2">
-                      Atenção!
-                    </p>
-                    <p className="text-sm text-red-800">
-                      Você está prestes a cancelar{" "}
-                      <strong>{projectToCancel?.name}</strong>.
-                    </p>
-                    <p className="text-sm text-red-800 mt-2">
-                      Isso resultará em:
-                    </p>
-                    <ul className="text-sm text-red-800 mt-2 space-y-1 ml-4">
-                      <li>• Suspensão de todas as cobranças futuras</li>
-                      <li>• Projeto marcado como inativo</li>
-                      <li>• Não será mais possível contratar produtos</li>
-                    </ul>
-                  </div>
-                </div>
-                <DialogFooter>
-                  <Button
-                    variant="outline"
-                    onClick={() => {
-                      setShowCancelWizard(false);
-                      setProjectToCancel(null);
-                      setCancelReason("");
-                      setCancelStep(1);
-                    }}
-                    disabled={isCancellingProject}
-                  >
-                    Cancelar Operação
-                  </Button>
-                  <Button
-                    onClick={handleConfirmCancel}
-                    className="bg-red-600 hover:bg-red-700"
-                    disabled={isCancellingProject}
-                  >
-                    {isCancellingProject ? (
-                      <ButtonLoader text="Cancelando…" />
-                    ) : (
-                      "Confirmar Cancelamento"
-                    )}
-                  </Button>
-                </DialogFooter>
-              </>
-            )}
-          </DialogContent>
-        </Dialog>
+        {/* Cancel Project — Popup 2 (confirmação compacta) */}
+        <ConfirmationDialog
+          open={showCancelWizard}
+          onClose={() => {
+            setShowCancelWizard(false);
+            setProjectToCancel(null);
+            setCancelReason("");
+          }}
+          onConfirm={handleConfirmCancel}
+          title="Cancelar Projeto"
+          message={
+            <>
+              <p className="mb-3">
+                Tem certeza que deseja cancelar{" "}
+                <strong>{projectToCancel?.name}</strong>? Ao cancelar, todas as
+                cobranças futuras serão suspensas e o projeto será marcado
+                como inativo. Esta ação não pode ser desfeita.
+              </p>
+              <textarea
+                value={cancelReason}
+                onChange={(e) => setCancelReason(e.target.value)}
+                placeholder="Motivo do cancelamento (opcional)"
+                className="w-full h-20 p-3 border border-gray-300 rounded-lg text-sm resize-none"
+                onClick={(e) => e.stopPropagation()}
+              />
+            </>
+          }
+          confirmText={isCancellingProject ? "Cancelando…" : "Cancelar Projeto"}
+          cancelText="Voltar"
+          destructive
+        />
         <ProjectManagementModal
           project={selectedProject}
           open={modalOpen}
@@ -5149,7 +5445,7 @@ export default function AdminProjetosPage({
           }}
           initialData={projectCreateData}
           cloneMode={!!projectCreateData && !draftPanelProjectId}
-          allowCompanySelect={scope === "admin" && !projectCreateData}
+          allowCompanySelect={scope === "admin"}
           agencyName={scope === "agency" ? agencyName : undefined}
           companyName={scope === "agency" ? agencyName : undefined}
           draftProducts={
@@ -5177,7 +5473,7 @@ export default function AdminProjetosPage({
                 setSelectedProject(full);
                 setModalMode("view");
                 setModalOpen(true);
-                navigate(`${projectRouteBase}/${project.id}${tabParam}`, {
+                navigate(`${projectRouteBase}/${full.seq ?? project.id}${tabParam}`, {
                   replace: true,
                 });
               } catch {
@@ -5185,7 +5481,10 @@ export default function AdminProjetosPage({
                 setSelectedProject(project as FrontendProject);
                 setModalMode("view");
                 setModalOpen(true);
-                navigate(`${projectRouteBase}/${project.id}${tabParam}`, {
+                const fallbackSeq = project.project_code
+                  ? project.project_code.replace(/^proj_/, "")
+                  : project.id;
+                navigate(`${projectRouteBase}/${fallbackSeq}${tabParam}`, {
                   replace: true,
                 });
               }

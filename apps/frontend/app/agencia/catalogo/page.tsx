@@ -3,12 +3,17 @@
 
 import { useMemo } from "react";
 import { useProjectBasket } from "@/contexts/project-basket-context";
-import { PageHeader } from "@/components/page-header";
 import {
   ProductCatalogView,
   type CatalogSelectedProduct,
 } from "@/components/product-catalog-view";
 import { type Product } from "@/lib/contexts/product-context";
+import {
+  STANDARD_SHELL_PANEL_CLASS,
+  StandardPageBanner,
+} from "@/components/standard-page-shell";
+import { PinToTrayButton } from "@/components/pin-to-tray-button";
+import { Store } from "lucide-react";
 
 export default function AgenciaCatalogo() {
   const basket = useProjectBasket();
@@ -58,12 +63,20 @@ export default function AgenciaCatalogo() {
   };
 
   return (
-    <div className="flex-1 space-y-3">
-      <PageHeader
+    <div className={STANDARD_SHELL_PANEL_CLASS}>
+    <div className="h-full min-h-0 flex flex-col">
+      <div className="shrink-0 -mb-[11px]">
+      <StandardPageBanner
+        icon={Store}
         title="Catálogo de Produtos"
         description="Explore os produtos disponíveis e monte sua proposta com a cesta do projeto"
+        actions={
+          <PinToTrayButton id="page-agency-catalogo" label="Catálogo de Produtos" icon={Store} path="/agency/catalogo" />
+        }
       />
+      </div>
 
+      <div className="flex-1 min-h-0 overflow-y-auto -mx-6">
       <ProductCatalogView
         mode="page"
         selectedProducts={selectedProducts}
@@ -74,6 +87,8 @@ export default function AgenciaCatalogo() {
         onIncrease={handleIncrease}
         onDecrease={handleDecrease}
       />
+      </div>
+    </div>
     </div>
   );
 }

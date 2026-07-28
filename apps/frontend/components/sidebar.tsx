@@ -1,7 +1,7 @@
 // @ts-nocheck
 import type React from "react";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, Fragment } from "react";
 import { Link } from "react-router-dom";
 import { useLocation } from "react-router-dom";
 import { cn } from "@/lib/utils";
@@ -848,8 +848,26 @@ export function Sidebar({ transparent = false }: { transparent?: boolean } = {})
       // anexa os itens exclusivos de Partner ao menu normal da Agency em
       // vez de trocar de account_type/portal.
       if (!isPartnerActive) return baseAgencyItems;
+      // Regra (2026-07-20, pedido explícito do usuário): Partner NÃO é uma
+      // seção separada no menu — é a MESMA agência com mais conteúdo dentro
+      // das telas que ela já tem. Uma agência recém-criada não vê nada de
+      // Partner; depois que aceita o convite, ela continua vendo as MESMAS
+      // telas (Clientes/Projetos/Relatórios), só que agora com
+      // filtros/dados extras de Partner dentro delas — nunca uma segunda
+      // tela do lado. Por isso Clientes, Projetos e Relatórios do Partner
+      // NUNCA entram aqui (a página da Agency é que ganha o conteúdo de
+      // Partner internamente — ver AdminProjetosPage `scope` e
+      // ReportListPage `profileType`/`partnerActive`). Só sobra o que é
+      // genuinamente novo e não tem equivalente na Agency: Agências,
+      // Comissões, Saques — esses aparecem soltos na mesma lista, sem
+      // separador/seção visual (pedido explícito: "não separado assim").
       const partnerOnlyItems = navigationConfig.parceiro.filter(
-        (item) => item.href !== "/partner/dashboard" && item.href !== "/partner/usuarios",
+        (item) =>
+          item.href !== "/partner/dashboard" &&
+          item.href !== "/partner/usuarios" &&
+          item.href !== "/partner/clientes" &&
+          item.href !== "/partner/projetos" &&
+          item.href !== "/partner/relatorios",
       );
       return [...baseAgencyItems, ...partnerOnlyItems];
     }
@@ -1251,7 +1269,7 @@ export function Sidebar({ transparent = false }: { transparent?: boolean } = {})
           )}
           <div
             className={cn(
-              "relative flex items-center h-16 border-b border-white/10 backdrop-blur-sm transition-all duration-300 group",
+              "relative flex items-center h-16 backdrop-blur-sm transition-all duration-300 group",
               collapsed
                 ? "justify-center px-3 flex-col"
                 : "justify-between px-2 flex-row",
@@ -1661,8 +1679,13 @@ export function Sidebar({ transparent = false }: { transparent?: boolean } = {})
               const isActive = pathname === item.href;
               const isNavigatingHere = navigatingTo === item.href;
               return (
+                <Fragment key={item.href}>
+                  {item.sectionLabel && !collapsed && (
+                    <div className="px-3 pt-3 pb-1 text-[10px] font-bold uppercase tracking-wider text-white/40">
+                      {item.sectionLabel}
+                    </div>
+                  )}
                 <div
-                  key={item.name}
                   draggable={!collapsed}
                   onDragStart={(e) => handleDragStart(e, index)}
                   onDragOver={(e) => handleDragOver(e, index)}
@@ -1761,6 +1784,7 @@ export function Sidebar({ transparent = false }: { transparent?: boolean } = {})
                     )}
                   </Tooltip>
                 </div>
+                </Fragment>
               );
             })}
           </nav>

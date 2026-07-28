@@ -14,8 +14,12 @@ import {
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { PageHeader } from "@/components/page-header";
 import { CircuitoPreHabilitacaoModal } from "@/components/circuito-pre-habilitacao-modal";
+import {
+  STANDARD_SHELL_PANEL_CLASS,
+  StandardPageBanner,
+} from "@/components/standard-page-shell";
+import { PinToTrayButton } from "@/components/pin-to-tray-button";
 
 // ─── Mock teste com circuito pré-habilitação (PA0001 — Tráfego Pago) ─────────
 const MOCK_CIRCUITO_TEST = {
@@ -285,11 +289,26 @@ export default function NomadesHabilitacoesPage() {
   });
 
   return (
-    <div className="space-y-6">
-      <PageHeader
-        title="Habilitações"
-        subtitle="Suas certificações por tipo de tarefa na plataforma"
-      />
+    <div className={STANDARD_SHELL_PANEL_CLASS}>
+    <div className="relative h-full min-h-0 flex flex-col">
+    <div className="shrink-0 -mb-[11px]">
+    <StandardPageBanner
+      icon={Award}
+      title="Habilitações"
+      description="Suas certificações por tipo de tarefa na plataforma"
+      actions={
+        <PinToTrayButton
+          id="page-nomades-habilitacoes"
+          label="Habilitações"
+          icon={Award}
+          path="/nomades/habilitacoes"
+        />
+      }
+    />
+    </div>
+
+    <div className="flex-1 min-h-0 overflow-y-auto">
+    <div className="p-4 sm:p-6 space-y-5">
 
       {/* Stats */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
@@ -489,6 +508,9 @@ export default function NomadesHabilitacoesPage() {
           console.log("Tarefa teste iniciada para:", test.code);
         }}
       />
+    </div>
+    </div>
+    </div>
     </div>
   );
 }

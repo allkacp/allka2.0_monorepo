@@ -30,7 +30,7 @@ import {
   StandardPageBanner,
 } from "@/components/standard-page-shell";
 import { PinToTrayButton } from "@/components/pin-to-tray-button";
-import { SlidePanel } from "@/components/slide-panel";
+import { EmbeddedSlideScreen } from "@/components/embedded-slide-screen";
 import { ItemsPerPageSelect } from "@/components/items-per-page-select";
 import { useTableScrollSync } from "@/hooks/useTableScrollSync";
 import { useSorting, SortableHeader } from "@/hooks/useSorting";
@@ -658,7 +658,7 @@ export default function AdminDisponibilidadePage() {
 
   return (
     <div className={STANDARD_SHELL_PANEL_CLASS}>
-    <div className="h-full min-h-0 flex flex-col">
+    <div className="relative h-full min-h-0 flex flex-col">
       <div className="shrink-0 -mb-[11px]">
       <StandardPageBanner
         icon={Activity}
@@ -1226,7 +1226,7 @@ export default function AdminDisponibilidadePage() {
       </div>
 
       {/* "+" info panel — real nômades / tasks behind the selected group */}
-      <SlidePanel
+      <EmbeddedSlideScreen
         open={infoPanelOpen}
         onClose={() => setInfoPanelOpen(false)}
         title={infoGroup?.name || ""}
@@ -1235,8 +1235,13 @@ export default function AdminDisponibilidadePage() {
             ? `${infoGroup.category || "—"} · ${infoGroup.total} ${infoGroup.kind === "specialty" ? "nômade(s)" : "tarefa(s)"}`
             : undefined
         }
-        widthMode="compact"
-        compactWidth={420}
+        pin={{
+          id: `disponibilidade-${infoGroup?.name ?? "grupo"}`,
+          label: infoGroup?.name || "Detalhes",
+          icon: Users,
+          path: "/admin/disponibilidade",
+          activateKey: infoGroup?.name ?? "",
+        }}
       >
         <div className="p-5 flex-1 overflow-y-auto space-y-2">
           {infoGroup?.kind === "specialty" ? (
@@ -1295,7 +1300,7 @@ export default function AdminDisponibilidadePage() {
             )
           ) : null}
         </div>
-      </SlidePanel>
+      </EmbeddedSlideScreen>
     </div>
     </div>
     </div>

@@ -1,6 +1,7 @@
 // @ts-nocheck
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { useSidebar } from "@/contexts/sidebar-context";
+import { usePartner } from "@/contexts/partner-context";
 import { apiClient } from "@/lib/api-client";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -14,7 +15,11 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { PageLoader } from "@/components/ui/loading";
-import { PageHeader } from "@/components/page-header";
+import {
+  STANDARD_SHELL_PANEL_CLASS,
+  StandardPageBanner,
+} from "@/components/standard-page-shell";
+import { PinToTrayButton } from "@/components/pin-to-tray-button";
 import {
   Tooltip,
   TooltipContent,
@@ -39,6 +44,16 @@ import { useBatchIndicators } from "./hooks/use-indicator";
 import { IndicatorWidget } from "./components/indicator-widget";
 import { periodToDates } from "./types";
 import type { IndicatorResult } from "./types";
+import { exportReportSummaryPDF } from "./report-export";
+import { StandardModalDialog } from "@/components/standard-modal-dialog";
+
+function dateRangeLabel(dateRange: string) {
+  return dateRange === "7"   ? "7 dias"
+    : dateRange === "30"  ? "30 dias"
+    : dateRange === "90"  ? "90 dias"
+    : dateRange === "365" ? "1 ano"
+    : "Personalizado";
+}
 
 // ─── Profile indicator config ─────────────────────────────────────────────────
 
@@ -125,9 +140,23 @@ function GradientKpiCard({
 
 // ─── KPI strip for non-admin profiles ────────────────────────────────────────
 
-function ProfileKpiStrip({ profileType }: { profileType: ProfileType }) {
+function ProfileKpiStrip({
+  profileType,
+  extraKpis = [],
+}: {
+  profileType: ProfileType;
+  /**
+   * KPIs extra pra anexar aos do profileType — usado pra agência que
+   * também é Partner ativo: em vez de uma tela de Relatórios separada
+   * pro Partner, os KPIs do Partner aparecem juntos aqui (ver
+   * ReportListPage abaixo, que passa PROFILE_KPIS.parceiro quando
+   * profile de Partner existe). Pedido explícito do usuário 2026-07-20:
+   * "não separado assim ... o que muda é a página dela mesma".
+   */
+  extraKpis?: (typeof PROFILE_KPIS)[ProfileType];
+}) {
   const { startDate, endDate } = periodToDates(30);
-  const kpis = PROFILE_KPIS[profileType] ?? [];
+  const kpis = [...(PROFILE_KPIS[profileType] ?? []), ...extraKpis];
 
   const indicators = useMemo(
     () => kpis.map(({ id }) => ({ indicatorId: id, startDate, endDate })),
@@ -167,15 +196,18 @@ function ReportCard({
   category,
   dateRange,
   permission,
+  onView,
 }: {
   report: { id: string; name: string; desc: string; icon: any; formats: string[] };
   category: {
+    name: string;
     lightBg: string;
     lightText: string;
     border: string;
   };
   dateRange: string;
   permission: AvailableReport | null;
+  onView: (v: { report: any; category: any }) => void;
 }) {
   const [downloading, setDownloading] = useState(false);
   const canExport = permission?.can_export ?? false;
@@ -183,8 +215,17 @@ function ReportCard({
   async function handleDownload() {
     if (!canExport) return;
     setDownloading(true);
-    await new Promise((r) => setTimeout(r, 800));
-    setDownloading(false);
+    try {
+      await exportReportSummaryPDF(report, {
+        categoryName: category.name,
+        dateRangeLabel: dateRangeLabel(dateRange),
+        generatedAt: new Date().toLocaleDateString("pt-BR"),
+      });
+    } catch (e) {
+      console.error("[ReportListPage] export:", e);
+    } finally {
+      setDownloading(false);
+    }
   }
 
   if (!permission) {
@@ -235,12 +276,12 @@ function ReportCard({
           </span>
         ))}
         <span className="ml-auto text-[10px] text-slate-400">
-          {dateRange === "7" ? "7 dias" : dateRange === "30" ? "30 dias" : dateRange === "90" ? "90 dias" : "1 ano"}
+          {dateRangeLabel(dateRange)}
         </span>
       </div>
 
       <div className="flex gap-1.5 pt-1 border-t border-slate-100 dark:border-slate-700/60">
-        <Button size="sm" className="flex-1 h-7 text-[11px] gap-1">
+        <Button size="sm" className="flex-1 h-7 text-[11px] gap-1" onClick={() => onView({ report, category })}>
           <Eye className="h-3 w-3" />
           Visualizar
         </Button>
@@ -269,12 +310,14 @@ function CategorySection({
   dateRange,
   permissionMap,
   showLocked,
+  onView,
 }: {
   category: typeof CATEGORIES[number];
   search: string;
   dateRange: string;
   permissionMap: Record<string, AvailableReport>;
   showLocked: boolean;
+  onView: (v: { report: any; category: any }) => void;
 }) {
   const [collapsed, setCollapsed] = useState(false);
 
@@ -324,6 +367,7 @@ function CategorySection({
               category={category}
               dateRange={dateRange}
               permission={permissionMap[report.id] || null}
+              onView={onView}
             />
           ))}
         </div>
@@ -336,6 +380,12 @@ function CategorySection({
 
 export function ReportListPage({ profileType, description }: { profileType?: ProfileType; description?: string }) {
   useSidebar();
+  // Agency que também é Partner ativo: os KPIs de Partner aparecem AQUI,
+  // dentro da mesma tela — nunca numa segunda tela de Relatórios separada
+  // (usePartner() é global, ver PartnerProvider em App.tsx; profile só
+  // vem preenchido quando o usuário realmente tem status de Partner).
+  const { profile: partnerProfile } = usePartner();
+  const showPartnerKpis = profileType === "agency" && !!partnerProfile;
 
   const [available, setAvailable] = useState<AvailableReport[]>([]);
   const [loading, setLoading] = useState(true);
@@ -343,6 +393,8 @@ export function ReportListPage({ profileType, description }: { profileType?: Pro
   const [categoryFilter, setCategoryFilter] = useState("all");
   const [dateRange, setDateRange] = useState("30");
   const [showLocked, setShowLocked] = useState(false);
+  const [viewingReport, setViewingReport] = useState<{ report: any; category: any } | null>(null);
+  const [previewDownloading, setPreviewDownloading] = useState(false);
 
   const loadAvailable = useCallback(async () => {
     setLoading(true);
@@ -384,31 +436,42 @@ export function ReportListPage({ profileType, description }: { profileType?: Pro
   if (loading) return <PageLoader text="Carregando relatórios…" />;
 
   return (
-    <div className="space-y-6">
+    <div className={STANDARD_SHELL_PANEL_CLASS}>
+    <div className="h-full min-h-0 flex flex-col overflow-y-auto space-y-6">
       {/* Header */}
-      <PageHeader
+      <div className="shrink-0 -mb-[11px]">
+      <StandardPageBanner
+        icon={BarChart3}
         title="Relatórios"
         description={description ?? `${accessibleCount} de ${totalCount} relatórios disponíveis para o seu perfil`}
         actions={
-          <TooltipProvider delayDuration={400}>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <button
-                  onClick={loadAvailable}
-                  className="group relative flex items-center justify-center h-8 w-8 rounded-lg border border-border/60 hover:border-transparent overflow-hidden transition-all"
-                >
-                  <span className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none" style={{ background: "linear-gradient(135deg,#000000 0%,#1a2a6f 45%,#c81a7f 100%)" }} />
-                  <RefreshCw className="relative z-10 h-4 w-4 text-[#7d1b6a] group-hover:text-white transition-colors" />
-                </button>
-              </TooltipTrigger>
-              <TooltipContent side="bottom" sideOffset={6}>Atualizar</TooltipContent>
-            </Tooltip>
-          </TooltipProvider>
+          <>
+            <TooltipProvider delayDuration={400}>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <button
+                    onClick={loadAvailable}
+                    className="flex items-center justify-center h-8 w-8 rounded-lg border border-white/70 text-white bg-white/10 hover:bg-white/20 transition-colors"
+                  >
+                    <RefreshCw className="h-4 w-4" />
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent side="bottom" sideOffset={6}>Atualizar</TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+            <PinToTrayButton id="page-relatorios" label="Relatórios" icon={BarChart3} path="/agency/relatorios" />
+          </>
         }
       />
+      </div>
 
       {/* Live KPI strip — shows indicators scoped to this profile */}
-      {profileType && <ProfileKpiStrip profileType={profileType} />}
+      {profileType && (
+        <ProfileKpiStrip
+          profileType={profileType}
+          extraKpis={showPartnerKpis ? PROFILE_KPIS.parceiro : []}
+        />
+      )}
 
       {/* No access banner */}
       {accessibleCount === 0 && (
@@ -501,12 +564,86 @@ export function ReportListPage({ profileType, description }: { profileType?: Pro
                   dateRange={dateRange}
                   permissionMap={permissionMap}
                   showLocked={showLocked}
+                  onView={(v) => setViewingReport(v)}
                 />
               ))
             )}
           </div>
         </>
       )}
+
+      {/* Visualizar — preview do relatório (Popup 1) */}
+      <StandardModalDialog
+        open={!!viewingReport}
+        onClose={() => setViewingReport(null)}
+        title={viewingReport?.report?.name}
+        subtitle={viewingReport?.category?.name}
+        size="compact"
+        footer={
+          viewingReport && (
+            <div className="flex items-center justify-between w-full">
+              <div className="flex items-center gap-1.5">
+                {viewingReport.report.formats.map((f: string) => (
+                  <span
+                    key={f}
+                    className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] font-medium bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-400"
+                  >
+                    <FileText className="h-2.5 w-2.5" />
+                    {f}
+                  </span>
+                ))}
+              </div>
+              {(permissionMap[viewingReport.report.id]?.can_export ?? false) && (
+                <Button
+                  size="sm"
+                  disabled={previewDownloading}
+                  onClick={async () => {
+                    setPreviewDownloading(true);
+                    try {
+                      await exportReportSummaryPDF(viewingReport.report, {
+                        categoryName: viewingReport.category.name,
+                        dateRangeLabel: dateRangeLabel(dateRange),
+                        generatedAt: new Date().toLocaleDateString("pt-BR"),
+                      });
+                    } catch (e) {
+                      console.error("[ReportListPage] export:", e);
+                    } finally {
+                      setPreviewDownloading(false);
+                    }
+                  }}
+                  className="gap-1.5"
+                >
+                  {previewDownloading ? (
+                    <RefreshCw className="h-3.5 w-3.5 animate-spin" />
+                  ) : (
+                    <Download className="h-3.5 w-3.5" />
+                  )}
+                  Baixar
+                </Button>
+              )}
+            </div>
+          )
+        }
+      >
+        {viewingReport && (
+          <div className="p-6 space-y-4">
+            <div className="flex items-center gap-3">
+              <div className={`p-2.5 rounded-lg ${viewingReport.category.lightBg} ${viewingReport.category.border} border shrink-0`}>
+                <viewingReport.report.icon className={`h-4 w-4 ${viewingReport.category.lightText}`} />
+              </div>
+              <div className="min-w-0">
+                <p className="text-sm font-semibold text-slate-800 dark:text-slate-100">{viewingReport.report.name}</p>
+                <p className="text-xs text-slate-400">{viewingReport.category.name} · {dateRangeLabel(dateRange)}</p>
+              </div>
+            </div>
+            <div className="p-4 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700">
+              <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide mb-2">Descrição</p>
+              <p className="text-sm text-slate-600 dark:text-slate-300 leading-relaxed">{viewingReport.report.desc}</p>
+            </div>
+          </div>
+        )}
+      </StandardModalDialog>
+    </div>
     </div>
   );
 }

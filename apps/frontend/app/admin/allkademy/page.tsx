@@ -7,17 +7,12 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
-import {
-  Sheet,
-  SheetContent,
-  SheetHeader,
-  SheetTitle,
-} from "@/components/ui/sheet";
 import { ConfirmationDialog } from "@/components/confirmation-dialog";
 import { useToast } from "@/components/ui/use-toast";
 import { useSorting, SortableHeader } from "@/hooks/useSorting";
 import { useTableScrollSync } from "@/hooks/useTableScrollSync";
-import { SlidePanel } from "@/components/slide-panel";
+import { EmbeddedSlideScreen } from "@/components/embedded-slide-screen";
+import { StandardModalDialog } from "@/components/standard-modal-dialog";
 import { IconToolbarButton } from "@/components/icon-toolbar-button";
 import { NeonBadge } from "@/components/neon-badge";
 import { ItemsPerPageSelect } from "@/components/items-per-page-select";
@@ -219,14 +214,19 @@ function CourseDetailSheet({ courseId, open, onClose }) {
     s + (m.lessons || []).reduce((ls, l) => ls + (l.duration || 0), 0), 0);
 
   return (
-    <Sheet open={open} onOpenChange={(v) => !v && onClose()}>
-      <SheetContent hideOverlay className="w-full sm:max-w-xl overflow-y-auto">
-        <SheetHeader className="mb-4">
-          <SheetTitle className="flex items-center gap-2">
-            <BookOpen className="h-4 w-4 text-blue-500" />
-            {loading ? "Carregando…" : detail?.title || "Curso"}
-          </SheetTitle>
-        </SheetHeader>
+    <EmbeddedSlideScreen
+      open={open}
+      onClose={onClose}
+      title={loading ? "Carregando…" : detail?.title || "Curso"}
+      pin={{
+        id: `allkademy-view-${courseId ?? "none"}`,
+        label: detail?.title || "Curso",
+        icon: BookOpen,
+        path: "/admin/allkademy",
+        activateKey: `view:${courseId ?? ""}`,
+      }}
+    >
+        <div className="flex-1 overflow-y-auto p-6 w-full">
 
         {loading ? (
           <div className="flex items-center justify-center py-16 text-slate-400 gap-2">
@@ -332,8 +332,8 @@ function CourseDetailSheet({ courseId, open, onClose }) {
             </div>
           </div>
         ) : null}
-      </SheetContent>
-    </Sheet>
+        </div>
+    </EmbeddedSlideScreen>
   );
 }
 
@@ -687,7 +687,7 @@ export default function AdminAllkademyPage() {
 
   return (
     <div className={STANDARD_SHELL_PANEL_CLASS}>
-    <div className="h-full min-h-0 flex flex-col" ref={pageRef}>
+    <div className="relative h-full min-h-0 flex flex-col" ref={pageRef}>
       <div className="shrink-0 -mb-[11px]">
       <StandardPageBanner
         icon={GraduationCap}
@@ -1053,13 +1053,11 @@ export default function AdminAllkademyPage() {
       </div>
 
       {/* Filtros panel */}
-      <SlidePanel
+      <StandardModalDialog
         open={filterPanelOpen}
         onClose={() => setFilterPanelOpen(false)}
         title="Filtros"
         subtitle="Filtre a lista de cursos por status e categoria"
-        widthMode="compact"
-        compactWidth={360}
       >
         <div className="p-5 flex-1 overflow-y-auto space-y-5">
           <div className="space-y-2">
@@ -1110,16 +1108,14 @@ export default function AdminAllkademyPage() {
             ))}
           </div>
         </div>
-      </SlidePanel>
+      </StandardModalDialog>
 
       {/* Column config panel */}
-      <SlidePanel
+      <StandardModalDialog
         open={colConfigOpen}
         onClose={() => setColConfigOpen(false)}
         title="Configurar colunas"
         subtitle="Escolha quais colunas aparecem na tabela"
-        widthMode="compact"
-        compactWidth={360}
       >
         <div className="p-5 flex-1 overflow-y-auto space-y-2">
           {ALL_COLUMNS.map((col) => (
@@ -1129,15 +1125,22 @@ export default function AdminAllkademyPage() {
             </label>
           ))}
         </div>
-      </SlidePanel>
+      </StandardModalDialog>
 
       {/* Sheet: Criar / Editar Curso */}
-      <Sheet open={sheetOpen} onOpenChange={setSheetOpen}>
-        <SheetContent className="w-full sm:max-w-md overflow-y-auto">
-          <SheetHeader className="mb-6">
-            <SheetTitle>{editingCourse ? "Editar Curso" : "Novo Curso"}</SheetTitle>
-          </SheetHeader>
-          <div className="space-y-4">
+      <EmbeddedSlideScreen
+        open={sheetOpen}
+        onClose={() => setSheetOpen(false)}
+        title={editingCourse ? "Editar Curso" : "Novo Curso"}
+        pin={{
+          id: editingCourse ? `allkademy-edit-${editingCourse.id}` : "allkademy-novo",
+          label: editingCourse ? "Editar Curso" : "Novo Curso",
+          icon: BookOpen,
+          path: "/admin/allkademy",
+          activateKey: editingCourse ? `edit:${editingCourse.id}` : "create",
+        }}
+      >
+          <div className="flex-1 overflow-y-auto p-6 space-y-4 w-full">
             <div className="space-y-1.5">
               <Label className="text-xs">Título <span className="text-red-500">*</span></Label>
               <Input placeholder="Ex: Fundamentos de Marketing Digital" className="h-9 text-sm"
@@ -1206,8 +1209,7 @@ export default function AdminAllkademyPage() {
               </Button>
             </div>
           </div>
-        </SheetContent>
-      </Sheet>
+      </EmbeddedSlideScreen>
 
       {/* Detail sheet */}
       <CourseDetailSheet
@@ -1219,11 +1221,11 @@ export default function AdminAllkademyPage() {
       {/* Confirm delete */}
       <ConfirmationDialog
         open={!!deleteTarget}
-        onOpenChange={(open) => !open && setDeleteTarget(null)}
+        onClose={() => setDeleteTarget(null)}
         title="Excluir Curso"
-        description="Tem certeza que deseja excluir este curso? Todos os módulos e aulas serão removidos."
-        confirmLabel="Excluir"
-        variant="destructive"
+        message="Tem certeza que deseja excluir este curso? Todos os módulos e aulas serão removidos."
+        confirmText="Excluir"
+        destructive
         onConfirm={handleDelete}
       />
     </div>

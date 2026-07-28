@@ -1,6 +1,6 @@
 // @ts-nocheck
 import { useState, useEffect, useRef, useCallback } from "react";
-import { useSidebar } from "@/contexts/sidebar-context";
+import { EmbeddedSlideScreen } from "@/components/embedded-slide-screen";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -188,9 +188,6 @@ export function TaskLaunchDrawer({
   onReleased,
   onTaskUpdated,
 }: TaskLaunchDrawerProps) {
-  // ── Sidebar width for full-height panel positioning ────────────────────────
-  const { sidebarWidth } = useSidebar();
-
   // ── State ──────────────────────────────────────────────────────────────────
   const [initializing, setInitializing] = useState(true);
   const [currentTask, setCurrentTask] = useState<any>(task);
@@ -216,6 +213,9 @@ export function TaskLaunchDrawer({
   const [aiFilledFields, setAiFilledFields] = useState<Set<string>>(new Set());
   const [overwriteExisting, setOverwriteExisting] = useState(false);
   const [aiFillSuccess, setAiFillSuccess] = useState(false);
+  // "Melhorar com IA" por pergunta (modo manual) — guarda a question_key em
+  // andamento pra mostrar o spinner só naquele botão específico.
+  const [improvingKey, setImprovingKey] = useState<string | null>(null);
 
   // ── Initialize ─────────────────────────────────────────────────────────────
   useEffect(() => {
@@ -478,14 +478,30 @@ export function TaskLaunchDrawer({
   }
 
   // ── Handle AI/Assistant fill ────────────────────────────────────────────
+  // Chama o Consultor IA (backend, Gemini embasado na base PLAC) — a agência
+  // sempre revisa/ajusta as sugestões na tela de questionário antes de salvar,
+  // nada é enviado direto pro cliente a partir daqui.
   async function handleAIFill() {
     if (!aiText.trim() || briefingQuestions.length === 0) return;
     setAiLoading(true);
     setAiError(null);
     setAiFillSuccess(false);
     try {
-      // Local parser — no external API needed
-      const suggested = parseFreetextToAnswers(aiText, briefingQuestions);
+      const questionsPayload = briefingQuestions.map((q, idx) => ({
+        question_key: getQuestionKey(q, idx),
+        question_text: q.question_text ?? q.label ?? `Pergunta ${idx + 1}`,
+        type: q.type,
+        options: q.options,
+        required: q.required,
+      }));
+      const res: any = await apiClient.aiFillBriefing({
+        free_text: aiText,
+        questions: questionsPayload,
+      });
+      const suggested: Record<string, string> = {};
+      for (const a of res?.answers ?? []) {
+        if (a?.question_key && a?.answer) suggested[a.question_key] = a.answer;
+      }
 
       const newAnswers = { ...answers };
       const filledNow = new Set<string>();
@@ -511,10 +527,35 @@ export function TaskLaunchDrawer({
       setAiFillSuccess(true);
       // Switch to questionnaire view so user can review suggestions
       setFillMode("manual");
-    } catch {
-      setAiError("Não foi possível processar o briefing. Tente novamente.");
+    } catch (err: any) {
+      setAiError(err?.message || "Não foi possível processar o briefing. Tente novamente.");
     } finally {
       setAiLoading(false);
+    }
+  }
+
+  // ── Handle "Melhorar com IA" on a single question (manual mode) ──────────
+  async function handleImproveAnswer(question: any, idx: number) {
+    const key = getQuestionKey(question, idx);
+    const questionText = question.question_text ?? question.label ?? `Pergunta ${idx + 1}`;
+    const currentAnswer = answers[key]?.answer ?? "";
+    setImprovingKey(key);
+    try {
+      const res: any = await apiClient.aiImproveAnswer({
+        question_text: questionText,
+        current_answer: currentAnswer,
+        type: question.type,
+      });
+      if (res?.improved_answer) {
+        setAnswers((prev) => ({
+          ...prev,
+          [key]: { ...(prev[key] ?? {}), answer: res.improved_answer, answeredAt: new Date().toISOString() },
+        }));
+      }
+    } catch (err: any) {
+      setAiError(err?.message || "Não foi possível melhorar esta resposta. Tente novamente.");
+    } finally {
+      setImprovingKey(null);
     }
   }
 
@@ -566,29 +607,61 @@ export function TaskLaunchDrawer({
 
         {/* ── text_short (default) ── */}
         {(q.type === "text_short" || !q.type) && (
-          <Input
-            placeholder="Sua resposta..."
-            value={a.answer ?? ""}
-            onChange={(e) => setAnswer(key, { answer: e.target.value })}
-            className={cn(
-              "text-sm",
-              isMissing && !a.answer?.trim() && "border-red-300",
-            )}
-          />
+          <>
+            <Input
+              placeholder="Sua resposta..."
+              value={a.answer ?? ""}
+              onChange={(e) => setAnswer(key, { answer: e.target.value })}
+              className={cn(
+                "text-sm",
+                isMissing && !a.answer?.trim() && "border-red-300",
+              )}
+            />
+            <button
+              type="button"
+              onClick={() => handleImproveAnswer(q, idx)}
+              disabled={improvingKey === key}
+              title="Melhorar resposta com IA"
+              className="inline-flex items-center gap-1 text-[10px] font-medium text-violet-600 hover:text-violet-700 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {improvingKey === key ? (
+                <Loader2 className="h-3 w-3 animate-spin" />
+              ) : (
+                <Sparkles className="h-3 w-3" />
+              )}
+              {improvingKey === key ? "Melhorando..." : "Melhorar com IA"}
+            </button>
+          </>
         )}
 
         {/* ── text_long ── */}
         {q.type === "text_long" && (
-          <Textarea
-            placeholder="Descreva em detalhes..."
-            value={a.answer ?? ""}
-            onChange={(e) => setAnswer(key, { answer: e.target.value })}
-            rows={4}
-            className={cn(
-              "text-sm resize-none",
-              isMissing && !a.answer?.trim() && "border-red-300",
-            )}
-          />
+          <>
+            <Textarea
+              placeholder="Descreva em detalhes..."
+              value={a.answer ?? ""}
+              onChange={(e) => setAnswer(key, { answer: e.target.value })}
+              rows={4}
+              className={cn(
+                "text-sm resize-none",
+                isMissing && !a.answer?.trim() && "border-red-300",
+              )}
+            />
+            <button
+              type="button"
+              onClick={() => handleImproveAnswer(q, idx)}
+              disabled={improvingKey === key}
+              title="Melhorar resposta com IA"
+              className="inline-flex items-center gap-1 text-[10px] font-medium text-violet-600 hover:text-violet-700 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {improvingKey === key ? (
+                <Loader2 className="h-3 w-3 animate-spin" />
+              ) : (
+                <Sparkles className="h-3 w-3" />
+              )}
+              {improvingKey === key ? "Melhorando..." : "Melhorar com IA"}
+            </button>
+          </>
         )}
 
         {/* ── select ── */}
@@ -829,7 +902,7 @@ export function TaskLaunchDrawer({
           <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2.5 flex items-start gap-2">
             <Info className="h-4 w-4 text-amber-500 shrink-0 mt-0.5" />
             <p className="text-xs text-amber-700">
-              <span className="font-semibold">Assistente automático local.</span> As sugestões são geradas pelo dispositivo com base em palavras-chave — sem envio de dados para serviços externos. Revise as respostas antes de salvar.
+              <span className="font-semibold">Consultor IA (Gemini).</span> As respostas são geradas com base no texto informado e na metodologia PLAC. Nenhuma resposta é salva automaticamente — revise e ajuste antes de confirmar.
             </p>
           </div>
 
@@ -1064,22 +1137,9 @@ export function TaskLaunchDrawer({
   }
 
   // ── Render ─────────────────────────────────────────────────────────────────
-  const panelWidth = `calc(100vw - ${sidebarWidth}px)`;
-
   return (
-    <>
-      {/* Backdrop */}
-      <div
-        className="fixed inset-0 z-40 bg-black/20 backdrop-blur-[2px]"
-        style={{ left: `${sidebarWidth}px` }}
-        onClick={onClose}
-      />
-
-      {/* Full-height side panel */}
-      <div
-        className="fixed top-0 right-0 bottom-0 z-50 flex flex-col bg-white border-l border-slate-200 shadow-2xl overflow-hidden"
-        style={{ left: `${sidebarWidth}px`, width: panelWidth }}
-      >
+    <EmbeddedSlideScreen open={true} onClose={onClose} hideHeader>
+      <div className="flex flex-col flex-1 min-h-0 w-full">
         {initializing ? (
           /* Loading state */
           <div className="flex-1 flex flex-col items-center justify-center gap-3">
@@ -1181,6 +1241,6 @@ export function TaskLaunchDrawer({
           </>
         )}
       </div>
-    </>
+    </EmbeddedSlideScreen>
   );
 }

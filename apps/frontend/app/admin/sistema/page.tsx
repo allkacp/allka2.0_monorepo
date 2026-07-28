@@ -8,9 +8,8 @@ import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/components/ui/use-toast";
-import {
-  Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
-} from "@/components/ui/dialog";
+import { StandardModalDialog } from "@/components/standard-modal-dialog";
+import { EmbeddedSlideScreen } from "@/components/embedded-slide-screen";
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
@@ -34,7 +33,6 @@ import {
   StandardPageBanner,
 } from "@/components/standard-page-shell";
 import { PinToTrayButton } from "@/components/pin-to-tray-button";
-import { SlidePanel } from "@/components/slide-panel";
 import { IconToolbarButton } from "@/components/icon-toolbar-button";
 import { NeonBadge } from "@/components/neon-badge";
 import { ItemsPerPageSelect } from "@/components/items-per-page-select";
@@ -362,12 +360,19 @@ function EditConnectorModal({ connector, open, onClose, onSave }) {
   useEffect(() => { setForm(connector ?? {}); setShowKey(false); }, [connector]);
 
   return (
-    <Dialog open={open} onOpenChange={v => { if (!v) onClose(); }}>
-      <DialogContent className="sm:max-w-lg">
-        <DialogHeader>
-          <DialogTitle className="text-sm">Editar conector — {form.name}</DialogTitle>
-        </DialogHeader>
-        <div className="grid grid-cols-1 gap-3 py-2 max-h-[60vh] overflow-y-auto pr-1">
+    <EmbeddedSlideScreen
+      open={open}
+      onClose={onClose}
+      title={`Editar conector — ${form.name}`}
+      subtitle="Configurações de integração e conformidade LGPD"
+      footer={
+        <div className="flex justify-end gap-2">
+          <Button variant="outline" size="sm" className="h-8 text-xs" onClick={onClose}>Cancelar</Button>
+          <Button size="sm" className="h-8 text-xs" onClick={() => { onSave(form); onClose(); }}>Salvar</Button>
+        </div>
+      }
+    >
+        <div className="grid grid-cols-1 gap-3 p-5 overflow-y-auto w-full max-w-2xl mx-auto">
           <div>
             <p className="text-[11px] font-semibold text-slate-600 dark:text-slate-300 mb-1">Nome</p>
             <Input value={form.name ?? ""} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} className="h-8 text-xs" />
@@ -437,12 +442,7 @@ function EditConnectorModal({ connector, open, onClose, onSave }) {
             <Input value={form.transferCountry ?? ""} onChange={e => setForm(f => ({ ...f, transferCountry: e.target.value }))} placeholder="ex: EUA, Europa, Nacional..." className="h-8 text-xs" />
           </div>
         </div>
-        <DialogFooter>
-          <Button variant="outline" size="sm" className="h-8 text-xs" onClick={onClose}>Cancelar</Button>
-          <Button size="sm" className="h-8 text-xs" onClick={() => { onSave(form); onClose(); }}>Salvar</Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+    </EmbeddedSlideScreen>
   );
 }
 
@@ -762,7 +762,7 @@ export default function AdminSistemaPage() {
 
   return (
     <div className={STANDARD_SHELL_PANEL_CLASS}>
-    <div className="h-full min-h-0 flex flex-col">
+    <div className="relative h-full min-h-0 flex flex-col">
       <div className="shrink-0 -mb-[11px]">
       <StandardPageBanner
         icon={Server}
@@ -1343,13 +1343,13 @@ export default function AdminSistemaPage() {
           </div>
 
           {/* Filtros panel — connector + action checkboxes */}
-          <SlidePanel
+          <StandardModalDialog
             open={logFilterPanelOpen}
             onClose={() => setLogFilterPanelOpen(false)}
             title="Filtros"
             subtitle="Filtre o registro de atividade por conector e ação"
-            widthMode="compact"
-            compactWidth={360}
+            size="compact"
+            maxWidthPx={360}
           >
             <div className="p-5 flex-1 overflow-y-auto space-y-5">
               <div className="space-y-2">
@@ -1371,16 +1371,16 @@ export default function AdminSistemaPage() {
                 ))}
               </div>
             </div>
-          </SlidePanel>
+          </StandardModalDialog>
 
           {/* Detalhes do registro panel */}
-          <SlidePanel
+          <StandardModalDialog
             open={!!logDetailTarget}
             onClose={() => setLogDetailTarget(null)}
             title="Detalhes do registro"
             subtitle={logDetailTarget?.ts}
-            widthMode="compact"
-            compactWidth={380}
+            size="compact"
+            maxWidthPx={380}
           >
             {logDetailTarget && (
               <div className="p-5 flex-1 overflow-y-auto space-y-4">
@@ -1406,7 +1406,7 @@ export default function AdminSistemaPage() {
                 </div>
               </div>
             )}
-          </SlidePanel>
+          </StandardModalDialog>
 
           <div>
             <h3 className="text-sm font-semibold text-slate-700 dark:text-slate-200 mb-3 flex items-center gap-2">

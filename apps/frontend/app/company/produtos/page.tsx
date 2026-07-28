@@ -15,6 +15,11 @@ import {
 import { ProjectCreateNewPanel } from "@/components/project-create-new-panel";
 import { useProjectBasket } from "@/contexts/project-basket-context";
 import { cn } from "@/lib/utils";
+import {
+  STANDARD_SHELL_PANEL_CLASS,
+  StandardPageBanner,
+} from "@/components/standard-page-shell";
+import { PinToTrayButton } from "@/components/pin-to-tray-button";
 
 function fmtBRL(n: number) {
   return n.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
@@ -99,30 +104,33 @@ export default function EmpresaProdutos() {
   };
 
   return (
-    <div className="p-6 space-y-6">
+    <div className={STANDARD_SHELL_PANEL_CLASS}>
+    <div className="relative h-full min-h-0 flex flex-col overflow-hidden">
+    <div className="h-full min-h-0 flex flex-col overflow-y-auto p-6 space-y-6">
       {/* Header */}
-      <div className="flex items-start justify-between gap-4">
-        <div>
-          <h1 className="text-xl font-bold text-slate-900">
-            Catálogo de Produtos
-          </h1>
-          <p className="text-sm text-slate-500 mt-0.5">
-            Explore os serviços disponíveis e contrate para seus projetos
-          </p>
-        </div>
-
-        {cartCount > 0 && (
-          <Button
-            onClick={() => setCartOpen(true)}
-            className="relative bg-violet-600 hover:bg-violet-700 text-white shrink-0"
-          >
-            <ShoppingCart className="h-4 w-4 mr-2" />
-            Carrinho
-            <span className="ml-2 bg-white text-violet-700 rounded-full text-xs font-bold px-2 py-0.5">
-              {cartCount}
-            </span>
-          </Button>
-        )}
+      <div className="shrink-0 -mb-[11px]">
+      <StandardPageBanner
+        icon={Package}
+        title="Catálogo de Produtos"
+        description="Explore os serviços disponíveis e contrate para seus projetos"
+        actions={
+          <>
+            {cartCount > 0 && (
+              <button
+                onClick={() => setCartOpen(true)}
+                className="relative flex items-center gap-2 h-8 px-3 rounded-lg border border-white/70 text-white bg-white/10 hover:bg-white/20 transition-colors text-sm font-medium"
+              >
+                <ShoppingCart className="h-4 w-4" />
+                Carrinho
+                <span className="ml-1 bg-white text-violet-700 rounded-full text-xs font-bold px-2 py-0.5">
+                  {cartCount}
+                </span>
+              </button>
+            )}
+            <PinToTrayButton id="page-company-produtos" label="Produtos" icon={Package} path="/company/produtos" />
+          </>
+        }
+      />
       </div>
 
       {/* Catalog */}
@@ -245,6 +253,8 @@ export default function EmpresaProdutos() {
           setPanelOpen(false);
         }}
       />
+    </div>
+    </div>
     </div>
   );
 }

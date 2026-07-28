@@ -41,6 +41,7 @@ import shareRouter from "./routes/share";
 import expensesRouter from "./routes/expenses";
 import walletsRouter from "./routes/wallets";
 import squadRouter from "./routes/squad";
+import aiConsultorRouter from "./routes/ai-consultor";
 import { prisma } from "./lib/prisma";
 import { errorHandler } from "./middleware/error";
 
@@ -174,6 +175,9 @@ app.use("/api/expenses", expensesRouter);
 app.use("/api/wallets", walletsRouter);
 // Squad — plano pós-pago com limite de crédito
 app.use("/api/squad", squadRouter);
+// Consultor IA — preencher/melhorar briefing de tarefas via Gemini, embasado
+// na base de conhecimento PLAC (ver lib/ai-consultor.ts e ai-knowledge-base.ts)
+app.use("/api/ai-consultor", aiConsultorRouter);
 
 // ─── 404 Handler ──────────────────────────────────────────────────────────────
 

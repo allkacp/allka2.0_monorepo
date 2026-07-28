@@ -1090,6 +1090,12 @@ class ApiClient {
   async getOperationalTasks(filters?: Record<string, any>) {
     return this.get("/project-tasks", filters);
   }
+  // Item único — mesmo modelo/include rico usado pela listagem (project,
+  // project_product, stages, briefing_answers, attachments). Nunca usar
+  // getTask() (rota /tasks/:id, outro model/router mais pobre) aqui.
+  async getOperationalTask(id: string) {
+    return this.get(`/project-tasks/${id}`);
+  }
   async launchProjectTask(id: string) {
     return this.patch(`/project-tasks/${id}/launch`, {});
   }
@@ -1144,6 +1150,16 @@ class ApiClient {
   }
   async saveProjectTaskBriefing(id: string, body: { answers: any[] }) {
     return this.put(`/project-tasks/${id}/briefing`, body);
+  }
+  // ─── Consultor IA (Gemini, embasado na base PLAC) ──────────────────────────
+  async aiFillBriefing(body: {
+    free_text: string;
+    questions: { question_key: string; question_text: string; type?: string; options?: string[]; required?: boolean }[];
+  }) {
+    return this.post("/ai-consultor/fill-briefing", body);
+  }
+  async aiImproveAnswer(body: { question_text: string; current_answer?: string; type?: string }) {
+    return this.post("/ai-consultor/improve-answer", body);
   }
   async submitProjectTaskBriefing(id: string, body: { answers: any[] }) {
     return this.patch(`/project-tasks/${id}/submit-briefing`, body);

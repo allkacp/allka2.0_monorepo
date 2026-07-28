@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useCallback, useEffect } from "react";
-import { Plus, Mail, Loader2, Pencil, Lock, Unlock, Crown } from "lucide-react";
+import { Plus, Mail, Loader2, Pencil, Lock, Unlock, Crown, Users } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
@@ -12,10 +12,14 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { PageHeader } from "@/components/page-header";
 import { SlidePanel } from "@/components/slide-panel";
 import { useToast } from "@/components/ui/use-toast";
 import { apiClient } from "@/lib/api-client";
+import {
+  STANDARD_SHELL_PANEL_CLASS,
+  StandardPageBanner,
+} from "@/components/standard-page-shell";
+import { PinToTrayButton } from "@/components/pin-to-tray-button";
 
 // Self-service: a própria Company cria/gerencia seus colaboradores via
 // /api/company/users. Não mostra company_id nem permite escolher outra
@@ -159,21 +163,30 @@ export default function CompanyUsuariosPage() {
   }
 
   return (
-    <div className="p-4 sm:p-6 space-y-4">
-      <PageHeader
+    <div className={STANDARD_SHELL_PANEL_CLASS}>
+    <div className="relative h-full min-h-0 flex flex-col overflow-hidden">
+    <div className="h-full min-h-0 flex flex-col overflow-y-auto p-4 sm:p-6 space-y-4">
+      <div className="shrink-0 -mb-[11px]">
+      <StandardPageBanner
+        icon={Users}
         title="Usuários"
         description="Colaboradores com acesso à sua empresa na plataforma"
         actions={
-          <Button onClick={openCreate} size="sm" className="h-9 gap-2 px-4 text-sm btn-brand border-0 shadow-sm">
-            <Plus className="h-4 w-4" /> Novo usuário
-          </Button>
+          <>
+            <Button onClick={openCreate} size="sm" className="h-9 gap-2 px-4 text-sm btn-brand border-0 shadow-sm">
+              <Plus className="h-4 w-4" /> Novo usuário
+            </Button>
+            <PinToTrayButton id="page-company-usuarios" label="Usuários" icon={Users} path="/company/usuarios" />
+          </>
         }
       />
+      </div>
 
       <div className="border border-slate-200/70 dark:border-slate-800 rounded-lg overflow-hidden shadow-sm bg-white dark:bg-slate-900">
         <div className="flex items-center gap-3 px-4 py-3 border-b border-slate-200/70 dark:border-slate-800">
           <Input
             placeholder="Buscar por nome ou e-mail..."
+            autoComplete="new-password"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             className="h-9 text-sm max-w-xs"
@@ -398,6 +411,8 @@ export default function CompanyUsuariosPage() {
           )}
         </div>
       </SlidePanel>
+    </div>
+    </div>
     </div>
   );
 }

@@ -32,11 +32,23 @@ import {
   CheckCircle as CheckCircleIcon,
   Pause,
   Loader2,
+  Info,
+  Image as ImageIcon,
+  AlignLeft,
+  StickyNote,
+  Tag,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { AddressMapPicker } from "@/components/address/address-map-picker";
 import {
@@ -112,7 +124,48 @@ interface Company {
   activeUsers?: number;
   totalUsers?: number;
   projects?: number;
+  segment?: string;
+  description?: string;
+  logo?: string;
+  observations?: string;
+  avatar?: string;
   // ... potentially other fields
+}
+
+// Rótulo de campo padrão do formulário (compacto: text-[11px] uppercase)
+// com ícone de info opcional que mostra uma explicação em tooltip ao passar
+// o mouse — mesmo padrão do PageHeader (components/page-header.tsx), só que
+// em escala menor para caber na densidade deste painel.
+function FieldLabel({
+  icon: Icon,
+  children,
+  info,
+}: {
+  icon?: any;
+  children: React.ReactNode;
+  info: string;
+}) {
+  return (
+    <label className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide flex items-center gap-1">
+      {Icon && <Icon className="h-3 w-3" />}
+      {children}
+      <TooltipProvider delayDuration={200}>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <button
+              type="button"
+              className="ml-0.5 flex items-center justify-center h-3.5 w-3.5 rounded-full hover:bg-slate-100 transition-colors"
+            >
+              <Info className="h-2.5 w-2.5 text-slate-400" strokeWidth={2.5} />
+            </button>
+          </TooltipTrigger>
+          <TooltipContent side="top" className="max-w-[220px] p-2.5" sideOffset={4}>
+            <p className="text-xs leading-relaxed">{info}</p>
+          </TooltipContent>
+        </Tooltip>
+      </TooltipProvider>
+    </label>
+  );
 }
 
 // Interface update based on the provided updates
@@ -765,9 +818,9 @@ export function CompanyEditSlidePanel({
                     <div className="p-4 grid grid-cols-3 gap-3">
                       {/* Nome */}
                       <div className="col-span-2 space-y-1">
-                        <label className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide flex items-center gap-1">
-                          <Building2 className="h-3 w-3" /> Nome da Empresa
-                        </label>
+                        <FieldLabel icon={Building2} info="Razão social ou nome fantasia usado em toda a plataforma para identificar esta conta.">
+                          Nome da Empresa
+                        </FieldLabel>
                         <Input
                           value={editedCompany.name}
                           onChange={(e) => setEditedCompany({ ...editedCompany, name: e.target.value })}
@@ -777,7 +830,9 @@ export function CompanyEditSlidePanel({
                       </div>
                       {/* Tipo */}
                       <div className="space-y-1">
-                        <label className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide">Tipo</label>
+                        <FieldLabel info="Categoria da conta na plataforma: Company, Agency ou Nomad — define permissões e fluxos disponíveis.">
+                          Tipo
+                        </FieldLabel>
                         <Select
                           value={editedCompany.type}
                           onValueChange={(v) => setEditedCompany({ ...editedCompany, type: v as CompanyType })}
@@ -792,9 +847,9 @@ export function CompanyEditSlidePanel({
                       </div>
                       {/* Email */}
                       <div className="space-y-1">
-                        <label className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide flex items-center gap-1">
-                          <Mail className="h-3 w-3" /> E-mail
-                        </label>
+                        <FieldLabel icon={Mail} info="E-mail principal de contato e login da conta — usado para notificações e comunicações da plataforma.">
+                          E-mail
+                        </FieldLabel>
                         <Input
                           type="email"
                           value={editedCompany.email}
@@ -805,9 +860,9 @@ export function CompanyEditSlidePanel({
                       </div>
                       {/* Telefone */}
                       <div className="space-y-1">
-                        <label className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide flex items-center gap-1">
-                          <Phone className="h-3 w-3" /> Telefone
-                        </label>
+                        <FieldLabel icon={Phone} info="Telefone de contato da empresa, com DDI e DDD — formato +55 (11) 98765-4321.">
+                          Telefone
+                        </FieldLabel>
                         <Input
                           type="tel"
                           value={editedCompany.phone}
@@ -818,9 +873,9 @@ export function CompanyEditSlidePanel({
                       </div>
                       {/* Website */}
                       <div className="space-y-1">
-                        <label className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide flex items-center gap-1">
-                          <Globe className="h-3 w-3" /> Website
-                        </label>
+                        <FieldLabel icon={Globe} info="Endereço do site oficial da empresa, exibido em materiais e páginas voltadas ao cliente.">
+                          Website
+                        </FieldLabel>
                         <Input
                           value={editedCompany.website || ""}
                           onChange={(e) => setEditedCompany({ ...editedCompany, website: e.target.value })}
@@ -828,6 +883,56 @@ export function CompanyEditSlidePanel({
                           placeholder="https://empresa.com"
                         />
                       </div>
+                      {/* Logo */}
+                      <div className="space-y-1">
+                        <FieldLabel icon={ImageIcon} info="URL da imagem do logotipo, exibida no avatar da conta em toda a plataforma.">
+                          Logo (URL)
+                        </FieldLabel>
+                        <div className="flex items-center gap-2">
+                          <Avatar className="h-8 w-8 shrink-0">
+                            <AvatarFallback className="bg-blue-600 text-white text-[10px] font-bold">
+                              {editedCompany.name?.substring(0, 2).toUpperCase() || "--"}
+                            </AvatarFallback>
+                          </Avatar>
+                          <Input
+                            value={editedCompany.logo || ""}
+                            onChange={(e) => setEditedCompany({ ...editedCompany, logo: e.target.value })}
+                            className="h-8 text-sm"
+                            placeholder="https://exemplo.com/logo.png"
+                          />
+                        </div>
+                      </div>
+                      {/* Descrição */}
+                      <div className="col-span-3 space-y-1">
+                        <FieldLabel icon={AlignLeft} info="Texto público sobre o que a empresa faz — pode aparecer em materiais e páginas voltadas ao cliente.">
+                          Descrição
+                        </FieldLabel>
+                        <Textarea
+                          value={editedCompany.description || ""}
+                          onChange={(e) => setEditedCompany({ ...editedCompany, description: e.target.value })}
+                          className="text-sm min-h-[64px]"
+                          placeholder="Breve descrição sobre a empresa..."
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Section: Observações Internas */}
+                  <div className="bg-white rounded-xl border border-slate-200/80 overflow-hidden">
+                    <div className="flex items-center gap-2 px-4 py-2.5 border-b border-slate-100 bg-slate-50/60">
+                      <StickyNote className="h-3.5 w-3.5 text-orange-500" />
+                      <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Observações Internas</span>
+                    </div>
+                    <div className="p-4 space-y-1">
+                      <FieldLabel icon={StickyNote} info="Anotações internas visíveis apenas para administradores — não aparece para o cliente.">
+                        Observações
+                      </FieldLabel>
+                      <Textarea
+                        value={editedCompany.observations || ""}
+                        onChange={(e) => setEditedCompany({ ...editedCompany, observations: e.target.value })}
+                        className="text-sm min-h-[64px]"
+                        placeholder="Notas internas sobre esta conta, visíveis apenas para administradores..."
+                      />
                     </div>
                   </div>
 
@@ -840,9 +945,9 @@ export function CompanyEditSlidePanel({
                     <div className="p-4 grid grid-cols-3 gap-3">
                       {/* CNPJ */}
                       <div className="space-y-1">
-                        <label className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide flex items-center gap-1">
-                          <FileText className="h-3 w-3" /> CNPJ
-                        </label>
+                        <FieldLabel icon={FileText} info="Documento fiscal da empresa — formato 00.000.000/0000-00.">
+                          CNPJ
+                        </FieldLabel>
                         <Input
                           value={editedCompany.document || editedCompany.cnpj || ""}
                           onChange={(e) => setEditedCompany({ ...editedCompany, document: e.target.value, cnpj: e.target.value })}
@@ -852,9 +957,9 @@ export function CompanyEditSlidePanel({
                       </div>
                       {/* Tipo de conta */}
                       <div className="space-y-1">
-                        <label className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide flex items-center gap-1">
-                          <Shield className="h-3 w-3" /> Tipo de Conta
-                        </label>
+                        <FieldLabel icon={Shield} info="Define o nível de recursos disponíveis: Independente ou Premium.">
+                          Tipo de Conta
+                        </FieldLabel>
                         <Select
                           value={editedCompany.account_type || "independent"}
                           onValueChange={(v) => setEditedCompany({ ...editedCompany, account_type: v as "independent" | "premium" })}
@@ -868,9 +973,9 @@ export function CompanyEditSlidePanel({
                       </div>
                       {/* Plano */}
                       <div className="space-y-1">
-                        <label className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide flex items-center gap-1">
-                          <Crown className="h-3 w-3" /> Plano
-                        </label>
+                        <FieldLabel icon={Crown} info="Plano contratado pela conta — define limites de uso e recursos disponíveis na plataforma.">
+                          Plano
+                        </FieldLabel>
                         <Select
                           value={currentPlan}
                           onValueChange={setCurrentPlan}
@@ -882,6 +987,18 @@ export function CompanyEditSlidePanel({
                             <SelectItem value="enterprise">Enterprise</SelectItem>
                           </SelectContent>
                         </Select>
+                      </div>
+                      {/* Segmento */}
+                      <div className="col-span-3 space-y-1">
+                        <FieldLabel icon={Tag} info="Setor de atuação da empresa (ex: Marketing Digital, Varejo, Saúde) — usado em filtros e relatórios.">
+                          Segmento
+                        </FieldLabel>
+                        <Input
+                          value={editedCompany.segment || ""}
+                          onChange={(e) => setEditedCompany({ ...editedCompany, segment: e.target.value })}
+                          className="h-8 text-sm max-w-sm"
+                          placeholder="Ex: Marketing Digital, E-commerce, Saúde"
+                        />
                       </div>
                     </div>
                   </div>
@@ -895,7 +1012,9 @@ export function CompanyEditSlidePanel({
                     <div className="p-4 grid grid-cols-3 gap-3">
                       {/* CEP — primeiro campo, com autofill via ViaCEP */}
                       <div className="col-span-3 space-y-1">
-                        <label className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide">CEP</label>
+                        <FieldLabel info="Usado para preencher automaticamente rua, bairro, cidade e estado.">
+                          CEP
+                        </FieldLabel>
                         <div className="relative max-w-[200px]">
                           <Input
                             value={editedCompany.zip_code || ""}
@@ -912,7 +1031,9 @@ export function CompanyEditSlidePanel({
                       </div>
                       {/* Rua */}
                       <div className="col-span-2 space-y-1">
-                        <label className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide">Rua / Logradouro</label>
+                        <FieldLabel info="Nome da rua ou avenida do endereço da empresa.">
+                          Rua / Logradouro
+                        </FieldLabel>
                         <Input
                           value={editedCompany.street || ""}
                           onChange={(e) => setEditedCompany({ ...editedCompany, street: e.target.value })}
@@ -922,7 +1043,9 @@ export function CompanyEditSlidePanel({
                       </div>
                       {/* Número */}
                       <div className="space-y-1">
-                        <label className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide">Número</label>
+                        <FieldLabel info="Número do imóvel no endereço da empresa.">
+                          Número
+                        </FieldLabel>
                         <Input
                           value={editedCompany.number || ""}
                           onChange={(e) => setEditedCompany({ ...editedCompany, number: e.target.value })}
@@ -932,7 +1055,9 @@ export function CompanyEditSlidePanel({
                       </div>
                       {/* Bairro */}
                       <div className="space-y-1">
-                        <label className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide">Bairro</label>
+                        <FieldLabel info="Bairro do endereço da empresa.">
+                          Bairro
+                        </FieldLabel>
                         <Input
                           value={editedCompany.neighborhood || ""}
                           onChange={(e) => setEditedCompany({ ...editedCompany, neighborhood: e.target.value })}
@@ -942,7 +1067,9 @@ export function CompanyEditSlidePanel({
                       </div>
                       {/* Cidade */}
                       <div className="space-y-1">
-                        <label className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide">Cidade</label>
+                        <FieldLabel info="Cidade onde a empresa está localizada.">
+                          Cidade
+                        </FieldLabel>
                         <Input
                           value={editedCompany.city || ""}
                           onChange={(e) => setEditedCompany({ ...editedCompany, city: e.target.value })}
@@ -952,7 +1079,9 @@ export function CompanyEditSlidePanel({
                       </div>
                       {/* Estado */}
                       <div className="space-y-1">
-                        <label className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide">Estado</label>
+                        <FieldLabel info="Sigla do estado (UF) — 2 letras, ex: SP, RJ, MG.">
+                          Estado
+                        </FieldLabel>
                         <Input
                           value={editedCompany.state || ""}
                           onChange={(e) => setEditedCompany({ ...editedCompany, state: e.target.value.toUpperCase() })}
@@ -990,17 +1119,6 @@ export function CompanyEditSlidePanel({
                         />
                       </div>
                     </div>
-                  </div>
-
-                  {/* Footer actions */}
-                  <div className="flex justify-end gap-2 pt-1">
-                    <Button type="button" variant="outline" onClick={handleClickCancel} className="h-8 px-5 text-xs">
-                      Cancelar
-                    </Button>
-                    <Button type="button" onClick={handleClickSave} className="h-8 px-5 text-xs">
-                      <Save className="h-3 w-3 mr-1.5" />
-                      Salvar Alterações
-                    </Button>
                   </div>
                 </div>
               </TabsContent>
@@ -1057,6 +1175,7 @@ export function CompanyEditSlidePanel({
                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400" />
                     <Input
                       placeholder="Buscar por nome ou e-mail..."
+                      autoComplete="new-password"
                       value={userSearch}
                       onChange={(e) => setUserSearch(e.target.value)}
                       className="pl-9 h-8 text-xs"

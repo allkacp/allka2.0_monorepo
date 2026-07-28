@@ -31,8 +31,12 @@
  *   >
  */
 import { useEffect, useState, type ReactNode } from "react";
-import { Pin, X } from "lucide-react";
-import { usePinEntry, type PinnedEntry } from "@/contexts/open-screens-context";
+import { Pin, X, Loader2 } from "lucide-react";
+import {
+  usePinEntry,
+  useOpenScreens,
+  type PinnedEntry,
+} from "@/contexts/open-screens-context";
 import {
   Tooltip,
   TooltipContent,
@@ -59,6 +63,24 @@ interface EmbeddedSlideScreenProps {
    * direito, por cima do que os `children` renderizarem ali.
    */
   hideHeader?: boolean;
+  /**
+   * Chamado (e aguardado, se async) bem antes de adicionar o pin à Bandeja
+   * de Telas — só no momento de PINAR (não ao despinar). Único ponto onde
+   * um callback "vivo" faz sentido aqui: ao contrário da reativação (que
+   * acontece depois de montar de novo, sem acesso ao estado antigo — daí
+   * `path`/`activateKey`, não callback), pinar acontece com o componente
+   * ainda montado.
+   *
+   * Pode retornar um Partial<PinnedEntry> (tipicamente só `path`, ex.: com
+   * `?resumeDraft=<id>` depois de salvar um rascunho) pra sobrescrever o
+   * `pin` recebido via prop — de propósito NÃO confiamos em re-render pra
+   * pegar isso: o `pin` passado como prop foi calculado ANTES deste
+   * callback rodar (ex.: antes do rascunho existir), e nada garante que o
+   * componente pai já re-renderizou com o valor novo no exato instante em
+   * que continuamos aqui depois do `await` — por isso o merge é explícito,
+   * não implícito via closure. Ver ProjectCreateNewPanel pro uso real.
+   */
+  onBeforePin?: () => void | Partial<PinnedEntry> | Promise<void | Partial<PinnedEntry>>;
 }
 
 export function EmbeddedSlideScreen({
@@ -71,10 +93,33 @@ export function EmbeddedSlideScreen({
   zIndex = 30,
   pin,
   hideHeader = false,
+  onBeforePin,
 }: EmbeddedSlideScreenProps) {
   const [mounted, setMounted] = useState(open);
   const [closing, setClosing] = useState(false);
+  const [pinning, setPinning] = useState(false);
   const { pinned, toggle: togglePin } = usePinEntry(pin ?? null);
+  const { addPinned } = useOpenScreens();
+
+  const handleTogglePin = async () => {
+    if (pinned || !pin) {
+      togglePin();
+      return;
+    }
+    let overrides: Partial<PinnedEntry> | void;
+    if (onBeforePin) {
+      setPinning(true);
+      try {
+        overrides = await onBeforePin();
+      } finally {
+        setPinning(false);
+      }
+    }
+    // Monta a entry final aqui (merge explícito), não via togglePin — que
+    // fecharia sobre o `pin` de UM render atrás, antes do rascunho existir
+    // (ver comentário de onBeforePin acima).
+    addPinned({ ...pin, ...(overrides || {}) });
+  };
 
   useEffect(() => {
     if (open) {
@@ -132,15 +177,21 @@ export function EmbeddedSlideScreen({
                 <TooltipTrigger asChild>
                   <button
                     type="button"
-                    onClick={togglePin}
+                    onClick={handleTogglePin}
+                    disabled={pinning}
                     aria-pressed={pinned}
-                    className={`flex items-center justify-center h-9 w-9 rounded-lg border transition-colors shrink-0 ${
+                    aria-label={pinned ? "Remover da Bandeja de Telas" : "Adicionar à Bandeja de Telas"}
+                    className={`flex items-center justify-center h-9 w-9 rounded-lg border transition-colors shrink-0 disabled:opacity-60 ${
                       pinned
                         ? "border-white bg-white/25 text-white"
                         : "border-white/40 bg-white/10 text-white/80 hover:bg-white/20 hover:text-white"
                     }`}
                   >
-                    <Pin className={`h-4 w-4 ${pinned ? "fill-current" : ""}`} />
+                    {pinning ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <Pin className={`h-4 w-4 ${pinned ? "fill-current" : ""}`} />
+                    )}
                   </button>
                 </TooltipTrigger>
                 <TooltipContent side="bottom" sideOffset={6}>
@@ -164,18 +215,24 @@ export function EmbeddedSlideScreen({
             <TooltipTrigger asChild>
               <button
                 type="button"
-                onClick={togglePin}
+                onClick={handleTogglePin}
+                disabled={pinning}
                 aria-pressed={pinned}
+                aria-label={pinned ? "Remover da Bandeja de Telas" : "Adicionar à Bandeja de Telas"}
                 // Posicionado pra não colidir com o X do cabeçalho custom
                 // (ModalBrandHeader usa top-5 right-5, ~36px de botão) —
                 // fica logo à esquerda dele, mesma altura.
-                className={`absolute top-5 right-16 z-10 flex items-center justify-center h-8 w-8 rounded-lg transition-all ${
+                className={`absolute top-5 right-16 z-10 flex items-center justify-center h-8 w-8 rounded-lg transition-all disabled:opacity-60 ${
                   pinned
                     ? "bg-white/25 text-white"
                     : "text-white/80 hover:bg-white/20 hover:text-white"
                 }`}
               >
-                <Pin className={`h-4 w-4 ${pinned ? "fill-current" : ""}`} />
+                {pinning ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Pin className={`h-4 w-4 ${pinned ? "fill-current" : ""}`} />
+                )}
               </button>
             </TooltipTrigger>
             <TooltipContent side="bottom" sideOffset={6}>

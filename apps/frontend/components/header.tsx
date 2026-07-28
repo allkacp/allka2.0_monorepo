@@ -23,8 +23,6 @@ import {
   Zap,
   Target,
   Activity,
-  Sun,
-  Moon,
   ShoppingCart,
   Trash2,
   Minus,
@@ -47,17 +45,15 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { useAccountType } from "@/contexts/account-type-context";
 import { useSidebar } from "@/contexts/sidebar-context";
-import { AlertsHeaderIcon } from "@/components/alerts-header-icon";
 import { NotificationPreferencesPanel } from "@/components/notification-preferences-panel";
 import { UserViewSlidePanel } from "@/components/user-view-slide-panel";
 import { usePartner } from "@/contexts/partner-context";
 import { useEmpresa } from "@/contexts/empresa-context";
 import { useAgencia } from "@/contexts/agencia-context";
 import { apiClient } from "@/lib/api-client";
-import { useSettings } from "@/contexts/settings-context";
 import { useProjectBasket } from "@/contexts/project-basket-context";
 import { ProjectBasketDrawer } from "@/components/project-basket-drawer";
-import { FontScaleControl } from "@/components/font-scale-control";
+import { useNotificationsPanel } from "@/contexts/notifications-panel-context";
 
 const LEVEL_CONFIG = {
   bronze: { label: "Bronze", bg: "bg-amber-100", text: "text-amber-700" },
@@ -128,8 +124,7 @@ function reducedUserCode(code?: string) {
 export function Header({ transparent = false }: { transparent?: boolean } = {}) {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
-  const [notifOpen, setNotifOpen] = useState(false);
-  const [notifTab, setNotifTab] = useState<"inbox" | "notifications">("inbox");
+  const { open: notifOpen, setOpen: setNotifOpen, tab: notifTab, setTab: setNotifTab } = useNotificationsPanel();
   const [profileOpen, setProfileOpen] = useState(false);
   const [selfUser, setSelfUser] = useState<any>(null);
   const [searchQuery, setSearchQuery] = useState("");
@@ -145,7 +140,6 @@ export function Header({ transparent = false }: { transparent?: boolean } = {}) 
   const { accountType, unlockAccountType, previewUserName, previewUserEmail, isPartnerActive } =
     useAccountType();
   const { userProfile, updateUserProfile } = useSidebar();
-  const { theme, setTheme } = useSettings();
   const partner = usePartner();
   const empresa = useEmpresa();
   const agencia = useAgencia();
@@ -674,11 +668,9 @@ export function Header({ transparent = false }: { transparent?: boolean } = {}) 
 
       <header
         className={cn(
-          "border-b px-4 sm:px-8 relative z-90 overflow-visible",
+          "px-4 sm:px-8 relative z-90 overflow-visible",
           hasBottomStats && "pb-2.5",
-          transparent
-            ? "border-white/15"
-            : "border-white shadow-xl",
+          !transparent && "shadow-xl",
         )}
         style={
           transparent
@@ -857,25 +849,9 @@ export function Header({ transparent = false }: { transparent?: boolean } = {}) 
               )}
             </div>
 
-            <AlertsHeaderIcon />
-
-            {/* Dark mode toggle — oculto em mobile para economizar espaço */}
-            <button
-              onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
-              title={theme === "dark" ? "Modo claro" : "Modo escuro"}
-              className="hidden sm:flex items-center justify-center h-9 w-9 rounded-xl bg-white/10 border border-white/15 text-white/70 hover:bg-white/20 hover:text-white transition-all"
-            >
-              {theme === "dark" ? (
-                <Sun className="h-4 w-4" />
-              ) : (
-                <Moon className="h-4 w-4" />
-              )}
-            </button>
-
-            {/* Controle de tamanho de fonte — apenas desktop */}
-            <div className="hidden lg:flex">
-              <FontScaleControl />
-            </div>
+            {/* Alertas, modo escuro e tamanho de fonte agora vivem como ícones
+                flutuantes abaixo da Bandeja de Telas (ver HeaderFloatingTools
+                em App.tsx) — não ficam mais no cabeçalho. */}
 
             {/* ── Cesta de projeto (oculta para líder) ───────────── */}
             {accountType !== "lider" && (() => {

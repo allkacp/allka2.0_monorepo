@@ -20,8 +20,13 @@ import {
   Link2,
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
-import { PageHeader } from "@/components/page-header";
+import {
+  STANDARD_SHELL_PANEL_CLASS,
+  STANDARD_SHELL_TABLE_CARD_CLASS,
+  StandardPageBanner,
+} from "@/components/standard-page-shell";
 import { ExportButton } from "@/components/export-button";
+import { PinToTrayButton } from "@/components/pin-to-tray-button";
 import { SlidePanel } from "@/components/slide-panel";
 import { IconToolbarButton } from "@/components/icon-toolbar-button";
 import { NeonBadge } from "@/components/neon-badge";
@@ -472,13 +477,26 @@ export default function LiderClientesPage() {
   );
 
   return (
-    <div ref={pageRef} className="p-4 sm:p-6 space-y-4">
-      <PageHeader
+    <div className={STANDARD_SHELL_PANEL_CLASS}>
+    <div ref={pageRef} className="relative h-full min-h-0 flex flex-col overflow-hidden">
+      <div className="shrink-0 -mb-[11px]">
+      <StandardPageBanner
+        icon={Tag}
         title="Clientes"
         description="Todos os clientes reais da plataforma — vinculados a Agency, Company, Partner ou sem vínculo (somente leitura)"
-        actions={<ExportButton pageRef={pageRef} filename="clientes" />}
+        actions={
+          <>
+            <div className="bg-white rounded-lg">
+              <ExportButton pageRef={pageRef} filename="clientes" />
+            </div>
+            <PinToTrayButton id="page-lider-clientes" label="Clientes" icon={Tag} path="/leader/clientes" />
+          </>
+        }
       />
+      </div>
 
+      <div className="flex-1 min-h-0 overflow-y-auto">
+      <div className="space-y-5">
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         <StatCard label="Total de Clientes" value={total} icon={Tag} color="blue" />
         <StatCard label="Pessoa Jurídica" value={totalPj} icon={Building2} color="violet" />
@@ -486,13 +504,14 @@ export default function LiderClientesPage() {
         <StatCard label="Ativos" value={totalActive} icon={Tag} color="orange" />
       </div>
 
-      <div className="bg-white dark:bg-slate-900 border border-[#e8edf5] dark:border-slate-700 rounded-xl shadow-sm overflow-hidden">
+      <div className={STANDARD_SHELL_TABLE_CARD_CLASS}>
         <div className="flex items-center gap-2 flex-wrap px-[18px] py-3">
           <div ref={searchBoxRef} className="relative flex-1 min-w-[220px] max-w-sm">
             <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <Input
               className="pl-8 h-9 text-sm"
               placeholder="Nome, ID, e-mail ou documento..."
+              autoComplete="new-password"
               value={searchInput}
               onFocus={() => setSearchFocused(true)}
               onChange={(e) => handleSearchChange(e.target.value)}
@@ -792,6 +811,8 @@ export default function LiderClientesPage() {
           </div>
         )}
       </div>
+      </div>
+      </div>
 
       {/* Filtros panel */}
       <SlidePanel
@@ -953,6 +974,7 @@ export default function LiderClientesPage() {
           );
         })()}
       </SlidePanel>
+    </div>
     </div>
   );
 }

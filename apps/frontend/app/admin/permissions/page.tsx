@@ -9,6 +9,7 @@ import { Badge } from "@/components/ui/badge"
 import { NeonBadge } from "@/components/neon-badge"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { PermissionProfileSlidePanel } from "@/components/permission-profile-slide-panel"
+import { ConfirmationDialog } from "@/components/confirmation-dialog"
 import {
   Search, Plus, Users, Shield, Settings, BarChart3, Edit, Trash2,
   Building2, Briefcase, Compass, Store, DollarSign, Lock, FileText, LayoutDashboard, Minus,
@@ -84,6 +85,10 @@ export default function PermissionsPage() {
   const [searchQuery, setSearchQuery] = useState("")
   const [selectedProfile, setSelectedProfile] = useState<PermissionProfile | null>(null)
   const [isPanelOpen, setIsPanelOpen] = useState(false)
+  const [deleteDialog, setDeleteDialog] = useState<{ open: boolean; profile: PermissionProfile | null }>({
+    open: false,
+    profile: null,
+  })
   const pageRef = useRef<HTMLDivElement>(null)
 
   const ALL: Scope = "all"; const OWN: Scope = "own"; const NONE: Scope = "none"
@@ -92,7 +97,7 @@ export default function PermissionsPage() {
 
   // NOTE: mock data — no backend endpoint for permission profiles exists yet;
   // this whole page renders from this hardcoded array (out of scope to wire up here).
-  const mockProfiles: PermissionProfile[] = [
+  const [profiles, setProfiles] = useState<PermissionProfile[]>([
     {
       id: 1, name: "Super Admin", description: "Acesso irrestrito a toda a plataforma", users: 2,
       permissions: Object.fromEntries(MODULES.map((m) => [m.key, fullModule(ALL)])) as P,
@@ -148,7 +153,7 @@ export default function PermissionsPage() {
         terms:       { view: OWN,  create: NONE, edit: NONE, delete: NONE },
       } as P,
     },
-  ]
+  ])
 
   const handleCreateProfile = () => {
     setSelectedProfile(null)
@@ -161,18 +166,38 @@ export default function PermissionsPage() {
   }
 
   const handleSaveProfile = (profileData: any) => {
+    if (selectedProfile) {
+      setProfiles((prev) =>
+        prev.map((p) => (p.id === selectedProfile.id ? { ...p, ...profileData } : p)),
+      )
+    } else {
+      setProfiles((prev) => [
+        ...prev,
+        { ...profileData, id: Math.max(0, ...prev.map((p) => p.id)) + 1, users: 0 },
+      ])
+    }
     setIsPanelOpen(false)
   }
 
-  const filteredProfiles = mockProfiles.filter((profile) =>
+  const handleDeleteProfile = (profile: PermissionProfile) => {
+    setDeleteDialog({ open: true, profile })
+  }
+
+  const handleConfirmDeleteProfile = () => {
+    if (deleteDialog.profile) {
+      setProfiles((prev) => prev.filter((p) => p.id !== deleteDialog.profile!.id))
+    }
+  }
+
+  const filteredProfiles = profiles.filter((profile) =>
     profile.name.toLowerCase().includes(searchQuery.toLowerCase()),
   )
 
   const stats = [
-    { label: "Total de Perfis", value: mockProfiles.length, icon: Shield, color: "blue" as const },
+    { label: "Total de Perfis", value: profiles.length, icon: Shield, color: "blue" as const },
     {
       label: "Usuários com Perfil",
-      value: mockProfiles.reduce((acc, p) => acc + p.users, 0),
+      value: profiles.reduce((acc, p) => acc + p.users, 0),
       icon: Users,
       color: "emerald" as const,
     },
@@ -181,7 +206,7 @@ export default function PermissionsPage() {
 
   return (
     <div className={STANDARD_SHELL_PANEL_CLASS}>
-    <div className="h-full min-h-0 flex flex-col" ref={pageRef}>
+    <div className="relative h-full min-h-0 flex flex-col" ref={pageRef}>
       <div className="shrink-0 -mb-[11px]">
       <StandardPageBanner
         icon={Shield}
@@ -274,7 +299,10 @@ export default function PermissionsPage() {
                             <TooltipProvider delayDuration={400}>
                               <Tooltip>
                                 <TooltipTrigger asChild>
-                                  <button className="h-7 w-7 flex items-center justify-center rounded-[8px] bg-white dark:bg-slate-800 border border-[#e8edf5] dark:border-slate-700 text-rose-500 dark:text-slate-500 shadow-[0_4px_10px_rgba(15,23,42,0.06)] hover:bg-gradient-to-br hover:from-[#2558FF] hover:via-[#6E2C96] hover:to-[#D92293] hover:text-white dark:hover:text-[#0a1628] hover:border-transparent hover:shadow-[0_8px_18px_rgba(15,23,42,0.18)] hover:-translate-y-px transition-all duration-150">
+                                  <button
+                                    onClick={() => handleDeleteProfile(profile)}
+                                    className="h-7 w-7 flex items-center justify-center rounded-[8px] bg-white dark:bg-slate-800 border border-[#e8edf5] dark:border-slate-700 text-rose-500 dark:text-slate-500 shadow-[0_4px_10px_rgba(15,23,42,0.06)] hover:bg-gradient-to-br hover:from-[#2558FF] hover:via-[#6E2C96] hover:to-[#D92293] hover:text-white dark:hover:text-[#0a1628] hover:border-transparent hover:shadow-[0_8px_18px_rgba(15,23,42,0.18)] hover:-translate-y-px transition-all duration-150"
+                                  >
                                     <Trash2 className="h-3.5 w-3.5" />
                                   </button>
                                 </TooltipTrigger>
@@ -427,6 +455,17 @@ export default function PermissionsPage() {
         onClose={() => setIsPanelOpen(false)}
         profile={selectedProfile}
         onSave={handleSaveProfile}
+      />
+
+      <ConfirmationDialog
+        open={deleteDialog.open}
+        onClose={() => setDeleteDialog({ open: false, profile: null })}
+        onConfirm={handleConfirmDeleteProfile}
+        title="Excluir Perfil"
+        message={`Tem certeza que deseja excluir o perfil "${deleteDialog.profile?.name}"? Usuários vinculados a ele perdem essas permissões.`}
+        confirmText="Excluir"
+        cancelText="Cancelar"
+        destructive
       />
     </div>
     </div>

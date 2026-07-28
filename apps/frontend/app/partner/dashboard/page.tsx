@@ -1,4 +1,6 @@
 ﻿// @ts-nocheck
+import { DashboardShellFrame } from "@/features/dashboards/shared/dashboard-shell-frame";
+import { useDashboardScrollCompact } from "@/hooks/useDashboardScrollCompact";
 import {
   Tooltip,
   TooltipContent,
@@ -9,7 +11,7 @@ import { WIDGETS_BY_ROLE } from "@/lib/dashboard-widget-roles";
 import { PARTNER_PRESETS, buildWidgets, DASHBOARD_STORAGE_KEY, CURRENT_DASHBOARD_KEY } from "@/lib/dashboard-presets-by-role";
 import type React from "react";
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { PageLoader } from "@/components/ui/loading";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -1107,7 +1109,7 @@ export default function AdminDashboardPage() {
   const [viewMode, setViewMode] = useState<"conclude" | "default">("default");
   const [showExportMenu, setShowExportMenu] = useState(false);
   const [layoutMode, setLayoutMode] = useState<"padrao" | "compacto">("padrao");
-  const [isHeaderCompact, setIsHeaderCompact] = useState(false);
+  const { isHeaderCompact, dashboardScrollRef } = useDashboardScrollCompact();
   const [saveDashboardOpen, setSaveDashboardOpen] = useState(false); // State for the save dashboard dialog
   const [isEditDashboardModalOpen, setIsEditDashboardModalOpen] =
     useState(false);
@@ -2211,14 +2213,6 @@ export default function AdminDashboardPage() {
 
   useEffect(() => {
     // intentionally empty - mounted
-  }, []);
-
-  useEffect(() => {
-    const main = document.querySelector("main");
-    if (!main) return;
-    const handleScroll = () => setIsHeaderCompact(main.scrollTop > 48);
-    main.addEventListener("scroll", handleScroll, { passive: true });
-    return () => main.removeEventListener("scroll", handleScroll);
   }, []);
 
   const widgetLibrary: WidgetLibraryItem[] = [
@@ -11051,11 +11045,11 @@ export default function AdminDashboardPage() {
   }
 
   return (
-    <div className="container mx-auto space-y-4 px-0 py-0">
+    <DashboardShellFrame ref={dashboardScrollRef}>
       {/* Sticky Dashboard Header */}
       <div
         className={cn(
-          "sticky top-[-3rem] z-20 -mx-14 px-14 transition-all duration-300",
+          "sticky top-0 z-20 transition-all duration-300",
           isHeaderCompact
             ? "bg-background/95 backdrop-blur-sm border-b border-border/40 shadow-sm"
             : "bg-transparent",
@@ -12988,7 +12982,7 @@ export default function AdminDashboardPage() {
         cancelText="Cancelar"
         destructive={true}
       />
-    </div>
+    </DashboardShellFrame>
     // </CHANGE>
   );
 }

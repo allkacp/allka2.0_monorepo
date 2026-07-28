@@ -70,6 +70,7 @@ import {
   FileDown,
   Image,
   UserPlus,
+  Eye,
 } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import {
@@ -80,7 +81,8 @@ import { PinToTrayButton } from "@/components/pin-to-tray-button";
 import { useSorting, SortableHeader } from "@/hooks/useSorting";
 import { useTableScrollSync } from "@/hooks/useTableScrollSync";
 import { IconToolbarButton } from "@/components/icon-toolbar-button";
-import { SlidePanel } from "@/components/slide-panel";
+import { EmbeddedSlideScreen } from "@/components/embedded-slide-screen";
+import { StandardModalDialog } from "@/components/standard-modal-dialog";
 import { NeonBadge } from "@/components/neon-badge";
 import { Settings2 } from "lucide-react";
 
@@ -414,6 +416,8 @@ export default function CampanhasPage() {
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
   const [campaignDialogOpen, setCampaignDialogOpen] = useState(false);
   const [editingCampaign, setEditingCampaign] = useState<Campaign | null>(null);
+  const [campaignViewOpen, setCampaignViewOpen] = useState(false);
+  const [viewingCampaign, setViewingCampaign] = useState<Campaign | null>(null);
   const [campaignForm, setCampaignForm] = useState({
     name: "",
     campaignType: "referral" as Campaign["campaignType"],
@@ -586,6 +590,10 @@ export default function CampanhasPage() {
       linkedUserName: c.linkedUserName || "",
     });
     setCampaignDialogOpen(true);
+  };
+  const openViewCampaign = (c: Campaign) => {
+    setViewingCampaign(c);
+    setCampaignViewOpen(true);
   };
   const closeCampaignDialog = () => {
     setCampaignDialogOpen(false);
@@ -1097,7 +1105,7 @@ export default function CampanhasPage() {
 
   return (
     <div className={STANDARD_SHELL_PANEL_CLASS}>
-    <div className="h-full min-h-0 flex flex-col" ref={pageRef}>
+    <div className="relative h-full min-h-0 flex flex-col" ref={pageRef}>
       <div className="shrink-0 -mb-[11px]">
       <StandardPageBanner
         icon={Megaphone}
@@ -1417,6 +1425,19 @@ export default function CampanhasPage() {
                           </TooltipTrigger>
                           <TooltipContent className="text-xs font-medium">{row.status === "active" ? "Desativar" : "Ativar"}</TooltipContent>
                         </Tooltip>
+                        {row.kind === "campaign" && (
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <button
+                                onClick={() => openViewCampaign(row.campaign!)}
+                                className="h-[26px] w-[26px] flex items-center justify-center rounded-[8px] bg-white dark:bg-slate-800 border border-[#e8edf5] dark:border-slate-700 text-[#6E2C96] dark:text-slate-500 shadow-[0_4px_10px_rgba(15,23,42,0.06)] hover:bg-gradient-to-br hover:from-[#2558FF] hover:via-[#6E2C96] hover:to-[#D92293] hover:text-white dark:hover:text-[#0a1628] hover:border-transparent hover:shadow-[0_8px_18px_rgba(15,23,42,0.18)] hover:-translate-y-px transition-all duration-150"
+                              >
+                                <Eye className="h-3.5 w-3.5" />
+                              </button>
+                            </TooltipTrigger>
+                            <TooltipContent className="text-xs font-medium">Ver campanha</TooltipContent>
+                          </Tooltip>
+                        )}
                         <Tooltip>
                           <TooltipTrigger asChild>
                             <button
@@ -1609,12 +1630,11 @@ export default function CampanhasPage() {
       </div>
 
       {/* ── Campaign Drawer ──────────────────────────────────────── */}
-        <SlidePanel
+        <EmbeddedSlideScreen
           open={campaignDialogOpen}
           onClose={closeCampaignDialog}
           title={editingCampaign ? "Editar Campanha" : "Nova Campanha"}
           subtitle="Configure os parâmetros, comissões e vínculos da campanha"
-          widthMode="full"
           footer={
             <div className="flex justify-end gap-2">
               <Button
@@ -1909,15 +1929,148 @@ export default function CampanhasPage() {
               </div>
             </div>
             </div>
-        </SlidePanel>
+        </EmbeddedSlideScreen>
+
+      {/* ── Campaign View (read-only) Drawer ─────────────────────── */}
+        <EmbeddedSlideScreen
+          open={campaignViewOpen}
+          onClose={() => setCampaignViewOpen(false)}
+          title={viewingCampaign?.name || "Detalhes da Campanha"}
+          subtitle="Visualização detalhada da campanha"
+          footer={
+            <div className="flex justify-end gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-9"
+                onClick={() => setCampaignViewOpen(false)}
+              >
+                Fechar
+              </Button>
+              <Button
+                size="sm"
+                className="h-9 btn-brand gap-1.5"
+                onClick={() => {
+                  setCampaignViewOpen(false);
+                  if (viewingCampaign) openEditCampaign(viewingCampaign);
+                }}
+              >
+                <Pencil className="h-3.5 w-3.5" />
+                Editar Campanha
+              </Button>
+            </div>
+          }
+        >
+          <div className="flex-1 overflow-y-auto w-full">
+            {viewingCampaign && (
+              <div className="max-w-3xl mx-auto px-6 py-5 space-y-4">
+                <div className="grid grid-cols-2 gap-3">
+                  {[
+                    {
+                      label: "Tipo",
+                      value:
+                        viewingCampaign.campaignType === "influencer"
+                          ? "Influencer"
+                          : "Indicação",
+                      icon: viewingCampaign.campaignType === "influencer" ? Star : Share2,
+                    },
+                    {
+                      label: "Status",
+                      value:
+                        viewingCampaign.status === "active"
+                          ? "Ativa"
+                          : viewingCampaign.status === "paused"
+                            ? "Pausada"
+                            : "Encerrada",
+                      icon: Clock,
+                    },
+                    {
+                      label: "Comissão",
+                      value:
+                        viewingCampaign.commissionType === "percentage"
+                          ? `${viewingCampaign.commissionValue}%`
+                          : `R$ ${viewingCampaign.commissionValue}`,
+                      icon: Percent,
+                    },
+                    {
+                      label: "Indicações",
+                      value: `${viewingCampaign.minReferrals} a ${viewingCampaign.maxReferrals}`,
+                      icon: Users,
+                    },
+                    {
+                      label: "Início",
+                      value: viewingCampaign.startDate
+                        ? new Date(viewingCampaign.startDate).toLocaleDateString("pt-BR")
+                        : "—",
+                      icon: Calendar,
+                    },
+                    {
+                      label: "Término",
+                      value: viewingCampaign.endDate
+                        ? new Date(viewingCampaign.endDate).toLocaleDateString("pt-BR")
+                        : "—",
+                      icon: Calendar,
+                    },
+                    {
+                      label: "Indicações ativas",
+                      value: String(viewingCampaign.activeReferrals),
+                      icon: UserCheck,
+                    },
+                    {
+                      label: "Total ganho",
+                      value: `R$ ${viewingCampaign.totalEarned}`,
+                      icon: DollarSign,
+                    },
+                  ].map(({ label, value, icon: Icon }) => (
+                    <div
+                      key={label}
+                      className="p-3 rounded-lg bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700"
+                    >
+                      <div className="flex items-center gap-1.5 mb-1">
+                        <Icon className="h-3 w-3 text-slate-400" />
+                        <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide">
+                          {label}
+                        </p>
+                      </div>
+                      <p className="text-sm font-medium text-slate-700 dark:text-slate-200 truncate">
+                        {value}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+
+                {viewingCampaign.linkedCouponCode && (
+                  <div className="p-3 rounded-lg bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700">
+                    <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide mb-1 flex items-center gap-1.5">
+                      <Tag className="h-3 w-3" /> Cupom vinculado
+                    </p>
+                    <p className="text-sm font-mono font-semibold text-slate-700 dark:text-slate-200">
+                      {viewingCampaign.linkedCouponCode}
+                    </p>
+                  </div>
+                )}
+
+                {viewingCampaign.linkedUserName && (
+                  <div className="p-3 rounded-lg bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700">
+                    <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide mb-1 flex items-center gap-1.5">
+                      <User className="h-3 w-3" /> Influencer vinculado
+                    </p>
+                    <p className="text-sm font-medium text-slate-700 dark:text-slate-200">
+                      {viewingCampaign.linkedUserName}
+                    </p>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        </EmbeddedSlideScreen>
 
       {/* ── Coupon Drawer ────────────────────────────────────────── */}
-        <SlidePanel
+        <EmbeddedSlideScreen
           open={couponDialogOpen}
           onClose={closeCouponDrawer}
           title={editingCoupon ? "Editar Cupom" : "Novo Cupom"}
           subtitle="Configure o tipo, código, restrições e regras de uso"
-          widthMode="full"
           footer={
             <div className="flex justify-end gap-2">
               <Button
@@ -2912,7 +3065,7 @@ export default function CampanhasPage() {
               )}
             </div>
             </div>
-        </SlidePanel>
+        </EmbeddedSlideScreen>
 
       <ConfirmationDialog
         open={campaignToggle.campaign !== null}
@@ -3118,12 +3271,11 @@ export default function CampanhasPage() {
       )}
 
       {/* ── Report Drawer ────────────────────────────────────────── */}
-        <SlidePanel
+        <EmbeddedSlideScreen
           open={reportOpen}
           onClose={closeReportDrawer}
           title="Relatório de Campanhas e Promoções"
           subtitle="Análise detalhada de cliques, conversões e abandono"
-          widthMode="full"
           footer={
             <div className="flex items-center justify-between w-full">
               <span className="text-xs text-slate-400">
@@ -3528,15 +3680,14 @@ export default function CampanhasPage() {
               </div>
             </div>
           </div>
-        </SlidePanel>
+        </EmbeddedSlideScreen>
 
       {/* Filtros — Tipo (Campanha/Cupom) + Status */}
-      <SlidePanel
+      <StandardModalDialog
         open={itemFiltersOpen}
         onClose={() => setItemFiltersOpen(false)}
         title="Filtros"
         subtitle="Filtre campanhas e cupons por tipo e status."
-        widthMode="full"
         footer={
           itemActiveFilterCount > 0 ? (
             <button
@@ -3607,15 +3758,14 @@ export default function CampanhasPage() {
           </div>
         </div>
         </div>
-      </SlidePanel>
+      </StandardModalDialog>
 
       {/* Configurar colunas */}
-      <SlidePanel
+      <StandardModalDialog
         open={itemColConfigOpen}
         onClose={() => setItemColConfigOpen(false)}
         title="Configurar colunas"
         subtitle={`${itemVisibleCols.size} de ${ITEM_COLUMNS.length} visíveis`}
-        widthMode="full"
         footer={
           <div className="flex items-center justify-end gap-3">
             <button
@@ -3683,7 +3833,7 @@ export default function CampanhasPage() {
             ))}
           </div>
         </div>
-      </SlidePanel>
+      </StandardModalDialog>
     </div>
     </div>
     </div>

@@ -65,8 +65,29 @@ import { useItemsPerPage } from "@/lib/use-items-per-page";
 import { useSidebar } from "@/contexts/sidebar-context";
 import { UserCreateSlidePanel } from "@/components/user-create-slide-panel";
 import { usePlatformUsers } from "@/contexts/platform-users-context";
+import { apiClient } from "@/lib/api-client";
+import { useToast } from "@/hooks/use-toast";
 import type { Permission as PlatformPermission } from "@/types/user";
 import { ALL_PROJECT_PERMISSIONS, MOCK_COMPANY_PROJECTS } from "@/types/user";
+
+// Função do usuário dentro da empresa/agência — mesmas 4 opções do cadastro
+// (ver user-create-slide-panel.tsx), com o mesmo esquema de nomes
+// "{company|agency}_{consultant|financial|admin|manager}".
+function roleToProfileLabel(role?: string): string {
+  if (!role) return "Usuário";
+  if (role.endsWith("_admin")) return "Administrador";
+  if (role.endsWith("_financial")) return "Financeiro";
+  if (role.endsWith("_consultant")) return "Consultor";
+  if (role.endsWith("_manager")) return "Gerente";
+  return "Usuário";
+}
+
+const ROLE_OPTIONS = [
+  { value: "consultant", label: "Consultor" },
+  { value: "financial", label: "Financeiro" },
+  { value: "admin", label: "Admin" },
+  { value: "manager", label: "Gerenciador" },
+];
 
 interface UserListItem {
   id: number;
@@ -87,6 +108,9 @@ interface UserListItem {
   averageOnlineHours?: number;
   averageOfflineDays?: number;
   permissions?: UserPermissions;
+  /** Role bruto ("company_consultant", "agency_admin", etc.) — profile
+   * acima é só o rótulo derivado disso pra exibição. */
+  role?: string;
   /** ID of the corresponding platform User record */
   platformUserId?: number;
   /** Platform-level permissions (flat list, managed by platform admin) */
@@ -151,11 +175,13 @@ export function CompanyUsersTab({
   onUserCreated,
 }: CompanyUsersTabProps) {
   const { sidebarWidth } = useSidebar();
+  const { toast } = useToast();
   const {
     users: contextUsers,
     addUser,
     addCompanyLink,
     getUserById,
+    updateUser: updateUserCache,
     upsertProjectMembership,
     removeProjectMembership,
     removeCompanyLink,
@@ -191,12 +217,8 @@ export function CompanyUsersTab({
         status: (u.online_status === "online" ? "online" : "offline") as
           | "online"
           | "offline",
-        profile:
-          assoc.role === "company_admin"
-            ? "Administrador"
-            : assoc.role === "company_financial"
-              ? "Financeiro"
-              : "Usuário",
+        profile: roleToProfileLabel(assoc.role),
+        role: assoc.role,
         lastAccess: u.last_login
           ? new Date(u.last_login).toLocaleString("pt-BR")
           : "Nunca",
@@ -462,6 +484,7 @@ export function CompanyUsersTab({
               city: selectedUser.city || "",
               state: selectedUser.state || "",
               zipCode: selectedUser.zipCode || "",
+              role: selectedUser.role || "",
             });
           }
         },
@@ -482,8 +505,32 @@ export function CompanyUsersTab({
         city: selectedUser.city || "",
         state: selectedUser.state || "",
         zipCode: selectedUser.zipCode || "",
+        role: selectedUser.role || "",
       });
     }
+  };
+
+  // Abre "Ver detalhes" já em modo de edição direto — pro botão de editar
+  // na própria linha da tabela, sem precisar passar por "Ver detalhes"
+  // primeiro e clicar em Editar de novo lá dentro.
+  const handleEditUserRow = (user: UserListItem) => {
+    setSelectedUser(user);
+    setIsDetailsOpen(true);
+    setIsDetailsClosing(false);
+    setEditMode(true);
+    setPermissionsMode(false);
+    setPermissionsData(null);
+    setInitialPermissionsData(null);
+    setEditData({
+      name: user.name,
+      email: user.email,
+      phone: user.phone || "",
+      address: user.address || "",
+      city: user.city || "",
+      state: user.state || "",
+      zipCode: user.zipCode || "",
+      role: user.role || "",
+    });
   };
 
   const handleCancelEdit = () => {
@@ -496,17 +543,53 @@ export function CompanyUsersTab({
     setConfirmSave(true);
   };
 
-  const handleConfirmSave = () => {
-    if (selectedUser && editData) {
-      const updatedUser = { ...selectedUser, ...editData };
+  const handleConfirmSave = async () => {
+    if (!selectedUser || !editData) return;
+    try {
+      // Antes disto, "salvar" só mudava o estado local (userList/context) —
+      // nunca chamava o backend, então a edição parecia funcionar mas
+      // sumia em qualquer refresh. apiClient.updateUser é o mesmo endpoint
+      // (PUT /api/users/:id) usado por user-view-slide-panel.tsx.
+      await apiClient.updateUser(String(selectedUser.id), {
+        name: editData.name,
+        email: editData.email,
+        phone: editData.phone || undefined,
+        street: editData.address || undefined,
+        city: editData.city || undefined,
+        state: editData.state || undefined,
+        zip_code: editData.zipCode || undefined,
+        role: editData.role || undefined,
+      });
+      const updatedUser = {
+        ...selectedUser,
+        ...editData,
+        profile: roleToProfileLabel(editData.role),
+      };
       setUserList((prevUsers) =>
         prevUsers.map((u) => (u.id === selectedUser.id ? updatedUser : u)),
       );
       setSelectedUser(updatedUser);
+      updateUserCache(String(selectedUser.id), {
+        name: editData.name,
+        email: editData.email,
+        phone: editData.phone,
+        role: editData.role,
+      } as any);
       setEditMode(false);
       setEditData(null);
       setConfirmSave(false);
       setHasUnsavedChanges(false);
+      toast({
+        title: "Usuário atualizado",
+        description: "As alterações foram salvas com sucesso.",
+        variant: "success",
+      });
+    } catch (err: any) {
+      toast({
+        title: "Erro ao salvar",
+        description: err?.message || "Não foi possível salvar as alterações. Tente novamente.",
+        variant: "destructive",
+      });
     }
   };
 
@@ -863,6 +946,7 @@ export function CompanyUsersTab({
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
               <Input
                 placeholder="Buscar por nome ou e-mail..."
+                autoComplete="new-password"
                 value={searchTerm}
                 onChange={(e) => handleSearchChange(e.target.value)}
                 className="pl-9 h-9 text-sm bg-white border-slate-200 rounded-lg focus-visible:ring-blue-500 w-full"
@@ -1166,9 +1250,11 @@ export function CompanyUsersTab({
                                   ? "bg-violet-50 text-violet-700 border-violet-200"
                                   : user.profile === "Financeiro"
                                     ? "bg-emerald-50 text-emerald-700 border-emerald-200"
-                                    : user.profile === "Gerente"
-                                      ? "bg-blue-50 text-blue-700 border-blue-200"
-                                      : "bg-slate-50 text-slate-600 border-slate-200"
+                                    : user.profile === "Consultor"
+                                      ? "bg-amber-50 text-amber-700 border-amber-200"
+                                      : user.profile === "Gerente"
+                                        ? "bg-blue-50 text-blue-700 border-blue-200"
+                                        : "bg-slate-50 text-slate-600 border-slate-200"
                               }`}
                             >
                               {user.profile}
@@ -1205,6 +1291,21 @@ export function CompanyUsersTab({
                               </TooltipTrigger>
                               <TooltipContent className="text-xs">
                                 Ver detalhes
+                              </TooltipContent>
+                            </Tooltip>
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  className="h-5 w-5 p-0 rounded text-slate-400 hover:text-slate-700 hover:bg-slate-100"
+                                  onClick={() => handleEditUserRow(user)}
+                                >
+                                  <Edit2 className="h-2.5 w-2.5" />
+                                </Button>
+                              </TooltipTrigger>
+                              <TooltipContent className="text-xs">
+                                Editar
                               </TooltipContent>
                             </Tooltip>
                             <Tooltip>
@@ -1804,6 +1905,40 @@ export function CompanyUsersTab({
                                 placeholder="Nome completo"
                                 className="mt-1 h-8 text-xs"
                               />
+                            </div>
+                            <div>
+                              <label className="text-[10px] font-semibold text-slate-500 uppercase tracking-wide">
+                                Função
+                              </label>
+                              <Select
+                                value={
+                                  (editData?.role || "").replace(
+                                    /^(company|agency)_/,
+                                    "",
+                                  ) || (type === "agency" ? "consultant" : "manager")
+                                }
+                                onValueChange={(value) =>
+                                  handleEditFieldChange(
+                                    "role",
+                                    `${type === "agency" ? "agency" : "company"}_${value}`,
+                                  )
+                                }
+                              >
+                                <SelectTrigger className="mt-1 h-8 text-xs">
+                                  <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  {/* Consultor é papel de Agency — Company não
+                                      tem esse conceito. */}
+                                  {ROLE_OPTIONS.filter(
+                                    (opt) => type === "agency" || opt.value !== "consultant",
+                                  ).map((opt) => (
+                                    <SelectItem key={opt.value} value={opt.value}>
+                                      {opt.label}
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
                             </div>
                             <div className="grid grid-cols-2 gap-2">
                               <div>

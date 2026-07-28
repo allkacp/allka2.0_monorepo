@@ -43,6 +43,13 @@ const enrichedSelect = {
       partner_profile: { select: { id: true, status: true } },
     },
   },
+  // Vínculo de MEMBRO (agency_user) — distinto de owned_agency, que só
+  // existe pro dono (agency_admin). Sem isso, todo colaborador de agência
+  // (role agency_user, criado via admin/usuarios ou self-service) aparecia
+  // como "Sem vínculo" mesmo com agency_id corretamente preenchido no
+  // banco — o mesmo bug que "empresas" já evita usando `company` (via
+  // company_id) em vez de checar propriedade.
+  agency_link: { select: { id: true, name: true } },
   nomade: { select: { id: true, name: true } },
   lider_areas: { select: { id: true, area_nome: true, ativo: true } },
   profile: {
@@ -97,9 +104,12 @@ function mapUser(u: EnrichedUser) {
     profile_link_type = "admin";
     profile_link_name = "Admin";
   } else if (u.account_type === "agencias") {
-    has_profile_link = !!u.owned_agency;
+    // Dono (agency_admin) usa owned_agency; colaborador (agency_user) só
+    // tem agency_link (agency_id) — nunca os dois ao mesmo tempo.
+    const agency = u.owned_agency ?? u.agency_link;
+    has_profile_link = !!agency;
     profile_link_type = "agency";
-    profile_link_name = u.owned_agency?.name ?? null;
+    profile_link_name = agency?.name ?? null;
   } else if (u.account_type === "empresas") {
     has_profile_link = !!u.company;
     profile_link_type = "company";
@@ -144,8 +154,8 @@ function mapUser(u: EnrichedUser) {
     reactivation_review_required: u.reactivation_review_required,
     created_at: u.created_at,
     updated_at: u.updated_at,
-    agency_id: u.owned_agency?.id ?? null,
-    agency_name: u.owned_agency?.name ?? null,
+    agency_id: u.owned_agency?.id ?? u.agency_link?.id ?? null,
+    agency_name: u.owned_agency?.name ?? u.agency_link?.name ?? null,
     company_name: u.company?.name ?? null,
     // Partner agora é um status da própria Agency (não um account_type
     // separado) — só populado quando o usuário é dono de uma agência que

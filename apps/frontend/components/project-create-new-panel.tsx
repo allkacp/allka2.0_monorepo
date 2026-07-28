@@ -52,7 +52,7 @@ import { apiClient } from "@/lib/api-client";
 import { ButtonLoader } from "@/components/ui/loading";
 import { useSidebar } from "@/contexts/sidebar-context";
 import { useAccountType } from "@/contexts/account-type-context";
-import { SlidePanel } from "@/components/slide-panel";
+import { EmbeddedSlideScreen } from "@/components/embedded-slide-screen";
 import { Badge } from "@/components/ui/badge";
 import {
   Accordion,
@@ -305,7 +305,7 @@ export function ProjectCreateNewPanel({
   const { toast } = useToast();
   const { accountType } = useAccountType();
   const isAdmin = accountType === "admin";
-  const { sidebarWidth, sidebarSettings } = useSidebar();
+  const { sidebarSettings } = useSidebar();
   const [loading, setLoading] = useState(false);
   /** Tracks which footer action triggered loading, so each button shows its own label. */
   const [loadingAction, setLoadingAction] = useState<"draft" | "submit" | null>(
@@ -331,12 +331,18 @@ export function ProjectCreateNewPanel({
   const [resolvedCompanyName, setResolvedCompanyName] = useState<string>(
     companyName ?? "",
   );
+  // Company ou Agency (ver orgType em MockCompanyItem) — decide se o
+  // projeto vai gravar em client_id (legado, só Company) ou agency_id.
+  const [resolvedCompanyType, setResolvedCompanyType] = useState<
+    "company" | "agency"
+  >("company");
 
   // New-client inline form state
   const [showNewClientForm, setShowNewClientForm] = useState(false);
   const [newClientName, setNewClientName] = useState("");
   const [newClientEmail, setNewClientEmail] = useState("");
   const [localClients, setLocalClients] = useState<MockClientItem[]>([]);
+  const [loadingClients, setLoadingClients] = useState(false);
 
   // Consultant state — fetched from API per company
   const [localConsultants, setLocalConsultants] = useState<
@@ -558,6 +564,44 @@ export function ProjectCreateNewPanel({
     };
   }, [open, draftProjectId, draftProducts]);
 
+  // Resuming a draft (via a pinned "Bandeja de Telas" entry) or reopening an
+  // existing project only restores `formData` (plain strings, incl. the
+  // company's NAME in `agencia`) — it never had the actual agency_id/
+  // company_id, so resolvedCompanyId stayed null and Empresa/Consultor/
+  // Cliente all fell back to their disabled plain-<Input> states instead of
+  // the real pickers. Fetch the project once to recover the real FK and
+  // properly re-resolve the scoping.
+  useEffect(() => {
+    if (!open || !draftProjectId || companyIdProp != null) return;
+    let cancelled = false;
+    apiClient
+      .getProject(String(draftProjectId))
+      .then((raw: any) => {
+        if (cancelled || !raw) return;
+        let name = "";
+        if (raw.agency_id) {
+          setResolvedCompanyId(String(raw.agency_id));
+          setResolvedCompanyType("agency");
+          name = raw.agency_owner?.name || raw.agency || "";
+          setResolvedCompanyName(name);
+        } else if (raw.company_id || raw.client_id) {
+          setResolvedCompanyId(String(raw.company_id || raw.client_id));
+          setResolvedCompanyType("company");
+          name = raw.company_owner?.name || raw.client?.name || raw.agency || "";
+          setResolvedCompanyName(name);
+        }
+        if (name) {
+          setFormData((prev) => (prev.agencia ? prev : { ...prev, agencia: name }));
+        }
+      })
+      .catch(() => {
+        // non-fatal — Empresa/Consultor/Cliente just stay as plain text
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [open, draftProjectId, companyIdProp]);
+
   // Fetch companies lazily when panel opens (and allowCompanySelect is on)
   // ESC closes the Review overlay and returns to the correct previous screen
   useEffect(() => {
@@ -583,14 +627,33 @@ export function ProjectCreateNewPanel({
     let cancelled = false;
     setLoadingCompanies(true);
     setCompaniesError(null);
-    apiClient
-      .getCompanies({ limit: "1000" })
-      .then((res: any) => {
+    // Company e Agency são entidades Prisma separadas (mesmo padrão de
+    // admin/empresas) — o seletor "Empresa" do Admin precisa listar as
+    // duas juntas (Agency já inclui as com status de Partner, que não é
+    // um tipo de conta próprio, só um upgrade de Agency). Sem isso, criar
+    // projeto pelo Admin só deixava escolher Company.
+    Promise.all([
+      apiClient.getCompanies({ limit: "1000" }),
+      apiClient.getAgencies({ limit: "1000" }),
+    ])
+      .then(([companiesRes, agenciesRes]: any[]) => {
         if (cancelled) return;
-        const data: any[] = res.data || (Array.isArray(res) ? res : []);
-        setApiCompanies(
-          data.map((c: any) => ({ id: String(c.id), name: c.name })),
-        );
+        const companiesData: any[] =
+          companiesRes.data || (Array.isArray(companiesRes) ? companiesRes : []);
+        const agenciesData: any[] =
+          agenciesRes.data || (Array.isArray(agenciesRes) ? agenciesRes : []);
+        setApiCompanies([
+          ...companiesData.map((c: any) => ({
+            id: String(c.id),
+            name: c.name,
+            orgType: "company" as const,
+          })),
+          ...agenciesData.map((a: any) => ({
+            id: String(a.id),
+            name: a.name,
+            orgType: "agency" as const,
+          })),
+        ]);
       })
       .catch(() => {
         if (!cancelled)
@@ -623,7 +686,14 @@ export function ProjectCreateNewPanel({
     let cancelled = false;
     setLocalConsultants([]);
     const filters: Record<string, string> = { limit: "500" };
-    if (resolvedCompanyId) filters.company_id = resolvedCompanyId;
+    // Agency e Company são tabelas separadas — o vínculo do usuário vive em
+    // agency_id ou company_id dependendo de qual foi selecionada (ver
+    // resolvedCompanyType, mesmo campo usado pra decidir agency_id vs
+    // client_id no payload de criação do projeto).
+    if (resolvedCompanyId) {
+      if (resolvedCompanyType === "agency") filters.agency_id = resolvedCompanyId;
+      else filters.company_id = resolvedCompanyId;
+    }
     if (selectedAccountTypeFilter) {
       filters.account_type = selectedAccountTypeFilter;
     }
@@ -636,8 +706,15 @@ export function ProjectCreateNewPanel({
         const data: any[] = res.data || (Array.isArray(res) ? res : []);
         const activeUsers = data.filter((u) => u.is_active !== false);
 
+        // "Consultor Responsável" só lista quem tem a função Consultor (ver
+        // seletor de Função em user-create-slide-panel.tsx) — os demais
+        // (Admin/Financeiro/Gerenciador) continuam disponíveis como
+        // "Cliente" logo abaixo, só não aparecem aqui.
+        const consultantUsers = activeUsers.filter((u) =>
+          String(u.role || "").endsWith("_consultant"),
+        );
         setLocalConsultants(
-          activeUsers.map((u) => ({
+          consultantUsers.map((u) => ({
             id: String(u.id),
             name: u.name,
             email: u.email || "",
@@ -645,27 +722,10 @@ export function ProjectCreateNewPanel({
           })),
         );
 
-        // Populate the client dropdown with the same company users.
-        // Only auto-fill when a company is actually selected so generic
-        // (no-company) opens don't leak global users into the list.
+        // O dropdown de "Cliente" é populado à parte, a partir da entidade
+        // Client real (via ClientLink) — ver efeito logo abaixo. Users da
+        // própria Agency/Company são STAFF, não clientes dela.
         if (resolvedCompanyId) {
-          const clientItems: MockClientItem[] = activeUsers.map((u) => ({
-            id: String(u.id),
-            name: u.name,
-            email: u.email || "",
-          }));
-          setLocalClients(clientItems);
-
-          // If exactly one client → auto-select it
-          if (clientItems.length === 1) {
-            const only = clientItems[0];
-            setFormData((prev) => ({
-              ...prev,
-              cliente: only.name,
-              clienteCnpj: prev.clienteCnpj,
-            }));
-          }
-
           // If exactly one consultant → auto-select it
           const consultorItems = activeUsers.filter(
             (u) => u.role !== "company_user",
@@ -690,7 +750,59 @@ export function ProjectCreateNewPanel({
     return () => {
       cancelled = true;
     };
-  }, [open, resolvedCompanyId, allowCompanySelect, selectedAccountTypeFilter]);
+  }, [open, resolvedCompanyId, resolvedCompanyType, allowCompanySelect, selectedAccountTypeFilter]);
+
+  // Fetch the Clients (entidade Client real, via ClientLink) linked to the
+  // resolved Agency/Company — não os USERS dela (staff), que é o que a
+  // Consultor Responsável já usa. Sem escopo aqui o Admin via TODOS os
+  // clientes da plataforma no seletor, não só os desta empresa/agência.
+  useEffect(() => {
+    if (!open) return;
+    if (!resolvedCompanyId) {
+      setLocalClients([]);
+      setLoadingClients(false);
+      return;
+    }
+
+    let cancelled = false;
+    setLoadingClients(true);
+    const filters: Record<string, string> = { limit: "500" };
+    if (resolvedCompanyType === "agency") filters.agency_id = resolvedCompanyId;
+    else filters.company_id = resolvedCompanyId;
+
+    apiClient
+      .getClientRecords(filters)
+      .then((res: any) => {
+        if (cancelled) return;
+        const data: any[] = res.data || (Array.isArray(res) ? res : []);
+        const clientItems: MockClientItem[] = data.map((c) => ({
+          id: String(c.id),
+          name: c.name,
+          email: c.email || "",
+          cnpj: c.document || undefined,
+        }));
+        setLocalClients(clientItems);
+
+        if (clientItems.length === 1) {
+          const only = clientItems[0];
+          setFormData((prev) => ({
+            ...prev,
+            cliente: only.name,
+            clienteCnpj: only.cnpj || prev.clienteCnpj,
+          }));
+        }
+      })
+      .catch(() => {
+        if (!cancelled) setLocalClients([]);
+      })
+      .finally(() => {
+        if (!cancelled) setLoadingClients(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [open, resolvedCompanyId, resolvedCompanyType]);
 
   // Debounced duplicate-name check against the API
   useEffect(() => {
@@ -859,7 +971,12 @@ export function ProjectCreateNewPanel({
         description: formData.descricao || undefined,
         status,
         lifecycle: "avulso",
-        client_id: resolvedCompanyId ?? undefined,
+        // client_id é o vínculo legado, com FK só pra Company — uma Agency
+        // selecionada aqui (allowCompanySelect, fluxo do Admin) precisa ir
+        // pelo campo novo (agency_id) ou o insert quebra por violar a FK.
+        ...(resolvedCompanyType === "agency"
+          ? { agency_id: resolvedCompanyId ?? undefined }
+          : { client_id: resolvedCompanyId ?? undefined }),
       };
       const existingId =
         savedDraftId ?? (draftProjectId ? String(draftProjectId) : null);
@@ -910,6 +1027,7 @@ export function ProjectCreateNewPanel({
         onCreate(created);
         handleClose();
       }
+      return created;
     } catch (err: any) {
       console.error("[confirmSubmit]", err);
       // 409 = duplicate project name
@@ -1196,6 +1314,26 @@ export function ProjectCreateNewPanel({
     }));
     setLoadingAction("draft");
     confirmSubmit("draft", products);
+  };
+
+  // Salva (ou atualiza) o rascunho no momento de pinar a tela — sem isso, a
+  // Bandeja de Telas reabre a tela em branco (limitação documentada em
+  // open-screens-context.tsx: reativação não preserva estado do React).
+  // Silencioso quando ainda não há nome (nada de útil pra preservar ainda);
+  // o retorno vira o `path` do pin, que embute o id do rascunho — é isso
+  // que faz reabrir carregar os dados de volta (ver draftPanelProjectId em
+  // admin/projetos/page.tsx).
+  const saveDraftForPin = async (): Promise<{ path: string } | void> => {
+    if (!formData.nome.trim()) return;
+    const products = selectedProducts.map((p) => ({
+      name: p.name,
+      price: p.finalPrice,
+      qty: productQuantities[String(p.id)] || p.quantity || 1,
+    }));
+    const created = await confirmSubmit("draft", products);
+    const id = created?.id ?? savedDraftId ?? draftProjectId;
+    if (!id) return;
+    return { path: `/admin/projetos?resumeDraft=${id}` };
   };
 
   const handleOpenReview = () => {
@@ -1533,10 +1671,24 @@ export function ProjectCreateNewPanel({
         description: formData.descricao || undefined,
         status: "awaiting-payment",
         lifecycle: "avulso",
-        client_id: resolvedCompanyId ?? undefined,
+        // client_id é o vínculo legado, com FK só pra Company — uma Agency
+        // selecionada aqui (allowCompanySelect, fluxo do Admin) precisa ir
+        // pelo campo novo (agency_id) ou o insert quebra por violar a FK
+        // (mesmo bug já corrigido em confirmSubmit, replicado aqui).
+        ...(resolvedCompanyType === "agency"
+          ? { agency_id: resolvedCompanyId ?? undefined }
+          : { client_id: resolvedCompanyId ?? undefined }),
       };
-      const created = await apiClient.createProject(payload);
-      const createdId = String(created?.id);
+      // Se já existe um rascunho/projeto (resumido da Bandeja de Telas ou de
+      // "Continuar rascunho"), atualiza em vez de criar um segundo projeto
+      // com o mesmo nome (isso violava a constraint de nome único e/ou
+      // deixava um rascunho órfão pra trás).
+      const existingId =
+        savedDraftId ?? (draftProjectId ? String(draftProjectId) : null);
+      const created = existingId
+        ? await apiClient.updateProject(existingId, payload)
+        : await apiClient.createProject(payload);
+      const createdId = String(created?.id ?? existingId);
 
       // Link each selected product to the project
       const linkedMap: Record<string, string> = {};
@@ -1598,6 +1750,7 @@ export function ProjectCreateNewPanel({
       toast({
         title: "Erro ao criar projeto",
         description:
+          err?.message ||
           "Não foi possível iniciar o checkout. Verifique os dados e tente novamente.",
         variant: "destructive",
       });
@@ -1659,13 +1812,23 @@ export function ProjectCreateNewPanel({
   };
   const totalErrors = Object.values(sectionErrors).reduce((a, b) => a + b, 0);
 
-  if (!open) return null;
-
   return (
     <>
-      <SlidePanel
+      <EmbeddedSlideScreen
         open={open}
         onClose={handleClose}
+        pin={{
+          id: cloneMode ? "projetos-clonar" : "projetos-novo",
+          label: cloneMode ? "Clonar Projeto" : "Novo Projeto",
+          icon: FolderKanban,
+          path: `/admin/projetos${
+            savedDraftId || draftProjectId
+              ? `?resumeDraft=${savedDraftId ?? draftProjectId}`
+              : ""
+          }`,
+          activateKey: cloneMode ? "clone" : "create",
+        }}
+        onBeforePin={saveDraftForPin}
         title={
           <>
             <div className="relative flex-shrink-0">
@@ -1743,7 +1906,6 @@ export function ProjectCreateNewPanel({
           </>
         }
         subtitle={cloneMode ? "Clonar projeto existente" : "Configure os dados do projeto"}
-        widthMode="full"
         footer={
           <div className="flex flex-col-reverse sm:flex-row sm:items-center sm:justify-start gap-2 sm:gap-3 w-full">
             <Button
@@ -2049,6 +2211,7 @@ export function ProjectCreateNewPanel({
                               (c) => ({
                                 value: String(c.id),
                                 label: c.name,
+                                sublabel: c.orgType === "agency" ? "Agency" : "Company",
                               }),
                             )}
                             value={resolvedCompanyId ?? ""}
@@ -2060,6 +2223,7 @@ export function ProjectCreateNewPanel({
                               const co = allCos.find((c) => String(c.id) === v);
                               setResolvedCompanyId(v || null);
                               setResolvedCompanyName(co?.name ?? "");
+                              setResolvedCompanyType(co?.orgType ?? "company");
                               updateField("agencia", co?.name ?? "");
                               updateField("cliente", "");
                               updateField("clienteCnpj", "");
@@ -2240,7 +2404,9 @@ export function ProjectCreateNewPanel({
                                 }}
                                 placeholder="Pesquisar cliente..."
                                 searchPlaceholder="Digite para buscar..."
-                                emptyMessage="Nenhum cliente encontrado."
+                                emptyMessage="Nenhum cliente vinculado a esta empresa."
+                                loading={loadingClients}
+                                loadingMessage="Carregando clientes..."
                                 className={cn(
                                   "h-8 text-xs",
                                   errors.cliente && "border-red-400",
@@ -2550,7 +2716,7 @@ export function ProjectCreateNewPanel({
           </div>
 
       </div>
-      </SlidePanel>
+      </EmbeddedSlideScreen>
 
       {/* Decision Modal after "Próximo" */}
       <AlertDialog
@@ -2776,12 +2942,10 @@ export function ProjectCreateNewPanel({
         </AlertDialogContent>
       </AlertDialog>
 
-      {/* Catalog/Products Step */}
+      {/* Catalog/Products Step — absolute dentro do EmbeddedSlideScreen (não
+          fixed), senão escapa do painel e cobre o header/sidebar inteiros. */}
       {showProductsStep && !showCheckout && (
-        <div
-          className="fixed top-0 z-[60] h-[calc(100%-25px)] bg-white flex flex-col border-l border-gray-200 shadow-2xl"
-          style={{ left: `${sidebarWidth}px`, right: 0 }}
-        >
+        <div className="absolute inset-0 z-[60] bg-white flex flex-col overflow-hidden">
           {/* Header */}
           <div
             className="relative shrink-0 px-6 py-4 overflow-hidden flex items-center justify-between"
@@ -2859,72 +3023,140 @@ export function ProjectCreateNewPanel({
 
           {/* Review Modal Overlay (inside this panel so z-index works correctly) */}
           {showReview && (
-            <div className="absolute inset-0 z-10 bg-black/70 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4">
-              <div
-                className="bg-white rounded-2xl shadow-2xl w-full max-h-[calc(100%-24px)] flex flex-col overflow-hidden"
-                style={{ maxWidth: "1020px" }}
-              >
-                {/* ── Header ── */}
-                <div
-                  className="relative shrink-0 px-6 py-5 overflow-hidden"
-                  style={{
-                    background:
-                      "linear-gradient(135deg, #1a2060 0%, #2558FF 30%, #6E2C96 65%, #A61E86 100%)",
-                  }}
-                >
-                  {/* Decorative blobs */}
-                  <div className="absolute -top-12 -right-12 w-56 h-56 bg-white/5 rounded-full blur-3xl pointer-events-none" />
-                  <div className="absolute bottom-0 left-1/3 w-40 h-40 bg-blue-300/10 rounded-full blur-3xl pointer-events-none" />
-                  <div className="absolute top-0 left-0 w-full h-full bg-[radial-gradient(ellipse_at_bottom_right,rgba(166,30,134,0.15)_0%,transparent_60%)] pointer-events-none" />
+            <EmbeddedSlideScreen
+              open={showReview}
+              onClose={handleCloseReview}
+              zIndex={40}
+              pin={{
+                id: cloneMode ? "projetos-clonar" : "projetos-novo",
+                label: cloneMode ? "Clonar Projeto" : "Novo Projeto",
+                icon: FolderKanban,
+                path: `/admin/projetos${
+                  savedDraftId || draftProjectId
+                    ? `?resumeDraft=${savedDraftId ?? draftProjectId}`
+                    : ""
+                }`,
+                activateKey: cloneMode ? "clone" : "create",
+              }}
+              onBeforePin={saveDraftForPin}
+              title={
+                <div className="flex items-center gap-3 min-w-0">
+                  <Eye className="h-4.5 w-4.5 shrink-0" />
+                  <span className="truncate">Revisar Projeto</span>
+                  {selectedProducts.length > 0 && (
+                    <span className="hidden sm:inline text-xs font-normal text-white/60 shrink-0">
+                      · {selectedProducts.length}{" "}
+                      {selectedProducts.length === 1 ? "produto" : "produtos"} ·{" "}
+                      {formatCurrency(calculateClientTotal())}
+                    </span>
+                  )}
+                </div>
+              }
+              subtitle={
+                <>
+                  {formData.nome ? `"${formData.nome}"` : "Novo projeto"} · Confira
+                  tudo antes de confirmar
+                </>
+              }
+              footer={
+                <div className="space-y-2">
+                  {/* Row 1: secondary actions */}
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    <button
+                      onClick={handleCloseReview}
+                      className="h-8 px-3 flex items-center gap-1.5 text-xs font-medium text-slate-500 hover:text-slate-800 rounded-lg hover:bg-slate-100 border border-slate-200 transition-all"
+                    >
+                      <ArrowLeft className="h-3.5 w-3.5" />
+                      Voltar
+                    </button>
+                    <button
+                      onClick={() => setShowEditProducts(true)}
+                      className="h-8 px-3 flex items-center gap-1.5 text-xs font-medium text-slate-500 hover:text-slate-800 rounded-lg hover:bg-slate-100 border border-slate-200 transition-all"
+                    >
+                      <Package className="h-3.5 w-3.5" />
+                      Editar Produtos
+                    </button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={handleExportPresentation}
+                      disabled={exportingPDF || !!exportBlockReason}
+                      title={!exportingPDF && exportBlockReason ? exportBlockReason : undefined}
+                      className="h-8 text-xs gap-1.5 border-slate-200 text-slate-500 hover:text-slate-800 hover:bg-slate-50 disabled:opacity-40"
+                    >
+                      {exportingPDF ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <FileDown className="h-3.5 w-3.5" />}
+                      {exportingPDF ? "Gerando..." : "Exportar"}
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={handleSaveDraftNow}
+                      disabled={loading || !!draftBlockReason}
+                      title={draftBlockReason ?? undefined}
+                      className="h-8 text-xs gap-1.5 border-slate-200 text-slate-600 hover:text-slate-900 hover:bg-slate-50 disabled:opacity-40"
+                    >
+                      {loadingAction === "draft" ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}
+                      {loadingAction === "draft" ? "Salvando..." : "Salvar Rascunho"}
+                    </Button>
+                  </div>
 
-                  <div className="relative flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                      <div className="h-10 w-10 rounded-xl bg-white/15 border border-white/25 flex items-center justify-center backdrop-blur-sm">
-                        <Eye className="h-5 w-5 text-white" />
-                      </div>
-                      <div>
-                        <h2 className="text-base font-bold text-white leading-tight">
-                          Revisar Projeto
-                        </h2>
-                        <p className="text-xs text-white/60 mt-0.5 max-w-xs truncate">
-                          {formData.nome
-                            ? `"${formData.nome}"`
-                            : "Novo projeto"}{" "}
-                          · Confira tudo antes de confirmar
-                        </p>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      {selectedProducts.length > 0 && (
-                        <div className="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-lg bg-white/10 border border-white/20">
-                          <Package className="h-3.5 w-3.5 text-white/70" />
-                          <span className="text-xs font-semibold text-white/90">
-                            {selectedProducts.length}{" "}
-                            {selectedProducts.length === 1
-                              ? "produto"
-                              : "produtos"}
-                          </span>
-                          <span className="text-white/40 text-xs">·</span>
-                          <span
-                            className="text-xs font-bold text-white"
-                            style={{
-                              textShadow: "0 0 12px rgba(255,255,255,0.4)",
-                            }}
-                          >
-                            {formatCurrency(calculateClientTotal())}
-                          </span>
-                        </div>
-                      )}
+                  {/* Row 2: payer selector + primary CTA */}
+                  <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-1.5 mr-auto">
+                      <span className="text-[10px] font-semibold text-slate-400 shrink-0">Pagar via:</span>
                       <button
-                        onClick={handleCloseReview}
-                        className="h-9 w-9 flex items-center justify-center rounded-xl bg-white/10 border border-white/20 text-white/60 hover:bg-white/20 hover:text-white transition-all"
+                        onClick={() => setCheckoutPayerMode("agency")}
+                        title="Agência processa o pagamento pelo preço base"
+                        className={cn(
+                          "h-7 px-2.5 rounded-lg text-[10px] font-semibold border transition-all flex items-center gap-1",
+                          checkoutPayerMode === "agency"
+                            ? "bg-blue-600 text-white border-blue-600"
+                            : "bg-white text-slate-500 border-slate-200 hover:border-blue-300",
+                        )}
                       >
-                        <XIcon className="h-4 w-4" />
+                        <Building2 className="h-3 w-3" />
+                        Agência
+                      </button>
+                      <button
+                        onClick={() => setCheckoutPayerMode("client")}
+                        disabled={calculateClientPayTotal() === 0}
+                        title={calculateClientPayTotal() === 0 ? "Nenhum produto com pagamento do cliente" : "Cliente processa o pagamento pelo preço final"}
+                        className={cn(
+                          "h-7 px-2.5 rounded-lg text-[10px] font-semibold border transition-all flex items-center gap-1",
+                          checkoutPayerMode === "client"
+                            ? "bg-emerald-600 text-white border-emerald-600"
+                            : "bg-white text-slate-500 border-slate-200 hover:border-emerald-300",
+                          calculateClientPayTotal() === 0 && "opacity-40 cursor-not-allowed",
+                        )}
+                      >
+                        <User className="h-3 w-3" />
+                        Cliente
                       </button>
                     </div>
+                    <button
+                      disabled={!!checkoutBlockReason || loading}
+                      title={checkoutBlockReason ?? undefined}
+                      onClick={handleProceedToCheckout}
+                      className="h-10 px-6 flex items-center gap-2 text-sm font-bold text-white rounded-xl transition-all disabled:opacity-40 disabled:cursor-not-allowed hover:opacity-90 active:scale-[0.98] shadow-lg"
+                      style={{
+                        background: "linear-gradient(135deg, #2558FF 0%, #6E2C96 55%, #A61E86 100%)",
+                        boxShadow: "0 4px 14px rgba(37,88,255,0.35)",
+                      }}
+                    >
+                      {loading ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <CreditCard className="h-4 w-4" />
+                      )}
+                      {loading ? "Aguarde..." : "Confirmar e ir ao Checkout"}
+                      {!loading && (
+                        <ChevronRight className="h-3.5 w-3.5 opacity-70" />
+                      )}
+                    </button>
                   </div>
                 </div>
-
+              }
+            >
                 {/* ── Two-column scrollable body ── */}
                 <div className="flex-1 overflow-y-auto bg-slate-50/80">
                   <div className="p-4 sm:p-5 grid grid-cols-1 lg:grid-cols-5 gap-4">
@@ -3504,105 +3736,7 @@ export function ProjectCreateNewPanel({
                   </div>
                 </div>
 
-                {/* ── Footer Actions ── */}
-                <div className="shrink-0 border-t border-slate-100 bg-white px-5 py-3 space-y-2">
-                  {/* Row 1: secondary actions */}
-                  <div className="flex items-center gap-1.5 flex-wrap">
-                    <button
-                      onClick={handleCloseReview}
-                      className="h-8 px-3 flex items-center gap-1.5 text-xs font-medium text-slate-500 hover:text-slate-800 rounded-lg hover:bg-slate-100 border border-slate-200 transition-all"
-                    >
-                      <ArrowLeft className="h-3.5 w-3.5" />
-                      Voltar
-                    </button>
-                    <button
-                      onClick={() => setShowEditProducts(true)}
-                      className="h-8 px-3 flex items-center gap-1.5 text-xs font-medium text-slate-500 hover:text-slate-800 rounded-lg hover:bg-slate-100 border border-slate-200 transition-all"
-                    >
-                      <Package className="h-3.5 w-3.5" />
-                      Editar Produtos
-                    </button>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={handleExportPresentation}
-                      disabled={exportingPDF || !!exportBlockReason}
-                      title={!exportingPDF && exportBlockReason ? exportBlockReason : undefined}
-                      className="h-8 text-xs gap-1.5 border-slate-200 text-slate-500 hover:text-slate-800 hover:bg-slate-50 disabled:opacity-40"
-                    >
-                      {exportingPDF ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <FileDown className="h-3.5 w-3.5" />}
-                      {exportingPDF ? "Gerando..." : "Exportar"}
-                    </Button>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={handleSaveDraftNow}
-                      disabled={loading || !!draftBlockReason}
-                      title={draftBlockReason ?? undefined}
-                      className="h-8 text-xs gap-1.5 border-slate-200 text-slate-600 hover:text-slate-900 hover:bg-slate-50 disabled:opacity-40"
-                    >
-                      {loadingAction === "draft" ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}
-                      {loadingAction === "draft" ? "Salvando..." : "Salvar Rascunho"}
-                    </Button>
-                  </div>
-
-                  {/* Row 2: payer selector + primary CTA */}
-                  <div className="flex items-center gap-2">
-                    <div className="flex items-center gap-1.5 mr-auto">
-                      <span className="text-[10px] font-semibold text-slate-400 shrink-0">Pagar via:</span>
-                      <button
-                        onClick={() => setCheckoutPayerMode("agency")}
-                        title="Agência processa o pagamento pelo preço base"
-                        className={cn(
-                          "h-7 px-2.5 rounded-lg text-[10px] font-semibold border transition-all flex items-center gap-1",
-                          checkoutPayerMode === "agency"
-                            ? "bg-blue-600 text-white border-blue-600"
-                            : "bg-white text-slate-500 border-slate-200 hover:border-blue-300",
-                        )}
-                      >
-                        <Building2 className="h-3 w-3" />
-                        Agência
-                      </button>
-                      <button
-                        onClick={() => setCheckoutPayerMode("client")}
-                        disabled={calculateClientPayTotal() === 0}
-                        title={calculateClientPayTotal() === 0 ? "Nenhum produto com pagamento do cliente" : "Cliente processa o pagamento pelo preço final"}
-                        className={cn(
-                          "h-7 px-2.5 rounded-lg text-[10px] font-semibold border transition-all flex items-center gap-1",
-                          checkoutPayerMode === "client"
-                            ? "bg-emerald-600 text-white border-emerald-600"
-                            : "bg-white text-slate-500 border-slate-200 hover:border-emerald-300",
-                          calculateClientPayTotal() === 0 && "opacity-40 cursor-not-allowed",
-                        )}
-                      >
-                        <User className="h-3 w-3" />
-                        Cliente
-                      </button>
-                    </div>
-                    <button
-                      disabled={!!checkoutBlockReason || loading}
-                      title={checkoutBlockReason ?? undefined}
-                      onClick={handleProceedToCheckout}
-                      className="h-10 px-6 flex items-center gap-2 text-sm font-bold text-white rounded-xl transition-all disabled:opacity-40 disabled:cursor-not-allowed hover:opacity-90 active:scale-[0.98] shadow-lg"
-                      style={{
-                        background: "linear-gradient(135deg, #2558FF 0%, #6E2C96 55%, #A61E86 100%)",
-                        boxShadow: "0 4px 14px rgba(37,88,255,0.35)",
-                      }}
-                    >
-                      {loading ? (
-                        <Loader2 className="h-4 w-4 animate-spin" />
-                      ) : (
-                        <CreditCard className="h-4 w-4" />
-                      )}
-                      {loading ? "Aguarde..." : "Confirmar e ir ao Checkout"}
-                      {!loading && (
-                        <ChevronRight className="h-3.5 w-3.5 opacity-70" />
-                      )}
-                      </button>
-                    </div>
-                  </div>
-              </div>
-            </div>
+            </EmbeddedSlideScreen>
           )}
 
           {/* ── Edit Products Overlay ── */}
@@ -4015,12 +4149,10 @@ export function ProjectCreateNewPanel({
         </div>
       )}
 
-      {/* Checkout Step */}
+      {/* Checkout Step — absolute dentro do EmbeddedSlideScreen (não fixed),
+          senão escapa do painel e cobre o header/sidebar inteiros. */}
       {showCheckout && (
-        <div
-          className="fixed top-0 z-[70] h-[calc(100%-25px)] bg-white flex flex-col border-l border-gray-200 shadow-2xl overflow-hidden"
-          style={{ left: `${sidebarWidth}px`, right: 0 }}
-        >
+        <div className="absolute inset-0 z-[70] bg-white flex flex-col overflow-hidden">
           <CheckoutFlow
             items={convertProductsToCartItems()}
             onBack={() => setShowCheckout(false)}
@@ -4055,10 +4187,12 @@ export function ProjectCreateNewPanel({
           const newCo: MockCompanyItem = {
             id: company.id ? String(company.id) : String(Date.now()),
             name: company.name,
+            orgType: "company",
           };
           setLocalCompanies((prev) => [...prev, newCo]);
           setResolvedCompanyId(String(newCo.id));
           setResolvedCompanyName(newCo.name);
+          setResolvedCompanyType("company");
           updateField("agencia", newCo.name);
           updateField("cliente", "");
           updateField("clienteCnpj", "");

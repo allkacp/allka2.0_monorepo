@@ -3,9 +3,7 @@
 
 import React, { useState, useEffect, useCallback } from "react";
 import {
-  X,
   Filter,
-  SlidersHorizontal,
   Clock,
   FolderOpen,
   GraduationCap,
@@ -13,12 +11,10 @@ import {
   Hash,
   Search,
 } from "lucide-react";
-import { Sheet, SheetContent } from "@/components/ui/sheet";
+import { StandardModalDialog } from "@/components/standard-modal-dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
-import { useAppFrameMetrics } from "@/hooks/useAppFrameMetrics";
-import { useSidebar } from "@/contexts/sidebar-context";
 import {
   Select,
   SelectContent,
@@ -190,8 +186,6 @@ export function TarefasFilterDrawer({
   uniqueLideres,
   uniqueCategorias,
 }: TarefasFilterDrawerProps) {
-  const { sidebarWidth } = useSidebar();
-  const { headerHeight, footerHeight } = useAppFrameMetrics();
   const [draft, setDraft] = useState<FilterValues>(initialFilters);
 
   // Sync draft when drawer opens
@@ -276,61 +270,57 @@ export function TarefasFilterDrawer({
   };
 
   return (
-    <Sheet open={open} onOpenChange={(v) => !v && onClose()}>
-      <SheetContent
-        side="right"
-        hideOverlay
-        style={{
-          left: `${sidebarWidth - 2}px`,
-          width: `calc(100vw - ${sidebarWidth - 2}px)`,
-          maxWidth: `calc(100vw - ${sidebarWidth - 2}px)`,
-          top: `${headerHeight - 1}px`,
-          bottom: `${footerHeight - 1}px`,
-        }}
-        className="w-full p-0 flex flex-col overflow-hidden border-l border-slate-200 dark:border-slate-700"
-      >
-        {/* ── Gradient header ─────────────────────────────────────── */}
-        <div
-          className="px-6 py-5 shrink-0"
-          style={{
-            background:
-              "linear-gradient(135deg, #0f172a 0%, #1e3a8a 55%, #4c1d95 100%)",
-          }}
-        >
-          <div className="flex items-start justify-between gap-3">
-            <div className="flex items-center gap-3">
-              <div className="h-10 w-10 rounded-xl bg-white/10 flex items-center justify-center shrink-0">
-                <SlidersHorizontal className="h-5 w-5 text-white" />
-              </div>
-              <div>
-                <h2 className="text-base font-bold text-white">
-                  Filtros avan\u00e7ados
-                </h2>
-                <p className="text-xs text-white/50 mt-0.5">
-                  {activeCount > 0
-                    ? `${activeCount} filtro${activeCount !== 1 ? "s" : ""} ativo${activeCount !== 1 ? "s" : ""}`
-                    : "Sem filtros ativos"}
-                </p>
-              </div>
-            </div>
-            <button
-              onClick={onClose}
-              className="text-white/50 hover:text-white p-1.5 rounded-lg hover:bg-white/10 transition-colors shrink-0"
-            >
-              <X className="h-5 w-5" />
-            </button>
+    <StandardModalDialog
+      open={open}
+      onClose={onClose}
+      title="Filtros avançados"
+      subtitle={
+        activeCount > 0
+          ? `${activeCount} filtro${activeCount !== 1 ? "s" : ""} ativo${activeCount !== 1 ? "s" : ""}`
+          : "Sem filtros ativos"
+      }
+      footer={
+        <div className="flex items-center justify-between gap-3 w-full">
+          <div className="flex items-center gap-2">
+            {activeCount > 0 && (
+              <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-blue-700 dark:text-blue-400 bg-blue-100 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-700 rounded-full px-2.5 py-0.5">
+                <Filter className="h-3 w-3" />
+                {activeCount} filtro{activeCount !== 1 ? "s" : ""} ativo
+                {activeCount !== 1 ? "s" : ""}
+              </span>
+            )}
           </div>
-          {activeCount > 0 && (
-            <button
-              onClick={() => setDraft(EMPTY_FILTERS)}
-              className="mt-3 inline-flex items-center gap-1.5 text-[11px] text-white/60 hover:text-white transition-colors"
+          <div className="flex items-center gap-2">
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-9 text-sm"
+              onClick={onClose}
             >
-              <X className="h-3 w-3" />
-              Limpar todos os filtros
-            </button>
-          )}
+              Cancelar
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-9 text-sm"
+              onClick={() => setDraft(EMPTY_FILTERS)}
+            >
+              Limpar filtros
+            </Button>
+            <Button
+              size="sm"
+              className="h-9 text-sm btn-brand"
+              onClick={() => {
+                onApply(draft);
+                onClose();
+              }}
+            >
+              Aplicar filtros
+            </Button>
+          </div>
         </div>
-
+      }
+    >
         {/* ── Scrollable body ─────────────────────────────────────── */}
         <div className="flex-1 overflow-y-auto bg-white dark:bg-background">
           {/* ── Section 1: Identificação ── */}
@@ -795,50 +785,6 @@ export function TarefasFilterDrawer({
           {/* bottom spacer */}
           <div className="h-4" />
         </div>
-
-        {/* ── Sticky footer ───────────────────────────────────────── */}
-        <div className="shrink-0 px-6 py-4 border-t border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/50">
-          <div className="flex items-center justify-between gap-3">
-            <div className="flex items-center gap-2">
-              {activeCount > 0 && (
-                <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-blue-700 dark:text-blue-400 bg-blue-100 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-700 rounded-full px-2.5 py-0.5">
-                  <Filter className="h-3 w-3" />
-                  {activeCount} filtro{activeCount !== 1 ? "s" : ""} ativo
-                  {activeCount !== 1 ? "s" : ""}
-                </span>
-              )}
-            </div>
-            <div className="flex items-center gap-2">
-              <Button
-                variant="ghost"
-                size="sm"
-                className="h-9 text-sm"
-                onClick={onClose}
-              >
-                Cancelar
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                className="h-9 text-sm"
-                onClick={() => setDraft(EMPTY_FILTERS)}
-              >
-                Limpar filtros
-              </Button>
-              <Button
-                size="sm"
-                className="h-9 text-sm btn-brand"
-                onClick={() => {
-                  onApply(draft);
-                  onClose();
-                }}
-              >
-                Aplicar filtros
-              </Button>
-            </div>
-          </div>
-        </div>
-      </SheetContent>
-    </Sheet>
+    </StandardModalDialog>
   );
 }

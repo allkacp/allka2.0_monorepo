@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect } from "react";
 import { useAccountType } from "@/contexts/account-type-context";
+import { useGlobalHeaderPanel } from "@/contexts/global-header-panel-context";
 import {
   getCatalogBasketStorageKey,
   resolveCatalogIdentity,
@@ -116,7 +117,10 @@ export function ProjectBasketProvider({
   const [projectId, setProjectId] = useState<string | null>(
     initialState.projectId,
   );
-  const [isOpen, setOpen] = useState(false);
+  const { isActive, openPanel, closePanel } = useGlobalHeaderPanel();
+  const isOpen = isActive("cesta");
+  const setOpen = (v: boolean) =>
+    v ? openPanel("cesta") : closePanel("cesta");
 
   useEffect(() => {
     const next = readBasketState(storageKey);

@@ -1217,7 +1217,12 @@ export default function EmpresasPage() {
   // Sync API companies into local state
   useEffect(() => {
     const mapped = apiCompanies.map((c: any, idx: number) => ({
-      id: idx + 1,
+      // Usa o sequence_number real (o mesmo número mostrado como "emp_N")
+      // como id — nunca a posição no array (`idx`), que muda com
+      // ordenação/filtro/paginação e não corresponde a nada estável. É esse
+      // id que vira a URL (/admin/empresas/:id) e a chave de deep-link da
+      // Bandeja de Telas, então precisa ser o número real do registro.
+      id: c.sequence_number ?? idx + 1,
       _apiId: c.id,
       sequence_number: c.sequence_number ?? undefined,
       name: c.name || "",
@@ -1240,7 +1245,9 @@ export default function EmpresasPage() {
       segment: c.segment || "",
       description: c.description || "",
       website: c.website || "",
+      observations: c.observations || "",
       avatar: c.logo || c.avatar || null,
+      logo: c.logo || "",
       zip_code: c.zip_code || "",
       street: c.address || "",
       number: c.number || "",
@@ -1296,7 +1303,9 @@ export default function EmpresasPage() {
     // (é o próprio tipo da entidade), diferente do bloco acima que precisa
     // derivar de c.type.
     const mappedAgencies = apiAgencies.map((a: any, idx: number) => ({
-      id: mapped.length + idx + 1,
+      // Mesmo raciocínio do bloco de Company acima — usa o sequence_number
+      // real, não a posição no array.
+      id: a.sequence_number ?? mapped.length + idx + 1,
       _apiId: a.id,
       sequence_number: a.sequence_number ?? undefined,
       name: a.name || "",
@@ -1330,6 +1339,13 @@ export default function EmpresasPage() {
       state: a.state || "",
       pix_key: a.pix_key || "",
       pix_type: a.pix_key_type || "",
+      // Paridade com Company — colunas adicionadas em Agency 2026-07-20.
+      segment: a.segment || "",
+      description: a.description || "",
+      website: a.website || "",
+      observations: a.observations || "",
+      avatar: a.logo || null,
+      logo: a.logo || "",
     })) as Company[];
 
     const mappedNomades = apiNomades.map((n: any, idx: number) => ({
@@ -1853,6 +1869,11 @@ export default function EmpresasPage() {
       ];
       const firstErrorField = orderedFieldIds.find((id) => errors[id]);
       if (firstErrorField) focusAndScrollToField(firstErrorField);
+      toast({
+        title: "Revise os campos destacados",
+        description: firstErrorField ? errors[firstErrorField] : "Preencha os campos obrigatórios antes de continuar.",
+        variant: "destructive",
+      });
       return;
     }
     setCreateWithOwnerErrors({});
@@ -1995,6 +2016,23 @@ export default function EmpresasPage() {
           email: data.email || undefined,
           phone: data.phone || undefined,
           status: data.status ? STATUS_TO_AGENCY[data.status] || data.status : undefined,
+          // Antes descartados aqui mesmo depois de preenchidos no form —
+          // as colunas já existem em Agency (schema.prisma), só nunca
+          // tinham sido enviadas pelo frontend nem aceitas pelo backend
+          // (ver PUT /api/agencies/:id).
+          address: data.street || data.location || undefined,
+          number: data.number || undefined,
+          neighborhood: data.neighborhood || undefined,
+          city: data.city || undefined,
+          state: data.state || undefined,
+          zip_code: data.zip_code || undefined,
+          pix_key: data.pix_key || undefined,
+          pix_key_type: data.pix_type || undefined,
+          segment: data.segment || undefined,
+          description: data.description || undefined,
+          logo: data.logo || undefined,
+          website: data.website || undefined,
+          observations: data.observations || undefined,
         });
       } else if (type === "nomad") {
         await apiClient.updateNomade(selectedCompany._apiId, {
@@ -2020,7 +2058,9 @@ export default function EmpresasPage() {
           pix_key: data.pix_key || undefined,
           pix_key_type: data.pix_type || undefined,
           description: data.description || undefined,
+          logo: data.logo || undefined,
           website: data.website || undefined,
+          observations: data.observations || undefined,
         });
       }
       toast({
@@ -2211,6 +2251,7 @@ export default function EmpresasPage() {
             id="create-company-email"
             type="email"
             placeholder="contato@empresa.com"
+            autoComplete="new-password"
             value={createWithOwnerForm.email}
             onChange={(e) => {
               setCreateWithOwnerForm((f) => ({ ...f, email: e.target.value }));
@@ -2232,6 +2273,7 @@ export default function EmpresasPage() {
               id="create-company-password"
               type={showCreateWithOwnerPassword ? "text" : "password"}
               placeholder="Mínimo 6 caracteres"
+              autoComplete="new-password"
               value={createWithOwnerForm.password}
               onChange={(e) => {
                 setCreateWithOwnerForm((f) => ({ ...f, password: e.target.value }));
@@ -2387,6 +2429,7 @@ export default function EmpresasPage() {
             <Input
               placeholder="Buscar por nome, CNPJ, e-mail ou responsável..."
               aria-label="Buscar empresas"
+              autoComplete="new-password"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               onFocus={() => setSearchFocused(true)}

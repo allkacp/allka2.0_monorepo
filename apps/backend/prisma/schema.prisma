@@ -69,6 +69,12 @@ model User {
   profile                  UserProfile?
   deleted_company_archives CompanyArchive[]   @relation("CompanyArchiveDeletedBy")
 
+  @@index([role])
+  @@index([account_type])
+  @@index([company_id])
+  @@index([agency_id])
+  @@index([is_active])
+  @@index([account_type, is_active])
   @@map("users")
 }
 
@@ -121,6 +127,16 @@ model LiderArea {
   categorias_permitidas String?  @db.LongText
   produtos_permitidos   String?  @db.LongText
   ativo                 Boolean  @default(true)
+  // Mesmo padrão do Nomade (não é uma organização própria como Agency/
+  // Company — Leader é pessoa física prestando serviço à plataforma, por
+  // isso precisa de CNPJ/endereço próprios, adicionados 2026-07-21).
+  cnpj                  String?  @unique
+  address               String?
+  number                String?
+  neighborhood          String?
+  city                  String?
+  state                 String?
+  zip_code              String?
   created_at            DateTime @default(now())
   updated_at            DateTime @updatedAt
 
@@ -158,6 +174,10 @@ model Company {
   description                          String?         @db.LongText
   logo                                 String?         @db.LongText
   website                              String?
+  // Observações administrativas gerais — distinto de
+  // commercial_contact_notes/financial_contact_notes (que são só sobre o
+  // contato de cada área), adicionado 2026-07-20.
+  observations                         String?         @db.LongText
   // ── Commercial contact ──────────────────────────────────────────
   commercial_contact_name              String?         @db.VarChar(255)
   commercial_contact_role              String?         @db.VarChar(100)
@@ -366,6 +386,14 @@ model Agency {
   zip_code       String?
   pix_key        String?
   pix_key_type   String? // cpf | cnpj | email | phone | random
+  // Paridade com Company (que já tinha esses 5 campos) — adicionados
+  // 2026-07-20 junto com a correção do form de edição, que já coletava
+  // segment/description mas o backend nunca teve onde guardar.
+  segment        String?
+  description    String?  @db.LongText
+  logo           String?  @db.LongText
+  website        String?
+  observations   String?  @db.LongText
   created_at     DateTime @default(now())
   updated_at     DateTime @updatedAt
 
@@ -1011,6 +1039,12 @@ model ProjectTask {
   lider_responsavel  User?                   @relation("TaskLiderResponsavel", fields: [lider_responsavel_id], references: [id])
 
   @@index([origin_payment_id])
+  @@index([project_id])
+  @@index([status])
+  @@index([assignee_id])
+  @@index([nomade_responsavel_id])
+  @@index([responsavel_agencia_id])
+  @@index([lider_responsavel_id])
   @@map("project_tasks")
 }
 

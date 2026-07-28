@@ -33,7 +33,7 @@ import {
   PlusCircle,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { SlidePanel } from "@/components/slide-panel";
+import { EmbeddedSlideScreen } from "@/components/embedded-slide-screen";
 import { useAccountType } from "@/contexts/account-type-context";
 import { useProducts } from "@/lib/contexts/product-context";
 import { ProductNomadsTab } from "@/components/admin/product-nomads-tab";
@@ -384,12 +384,11 @@ export function ProductDetailSheet({
 
   return (
     <>
-      <SlidePanel
+      <EmbeddedSlideScreen
         open={open}
         onClose={handleClose}
         title={product.name}
         subtitle={product.category || undefined}
-        widthMode="full"
       >
         <div className="flex flex-col flex-1 min-h-0 overflow-hidden w-full">
           {/* ══════════════════════════════════════════════════════════════
@@ -1525,7 +1524,7 @@ export function ProductDetailSheet({
           </div>
         </div>
         </div>
-      </SlidePanel>
+      </EmbeddedSlideScreen>
       {/* ── Nested detail sheet for complementary products with variations ── */}
       {nestedDetailProduct && (
         <ProductDetailSheet

@@ -30,7 +30,11 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { PageLoader } from "@/components/ui/loading";
-import { PageHeader } from "@/components/page-header";
+import {
+  STANDARD_SHELL_PANEL_CLASS,
+  StandardPageBanner,
+} from "@/components/standard-page-shell";
+import { PinToTrayButton } from "@/components/pin-to-tray-button";
 import { apiClient } from "@/lib/api-client";
 import type { LedAgency, AgencyReport } from "@/types/partner";
 
@@ -771,18 +775,26 @@ export default function ParceiroAgencias() {
   }
 
   return (
-    <div className="p-6 space-y-6">
-      {/* Header */}
-      <PageHeader
+    <div className={STANDARD_SHELL_PANEL_CLASS}>
+    <div className="relative h-full min-h-0 flex flex-col overflow-hidden">
+      <div className="shrink-0 -mb-[11px]">
+      <StandardPageBanner
+        icon={Building2}
         title="Agências Lideradas"
         description="Acompanhe o desempenho e relatórios das agências sob sua liderança"
         actions={
-          <span className="text-xs text-slate-400 bg-slate-100 rounded-full px-3 py-1 font-medium">
-            {ledAgencies.length} agência{ledAgencies.length !== 1 ? "s" : ""}
-          </span>
+          <>
+            <span className="flex items-center h-8 px-3 rounded-lg border border-white/70 text-white bg-white/10 text-xs font-semibold whitespace-nowrap">
+              {ledAgencies.length} agência{ledAgencies.length !== 1 ? "s" : ""}
+            </span>
+            <PinToTrayButton id="page-parceiro-agencias" label="Agências Lideradas" icon={Building2} path="/partner/agencias" />
+          </>
         }
       />
+      </div>
 
+      <div className="flex-1 min-h-0 overflow-y-auto">
+      <div className="p-6 space-y-6">
       {/* KPI Strip */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <KpiCard
@@ -823,6 +835,7 @@ export default function ParceiroAgencias() {
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Buscar por nome ou e-mail…"
+            autoComplete="new-password"
             className="pl-9 h-9 text-sm"
           />
         </div>
@@ -855,6 +868,8 @@ export default function ParceiroAgencias() {
           ))}
         </div>
       )}
+      </div>
+      </div>
 
       {/* Agency detail panel */}
       {selectedAgency && (
@@ -863,6 +878,7 @@ export default function ParceiroAgencias() {
           onClose={() => setSelectedAgency(null)}
         />
       )}
+    </div>
     </div>
   );
 }

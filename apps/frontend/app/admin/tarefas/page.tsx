@@ -10,6 +10,7 @@ import React, {
 } from "react";
 import { useItemsPerPage } from "@/lib/use-items-per-page";
 import { useNavigate, useParams } from "react-router-dom";
+import { useToast } from "@/hooks/use-toast";
 import {
   CheckSquare2,
   Loader2,
@@ -101,9 +102,10 @@ import { PinToTrayButton } from "@/components/pin-to-tray-button";
 import { ItemsPerPageSelect } from "@/components/items-per-page-select";
 import { useSorting, SortableHeader } from "@/hooks/useSorting";
 import { useTableScrollSync } from "@/hooks/useTableScrollSync";
-import { SlidePanel } from "@/components/slide-panel";
+import { StandardModalDialog } from "@/components/standard-modal-dialog";
 import { TaskLaunchDrawer } from "@/components/task-launch-drawer";
 import { ProjectViewSlidePanel } from "@/components/project-view-slide-panel";
+import { ProjectManagementModal } from "@/components/project-management-modal";
 import { TarefasFilterDrawer } from "@/components/tarefas-filter-drawer";
 import { TarefaDetailDrawer } from "@/components/tarefa-detail-drawer";
 import {
@@ -805,6 +807,7 @@ function AssignNomadeDialog({
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400 pointer-events-none" />
             <Input
               placeholder="Buscar por nome ou e-mail..."
+              autoComplete="new-password"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               className="pl-9 h-9 text-sm"
@@ -987,20 +990,33 @@ export default function AdminTarefasPage({
   const [selectedTarefa, setSelectedTarefa] =
     useState<TarefaOperacional | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
+  // Ícone "Editar" na linha da tabela abre o mesmo TarefaDetailDrawer, só
+  // que já direto no modo de edição (em vez do usuário precisar abrir e
+  // clicar em "Editar" lá dentro).
+  const [drawerStartInEditMode, setDrawerStartInEditMode] = useState(false);
   const navigate = useNavigate();
+  const { toast } = useToast();
   const { tarefaId: urlTarefaId } = useParams<{ tarefaId?: string }>();
 
-  // Deep-link: open task drawer from URL param
+  // Deep-link: open task drawer from URL param. Só busca da API quando a
+  // URL muda por navegação externa (ex.: link direto) — os cliques nas
+  // linhas da tabela já chamam navigate() com os mesmos dados que a lista
+  // trouxe, e antes esse efeito disparava de novo por causa disso,
+  // sobrescrevendo a tarefa completa por uma versão mais pobre (ou vazia,
+  // se a chamada falhasse) vinda de getTask().
   useEffect(() => {
     if (!urlTarefaId) return;
+    if (drawerOpen && selectedTarefa?.id === urlTarefaId) return;
     apiClient
-      .getTask(urlTarefaId)
+      .getOperationalTask(urlTarefaId)
       .then((task: any) => {
         setSelectedTarefa(task);
+        setDrawerStartInEditMode(false);
         setDrawerOpen(true);
       })
       .catch(() => {
         setSelectedTarefa({ id: urlTarefaId } as any);
+        setDrawerStartInEditMode(false);
         setDrawerOpen(true);
       });
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -1012,6 +1028,11 @@ export default function AdminTarefasPage({
   const [assignOpen, setAssignOpen] = useState(false);
   const [projectData, setProjectData] = useState<any | null>(null);
   const [projectOpen, setProjectOpen] = useState(false);
+  // Edição de projeto — reaproveita o mesmo ProjectManagementModal usado em
+  // admin/projetos (mode="edit"), acionado pelo botão "Editar" já existente
+  // dentro do ProjectViewSlidePanel (antes não fazia nada porque onEdit
+  // nunca era passado pra cá).
+  const [projectEditOpen, setProjectEditOpen] = useState(false);
 
   const fetchTarefas = useCallback(async () => {
     setLoading(true);
@@ -1619,7 +1640,66 @@ export default function AdminTarefasPage({
   return (
     <TooltipProvider>
       <div className={STANDARD_SHELL_PANEL_CLASS}>
-      <div className="h-full min-h-0 flex flex-col">
+      <div className="relative h-full min-h-0 flex flex-col">
+      {/* Tela Slide (EmbeddedSlideScreen) — precisam ficar DENTRO do
+          container relative acima, senão o position:absolute delas não
+          tem contra o que se ancorar e escapam do painel inteiro. */}
+      <TarefaDetailDrawer
+        tarefa={selectedTarefa}
+        open={drawerOpen}
+        onClose={() => {
+          setDrawerOpen(false);
+          navigate(routeBase, { replace: true });
+        }}
+        onStatusChange={handleStatusChange}
+        updatingId={updatingId}
+        startInEditMode={drawerStartInEditMode}
+      />
+      <ProjectViewSlidePanel
+        open={projectOpen}
+        project={projectData}
+        onClose={() => setProjectOpen(false)}
+        onEdit={() => {
+          setProjectOpen(false);
+          setProjectEditOpen(true);
+        }}
+        onClone={() => {
+          toast({
+            title: "Duplicar projeto",
+            description: "Disponível na tela de Projetos.",
+          });
+          if (projectData?.id) navigate(`/admin/projetos/${projectData.id}`);
+        }}
+        onExport={() => {
+          toast({
+            title: "Exportar projeto",
+            description: "Disponível na tela de Projetos.",
+          });
+        }}
+        onCancel={() => {
+          toast({
+            title: "Cancelar projeto",
+            description: "Disponível na tela de Projetos.",
+          });
+          if (projectData?.id) navigate(`/admin/projetos/${projectData.id}`);
+        }}
+      />
+      {/* Editar Projeto — reaproveita o ProjectManagementModal (Tela Slide)
+          de admin/projetos, acionado pelo botão Editar dentro do painel
+          de visualização acima. */}
+      <ProjectManagementModal
+        project={projectData}
+        open={projectEditOpen}
+        onOpenChange={(v: boolean) => {
+          setProjectEditOpen(v);
+          if (!v) setProjectData(null);
+        }}
+        mode="edit"
+        onSave={() => {
+          setProjectEditOpen(false);
+          setProjectData(null);
+        }}
+      />
       <div className="shrink-0 -mb-[11px]">
         {/* ── Header ─────────────────────────────────────────────── */}
         <StandardPageBanner
@@ -1993,8 +2073,9 @@ export default function AdminTarefasPage({
                                   <button
                                     onClick={() => {
                                       setSelectedTarefa(tarefa);
+                                      setDrawerStartInEditMode(false);
                                       setDrawerOpen(true);
-                                      navigate(`${routeBase}/${tarefa.id}`, {
+                                      navigate(`${routeBase}/${tarefa.task_code || tarefa.id}`, {
                                         replace: true,
                                       });
                                     }}
@@ -2005,6 +2086,26 @@ export default function AdminTarefasPage({
                                 </TooltipTrigger>
                                 <TooltipContent side="top" className="text-xs">
                                   Ver detalhes
+                                </TooltipContent>
+                              </Tooltip>
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <button
+                                    onClick={() => {
+                                      setSelectedTarefa(tarefa);
+                                      setDrawerStartInEditMode(true);
+                                      setDrawerOpen(true);
+                                      navigate(`${routeBase}/${tarefa.task_code || tarefa.id}`, {
+                                        replace: true,
+                                      });
+                                    }}
+                                    className="h-[26px] w-[26px] flex items-center justify-center rounded-[8px] bg-white dark:bg-slate-800 border border-[#e8edf5] dark:border-slate-700 text-violet-500 dark:text-slate-500 shadow-[0_4px_10px_rgba(15,23,42,0.06)] hover:bg-gradient-to-br hover:from-[#2558FF] hover:via-[#6E2C96] hover:to-[#D92293] hover:text-white dark:hover:text-[#0a1628] hover:border-transparent hover:shadow-[0_8px_18px_rgba(15,23,42,0.18)] hover:-translate-y-px transition-all duration-150"
+                                  >
+                                    <Pencil className="h-3.5 w-3.5" />
+                                  </button>
+                                </TooltipTrigger>
+                                <TooltipContent side="top" className="text-xs">
+                                  Editar tarefa
                                 </TooltipContent>
                               </Tooltip>
                               <DropdownMenu>
@@ -2021,8 +2122,9 @@ export default function AdminTarefasPage({
                                     className="gap-2.5 rounded-lg py-2 px-2.5 text-sm cursor-pointer"
                                     onClick={() => {
                                       setSelectedTarefa(tarefa);
+                                      setDrawerStartInEditMode(false);
                                       setDrawerOpen(true);
-                                      navigate(`${routeBase}/${tarefa.id}`, {
+                                      navigate(`${routeBase}/${tarefa.task_code || tarefa.id}`, {
                                         replace: true,
                                       });
                                     }}
@@ -2198,8 +2300,9 @@ export default function AdminTarefasPage({
                                   className="text-left w-full"
                                   onClick={() => {
                                     setSelectedTarefa(tarefa);
+                                    setDrawerStartInEditMode(false);
                                     setDrawerOpen(true);
-                                    navigate(`${routeBase}/${tarefa.id}`, {
+                                    navigate(`${routeBase}/${tarefa.task_code || tarefa.id}`, {
                                       replace: true,
                                     });
                                   }}
@@ -2642,18 +2745,6 @@ export default function AdminTarefasPage({
         uniqueCategorias={uniqueCategorias}
       />
 
-      {/* Detail Drawer */}
-      <TarefaDetailDrawer
-        tarefa={selectedTarefa}
-        open={drawerOpen}
-        onClose={() => {
-          setDrawerOpen(false);
-          navigate(routeBase, { replace: true });
-        }}
-        onStatusChange={handleStatusChange}
-        updatingId={updatingId}
-      />
-
       {/* Launch Drawer */}
       {launchTask && (
         <TaskLaunchDrawer
@@ -2679,23 +2770,12 @@ export default function AdminTarefasPage({
         onAssigned={handleNomadeAssigned}
       />
 
-      {/* Project Panel */}
-      <ProjectViewSlidePanel
-        open={projectOpen}
-        project={projectData}
-        onClose={() => {
-          setProjectOpen(false);
-          setProjectData(null);
-        }}
-      />
-
-      {/* Column config — SlidePanel, matching the platform-wide pattern */}
-      <SlidePanel
+      {/* Column config — Popup 1 */}
+      <StandardModalDialog
         open={colConfigOpen}
         onClose={() => setColConfigOpen(false)}
         title="Configurar colunas"
         subtitle="Escolha quais colunas aparecem na tabela"
-        widthMode="full"
       >
         <div className="flex-1 overflow-y-auto">
           <div className="p-2 space-y-0.5">
@@ -2748,7 +2828,7 @@ export default function AdminTarefasPage({
             </span>
           </div>
         </div>
-      </SlidePanel>
+      </StandardModalDialog>
     </TooltipProvider>
   );
 }

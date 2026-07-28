@@ -140,6 +140,7 @@ export function TermAcceptanceHistory({ open, onOpenChange, acceptances = MOCK_A
           <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
           <Input
             placeholder="Buscar por usuário, email ou termo..."
+            autoComplete="new-password"
             value={searchTerm}
             onChange={(e) => handleSearch(e.target.value)}
             className="pl-10"

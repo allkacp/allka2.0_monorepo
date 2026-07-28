@@ -1,6 +1,5 @@
 ﻿// @ts-nocheck
 import { useState, useEffect, useCallback } from "react";
-import { useAppFrameMetrics } from "@/hooks/useAppFrameMetrics";
 import { apiClient } from "@/lib/api-client";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -8,7 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
-import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
+import { EmbeddedSlideScreen } from "@/components/embedded-slide-screen";
 import { Switch } from "@/components/ui/switch";
 import { ConfirmationDialog } from "@/components/confirmation-dialog";
 import { PageLoader } from "@/components/ui/loading";
@@ -146,7 +145,6 @@ const LEVEL_ICON_MAP: Record<string, { gradient: string; Icon: any }> = {
 // Levels are loaded from API in the component
 
 export default function NiveisPage() {
-  const { sidebarWidth, headerHeight, footerHeight } = useAppFrameMetrics();
   const [partnerLevels, setPartnerLevels] = useState<any[]>([]);
   const [editingLevel, setEditingLevel] = useState<any>(null);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
@@ -300,7 +298,7 @@ export default function NiveisPage() {
 
   return (
     <div className={STANDARD_SHELL_PANEL_CLASS}>
-    <div className="h-full min-h-0 flex flex-col">
+    <div className="relative h-full min-h-0 flex flex-col">
       <div className="shrink-0 -mb-[11px]">
       <StandardPageBanner
         icon={Award}
@@ -562,36 +560,20 @@ export default function NiveisPage() {
         })}
       </div>
 
-      <Sheet open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-        <SheetContent
-          side="right"
-          hideOverlay={true}
-          className="p-0 flex flex-col gap-0 z-[70] [&>button:last-child]:top-3 [&>button:last-child]:right-3 [&>button:last-child]:p-1.5 [&>button:last-child]:hover:bg-white/20 [&>button:last-child_svg]:size-4"
-          style={{
-            left: `${sidebarWidth - 2}px`,
-            top: `${headerHeight - 1}px`,
-            bottom: `${footerHeight - 1}px`,
-            height: "auto",
-            width: `calc(100vw - ${sidebarWidth - 2}px)`,
-          }}
-        >
-          <div
-            className="flex items-center justify-between px-5 py-3 flex-shrink-0"
-            style={{
-              background:
-                "var(--brand-gradient, linear-gradient(to right, #0a1628, #1e3a8a, #0a1628))",
-            }}
-          >
-            <div className="min-w-0 flex-1 text-sm font-bold text-white truncate">
-              <SheetTitle className="text-sm font-bold text-white truncate">
-                {editingLevel?.id ? "Editar Nível" : "Novo Nível Partner"}
-              </SheetTitle>
-              <p className="text-[11px] font-normal text-white/60 mt-0.5 truncate">
-                Configure critérios, benefícios e regras do nível
-              </p>
-            </div>
-          </div>
-          <div className="flex-1 overflow-y-auto p-6 bg-slate-50 dark:bg-slate-950">
+      <EmbeddedSlideScreen
+        open={isDialogOpen}
+        onClose={() => setIsDialogOpen(false)}
+        title={editingLevel?.id ? "Editar Nível" : "Novo Nível Partner"}
+        subtitle="Configure critérios, benefícios e regras do nível"
+        pin={{
+          id: `niveis-${editingLevel?.id ?? "novo"}`,
+          label: editingLevel?.id ? "Editar Nível" : "Novo Nível Partner",
+          icon: TrendingUp,
+          path: "/admin/niveis",
+          activateKey: editingLevel?.id ? `edit:${editingLevel.id}` : "create",
+        }}
+      >
+          <div className="flex-1 overflow-y-auto p-6 bg-slate-50 dark:bg-slate-950 w-full">
             <div className="max-w-3xl mx-auto">
               {editingLevel && (
                 <LevelForm
@@ -602,8 +584,7 @@ export default function NiveisPage() {
               )}
             </div>
           </div>
-        </SheetContent>
-      </Sheet>
+      </EmbeddedSlideScreen>
 
       <ConfirmationDialog
         open={deleteDialog.open}

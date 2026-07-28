@@ -724,6 +724,7 @@ export default function AdminClientesPage() {
             <Input
               className="pl-8 h-9 text-sm"
               placeholder="Nome, ID, e-mail ou documento..."
+              autoComplete="new-password"
               value={searchInput}
               onFocus={() => setSearchFocused(true)}
               onChange={(e) => handleSearchChange(e.target.value)}

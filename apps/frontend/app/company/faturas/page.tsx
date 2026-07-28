@@ -14,7 +14,11 @@ import { useSorting, SortableHeader } from "@/hooks/useSorting";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { PageLoader } from "@/components/ui/loading";
-import { PageHeader } from "@/components/page-header";
+import {
+  STANDARD_SHELL_PANEL_CLASS,
+  StandardPageBanner,
+} from "@/components/standard-page-shell";
+import { PinToTrayButton } from "@/components/pin-to-tray-button";
 
 function fmtBRL(n: number) {
   return n.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
@@ -78,8 +82,19 @@ export default function EmpresaFaturas() {
   }
 
   return (
-    <div className="p-6 space-y-6">
-      <PageHeader title="Faturas" description="Histórico e status das suas faturas" />
+    <div className={STANDARD_SHELL_PANEL_CLASS}>
+    <div className="relative h-full min-h-0 flex flex-col overflow-hidden">
+    <div className="h-full min-h-0 flex flex-col overflow-y-auto p-6 space-y-6">
+      <div className="shrink-0 -mb-[11px]">
+      <StandardPageBanner
+        icon={FileText}
+        title="Faturas"
+        description="Histórico e status das suas faturas"
+        actions={
+          <PinToTrayButton id="page-company-faturas" label="Faturas" icon={FileText} path="/company/faturas" />
+        }
+      />
+      </div>
 
       {/* Summary */}
       <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
@@ -245,6 +260,8 @@ export default function EmpresaFaturas() {
           </table>
         </div>
       </div>
+    </div>
+    </div>
     </div>
   );
 }

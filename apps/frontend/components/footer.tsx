@@ -44,7 +44,13 @@ export function Footer({ transparent = false }: { transparent?: boolean } = {}) 
 
   const getFooterStyle = (): React.CSSProperties => {
     if (!bg || bg === "bg-slate-900") {
-      return { background: "linear-gradient(to bottom, #0a1628, #000000)" }
+      // Mesmo gradiente de marca do Header/Sidebar (var(--app-brand-gradient),
+      // configurável em Personalizar Sidebar) — evita um degradê diferente
+      // no rodapé que cria uma linha de contraste visível junto ao conteúdo.
+      return {
+        background:
+          "var(--app-brand-gradient, linear-gradient(135deg, #000000 0%, #1a2a6f 45%, #c81a7f 100%))",
+      }
     }
     if (bg.startsWith("custom-gradient:")) {
       return { background: bg.replace("custom-gradient:", "") }

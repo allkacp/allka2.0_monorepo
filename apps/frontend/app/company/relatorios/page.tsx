@@ -5,7 +5,11 @@ import { useEmpresa } from "@/contexts/empresa-context";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { PageLoader } from "@/components/ui/loading";
-import { PageHeader } from "@/components/page-header";
+import {
+  STANDARD_SHELL_PANEL_CLASS,
+  StandardPageBanner,
+} from "@/components/standard-page-shell";
+import { PinToTrayButton } from "@/components/pin-to-tray-button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
 import {
@@ -486,60 +490,73 @@ export default function CompanyRelatoriosPage() {
   if (loading) return <PageLoader text="Carregando relatórios…" />;
 
   return (
-    <div className="space-y-6">
+    <div className={STANDARD_SHELL_PANEL_CLASS}>
+    <div className="relative h-full min-h-0 flex flex-col overflow-hidden">
+    <div className="h-full min-h-0 flex flex-col overflow-y-auto space-y-6">
       {/* Header */}
-      <PageHeader title="Relatórios" description="Visão analítica dos seus projetos e investimentos" />
-      <div className="flex items-center justify-end gap-3 flex-wrap">
-        <div className="flex items-center gap-2">
-          <div className="flex items-center gap-0.5 p-1 bg-slate-100 dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700">
-            {(["7", "30", "90", "365"] as const).map((v) => (
-              <button
-                key={v}
-                onClick={() => setDateRange(v)}
-                className={cn(
-                  "px-3 py-1 rounded-md text-xs font-medium transition-all",
-                  dateRange === v
-                    ? "bg-white dark:bg-slate-700 text-slate-900 dark:text-white shadow-sm"
-                    : "text-slate-500 hover:text-slate-700 dark:hover:text-slate-300",
-                )}
-              >
-                {v === "365" ? "1a" : `${v}d`}
-              </button>
-            ))}
-            <Popover open={pickerOpen} onOpenChange={setPickerOpen}>
-              <PopoverTrigger asChild>
+      <div className="shrink-0 -mb-[11px]">
+      <StandardPageBanner
+        icon={BarChart3}
+        title="Relatórios"
+        description="Visão analítica dos seus projetos e investimentos"
+        actions={
+          <>
+            <div className="flex items-center gap-0.5 p-1 bg-white/10 rounded-lg border border-white/70">
+              {(["7", "30", "90", "365"] as const).map((v) => (
                 <button
-                  onClick={() => setDateRange("custom")}
+                  key={v}
+                  onClick={() => setDateRange(v)}
                   className={cn(
-                    "flex items-center gap-1 px-3 py-1 rounded-md text-xs font-medium transition-all",
-                    dateRange === "custom"
-                      ? "bg-white dark:bg-slate-700 text-slate-900 dark:text-white shadow-sm"
-                      : "text-slate-500 hover:text-slate-700 dark:hover:text-slate-300",
+                    "px-3 py-1 rounded-md text-xs font-medium transition-all",
+                    dateRange === v
+                      ? "bg-white text-slate-900 shadow-sm"
+                      : "text-white/80 hover:text-white",
                   )}
                 >
-                  <CalendarDays className="h-3 w-3" />
-                  {dateRange === "custom" && customRange?.from ? periodLabel : "Custom"}
+                  {v === "365" ? "1a" : `${v}d`}
                 </button>
-              </PopoverTrigger>
-              <PopoverContent className="w-auto p-0" align="end">
-                <Calendar
-                  mode="range"
-                  selected={customRange}
-                  onSelect={(range) => {
-                    setCustomRange(range);
-                    setDateRange("custom");
-                    if (range?.from && range?.to) setPickerOpen(false);
-                  }}
-                  numberOfMonths={2}
-                  toDate={new Date()}
-                />
-              </PopoverContent>
-            </Popover>
-          </div>
-          <Button variant="outline" size="sm" onClick={refetch} className="h-8 gap-1.5 text-xs">
-            <RefreshCw className="h-3.5 w-3.5" />Atualizar
-          </Button>
-        </div>
+              ))}
+              <Popover open={pickerOpen} onOpenChange={setPickerOpen}>
+                <PopoverTrigger asChild>
+                  <button
+                    onClick={() => setDateRange("custom")}
+                    className={cn(
+                      "flex items-center gap-1 px-3 py-1 rounded-md text-xs font-medium transition-all",
+                      dateRange === "custom"
+                        ? "bg-white text-slate-900 shadow-sm"
+                        : "text-white/80 hover:text-white",
+                    )}
+                  >
+                    <CalendarDays className="h-3 w-3" />
+                    {dateRange === "custom" && customRange?.from ? periodLabel : "Custom"}
+                  </button>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-0" align="end">
+                  <Calendar
+                    mode="range"
+                    selected={customRange}
+                    onSelect={(range) => {
+                      setCustomRange(range);
+                      setDateRange("custom");
+                      if (range?.from && range?.to) setPickerOpen(false);
+                    }}
+                    numberOfMonths={2}
+                    toDate={new Date()}
+                  />
+                </PopoverContent>
+              </Popover>
+            </div>
+            <button
+              onClick={refetch}
+              className="flex items-center justify-center h-8 w-8 rounded-lg border border-white/70 text-white bg-white/10 hover:bg-white/20 transition-colors"
+              title="Atualizar"
+            >
+              <RefreshCw className="h-3.5 w-3.5" />
+            </button>
+            <PinToTrayButton id="page-company-relatorios" label="Relatórios" icon={BarChart3} path="/company/relatorios" />
+          </>
+        }
+      />
       </div>
 
       {/* KPI strip */}
@@ -757,6 +774,8 @@ export default function CompanyRelatoriosPage() {
           </div>
         </div>
       )}
+    </div>
+    </div>
     </div>
   );
 }

@@ -1,13 +1,12 @@
 ﻿// @ts-nocheck
 import { useState, useEffect } from "react";
-import { useAppFrameMetrics } from "@/hooks/useAppFrameMetrics";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
-import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
+import { EmbeddedSlideScreen } from "@/components/embedded-slide-screen";
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ConfirmationDialog } from "@/components/confirmation-dialog";
@@ -639,7 +638,6 @@ function RevisionTab() {
 }
 
 export default function NiveisNomadesPage() {
-  const { sidebarWidth, headerHeight, footerHeight } = useAppFrameMetrics();
   const {
     levels: apiLevels,
     loading: levelsLoading,
@@ -728,7 +726,7 @@ export default function NiveisNomadesPage() {
 
   return (
     <div className={STANDARD_SHELL_PANEL_CLASS}>
-    <div className="h-full min-h-0 flex flex-col">
+    <div className="relative h-full min-h-0 flex flex-col">
       <div className="shrink-0 -mb-[11px]">
       <StandardPageBanner
         icon={Award}
@@ -1047,36 +1045,20 @@ export default function NiveisNomadesPage() {
         </TabsContent>
       </Tabs>
 
-      <Sheet open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-        <SheetContent
-          side="right"
-          hideOverlay={true}
-          className="p-0 flex flex-col gap-0 z-[70] [&>button:last-child]:top-3 [&>button:last-child]:right-3 [&>button:last-child]:p-1.5 [&>button:last-child]:hover:bg-white/20 [&>button:last-child_svg]:size-4"
-          style={{
-            left: `${sidebarWidth - 2}px`,
-            top: `${headerHeight - 1}px`,
-            bottom: `${footerHeight - 1}px`,
-            height: "auto",
-            width: `calc(100vw - ${sidebarWidth - 2}px)`,
-          }}
-        >
-          <div
-            className="flex items-center justify-between px-5 py-3 flex-shrink-0"
-            style={{
-              background:
-                "var(--brand-gradient, linear-gradient(to right, #0a1628, #1e3a8a, #0a1628))",
-            }}
-          >
-            <div className="min-w-0 flex-1 text-sm font-bold text-white truncate">
-              <SheetTitle className="text-sm font-bold text-white truncate">
-                {editingLevel?.id ? "Editar Nível" : "Novo Nível de Nômade"}
-              </SheetTitle>
-              <p className="text-[11px] font-normal text-white/60 mt-0.5 truncate">
-                Configure critérios de performance e benefícios
-              </p>
-            </div>
-          </div>
-          <div className="flex-1 overflow-y-auto p-6 bg-slate-50 dark:bg-slate-950">
+      <EmbeddedSlideScreen
+        open={isDialogOpen}
+        onClose={() => setIsDialogOpen(false)}
+        title={editingLevel?.id ? "Editar Nível" : "Novo Nível de Nômade"}
+        subtitle="Configure critérios de performance e benefícios"
+        pin={{
+          id: `niveis-nomades-${editingLevel?.id ?? "novo"}`,
+          label: editingLevel?.id ? "Editar Nível" : "Novo Nível de Nômade",
+          icon: TrendingUp,
+          path: "/admin/niveis-nomades",
+          activateKey: editingLevel?.id ? `edit:${editingLevel.id}` : "create",
+        }}
+      >
+          <div className="flex-1 overflow-y-auto p-6 bg-slate-50 dark:bg-slate-950 w-full">
             <div className="max-w-3xl mx-auto">
               {editingLevel && (
                 <LevelForm
@@ -1087,8 +1069,7 @@ export default function NiveisNomadesPage() {
               )}
             </div>
           </div>
-        </SheetContent>
-      </Sheet>
+      </EmbeddedSlideScreen>
 
       <ConfirmationDialog
         open={deleteDialog.open}
