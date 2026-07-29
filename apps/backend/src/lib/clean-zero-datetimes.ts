@@ -17,43 +17,61 @@ export async function cleanZeroDatetimes(force = false): Promise<number> {
 
   cleanupInFlight = (async () => {
     try {
-      await prisma.$executeRawUnsafe(
-        "SET sql_mode = (SELECT REPLACE(REPLACE(@@sql_mode, 'NO_ZERO_IN_DATE,', ''), 'NO_ZERO_DATE,', ''))",
-      );
-      const dbRows = await prisma.$queryRawUnsafe<{ db: string }[]>(
-        "SELECT DATABASE() AS db",
-      );
-      const dbName = dbRows[0]?.db;
-      if (!dbName) return 0;
-      const cols = await prisma.$queryRawUnsafe<
-        { TABLE_NAME: string; COLUMN_NAME: string; IS_NULLABLE: string }[]
-      >(
-        `SELECT TABLE_NAME, COLUMN_NAME, IS_NULLABLE
-           FROM information_schema.columns
-          WHERE TABLE_SCHEMA = ?
-            AND DATA_TYPE IN ('datetime','timestamp','date')`,
-        dbName,
-      );
       let fixed = 0;
-      for (const c of cols) {
-        const replacement =
-          c.IS_NULLABLE === "YES" ? "NULL" : "'1970-01-01 00:00:00'";
-        try {
-          const affected = await prisma.$executeRawUnsafe(
-            `UPDATE \`${c.TABLE_NAME}\` SET \`${c.COLUMN_NAME}\` = ${replacement}
-              WHERE \`${c.COLUMN_NAME}\` = '0000-00-00 00:00:00'
-                 OR \`${c.COLUMN_NAME}\` = '0000-00-00'`,
+      // Tudo dentro de UMA transação: garante que o `SET sql_mode` (session-
+      // scoped) e as UPDATEs seguintes rodem na MESMA conexão física do pool.
+      // Sem isso, o Prisma podia despachar cada $executeRawUnsafe pra uma
+      // conexão diferente — o SET "vazava" pra conexão errada e a limpeza
+      // falhava silenciosamente com o mesmo erro 1292 que ela tentava corrigir.
+      await prisma.$transaction(
+        async (tx) => {
+          await tx.$executeRawUnsafe(
+            "SET sql_mode = (SELECT REPLACE(REPLACE(@@sql_mode, 'NO_ZERO_IN_DATE,', ''), 'NO_ZERO_DATE,', ''))",
           );
-          if (affected > 0) {
-            fixed += affected;
-            console.log(
-              `  🧹 zero-date fix: ${c.TABLE_NAME}.${c.COLUMN_NAME} → ${affected} row(s)`,
-            );
+          const dbRows = await tx.$queryRawUnsafe<{ db: string }[]>(
+            "SELECT DATABASE() AS db",
+          );
+          const dbName = dbRows[0]?.db;
+          if (!dbName) return;
+          const cols = await tx.$queryRawUnsafe<
+            { TABLE_NAME: string; COLUMN_NAME: string; IS_NULLABLE: string }[]
+          >(
+            `SELECT TABLE_NAME, COLUMN_NAME, IS_NULLABLE
+               FROM information_schema.columns
+              WHERE TABLE_SCHEMA = ?
+                AND DATA_TYPE IN ('datetime','timestamp','date')`,
+            dbName,
+          );
+          for (const c of cols) {
+            const replacement =
+              c.IS_NULLABLE === "YES" ? "NULL" : "'1970-01-01 00:00:00'";
+            try {
+              // Compara via CAST(...AS CHAR) em vez do literal
+              // '0000-00-00 00:00:00' direto — evita que o MySQL precise
+              // interpretar o literal como DATETIME (o que por si só dispara
+              // o erro 1292 em modo estrito, mesmo antes de tocar na coluna).
+              const affected = await tx.$executeRawUnsafe(
+                `UPDATE \`${c.TABLE_NAME}\` SET \`${c.COLUMN_NAME}\` = ${replacement}
+                  WHERE CAST(\`${c.COLUMN_NAME}\` AS CHAR) IN ('0000-00-00 00:00:00', '0000-00-00')`,
+              );
+              if (affected > 0) {
+                fixed += affected;
+                console.log(
+                  `  🧹 zero-date fix: ${c.TABLE_NAME}.${c.COLUMN_NAME} → ${affected} row(s)`,
+                );
+              }
+            } catch (colErr) {
+              // Visível no log (não engolido) — requisito explícito: não
+              // esconder erros importantes, mesmo que por coluna.
+              console.warn(
+                `  ⚠️  zero-date fix falhou em ${c.TABLE_NAME}.${c.COLUMN_NAME}:`,
+                (colErr as Error).message,
+              );
+            }
           }
-        } catch {
-          /* ignore individual column failures */
-        }
-      }
+        },
+        { timeout: 30_000, maxWait: 10_000 },
+      );
       lastCleanupAt = Date.now();
       return fixed;
     } catch (err) {

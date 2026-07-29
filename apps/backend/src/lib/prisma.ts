@@ -20,38 +20,53 @@ async function runZeroDateCleanup(client: PrismaClient): Promise<void> {
   if (now - (globalForPrisma.zeroDateCleanedAt ?? 0) < 60_000) return;
   globalForPrisma.zeroDateCleanupRunning = true;
   try {
-    await client.$executeRawUnsafe(
-      "SET sql_mode = (SELECT REPLACE(REPLACE(@@sql_mode, 'NO_ZERO_IN_DATE,', ''), 'NO_ZERO_DATE,', ''))",
-    );
-    const dbRows = await client.$queryRawUnsafe<{ db: string }[]>(
-      "SELECT DATABASE() AS db",
-    );
-    const dbName = dbRows[0]?.db;
-    if (!dbName) return;
-    const cols = await client.$queryRawUnsafe<
-      { TABLE_NAME: string; COLUMN_NAME: string; IS_NULLABLE: string }[]
-    >(
-      `SELECT TABLE_NAME, COLUMN_NAME, IS_NULLABLE
-         FROM information_schema.columns
-        WHERE TABLE_SCHEMA = ?
-          AND DATA_TYPE IN ('datetime','timestamp','date')`,
-      dbName,
-    );
     let fixed = 0;
-    for (const c of cols) {
-      const val = c.IS_NULLABLE === "YES" ? "NULL" : "'1970-01-01 00:00:00'";
-      try {
-        const n = await client.$executeRawUnsafe(
-          `UPDATE \`${c.TABLE_NAME}\` SET \`${c.COLUMN_NAME}\` = ${val}
-            WHERE \`${c.COLUMN_NAME}\` = '0000-00-00 00:00:00'
-               OR \`${c.COLUMN_NAME}\` = '0000-00-00'`,
+    // Transação: garante que `SET sql_mode` (session-scoped) e as UPDATEs
+    // seguintes usem a MESMA conexão do pool — ver clean-zero-datetimes.ts
+    // pro mesmo fix, com a explicação completa do bug original.
+    await client.$transaction(
+      async (tx) => {
+        await tx.$executeRawUnsafe(
+          "SET sql_mode = (SELECT REPLACE(REPLACE(@@sql_mode, 'NO_ZERO_IN_DATE,', ''), 'NO_ZERO_DATE,', ''))",
         );
-        if (n > 0) {
-          fixed += n;
-          console.log(`  🧹 zero-date fix: ${c.TABLE_NAME}.${c.COLUMN_NAME} → ${n} row(s)`);
+        const dbRows = await tx.$queryRawUnsafe<{ db: string }[]>(
+          "SELECT DATABASE() AS db",
+        );
+        const dbName = dbRows[0]?.db;
+        if (!dbName) return;
+        const cols = await tx.$queryRawUnsafe<
+          { TABLE_NAME: string; COLUMN_NAME: string; IS_NULLABLE: string }[]
+        >(
+          `SELECT TABLE_NAME, COLUMN_NAME, IS_NULLABLE
+             FROM information_schema.columns
+            WHERE TABLE_SCHEMA = ?
+              AND DATA_TYPE IN ('datetime','timestamp','date')`,
+          dbName,
+        );
+        for (const c of cols) {
+          const val = c.IS_NULLABLE === "YES" ? "NULL" : "'1970-01-01 00:00:00'";
+          try {
+            // CAST(...AS CHAR): compara como string, sem forçar o MySQL a
+            // interpretar o literal '0000-00-00...' como DATETIME (isso
+            // sozinho dispara 1292 em modo estrito).
+            const n = await tx.$executeRawUnsafe(
+              `UPDATE \`${c.TABLE_NAME}\` SET \`${c.COLUMN_NAME}\` = ${val}
+                WHERE CAST(\`${c.COLUMN_NAME}\` AS CHAR) IN ('0000-00-00 00:00:00', '0000-00-00')`,
+            );
+            if (n > 0) {
+              fixed += n;
+              console.log(`  🧹 zero-date fix: ${c.TABLE_NAME}.${c.COLUMN_NAME} → ${n} row(s)`);
+            }
+          } catch (colErr) {
+            console.warn(
+              `  ⚠️  zero-date fix falhou em ${c.TABLE_NAME}.${c.COLUMN_NAME}:`,
+              (colErr as Error).message,
+            );
+          }
         }
-      } catch { /* ignore per-column errors */ }
-    }
+      },
+      { timeout: 30_000, maxWait: 10_000 },
+    );
     globalForPrisma.zeroDateCleanedAt = Date.now();
     if (fixed > 0) console.log(`✅ Zero-date cleanup: ${fixed} linhas corrigidas.`);
   } catch (err) {
