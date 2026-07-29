@@ -32,6 +32,7 @@ interface ParsedStep {
   id?: string;
   code?: string;
   name?: string;
+  title?: string;
   titulo?: string;
   description?: string;
   descricao?: string;
@@ -182,7 +183,7 @@ export async function gerarTarefasDoProjeto(
             ? parsedSteps.map((step, idx) => ({
                 project_task_id: newTask.id,
                 catalog_step_ref: step.id ?? step.code ?? `${ct.id}-step-${idx + 1}`,
-                titulo: step.name ?? step.titulo ?? `Etapa ${idx + 1}`,
+                titulo: step.name ?? step.title ?? step.titulo ?? `Etapa ${idx + 1}`,
                 descricao: step.description ?? step.descricao ?? null,
                 ordem: step.order ?? idx + 1,
                 // Primeira etapa disponível (PENDENTE); demais bloqueadas

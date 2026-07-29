@@ -2399,6 +2399,18 @@ export default function AdminProdutosPage() {
                         "Sem descrição"}
                     </p>
                     <div className="flex items-center gap-1.5 mt-2.5 flex-wrap">
+                      <Badge
+                        variant="outline"
+                        className={
+                          product.productType === "pacote"
+                            ? "text-[10px] font-medium px-2 py-0.5 text-violet-600 border-violet-200 bg-violet-50 dark:bg-violet-950/30 dark:border-violet-800 dark:text-violet-400"
+                            : "text-[10px] font-medium px-2 py-0.5 text-slate-600 border-slate-200 bg-slate-50 dark:bg-slate-800/60 dark:border-slate-700 dark:text-slate-300"
+                        }
+                      >
+                        {product.productType === "pacote"
+                          ? `Pacote (${product.activeTaskTemplates ?? 0} tarefas)`
+                          : "Único"}
+                      </Badge>
                       {((product as any).categories?.length ? (product as any).categories : [product.category]).filter(Boolean).map((cat: string) => (
                         <Badge key={cat} variant="secondary" className="text-[10px] font-medium px-2 py-0.5">
                           {cat}

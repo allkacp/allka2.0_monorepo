@@ -57,6 +57,7 @@ export interface BackendProduct {
     activeTaskTemplates: number;
     hasActiveTaskTemplates: boolean;
     isContractable: boolean;
+    productType?: "unico" | "pacote";
   };
 }
 
@@ -120,6 +121,8 @@ export function backendToFrontendProduct(b: BackendProduct): Product {
   const activeTaskTemplates =
     b.contractability?.activeTaskTemplates ??
     Math.max(activeTaskLinkCount, embeddedTaskCount);
+  const productType: "unico" | "pacote" =
+    b.contractability?.productType ?? (activeTaskTemplates > 1 ? "pacote" : "unico");
 
   const variations: ProductVariation[] = (b.variations ?? []).map((v) => ({
     id: v.id,
@@ -182,6 +185,7 @@ export function backendToFrontendProduct(b: BackendProduct): Product {
     portfolioImages: meta.portfolioImages ?? [],
     contractable: hasContractableTasks,
     activeTaskTemplates,
+    productType,
   } as Product;
 }
 

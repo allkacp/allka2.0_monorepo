@@ -325,6 +325,23 @@ function parseStrings(data: any): string[] {
   );
 }
 
+interface StepObject {
+  name: string;
+  description?: string;
+}
+
+// Etapas podem vir de dados antigos (string simples) ou já no formato rico
+// {name, description} — normaliza os dois formatos pro editor/exibição.
+function parseStepObjects(data: any): StepObject[] {
+  return parseJson(data).map((i: any) => {
+    if (typeof i === "string") return { name: i };
+    return {
+      name: i?.name || i?.titulo || i?.title || i?.label || JSON.stringify(i),
+      description: i?.description || i?.descricao || undefined,
+    };
+  });
+}
+
 function fmtDate(iso?: string | null): string {
   if (!iso) return "—";
   return new Date(iso).toLocaleDateString("pt-BR", {
@@ -479,7 +496,7 @@ function ModelDetailDrawer({
   const tc = TYPE_CONFIG[model.task_type] ?? TYPE_CONFIG.execution;
   const updating = updatingId === model.id;
 
-  const steps = parseStrings(model.steps);
+  const steps = parseStepObjects(model.steps);
   const checklist = parseStrings(model.checklist);
   const briefing = parseStrings(model.briefing_questions);
   const rules = parseStrings(model.execution_rules);
@@ -823,9 +840,16 @@ function ModelDetailDrawer({
                             <span className="h-6 w-6 rounded-full bg-indigo-100 text-indigo-700 text-xs font-bold flex items-center justify-center shrink-0 mt-0.5">
                               {i + 1}
                             </span>
-                            <p className="text-sm text-slate-700 leading-relaxed">
-                              {step}
-                            </p>
+                            <div className="min-w-0">
+                              <p className="text-sm text-slate-700 leading-relaxed">
+                                {step.name}
+                              </p>
+                              {step.description && (
+                                <p className="text-xs text-slate-500 leading-relaxed mt-0.5">
+                                  {step.description}
+                                </p>
+                              )}
+                            </div>
                           </li>
                         ))}
                       </ol>
@@ -1308,7 +1332,6 @@ export default function AdminModelosTarefasPage() {
   });
 
   const EMPTY_LISTS = {
-    steps: [] as string[],
     checklist: [] as string[],
     briefing_questions: [] as string[],
     required_files: [] as string[],
@@ -1317,7 +1340,6 @@ export default function AdminModelosTarefasPage() {
   };
   const [createLists, setCreateLists] = useState(EMPTY_LISTS);
   const [listInputs, setListInputs] = useState<Record<string, string>>({
-    steps: "",
     checklist: "",
     briefing_questions: "",
     required_files: "",
@@ -1333,6 +1355,27 @@ export default function AdminModelosTarefasPage() {
 
   const removeFromList = (key: keyof typeof EMPTY_LISTS, index: number) => {
     setCreateLists((l) => ({ ...l, [key]: l[key].filter((_, i) => i !== index) }));
+  };
+
+  // Etapas de execução — modelo próprio {name, description} (não reaproveita
+  // o padrão genérico string[] acima) pra preservar a descrição da etapa,
+  // que antes se perdia ao gerar as ProjectTaskStage (ver generate-tasks.ts).
+  const [createSteps, setCreateSteps] = useState<StepObject[]>([]);
+  const [stepNameInput, setStepNameInput] = useState("");
+  const [stepDescInput, setStepDescInput] = useState("");
+
+  const addStep = () => {
+    if (!stepNameInput.trim()) return;
+    setCreateSteps((s) => [
+      ...s,
+      { name: stepNameInput.trim(), description: stepDescInput.trim() || undefined },
+    ]);
+    setStepNameInput("");
+    setStepDescInput("");
+  };
+
+  const removeStep = (index: number) => {
+    setCreateSteps((s) => s.filter((_, i) => i !== index));
   };
 
   const resetCreateForm = () => {
@@ -1355,7 +1398,10 @@ export default function AdminModelosTarefasPage() {
       notes: "",
     });
     setCreateLists(EMPTY_LISTS);
-    setListInputs({ steps: "", checklist: "", briefing_questions: "", required_files: "", execution_rules: "", conclusion_rules: "" });
+    setListInputs({ checklist: "", briefing_questions: "", required_files: "", execution_rules: "", conclusion_rules: "" });
+    setCreateSteps([]);
+    setStepNameInput("");
+    setStepDescInput("");
     setEditingModel(null);
   };
 
@@ -1381,13 +1427,15 @@ export default function AdminModelosTarefasPage() {
       notes: model.notes || "",
     });
     setCreateLists({
-      steps: parseStrings(model.steps),
       checklist: parseStrings(model.checklist),
       briefing_questions: parseStrings(model.briefing_questions),
       required_files: parseStrings(model.required_files),
       execution_rules: parseStrings(model.execution_rules),
       conclusion_rules: parseStrings(model.conclusion_rules),
     });
+    setCreateSteps(parseStepObjects(model.steps));
+    setStepNameInput("");
+    setStepDescInput("");
     setCreateOpen(true);
   };
 
@@ -1779,8 +1827,10 @@ export default function AdminModelosTarefasPage() {
         requires_access: createForm.requires_access,
         requires_briefing: createForm.requires_briefing,
         requires_files: createForm.requires_files,
-        steps: createLists.steps.length
-          ? JSON.stringify(createLists.steps)
+        steps: createSteps.length
+          ? JSON.stringify(
+              createSteps.map((s, i) => ({ name: s.name, description: s.description, order: i + 1 })),
+            )
           : undefined,
         checklist: createLists.checklist.length
           ? JSON.stringify(createLists.checklist)
@@ -3123,9 +3173,9 @@ export default function AdminModelosTarefasPage() {
                   >
                     <Layers className="h-3.5 w-3.5" />
                     Etapas & Checklist
-                    {(createLists.steps.length + createLists.checklist.length) > 0 && (
+                    {(createSteps.length + createLists.checklist.length) > 0 && (
                       <span className="ml-0.5 h-4 min-w-4 px-1 rounded-full bg-blue-100 text-blue-600 text-[10px] font-bold flex items-center justify-center">
-                        {createLists.steps.length + createLists.checklist.length}
+                        {createSteps.length + createLists.checklist.length}
                       </span>
                     )}
                   </TabsTrigger>
@@ -3373,34 +3423,48 @@ export default function AdminModelosTarefasPage() {
                     </h4>
                     <p className="text-xs text-slate-500 mt-0.5">Passos sequenciais que o nômade deve seguir para completar a tarefa.</p>
                   </div>
-                  <div className="flex gap-2">
+                  <div className="space-y-2 bg-slate-50 dark:bg-slate-800/40 border border-slate-200 dark:border-slate-700 rounded-lg p-3">
                     <Input
-                      value={listInputs.steps}
-                      onChange={(e) => setListInputs((l) => ({ ...l, steps: e.target.value }))}
-                      onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addToList("steps", listInputs.steps); }}}
-                      placeholder="Descreva a etapa e pressione Enter"
+                      value={stepNameInput}
+                      onChange={(e) => setStepNameInput(e.target.value)}
+                      placeholder="Nome da etapa (ex.: Configuração inicial da campanha)"
                       className="h-9 text-sm"
                     />
-                    <Button
-                      type="button"
-                      size="sm"
-                      variant="outline"
-                      onClick={() => addToList("steps", listInputs.steps)}
-                      disabled={!listInputs.steps.trim()}
-                      className="h-9 px-3 shrink-0"
-                    >
-                      <Plus className="h-3.5 w-3.5" />
-                    </Button>
+                    <Textarea
+                      value={stepDescInput}
+                      onChange={(e) => setStepDescInput(e.target.value)}
+                      placeholder="Descrição da etapa (opcional)"
+                      rows={2}
+                      className="text-sm resize-none"
+                    />
+                    <div className="flex justify-end">
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        onClick={addStep}
+                        disabled={!stepNameInput.trim()}
+                        className="h-8 px-3 gap-1.5"
+                      >
+                        <Plus className="h-3.5 w-3.5" />
+                        Adicionar etapa
+                      </Button>
+                    </div>
                   </div>
-                  {createLists.steps.length > 0 && (
+                  {createSteps.length > 0 && (
                     <div className="space-y-1.5">
-                      {createLists.steps.map((step, i) => (
+                      {createSteps.map((step, i) => (
                         <div key={i} className="flex items-start gap-2 bg-slate-50 dark:bg-slate-800/40 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2">
                           <span className="text-[11px] font-mono text-slate-400 w-5 mt-0.5 shrink-0">{i + 1}.</span>
-                          <span className="flex-1 text-sm text-slate-700 dark:text-slate-200">{step}</span>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm text-slate-700 dark:text-slate-200">{step.name}</p>
+                            {step.description && (
+                              <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">{step.description}</p>
+                            )}
+                          </div>
                           <button
                             type="button"
-                            onClick={() => removeFromList("steps", i)}
+                            onClick={() => removeStep(i)}
                             className="text-slate-400 hover:text-red-500 transition-colors shrink-0"
                           >
                             <Trash2 className="h-3.5 w-3.5" />
@@ -3409,7 +3473,7 @@ export default function AdminModelosTarefasPage() {
                       ))}
                     </div>
                   )}
-                  {createLists.steps.length === 0 && (
+                  {createSteps.length === 0 && (
                     <p className="text-xs text-slate-400 italic">Nenhuma etapa adicionada ainda.</p>
                   )}
                 </div>

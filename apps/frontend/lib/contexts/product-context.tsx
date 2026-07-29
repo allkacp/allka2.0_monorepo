@@ -299,6 +299,9 @@ export interface Product {
   portfolioImages?: PortfolioImage[];
   contractable?: boolean;
   activeTaskTemplates?: number;
+  // "unico" = 1 CatalogTask ativa vinculada, "pacote" = 2+ — derivado da
+  // contagem, não é um campo editável (ver Fase 1 do plano de produtos).
+  productType?: "unico" | "pacote";
 }
 
 interface ProductContextType {

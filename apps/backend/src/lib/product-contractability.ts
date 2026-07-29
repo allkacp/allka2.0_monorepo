@@ -1,10 +1,16 @@
 import { prisma } from "./prisma";
 
+export type ProductType = "unico" | "pacote";
+
 export interface ProductContractabilitySummary {
   productId: string;
   activeTaskTemplates: number;
   hasActiveTaskTemplates: boolean;
   isContractable: boolean;
+  // "unico" = 1 CatalogTask ativa vinculada, "pacote" = 2+. Derivado, não é
+  // um campo persistido — ver Fase 1 do plano de produtos (memória
+  // project_products_unico_pacote / plano cheerful-pondering-mccarthy).
+  productType: ProductType;
 }
 
 export async function getProductContractability(
@@ -24,6 +30,7 @@ export async function getProductContractability(
     activeTaskTemplates,
     hasActiveTaskTemplates,
     isContractable: hasActiveTaskTemplates,
+    productType: activeTaskTemplates > 1 ? "pacote" : "unico",
   };
 }
 
