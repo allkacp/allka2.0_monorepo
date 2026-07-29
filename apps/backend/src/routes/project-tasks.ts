@@ -83,6 +83,27 @@ const briefingAnswerSchema = z.object({
     .min(1),
 });
 
+const bulkSubmitBriefingSchema = z.object({
+  items: z
+    .array(
+      z.object({
+        task_id: z.string().min(1),
+        answers: z
+          .array(
+            z.object({
+              question_key: z.string().min(1),
+              question_text: z.string().min(1),
+              answer: z.string().optional().nullable(),
+              files: z.string().optional().nullable(),
+              links: z.string().optional().nullable(),
+            }),
+          )
+          .min(1),
+      }),
+    )
+    .min(1),
+});
+
 const attachmentSchema = z.object({
   type: z.enum(["file", "link", "reference", "delivery"]).default("file"),
   name: z.string().min(1),
@@ -433,6 +454,103 @@ router.get(
       }
 
       res.json(task);
+    } catch (err) {
+      next(err);
+    }
+  },
+);
+
+// ── PATCH /api/project-tasks/bulk-submit-briefing ────────────────────────────
+// Lançamento em lote — produtos "pacote" (2+ tarefas): agência responde todos
+// os questionários de uma vez e libera todas as tarefas do lote juntas.
+// Mesma transição que /:id/submit-briefing, aplicada a várias tarefas dentro
+// de uma única transação (tudo ou nada — se uma tarefa do lote não estiver
+// num status lançável, NENHUMA tarefa do lote é alterada). Precisa vir ANTES
+// de PATCH /:id abaixo — senão Express casaria "bulk-submit-briefing" como
+// valor do parâmetro :id.
+
+router.patch(
+  "/bulk-submit-briefing",
+  verifyToken,
+  validate(bulkSubmitBriefingSchema),
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const { items } = req.body as z.infer<typeof bulkSubmitBriefingSchema>;
+
+      const scopeWhere = await getTaskScopeWhere(
+        req.user!.id,
+        req.user!.account_type,
+        req.user!.role,
+      );
+      if (scopeWhere === null) {
+        res.status(404).json({ error: "Tarefas não encontradas" });
+        return;
+      }
+
+      const submittable = [
+        "EM_LANCAMENTO",
+        "AGUARDANDO_INFORMACOES",
+        "DEVOLVIDA_PARA_AGENCIA",
+      ];
+      const taskIds = items.map((i) => i.task_id);
+
+      const tasks = await prisma.projectTask.findMany({
+        where: applyScope({ id: { in: taskIds } }, scopeWhere),
+      });
+      if (tasks.length !== taskIds.length) {
+        res.status(404).json({ error: "Uma ou mais tarefas não foram encontradas" });
+        return;
+      }
+      const notSubmittable = tasks.filter((t) => !submittable.includes(t.status));
+      if (notSubmittable.length > 0) {
+        res.status(422).json({
+          error: "Uma ou mais tarefas do lote não estão em status lançável.",
+          tasks: notSubmittable.map((t) => ({ id: t.id, status: t.status })),
+        });
+        return;
+      }
+
+      await prisma.$transaction(
+        items.flatMap((item) => [
+          ...item.answers.map((a) =>
+            prisma.taskBriefingAnswer.upsert({
+              where: {
+                project_task_id_question_key: {
+                  project_task_id: item.task_id,
+                  question_key: a.question_key,
+                },
+              },
+              create: {
+                project_task_id: item.task_id,
+                question_key: a.question_key,
+                question_text: a.question_text,
+                answer: a.answer ?? null,
+                files: a.files ?? null,
+                links: a.links ?? null,
+              },
+              update: {
+                question_text: a.question_text,
+                answer: a.answer ?? null,
+                files: a.files ?? null,
+                links: a.links ?? null,
+              },
+            }),
+          ),
+          prisma.projectTask.update({
+            where: { id: item.task_id },
+            data: { status: "LANCAMENTO_ENVIADO_PARA_ANALISE" },
+          }),
+        ]),
+      );
+
+      for (const taskId of taskIds) {
+        atribuirLiderParaTarefa(taskId).catch((err) =>
+          console.error("[bulk-submit-briefing] Erro ao atribuir líder:", err),
+        );
+      }
+
+      const updated = await prisma.projectTask.findMany({ where: { id: { in: taskIds } } });
+      res.json({ updated: updated.length, tasks: updated });
     } catch (err) {
       next(err);
     }

@@ -1164,6 +1164,10 @@ class ApiClient {
   async submitProjectTaskBriefing(id: string, body: { answers: any[] }) {
     return this.patch(`/project-tasks/${id}/submit-briefing`, body);
   }
+  // Lançamento em lote — produtos "pacote" (2+ tarefas do mesmo ProjectProduct)
+  async bulkSubmitProjectTaskBriefing(items: { task_id: string; answers: any[] }[]) {
+    return this.patch(`/project-tasks/bulk-submit-briefing`, { items });
+  }
   async addProjectTaskAttachment(
     id: string,
     data: {

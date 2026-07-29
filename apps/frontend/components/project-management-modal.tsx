@@ -108,6 +108,7 @@ import {
   Search,
   ChevronDown,
   FolderOpen,
+  SendHorizonal,
 } from "lucide-react";
 import { useSidebar } from "@/contexts/sidebar-context";
 import { useAppFrameMetrics } from "@/hooks/useAppFrameMetrics";
@@ -130,6 +131,7 @@ import {
 import { apiClient } from "@/lib/api-client";
 import { TarefaDetailDrawer } from "@/components/tarefa-detail-drawer";
 import { TaskLaunchDrawer } from "@/components/task-launch-drawer";
+import { BulkTaskLaunchDrawer } from "@/components/bulk-task-launch-drawer";
 import {
   buildProposalData,
   exportProposalPDF,
@@ -628,6 +630,8 @@ export function ProjectManagementModal({
   const [taskDrawerTask, setTaskDrawerTask] = useState<any>(null);
   const [launchDrawerOpen, setLaunchDrawerOpen] = useState(false);
   const [launchDrawerTask, setLaunchDrawerTask] = useState<any>(null);
+  const [bulkLaunchOpen, setBulkLaunchOpen] = useState(false);
+  const [bulkLaunchTasks, setBulkLaunchTasks] = useState<any[]>([]);
   const [taskDateFilter, setTaskDateFilter] = useState<string>("");
   const [taskSortBy, setTaskSortBy] = useState<string>("produto");
   const [taskSortOrder, setTaskSortOrder] = useState<"asc" | "desc">("asc");
@@ -1158,6 +1162,42 @@ export function ProjectManagementModal({
       project_product: { product_name_snapshot: tarefa.produtoNome },
     });
     setLaunchDrawerOpen(true);
+  };
+
+  // Produtos "pacote" (2+ tarefas) — lançamento em lote de todas as tarefas
+  // ainda lançáveis do produto de uma vez, via BulkTaskLaunchDrawer.
+  const LAUNCHABLE_STATUSES = [
+    "PARA_LANCAMENTO",
+    "EM_LANCAMENTO",
+    "AGUARDANDO_INFORMACOES",
+    "DEVOLVIDA_PARA_AGENCIA",
+  ];
+
+  const openBulkLaunchDrawer = (produto: any) => {
+    const launchable = (produto.tarefas ?? []).filter((t: any) =>
+      LAUNCHABLE_STATUSES.includes(t.rawStatus),
+    );
+    setBulkLaunchTasks(
+      launchable.map((tarefa: any) => ({
+        id: tarefa.taskDbId,
+        title: tarefa.nome,
+        code_snapshot: tarefa.tarefaCode,
+        task_code: tarefa.tarefaCode,
+        status: tarefa.rawStatus ?? "PARA_LANCAMENTO",
+        priority: tarefa.priority ?? "medium",
+        due_date: null,
+        lancamento_expires_at: tarefa.lancamentoExpiresAt ?? null,
+        project: project
+          ? {
+              id: String(project.id),
+              title: project.name,
+              client: { name: project.client },
+            }
+          : null,
+        project_product: { product_name_snapshot: produto.nome },
+      })),
+    );
+    setBulkLaunchOpen(true);
   };
 
   /** Returns a badge label + className for PARA_LANCAMENTO expiry, or null for other statuses */
@@ -2994,16 +3034,30 @@ export function ProjectManagementModal({
                               </div>
 
                               {/* Actions */}
-                              <button
-                                className="shrink-0 w-8 h-8 rounded-lg flex items-center justify-center border border-slate-200 bg-white hover:bg-slate-50 hover:border-blue-300 text-slate-400 hover:text-blue-600 transition-all"
-                                onClick={() => {
-                                  setSelectedProduct(produto);
-                                  setShowProductTasksModal(true);
-                                }}
-                                title="Ver tarefas"
-                              >
-                                <Eye className="h-3.5 w-3.5" />
-                              </button>
+                              <div className="shrink-0 flex items-center gap-1.5">
+                                {(produto.tarefas ?? []).filter((t: any) =>
+                                  LAUNCHABLE_STATUSES.includes(t.rawStatus),
+                                ).length >= 2 && (
+                                  <button
+                                    className="h-8 px-2.5 rounded-lg flex items-center gap-1.5 border border-indigo-200 bg-indigo-50 hover:bg-indigo-100 text-indigo-600 text-[11px] font-semibold transition-all"
+                                    onClick={() => openBulkLaunchDrawer(produto)}
+                                    title="Lançar todas as tarefas deste produto de uma vez"
+                                  >
+                                    <SendHorizonal className="h-3.5 w-3.5" />
+                                    Lançar todas
+                                  </button>
+                                )}
+                                <button
+                                  className="shrink-0 w-8 h-8 rounded-lg flex items-center justify-center border border-slate-200 bg-white hover:bg-slate-50 hover:border-blue-300 text-slate-400 hover:text-blue-600 transition-all"
+                                  onClick={() => {
+                                    setSelectedProduct(produto);
+                                    setShowProductTasksModal(true);
+                                  }}
+                                  title="Ver tarefas"
+                                >
+                                  <Eye className="h-3.5 w-3.5" />
+                                </button>
+                              </div>
                             </div>
                           </div>
                         ))}
@@ -7399,6 +7453,22 @@ export function ProjectManagementModal({
           }}
           onTaskUpdated={(updatedTask) => {
             setLaunchDrawerTask(updatedTask);
+          }}
+        />
+      )}
+
+      {/* ── Bulk Task Launch Drawer (produtos "pacote") ────────────────────── */}
+      {bulkLaunchOpen && bulkLaunchTasks.length > 0 && (
+        <BulkTaskLaunchDrawer
+          tasks={bulkLaunchTasks}
+          onClose={() => {
+            setBulkLaunchOpen(false);
+            setBulkLaunchTasks([]);
+          }}
+          onReleased={() => {
+            setBulkLaunchOpen(false);
+            setBulkLaunchTasks([]);
+            fetchModalData();
           }}
         />
       )}
