@@ -1,14 +1,25 @@
 /**
  * Cleans MySQL zero-date rows (`0000-00-00 00:00:00`) that Prisma cannot read.
  * Idempotent. Safe to call multiple times. No-op on non-MySQL databases.
+ *
+ * Única implementação desta lógica no backend — antes existia triplicada
+ * (aqui, no middleware de src/lib/prisma.ts, e no script avulso
+ * src/scripts/fix-zero-datetimes.ts), cada uma com seu próprio cooldown
+ * independente mesmo operando no mesmo banco. Recebe o client por parâmetro
+ * (em vez de importar o singleton `prisma` daqui) de propósito: isso é o que
+ * permite o middleware em prisma.ts chamar esta função sem criar um import
+ * circular (prisma.ts → clean-zero-datetimes.ts → prisma.ts).
  */
-import { prisma } from "./prisma";
+import type { PrismaClient } from "@prisma/client";
 
 let cleanupInFlight: Promise<number> | null = null;
 let lastCleanupAt = 0;
 const COOLDOWN_MS = 60_000;
 
-export async function cleanZeroDatetimes(force = false): Promise<number> {
+export async function cleanZeroDatetimes(
+  client: PrismaClient,
+  force = false,
+): Promise<number> {
   const dbUrl = process.env.DATABASE_URL ?? "";
   if (!dbUrl.startsWith("mysql")) return 0;
 
@@ -23,7 +34,7 @@ export async function cleanZeroDatetimes(force = false): Promise<number> {
       // Sem isso, o Prisma podia despachar cada $executeRawUnsafe pra uma
       // conexão diferente — o SET "vazava" pra conexão errada e a limpeza
       // falhava silenciosamente com o mesmo erro 1292 que ela tentava corrigir.
-      await prisma.$transaction(
+      await client.$transaction(
         async (tx) => {
           await tx.$executeRawUnsafe(
             "SET sql_mode = (SELECT REPLACE(REPLACE(@@sql_mode, 'NO_ZERO_IN_DATE,', ''), 'NO_ZERO_DATE,', ''))",
@@ -101,15 +112,18 @@ export function isZeroDateError(err: unknown): boolean {
 
 /**
  * Runs a Prisma operation; if it fails with the zero-date error, cleans the
- * data and retries once. Otherwise re-throws.
+ * data (using `client`) and retries once. Otherwise re-throws.
  */
-export async function withZeroDateRecovery<T>(op: () => Promise<T>): Promise<T> {
+export async function withZeroDateRecovery<T>(
+  client: PrismaClient,
+  op: () => Promise<T>,
+): Promise<T> {
   try {
     return await op();
   } catch (err) {
     if (!isZeroDateError(err)) throw err;
     console.warn("⚠️  Zero-date detected in query result. Running cleanup...");
-    await cleanZeroDatetimes(true);
+    await cleanZeroDatetimes(client, true);
     return await op();
   }
 }

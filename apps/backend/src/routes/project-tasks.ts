@@ -245,7 +245,7 @@ router.get(
         where.status = { notIn: ["CONCLUIDA", "CANCELADA"] };
       }
 
-      const tasks = await withZeroDateRecovery(() =>
+      const tasks = await withZeroDateRecovery(prisma, () =>
         prisma.projectTask.findMany({
           where: applyScope(where, scopeWhere),
           include: {

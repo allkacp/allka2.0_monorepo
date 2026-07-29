@@ -61,7 +61,7 @@ async function main() {
   console.log("✅ Banco de dados conectado");
 
   // Auto-fix invalid '0000-00-00' datetimes (MySQL only) — they crash Prisma queries
-  await cleanZeroDatetimes(true);
+  await cleanZeroDatetimes(prisma, true);
 
   await logStartupState();
 

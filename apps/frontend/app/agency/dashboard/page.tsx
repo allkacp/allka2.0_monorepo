@@ -1,5 +1,6 @@
 ﻿// @ts-nocheck
 import { DashboardShellFrame } from "@/features/dashboards/shared/dashboard-shell-frame";
+import { WidgetCard } from "@/features/dashboards/shared/widget-card";
 import { useDashboardScrollCompact } from "@/hooks/useDashboardScrollCompact";
 import { WIDGETS_BY_ROLE } from "@/lib/dashboard-widget-roles";
 import {
@@ -7543,61 +7544,47 @@ export default function AdminDashboardPage() {
 
       case "activity":
         return (
-          <div
-            key={widget.id}
-            data-widget-id={widget.type}
-            draggable={isCustomizeMode}
-            onDragStart={(e) => handleDragStart(e, widget.id)}
-            onDragOver={(e) => handleDragOver(e, widget.id)}
+          <WidgetCard
+            widgetId={widget.id}
+            widgetType={widget.type}
+            icon={Activity}
+            title={getWidgetTitle(widget.type)}
+            description="Atividades recentes da sua agency"
+            isCustomizeMode={isCustomizeMode}
+            draggedWidget={draggedWidget}
+            dragOverWidget={dragOverWidget}
+            onDragStart={handleDragStart}
+            onDragOver={handleDragOver}
             onDragLeave={handleDragLeave}
-            onDrop={(e) => handleDrop(e, widget.id)}
+            onDrop={handleDrop}
             onDragEnd={handleDragEnd}
-            className={cn(
-              "relative transition-all duration-200",
-              isCustomizeMode && "cursor-move",
-              draggedWidget === widget.id && "opacity-50 scale-95",
-              getDragOverClasses(widget.id),
-              !draggedWidget && !dragOverWidget && "hover:scale-[1.01]",
-            )}
+            getDragOverClasses={getDragOverClasses}
+            renderCustomizeControls={() => renderCustomizeControls(widget)}
+            cardClassName="bg-gradient-to-br from-card to-card/50"
+            headerClassName="pb-4 relative"
+            iconBgClassName="bg-info/10"
+            iconColorClassName="text-info"
+            titleRowExtra={
+              <Link to="/agency/atividades" className="shrink-0">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="text-xs hover:bg-primary/10"
+                >
+                  Ver todas
+                  <ArrowRightIcon className="h-3 w-3 ml-1" />
+                </Button>
+              </Link>
+            }
+            periodSelector={<WidgetPeriodSelector widgetId={widget.id} />}
+            exportButton={
+              <WidgetExportButton
+                widgetId={widget.type}
+                widgetTitle={getWidgetTitle(widget.type)}
+              />
+            }
+            contentClassName="px-4 pb-4 pt-0"
           >
-            {isCustomizeMode && renderCustomizeControls(widget)}
-            <Card className="border-0 shadow-lg bg-gradient-to-br from-card to-card/50">
-              <CardHeader className="pb-4 relative">
-                <div className="flex items-center gap-3 pr-20">
-                  {isCustomizeMode && (
-                    <GripVertical className="h-4 w-4 text-muted-foreground shrink-0" />
-                  )}
-                  <div className="p-2 bg-info/10 rounded-lg shrink-0">
-                    <Activity className="h-4 w-4 text-info" />
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <CardTitle className="text-base font-semibold leading-tight">
-                      {getWidgetTitle(widget.type)}
-                    </CardTitle>
-                    <p className="text-xs text-muted-foreground mt-0.5">
-                      Atividades recentes da sua agency
-                    </p>
-                  </div>
-                  <Link to="/agency/atividades" className="shrink-0">
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="text-xs hover:bg-primary/10"
-                    >
-                      Ver todas
-                      <ArrowRightIcon className="h-3 w-3 ml-1" />
-                    </Button>
-                  </Link>
-                </div>
-                <div className="mt-2">
-                  <WidgetPeriodSelector widgetId={widget.id} />
-                </div>
-                <WidgetExportButton
-                  widgetId={widget.type}
-                  widgetTitle={getWidgetTitle(widget.type)}
-                />
-              </CardHeader>
-              <CardContent className="px-4 pb-4 pt-0">
                 <div className="divide-y divide-border/50">
                   {recentActivities.map((activity) => (
                     <div
@@ -7634,62 +7621,47 @@ export default function AdminDashboardPage() {
                     </div>
                   ))}
                 </div>
-              </CardContent>
-            </Card>
-          </div>
+          </WidgetCard>
         );
 
       case "alerts":
         return (
-          <div
-            key={widget.id}
-            data-widget-id={widget.type}
-            draggable={isCustomizeMode}
-            onDragStart={(e) => handleDragStart(e, widget.id)}
-            onDragOver={(e) => handleDragOver(e, widget.id)}
+          <WidgetCard
+            widgetId={widget.id}
+            widgetType={widget.type}
+            icon={Bell}
+            title={getWidgetTitle(widget.type)}
+            description="Alertas da sua agency"
+            isCustomizeMode={isCustomizeMode}
+            draggedWidget={draggedWidget}
+            dragOverWidget={dragOverWidget}
+            onDragStart={handleDragStart}
+            onDragOver={handleDragOver}
             onDragLeave={handleDragLeave}
-            onDrop={(e) => handleDrop(e, widget.id)}
+            onDrop={handleDrop}
             onDragEnd={handleDragEnd}
-            className={cn(
-              "relative transition-all duration-200",
-              isCustomizeMode && "cursor-move",
-              draggedWidget === widget.id && "opacity-50 scale-95",
-              getDragOverClasses(widget.id),
-              !draggedWidget && !dragOverWidget && "hover:scale-[1.01]",
-            )}
+            getDragOverClasses={getDragOverClasses}
+            renderCustomizeControls={() => renderCustomizeControls(widget)}
+            cardClassName="overflow-hidden"
+            iconBgClassName="bg-warning/10"
+            iconColorClassName="text-warning"
+            titleRowExtra={
+              <Badge
+                variant="outline"
+                className={cn("text-xs shrink-0", agencyAlerts.length > 0 && "bg-destructive/10 border-destructive/30 text-destructive")}
+              >
+                {agencyAlerts.length} {agencyAlerts.length === 1 ? "alerta" : "alertas"}
+              </Badge>
+            }
+            exportButton={
+              <WidgetExportButton
+                widgetId={widget.type}
+                widgetTitle={getWidgetTitle(widget.type)}
+              />
+            }
+            contentClassName="space-y-2.5 px-4 pb-4"
           >
-            {isCustomizeMode && renderCustomizeControls(widget)}
-            <Card className="border-0 shadow-lg overflow-hidden">
-              <CardHeader className="pb-3 relative">
-                <div className="flex items-center gap-3 pr-20">
-                  {isCustomizeMode && (
-                    <GripVertical className="h-4 w-4 text-muted-foreground shrink-0" />
-                  )}
-                  <div className="p-2 bg-warning/10 rounded-lg shrink-0">
-                    <Bell className="h-4 w-4 text-warning" />
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <CardTitle className="text-base font-semibold leading-tight">
-                      {getWidgetTitle(widget.type)}
-                    </CardTitle>
-                    <p className="text-xs text-muted-foreground mt-0.5">
-                      Alertas da sua agency
-                    </p>
-                  </div>
-                  <Badge
-                    variant="outline"
-                    className={cn("text-xs shrink-0", agencyAlerts.length > 0 && "bg-destructive/10 border-destructive/30 text-destructive")}
-                  >
-                    {agencyAlerts.length} {agencyAlerts.length === 1 ? "alerta" : "alertas"}
-                  </Badge>
-                </div>
-                <WidgetExportButton
-                  widgetId={widget.type}
-                  widgetTitle={getWidgetTitle(widget.type)}
-                />
-              </CardHeader>
-              <CardContent className="space-y-2.5 px-4 pb-4">
-                {agencyAlerts.length === 0 ? (
+            {agencyAlerts.length === 0 ? (
                   <div className="flex flex-col items-center justify-center py-6 text-center">
                     <div className="w-10 h-10 rounded-full bg-success/10 flex items-center justify-center mb-2">
                       <CheckCircle2 className="h-5 w-5 text-success" />
@@ -7750,9 +7722,7 @@ export default function AdminDashboardPage() {
                     </div>
                   </>
                 )}
-              </CardContent>
-            </Card>
-          </div>
+          </WidgetCard>
         );
 
       case "performers":
@@ -7874,114 +7844,93 @@ export default function AdminDashboardPage() {
 
       case "quickActions":
         return (
-          <div
-            key={widget.id}
-            data-widget-id={widget.type}
-            draggable={isCustomizeMode}
-            onDragStart={(e) => handleDragStart(e, widget.id)}
-            onDragOver={(e) => handleDragOver(e, widget.id)}
+          <WidgetCard
+            widgetId={widget.id}
+            widgetType={widget.type}
+            icon={Zap}
+            title={getWidgetTitle(widget.type)}
+            description="Atalhos da agency"
+            isCustomizeMode={isCustomizeMode}
+            draggedWidget={draggedWidget}
+            dragOverWidget={dragOverWidget}
+            onDragStart={handleDragStart}
+            onDragOver={handleDragOver}
             onDragLeave={handleDragLeave}
-            onDrop={(e) => handleDrop(e, widget.id)}
+            onDrop={handleDrop}
             onDragEnd={handleDragEnd}
-            className={cn(
-              "relative transition-all duration-200",
-              isCustomizeMode && "cursor-move",
-              draggedWidget === widget.id && "opacity-50 scale-95",
-              getDragOverClasses(widget.id),
-              !draggedWidget && !dragOverWidget && "hover:scale-[1.01]",
-            )}
+            getDragOverClasses={getDragOverClasses}
+            renderCustomizeControls={() => renderCustomizeControls(widget)}
+            cardClassName="overflow-hidden"
+            periodSelector={<WidgetPeriodSelector widgetId={widget.id} />}
+            exportButton={
+              <WidgetExportButton
+                widgetId={widget.type}
+                widgetTitle={getWidgetTitle(widget.type)}
+              />
+            }
+            contentClassName="px-4 pb-4"
           >
-            {isCustomizeMode && renderCustomizeControls(widget)}
-            <Card className="border-0 shadow-lg overflow-hidden">
-              <CardHeader className="pb-3 relative">
-                <div className="flex items-center gap-3 pr-20">
-                  {isCustomizeMode && (
-                    <GripVertical className="h-4 w-4 text-muted-foreground shrink-0" />
-                  )}
-                  <div className="p-2 bg-primary/10 rounded-lg shrink-0">
-                    <Zap className="h-4 w-4 text-primary" />
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <CardTitle className="text-base font-semibold leading-tight">
-                      {getWidgetTitle(widget.type)}
-                    </CardTitle>
-                    <p className="text-xs text-muted-foreground mt-0.5">
-                      Atalhos da agency
-                    </p>
-                  </div>
-                </div>
-                <div className="mt-2">
-                  <WidgetPeriodSelector widgetId={widget.id} />
-                </div>
-                <WidgetExportButton
-                  widgetId={widget.type}
-                  widgetTitle={getWidgetTitle(widget.type)}
-                />
-              </CardHeader>
-              <CardContent className="px-4 pb-4">
-                <div className="grid grid-cols-2 gap-2.5">
-                  {(
-                    [
-                      {
-                        to: "/agency/projetos",
-                        icon: Briefcase,
-                        label: "Criar Projeto",
-                        border: "border-info/20",
-                        bg: "bg-info/5 hover:bg-info/10",
-                        text: "text-info",
-                      },
-                      {
-                        to: "/agency/catalogo",
-                        icon: LayoutGrid,
-                        label: "Abrir Catálogo",
-                        border: "border-chart-4/20",
-                        bg: "bg-chart-4/5 hover:bg-chart-4/10",
-                        text: "text-chart-4",
-                      },
-                      {
-                        to: "/agency/tarefas",
-                        icon: CheckCircle2,
-                        label: "Minhas Tarefas",
-                        border: "border-success/20",
-                        bg: "bg-success/5 hover:bg-success/10",
-                        text: "text-success",
-                      },
-                      {
-                        to: "/agency/aprovacoes",
-                        icon: UserCheck,
-                        label: "Aprovar Entregas",
-                        border: "border-warning/20",
-                        bg: "bg-warning/5 hover:bg-warning/10",
-                        text: "text-warning",
-                      },
-                      {
-                        to: "/agency/propostas",
-                        icon: FileText,
-                        label: "Ver Propostas",
-                        border: "border-violet-200 dark:border-violet-800",
-                        bg: "bg-violet-50 dark:bg-violet-950/20 hover:bg-violet-100 dark:hover:bg-violet-950/40",
-                        text: "text-violet-600 dark:text-violet-400",
-                      },
-                    ] as const
-                  ).map((action) => {
-                    const Icon = action.icon;
-                    return (
-                      <Link key={action.to} to={action.to}>
-                        <button
-                          className={`w-full p-3 rounded-xl border ${action.border} ${action.bg} transition-colors text-center space-y-1.5`}
-                        >
-                          <Icon className={`h-5 w-5 ${action.text} mx-auto`} />
-                          <p className={`text-xs font-medium ${action.text}`}>
-                            {action.label}
-                          </p>
-                        </button>
-                      </Link>
-                    );
-                  })}
-                </div>
-              </CardContent>
-            </Card>
-          </div>
+            <div className="grid grid-cols-2 gap-2.5">
+              {(
+                [
+                  {
+                    to: "/agency/projetos",
+                    icon: Briefcase,
+                    label: "Criar Projeto",
+                    border: "border-info/20",
+                    bg: "bg-info/5 hover:bg-info/10",
+                    text: "text-info",
+                  },
+                  {
+                    to: "/agency/catalogo",
+                    icon: LayoutGrid,
+                    label: "Abrir Catálogo",
+                    border: "border-chart-4/20",
+                    bg: "bg-chart-4/5 hover:bg-chart-4/10",
+                    text: "text-chart-4",
+                  },
+                  {
+                    to: "/agency/tarefas",
+                    icon: CheckCircle2,
+                    label: "Minhas Tarefas",
+                    border: "border-success/20",
+                    bg: "bg-success/5 hover:bg-success/10",
+                    text: "text-success",
+                  },
+                  {
+                    to: "/agency/aprovacoes",
+                    icon: UserCheck,
+                    label: "Aprovar Entregas",
+                    border: "border-warning/20",
+                    bg: "bg-warning/5 hover:bg-warning/10",
+                    text: "text-warning",
+                  },
+                  {
+                    to: "/agency/propostas",
+                    icon: FileText,
+                    label: "Ver Propostas",
+                    border: "border-violet-200 dark:border-violet-800",
+                    bg: "bg-violet-50 dark:bg-violet-950/20 hover:bg-violet-100 dark:hover:bg-violet-950/40",
+                    text: "text-violet-600 dark:text-violet-400",
+                  },
+                ] as const
+              ).map((action) => {
+                const Icon = action.icon;
+                return (
+                  <Link key={action.to} to={action.to}>
+                    <button
+                      className={`w-full p-3 rounded-xl border ${action.border} ${action.bg} transition-colors text-center space-y-1.5`}
+                    >
+                      <Icon className={`h-5 w-5 ${action.text} mx-auto`} />
+                      <p className={`text-xs font-medium ${action.text}`}>
+                        {action.label}
+                      </p>
+                    </button>
+                  </Link>
+                );
+              })}
+            </div>
+          </WidgetCard>
         );
 
       case "revenue": {
@@ -8250,51 +8199,32 @@ export default function AdminDashboardPage() {
         ];
         const apBarHeights = [55, 70, 85, 100];
         return (
-          <div
-            key={widget.id}
-            data-widget-id={widget.type}
-            draggable={isCustomizeMode}
-            onDragStart={(e) => handleDragStart(e, widget.id)}
-            onDragOver={(e) => handleDragOver(e, widget.id)}
+          <WidgetCard
+            widgetId={widget.id}
+            widgetType={widget.type}
+            icon={Briefcase}
+            title={getWidgetTitle(widget.type)}
+            description="Projetos ativos no período"
+            isCustomizeMode={isCustomizeMode}
+            draggedWidget={draggedWidget}
+            dragOverWidget={dragOverWidget}
+            onDragStart={handleDragStart}
+            onDragOver={handleDragOver}
             onDragLeave={handleDragLeave}
-            onDrop={(e) => handleDrop(e, widget.id)}
+            onDrop={handleDrop}
             onDragEnd={handleDragEnd}
-            className={cn(
-              "relative transition-all duration-200",
-              isCustomizeMode && "cursor-move",
-              draggedWidget === widget.id && "opacity-50 scale-95",
-              getDragOverClasses(widget.id),
-              !draggedWidget && !dragOverWidget && "hover:scale-[1.01]",
-            )}
+            getDragOverClasses={getDragOverClasses}
+            renderCustomizeControls={() => renderCustomizeControls(widget)}
+            cardClassName="overflow-hidden"
+            periodSelector={<WidgetPeriodSelector widgetId={widget.id} />}
+            exportButton={
+              <WidgetExportButton
+                widgetId={widget.type}
+                widgetTitle={getWidgetTitle(widget.type)}
+              />
+            }
+            contentClassName="space-y-3 px-4 pb-4"
           >
-            {isCustomizeMode && renderCustomizeControls(widget)}
-            <Card className="border-0 shadow-lg overflow-hidden">
-              <CardHeader className="pb-3 relative">
-                <div className="flex items-center gap-3 pr-20">
-                  {isCustomizeMode && (
-                    <GripVertical className="h-4 w-4 text-muted-foreground shrink-0" />
-                  )}
-                  <div className="p-2 bg-primary/10 rounded-lg shrink-0">
-                    <Briefcase className="h-4 w-4 text-primary" />
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <CardTitle className="text-base font-semibold leading-tight">
-                      {getWidgetTitle(widget.type)}
-                    </CardTitle>
-                    <p className="text-xs text-muted-foreground mt-0.5">
-                      Projetos ativos no período
-                    </p>
-                  </div>
-                </div>
-                <div className="mt-2">
-                  <WidgetPeriodSelector widgetId={widget.id} />
-                </div>
-                <WidgetExportButton
-                  widgetId={widget.type}
-                  widgetTitle={getWidgetTitle(widget.type)}
-                />
-              </CardHeader>
-              <CardContent className="space-y-3 px-4 pb-4">
                 {/* Hero */}
                 <div className="flex items-end justify-between p-4 rounded-xl bg-primary/5 border border-primary/20">
                   <div>
@@ -8368,9 +8298,7 @@ export default function AdminDashboardPage() {
                 <p className="text-xs text-muted-foreground text-center">
                   Comparado ao mesmo período anterior
                 </p>
-              </CardContent>
-            </Card>
-          </div>
+          </WidgetCard>
         );
       }
 
@@ -10395,51 +10323,32 @@ export default function AdminDashboardPage() {
           },
         ];
         return (
-          <div
-            key={widget.id}
-            data-widget-id={widget.type}
-            draggable={isCustomizeMode}
-            onDragStart={(e) => handleDragStart(e, widget.id)}
-            onDragOver={(e) => handleDragOver(e, widget.id)}
+          <WidgetCard
+            widgetId={widget.id}
+            widgetType={widget.type}
+            icon={LayoutGrid}
+            title="Visão Geral por Status"
+            description="Status de projetos, tarefas e leads"
+            isCustomizeMode={isCustomizeMode}
+            draggedWidget={draggedWidget}
+            dragOverWidget={dragOverWidget}
+            onDragStart={handleDragStart}
+            onDragOver={handleDragOver}
             onDragLeave={handleDragLeave}
-            onDrop={(e) => handleDrop(e, widget.id)}
+            onDrop={handleDrop}
             onDragEnd={handleDragEnd}
-            className={cn(
-              "relative transition-all duration-200",
-              isCustomizeMode && "cursor-move",
-              draggedWidget === widget.id && "opacity-50 scale-95",
-              getDragOverClasses(widget.id),
-              !draggedWidget && !dragOverWidget && "hover:scale-[1.01]",
-            )}
+            getDragOverClasses={getDragOverClasses}
+            renderCustomizeControls={() => renderCustomizeControls(widget)}
+            cardClassName="overflow-hidden"
+            periodSelector={<WidgetPeriodSelector widgetId={widget.id} />}
+            exportButton={
+              <WidgetExportButton
+                widgetId={widget.type}
+                widgetTitle={getWidgetTitle(widget.type)}
+              />
+            }
+            contentClassName="px-4 pb-4 space-y-4"
           >
-            {isCustomizeMode && renderCustomizeControls(widget)}
-            <Card className="border-0 shadow-lg overflow-hidden">
-              <CardHeader className="pb-3 relative">
-                <div className="flex items-center gap-3 pr-20">
-                  {isCustomizeMode && (
-                    <GripVertical className="h-4 w-4 text-muted-foreground shrink-0" />
-                  )}
-                  <div className="p-2 bg-primary/10 rounded-lg shrink-0">
-                    <LayoutGrid className="h-4 w-4 text-primary" />
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <CardTitle className="text-base font-semibold leading-tight whitespace-nowrap">
-                      Visão Geral por Status
-                    </CardTitle>
-                    <p className="text-xs text-muted-foreground mt-0.5">
-                      Status de projetos, tarefas e leads
-                    </p>
-                  </div>
-                </div>
-                <div className="mt-2">
-                  <WidgetPeriodSelector widgetId={widget.id} />
-                </div>
-                <WidgetExportButton
-                  widgetId={widget.type}
-                  widgetTitle={getWidgetTitle(widget.type)}
-                />
-              </CardHeader>
-              <CardContent className="px-4 pb-4 space-y-4">
                 {soSections.map((section) => (
                   <div key={section.label}>
                     <div
@@ -10474,9 +10383,7 @@ export default function AdminDashboardPage() {
                     </div>
                   </div>
                 ))}
-              </CardContent>
-            </Card>
-          </div>
+          </WidgetCard>
         );
       }
 
