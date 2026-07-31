@@ -101,6 +101,7 @@ jobs:
           MYSQL_PASSWORD: ${{ secrets.MYSQL_PASSWORD }}
           MYSQL_ROOT_PASSWORD: ${{ secrets.MYSQL_ROOT_PASSWORD }}
           JWT_SECRET: ${{ secrets.JWT_SECRET }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
         run: |
           mkdir -p .deploy/infra/caddy
           cp docker-compose.prod.yml .deploy/docker-compose.yml
@@ -124,6 +125,10 @@ jobs:
             printf 'NODE_ENV=production\n'
             printf 'FRONTEND_URL=https://%s\n' "$FRONTEND_DOMAIN"
             printf 'CORS_ORIGIN=https://%s\n' "$FRONTEND_DOMAIN"
+            # Chave do Gemini — sem ela os recursos de IA (melhorar campo,
+            # pesquisa de mercado, geração de imagem) respondem erro em
+            # produção. Vem do secret GEMINI_API_KEY do repositório.
+            printf 'GEMINI_API_KEY=%s\n' "$GEMINI_API_KEY"
           } > .deploy/.env.backend
 
       - name: Configure SSH
