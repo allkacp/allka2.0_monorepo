@@ -74,3 +74,7 @@ output/
 instrucoesAI/
 produtos-modelos-questionarios.json
 *elementor*.html
+
+# Dumps de banco (nunca versionar)
+*.sql
+!apps/backend/prisma/migrations/**/*.sql
