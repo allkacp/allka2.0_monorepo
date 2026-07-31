@@ -19,6 +19,7 @@ import {
   StandardPageBanner,
 } from "@/components/standard-page-shell";
 import { PinToTrayButton } from "@/components/pin-to-tray-button";
+import { useConsumePendingActivation } from "@/contexts/open-screens-context";
 import { IconToolbarButton } from "@/components/icon-toolbar-button";
 import { NeonBadge } from "@/components/neon-badge";
 import { ItemsPerPageSelect } from "@/components/items-per-page-select";
@@ -178,6 +179,68 @@ export default function AdminEspecialidadesPage() {
   const [actionLoading, setActionLoading] = useState(null);
   const [form, setForm] = useState(emptyForm);
 
+  // Pesquisa de mercado com IA (busca real na internet via Gemini grounding)
+  // — por especialidade (dentro do painel de edição) e "novas especialidades
+  // emergentes" (nível de página, sem precisar de um registro selecionado).
+  const [specialtyResearch, setSpecialtyResearch] = useState({
+    loading: false, text: "", sources: [], error: null,
+  });
+  const [emergingOpen, setEmergingOpen] = useState(false);
+  const [emergingResearch, setEmergingResearch] = useState({
+    loading: false, text: "", sources: [], error: null,
+  });
+
+  // A IA às vezes usa markdown (**negrito**, # título) mesmo quando pedimos
+  // pra não usar — o painel exibe texto puro, então limpamos aqui em vez de
+  // depender só do prompt.
+  function stripMarkdown(text) {
+    return text
+      .replace(/\*\*(.*?)\*\*/g, "$1")
+      .replace(/^[ \t]*#{1,6}\s+/gm, "")
+      .replace(/^([ \t]*)\*\s+/gm, "$1- ");
+  }
+
+  async function handleResearchSpecialty() {
+    setSpecialtyResearch({ loading: true, text: "", sources: [], error: null });
+    try {
+      const res = await apiClient.aiResearchSpecialtyMarket({
+        specialty_name: form.name,
+        category: form.category,
+        description: form.description,
+      });
+      setSpecialtyResearch({
+        loading: false,
+        text: stripMarkdown(res?.research_text || ""),
+        sources: res?.sources || [],
+        error: null,
+      });
+    } catch (err) {
+      setSpecialtyResearch({
+        loading: false, text: "", sources: [],
+        error: err?.message || "Não foi possível pesquisar o mercado agora.",
+      });
+    }
+  }
+
+  async function handleResearchEmerging() {
+    setEmergingOpen(true);
+    setEmergingResearch({ loading: true, text: "", sources: [], error: null });
+    try {
+      const res = await apiClient.aiResearchEmergingSpecialties({});
+      setEmergingResearch({
+        loading: false,
+        text: stripMarkdown(res?.research_text || ""),
+        sources: res?.sources || [],
+        error: null,
+      });
+    } catch (err) {
+      setEmergingResearch({
+        loading: false, text: "", sources: [],
+        error: err?.message || "Não foi possível pesquisar novas especialidades agora.",
+      });
+    }
+  }
+
   const load = useCallback(async () => {
     setLoading(true);
     setError(null);
@@ -287,6 +350,7 @@ export default function AdminEspecialidadesPage() {
     setEditItem(null);
     setViewMode(false);
     setForm(emptyForm);
+    setSpecialtyResearch({ loading: false, text: "", sources: [], error: null });
     setPanelOpen(true);
   }
 
@@ -309,6 +373,7 @@ export default function AdminEspecialidadesPage() {
     setEditItem(item);
     setViewMode(false);
     fillForm(item);
+    setSpecialtyResearch({ loading: false, text: "", sources: [], error: null });
     setPanelOpen(true);
   }
 
@@ -316,8 +381,24 @@ export default function AdminEspecialidadesPage() {
     setEditItem(item);
     setViewMode(true);
     fillForm(item);
+    setSpecialtyResearch({ loading: false, text: "", sources: [], error: null });
     setPanelOpen(true);
   }
+
+  // Reabre o painel certo ao clicar num item pinado na Bandeja de Telas.
+  useConsumePendingActivation((key) => {
+    if (key === "create") {
+      openCreate();
+    } else if (key.startsWith("edit:")) {
+      const id = key.slice(5);
+      const found = specialties.find((s) => s.id === id);
+      if (found) openEdit(found);
+    } else if (key.startsWith("view:")) {
+      const id = key.slice(5);
+      const found = specialties.find((s) => s.id === id);
+      if (found) openView(found);
+    }
+  });
 
   async function handleSave() {
     if (!form.name.trim()) { toast({ title: "Informe o nome", variant: "destructive" }); return; }
@@ -525,6 +606,22 @@ export default function AdminEspecialidadesPage() {
           <div className="bg-white rounded-lg">
             <ExportButton pageRef={pageRef} filename="especialidades" />
           </div>
+          <TooltipProvider delayDuration={400}>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button
+                  onClick={handleResearchEmerging}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-white/70 text-white bg-white/10 hover:bg-white/20 transition-colors text-xs font-semibold whitespace-nowrap"
+                >
+                  <Sparkles className="h-3.5 w-3.5 shrink-0" />
+                  Novas Especialidades (IA)
+                </button>
+              </TooltipTrigger>
+              <TooltipContent side="bottom" sideOffset={6}>
+                Pesquisar com IA quais especialidades novas/emergentes estão surgindo no mercado
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
           <TooltipProvider delayDuration={400}>
             <Tooltip>
               <TooltipTrigger asChild>
@@ -911,6 +1008,23 @@ export default function AdminEspecialidadesPage() {
             ? "Atualize os dados da especialidade"
             : "Configure uma nova especialidade e valor por hora"
         }
+        pin={
+          editItem
+            ? {
+                id: `especialidades-${viewMode ? "view" : "edit"}-${editItem.id}`,
+                label: `${viewMode ? "Ver" : "Editar"}: ${editItem.name}`,
+                icon: viewMode ? Eye : Pencil,
+                path: "/admin/especialidades",
+                activateKey: `${viewMode ? "view" : "edit"}:${editItem.id}`,
+              }
+            : {
+                id: "especialidades-create",
+                label: "Nova Especialidade",
+                icon: Plus,
+                path: "/admin/especialidades",
+                activateKey: "create",
+              }
+        }
         footer={
           <div className="flex items-center gap-3">
             <Button variant="outline" className="h-10 px-6 text-sm" onClick={() => setPanelOpen(false)}>
@@ -965,6 +1079,53 @@ export default function AdminEspecialidadesPage() {
                     value={form.hourly_rate} onChange={(e) => setForm((f) => ({ ...f, hourly_rate: e.target.value }))} />
                 </div>
               </div>
+
+              <div>
+                <button
+                  type="button"
+                  onClick={handleResearchSpecialty}
+                  disabled={specialtyResearch.loading || !form.name.trim()}
+                  className="inline-flex items-center gap-1.5 text-xs font-medium text-violet-600 dark:text-violet-400 hover:text-violet-700 dark:hover:text-violet-300 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                >
+                  {specialtyResearch.loading ? (
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  ) : (
+                    <Sparkles className="h-3.5 w-3.5" />
+                  )}
+                  {specialtyResearch.loading
+                    ? "Pesquisando mercado…"
+                    : "Pesquisar mercado com IA (valor/h, demanda, ferramentas)"}
+                </button>
+                {!form.name.trim() && (
+                  <p className="text-[10px] text-slate-400 mt-1">
+                    Preencha o nome da especialidade pra pesquisar.
+                  </p>
+                )}
+
+                {(specialtyResearch.loading || specialtyResearch.text || specialtyResearch.error) && (
+                  <div className="mt-2 rounded-xl border border-violet-200 dark:border-violet-800 bg-violet-50/60 dark:bg-violet-950/20 p-3 space-y-2">
+                    {specialtyResearch.error && (
+                      <p className="text-xs text-red-600 dark:text-red-400">{specialtyResearch.error}</p>
+                    )}
+                    {specialtyResearch.text && (
+                      <p className="text-xs text-slate-700 dark:text-slate-300 whitespace-pre-wrap leading-relaxed">
+                        {specialtyResearch.text}
+                      </p>
+                    )}
+                    {specialtyResearch.sources.length > 0 && (
+                      <div className="flex flex-wrap gap-x-3 gap-y-1 pt-2 border-t border-violet-200/60 dark:border-violet-800/40">
+                        {specialtyResearch.sources.map((s, i) => (
+                          <a key={i} href={s.url} target="_blank" rel="noopener noreferrer"
+                            className="text-[11px] text-violet-600 dark:text-violet-400 hover:underline truncate max-w-[200px]">
+                            {s.title}
+                          </a>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+
               <div className="space-y-1.5">
                 <Label className="text-xs font-semibold text-slate-500 dark:text-slate-400">Descrição</Label>
                 <Textarea placeholder="Descreva esta especialidade..." className="text-sm resize-none" rows={3} disabled={viewMode}
@@ -1089,6 +1250,43 @@ export default function AdminEspecialidadesPage() {
           </div>
         </div>
       </EmbeddedSlideScreen>
+
+      {/* Novas Especialidades (IA) — pesquisa de mercado com busca real */}
+      <StandardModalDialog
+        open={emergingOpen}
+        onClose={() => setEmergingOpen(false)}
+        title="Novas Especialidades (IA)"
+        subtitle="Pesquisa de mercado em tempo real — especialidades emergentes e valores praticados"
+        size="compact"
+        maxWidthPx={520}
+      >
+        <div className="p-5 flex-1 overflow-y-auto space-y-3">
+          {emergingResearch.loading && (
+            <div className="flex items-center gap-2 text-sm text-violet-600 dark:text-violet-400">
+              <Loader2 className="h-4 w-4 animate-spin" />
+              Pesquisando especialidades emergentes na internet…
+            </div>
+          )}
+          {emergingResearch.error && (
+            <p className="text-sm text-red-600 dark:text-red-400">{emergingResearch.error}</p>
+          )}
+          {emergingResearch.text && (
+            <p className="text-sm text-slate-700 dark:text-slate-300 whitespace-pre-wrap leading-relaxed">
+              {emergingResearch.text}
+            </p>
+          )}
+          {emergingResearch.sources.length > 0 && (
+            <div className="flex flex-wrap gap-x-3 gap-y-1 pt-3 border-t border-slate-200 dark:border-slate-700">
+              {emergingResearch.sources.map((s, i) => (
+                <a key={i} href={s.url} target="_blank" rel="noopener noreferrer"
+                  className="text-xs text-violet-600 dark:text-violet-400 hover:underline truncate max-w-[220px]">
+                  {s.title}
+                </a>
+              ))}
+            </div>
+          )}
+        </div>
+      </StandardModalDialog>
 
       {/* Confirm delete */}
       <ConfirmationDialog

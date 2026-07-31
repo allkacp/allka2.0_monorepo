@@ -17,6 +17,10 @@ import type {
 
 export interface BackendProduct {
   id: string | number;
+  // Código público sequencial ("prod_1", "prod_2"...) usado na URL e no
+  // campo "ID do Produto" da UI — nunca usar no lugar de `id` pra
+  // update/delete/lookup técnico (ver product-code.ts no backend).
+  product_code?: string | null;
   name: string;
   description: string | null;
   short_description: string | null;
@@ -96,6 +100,26 @@ interface ProductMetadata {
   variationsInternal?: Record<string, any>;
   // portfólio com metadados ricos
   portfolioImages?: PortfolioImage[];
+  // ── Campos editáveis no formulário de cadastro/edição ────────────────
+  // Todos estes vivem só no metadata (não têm coluna própria no banco).
+  // Precisam estar aqui E nos dois sentidos do adapter, senão o valor é
+  // descartado silenciosamente no save (o form salva, o backend responde
+  // 200, mas o dado nunca chega ao banco).
+  benefits?: string;
+  information?: string;
+  descriptionAttention?: string;
+  deliveryVideoUrl?: string;
+  categories?: string[];
+  subcategories?: string[];
+  includedItems?: string[];
+  notIncludedItems?: string[];
+  excludedItems?: string[];
+  requestAttention?: string;
+  oneTimeContract?: string;
+  monthlyContract?: string;
+  previousContracts?: string;
+  associatedTaskModels?: string[];
+  additionalImages?: any[];
 }
 
 function safeParseJSON<T>(raw: string | null | undefined, fallback: T): T {
@@ -146,6 +170,7 @@ export function backendToFrontendProduct(b: BackendProduct): Product {
 
   return {
     id: String(b.id),
+    productCode: b.product_code ?? undefined,
     name: b.name,
     description: b.description ?? "",
     category: b.category,
@@ -183,6 +208,22 @@ export function backendToFrontendProduct(b: BackendProduct): Product {
     variationsInternal: meta.variationsInternal ?? {},
     demonstrations: safeParseJSON<string[]>(b.demonstrations, []),
     portfolioImages: meta.portfolioImages ?? [],
+    // campos do formulário que vivem só no metadata
+    benefits: meta.benefits ?? "",
+    information: meta.information ?? "",
+    descriptionAttention: meta.descriptionAttention ?? "",
+    deliveryVideoUrl: meta.deliveryVideoUrl ?? "",
+    categories: meta.categories ?? (b.category ? [b.category] : []),
+    subcategories: meta.subcategories ?? [],
+    includedItems: meta.includedItems ?? [],
+    notIncludedItems: meta.notIncludedItems ?? [],
+    excludedItems: meta.excludedItems ?? [],
+    requestAttention: meta.requestAttention ?? "",
+    oneTimeContract: meta.oneTimeContract ?? "",
+    monthlyContract: meta.monthlyContract ?? "",
+    previousContracts: meta.previousContracts ?? "",
+    associatedTaskModels: meta.associatedTaskModels ?? [],
+    additionalImages: meta.additionalImages ?? [],
     contractable: hasContractableTasks,
     activeTaskTemplates,
     productType,
@@ -216,6 +257,22 @@ export function frontendToBackendProduct(p: Product): Record<string, any> {
     baseFeatures: (p as any).baseFeatures,
     variationsInternal: (p as any).variationsInternal,
     portfolioImages: (p as any).portfolioImages,
+    // campos do formulário que vivem só no metadata
+    benefits: (p as any).benefits,
+    information: (p as any).information,
+    descriptionAttention: (p as any).descriptionAttention,
+    deliveryVideoUrl: (p as any).deliveryVideoUrl,
+    categories: (p as any).categories,
+    subcategories: (p as any).subcategories,
+    includedItems: (p as any).includedItems,
+    notIncludedItems: (p as any).notIncludedItems,
+    excludedItems: (p as any).excludedItems,
+    requestAttention: (p as any).requestAttention,
+    oneTimeContract: (p as any).oneTimeContract,
+    monthlyContract: (p as any).monthlyContract,
+    previousContracts: (p as any).previousContracts,
+    associatedTaskModels: (p as any).associatedTaskModels,
+    additionalImages: (p as any).additionalImages,
   };
 
   const tagsArr = (p as any).tags ?? [];
@@ -226,22 +283,26 @@ export function frontendToBackendProduct(p: Product): Record<string, any> {
   return {
     name: p.name,
     description: p.description,
-    short_description: (p as any).summaryDescription ?? null,
+    short_description: (p as any).summaryDescription ?? undefined,
     category: p.category,
     tags: JSON.stringify(tagsArr),
     base_price: p.finalPrice ?? 0,
     image: p.image ?? undefined,
-    demonstrations: demos.length ? JSON.stringify(demos) : null,
+    // Backend valida com z.string().optional() (sem .nullable()) — mandar
+    // `null` explícito quebra a validação ("Expected string, received
+    // null"); omitir o campo (undefined) é o que o schema realmente aceita
+    // quando não há demonstrações/descrição/etc.
+    demonstrations: demos.length ? JSON.stringify(demos) : undefined,
     is_active: p.isActive,
     metadata: JSON.stringify(meta),
     variations: p.variations?.map((v) => ({
       name: v.name,
-      description: v.description ?? null,
+      description: v.description ?? undefined,
       price: v.price,
       price_modifier: v.priceModifier ?? 0,
-      deadline_days: v.deadlineDays ?? null,
-      scope_description: v.scopeDescription ?? null,
-      features: v.features ? JSON.stringify(v.features) : null,
+      deadline_days: v.deadlineDays ?? undefined,
+      scope_description: v.scopeDescription ?? undefined,
+      features: v.features ? JSON.stringify(v.features) : undefined,
       sort_order: v.sortOrder ?? 0,
       is_active: v.isActive ?? true,
     })),

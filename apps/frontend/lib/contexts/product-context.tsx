@@ -253,6 +253,9 @@ export interface PortfolioImage {
 
 export interface Product {
   id: string;
+  // Código público sequencial ("prod_1"...) usado na URL e na UI — nunca
+  // usar no lugar de `id` pra update/delete/lookup técnico.
+  productCode?: string;
   name: string;
   description: string;
   category: string;

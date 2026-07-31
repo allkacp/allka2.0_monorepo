@@ -750,6 +750,11 @@ model TaskExecution {
 
 model Product {
   id                String   @id @default(cuid())
+  // Código público sequencial exibido na UI e usado na URL (formato
+  // "prod_1", "prod_2"...), mesmo padrão do "user_N"/"emp_N" — ver
+  // src/lib/product-code.ts. Nunca usar no lugar de `id` (FK/lookup
+  // técnico) — é só para exibição/URL amigável.
+  product_code      String?  @unique
   name              String
   description       String?  @db.LongText
   // Sem @db.VarChar explícito, o Prisma aplicava o padrão de 191 chars pro
@@ -757,7 +762,11 @@ model Product {
   // legítimo, não lixo de dado). Ampliado com folga; continua VarChar (não
   // Text) porque o campo é conceitualmente "curto" — só a coluna estava
   // subdimensionada. Ver migration 20260711100400_widen_short_description.
-  short_description String?  @db.VarChar(500)
+  // Produtos importados de bases antigas trazem "resumo" real com mais de
+  // 500 chars (ex.: 549 chars, texto legítimo) — VarChar(500) ainda
+  // estourava. Trocado pra LongText (sem teto) — ver migration
+  // widen_short_description_longtext.
+  short_description String?  @db.LongText
   category          String
   tags              String?  @db.LongText
   // JSON: string[]
@@ -784,8 +793,25 @@ model Product {
   project_products ProjectProduct[]
   project_tasks    ProjectTask[]
   payment_items    PaymentItem[]
+  versions         ProductVersion[]
 
   @@map("products")
+}
+
+// Snapshot automático do estado do produto tirado ANTES de cada salvamento
+// (ver PUT /api/products/:id) — permite reverter pra uma versão anterior.
+// `snapshot` guarda os campos do Product + variations/addons daquele
+// momento, serializados em JSON (não normalizado — é só um histórico,
+// não precisa ser consultável por campo).
+model ProductVersion {
+  id         String   @id @default(cuid())
+  product_id String
+  product    Product  @relation(fields: [product_id], references: [id], onDelete: Cascade)
+  snapshot   String   @db.LongText
+  created_at DateTime @default(now())
+
+  @@index([product_id])
+  @@map("product_versions")
 }
 
 model ProductVariation {

@@ -67,3 +67,10 @@ pnpm-lock.yaml
 vite-output.log
 
 .claude/
+
+# Artefatos de trabalho local (não versionar)
+tmp/
+output/
+instrucoesAI/
+produtos-modelos-questionarios.json
+*elementor*.html

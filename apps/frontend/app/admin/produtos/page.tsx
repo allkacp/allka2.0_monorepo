@@ -1,5 +1,12 @@
 // @ts-nocheck
 import { SheetFooter } from "@/components/ui/sheet";
+import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover";
+import {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuItem,
+} from "@/components/ui/dropdown-menu";
 import { EmbeddedSlideScreen } from "@/components/embedded-slide-screen";
 import { StandardModalDialog } from "@/components/standard-modal-dialog";
 import {
@@ -10,7 +17,7 @@ import {
 
 import type React from "react";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef, useLayoutEffect, Fragment } from "react";
 import { useItemsPerPage } from "@/lib/use-items-per-page";
 import { useNavigate, useParams } from "react-router-dom";
 import {
@@ -61,6 +68,12 @@ import {
   ChevronRight,
   ChevronLeft,
   Sparkles,
+  Loader2,
+  History,
+  RotateCcw,
+  XCircle,
+  ArrowUpDown,
+  Gauge,
   FileQuestion,
   CheckCircle2,
   ArrowRight,
@@ -97,6 +110,16 @@ import {
   ExternalLink,
   ChevronUp,
   ChevronDown,
+  Tag,
+  RefreshCw,
+  Calendar,
+  Target,
+  Play,
+  ThumbsUp,
+  TrendingUp,
+  Puzzle,
+  CheckSquare,
+  Circle,
 } from "lucide-react";
 import { CircuitoPreHabilitacaoModal } from "@/components/circuito-pre-habilitacao-modal";
 import { QualificationChecklistPanel } from "@/components/qualification-checklist-panel";
@@ -122,7 +145,6 @@ import { useSidebar } from "@/contexts/sidebar-context";
 import { useAppFrameMetrics } from "@/hooks/useAppFrameMetrics";
 import { ModalBrandHeader } from "@/components/ui/modal-brand-header";
 import { CopyLinkButton } from "@/components/copy-link-button";
-import { SlidePanel } from "@/components/slide-panel";
 import { NeonBadge } from "@/components/neon-badge";
 import { useSpecialties } from "@/lib/contexts/specialty-context";
 import type { Task } from "@/types/product"; // Assuming Task type is defined in types/product
@@ -132,6 +154,7 @@ import {
   StandardPageBanner,
 } from "@/components/standard-page-shell";
 import { PinToTrayButton } from "@/components/pin-to-tray-button";
+import { useConsumePendingActivation } from "@/contexts/open-screens-context";
 
 // ── View mode for the product grid ───────────────────────────────────────────
 type ProdGridMode = 2 | 3 | 4 | 5 | "list";
@@ -341,6 +364,182 @@ function ProdStatCard({
   );
 }
 
+// Barra de abas responsiva — mede quantas abas cabem na largura disponível
+// e joga o resto num menu "Mais N" (dropdown), em vez de deixar a barra
+// estourar com scroll horizontal. Usada no "Ver Detalhes" do produto.
+const TAB_BTN_BASE =
+  "h-11 px-4 shrink-0 whitespace-nowrap rounded-lg border flex items-center gap-2 text-sm font-medium transition-all";
+function tabBtnClass(isActive: boolean) {
+  return `${TAB_BTN_BASE} ${
+    isActive
+      ? "bg-gradient-to-r from-[#2558FF] via-[#6E2C96] to-[#D92293] text-white border-transparent shadow-md"
+      : "bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 shadow-sm hover:text-slate-900 dark:hover:text-white hover:border-slate-300 dark:hover:border-slate-600"
+  }`;
+}
+// Botão "Mais N" — de propósito SEM o mesmo estilo de pill/cartão dos
+// outros (é um controle de menu, não uma aba), só texto + seta, com um
+// separador vertical antes dele.
+const MORE_BTN_CLASS =
+  "h-11 px-3 shrink-0 whitespace-nowrap flex items-center gap-1.5 text-sm font-medium text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200 transition-colors";
+function TabBadge({
+  children,
+  tone = "slate",
+  onActiveTab = false,
+}: {
+  children: React.ReactNode;
+  tone?: string;
+  onActiveTab?: boolean;
+}) {
+  const toneClass =
+    {
+      slate: "bg-slate-100 text-slate-400 dark:bg-slate-800 dark:text-slate-500",
+      indigo: "bg-indigo-100 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400",
+      violet: "bg-violet-100 dark:bg-violet-900/40 text-violet-600 dark:text-violet-400",
+      teal: "bg-teal-100 dark:bg-teal-900/40 text-teal-600 dark:text-teal-400",
+      emerald: "bg-emerald-100 dark:bg-emerald-900/40 text-emerald-600 dark:text-emerald-400",
+    }[tone] || "bg-slate-100 text-slate-400";
+  return (
+    <span
+      className={`ml-0.5 h-4 min-w-4 px-1 rounded-full text-[10px] font-bold flex items-center justify-center ${
+        onActiveTab ? "bg-white/25 text-white" : toneClass
+      }`}
+    >
+      {children}
+    </span>
+  );
+}
+
+interface OverflowTab {
+  value: string;
+  label: string;
+  icon: React.ElementType;
+  badge?: React.ReactNode;
+}
+
+function OverflowTabBar({
+  tabs,
+  active,
+  onChange,
+}: {
+  tabs: OverflowTab[];
+  active: string;
+  onChange: (value: string) => void;
+}) {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const hiddenRefs = useRef<(HTMLButtonElement | null)[]>([]);
+  const moreGhostRef = useRef<HTMLButtonElement>(null);
+  const [visibleCount, setVisibleCount] = useState(tabs.length);
+
+  const GAP_PX = 8; // gap-2
+  const SEPARATOR_RESERVE_PX = 24; // divisor + margens antes do "Mais N"
+
+  useLayoutEffect(() => {
+    const container = containerRef.current;
+    if (!container) return;
+
+    function recompute() {
+      const available = container!.clientWidth;
+      const moreWidth = (moreGhostRef.current?.offsetWidth || 90) + SEPARATOR_RESERVE_PX;
+      let fit = tabs.length;
+      let total = 0;
+      for (let i = 0; i < tabs.length; i++) {
+        total += (hiddenRefs.current[i]?.offsetWidth || 0) + (i > 0 ? GAP_PX : 0);
+        const isLast = i === tabs.length - 1;
+        const reserve = isLast ? 0 : GAP_PX + moreWidth;
+        if (total + reserve > available) {
+          fit = i;
+          break;
+        }
+      }
+      setVisibleCount(Math.max(1, fit));
+    }
+
+    recompute();
+    const ro = new ResizeObserver(recompute);
+    ro.observe(container);
+    return () => ro.disconnect();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tabs.length, tabs.map((t) => t.label).join("|")]);
+
+  const visible = tabs.slice(0, visibleCount);
+  const overflow = tabs.slice(visibleCount);
+
+  return (
+    <div ref={containerRef} className="relative flex items-center h-12 w-full overflow-hidden">
+      {/* Camada de medição — invisível, fora do fluxo visual, só pra saber a
+          largura natural de cada aba antes de decidir o que cabe. */}
+      <div className="absolute top-0 left-0 flex items-center gap-2 invisible pointer-events-none" aria-hidden="true">
+        {tabs.map((tab, i) => (
+          <button
+            key={tab.value}
+            ref={(el) => {
+              hiddenRefs.current[i] = el;
+            }}
+            className={tabBtnClass(false)}
+            tabIndex={-1}
+          >
+            <tab.icon className="h-4 w-4" />
+            {tab.label}
+            {tab.badge !== undefined && <TabBadge>{tab.badge}</TabBadge>}
+          </button>
+        ))}
+        <button ref={moreGhostRef} className={MORE_BTN_CLASS} tabIndex={-1}>
+          Mais {tabs.length}
+          <ChevronDown className="h-3.5 w-3.5" />
+        </button>
+      </div>
+
+      {/* Abas visíveis de verdade */}
+      <div className="flex items-center gap-2">
+        {visible.map((tab) => (
+          <button
+            key={tab.value}
+            type="button"
+            onClick={() => onChange(tab.value)}
+            className={tabBtnClass(active === tab.value)}
+          >
+            <tab.icon className="h-4 w-4" />
+            {tab.label}
+            {tab.badge !== undefined && (
+              <TabBadge onActiveTab={active === tab.value}>{tab.badge}</TabBadge>
+            )}
+          </button>
+        ))}
+      </div>
+
+      {overflow.length > 0 && (
+        <>
+        <div className="w-px h-6 bg-slate-200 dark:bg-slate-700 mx-2 shrink-0" />
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <button
+              type="button"
+              className={MORE_BTN_CLASS}
+            >
+              Mais {overflow.length}
+              <ChevronDown className="h-3.5 w-3.5" />
+            </button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            {overflow.map((tab) => (
+              <DropdownMenuItem
+                key={tab.value}
+                onClick={() => onChange(tab.value)}
+                className={active === tab.value ? "text-blue-600 font-medium" : ""}
+              >
+                <tab.icon className="h-3.5 w-3.5 mr-2" />
+                {tab.label}
+                {tab.badge !== undefined && <span className="ml-auto text-[10px] font-bold">{tab.badge}</span>}
+              </DropdownMenuItem>
+            ))}
+          </DropdownMenuContent>
+        </DropdownMenu>
+        </>
+      )}
+    </div>
+  );
+}
+
 type Question = {
   id: string;
   question: string;
@@ -526,6 +725,11 @@ export default function AdminProdutosPage() {
   const [filterCategories, setFilterCategories] = useState<string[]>([]);
   const [filterAreas, setFilterAreas] = useState<string[]>([]);
   const [filterStatus, setFilterStatus] = useState<string>("all");
+  // Aba-filtro "Com tarefas" (barra de filtros rápidos acima da tabela) —
+  // separada de filterStatus porque é uma dimensão diferente (tem/não tem
+  // tarefas vinculadas, não ativo/inativo).
+  const [quickFilterTasksOnly, setQuickFilterTasksOnly] = useState(false);
+  const [selectedProductIds, setSelectedProductIds] = useState<Set<string>>(new Set());
   const [sortBy, setSortBy] = useState<string>("name");
   const [gridMode, setGridModeState] = useState<ProdGridMode>(() => {
     try {
@@ -569,30 +773,58 @@ export default function AdminProdutosPage() {
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
   const [isProductSheetOpen, setIsProductSheetOpen] = useState(false); // Renamed from isCreateOpen
   const [isViewSheetOpen, setIsViewSheetOpen] = useState(false);
+  // Qual imagem da galeria está em destaque no "Ver Detalhes" — null = usa a
+  // capa por padrão. Resetado sempre que um novo produto é aberto (ver
+  // handleViewProduct) pra não "vazar" a seleção de um produto pro outro.
+  const [activeGalleryImage, setActiveGalleryImage] = useState<string | null>(null);
+  // Aba ativa do "Ver Detalhes" — controlada pra permitir trocar de aba
+  // programaticamente a partir do menu "Mais N" (ver OverflowTabBar).
+  const [viewActiveTab, setViewActiveTab] = useState("overview");
+  // Toolbar do questionário (busca + filtro + expandir/colapsar)
+  const [questionnaireSearch, setQuestionnaireSearch] = useState("");
+  const [questionnaireFilter, setQuestionnaireFilter] = useState<
+    "all" | "required" | "optional"
+  >("all");
+  const [questionnaireExpandAll, setQuestionnaireExpandAll] = useState(false);
+  const [collapsedQSections, setCollapsedQSections] = useState<Set<string>>(new Set());
+  const [expandedQQuestions, setExpandedQQuestions] = useState<Set<string>>(new Set());
+  // Sub-aba ativa dentro de "Apresentação" (Resumo/Destaques/Escopo/Entregáveis/Contratação/FAQ)
+  const [presentationSubTab, setPresentationSubTab] = useState("resumo");
 
-  // "+" info panel for the list view — surfaces the task breakdown,
-  // categories/tags and pricing composition already loaded on each product,
-  // same recipe as admin/clientes' openInfoPanel SlidePanel.
-  const [infoPanelOpen, setInfoPanelOpen] = useState(false);
-  const [infoPanelProduct, setInfoPanelProduct] = useState<Product | null>(null);
-  const openInfoPanel = useCallback((product: Product) => {
-    setInfoPanelProduct(product);
-    setInfoPanelOpen(true);
-  }, []);
+  // Reabre o painel certo (criar/editar/ver detalhes) ao clicar num item
+  // pinado na Bandeja de Telas — mesmo padrão de admin/empresas.
+  useConsumePendingActivation((key: string) => {
+    if (key === "create") {
+      handleOpenProductSheet();
+    } else if (key.startsWith("edit:")) {
+      const id = key.slice(5);
+      const found = products.find((p) => p.id === id);
+      if (found) handleEditProduct(found);
+    } else if (key.startsWith("view:")) {
+      const id = key.slice(5);
+      const found = products.find((p) => p.id === id);
+      if (found) handleViewProduct(found);
+    }
+  });
   const navigate = useNavigate();
   const { produtoId: urlProdutoId } = useParams<{ produtoId?: string }>();
 
   // Deep-link: open product sheet from URL param
   useEffect(() => {
     if (!urlProdutoId) return;
+    // A URL usa só o número ("5"), sem o prefixo "prod_" (já tem "produtos"
+    // antes da barra) — reconstitui o product_code completo pra buscar.
+    const lookupId = /^\d+$/.test(urlProdutoId)
+      ? `prod_${urlProdutoId}`
+      : urlProdutoId;
     apiClient
-      .getProduct(urlProdutoId)
+      .getProduct(lookupId)
       .then((product: any) => {
         setSelectedProduct(product ? backendToFrontendProduct(product) : product);
         setIsViewSheetOpen(true);
       })
       .catch(() => {
-        setSelectedProduct({ id: urlProdutoId } as any);
+        setSelectedProduct({ id: lookupId } as any);
         setIsViewSheetOpen(true);
       });
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -764,6 +996,225 @@ export default function AdminProdutosPage() {
     excludedItems: [],
   });
 
+  // Aba ativa do formulário de cadastro/edição de produto (controlada pra
+  // permitir "pular" direto pra aba+campo certos a partir do alerta de
+  // pendências abaixo).
+  const [productFormTab, setProductFormTab] = useState("info");
+
+  // Alguns produtos antigos guardam `presentation` como objeto rico
+  // ({tagline, highlights, ...}, ver lib/product-adapter.ts) em vez de
+  // string simples — esse form só lida com texto puro, então convertemos
+  // com segurança em vez de deixar `.trim()` quebrar a tela.
+  const textOf = (v: unknown): string => {
+    if (typeof v === "string") return v;
+    if (v && typeof v === "object" && typeof (v as any).tagline === "string") {
+      return (v as any).tagline;
+    }
+    return "";
+  };
+
+  // Ao salvar, o form só edita o texto puro da tagline — se o produto tinha
+  // o objeto rico (highlights, targetAudience, whatIsIncluded, etc. vindos
+  // da importação da base antiga), preserva o resto e só atualiza a
+  // tagline. Sem isso, qualquer save no formulário apagava esses campos
+  // silenciosamente (sobrescrevia o objeto inteiro pela string).
+  // Estado editável dos campos estruturados da apresentação comercial
+  // (Para quem é, O que está incluído, Não incluído, Pré-requisitos, Como
+  // contratar, FAQ, Destaques, Entregáveis) — antes só existiam no seed/
+  // import da base antiga, sem nenhuma UI de edição.
+  const [presentationDraft, setPresentationDraft] = useState<{
+    highlights: string[];
+    targetAudience: string[];
+    whatIsIncluded: { title: string; description: string }[];
+    deliverables: string[];
+    notIncluded: string[];
+    requirements: string[];
+    howToRequest: { step: string; description: string }[];
+    faq: { question: string; answer: string }[];
+  }>({
+    highlights: [],
+    targetAudience: [],
+    whatIsIncluded: [],
+    deliverables: [],
+    notIncluded: [],
+    requirements: [],
+    howToRequest: [],
+    faq: [],
+  });
+
+  // O placeholder deixado pela migração da base antiga ("[DADO NÃO
+  // DISPONÍVEL NA BASE ANTIGA...]") não deve aparecer como item editável —
+  // ao abrir o form pra editar, tratamos como campo vazio pra o usuário
+  // preencher do zero.
+  const isPlaceholderText = (v: unknown): boolean =>
+    typeof v === "string" && v.includes("DADO NÃO DISPONÍVEL");
+  const cleanStringArr = (arr: unknown): string[] =>
+    Array.isArray(arr)
+      ? arr.filter((s): s is string => typeof s === "string" && !isPlaceholderText(s))
+      : [];
+  const cleanPointArr = (
+    arr: unknown,
+    key: string,
+  ): { [k: string]: string }[] =>
+    Array.isArray(arr)
+      ? arr
+          .filter((p) => p && typeof p === "object" && !isPlaceholderText((p as any)[key]))
+          .map((p: any) => ({ [key]: p[key] || "", description: p.description || "" }))
+      : [];
+  const cleanFaqArr = (
+    arr: unknown,
+  ): { question: string; answer: string }[] =>
+    Array.isArray(arr)
+      ? arr
+          .filter((p) => p && typeof p === "object" && !isPlaceholderText((p as any).question))
+          .map((p: any) => ({ question: p.question || "", answer: p.answer || "" }))
+      : [];
+
+  const buildPresentationPayload = (
+    original: unknown,
+    tagline: string,
+    draft: typeof presentationDraft,
+  ): unknown => ({
+    ...(original && typeof original === "object" ? (original as object) : {}),
+    tagline,
+    highlights: draft.highlights,
+    targetAudience: draft.targetAudience,
+    whatIsIncluded: draft.whatIsIncluded,
+    deliverables: draft.deliverables,
+    notIncluded: draft.notIncluded,
+    requirements: draft.requirements,
+    howToRequest: draft.howToRequest,
+    faq: draft.faq,
+  });
+
+  // Itens que compõem o "quão completo está o cadastro" — cada um aponta
+  // pra uma aba + campo específico. `required` bloqueia o salvamento (ver
+  // handleCreateProduct/handleSaveProduct); os demais são recomendados.
+  const PRODUCT_COMPLETION_CHECKLIST: Array<{
+    key: string;
+    label: string;
+    tab: string;
+    required: boolean;
+    isFilled: (d: typeof productFormData) => boolean;
+  }> = [
+    {
+      key: "name",
+      label: "Nome do produto",
+      tab: "info",
+      required: true,
+      isFilled: (d) => !!textOf(d.name).trim(),
+    },
+    {
+      key: "categories",
+      label: "Categoria",
+      tab: "info",
+      required: true,
+      isFilled: (d) => (d.categories || []).length > 0,
+    },
+    {
+      key: "productImage",
+      label: "Imagem de capa",
+      tab: "info",
+      required: false,
+      isFilled: (d) => !!(d.productImagePreview || d.productImage),
+    },
+    {
+      key: "summaryDescription",
+      label: "Resumo da descrição",
+      tab: "info",
+      required: false,
+      isFilled: (d) => !!textOf(d.summaryDescription).trim(),
+    },
+    {
+      key: "includedItems",
+      label: "Itens inclusos",
+      tab: "info",
+      required: false,
+      isFilled: (d) => (d.includedItems || []).length > 0,
+    },
+    {
+      key: "notIncludedItems",
+      label: "Itens não inclusos",
+      tab: "info",
+      required: false,
+      isFilled: (d) => (d.notIncludedItems || []).length > 0,
+    },
+    {
+      key: "presentation",
+      label: "Texto de apresentação",
+      tab: "apresentacao",
+      required: false,
+      isFilled: (d) => !!textOf(d.presentation).trim(),
+    },
+    {
+      key: "benefits",
+      label: "Benefícios chave",
+      tab: "apresentacao",
+      required: false,
+      isFilled: (d) => !!textOf(d.benefits).trim(),
+    },
+    {
+      key: "requestAttention",
+      label: "O que solicitar ao cliente",
+      tab: "solicitar",
+      required: false,
+      isFilled: (d) => !!textOf(d.requestAttention).trim(),
+    },
+    {
+      key: "tasks",
+      label: "Tarefas do produto",
+      tab: "tarefas",
+      required: false,
+      isFilled: (d) => (d.tasks || []).length > 0,
+    },
+    {
+      key: "questionnaire",
+      label: "Perguntas do questionário",
+      tab: "questionario",
+      required: false,
+      isFilled: (d) =>
+        Array.isArray((d.questionnaire as any)?.questions)
+          ? (d.questionnaire as any).questions.length > 0
+          : Array.isArray(d.questionnaire) && d.questionnaire.length > 0,
+    },
+  ];
+
+  const productCompletionStatus = PRODUCT_COMPLETION_CHECKLIST.map((item) => ({
+    ...item,
+    filled: item.isFilled(productFormData),
+  }));
+  const missingRequiredItems = productCompletionStatus.filter(
+    (i) => i.required && !i.filled,
+  );
+  const missingRecommendedItems = productCompletionStatus.filter(
+    (i) => !i.required && !i.filled,
+  );
+
+  const jumpToProductField = (tab: string, key: string) => {
+    setProductFormTab(tab);
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        const el = document.getElementById(`product-field-${key}`);
+        if (!el) return;
+        el.scrollIntoView({ behavior: "smooth", block: "center" });
+        el.classList.add(
+          "ring-2",
+          "ring-blue-400",
+          "ring-offset-2",
+          "dark:ring-offset-slate-900",
+        );
+        setTimeout(() => {
+          el.classList.remove(
+            "ring-2",
+            "ring-blue-400",
+            "ring-offset-2",
+            "dark:ring-offset-slate-900",
+          );
+        }, 1600);
+      });
+    });
+  };
+
   const availableTags = [
     "Pauta",
     "Assuntos para posts",
@@ -800,7 +1251,8 @@ export default function AdminProdutosPage() {
     .filter((product) => {
       const matchesSearch =
         product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        String(product.id).includes(searchTerm.toLowerCase()) ||
+        String(product.id).toLowerCase().includes(searchTerm.toLowerCase()) ||
+        String((product as any).productCode || "").toLowerCase().includes(searchTerm.toLowerCase()) ||
         (product.description &&
           product.description.toLowerCase().includes(searchTerm.toLowerCase()));
 
@@ -822,7 +1274,9 @@ export default function AdminProdutosPage() {
         (filterStatus === "active" && product.isActive) ||
         (filterStatus === "inactive" && !product.isActive);
 
-      return matchesSearch && matchesArea && matchesCategory && matchesStatus;
+      const matchesTasksOnly = !quickFilterTasksOnly || (product.tasks || []).length > 0;
+
+      return matchesSearch && matchesArea && matchesCategory && matchesStatus && matchesTasksOnly;
     })
     .sort((a, b) => {
       switch (sortBy) {
@@ -1083,12 +1537,15 @@ export default function AdminProdutosPage() {
 
   const handleEditProduct = (product: Product) => {
     setSelectedProduct(product);
+    setProductFormTab("info");
     setProductFormData({
       name: product.name || "",
-      presentation: (product as any).presentation || "",
+      presentation: textOf((product as any).presentation),
       benefits: (product as any).benefits || "",
       information: (product as any).information || "",
       description: product.description || "",
+      summaryDescription: (product as any).summaryDescription || "",
+      descriptionAttention: (product as any).descriptionAttention || "",
       category: product.category || "",
       categories: (product as any).categories?.length
         ? (product as any).categories
@@ -1101,7 +1558,7 @@ export default function AdminProdutosPage() {
         (product as any).productImagePreview || (product as any).image || "",
       deliveryVideoUrl: (product as any).deliveryVideoUrl || "",
       tags: (product as any).tags || [],
-      productId: product.id,
+      productId: (product as any).productCode || product.id,
       recurrence: (product as any).recurrence || "",
       complementaryProducts: (product as any).complementaryProductIds || [],
       requestAttention: (product as any).requestAttention || "",
@@ -1109,6 +1566,7 @@ export default function AdminProdutosPage() {
       monthlyContract: (product as any).monthlyContract || "",
       previousContracts: (product as any).previousContracts || "",
       status: product.isActive ? "Ativo" : "Inativo",
+      isActive: product.isActive,
       associatedTaskModels: (product as any).associatedTaskModels || [],
       // Update formData for questionnaire and tasks
       questionnaire: (product as any).questionnaire?.questions || [], // Ensure accessing questions array
@@ -1117,6 +1575,22 @@ export default function AdminProdutosPage() {
       notIncludedItems: (product as any).notIncludedItems || [],
       excludedItems: (product as any).excludedItems || [],
     });
+    {
+      const pres = (product as any).presentation;
+      setPresentationDraft({
+        highlights: cleanStringArr(pres?.highlights),
+        targetAudience: cleanStringArr(pres?.targetAudience),
+        whatIsIncluded: cleanPointArr(pres?.whatIsIncluded, "title"),
+        deliverables: cleanStringArr(pres?.deliverables),
+        notIncluded: cleanStringArr(pres?.notIncluded),
+        requirements: cleanStringArr(pres?.requirements),
+        howToRequest: cleanPointArr(pres?.howToRequest, "step") as {
+          step: string;
+          description: string;
+        }[],
+        faq: cleanFaqArr(pres?.faq),
+      });
+    }
     setAdditionalImages((product as any).additionalImages || []);
     // Load rich portfolio images; fall back to building from demonstrations URLs
     const existingPortfolio = (product as any).portfolioImages as
@@ -1144,7 +1618,13 @@ export default function AdminProdutosPage() {
         })),
       );
     }
-    setProductQuestions((product as any).questions || []);
+    // "Perguntas" nessa aba lê productQuestions, não productFormData.questionnaire
+    // — mas o dado real (do produto salvo) vive em product.questionnaire.questions,
+    // não em product.questions (campo que nunca existiu no adapter). Sem isso, a
+    // aba sempre aparecia vazia mesmo com perguntas reais salvas no produto.
+    setProductQuestions(
+      (product as any).questions || (product as any).questionnaire?.questions || [],
+    );
     setProductVariations(product.variations || []);
     setProductAddOns(product.addOns || []);
     setProductTasks(product.tasks || []); // Set tasks for the product form
@@ -1156,8 +1636,21 @@ export default function AdminProdutosPage() {
     // Do NOT run backendToFrontendProduct here — that double-adapts and wipes
     // tags/demonstrations/stages/tasks.
     setSelectedProduct(product);
+    setActiveGalleryImage(null);
+    setViewActiveTab("overview");
+    setQuestionnaireSearch("");
+    setQuestionnaireFilter("all");
+    setQuestionnaireExpandAll(false);
+    setCollapsedQSections(new Set());
+    setExpandedQQuestions(new Set());
+    setPresentationSubTab("resumo");
     setIsViewSheetOpen(true);
-    navigate(`/admin/produtos/${product.id}`, { replace: true });
+    // "produtos" já está antes da barra, então o prefixo "prod_" é redundante
+    // na URL — só o número (a UI ainda mostra "prod_N" nos badges/ID normalmente).
+    const urlCode = (
+      (product as any).productCode || product.id
+    ).replace(/^prod_/, "");
+    navigate(`/admin/produtos/${urlCode}`, { replace: true });
   };
 
   const handleDeleteProduct = async (productId: string) => {
@@ -1218,22 +1711,309 @@ export default function AdminProdutosPage() {
     }, 0);
   };
 
-  const handleAIEnhance = async (fieldName: string, currentText: string) => {
+  // Campos do cadastro de produto com botão "Melhorar com IA". `mode: "list"`
+  // pede itens curtos (um por linha) e faz merge no array existente; "text"
+  // (padrão) substitui o campo pelo texto gerado.
+  const AI_ENHANCE_FIELDS: Record<
+    string,
+    { label: string; mode?: "text" | "list" }
+  > = {
+    name: { label: "Nome do Produto" },
+    description: { label: "Descrição Completa do Produto" },
+    summaryDescription: { label: "Resumo da Descrição" },
+    descriptionAttention: { label: "Atenção na Descrição" },
+    presentation: { label: "Texto de Apresentação" },
+    benefits: { label: "Benefícios Chave" },
+    information: { label: "Informações Adicionais" },
+    requestAttention: { label: "O que Solicitar ao Cliente" },
+    includedItems: { label: "Itens Inclusos", mode: "list" },
+    notIncludedItems: { label: "Itens Não Inclusos", mode: "list" },
+  };
+
+  const [aiEnhanceError, setAiEnhanceError] = useState<string | null>(null);
+
+  // Histórico de versões — snapshot automático tirado pelo backend a cada
+  // "Salvar Produto" (ver PUT /api/products/:id). Aqui só listamos e
+  // permitimos restaurar; o snapshot em si é responsabilidade do backend.
+  const [versionHistory, setVersionHistory] = useState<{
+    open: boolean;
+    loading: boolean;
+    restoring: string | null;
+    versions: Array<{ id: string; created_at: string; name?: string; short_description?: string }>;
+    error: string | null;
+  }>({ open: false, loading: false, restoring: null, versions: [], error: null });
+
+  const handleOpenVersionHistory = async () => {
+    if (!selectedProduct) return;
+    setVersionHistory((v) => ({ ...v, open: true, loading: true, error: null }));
+    try {
+      const res: any = await apiClient.getProductVersions(selectedProduct.id);
+      setVersionHistory((v) => ({ ...v, loading: false, versions: res?.data || [] }));
+    } catch (err: any) {
+      setVersionHistory((v) => ({
+        ...v,
+        loading: false,
+        error: err?.message || "Não foi possível carregar o histórico.",
+      }));
+    }
+  };
+
+  // Confirmação antes de restaurar — a versão que o usuário clicou fica
+  // "pendente" até confirmar no ConfirmationDialog (evita reverter por
+  // engano com um clique só).
+  const [versionPendingRestore, setVersionPendingRestore] = useState<{
+    id: string;
+    name?: string;
+    created_at: string;
+  } | null>(null);
+
+  // Confirmação antes de salvar o produto — "Salvar Produto" só abre o
+  // diálogo; o save de fato só roda em onConfirm.
+  const [isSaveConfirmOpen, setIsSaveConfirmOpen] = useState(false);
+
+  const handleRequestRestoreVersion = (version: { id: string; name?: string; created_at: string }) => {
+    setVersionPendingRestore(version);
+  };
+
+  const handleRestoreVersion = async (versionId: string) => {
+    if (!selectedProduct) return;
+    setVersionPendingRestore(null);
+    setVersionHistory((v) => ({ ...v, restoring: versionId }));
+    try {
+      const restored: any = await apiClient.restoreProductVersion(selectedProduct.id, versionId);
+      const adapted = backendToFrontendProduct(restored);
+      setSelectedProduct(adapted);
+      handleEditProduct(adapted);
+      setVersionHistory((v) => ({ ...v, open: false, restoring: null }));
+      toast({ title: "Versão restaurada", description: "O produto foi revertido pra essa versão." });
+      refetchProducts();
+    } catch (err: any) {
+      setVersionHistory((v) => ({
+        ...v,
+        restoring: null,
+        error: err?.message || "Não foi possível restaurar essa versão.",
+      }));
+    }
+  };
+
+  // Pesquisa de preço de mercado com IA (busca real na internet via Gemini
+  // grounding) — só dispara quando o admin clica, nunca automático (cada
+  // chamada é uma busca de verdade, mais lenta/cara que os botões de texto).
+  const [pricingResearch, setPricingResearch] = useState<{
+    loading: boolean;
+    text: string;
+    sources: Array<{ title: string; url: string }>;
+    error: string | null;
+  }>({ loading: false, text: "", sources: [], error: null });
+
+  // A IA às vezes usa markdown (**negrito**, # título) mesmo quando pedimos
+  // pra não usar — o painel exibe texto puro, então limpamos aqui em vez de
+  // depender só do prompt.
+  const stripMarkdown = (text: string) =>
+    text
+      .replace(/\*\*(.*?)\*\*/g, "$1")
+      .replace(/^[ \t]*#{1,6}\s+/gm, "")
+      .replace(/^([ \t]*)\*\s+/gm, "$1- ");
+
+  const handleResearchPricing = async () => {
+    setPricingResearch({ loading: true, text: "", sources: [], error: null });
+    try {
+      const res: any = await apiClient.aiResearchProductPricing({
+        product_name: productFormData.name,
+        category:
+          (productFormData.categories || [])[0] || productFormData.category,
+        description:
+          productFormData.description || productFormData.summaryDescription,
+      });
+      setPricingResearch({
+        loading: false,
+        text: stripMarkdown(res?.research_text || ""),
+        sources: res?.sources || [],
+        error: null,
+      });
+    } catch (err: any) {
+      setPricingResearch({
+        loading: false,
+        text: "",
+        sources: [],
+        error: err?.message || "Não foi possível pesquisar o mercado agora.",
+      });
+    }
+  };
+
+  const handleAIEnhance = async (
+    fieldName: string,
+    prefs: { length: "manter" | "curto" | "medio" | "longo"; approach: "melhorar" | "recriar" } = {
+      length: "manter",
+      approach: "melhorar",
+    },
+  ) => {
+    const fieldConfig = AI_ENHANCE_FIELDS[fieldName];
+    if (!fieldConfig) return;
+    const mode = fieldConfig.mode || "text";
+    const currentValue = (productFormData as any)[fieldName];
+    const currentText = Array.isArray(currentValue)
+      ? currentValue.join("\n")
+      : currentValue || "";
+
+    setAiEnhanceError(null);
     setIsEnhancingWithAI(true);
     setCurrentFieldEnhancing(fieldName);
 
-    // Simulate AI processing
-    setTimeout(() => {
-      const enhancedText = `${currentText}\n\n[Texto melhorado pela IA: Conteúdo expandido com melhor estrutura e clareza.]`;
-
-      setProductFormData({
-        ...productFormData,
-        [fieldName]: enhancedText,
+    try {
+      const otherFields: Record<string, string> = {};
+      Object.entries(AI_ENHANCE_FIELDS).forEach(([key, cfg]) => {
+        if (key === fieldName) return;
+        const v = (productFormData as any)[key];
+        const text = Array.isArray(v) ? v.join(", ") : v;
+        if (text && String(text).trim()) otherFields[cfg.label] = String(text);
       });
 
+      const res: any = await apiClient.aiImproveProductField({
+        field_label: fieldConfig.label,
+        current_value: currentText,
+        mode,
+        length: prefs.length,
+        approach: prefs.approach,
+        context: {
+          name: productFormData.name,
+          category:
+            (productFormData.categories || [])[0] || productFormData.category,
+          price: productFormData.price,
+          other_fields: otherFields,
+        },
+      });
+
+      const improved = (res?.improved_value || "").trim();
+      if (!improved) return;
+
+      if (mode === "list") {
+        const newItems = improved
+          .split("\n")
+          .map((s: string) => s.replace(/^[-•\d.]+\s*/, "").trim())
+          .filter(Boolean);
+        const existing: string[] = Array.isArray(currentValue)
+          ? currentValue
+          : [];
+        const merged = Array.from(new Set([...existing, ...newItems]));
+        setProductFormData({ ...productFormData, [fieldName]: merged });
+      } else {
+        setProductFormData({ ...productFormData, [fieldName]: improved });
+      }
+    } catch (err: any) {
+      setAiEnhanceError(
+        err?.message || "Não foi possível melhorar este campo com IA agora.",
+      );
+    } finally {
       setIsEnhancingWithAI(false);
       setCurrentFieldEnhancing(null);
-    }, 2000);
+    }
+  };
+
+  // Botão "Melhorar com IA" reutilizável — mesma linguagem visual do
+  // TaskLaunchDrawer (Sparkles ↔ Loader2, texto vira "Melhorando…"). Antes de
+  // gerar, abre um popover com preferências de tamanho/abordagem — lembradas
+  // por campo (cada campo guarda a última escolha feita nele).
+  const AiFieldButton = ({ fieldName }: { fieldName: string }) => {
+    const isLoading =
+      isEnhancingWithAI && currentFieldEnhancing === fieldName;
+    const [open, setOpen] = useState(false);
+    const [length, setLength] = useState<"manter" | "curto" | "medio" | "longo">("manter");
+    const [approach, setApproach] = useState<"melhorar" | "recriar">("melhorar");
+    const isList = AI_ENHANCE_FIELDS[fieldName]?.mode === "list";
+
+    const LENGTH_OPTIONS: Array<{ value: typeof length; label: string }> = isList
+      ? [
+          { value: "manter", label: "Mesma quantidade" },
+          { value: "curto", label: "Poucos itens" },
+          { value: "medio", label: "Quantidade média" },
+          { value: "longo", label: "Muitos itens" },
+        ]
+      : [
+          { value: "manter", label: "Manter tamanho atual" },
+          { value: "curto", label: "Curto" },
+          { value: "medio", label: "Médio" },
+          { value: "longo", label: "Longo" },
+        ];
+
+    return (
+      <Popover open={open} onOpenChange={setOpen}>
+        <PopoverTrigger asChild>
+          <button
+            type="button"
+            disabled={isEnhancingWithAI}
+            className="inline-flex items-center gap-1 text-xs font-medium text-violet-600 dark:text-violet-400 hover:text-violet-700 dark:hover:text-violet-300 disabled:opacity-50 disabled:cursor-not-allowed transition-colors ml-auto"
+          >
+            {isLoading ? (
+              <Loader2 className="h-3 w-3 animate-spin" />
+            ) : (
+              <Sparkles className="h-3 w-3" />
+            )}
+            {isLoading ? "Melhorando…" : "Melhorar com IA"}
+          </button>
+        </PopoverTrigger>
+        <PopoverContent align="end" className="w-64 p-3 space-y-3">
+          <div className="space-y-1.5">
+            <p className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide">
+              {isList ? "Quantidade" : "Tamanho da resposta"}
+            </p>
+            <div className="flex flex-wrap gap-1">
+              {LENGTH_OPTIONS.map((opt) => (
+                <button
+                  key={opt.value}
+                  type="button"
+                  onClick={() => setLength(opt.value)}
+                  className={`text-[11px] px-2 py-1 rounded-md border transition-colors ${
+                    length === opt.value
+                      ? "bg-violet-100 border-violet-300 text-violet-700 dark:bg-violet-900/40 dark:border-violet-700 dark:text-violet-300"
+                      : "border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800"
+                  }`}
+                >
+                  {opt.label}
+                </button>
+              ))}
+            </div>
+          </div>
+          <div className="space-y-1.5">
+            <p className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide">
+              Como aplicar
+            </p>
+            <div className="flex flex-wrap gap-1">
+              {(
+                [
+                  { value: "melhorar", label: "Melhorar o atual" },
+                  { value: "recriar", label: "Recriar do zero" },
+                ] as const
+              ).map((opt) => (
+                <button
+                  key={opt.value}
+                  type="button"
+                  onClick={() => setApproach(opt.value)}
+                  className={`text-[11px] px-2 py-1 rounded-md border transition-colors ${
+                    approach === opt.value
+                      ? "bg-violet-100 border-violet-300 text-violet-700 dark:bg-violet-900/40 dark:border-violet-700 dark:text-violet-300"
+                      : "border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800"
+                  }`}
+                >
+                  {opt.label}
+                </button>
+              ))}
+            </div>
+          </div>
+          <Button
+            size="sm"
+            className="w-full h-8 text-xs btn-brand gap-1.5"
+            onClick={() => {
+              setOpen(false);
+              handleAIEnhance(fieldName, { length, approach });
+            }}
+          >
+            <Sparkles className="h-3 w-3" />
+            Gerar
+          </Button>
+        </PopoverContent>
+      </Popover>
+    );
   };
 
   // ── ID generator ────────────────────────────────────────────────────────
@@ -1321,7 +2101,11 @@ export default function AdminProdutosPage() {
       image: productFormData.productImagePreview,
       productImagePreview: productFormData.productImagePreview,
       deliveryVideoUrl: productFormData.deliveryVideoUrl,
-      presentation: productFormData.presentation,
+      presentation: buildPresentationPayload(
+        null,
+        productFormData.presentation,
+        presentationDraft,
+      ),
       benefits: productFormData.benefits,
       information: productFormData.information,
       descriptionAttention: productFormData.descriptionAttention,
@@ -1344,8 +2128,11 @@ export default function AdminProdutosPage() {
       demonstrations: portfolioImages.map((img) => img.url).filter(Boolean),
       // Questionnaire should be part of the product data if managed
       questionnaire: {
-        title: "Questionário do Produto", // Placeholder title
-        description: "Respostas do cliente para configurar o produto.", // Placeholder description
+        ...(productFormData.questionnaire as any),
+        title: (productFormData.questionnaire as any)?.title || "Questionário do Produto",
+        description:
+          (productFormData.questionnaire as any)?.description ||
+          "Respostas do cliente para configurar o produto.",
         questions: productQuestions,
       },
     };
@@ -1357,6 +2144,7 @@ export default function AdminProdutosPage() {
   };
 
   const resetProductForm = () => {
+    setProductFormTab("info");
     setProductFormData({
       productId: "",
       name: "",
@@ -1590,7 +2378,11 @@ export default function AdminProdutosPage() {
           tasks: productTasks, // Use the tasks from the form state
           // Ensure other necessary fields are updated as well
           name: productFormData.name,
-          presentation: productFormData.presentation,
+          presentation: buildPresentationPayload(
+            (selectedProduct as any)?.presentation,
+            productFormData.presentation,
+            presentationDraft,
+          ),
           benefits: productFormData.benefits,
           information: productFormData.information,
           description: productFormData.description,
@@ -1612,8 +2404,11 @@ export default function AdminProdutosPage() {
           isActive: productFormData.isActive, // Assuming isActive is part of productFormData
           // Include questionnaire and tasks from form state
           questionnaire: {
-            title: "Questionário do Produto", // Placeholder title
-            description: "Respostas do cliente para configurar o produto.", // Placeholder description
+            ...(productFormData.questionnaire as any),
+            title: (productFormData.questionnaire as any)?.title || "Questionário do Produto",
+            description:
+              (productFormData.questionnaire as any)?.description ||
+              "Respostas do cliente para configurar o produto.",
             questions: productQuestions,
           },
           excludedItems: productFormData.excludedItems,
@@ -1647,6 +2442,7 @@ export default function AdminProdutosPage() {
 
   const resetForm = () => {
     setSelectedProduct(null);
+    setProductFormTab("info");
     setProductFormData({
       productId: "",
       name: "",
@@ -1691,6 +2487,16 @@ export default function AdminProdutosPage() {
     setProductVariations([]);
     setProductAddOns([]);
     setProductTasks([]); // Reset tasks as well
+    setPresentationDraft({
+      highlights: [],
+      targetAudience: [],
+      whatIsIncluded: [],
+      deliverables: [],
+      notIncluded: [],
+      requirements: [],
+      howToRequest: [],
+      faq: [],
+    });
   };
 
   const handleSaveDraft = () => {
@@ -1728,7 +2534,11 @@ export default function AdminProdutosPage() {
       image: productFormData.productImagePreview,
       productImagePreview: productFormData.productImagePreview,
       deliveryVideoUrl: productFormData.deliveryVideoUrl,
-      presentation: productFormData.presentation,
+      presentation: buildPresentationPayload(
+        null,
+        productFormData.presentation,
+        presentationDraft,
+      ),
       benefits: productFormData.benefits,
       information: productFormData.information,
       descriptionAttention: productFormData.descriptionAttention,
@@ -1752,8 +2562,11 @@ export default function AdminProdutosPage() {
       variations: productVariations,
       addOns: productAddOns,
       questionnaire: {
-        title: "Rascunho Questionário",
-        description: "Questionário para configurar o produto.",
+        ...(productFormData.questionnaire as any),
+        title: (productFormData.questionnaire as any)?.title || "Rascunho Questionário",
+        description:
+          (productFormData.questionnaire as any)?.description ||
+          "Questionário para configurar o produto.",
         questions: productQuestions,
       },
     };
@@ -2075,22 +2888,84 @@ export default function AdminProdutosPage() {
 
     <div className="flex-1 min-h-0 overflow-y-auto">
     <div className="space-y-3">
-      {/* ── Stats Bar — gradient cards matching admin/empresas ── */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-1">
-        <ProdStatCard label="Produtos" value={safeProducts.length} icon={Package} color="blue" />
-        <ProdStatCard
-          label="Ativos"
-          value={safeProducts.filter((p) => p.isActive).length}
-          icon={CheckCircle2}
-          color="emerald"
-        />
-        <ProdStatCard
-          label="Tarefas"
-          value={safeProducts.reduce((sum, p) => sum + (p.tasks || []).length, 0)}
-          icon={ListChecks}
-          color="violet"
-        />
-        <ProdStatCard label="Categorias" value={uniqueCategories.length} icon={Layers} color="orange" />
+      {/* ── Abas-filtro rápido — substituem os cards de KPI; clicar filtra a
+          tabela abaixo direto, sem precisar abrir o painel de Filtros. ── */}
+      <div className="bg-white dark:bg-slate-900 border border-slate-200/70 dark:border-slate-700/60 rounded-xl shadow-sm overflow-hidden mb-1">
+        <div className="flex items-center flex-wrap">
+          {(
+            [
+              {
+                key: "all",
+                label: "Todos os produtos",
+                icon: Package,
+                count: safeProducts.length,
+                active: filterStatus === "all" && !quickFilterTasksOnly,
+                onClick: () => {
+                  setFilterStatus("all");
+                  setQuickFilterTasksOnly(false);
+                },
+              },
+              {
+                key: "active",
+                label: "Ativos",
+                icon: CheckCircle2,
+                count: safeProducts.filter((p) => p.isActive).length,
+                active: filterStatus === "active" && !quickFilterTasksOnly,
+                onClick: () => {
+                  setFilterStatus("active");
+                  setQuickFilterTasksOnly(false);
+                },
+              },
+              {
+                key: "with_tasks",
+                label: "Com tarefas",
+                icon: ListChecks,
+                count: safeProducts.filter((p) => (p.tasks || []).length > 0).length,
+                active: quickFilterTasksOnly,
+                onClick: () => {
+                  setQuickFilterTasksOnly(true);
+                  setFilterStatus("all");
+                },
+              },
+              {
+                key: "categories",
+                label: "Categorias",
+                icon: Layers,
+                count: uniqueCategories.length,
+                active: false,
+                onClick: () => setIsFilterModalOpen(true),
+              },
+            ] as const
+          ).map((tab) => (
+            <button
+              key={tab.key}
+              type="button"
+              onClick={tab.onClick}
+              className={`relative flex items-center gap-2 px-4 h-14 text-sm font-medium border-r border-slate-100 dark:border-slate-800 last:border-r-0 transition-colors ${
+                tab.active
+                  ? "text-blue-600 dark:text-blue-400"
+                  : "text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800/50"
+              }`}
+            >
+              <tab.icon className="h-4 w-4" />
+              {tab.label}
+              <span
+                className={`ml-0.5 h-5 min-w-5 px-1.5 rounded-full text-[11px] font-bold flex items-center justify-center ${
+                  tab.active
+                    ? "bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300"
+                    : "bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400"
+                }`}
+              >
+                {tab.count}
+              </span>
+              <span
+                className={`absolute bottom-0 inset-x-0 h-0.5 bg-blue-500 transition-transform origin-left ${
+                  tab.active ? "scale-x-100" : "scale-x-0"
+                }`}
+              />
+            </button>
+          ))}
+        </div>
       </div>
 
       <Card className="border border-slate-200/70 dark:border-slate-700/60 shadow-sm overflow-hidden">
@@ -2125,6 +3000,24 @@ export default function AdminProdutosPage() {
               </span>
             )}
           </Button>
+
+          {/* Ordenar */}
+          <Select value={sortBy} onValueChange={setSortBy}>
+            <SelectTrigger className="h-9 w-auto gap-1.5 text-xs shrink-0 border-slate-200 dark:border-slate-700">
+              <ArrowUpDown className="h-3.5 w-3.5 text-slate-400" />
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="name">Ordenar: Nome</SelectItem>
+              <SelectItem value="price-asc">Ordenar: Preço ↑</SelectItem>
+              <SelectItem value="price-desc">Ordenar: Preço ↓</SelectItem>
+              <SelectItem value="id">Ordenar: ID</SelectItem>
+            </SelectContent>
+          </Select>
+
+          <span className="text-xs text-slate-400 shrink-0 hidden sm:inline">
+            {filteredProducts.length} {filteredProducts.length === 1 ? "item" : "itens"}
+          </span>
 
           {/* View mode selector */}
           <div className="flex items-center gap-0.5 bg-slate-100 dark:bg-slate-800 rounded-lg p-0.5 shrink-0">
@@ -2187,146 +3080,244 @@ export default function AdminProdutosPage() {
             )}
           </div>
         ) : gridMode === "list" ? (
-          /* ── LIST VIEW ── */
-          <div className="divide-y divide-slate-100 dark:divide-slate-800">
-            {paginatedProducts.map((product) => (
-              <div
-                key={product.id}
-                className="flex items-center gap-3.5 px-4 py-3.5 hover:bg-slate-50/70 dark:hover:bg-slate-800/40 transition-colors group"
-              >
-                {/* Icon / Image */}
-                <div className="relative shrink-0">
-                  {product.productImagePreview || (product as any).image ? (
-                    <img
-                      src={
-                        product.productImagePreview || (product as any).image
-                      }
-                      alt={product.name}
-                      className="h-12 w-12 rounded-xl object-cover border shadow-sm"
-                    />
-                  ) : (
-                    <div className="h-12 w-12 rounded-xl bg-linear-to-br from-blue-500 to-violet-600 flex items-center justify-center shadow-sm">
-                      <Package className="h-5 w-5 text-white" />
-                    </div>
-                  )}
-                  <div
-                    className={`absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border-2 border-background ${
-                      product.isActive ? "bg-emerald-500" : "bg-slate-300"
-                    }`}
-                  />
-                </div>
-
-                {/* Name + description */}
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2">
-                    <p className="text-[15px] font-semibold truncate leading-tight">
-                      {product.name}
-                    </p>
-                    {getContractabilitySummary(product)?.isContractable === false && (
-                      <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300 shrink-0">
-                        Estrutura incompleta
-                      </span>
-                    )}
-                    <span className="text-xs font-mono font-bold text-slate-500 dark:text-slate-400 bg-muted px-2 py-0.5 rounded tracking-wider shrink-0">
-                      {product.id}
-                    </span>
-                  </div>
-                  <p className="text-xs text-muted-foreground truncate mt-0.5">
-                    {product.description || "Sem descrição"}
-                  </p>
-                </div>
-
-                {/* Category badges */}
-                <div className="hidden sm:flex items-center gap-1 shrink-0">
-                  {((product as any).categories?.length ? (product as any).categories : [product.category]).filter(Boolean).map((cat: string) => (
-                    <NeonBadge key={cat} color={getCategoryBadgeColor(cat)}>
-                      {cat}
-                    </NeonBadge>
-                  ))}
-                </div>
-
-                {/* Tasks + hours */}
-                <div className="hidden md:flex items-center gap-3 text-xs text-muted-foreground shrink-0">
-                  <span className="flex items-center gap-1">
-                    <ListChecks className="h-3.5 w-3.5" />
-                    {(product.tasks || []).length} tarefas
-                  </span>
-                  <span className="flex items-center gap-1">
-                    <Clock className="h-3.5 w-3.5" />
-                    {getTotalHours(product)}h
-                  </span>
-                </div>
-
-                {/* Price */}
-                <span className="text-[15px] font-bold text-emerald-600 shrink-0 min-w-[90px] text-right">
-                  {formatCurrency(product.finalPrice || 0)}
-                </span>
-
-                {/* Switch */}
-                <div className="flex items-center gap-1.5 shrink-0">
-                  <Switch
-                    checked={product.isActive}
-                    disabled={!canActivateProduct(product) && !product.isActive}
-                    onCheckedChange={(checked) =>
-                      handleToggleProductStatus(product, checked)
-                    }
-                    className="data-[state=checked]:bg-emerald-500"
-                  />
-                  <span
-                    className={`text-xs font-medium hidden lg:block ${product.isActive ? "text-emerald-600" : "text-slate-400"}`}
-                  >
-                    {product.isActive ? "Ativo" : "Inativo"}
-                  </span>
-                </div>
-
-                {/* Actions — "+" info panel, view, edit (standard icon-button recipe) */}
-                <div className="flex items-center gap-1 shrink-0">
-                  <TooltipProvider delayDuration={400}>
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            openInfoPanel(product);
+          /* ── LIST VIEW — tabela com checkbox + seleção em lote ── */
+          <>
+            <div className="overflow-x-auto">
+              <table className="w-full text-xs min-w-[900px]">
+                <thead>
+                  <tr className="border-b border-slate-200/60 dark:border-slate-700/60 bg-slate-50/60 dark:bg-slate-900/30">
+                    <th className="py-3 px-4 w-10">
+                      <input
+                        type="checkbox"
+                        checked={
+                          paginatedProducts.length > 0 &&
+                          paginatedProducts.every((p) => selectedProductIds.has(p.id))
+                        }
+                        onChange={(e) => {
+                          setSelectedProductIds((prev) => {
+                            const next = new Set(prev);
+                            if (e.target.checked) {
+                              paginatedProducts.forEach((p) => next.add(p.id));
+                            } else {
+                              paginatedProducts.forEach((p) => next.delete(p.id));
+                            }
+                            return next;
+                          });
+                        }}
+                        className="h-3.5 w-3.5 rounded border-slate-300"
+                      />
+                    </th>
+                    <th className="py-3 px-2 text-left text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-[0.04em]">Produto</th>
+                    <th className="py-3 px-2 text-left text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-[0.04em] hidden sm:table-cell">Categoria</th>
+                    <th className="py-3 px-2 text-left text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-[0.04em] hidden md:table-cell">Tarefas e tempo</th>
+                    <th className="py-3 px-2 text-right text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-[0.04em]">Preço</th>
+                    <th className="py-3 px-2 text-left text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-[0.04em]">Status</th>
+                    <th className="py-3 px-2 text-center text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-[0.04em]">Ações</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                  {paginatedProducts.map((product) => (
+                    <tr
+                      key={product.id}
+                      className="hover:bg-slate-50/70 dark:hover:bg-slate-800/40 transition-colors group"
+                    >
+                      <td className="py-3 px-4">
+                        <input
+                          type="checkbox"
+                          checked={selectedProductIds.has(product.id)}
+                          onChange={(e) => {
+                            setSelectedProductIds((prev) => {
+                              const next = new Set(prev);
+                              if (e.target.checked) next.add(product.id);
+                              else next.delete(product.id);
+                              return next;
+                            });
                           }}
-                          className="h-[21px] w-[21px] flex items-center justify-center rounded-full bg-[#2558FF] text-white shadow-[0_2px_6px_rgba(37,88,255,0.35)] hover:bg-gradient-to-br hover:from-[#2558FF] hover:via-[#6E2C96] hover:to-[#D92293] hover:text-white dark:hover:text-[#0a1628] hover:shadow-[0_2px_10px_rgba(110,44,150,0.5)] transition-all"
-                        >
-                          <Plus className="h-3 w-3" />
-                        </button>
-                      </TooltipTrigger>
-                      <TooltipContent className="text-xs font-medium">Mais informações</TooltipContent>
-                    </Tooltip>
-                  </TooltipProvider>
-                  <TooltipProvider delayDuration={400}>
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <button
-                          onClick={() => handleViewProduct(product)}
-                          className="h-[26px] w-[26px] flex items-center justify-center rounded-[8px] bg-white dark:bg-slate-800 border border-[#e8edf5] dark:border-slate-700 text-[#2558FF] dark:text-slate-500 shadow-[0_4px_10px_rgba(15,23,42,0.06)] hover:bg-gradient-to-br hover:from-[#2558FF] hover:via-[#6E2C96] hover:to-[#D92293] hover:text-white dark:hover:text-[#0a1628] hover:border-transparent hover:shadow-[0_8px_18px_rgba(15,23,42,0.18)] hover:-translate-y-px transition-all duration-150"
-                        >
-                          <Eye className="h-3.5 w-3.5" />
-                        </button>
-                      </TooltipTrigger>
-                      <TooltipContent className="text-xs font-medium">Ver detalhes</TooltipContent>
-                    </Tooltip>
-                  </TooltipProvider>
-                  <TooltipProvider delayDuration={400}>
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <button
-                          onClick={() => handleEditProduct(product)}
-                          className="h-[26px] w-[26px] flex items-center justify-center rounded-[8px] bg-white dark:bg-slate-800 border border-[#e8edf5] dark:border-slate-700 text-[#6E2C96] dark:text-slate-500 shadow-[0_4px_10px_rgba(15,23,42,0.06)] hover:bg-gradient-to-br hover:from-[#2558FF] hover:via-[#6E2C96] hover:to-[#D92293] hover:text-white dark:hover:text-[#0a1628] hover:border-transparent hover:shadow-[0_8px_18px_rgba(15,23,42,0.18)] hover:-translate-y-px transition-all duration-150"
-                        >
-                          <Pencil className="h-3.5 w-3.5" />
-                        </button>
-                      </TooltipTrigger>
-                      <TooltipContent className="text-xs font-medium">Editar produto</TooltipContent>
-                    </Tooltip>
-                  </TooltipProvider>
-                </div>
-              </div>
-            ))}
-          </div>
+                          className="h-3.5 w-3.5 rounded border-slate-300"
+                        />
+                      </td>
+                      <td className="py-3 px-2">
+                        <div className="flex items-center gap-3">
+                          <div className="relative shrink-0">
+                            {product.productImagePreview || (product as any).image ? (
+                              <img
+                                src={product.productImagePreview || (product as any).image}
+                                alt={product.name}
+                                className="h-10 w-10 rounded-xl object-cover border shadow-sm"
+                              />
+                            ) : (
+                              <div className="h-10 w-10 rounded-xl bg-linear-to-br from-blue-500 to-violet-600 flex items-center justify-center shadow-sm">
+                                <Package className="h-4 w-4 text-white" />
+                              </div>
+                            )}
+                            <div
+                              className={`absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full border-2 border-background ${
+                                product.isActive ? "bg-emerald-500" : "bg-slate-300"
+                              }`}
+                            />
+                          </div>
+                          <div className="min-w-0">
+                            <div className="flex items-center gap-1.5">
+                              <p className="text-[13px] font-semibold truncate leading-tight">
+                                {product.name}
+                              </p>
+                              <span className="text-[10px] font-mono font-bold text-slate-400 dark:text-slate-500 shrink-0">
+                                {(product as any).productCode || product.id}
+                              </span>
+                            </div>
+                            <p className="text-[11px] text-muted-foreground truncate max-w-[320px]">
+                              {product.description || "Sem descrição"}
+                            </p>
+                          </div>
+                        </div>
+                      </td>
+                      <td className="py-3 px-2 hidden sm:table-cell">
+                        {((product as any).categories?.length ? (product as any).categories : [product.category])
+                          .filter(Boolean)
+                          .slice(0, 1)
+                          .map((cat: string) => (
+                            <NeonBadge key={cat} color={getCategoryBadgeColor(cat)}>
+                              {cat}
+                            </NeonBadge>
+                          ))}
+                      </td>
+                      <td className="py-3 px-2 hidden md:table-cell">
+                        <div className="flex items-center gap-3 text-[11px] text-muted-foreground">
+                          <span className="flex items-center gap-1">
+                            <ListChecks className="h-3.5 w-3.5" />
+                            {(product.tasks || []).length} tarefas
+                          </span>
+                          <span className="flex items-center gap-1">
+                            <Clock className="h-3.5 w-3.5" />
+                            {getTotalHours(product)}h
+                          </span>
+                        </div>
+                      </td>
+                      <td className="py-3 px-2 text-right">
+                        <span className="text-[13px] font-bold text-emerald-600 whitespace-nowrap">
+                          {formatCurrency(product.finalPrice || 0)}
+                        </span>
+                      </td>
+                      <td className="py-3 px-2">
+                        <div className="flex items-center gap-1.5">
+                          <Switch
+                            checked={product.isActive}
+                            disabled={!canActivateProduct(product) && !product.isActive}
+                            onCheckedChange={(checked) => handleToggleProductStatus(product, checked)}
+                            className="data-[state=checked]:bg-emerald-500"
+                          />
+                          <span
+                            className={`text-[11px] font-medium hidden lg:block ${product.isActive ? "text-emerald-600" : "text-slate-400"}`}
+                          >
+                            {product.isActive ? "Ativo" : "Inativo"}
+                          </span>
+                        </div>
+                      </td>
+                      <td className="py-3 px-2">
+                        <div className="flex items-center justify-center gap-1">
+                          <TooltipProvider delayDuration={400}>
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <button
+                                  onClick={() => handleViewProduct(product)}
+                                  className="h-[26px] w-[26px] flex items-center justify-center rounded-[8px] bg-white dark:bg-slate-800 border border-[#e8edf5] dark:border-slate-700 text-[#2558FF] dark:text-slate-500 shadow-[0_4px_10px_rgba(15,23,42,0.06)] hover:bg-gradient-to-br hover:from-[#2558FF] hover:via-[#6E2C96] hover:to-[#D92293] hover:text-white dark:hover:text-[#0a1628] hover:border-transparent hover:shadow-[0_8px_18px_rgba(15,23,42,0.18)] hover:-translate-y-px transition-all duration-150"
+                                >
+                                  <Eye className="h-3.5 w-3.5" />
+                                </button>
+                              </TooltipTrigger>
+                              <TooltipContent className="text-xs font-medium">Ver detalhes</TooltipContent>
+                            </Tooltip>
+                          </TooltipProvider>
+                          <TooltipProvider delayDuration={400}>
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <button
+                                  onClick={() => handleEditProduct(product)}
+                                  className="h-[26px] w-[26px] flex items-center justify-center rounded-[8px] bg-white dark:bg-slate-800 border border-[#e8edf5] dark:border-slate-700 text-[#6E2C96] dark:text-slate-500 shadow-[0_4px_10px_rgba(15,23,42,0.06)] hover:bg-gradient-to-br hover:from-[#2558FF] hover:via-[#6E2C96] hover:to-[#D92293] hover:text-white dark:hover:text-[#0a1628] hover:border-transparent hover:shadow-[0_8px_18px_rgba(15,23,42,0.18)] hover:-translate-y-px transition-all duration-150"
+                                >
+                                  <Pencil className="h-3.5 w-3.5" />
+                                </button>
+                              </TooltipTrigger>
+                              <TooltipContent className="text-xs font-medium">Editar produto</TooltipContent>
+                            </Tooltip>
+                          </TooltipProvider>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Barra de seleção em lote */}
+            <div className="flex items-center gap-3 px-4 py-2.5 border-t border-slate-200/70 dark:border-slate-700/60 bg-slate-50/60 dark:bg-slate-900/30">
+              <span className="text-xs text-slate-500 dark:text-slate-400">
+                {selectedProductIds.size} selecionado{selectedProductIds.size !== 1 ? "s" : ""}
+              </span>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={selectedProductIds.size === 0}
+                    className="h-7 text-xs gap-1"
+                  >
+                    Ações em lote
+                    <ChevronDown className="h-3 w-3" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="start">
+                  <DropdownMenuItem
+                    onClick={async () => {
+                      let skipped = 0;
+                      for (const id of selectedProductIds) {
+                        const p = safeProducts.find((pr) => pr.id === id);
+                        if (!p || p.isActive) continue;
+                        const summary = getContractabilitySummary(p);
+                        if (summary && !summary.isContractable) {
+                          skipped++;
+                          continue;
+                        }
+                        await updateProduct(p.id, {
+                          ...p,
+                          isActive: true,
+                          updatedAt: new Date().toISOString(),
+                        });
+                      }
+                      setSelectedProductIds(new Set());
+                      toast({
+                        title: "Produtos ativados",
+                        description: skipped
+                          ? `${skipped} produto(s) sem tarefas vinculadas não foram ativados.`
+                          : undefined,
+                      });
+                    }}
+                  >
+                    <CheckCircle2 className="h-3.5 w-3.5 mr-2 text-emerald-500" />
+                    Ativar selecionados
+                  </DropdownMenuItem>
+                  <DropdownMenuItem
+                    onClick={async () => {
+                      for (const id of selectedProductIds) {
+                        const p = safeProducts.find((pr) => pr.id === id);
+                        if (!p || !p.isActive) continue;
+                        await updateProduct(p.id, {
+                          ...p,
+                          isActive: false,
+                          updatedAt: new Date().toISOString(),
+                        });
+                      }
+                      setSelectedProductIds(new Set());
+                      toast({ title: "Produtos desativados" });
+                    }}
+                  >
+                    <XCircle className="h-3.5 w-3.5 mr-2 text-slate-400" />
+                    Desativar selecionados
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </div>
+          </>
         ) : (
           /* ── GRID VIEW ── */
           <div className="p-4">
@@ -2360,7 +3351,7 @@ export default function AdminProdutosPage() {
                     {/* Top: ID + Status */}
                     <div className="absolute top-2.5 left-3 right-3 flex items-center justify-between">
                       <span className="text-[10px] font-mono font-bold bg-black/50 backdrop-blur-sm text-white/90 px-2 py-0.5 rounded-md tracking-wide border border-white/10">
-                        {product.id}
+                        {(product as any).productCode || product.id}
                       </span>
                       <span
                         className={`inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full backdrop-blur-sm border ${
@@ -2919,186 +3910,6 @@ export default function AdminProdutosPage() {
         )}
       </Card>
 
-      {/* "+" info panel — task breakdown, categories/tags and pricing composition
-          already loaded on each product (no extra request needed). */}
-      <SlidePanel
-        open={infoPanelOpen}
-        onClose={() => setInfoPanelOpen(false)}
-        title={
-          infoPanelProduct && (
-            <div className="flex items-center gap-3">
-              {infoPanelProduct.productImagePreview || (infoPanelProduct as any).image ? (
-                <img
-                  src={infoPanelProduct.productImagePreview || (infoPanelProduct as any).image}
-                  alt={infoPanelProduct.name}
-                  className="h-9 w-9 rounded-lg object-cover border border-white/20 shrink-0"
-                />
-              ) : (
-                <div className="h-9 w-9 rounded-lg bg-white/15 flex items-center justify-center shrink-0">
-                  <Package className="h-4 w-4 text-white" />
-                </div>
-              )}
-              <div className="min-w-0">
-                <p className="truncate">{infoPanelProduct.name}</p>
-              </div>
-            </div>
-          )
-        }
-        subtitle={
-          infoPanelProduct &&
-          `${infoPanelProduct.id} · ${infoPanelProduct.isActive ? "Ativo" : "Inativo"}`
-        }
-      >
-        {infoPanelProduct && (
-          <div className="flex-1 overflow-y-auto p-5">
-            <div className="max-w-3xl mx-auto space-y-6">
-              {/* Dados do produto */}
-              <div>
-                <h3 className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-3">
-                  Dados do produto
-                </h3>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div className="rounded-xl border border-slate-200 dark:border-slate-700 p-3.5 sm:col-span-2">
-                    <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide mb-1.5">
-                      Categorias
-                    </p>
-                    <div className="flex flex-wrap gap-1.5">
-                      {(((infoPanelProduct as any).categories?.length
-                        ? (infoPanelProduct as any).categories
-                        : [infoPanelProduct.category]
-                      )
-                        .filter(Boolean)
-                        .map((cat: string) => (
-                          <NeonBadge key={cat} color={getCategoryBadgeColor(cat)}>
-                            {cat}
-                          </NeonBadge>
-                        )))}
-                    </div>
-                  </div>
-                  {((infoPanelProduct.subcategories || []).length > 0) && (
-                    <div className="rounded-xl border border-slate-200 dark:border-slate-700 p-3.5 sm:col-span-2">
-                      <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide mb-1.5">
-                        Subcategorias
-                      </p>
-                      <div className="flex flex-wrap gap-1.5">
-                        {(infoPanelProduct.subcategories || []).map((sub) => (
-                          <NeonBadge key={sub} color="slate">
-                            {sub}
-                          </NeonBadge>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                  {((infoPanelProduct.tags || []).length > 0) && (
-                    <div className="rounded-xl border border-slate-200 dark:border-slate-700 p-3.5 sm:col-span-2">
-                      <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide mb-1.5">
-                        Tags
-                      </p>
-                      <div className="flex flex-wrap gap-1.5">
-                        {(infoPanelProduct.tags || []).map((tag) => (
-                          <NeonBadge key={tag} color="cyan">
-                            {tag}
-                          </NeonBadge>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                  <div className="rounded-xl border border-slate-200 dark:border-slate-700 p-3.5">
-                    <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide mb-1.5">
-                      Prazo de entrega
-                    </p>
-                    <p className="flex items-center gap-1.5 text-sm text-slate-700 dark:text-slate-300">
-                      <Clock className="h-3.5 w-3.5 text-slate-400 flex-shrink-0" />
-                      {infoPanelProduct.deliveryDays ? `${infoPanelProduct.deliveryDays} dias` : "—"}
-                    </p>
-                  </div>
-                  <div className="rounded-xl border border-slate-200 dark:border-slate-700 p-3.5">
-                    <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide mb-1.5">
-                      Recorrência
-                    </p>
-                    <p className="text-sm text-slate-700 dark:text-slate-300">
-                      {(infoPanelProduct as any).recurrence || "Contrato único"}
-                    </p>
-                  </div>
-                </div>
-              </div>
-
-              {/* Tarefas */}
-              <div>
-                <h3 className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-3">
-                  Tarefas
-                </h3>
-                <p className="text-sm text-slate-600 dark:text-slate-300 mb-3">
-                  <span className="text-2xl font-bold text-slate-800 dark:text-slate-100 mr-2">
-                    {(infoPanelProduct.tasks || []).length}
-                  </span>
-                  tarefa{(infoPanelProduct.tasks || []).length !== 1 ? "s" : ""} · {getTotalHours(infoPanelProduct)}h estimadas
-                </p>
-                {(infoPanelProduct.tasks || []).length > 0 ? (
-                  <div className="space-y-2">
-                    {(infoPanelProduct.tasks || []).map((task) => {
-                      const hours = (task.steps || []).reduce(
-                        (sum, s) => sum + (s.estimatedHours || 0),
-                        0,
-                      );
-                      return (
-                        <div
-                          key={task.id}
-                          className="flex items-center justify-between rounded-xl border border-slate-200 dark:border-slate-700 px-3.5 py-2.5"
-                        >
-                          <div className="min-w-0">
-                            <p className="text-sm font-medium text-slate-700 dark:text-slate-300 truncate">
-                              {task.name}
-                            </p>
-                            <p className="text-xs text-slate-400">
-                              {(task.steps || []).length} etapa{(task.steps || []).length !== 1 ? "s" : ""} · {hours}h
-                            </p>
-                          </div>
-                          <span className="flex-shrink-0 ml-3 text-xs font-bold text-emerald-600">
-                            {formatCurrency(task.calculatedCost || 0)}
-                          </span>
-                        </div>
-                      );
-                    })}
-                  </div>
-                ) : (
-                  <p className="text-xs text-slate-400">Nenhuma tarefa cadastrada para este produto.</p>
-                )}
-              </div>
-
-              {/* Precificação */}
-              <div>
-                <h3 className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-3">
-                  Precificação
-                </h3>
-                <div className="rounded-xl border border-slate-200 dark:border-slate-700 divide-y divide-slate-100 dark:divide-slate-800">
-                  {[
-                    { label: "Custo das tarefas", value: infoPanelProduct.totalTasksCost },
-                    { label: "Taxa de qualificação", value: infoPanelProduct.qualificationFee },
-                    { label: "Subtotal", value: infoPanelProduct.subtotal },
-                    { label: "Impostos", value: infoPanelProduct.taxes },
-                    { label: "Taxa operacional", value: infoPanelProduct.operationalFee },
-                    { label: "Comissão do parceiro", value: infoPanelProduct.partnerCommission },
-                  ].map((row) => (
-                    <div key={row.label} className="flex items-center justify-between px-3.5 py-2 text-sm">
-                      <span className="text-slate-500 dark:text-slate-400">{row.label}</span>
-                      <span className="font-medium text-slate-700 dark:text-slate-300">
-                        {formatCurrency(row.value || 0)}
-                      </span>
-                    </div>
-                  ))}
-                  <div className="flex items-center justify-between px-3.5 py-2.5 bg-slate-50 dark:bg-slate-800/60">
-                    <span className="text-sm font-semibold text-slate-700 dark:text-slate-200">Preço final</span>
-                    <span className="text-base font-bold text-emerald-600">
-                      {formatCurrency(infoPanelProduct.finalPrice || 0)}
-                    </span>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
-      </SlidePanel>
 
       {/* Advanced Filters Modal */}
       {isFilterModalOpen &&
@@ -3579,6 +4390,45 @@ export default function AdminProdutosPage() {
         }
         confirmText={toggleConfirmation.newStatus ? "Ativar" : "Desativar"}
         destructive={!toggleConfirmation.newStatus}
+      />
+
+      {/* ConfirmationDialog for restoring a product version from history */}
+      <ConfirmationDialog
+        open={versionPendingRestore !== null}
+        onClose={() => setVersionPendingRestore(null)}
+        onConfirm={() => {
+          if (versionPendingRestore) handleRestoreVersion(versionPendingRestore.id);
+        }}
+        title="Restaurar versão anterior"
+        message={
+          <>
+            Tem certeza que deseja restaurar o produto pra como estava em{" "}
+            <strong>
+              {versionPendingRestore
+                ? new Date(versionPendingRestore.created_at).toLocaleString("pt-BR")
+                : ""}
+            </strong>
+            {versionPendingRestore?.name ? ` ("${versionPendingRestore.name}")` : ""}? As alterações
+            feitas depois desse momento serão substituídas — mas fica salvo um novo snapshot do
+            estado atual antes de restaurar, então dá pra desfazer se precisar.
+          </>
+        }
+        confirmText="Restaurar"
+        destructive
+      />
+
+      {/* ConfirmationDialog before actually saving the product form */}
+      <ConfirmationDialog
+        open={isSaveConfirmOpen}
+        onClose={() => setIsSaveConfirmOpen(false)}
+        onConfirm={() => {
+          setIsSaveConfirmOpen(false);
+          handleSaveProduct();
+        }}
+        title="Salvar alterações"
+        message={`Tem certeza que deseja salvar as alterações em "${productFormData.name || "este produto"}"? Um snapshot do estado anterior fica salvo no histórico, então dá pra reverter depois se precisar.`}
+        confirmText="Salvar"
+        destructive={false}
       />
 
       {/* ProductSheet, QuestionnaireSheet, and PricingCalculatorModal are now inline below */}
@@ -4482,20 +5332,57 @@ export default function AdminProdutosPage() {
           navigate("/admin/produtos", { replace: true });
         }}
         hideHeader
+        pin={
+          selectedProduct
+            ? {
+                id: `produtos-view-${selectedProduct.id}`,
+                label: `Ver: ${selectedProduct.name}`,
+                icon: Eye,
+                path: "/admin/produtos",
+                activateKey: `view:${selectedProduct.id}`,
+              }
+            : undefined
+        }
       >
         <div className="flex flex-col flex-1 min-h-0 w-full">
           {selectedProduct && (
             <>
-              <div
-                className="flex items-center justify-between px-5 py-3 flex-shrink-0"
-                style={{ background: "var(--brand-gradient, linear-gradient(to right, #0a1628, #1e3a8a, #0a1628))" }}
-              >
-                <div className="min-w-0 flex-1 text-sm font-bold text-white truncate">
-                  {selectedProduct.name}
-                  <p className="text-[11px] font-normal text-white/60 mt-0.5 truncate">
-                    {selectedProduct.category}
-                    {selectedProduct.recurrence ? ` · ${selectedProduct.recurrence}` : ""} · {formatCurrency(selectedProduct.finalPrice || 0)}
-                  </p>
+              <div className="relative overflow-hidden flex-shrink-0 rounded-2xl mx-3 mt-3 mb-2 shadow-sm">
+                {/* Mesmo gradiente oficial dos banners da plataforma
+                    (StandardPageBanner) — navy → roxo → magenta vibrante,
+                    não o genérico simétrico que esmaecia de volta pro
+                    escuro no canto direito. */}
+                <div
+                  className="absolute inset-0"
+                  style={{ background: "linear-gradient(90deg, #0a1628 0%, #3b1f6e 50%, #c81a7f 100%)" }}
+                />
+                <div
+                  className="absolute inset-0 opacity-20 pointer-events-none"
+                  style={{
+                    backgroundImage:
+                      "radial-gradient(circle at 88% 15%, rgba(255,255,255,0.35), transparent 45%)",
+                  }}
+                />
+                <div className="relative z-10 flex items-center justify-between pl-6 pr-16 py-4">
+                <div className="min-w-0 flex-1 flex items-center gap-3">
+                  {selectedProduct.productImagePreview || (selectedProduct as any).image ? (
+                    <img
+                      src={selectedProduct.productImagePreview || (selectedProduct as any).image}
+                      alt={selectedProduct.name}
+                      className="h-12 w-12 rounded-xl object-cover border border-white/20 shrink-0"
+                    />
+                  ) : (
+                    <div className="h-12 w-12 rounded-xl bg-white/15 flex items-center justify-center shrink-0">
+                      <Package className="h-5 w-5 text-white" />
+                    </div>
+                  )}
+                  <div className="min-w-0 text-lg font-bold text-white truncate">
+                    {selectedProduct.name}
+                    <p className="text-[13px] font-normal text-white/60 mt-0.5 truncate">
+                      {selectedProduct.category}
+                      {selectedProduct.recurrence ? ` · ${selectedProduct.recurrence}` : ""} · {formatCurrency(selectedProduct.finalPrice || 0)}
+                    </p>
+                  </div>
                 </div>
                 <div className="flex items-center gap-2 flex-shrink-0">
                   <CopyLinkButton />
@@ -4509,133 +5396,63 @@ export default function AdminProdutosPage() {
                     <X className="h-4 w-4" />
                   </button>
                 </div>
+                </div>
               </div>
 
               <div className="flex-1 overflow-auto">
-                <Tabs defaultValue="overview" className="space-y-0">
-                  {/* Sticky tab navigation */}
-                  <div className="sticky top-0 z-10 bg-background border-b border-slate-200 dark:border-slate-700 px-5">
-                    <TabsList className="bg-transparent p-0 h-10 border-0 rounded-none gap-0 w-full justify-start">
-                      <TabsTrigger
-                        value="overview"
-                        className="relative h-10 px-4 rounded-none bg-transparent border-0 shadow-none text-xs font-medium text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200 data-[state=active]:text-blue-600 data-[state=active]:bg-transparent data-[state=active]:shadow-none gap-1.5 after:absolute after:bottom-0 after:inset-x-0 after:h-0.5 after:bg-blue-500 after:scale-x-0 data-[state=active]:after:scale-x-100 after:transition-transform"
-                      >
-                        <Eye className="h-3.5 w-3.5" />
-                        Visão Geral
-                      </TabsTrigger>
-                      <TabsTrigger
-                        value="tasks"
-                        className="relative h-10 px-4 rounded-none bg-transparent border-0 shadow-none text-xs font-medium text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200 data-[state=active]:text-blue-600 data-[state=active]:bg-transparent data-[state=active]:shadow-none gap-1.5 after:absolute after:bottom-0 after:inset-x-0 after:h-0.5 after:bg-blue-500 after:scale-x-0 data-[state=active]:after:scale-x-100 after:transition-transform"
-                      >
-                        <Layers className="h-3.5 w-3.5" />
-                        Tarefas
-                        {productCatalogTasks.length > 0 && (
-                          <span className="ml-0.5 h-4 min-w-4 px-1 rounded-full bg-indigo-100 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 text-[10px] font-bold flex items-center justify-center">
-                            {productCatalogTasks.length}
-                          </span>
-                        )}
-                      </TabsTrigger>
-                      <TabsTrigger
-                        value="pricing"
-                        className="relative h-10 px-4 rounded-none bg-transparent border-0 shadow-none text-xs font-medium text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200 data-[state=active]:text-blue-600 data-[state=active]:bg-transparent data-[state=active]:shadow-none gap-1.5 after:absolute after:bottom-0 after:inset-x-0 after:h-0.5 after:bg-blue-500 after:scale-x-0 data-[state=active]:after:scale-x-100 after:transition-transform"
-                      >
-                        <DollarSign className="h-3.5 w-3.5" />
-                        Preços
-                      </TabsTrigger>
-                      <TabsTrigger
-                        value="questionnaire"
-                        className="relative h-10 px-4 rounded-none bg-transparent border-0 shadow-none text-xs font-medium text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200 data-[state=active]:text-blue-600 data-[state=active]:bg-transparent data-[state=active]:shadow-none gap-1.5 after:absolute after:bottom-0 after:inset-x-0 after:h-0.5 after:bg-blue-500 after:scale-x-0 data-[state=active]:after:scale-x-100 after:transition-transform"
-                      >
-                        <FileQuestion className="h-3.5 w-3.5" />
-                        Questionário
-                      </TabsTrigger>
-                      <TabsTrigger
-                        value="nomad-tests"
-                        className="relative h-10 px-4 rounded-none bg-transparent border-0 shadow-none text-xs font-medium text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200 data-[state=active]:text-blue-600 data-[state=active]:bg-transparent data-[state=active]:shadow-none gap-1.5 after:absolute after:bottom-0 after:inset-x-0 after:h-0.5 after:bg-blue-500 after:scale-x-0 data-[state=active]:after:scale-x-100 after:transition-transform"
-                      >
-                        <FlaskConical className="h-3.5 w-3.5" />
-                        Testes
-                        {((selectedProduct as any).nomadTests || []).filter(
-                          (t: any) => t.isActive,
-                        ).length > 0 && (
-                          <span className="ml-0.5 h-4 min-w-4 px-1 rounded-full bg-violet-100 dark:bg-violet-900/40 text-violet-600 dark:text-violet-400 text-[10px] font-bold flex items-center justify-center">
-                            {
-                              (
-                                (selectedProduct as any).nomadTests || []
-                              ).filter((t: any) => t.isActive).length
-                            }
-                          </span>
-                        )}
-                      </TabsTrigger>
-                      <TabsTrigger
-                        value="circuito"
-                        className="relative h-10 px-4 rounded-none bg-transparent border-0 shadow-none text-xs font-medium text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200 data-[state=active]:text-blue-600 data-[state=active]:bg-transparent data-[state=active]:shadow-none gap-1.5 after:absolute after:bottom-0 after:inset-x-0 after:h-0.5 after:bg-blue-500 after:scale-x-0 data-[state=active]:after:scale-x-100 after:transition-transform"
-                      >
-                        <Route className="h-3.5 w-3.5" />
-                        Circuito
-                      </TabsTrigger>
-                      <TabsTrigger
-                        value="checklist"
-                        className="relative h-10 px-4 rounded-none bg-transparent border-0 shadow-none text-xs font-medium text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200 data-[state=active]:text-blue-600 data-[state=active]:bg-transparent data-[state=active]:shadow-none gap-1.5 after:absolute after:bottom-0 after:inset-x-0 after:h-0.5 after:bg-blue-500 after:scale-x-0 data-[state=active]:after:scale-x-100 after:transition-transform"
-                      >
-                        <ClipboardCheck className="h-3.5 w-3.5" />
-                        Checklist
-                        {((selectedProduct as any).nomadTests || []).filter(
-                          (t: any) => t.qualificationChecklist,
-                        ).length > 0 && (
-                          <span className="ml-0.5 h-4 min-w-4 px-1 rounded-full bg-teal-100 dark:bg-teal-900/40 text-teal-600 dark:text-teal-400 text-[10px] font-bold flex items-center justify-center">
-                            {
-                              (
-                                (selectedProduct as any).nomadTests || []
-                              ).filter((t: any) => t.qualificationChecklist)
-                                .length
-                            }
-                          </span>
-                        )}
-                      </TabsTrigger>
-                      <TabsTrigger
-                        value="apresentacao"
-                        className="relative h-10 px-4 rounded-none bg-transparent border-0 shadow-none text-xs font-medium text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200 data-[state=active]:text-blue-600 data-[state=active]:bg-transparent data-[state=active]:shadow-none gap-1.5 after:absolute after:bottom-0 after:inset-x-0 after:h-0.5 after:bg-blue-500 after:scale-x-0 data-[state=active]:after:scale-x-100 after:transition-transform"
-                      >
-                        <LayoutTemplate className="h-3.5 w-3.5" />
-                        Apresentação
-                        {(selectedProduct as any).presentation ? (
-                          <span className="ml-0.5 h-4 min-w-4 px-1 rounded-full bg-emerald-100 dark:bg-emerald-900/40 text-emerald-600 dark:text-emerald-400 text-[10px] font-bold flex items-center justify-center">
-                            ✓
-                          </span>
-                        ) : (
-                          <span className="ml-0.5 h-4 min-w-4 px-1 rounded-full bg-slate-100 text-slate-400 text-[10px] font-bold flex items-center justify-center">
-                            !
-                          </span>
-                        )}
-                      </TabsTrigger>
-                      <TabsTrigger
-                        value="nomades-habilitados"
-                        className="relative h-10 px-4 rounded-none bg-transparent border-0 shadow-none text-xs font-medium text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200 data-[state=active]:text-blue-600 data-[state=active]:bg-transparent data-[state=active]:shadow-none gap-1.5 after:absolute after:bottom-0 after:inset-x-0 after:h-0.5 after:bg-blue-500 after:scale-x-0 data-[state=active]:after:scale-x-100 after:transition-transform"
-                      >
-                        <Users className="h-3.5 w-3.5" />
-                        Nômades e Desempenho
-                      </TabsTrigger>
-                      <TabsTrigger
-                        value="complementares"
-                        className="relative h-10 px-4 rounded-none bg-transparent border-0 shadow-none text-xs font-medium text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200 data-[state=active]:text-blue-600 data-[state=active]:bg-transparent data-[state=active]:shadow-none gap-1.5 after:absolute after:bottom-0 after:inset-x-0 after:h-0.5 after:bg-blue-500 after:scale-x-0 data-[state=active]:after:scale-x-100 after:transition-transform"
-                      >
-                        <Link2 className="h-3.5 w-3.5" />
-                        Complementares
-                        {(
-                          (selectedProduct as any).complementaryProductIds || []
-                        ).length > 0 && (
-                          <span className="ml-0.5 h-4 min-w-4 px-1 rounded-full bg-indigo-100 dark:bg-indigo-900/40 text-indigo-600 dark:text-indigo-400 text-[10px] font-bold flex items-center justify-center">
-                            {
-                              (
-                                (selectedProduct as any)
-                                  .complementaryProductIds || []
-                              ).length
-                            }
-                          </span>
-                        )}
-                      </TabsTrigger>
-                    </TabsList>
+                <Tabs value={viewActiveTab} onValueChange={setViewActiveTab} className="space-y-0">
+                  {/* Sticky tab navigation — responsiva, colapsa em "Mais N" */}
+                  <div className="sticky top-0 z-10 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-700 px-5">
+                    <OverflowTabBar
+                      active={viewActiveTab}
+                      onChange={setViewActiveTab}
+                      tabs={[
+                        { value: "overview", label: "Visão Geral", icon: Eye },
+                        {
+                          value: "tasks",
+                          label: "Tarefas",
+                          icon: Layers,
+                          badge: productCatalogTasks.length > 0 ? productCatalogTasks.length : undefined,
+                        },
+                        { value: "pricing", label: "Preços", icon: DollarSign },
+                        { value: "questionnaire", label: "Questionário", icon: FileQuestion },
+                        {
+                          value: "nomad-tests",
+                          label: "Testes",
+                          icon: FlaskConical,
+                          badge:
+                            ((selectedProduct as any).nomadTests || []).filter((t: any) => t.isActive).length > 0
+                              ? ((selectedProduct as any).nomadTests || []).filter((t: any) => t.isActive).length
+                              : undefined,
+                        },
+                        { value: "circuito", label: "Circuito", icon: Route },
+                        {
+                          value: "checklist",
+                          label: "Checklist",
+                          icon: ClipboardCheck,
+                          badge:
+                            ((selectedProduct as any).nomadTests || []).filter((t: any) => t.qualificationChecklist).length > 0
+                              ? ((selectedProduct as any).nomadTests || []).filter((t: any) => t.qualificationChecklist).length
+                              : undefined,
+                        },
+                        {
+                          value: "apresentacao",
+                          label: "Apresentação",
+                          icon: LayoutTemplate,
+                          badge: (selectedProduct as any).presentation ? "✓" : "!",
+                        },
+                        { value: "nomades-habilitados", label: "Desempenho", icon: Users },
+                        {
+                          value: "complementares",
+                          label: "Complementares",
+                          icon: Link2,
+                          badge:
+                            ((selectedProduct as any).complementaryProductIds || []).length > 0
+                              ? ((selectedProduct as any).complementaryProductIds || []).length
+                              : undefined,
+                        },
+                      ]}
+                    />
                   </div>
                   <div className="p-5">
                     {/* ── VISÃO GERAL ── */}
@@ -4644,13 +5461,15 @@ export default function AdminProdutosPage() {
                       <div className="flex gap-3">
                         {/* Left: square main image */}
                         <div
-                          className="relative rounded-xl overflow-hidden border border-slate-200 dark:border-slate-700 shadow-sm bg-gradient-to-br from-blue-500 to-violet-600 shrink-0"
-                          style={{ width: 160, height: 160 }}
+                          className="relative rounded-2xl overflow-hidden border border-slate-200 dark:border-slate-700 shadow-sm bg-gradient-to-br from-blue-500 to-violet-600 shrink-0"
+                          style={{ width: 192, height: 192 }}
                         >
-                          {selectedProduct.productImagePreview ||
+                          {activeGalleryImage ||
+                          selectedProduct.productImagePreview ||
                           (selectedProduct as any).image ? (
                             <img
                               src={
+                                activeGalleryImage ||
                                 selectedProduct.productImagePreview ||
                                 (selectedProduct as any).image
                               }
@@ -4666,15 +5485,15 @@ export default function AdminProdutosPage() {
                           {/* Status pill */}
                           <div className="absolute top-2 left-2">
                             <span
-                              className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold backdrop-blur-sm ${selectedProduct.isActive ? "bg-emerald-500/90 text-white" : "bg-red-500/90 text-white"}`}
+                              className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold backdrop-blur-sm ${selectedProduct.isActive ? "bg-emerald-500/90 text-white" : "bg-red-500/90 text-white"}`}
                             >
                               <span className="h-1.5 w-1.5 rounded-full bg-white/80 inline-block" />
                               {selectedProduct.isActive ? "Ativo" : "Inativo"}
                             </span>
                           </div>
                           {/* Price overlay bottom */}
-                          <div className="absolute bottom-0 left-0 right-0 px-2 py-1.5">
-                            <p className="text-white font-bold text-xs drop-shadow">
+                          <div className="absolute bottom-0 left-0 right-0 px-3 py-2">
+                            <p className="text-white font-bold text-sm drop-shadow">
                               {formatCurrency(selectedProduct.finalPrice || 0)}
                             </p>
                           </div>
@@ -4683,7 +5502,7 @@ export default function AdminProdutosPage() {
                         {/* Right: gallery thumbnails (vertical) + metrics */}
                         <div className="flex-1 flex flex-col gap-2 min-w-0">
                           {/* Gallery column — real portfolio images */}
-                          <div className="flex gap-1.5 flex-wrap">
+                          <div className="flex gap-2 flex-wrap">
                             {(() => {
                               const coverUrl =
                                 selectedProduct.productImagePreview ||
@@ -4706,17 +5525,20 @@ export default function AdminProdutosPage() {
                                       ? [coverUrl]
                                       : [];
                               const displayUrls = allUrls.slice(0, 4);
+                              const currentMain = activeGalleryImage || coverUrl;
                               return displayUrls.map((url, i) => (
-                                <div
+                                <button
                                   key={i}
-                                  className={`shrink-0 h-[44px] w-[44px] rounded-lg overflow-hidden shadow-sm cursor-pointer transition-all ${i === 0 ? "border-2 border-blue-500" : "border border-slate-200 dark:border-slate-700 hover:border-blue-400 opacity-80 hover:opacity-100"}`}
+                                  type="button"
+                                  onClick={() => setActiveGalleryImage(url)}
+                                  className={`shrink-0 h-14 w-14 rounded-xl overflow-hidden cursor-pointer transition-all ${url === currentMain ? "border-2 border-blue-500 shadow-sm" : "border border-slate-200 dark:border-slate-700 hover:border-blue-400"}`}
                                 >
                                   <img
                                     src={url}
                                     alt={`Imagem ${i + 1}`}
                                     className="w-full h-full object-cover"
                                   />
-                                </div>
+                                </button>
                               ));
                             })()}
                             <button
@@ -4724,51 +5546,60 @@ export default function AdminProdutosPage() {
                                 setIsViewSheetOpen(false);
                                 handleEditProduct(selectedProduct);
                               }}
-                              className="shrink-0 h-[44px] w-[44px] rounded-lg border-2 border-dashed border-slate-300 dark:border-slate-600 flex flex-col items-center justify-center gap-0.5 hover:border-blue-400 hover:bg-blue-50/50 dark:hover:bg-blue-950/20 transition-colors text-slate-400 hover:text-blue-500"
+                              className="shrink-0 h-14 w-14 rounded-xl border-2 border-dashed border-slate-300 dark:border-slate-600 flex flex-col items-center justify-center gap-0.5 hover:border-blue-400 hover:bg-blue-50/50 dark:hover:bg-blue-950/20 transition-colors text-slate-400 hover:text-blue-500"
                               title="Gerenciar imagens"
                             >
                               <ImageIcon className="h-3.5 w-3.5" />
-                              <span className="text-[9px] font-medium leading-none">
+                              <span className="text-[10px] font-medium leading-none">
                                 + foto
                               </span>
                             </button>
                           </div>
 
                           {/* Compact metrics */}
-                          <div className="grid grid-cols-3 gap-1.5 flex-1">
-                            <div className="border rounded-lg p-2 text-center bg-slate-50/80 dark:bg-slate-800/50 flex flex-col justify-center">
-                              <p className="text-[9px] font-medium text-muted-foreground uppercase tracking-wide mb-0.5">
-                                Preço
-                              </p>
-                              <p className="font-bold text-emerald-600 text-xs leading-tight">
-                                {formatCurrency(
-                                  selectedProduct.finalPrice || 0,
-                                )}
-                              </p>
+                          <div className="grid grid-cols-3 gap-2">
+                            <div className="border border-slate-200 dark:border-slate-700 rounded-2xl px-3.5 py-2 h-14 bg-white dark:bg-slate-800/50 flex items-center gap-2.5">
+                              <Tag className="h-4 w-4 text-slate-400 shrink-0" />
+                              <div className="min-w-0">
+                                <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide leading-none mb-1">
+                                  Preço
+                                </p>
+                                <p className="font-bold text-emerald-600 text-sm leading-tight truncate">
+                                  {formatCurrency(
+                                    selectedProduct.finalPrice || 0,
+                                  )}
+                                </p>
+                              </div>
                             </div>
-                            <div className="border rounded-lg p-2 text-center bg-slate-50/80 dark:bg-slate-800/50 flex flex-col justify-center">
-                              <p className="text-[9px] font-medium text-muted-foreground uppercase tracking-wide mb-0.5">
-                                Recorrência
-                              </p>
-                              <p className="font-semibold text-xs leading-tight">
-                                {selectedProduct.recurrence || "—"}
-                              </p>
+                            <div className="border border-slate-200 dark:border-slate-700 rounded-2xl px-3.5 py-2 h-14 bg-white dark:bg-slate-800/50 flex items-center gap-2.5">
+                              <RefreshCw className="h-4 w-4 text-slate-400 shrink-0" />
+                              <div className="min-w-0">
+                                <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide leading-none mb-1">
+                                  Recorrência
+                                </p>
+                                <p className="font-semibold text-sm leading-tight truncate">
+                                  {selectedProduct.recurrence || "—"}
+                                </p>
+                              </div>
                             </div>
-                            <div className="border rounded-lg p-2 text-center bg-slate-50/80 dark:bg-slate-800/50 flex flex-col justify-center">
-                              <p className="text-[9px] font-medium text-muted-foreground uppercase tracking-wide mb-0.5">
-                                Prazo
-                              </p>
-                              <p className="font-semibold text-xs leading-tight">
-                                {selectedProduct.deliveryDays
-                                  ? `${selectedProduct.deliveryDays}d`
-                                  : "—"}
-                              </p>
+                            <div className="border border-slate-200 dark:border-slate-700 rounded-2xl px-3.5 py-2 h-14 bg-white dark:bg-slate-800/50 flex items-center gap-2.5">
+                              <Calendar className="h-4 w-4 text-slate-400 shrink-0" />
+                              <div className="min-w-0">
+                                <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide leading-none mb-1">
+                                  Prazo
+                                </p>
+                                <p className="font-semibold text-sm leading-tight truncate">
+                                  {selectedProduct.deliveryDays
+                                    ? `${selectedProduct.deliveryDays}d`
+                                    : "—"}
+                                </p>
+                              </div>
                             </div>
                           </div>
 
                           {/* Category + tags inline */}
-                          <div className="flex flex-wrap gap-1">
-                            <span className="px-2 py-0.5 rounded-full text-[10px] font-medium bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300 border border-blue-200 dark:border-blue-800">
+                          <div className="flex flex-wrap gap-1.5">
+                            <span className="px-2.5 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300 border border-blue-200 dark:border-blue-800">
                               {selectedProduct.category}
                             </span>
                             {(selectedProduct.tags || [])
@@ -4776,7 +5607,7 @@ export default function AdminProdutosPage() {
                               .map((tag) => (
                                 <span
                                   key={tag}
-                                  className="px-2 py-0.5 rounded-full text-[10px] font-medium bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400 border border-slate-200 dark:border-slate-700"
+                                  className="px-2.5 py-1 rounded-full text-xs font-medium bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400 border border-slate-200 dark:border-slate-700"
                                 >
                                   {tag}
                                 </span>
@@ -4787,11 +5618,11 @@ export default function AdminProdutosPage() {
 
                       {/* Summary description */}
                       {selectedProduct.summaryDescription && (
-                        <div className="space-y-1">
+                        <div className="space-y-1.5">
                           <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
                             Descrição
                           </p>
-                          <p className="text-sm text-foreground leading-relaxed">
+                          <p className="text-[13px] text-foreground leading-relaxed">
                             {selectedProduct.summaryDescription}
                           </p>
                         </div>
@@ -4910,38 +5741,78 @@ export default function AdminProdutosPage() {
 
                       {/* Base tasks section */}
                       <div className="space-y-3">
-                        <div className="flex items-center justify-between">
-                          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide flex items-center gap-1.5">
-                            Tarefas do produto
-                            {!catalogTasksLoading &&
-                              productCatalogTasks.filter(
-                                (l) => !l.phase || l.phase === "base",
-                              ).length > 0 && (
-                                <span className="text-indigo-600 bg-indigo-100 dark:bg-indigo-900/30 text-[10px] font-bold px-1.5 py-0.5 rounded-full">
-                                  {
-                                    productCatalogTasks.filter(
-                                      (l) => !l.phase || l.phase === "base",
-                                    ).length
-                                  }
-                                </span>
-                              )}
-                          </p>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            className="h-7 gap-1 text-xs"
-                            onClick={() => {
-                              setCatalogTaskSearch("");
-                              setCatalogTaskSearchResults([]);
-                              setOpenAddTaskFor((p) =>
-                                p === "base" ? null : "base",
-                              );
-                            }}
-                          >
-                            <Plus className="h-3 w-3" />
-                            Vincular Tarefa
-                          </Button>
-                        </div>
+                        {(() => {
+                          const baseTasks = productCatalogTasks.filter(
+                            (l) => !l.phase || l.phase === "base",
+                          );
+                          const mandatoryCount = baseTasks.filter(
+                            (l) => l.is_mandatory,
+                          ).length;
+                          const specificCount = baseTasks.filter(
+                            (l) => l.notes,
+                          ).length;
+                          return (
+                            <div className="flex items-start justify-between gap-3 flex-wrap">
+                              <div>
+                                <p className="text-base font-bold leading-tight">
+                                  Tarefas do produto
+                                </p>
+                                <p className="text-xs text-muted-foreground mt-0.5">
+                                  Gerencie as tarefas reutilizáveis vinculadas a este produto.
+                                </p>
+                              </div>
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <div className="flex items-center gap-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800/50 px-3 py-1.5">
+                                  <span className="h-6 w-6 rounded-lg bg-indigo-100 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 flex items-center justify-center shrink-0">
+                                    <Layers className="h-3.5 w-3.5" />
+                                  </span>
+                                  <div className="leading-tight">
+                                    <p className="text-sm font-bold">{baseTasks.length}</p>
+                                    <p className="text-[10px] text-muted-foreground">
+                                      tarefa{baseTasks.length !== 1 ? "s" : ""}
+                                    </p>
+                                  </div>
+                                </div>
+                                <div className="flex items-center gap-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800/50 px-3 py-1.5">
+                                  <span className="h-6 w-6 rounded-lg bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400 flex items-center justify-center shrink-0">
+                                    <CheckCircle2 className="h-3.5 w-3.5" />
+                                  </span>
+                                  <div className="leading-tight">
+                                    <p className="text-sm font-bold">{mandatoryCount}</p>
+                                    <p className="text-[10px] text-muted-foreground">
+                                      obrigatória{mandatoryCount !== 1 ? "s" : ""}
+                                    </p>
+                                  </div>
+                                </div>
+                                <div className="flex items-center gap-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800/50 px-3 py-1.5">
+                                  <span className="h-6 w-6 rounded-lg bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 flex items-center justify-center shrink-0">
+                                    <FileText className="h-3.5 w-3.5" />
+                                  </span>
+                                  <div className="leading-tight">
+                                    <p className="text-sm font-bold">{specificCount}</p>
+                                    <p className="text-[10px] text-muted-foreground">
+                                      específica{specificCount !== 1 ? "s" : ""}
+                                    </p>
+                                  </div>
+                                </div>
+                                <Button
+                                  size="sm"
+                                  className="btn-brand border-0 gap-1.5 h-9"
+                                  onClick={() => {
+                                    setCatalogTaskSearch("");
+                                    setCatalogTaskSearchResults([]);
+                                    setOpenAddTaskFor((p) =>
+                                      p === "base" ? null : "base",
+                                    );
+                                  }}
+                                >
+                                  <Plus className="h-3.5 w-3.5" />
+                                  Vincular tarefa
+                                </Button>
+                              </div>
+                            </div>
+                          );
+                        })()}
 
                         {/* Add panel for base tasks */}
                         {openAddTaskFor === "base" && (
@@ -5228,35 +6099,192 @@ export default function AdminProdutosPage() {
 
                     {/* ── PREÇOS ── */}
                     <TabsContent value="pricing" className="space-y-4 mt-3">
-                      {/* Variations */}
-                      {(selectedProduct.variations || []).length > 0 && (
-                        <div className="space-y-2">
-                          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
-                            Variações
+                      {/* Header + stat cards */}
+                      <div className="flex items-start justify-between gap-3 flex-wrap">
+                        <div>
+                          <p className="text-base font-bold leading-tight">
+                            Preços e variações
                           </p>
-                          <div className="border rounded-xl overflow-hidden divide-y">
-                            <div className="grid grid-cols-3 px-4 py-2 bg-muted/40 text-xs font-semibold text-muted-foreground">
-                              <span>Variação</span>
-                              <span className="text-center">Prazo</span>
-                              <span className="text-right">Preço</span>
-                            </div>
-                            {(selectedProduct.variations || []).map((v) => (
-                              <div
-                                key={v.id}
-                                className="grid grid-cols-3 px-4 py-2.5 text-sm"
-                              >
-                                <span>{v.name || "—"}</span>
-                                <span className="text-center text-muted-foreground">
-                                  {v.deadlineDays ? `${v.deadlineDays}d` : "—"}
-                                </span>
-                                <span className="text-right font-semibold text-emerald-600">
-                                  {formatCurrency(v.price)}
-                                </span>
-                              </div>
-                            ))}
-                          </div>
+                          <p className="text-xs text-muted-foreground mt-0.5">
+                            Gerencie valores, prazos e condições de cada contratação.
+                          </p>
                         </div>
-                      )}
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <div className="flex items-center gap-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800/50 px-3 py-1.5">
+                            <span className="h-6 w-6 rounded-lg bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400 flex items-center justify-center shrink-0">
+                              <Tag className="h-3.5 w-3.5" />
+                            </span>
+                            <div className="leading-tight">
+                              <p className="text-[10px] text-muted-foreground">Preço base</p>
+                              <p className="text-sm font-bold text-emerald-600">
+                                {formatCurrency(selectedProduct.finalPrice || 0)}
+                              </p>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800/50 px-3 py-1.5">
+                            <span className="h-6 w-6 rounded-lg bg-indigo-100 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 flex items-center justify-center shrink-0">
+                              <Layers className="h-3.5 w-3.5" />
+                            </span>
+                            <div className="leading-tight">
+                              <p className="text-[10px] text-muted-foreground">Variações</p>
+                              <p className="text-sm font-bold">
+                                {(selectedProduct.variations || []).length}
+                              </p>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800/50 px-3 py-1.5">
+                            <span className="h-6 w-6 rounded-lg bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 flex items-center justify-center shrink-0">
+                              <Calendar className="h-3.5 w-3.5" />
+                            </span>
+                            <div className="leading-tight">
+                              <p className="text-[10px] text-muted-foreground">Prazo padrão</p>
+                              <p className="text-sm font-bold">
+                                {selectedProduct.deliveryDays
+                                  ? `${selectedProduct.deliveryDays} dias`
+                                  : "—"}
+                              </p>
+                            </div>
+                          </div>
+                          <Button
+                            size="sm"
+                            className="btn-brand border-0 gap-1.5 h-9"
+                            onClick={() => {
+                              setIsViewSheetOpen(false);
+                              handleEditProduct(selectedProduct);
+                            }}
+                          >
+                            <Plus className="h-3.5 w-3.5" />
+                            Nova variação
+                          </Button>
+                        </div>
+                      </div>
+
+                      {/* Variações cadastradas — tabela */}
+                      <div className="rounded-2xl border border-slate-200 dark:border-slate-700 overflow-hidden bg-white dark:bg-slate-900/40">
+                        <div className="px-4 py-3 border-b border-slate-100 dark:border-slate-800">
+                          <p className="text-sm font-bold">Variações cadastradas</p>
+                        </div>
+                        <table className="w-full text-sm">
+                          <thead>
+                            <tr className="border-b border-slate-100 dark:border-slate-800 text-[11px] font-semibold text-muted-foreground">
+                              <th className="text-left px-4 py-2 font-semibold">Variação</th>
+                              <th className="text-left px-4 py-2 font-semibold">Recorrência</th>
+                              <th className="text-left px-4 py-2 font-semibold">Prazo</th>
+                              <th className="text-left px-4 py-2 font-semibold">Preço</th>
+                              <th className="text-left px-4 py-2 font-semibold">Status</th>
+                              <th className="text-right px-4 py-2 font-semibold">Ações</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                            <tr>
+                              <td className="px-4 py-3">
+                                <div className="flex items-center gap-2">
+                                  <span className="font-semibold">Contratação Padrão</span>
+                                  <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400">
+                                    Base
+                                  </span>
+                                </div>
+                                <p className="text-[11px] text-muted-foreground mt-0.5">
+                                  Configuração principal do produto
+                                </p>
+                              </td>
+                              <td className="px-4 py-3 text-muted-foreground">
+                                {selectedProduct.recurrence || "—"}
+                              </td>
+                              <td className="px-4 py-3 text-muted-foreground">
+                                {selectedProduct.deliveryDays
+                                  ? `${selectedProduct.deliveryDays} dias`
+                                  : "—"}
+                              </td>
+                              <td className="px-4 py-3 font-semibold text-emerald-600">
+                                {formatCurrency(selectedProduct.finalPrice || 0)}
+                              </td>
+                              <td className="px-4 py-3">
+                                <span
+                                  className={`inline-flex items-center gap-1.5 text-xs font-medium ${selectedProduct.isActive ? "text-emerald-600" : "text-red-500"}`}
+                                >
+                                  <span
+                                    className={`h-1.5 w-1.5 rounded-full inline-block ${selectedProduct.isActive ? "bg-emerald-500" : "bg-red-500"}`}
+                                  />
+                                  {selectedProduct.isActive ? "Ativa" : "Inativa"}
+                                </span>
+                              </td>
+                              <td className="px-4 py-3">
+                                <div className="flex items-center justify-end gap-1">
+                                  <button
+                                    className="h-7 w-7 rounded-lg border border-slate-200 dark:border-slate-700 flex items-center justify-center text-slate-500 hover:text-indigo-600 hover:border-indigo-300 transition-colors"
+                                    title="Visualizar"
+                                  >
+                                    <Eye className="h-3.5 w-3.5" />
+                                  </button>
+                                  <button
+                                    className="h-7 w-7 rounded-lg border border-slate-200 dark:border-slate-700 flex items-center justify-center text-slate-500 hover:text-indigo-600 hover:border-indigo-300 transition-colors"
+                                    title="Duplicar"
+                                  >
+                                    <Copy className="h-3.5 w-3.5" />
+                                  </button>
+                                  <button
+                                    onClick={() => {
+                                      setIsViewSheetOpen(false);
+                                      handleEditProduct(selectedProduct);
+                                    }}
+                                    className="h-7 w-7 rounded-lg border border-slate-200 dark:border-slate-700 flex items-center justify-center text-slate-500 hover:text-indigo-600 hover:border-indigo-300 transition-colors"
+                                    title="Editar"
+                                  >
+                                    <Pencil className="h-3.5 w-3.5" />
+                                  </button>
+                                </div>
+                              </td>
+                            </tr>
+                            {(selectedProduct.variations || []).map((v) => (
+                              <tr key={v.id}>
+                                <td className="px-4 py-3 font-medium">{v.name || "—"}</td>
+                                <td className="px-4 py-3 text-muted-foreground">
+                                  {selectedProduct.recurrence || "—"}
+                                </td>
+                                <td className="px-4 py-3 text-muted-foreground">
+                                  {v.deadlineDays ? `${v.deadlineDays} dias` : "—"}
+                                </td>
+                                <td className="px-4 py-3 font-semibold text-emerald-600">
+                                  {formatCurrency(v.price)}
+                                </td>
+                                <td className="px-4 py-3">
+                                  <span
+                                    className={`inline-flex items-center gap-1.5 text-xs font-medium ${v.isActive !== false ? "text-emerald-600" : "text-red-500"}`}
+                                  >
+                                    <span
+                                      className={`h-1.5 w-1.5 rounded-full inline-block ${v.isActive !== false ? "bg-emerald-500" : "bg-red-500"}`}
+                                    />
+                                    {v.isActive !== false ? "Ativa" : "Inativa"}
+                                  </span>
+                                </td>
+                                <td className="px-4 py-3">
+                                  <div className="flex items-center justify-end gap-1">
+                                    <button
+                                      onClick={() => {
+                                        setIsViewSheetOpen(false);
+                                        handleEditProduct(selectedProduct);
+                                      }}
+                                      className="h-7 w-7 rounded-lg border border-slate-200 dark:border-slate-700 flex items-center justify-center text-slate-500 hover:text-indigo-600 hover:border-indigo-300 transition-colors"
+                                      title="Editar"
+                                    >
+                                      <Pencil className="h-3.5 w-3.5" />
+                                    </button>
+                                  </div>
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+
+                      {/* Info banner */}
+                      <div className="flex items-center gap-2.5 rounded-xl border border-blue-100 dark:border-blue-900/40 bg-blue-50/60 dark:bg-blue-950/20 px-4 py-3">
+                        <Info className="h-4 w-4 text-blue-500 shrink-0" />
+                        <p className="text-xs text-blue-800 dark:text-blue-300">
+                          O preço da contratação padrão é exibido no catálogo. Variações podem sobrescrever valor e prazo.
+                        </p>
+                      </div>
 
                       {/* Add-ons — creative_type */}
                       {(selectedProduct.addOns || []).filter(
@@ -5349,47 +6377,6 @@ export default function AdminProdutosPage() {
                           );
                         }
 
-                        // ── Cabeçalho do questionário (metadados) ─────────────────
-                        const header = questionnaire && (
-                          <div className="rounded-xl border bg-gradient-to-br from-purple-50 to-blue-50 dark:from-purple-950/20 dark:to-blue-950/20 border-purple-100 dark:border-purple-800/30 p-4 space-y-2">
-                            <div className="flex items-start gap-3">
-                              <div className="h-8 w-8 rounded-lg bg-purple-100 dark:bg-purple-900/40 flex items-center justify-center shrink-0">
-                                <FileQuestion className="h-4 w-4 text-purple-600 dark:text-purple-400" />
-                              </div>
-                              <div className="flex-1 min-w-0">
-                                <p className="font-semibold text-sm">
-                                  {questionnaire.title}
-                                </p>
-                                {questionnaire.description && (
-                                  <p className="text-xs text-muted-foreground mt-0.5">
-                                    {questionnaire.description}
-                                  </p>
-                                )}
-                              </div>
-                              <div className="flex flex-col items-end gap-1 shrink-0">
-                                <span className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-purple-100 dark:bg-purple-900/40 text-purple-700 dark:text-purple-400 border border-purple-200 dark:border-purple-700">
-                                  {questions.length} perguntas
-                                </span>
-                                {questionnaire.briefingTitle && (
-                                  <span className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-400 border border-blue-200 dark:border-blue-700 flex items-center gap-1">
-                                    <Sparkles className="h-3 w-3" />
-                                    AI-ready
-                                  </span>
-                                )}
-                              </div>
-                            </div>
-                            {questionnaire.briefingInstructions && (
-                              <div className="flex items-start gap-2 text-xs text-blue-700 dark:text-blue-400 bg-blue-50 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-700 rounded-lg px-3 py-2 mt-1">
-                                <Sparkles className="h-3.5 w-3.5 shrink-0 mt-0.5" />
-                                <span>
-                                  <strong>Instrução IA:</strong>{" "}
-                                  {questionnaire.briefingInstructions}
-                                </span>
-                              </div>
-                            )}
-                          </div>
-                        );
-
                         // ── Agrupar por seção ──────────────────────────────────────
                         const sections: Record<string, any[]> = {};
                         const NO_SECTION = "__geral__";
@@ -5403,75 +6390,213 @@ export default function AdminProdutosPage() {
                           (k) => k !== NO_SECTION,
                         );
 
-                        let globalIndex = 0;
+                        const requiredCount = questions.filter(
+                          (q) => q.required,
+                        ).length;
+                        const optionalCount = questions.length - requiredCount;
+
+                        const TYPE_LABELS: Record<string, string> = {
+                          text: "Texto curto",
+                          multiline: "Texto longo",
+                          select: "Seleção única",
+                          multiselect: "Múltipla escolha",
+                          file: "Upload de arquivo",
+                        };
+
+                        const matchesQuestion = (q: any) => {
+                          const searchOk =
+                            !questionnaireSearch ||
+                            (q.question || "")
+                              .toLowerCase()
+                              .includes(questionnaireSearch.toLowerCase());
+                          const filterOk =
+                            questionnaireFilter === "all" ||
+                            (questionnaireFilter === "required"
+                              ? !!q.required
+                              : !q.required);
+                          return searchOk && filterOk;
+                        };
+
+                        const toggleSection = (key: string) => {
+                          setCollapsedQSections((prev) => {
+                            const next = new Set(prev);
+                            if (next.has(key)) next.delete(key);
+                            else next.add(key);
+                            return next;
+                          });
+                        };
+                        const toggleQuestion = (id: string) => {
+                          setExpandedQQuestions((prev) => {
+                            const next = new Set(prev);
+                            if (next.has(id)) next.delete(id);
+                            else next.add(id);
+                            return next;
+                          });
+                        };
+
+                        const FILTER_PILLS: {
+                          key: "all" | "required" | "optional";
+                          label: string;
+                        }[] = [
+                          { key: "all", label: "Todas" },
+                          { key: "required", label: "Obrigatórias" },
+                          { key: "optional", label: "Opcionais" },
+                        ];
 
                         return (
                           <div className="space-y-4">
-                            {header}
+                            {/* Header + stat pills */}
+                            <div className="flex items-start justify-between gap-3 flex-wrap">
+                              <div>
+                                <p className="text-base font-bold leading-tight">
+                                  Questionário do produto
+                                </p>
+                                <p className="text-xs text-muted-foreground mt-0.5">
+                                  Organize as informações solicitadas ao cliente antes da execução.
+                                </p>
+                              </div>
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-purple-100 text-purple-700 border border-purple-200 dark:bg-purple-900/30 dark:text-purple-400 dark:border-purple-800">
+                                  {questions.length} perguntas
+                                </span>
+                                <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-red-100 text-red-600 border border-red-200 dark:bg-red-900/30 dark:text-red-400 dark:border-red-800">
+                                  {requiredCount} obrigatórias
+                                </span>
+                                <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-blue-100 text-blue-700 border border-blue-200 dark:bg-blue-900/30 dark:text-blue-400 dark:border-blue-800">
+                                  {optionalCount} opcionais
+                                </span>
+                              </div>
+                            </div>
+
+                            {/* Toolbar: busca + filtro + expandir */}
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <div className="relative flex-1 min-w-[200px]">
+                                <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+                                <Input
+                                  className="pl-8 h-9 text-sm"
+                                  placeholder="Buscar pergunta..."
+                                  value={questionnaireSearch}
+                                  onChange={(e) =>
+                                    setQuestionnaireSearch(e.target.value)
+                                  }
+                                />
+                              </div>
+                              <div className="flex items-center gap-1.5">
+                                {FILTER_PILLS.map((f) => (
+                                  <button
+                                    key={f.key}
+                                    onClick={() => setQuestionnaireFilter(f.key)}
+                                    className={`h-9 px-3.5 rounded-lg text-xs font-semibold border transition-colors ${
+                                      questionnaireFilter === f.key
+                                        ? f.key === "required"
+                                          ? "bg-red-500 text-white border-red-500"
+                                          : f.key === "optional"
+                                            ? "bg-blue-500 text-white border-blue-500"
+                                            : "bg-gradient-to-r from-[#2558FF] via-[#6E2C96] to-[#D92293] text-white border-transparent"
+                                        : "bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:border-slate-300"
+                                    }`}
+                                  >
+                                    {f.label}
+                                  </button>
+                                ))}
+                              </div>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                className="h-9 gap-1.5 text-xs ml-auto"
+                                onClick={() => {
+                                  const willExpand = !questionnaireExpandAll;
+                                  setQuestionnaireExpandAll(willExpand);
+                                  setExpandedQQuestions(
+                                    willExpand
+                                      ? new Set(questions.map((q) => q.id))
+                                      : new Set(),
+                                  );
+                                }}
+                              >
+                                <ArrowUpDown className="h-3.5 w-3.5" />
+                                {questionnaireExpandAll
+                                  ? "Colapsar todas"
+                                  : "Expandir todas"}
+                              </Button>
+                            </div>
 
                             {sectionKeys.map((sectionKey) => {
-                              const sectionQuestions = sections[sectionKey];
+                              const sectionQuestions = sections[
+                                sectionKey
+                              ].filter(matchesQuestion);
+                              if (sectionQuestions.length === 0) return null;
+                              const isCollapsed =
+                                collapsedQSections.has(sectionKey);
                               return (
                                 <div key={sectionKey} className="space-y-2">
                                   {/* Cabeçalho da seção */}
                                   {hasMultipleSections &&
                                     sectionKey !== NO_SECTION && (
-                                      <div className="flex items-center gap-2 pt-1">
-                                        <div className="h-px flex-1 bg-border" />
-                                        <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground px-2">
-                                          {sectionKey}
-                                        </span>
-                                        <div className="h-px flex-1 bg-border" />
-                                      </div>
+                                      <button
+                                        type="button"
+                                        onClick={() => toggleSection(sectionKey)}
+                                        className="w-full flex items-center justify-between gap-2 rounded-xl border border-purple-100 dark:border-purple-800/40 bg-purple-50/70 dark:bg-purple-950/20 px-4 py-2.5 transition-colors hover:bg-purple-50 dark:hover:bg-purple-950/30"
+                                      >
+                                        <div className="flex items-center gap-2.5">
+                                          <span className="h-7 w-7 rounded-lg bg-purple-100 dark:bg-purple-900/40 text-purple-600 dark:text-purple-400 flex items-center justify-center shrink-0">
+                                            <FileQuestion className="h-3.5 w-3.5" />
+                                          </span>
+                                          <span className="text-sm font-semibold">
+                                            {sectionKey}
+                                          </span>
+                                        </div>
+                                        <div className="flex items-center gap-2 shrink-0">
+                                          <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-purple-100 dark:bg-purple-900/40 text-purple-700 dark:text-purple-400">
+                                            {sectionQuestions.length} perguntas
+                                          </span>
+                                          <ChevronDown
+                                            className={`h-4 w-4 text-purple-500 transition-transform ${isCollapsed ? "" : "rotate-180"}`}
+                                          />
+                                        </div>
+                                      </button>
                                     )}
 
                                   {/* Perguntas da seção */}
-                                  {sectionQuestions.map((question: any) => {
-                                    globalIndex += 1;
-                                    const idx = globalIndex;
-                                    const TYPE_LABELS: Record<string, string> =
-                                      {
-                                        text: "Texto curto",
-                                        multiline: "Texto longo",
-                                        select: "Seleção única",
-                                        multiselect: "Múltipla escolha",
-                                        file: "Upload de arquivo",
-                                      };
-                                    return (
-                                      <div
-                                        key={question.id}
-                                        className="border rounded-xl overflow-hidden"
-                                      >
-                                        {/* Linha principal */}
-                                        <div className="flex items-start gap-3 p-4">
-                                          <span className="flex items-center justify-center w-7 h-7 rounded-full bg-purple-100 dark:bg-purple-900/40 text-purple-700 dark:text-purple-400 text-xs font-bold shrink-0 mt-0.5">
-                                            {idx}
-                                          </span>
-                                          <div className="flex-1 min-w-0 space-y-2">
-                                            {/* Texto da pergunta + obrigatória */}
-                                            <div className="flex items-start justify-between gap-2">
+                                  {!isCollapsed &&
+                                    sectionQuestions.map((question: any) => {
+                                      const idx =
+                                        questions.indexOf(question) + 1;
+                                      const isExpanded = expandedQQuestions.has(
+                                        question.id,
+                                      );
+                                      const hasExpandableContent =
+                                        (question.options || []).length > 0 ||
+                                        !!question.warning ||
+                                        !!question.aiContext;
+                                      return (
+                                        <div
+                                          key={question.id}
+                                          className="border border-slate-200 dark:border-slate-700 rounded-xl overflow-hidden bg-white dark:bg-slate-900/40"
+                                        >
+                                          {/* Linha principal */}
+                                          <button
+                                            type="button"
+                                            onClick={() =>
+                                              hasExpandableContent &&
+                                              toggleQuestion(question.id)
+                                            }
+                                            className="w-full flex items-start gap-3 p-4 text-left"
+                                          >
+                                            <span className="flex items-center justify-center w-7 h-7 rounded-full bg-purple-100 dark:bg-purple-900/40 text-purple-700 dark:text-purple-400 text-xs font-bold shrink-0 mt-0.5">
+                                              {idx}
+                                            </span>
+                                            <div className="flex-1 min-w-0">
                                               <p className="font-medium text-sm">
                                                 {question.question}
                                               </p>
-                                              {question.required && (
-                                                <Badge
-                                                  variant="destructive"
-                                                  className="text-[10px] shrink-0"
-                                                >
-                                                  Obrigatória
-                                                </Badge>
+                                              {question.placeholder && (
+                                                <p className="text-xs text-muted-foreground/80 italic mt-0.5">
+                                                  Ex: {question.placeholder}
+                                                </p>
                                               )}
                                             </div>
-
-                                            {/* Hint / placeholder */}
-                                            {question.placeholder && (
-                                              <p className="text-xs text-muted-foreground/80 italic">
-                                                Ex: {question.placeholder}
-                                              </p>
-                                            )}
-
-                                            {/* Badges: tipo + AI assistida + briefingKey */}
-                                            <div className="flex items-center gap-1.5 flex-wrap">
+                                            <div className="flex items-center gap-1.5 shrink-0 flex-wrap justify-end max-w-[45%]">
                                               <Badge
                                                 variant="outline"
                                                 className="text-[10px] px-1.5"
@@ -5482,62 +6607,82 @@ export default function AdminProdutosPage() {
                                               {question.aiAssisted && (
                                                 <Badge className="text-[10px] px-1.5 bg-gradient-to-r from-purple-500 to-pink-500 text-white border-0">
                                                   <Sparkles className="h-2.5 w-2.5 mr-1" />
-                                                  IA Assistida
+                                                  IA
                                                 </Badge>
                                               )}
                                               {question.briefingKey && (
-                                                <span className="text-[10px] font-mono font-medium px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 border border-slate-200 dark:border-slate-700">
+                                                <span className="text-[10px] font-mono font-medium px-1.5 py-0.5 rounded bg-blue-50 dark:bg-blue-950/30 text-blue-600 dark:text-blue-400 border border-blue-200 dark:border-blue-800">
                                                   {question.briefingKey}
                                                 </span>
                                               )}
+                                              <span
+                                                className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${
+                                                  question.required
+                                                    ? "bg-red-100 text-red-600 dark:bg-red-900/30 dark:text-red-400"
+                                                    : "bg-blue-100 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400"
+                                                }`}
+                                              >
+                                                {question.required
+                                                  ? "Obrigatória"
+                                                  : "Opcional"}
+                                              </span>
+                                              <GripVertical className="h-3.5 w-3.5 text-slate-300 shrink-0" />
+                                              {hasExpandableContent && (
+                                                <ChevronDown
+                                                  className={`h-3.5 w-3.5 text-slate-400 shrink-0 transition-transform ${isExpanded ? "rotate-180" : ""}`}
+                                                />
+                                              )}
                                             </div>
+                                          </button>
 
-                                            {/* Warning */}
-                                            {question.warning && (
-                                              <div className="flex items-start gap-2 text-xs text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-700 rounded-lg px-3 py-2">
-                                                <AlertTriangle className="h-3.5 w-3.5 shrink-0 mt-0.5" />
-                                                <span>{question.warning}</span>
-                                              </div>
-                                            )}
+                                          {isExpanded && hasExpandableContent && (
+                                            <div className="px-4 pb-4 pl-14 space-y-2 bg-purple-50/30 dark:bg-purple-950/10 border-t border-slate-100 dark:border-slate-800 pt-3">
+                                              {/* Warning */}
+                                              {question.warning && (
+                                                <div className="flex items-start gap-2 text-xs text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-700 rounded-lg px-3 py-2">
+                                                  <AlertTriangle className="h-3.5 w-3.5 shrink-0 mt-0.5" />
+                                                  <span>{question.warning}</span>
+                                                </div>
+                                              )}
 
-                                            {/* aiContext (info sutil para admins) */}
-                                            {question.aiContext && (
-                                              <div className="flex items-start gap-2 text-[11px] text-blue-600 dark:text-blue-400">
-                                                <Info className="h-3 w-3 shrink-0 mt-0.5" />
-                                                <span className="text-muted-foreground">
-                                                  {question.aiContext}
-                                                </span>
-                                              </div>
-                                            )}
+                                              {/* aiContext */}
+                                              {question.aiContext && (
+                                                <div className="flex items-start gap-2 text-[11px] text-blue-600 dark:text-blue-400">
+                                                  <Info className="h-3 w-3 shrink-0 mt-0.5" />
+                                                  <span className="text-muted-foreground">
+                                                    {question.aiContext}
+                                                  </span>
+                                                </div>
+                                              )}
 
-                                            {/* Opções */}
-                                            {(question.options || []).length >
-                                              0 && (
-                                              <div className="pl-3 border-l-2 border-muted space-y-1">
-                                                <p className="text-[10px] text-muted-foreground uppercase tracking-wide mb-1">
-                                                  Opções:
-                                                </p>
-                                                {(question.options || []).map(
-                                                  (
-                                                    option: string,
-                                                    optIdx: number,
-                                                  ) => (
-                                                    <div
-                                                      key={optIdx}
-                                                      className="flex items-center gap-2 text-xs"
-                                                    >
-                                                      <CheckCircle2 className="h-3 w-3 text-muted-foreground shrink-0" />
-                                                      <span>{option}</span>
-                                                    </div>
-                                                  ),
-                                                )}
-                                              </div>
-                                            )}
-                                          </div>
+                                              {/* Opções */}
+                                              {(question.options || []).length >
+                                                0 && (
+                                                <div className="space-y-1">
+                                                  <p className="text-[10px] text-muted-foreground uppercase tracking-wide mb-1">
+                                                    Opções
+                                                  </p>
+                                                  {(question.options || []).map(
+                                                    (
+                                                      option: string,
+                                                      optIdx: number,
+                                                    ) => (
+                                                      <div
+                                                        key={optIdx}
+                                                        className="flex items-center gap-2 text-xs"
+                                                      >
+                                                        <CheckCircle2 className="h-3 w-3 text-muted-foreground shrink-0" />
+                                                        <span>{option}</span>
+                                                      </div>
+                                                    ),
+                                                  )}
+                                                </div>
+                                              )}
+                                            </div>
+                                          )}
                                         </div>
-                                      </div>
-                                    );
-                                  })}
+                                      );
+                                    })}
                                 </div>
                               );
                             })}
@@ -5551,17 +6696,135 @@ export default function AdminProdutosPage() {
                       {(() => {
                         const nomadTests =
                           (selectedProduct as any).nomadTests || [];
+                        const habilitadosCount = nomadTests.filter(
+                          (t: any) => t.isActive,
+                        ).length;
+
+                        const header = (
+                          <div className="flex items-start justify-between gap-3 flex-wrap">
+                            <div>
+                              <p className="text-base font-bold leading-tight">
+                                Testes do produto
+                              </p>
+                              <p className="text-xs text-muted-foreground mt-0.5">
+                                Defina validações práticas antes da entrega.
+                              </p>
+                            </div>
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <div className="flex items-center gap-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800/50 px-4 py-2.5">
+                                <span className="h-8 w-8 rounded-lg bg-violet-100 dark:bg-violet-900/30 text-violet-600 dark:text-violet-400 flex items-center justify-center shrink-0">
+                                  <FlaskConical className="h-4 w-4" />
+                                </span>
+                                <div className="leading-tight">
+                                  <p className="text-base font-bold">
+                                    {nomadTests.length}
+                                  </p>
+                                  <p className="text-[10px] text-muted-foreground">
+                                    testes
+                                  </p>
+                                </div>
+                              </div>
+                              <div className="flex items-center gap-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800/50 px-4 py-2.5">
+                                <span className="h-8 w-8 rounded-lg bg-violet-100 dark:bg-violet-900/30 text-violet-600 dark:text-violet-400 flex items-center justify-center shrink-0">
+                                  <Users className="h-4 w-4" />
+                                </span>
+                                <div className="leading-tight">
+                                  <p className="text-base font-bold">
+                                    {habilitadosCount}
+                                  </p>
+                                  <p className="text-[10px] text-muted-foreground">
+                                    nômades habilitados
+                                    <br />
+                                    após aprovação
+                                  </p>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        );
+
                         if (nomadTests.length === 0) {
                           return (
-                            <div className="flex flex-col items-center justify-center py-16 text-center">
-                              <FlaskConical className="h-10 w-10 text-muted-foreground/40 mb-3" />
-                              <p className="text-sm font-medium text-muted-foreground">
-                                Nenhum teste cadastrado.
-                              </p>
-                              <p className="text-xs text-muted-foreground/70 mt-1">
-                                Adicione testes práticos para habilitar nômades
-                                neste produto.
-                              </p>
+                            <div className="space-y-4">
+                              {header}
+                              <Button
+                                size="sm"
+                                className="btn-brand border-0 gap-1.5 h-9"
+                                onClick={() => {
+                                  setIsViewSheetOpen(false);
+                                  handleEditProduct(selectedProduct);
+                                }}
+                              >
+                                <Plus className="h-3.5 w-3.5" />
+                                Criar teste
+                              </Button>
+
+                              <div className="rounded-2xl border border-purple-100 dark:border-purple-900/40 bg-gradient-to-br from-purple-50 to-blue-50/60 dark:from-purple-950/20 dark:to-blue-950/10 px-6 py-10 flex flex-col items-center text-center gap-3">
+                                <FlaskConical className="h-12 w-12 text-violet-400" />
+                                <p className="text-base font-bold">
+                                  Nenhum teste cadastrado
+                                </p>
+                                <p className="text-sm text-muted-foreground max-w-md">
+                                  Crie critérios práticos para validar a qualidade da entrega e habilitar nômades neste produto.
+                                </p>
+                                <div className="flex items-center gap-4 mt-1">
+                                  <Button
+                                    size="sm"
+                                    className="btn-brand border-0"
+                                    onClick={() => {
+                                      setIsViewSheetOpen(false);
+                                      handleEditProduct(selectedProduct);
+                                    }}
+                                  >
+                                    Criar primeiro teste
+                                  </Button>
+                                  <button className="text-sm font-semibold text-indigo-600 hover:text-indigo-700">
+                                    Ver exemplos
+                                  </button>
+                                </div>
+                              </div>
+
+                              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                                <div className="rounded-xl border border-slate-200 dark:border-slate-700 px-4 py-3.5 flex items-start gap-3">
+                                  <span className="h-9 w-9 rounded-lg bg-violet-100 dark:bg-violet-900/30 text-violet-600 dark:text-violet-400 flex items-center justify-center shrink-0">
+                                    <FileText className="h-4 w-4" />
+                                  </span>
+                                  <div>
+                                    <p className="text-sm font-semibold leading-tight">
+                                      Validação técnica
+                                    </p>
+                                    <p className="text-xs text-muted-foreground mt-0.5">
+                                      Funcionamento e integrações
+                                    </p>
+                                  </div>
+                                </div>
+                                <div className="rounded-xl border border-slate-200 dark:border-slate-700 px-4 py-3.5 flex items-start gap-3">
+                                  <span className="h-9 w-9 rounded-lg bg-violet-100 dark:bg-violet-900/30 text-violet-600 dark:text-violet-400 flex items-center justify-center shrink-0">
+                                    <ClipboardCheck className="h-4 w-4" />
+                                  </span>
+                                  <div>
+                                    <p className="text-sm font-semibold leading-tight">
+                                      Checklist prático
+                                    </p>
+                                    <p className="text-xs text-muted-foreground mt-0.5">
+                                      Etapas que precisam ser comprovadas
+                                    </p>
+                                  </div>
+                                </div>
+                                <div className="rounded-xl border border-slate-200 dark:border-slate-700 px-4 py-3.5 flex items-start gap-3">
+                                  <span className="h-9 w-9 rounded-lg bg-violet-100 dark:bg-violet-900/30 text-violet-600 dark:text-violet-400 flex items-center justify-center shrink-0">
+                                    <ShieldCheck className="h-4 w-4" />
+                                  </span>
+                                  <div>
+                                    <p className="text-sm font-semibold leading-tight">
+                                      Critério de aprovação
+                                    </p>
+                                    <p className="text-xs text-muted-foreground mt-0.5">
+                                      Resultado mínimo esperado
+                                    </p>
+                                  </div>
+                                </div>
+                              </div>
                             </div>
                           );
                         }
@@ -5583,6 +6846,7 @@ export default function AdminProdutosPage() {
 
                         return (
                           <div className="space-y-6">
+                            {header}
                             {Object.entries(grouped).map(([taskId, group]) => (
                               <div key={taskId} className="space-y-3">
                                 {/* Cabeçalho do grupo */}
@@ -5781,32 +7045,176 @@ export default function AdminProdutosPage() {
                         const allTests =
                           (selectedProduct as any).nomadTests || [];
 
-                        if (allTests.length === 0) {
-                          return (
-                            <div className="flex flex-col items-center justify-center py-16 text-center">
-                              <Route className="h-10 w-10 text-muted-foreground/40 mb-3" />
-                              <p className="text-sm font-medium text-muted-foreground">
-                                Nenhum teste cadastrado.
+                        const circuitoHeader = (
+                          <div className="flex items-start justify-between gap-3 flex-wrap">
+                            <div>
+                              <p className="text-base font-bold leading-tight">
+                                Circuitos de qualificação
                               </p>
-                              <p className="text-xs text-muted-foreground/70 mt-1">
-                                Cadastre testes na aba "Testes" para configurar
-                                os circuitos.
+                              <p className="text-xs text-muted-foreground mt-0.5">
+                                Organize a sequência de testes e regras para aprovação.
                               </p>
                             </div>
-                          );
-                        }
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <Button
+                                size="sm"
+                                className="btn-brand border-0 gap-1.5 h-9"
+                                onClick={() => setViewActiveTab("nomad-tests")}
+                              >
+                                <FlaskConical className="h-3.5 w-3.5" />
+                                Ir para Testes
+                              </Button>
+                              <button className="text-sm font-semibold text-indigo-600 hover:text-indigo-700 flex items-center gap-1.5">
+                                <Info className="h-3.5 w-3.5" />
+                                Como funciona
+                              </button>
+                            </div>
+                          </div>
+                        );
 
-                        if (nomadTests.length === 0) {
+                        const circuitoStats = (
+                          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                            <div className="rounded-xl border border-slate-200 dark:border-slate-700 px-4 py-3 flex items-center gap-3">
+                              <span className="h-9 w-9 rounded-lg bg-violet-100 dark:bg-violet-900/30 text-violet-600 dark:text-violet-400 flex items-center justify-center shrink-0">
+                                <Route className="h-4 w-4" />
+                              </span>
+                              <div className="leading-tight">
+                                <p className="text-base font-bold">{nomadTests.length}</p>
+                                <p className="text-[11px] text-muted-foreground">circuitos</p>
+                              </div>
+                            </div>
+                            <div className="rounded-xl border border-slate-200 dark:border-slate-700 px-4 py-3 flex items-center gap-3">
+                              <span className="h-9 w-9 rounded-lg bg-violet-100 dark:bg-violet-900/30 text-violet-600 dark:text-violet-400 flex items-center justify-center shrink-0">
+                                <SlidersHorizontal className="h-4 w-4" />
+                              </span>
+                              <div className="leading-tight">
+                                <p className="text-base font-bold">
+                                  {nomadTests.reduce(
+                                    (a: number, t: any) => a + 5,
+                                    0,
+                                  ) || 0}
+                                </p>
+                                <p className="text-[11px] text-muted-foreground">etapas</p>
+                              </div>
+                            </div>
+                            <div className="rounded-xl border border-slate-200 dark:border-slate-700 px-4 py-3 flex items-center gap-3">
+                              <span className="h-9 w-9 rounded-lg bg-violet-100 dark:bg-violet-900/30 text-violet-600 dark:text-violet-400 flex items-center justify-center shrink-0">
+                                <Link2 className="h-4 w-4" />
+                              </span>
+                              <div className="leading-tight">
+                                <p className="text-[11px] text-muted-foreground">Dependência</p>
+                                <p className="text-sm font-bold">Testes</p>
+                              </div>
+                            </div>
+                          </div>
+                        );
+
+                        const exemploFluxo = (
+                          <div className="rounded-2xl border border-slate-200 dark:border-slate-700 p-4 space-y-3">
+                            <div>
+                              <p className="text-sm font-bold flex items-center gap-1.5">
+                                Exemplo de fluxo
+                                <Info className="h-3.5 w-3.5 text-muted-foreground" />
+                              </p>
+                              <p className="text-xs text-muted-foreground mt-0.5">
+                                Veja como os circuitos ajudam no processo de qualificação.
+                              </p>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              {[
+                                {
+                                  n: 1,
+                                  title: "Teste",
+                                  desc: "Configure os testes necessários.",
+                                  Icon: FlaskConical,
+                                  color: "text-blue-600",
+                                  bg: "bg-blue-100 dark:bg-blue-900/30",
+                                },
+                                {
+                                  n: 2,
+                                  title: "Validação",
+                                  desc: "Defina regras e condições de validação.",
+                                  Icon: ClipboardCheck,
+                                  color: "text-violet-600",
+                                  bg: "bg-violet-100 dark:bg-violet-900/30",
+                                },
+                                {
+                                  n: 3,
+                                  title: "Aprovação",
+                                  desc: "Revisão e aprovação final do processo.",
+                                  Icon: ShieldCheck,
+                                  color: "text-pink-600",
+                                  bg: "bg-pink-100 dark:bg-pink-900/30",
+                                },
+                              ].map((s, i, arr) => (
+                                <Fragment key={s.n}>
+                                  <div className="flex-1 rounded-xl border border-slate-200 dark:border-slate-700 px-3 py-2.5 flex items-start gap-2.5">
+                                    <span
+                                      className={`h-8 w-8 rounded-lg ${s.bg} ${s.color} flex items-center justify-center shrink-0`}
+                                    >
+                                      <s.Icon className="h-4 w-4" />
+                                    </span>
+                                    <div className="min-w-0">
+                                      <p className="text-xs font-semibold leading-tight">
+                                        {s.n}. {s.title}
+                                      </p>
+                                      <p className="text-[11px] text-muted-foreground mt-0.5">
+                                        {s.desc}
+                                      </p>
+                                    </div>
+                                  </div>
+                                  {i < arr.length - 1 && (
+                                    <div className="h-px w-4 border-t border-dashed border-slate-300 dark:border-slate-600 shrink-0" />
+                                  )}
+                                </Fragment>
+                              ))}
+                            </div>
+                          </div>
+                        );
+
+                        if (allTests.length === 0 || nomadTests.length === 0) {
                           return (
-                            <div className="flex flex-col items-center justify-center py-16 text-center">
-                              <Route className="h-10 w-10 text-muted-foreground/40 mb-3" />
-                              <p className="text-sm font-medium text-muted-foreground">
-                                Nenhum circuito configurado.
-                              </p>
-                              <p className="text-xs text-muted-foreground/70 mt-1">
-                                {allTests.length} teste(s) cadastrado(s), mas
-                                sem conteúdo de circuito definido.
-                              </p>
+                            <div className="space-y-4">
+                              {circuitoHeader}
+                              {circuitoStats}
+                              <div className="rounded-2xl border border-dashed border-purple-200 dark:border-purple-800/50 bg-purple-50/40 dark:bg-purple-950/10 px-6 py-10 flex flex-col items-center text-center gap-3">
+                                <div className="flex items-center gap-3">
+                                  {[FlaskConical, ClipboardCheck, ShieldCheck].map(
+                                    (Icon, i, arr) => (
+                                      <Fragment key={i}>
+                                        <span className="h-14 w-14 rounded-full border-2 border-dashed border-violet-200 dark:border-violet-800 bg-white dark:bg-slate-900 text-violet-400 flex items-center justify-center">
+                                          <Icon className="h-6 w-6" />
+                                        </span>
+                                        {i < arr.length - 1 && (
+                                          <div className="h-px w-8 border-t border-dashed border-violet-300 dark:border-violet-700" />
+                                        )}
+                                      </Fragment>
+                                    ),
+                                  )}
+                                </div>
+                                <p className="text-base font-bold mt-1">
+                                  Nenhum circuito configurado
+                                </p>
+                                <p className="text-sm text-muted-foreground max-w-md">
+                                  Cadastre ao menos um teste para criar fluxos de validação, revisão e aprovação.
+                                </p>
+                                <div className="flex items-center gap-4 mt-1">
+                                  <Button
+                                    size="sm"
+                                    className="btn-brand border-0"
+                                    onClick={() => {
+                                      setIsViewSheetOpen(false);
+                                      handleEditProduct(selectedProduct);
+                                    }}
+                                  >
+                                    Cadastrar teste
+                                  </Button>
+                                  <button className="text-sm font-semibold text-indigo-600 hover:text-indigo-700">
+                                    Ver exemplo de circuito
+                                  </button>
+                                </div>
+                              </div>
+                              {exemploFluxo}
                             </div>
                           );
                         }
@@ -5995,23 +7403,153 @@ export default function AdminProdutosPage() {
                           (t: any) => !t.qualificationChecklist,
                         );
 
+                        const checklistHeader = (
+                          <div className="flex items-start justify-between gap-3 flex-wrap">
+                            <div>
+                              <p className="text-base font-bold leading-tight">
+                                Checklists de qualificação
+                              </p>
+                              <p className="text-xs text-muted-foreground mt-0.5">
+                                Transforme testes em critérios claros de conferência e aprovação.
+                              </p>
+                            </div>
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <Button
+                                size="sm"
+                                className="btn-brand border-0 gap-1.5 h-9"
+                                onClick={() => setViewActiveTab("nomad-tests")}
+                              >
+                                <FlaskConical className="h-3.5 w-3.5" />
+                                Ir para Testes
+                              </Button>
+                              <button className="text-sm font-semibold text-indigo-600 hover:text-indigo-700 flex items-center gap-1.5">
+                                <Info className="h-3.5 w-3.5" />
+                                Entenda a relação
+                              </button>
+                            </div>
+                          </div>
+                        );
+
+                        const checklistStats = (
+                          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                            <div className="rounded-xl border border-slate-200 dark:border-slate-700 px-4 py-3 flex items-center gap-3">
+                              <span className="h-9 w-9 rounded-lg bg-violet-100 dark:bg-violet-900/30 text-violet-600 dark:text-violet-400 flex items-center justify-center shrink-0">
+                                <ClipboardCheck className="h-4 w-4" />
+                              </span>
+                              <div className="leading-tight">
+                                <p className="text-base font-bold">{testsWithCL.length}</p>
+                                <p className="text-[11px] text-muted-foreground">checklists</p>
+                              </div>
+                            </div>
+                            <div className="rounded-xl border border-slate-200 dark:border-slate-700 px-4 py-3 flex items-center gap-3">
+                              <span className="h-9 w-9 rounded-lg bg-violet-100 dark:bg-violet-900/30 text-violet-600 dark:text-violet-400 flex items-center justify-center shrink-0">
+                                <ListChecks className="h-4 w-4" />
+                              </span>
+                              <div className="leading-tight">
+                                <p className="text-base font-bold">
+                                  {testsWithCL.reduce(
+                                    (a: number, t: any) =>
+                                      a +
+                                      t.qualificationChecklist.sections.reduce(
+                                        (b: number, s: any) => b + s.items.length,
+                                        0,
+                                      ),
+                                    0,
+                                  )}
+                                </p>
+                                <p className="text-[11px] text-muted-foreground">critérios</p>
+                              </div>
+                            </div>
+                            <div className="rounded-xl border border-slate-200 dark:border-slate-700 px-4 py-3 flex items-center gap-3">
+                              <span className="h-9 w-9 rounded-lg bg-violet-100 dark:bg-violet-900/30 text-violet-600 dark:text-violet-400 flex items-center justify-center shrink-0">
+                                <Link2 className="h-4 w-4" />
+                              </span>
+                              <div className="leading-tight">
+                                <p className="text-[11px] text-muted-foreground">Dependência</p>
+                                <p className="text-sm font-bold">Testes</p>
+                              </div>
+                            </div>
+                          </div>
+                        );
+
                         if (allTests.length === 0) {
                           return (
-                            <div className="flex flex-col items-center justify-center py-16 text-center">
-                              <ClipboardCheck className="h-10 w-10 text-muted-foreground/40 mb-3" />
-                              <p className="text-sm font-medium text-muted-foreground">
-                                Nenhum teste cadastrado.
-                              </p>
-                              <p className="text-xs text-muted-foreground/70 mt-1">
-                                Cadastre testes na aba "Testes" para configurar
-                                os checklists de qualificação.
-                              </p>
+                            <div className="space-y-4">
+                              {checklistHeader}
+                              {checklistStats}
+                              <div className="rounded-2xl border border-dashed border-purple-200 dark:border-purple-800/50 bg-purple-50/40 dark:bg-purple-950/10 px-6 py-10 flex flex-col items-center text-center gap-3">
+                                <ClipboardCheck className="h-12 w-12 text-violet-400" />
+                                <p className="text-base font-bold">
+                                  Nenhum checklist disponível
+                                </p>
+                                <p className="text-sm text-muted-foreground max-w-md">
+                                  Cadastre testes para gerar checklists de qualificação e acompanhar evidências antes da aprovação.
+                                </p>
+                                <div className="flex items-center gap-4 mt-1">
+                                  <Button
+                                    size="sm"
+                                    className="btn-brand border-0"
+                                    onClick={() => {
+                                      setIsViewSheetOpen(false);
+                                      handleEditProduct(selectedProduct);
+                                    }}
+                                  >
+                                    Cadastrar teste
+                                  </Button>
+                                  <button className="text-sm font-semibold text-indigo-600 hover:text-indigo-700">
+                                    Ver modelo de checklist
+                                  </button>
+                                </div>
+                              </div>
+                              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                                <div className="rounded-xl border border-slate-200 dark:border-slate-700 px-4 py-3.5 flex items-start gap-3">
+                                  <span className="h-9 w-9 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-500 flex items-center justify-center shrink-0">
+                                    <Target className="h-4 w-4" />
+                                  </span>
+                                  <div>
+                                    <p className="text-sm font-semibold leading-tight">
+                                      Critérios objetivos
+                                    </p>
+                                    <p className="text-xs text-muted-foreground mt-0.5">
+                                      O que precisa ser validado
+                                    </p>
+                                  </div>
+                                </div>
+                                <div className="rounded-xl border border-slate-200 dark:border-slate-700 px-4 py-3.5 flex items-start gap-3">
+                                  <span className="h-9 w-9 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-500 flex items-center justify-center shrink-0">
+                                    <ImageIcon className="h-4 w-4" />
+                                  </span>
+                                  <div>
+                                    <p className="text-sm font-semibold leading-tight">
+                                      Evidências
+                                    </p>
+                                    <p className="text-xs text-muted-foreground mt-0.5">
+                                      Arquivos e comprovações
+                                    </p>
+                                  </div>
+                                </div>
+                                <div className="rounded-xl border border-slate-200 dark:border-slate-700 px-4 py-3.5 flex items-start gap-3">
+                                  <span className="h-9 w-9 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-500 flex items-center justify-center shrink-0">
+                                    <ShieldCheck className="h-4 w-4" />
+                                  </span>
+                                  <div>
+                                    <p className="text-sm font-semibold leading-tight">
+                                      Aprovação final
+                                    </p>
+                                    <p className="text-xs text-muted-foreground mt-0.5">
+                                      Resultado e responsável
+                                    </p>
+                                  </div>
+                                </div>
+                              </div>
                             </div>
                           );
                         }
 
                         return (
                           <div className="space-y-6">
+                            {checklistHeader}
+                            {checklistStats}
                             {/* Testes sem checklist configurado */}
                             {testsWithout.length > 0 && (
                               <div className="rounded-xl border border-dashed border-amber-300 dark:border-amber-700 bg-amber-50/50 dark:bg-amber-950/10 p-4">
@@ -6107,70 +7645,250 @@ export default function AdminProdutosPage() {
                       className="space-y-4 mt-3"
                     >
                       {(() => {
-                        const pres = (selectedProduct as any).presentation;
-                        if (!pres) {
-                          return (
-                            <div className="flex flex-col items-center justify-center py-16 text-center">
-                              <LayoutTemplate className="h-10 w-10 text-muted-foreground/40 mb-3" />
-                              <p className="text-sm font-medium text-muted-foreground">
-                                Apresentação pública não configurada.
+                        const pres = ((selectedProduct as any).presentation ||
+                          {}) as Record<string, any>;
+                        const hasPres = !!(selectedProduct as any).presentation;
+
+                        // Placeholder deixado pela migração da base antiga
+                        // ("[DADO NÃO DISPONÍVEL NA BASE ANTIGA...]") conta
+                        // como "sem dado" pra fins de exibição — mostra o
+                        // banner de pendência em vez do texto literal.
+                        const isPendingArr = (arr: any) => {
+                          if (!Array.isArray(arr) || arr.length === 0) return true;
+                          const first = arr[0];
+                          const text =
+                            typeof first === "string"
+                              ? first
+                              : first?.title || first?.step || first?.question || "";
+                          return text.includes("DADO NÃO DISPONÍVEL");
+                        };
+
+                        const goEdit = () => {
+                          setIsViewSheetOpen(false);
+                          handleEditProduct(selectedProduct);
+                        };
+
+                        const PendingInfo = ({ label }: { label: string }) => (
+                          <div className="flex items-center justify-between gap-3 rounded-xl border border-amber-200 dark:border-amber-800/50 bg-amber-50/70 dark:bg-amber-950/20 px-4 py-3">
+                            <div className="flex items-start gap-2.5">
+                              <Info className="h-4 w-4 text-amber-500 shrink-0 mt-0.5" />
+                              <div>
+                                <p className="text-sm font-semibold">
+                                  {label}{" "}
+                                  <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-400 align-middle">
+                                    Informação pendente
+                                  </span>{" "}
+                                  <span className="text-xs font-normal text-muted-foreground">
+                                    — conteúdo não disponível na base antiga.
+                                  </span>
+                                </p>
+                                <p className="text-xs text-muted-foreground mt-0.5">
+                                  Preencha este campo para deixar a apresentação completa.
+                                </p>
+                              </div>
+                            </div>
+                            <Button
+                              size="sm"
+                              className="btn-brand border-0 shrink-0"
+                              onClick={goEdit}
+                            >
+                              Completar informação
+                            </Button>
+                          </div>
+                        );
+
+                        const arrayFields = [
+                          "highlights",
+                          "targetAudience",
+                          "whatIsIncluded",
+                          "deliverables",
+                          "notIncluded",
+                          "requirements",
+                          "howToRequest",
+                          "faq",
+                        ];
+                        const taglineFilled =
+                          !!pres.tagline &&
+                          !pres.tagline.includes("DADO NÃO DISPONÍVEL");
+                        const filledCount =
+                          arrayFields.filter((f) => !isPendingArr(pres[f]))
+                            .length + (taglineFilled ? 1 : 0);
+                        const isComplete =
+                          hasPres && filledCount === arrayFields.length + 1;
+
+                        const header = (
+                          <div className="flex items-start justify-between gap-3 flex-wrap">
+                            <div>
+                              <p className="text-base font-bold leading-tight">
+                                Apresentação comercial
                               </p>
-                              <p className="text-xs text-muted-foreground/70 mt-1">
-                                Adicione o campo{" "}
-                                <code className="font-mono bg-muted px-1 rounded">
-                                  presentation
-                                </code>{" "}
-                                no seed do produto para exibir informações no
-                                catálogo.
+                              <p className="text-xs text-muted-foreground mt-0.5">
+                                Resumo do produto para consulta e compartilhamento.
                               </p>
                             </div>
-                          );
-                        }
+                            <span
+                              className={`text-xs font-semibold px-2.5 py-1 rounded-full ${
+                                isComplete
+                                  ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400"
+                                  : "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400"
+                              }`}
+                            >
+                              {isComplete ? "Completa" : "Incompleta"}
+                            </span>
+                          </div>
+                        );
 
-                        return (
-                          <div className="space-y-5">
-                            {/* Tagline */}
-                            {pres.tagline && (
-                              <div className="rounded-xl bg-gradient-to-r from-blue-50 to-purple-50 dark:from-blue-950/30 dark:to-purple-950/30 border border-blue-100 dark:border-blue-900/40 p-4">
-                                <p className="text-xs font-semibold text-blue-600 dark:text-blue-400 uppercase tracking-wide mb-1">
-                                  Tagline
+                        const SUB_TABS = [
+                          { key: "resumo", label: "Resumo" },
+                          { key: "destaques", label: "Destaques" },
+                          { key: "escopo", label: "Escopo" },
+                          { key: "entregaveis", label: "Entregáveis" },
+                          { key: "contratacao", label: "Contratação" },
+                          { key: "faq", label: "FAQ" },
+                        ];
+
+                        const subTabBar = (
+                          <div className="flex items-center gap-4 border-b border-slate-200 dark:border-slate-800 overflow-x-auto">
+                            {SUB_TABS.map((t) => (
+                              <button
+                                key={t.key}
+                                onClick={() => setPresentationSubTab(t.key)}
+                                className={`relative pb-2.5 pt-1 text-sm font-medium whitespace-nowrap transition-colors ${
+                                  presentationSubTab === t.key
+                                    ? "text-indigo-600 dark:text-indigo-400"
+                                    : "text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200"
+                                }`}
+                              >
+                                {t.label}
+                                {presentationSubTab === t.key && (
+                                  <span className="absolute bottom-0 left-0 right-0 h-0.5 rounded-full bg-indigo-500" />
+                                )}
+                              </button>
+                            ))}
+                          </div>
+                        );
+
+                        // Tagline curta = headline em destaque; quando o campo
+                        // veio da migração antiga como um parágrafo inteiro
+                        // (comum nesta base), usamos o nome do produto como
+                        // headline e mostramos o texto longo como corpo,
+                        // limitado visualmente pra não estourar o card.
+                        const shortTagline =
+                          taglineFilled && pres.tagline.length <= 140
+                            ? pres.tagline
+                            : null;
+                        const heroBody = taglineFilled
+                          ? shortTagline
+                            ? selectedProduct.summaryDescription
+                            : pres.tagline
+                          : selectedProduct.summaryDescription;
+
+                        // ── RESUMO ──────────────────────────────────────────
+                        const resumoContent = (
+                          <div className="space-y-4">
+                            <div className="rounded-2xl border border-purple-100 dark:border-purple-900/40 bg-gradient-to-br from-purple-50 to-blue-50/60 dark:from-purple-950/20 dark:to-blue-950/10 p-5">
+                              <p className="text-[11px] font-bold text-blue-600 dark:text-blue-400 uppercase tracking-wide mb-1.5">
+                                {selectedProduct.category}
+                              </p>
+                              <p className="text-xl font-bold leading-tight">
+                                {shortTagline || selectedProduct.name}
+                              </p>
+                              {heroBody && (
+                                <p className="text-sm text-muted-foreground mt-2 max-w-2xl line-clamp-6 whitespace-pre-line">
+                                  {heroBody}
                                 </p>
-                                <p className="text-sm font-medium">
-                                  {pres.tagline}
+                              )}
+                            </div>
+                            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                              <div className="rounded-xl border border-slate-200 dark:border-slate-700 px-4 py-3">
+                                <p className="text-lg font-bold">
+                                  {(pres.whatIsIncluded || []).length || "—"}
+                                </p>
+                                <p className="text-[11px] text-muted-foreground">
+                                  Itens incluídos
                                 </p>
                               </div>
-                            )}
-
-                            {/* Highlights */}
-                            {pres.highlights?.length > 0 && (
-                              <div>
-                                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">
-                                  Destaques
+                              <div className="rounded-xl border border-slate-200 dark:border-slate-700 px-4 py-3">
+                                <p className="text-lg font-bold">
+                                  {(pres.deliverables || []).length || "—"}
                                 </p>
-                                <div className="space-y-1.5">
-                                  {pres.highlights.map(
-                                    (h: string, i: number) => (
+                                <p className="text-[11px] text-muted-foreground">
+                                  Entregáveis
+                                </p>
+                              </div>
+                              <div className="rounded-xl border border-slate-200 dark:border-slate-700 px-4 py-3">
+                                <p className="text-lg font-bold">
+                                  {selectedProduct.deliveryDays
+                                    ? `${selectedProduct.deliveryDays} dias`
+                                    : "—"}
+                                </p>
+                                <p className="text-[11px] text-muted-foreground">
+                                  Prazo estimado
+                                </p>
+                              </div>
+                              <div className="rounded-xl border border-slate-200 dark:border-slate-700 px-4 py-3">
+                                <p className="text-lg font-bold">
+                                  {formatCurrency(selectedProduct.finalPrice || 0)}
+                                </p>
+                                <p className="text-[11px] text-muted-foreground">
+                                  Investimento
+                                </p>
+                              </div>
+                            </div>
+                            {!isPendingArr(pres.highlights) ? (
+                              <div>
+                                <p className="text-sm font-bold mb-2">
+                                  Destaques principais
+                                </p>
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                  {pres.highlights
+                                    .slice(0, 4)
+                                    .map((h: string, i: number) => (
                                       <div
                                         key={i}
-                                        className="flex items-start gap-2 text-sm"
+                                        className="flex items-start gap-2.5 rounded-xl border border-slate-200 dark:border-slate-700 px-3.5 py-3"
                                       >
-                                        <span className="h-4 w-4 rounded-full bg-emerald-100 dark:bg-emerald-900/40 text-emerald-600 text-[10px] font-bold flex items-center justify-center shrink-0 mt-0.5">
-                                          ✓
+                                        <span className="h-8 w-8 rounded-lg bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400 flex items-center justify-center shrink-0">
+                                          <CheckCircle2 className="h-4 w-4" />
                                         </span>
-                                        <span>{h}</span>
+                                        <p className="text-sm font-medium leading-snug">
+                                          {h}
+                                        </p>
                                       </div>
-                                    ),
-                                  )}
+                                    ))}
                                 </div>
                               </div>
+                            ) : (
+                              <PendingInfo label="Destaques principais" />
                             )}
+                          </div>
+                        );
 
-                            {/* Para quem */}
-                            {pres.targetAudience?.length > 0 && (
-                              <div>
-                                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">
-                                  Para quem é
-                                </p>
+                        // ── DESTAQUES ───────────────────────────────────────
+                        const destaquesContent = (
+                          <div className="space-y-4">
+                            {!isPendingArr(pres.highlights) ? (
+                              <div className="space-y-1.5">
+                                {pres.highlights.map((h: string, i: number) => (
+                                  <div
+                                    key={i}
+                                    className="flex items-start gap-2 text-sm rounded-xl border border-slate-200 dark:border-slate-700 px-3.5 py-2.5"
+                                  >
+                                    <span className="h-5 w-5 rounded-full bg-emerald-100 dark:bg-emerald-900/40 text-emerald-600 text-[10px] font-bold flex items-center justify-center shrink-0 mt-0.5">
+                                      ✓
+                                    </span>
+                                    <span>{h}</span>
+                                  </div>
+                                ))}
+                              </div>
+                            ) : (
+                              <PendingInfo label="Destaques" />
+                            )}
+                            <div>
+                              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">
+                                Para quem é
+                              </p>
+                              {!isPendingArr(pres.targetAudience) ? (
                                 <div className="flex flex-wrap gap-1.5">
                                   {pres.targetAudience.map(
                                     (t: string, i: number) => (
@@ -6183,23 +7901,58 @@ export default function AdminProdutosPage() {
                                     ),
                                   )}
                                 </div>
-                              </div>
-                            )}
+                              ) : (
+                                <PendingInfo label="Para quem é" />
+                              )}
+                            </div>
+                          </div>
+                        );
 
-                            {/* O que está incluído */}
-                            {pres.whatIsIncluded?.length > 0 && (
-                              <div>
-                                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">
+                        // ── ESCOPO ──────────────────────────────────────────
+                        const escopoContent = (
+                          <div className="space-y-4">
+                            <div>
+                              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">
+                                Para quem é
+                              </p>
+                              {!isPendingArr(pres.targetAudience) ? (
+                                <div className="flex flex-wrap gap-1.5">
+                                  {pres.targetAudience.map(
+                                    (t: string, i: number) => (
+                                      <span
+                                        key={i}
+                                        className="text-xs font-medium px-2.5 py-1 rounded-full bg-violet-100 dark:bg-violet-900/30 text-violet-700 dark:text-violet-400 border border-violet-200 dark:border-violet-800"
+                                      >
+                                        {t}
+                                      </span>
+                                    ),
+                                  )}
+                                </div>
+                              ) : (
+                                <PendingInfo label="Para quem é" />
+                              )}
+                            </div>
+
+                            <div>
+                              <div className="flex items-center gap-2 mb-2">
+                                <p className="text-sm font-bold">
                                   O que está incluído
                                 </p>
-                                <div className="space-y-2">
+                                {!isPendingArr(pres.whatIsIncluded) && (
+                                  <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-indigo-100 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400">
+                                    {pres.whatIsIncluded.length} itens
+                                  </span>
+                                )}
+                              </div>
+                              {!isPendingArr(pres.whatIsIncluded) ? (
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                                   {pres.whatIsIncluded.map(
                                     (item: any, i: number) => (
                                       <div
                                         key={i}
-                                        className="flex items-start gap-3 rounded-lg border p-3 bg-muted/20"
+                                        className="flex items-start gap-3 rounded-xl border border-slate-200 dark:border-slate-700 p-3"
                                       >
-                                        <span className="h-5 w-5 rounded-full bg-blue-100 dark:bg-blue-900/40 text-blue-600 text-[10px] font-bold flex items-center justify-center shrink-0 mt-0.5">
+                                        <span className="h-6 w-6 rounded-lg bg-blue-100 dark:bg-blue-900/40 text-blue-600 text-[10px] font-bold flex items-center justify-center shrink-0 mt-0.5">
                                           {i + 1}
                                         </span>
                                         <div>
@@ -6216,37 +7969,21 @@ export default function AdminProdutosPage() {
                                     ),
                                   )}
                                 </div>
-                              </div>
-                            )}
+                              ) : (
+                                <PendingInfo label="O que está incluído" />
+                              )}
+                            </div>
 
-                            {/* Entregas */}
-                            {pres.deliverables?.length > 0 && (
-                              <div>
-                                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">
-                                  Entregas / Entregáveis
-                                </p>
-                                <div className="space-y-1">
-                                  {pres.deliverables.map(
-                                    (d: string, i: number) => (
-                                      <div
-                                        key={i}
-                                        className="flex items-start gap-2 text-sm text-muted-foreground"
-                                      >
-                                        <span className="mt-1 h-1.5 w-1.5 rounded-full bg-teal-500 shrink-0" />
-                                        {d}
-                                      </div>
-                                    ),
-                                  )}
-                                </div>
+                            <div>
+                              <div className="flex items-center gap-2 mb-2">
+                                <p className="text-sm font-bold">Não incluído</p>
+                                {!isPendingArr(pres.notIncluded) && (
+                                  <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-500">
+                                    {pres.notIncluded.length} itens
+                                  </span>
+                                )}
                               </div>
-                            )}
-
-                            {/* Não incluído */}
-                            {pres.notIncluded?.length > 0 && (
-                              <div>
-                                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">
-                                  Não incluído
-                                </p>
+                              {!isPendingArr(pres.notIncluded) ? (
                                 <div className="space-y-1">
                                   {pres.notIncluded.map(
                                     (d: string, i: number) => (
@@ -6260,11 +7997,164 @@ export default function AdminProdutosPage() {
                                     ),
                                   )}
                                 </div>
-                              </div>
-                            )}
+                              ) : (
+                                <PendingInfo label="Não incluído" />
+                              )}
+                            </div>
+                          </div>
+                        );
 
-                            {/* Pré-requisitos */}
-                            {pres.requirements?.length > 0 && (
+                        // ── COMO CONTRATAR (reaproveitado em Entregáveis e Contratação) ──
+                        const comoContratarBox = (
+                          <div className="rounded-xl border border-purple-100 dark:border-purple-900/40 bg-purple-50/40 dark:bg-purple-950/10 p-4">
+                            <div className="flex items-center justify-between gap-2 mb-3">
+                              <p className="text-sm font-bold flex items-center gap-1.5">
+                                <Link2 className="h-3.5 w-3.5 text-purple-500" />
+                                Como contratar
+                              </p>
+                              {!isPendingArr(pres.howToRequest) && (
+                                <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-purple-100 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400">
+                                  {pres.howToRequest.length} etapa
+                                  {pres.howToRequest.length !== 1 ? "s" : ""} cadastrada
+                                  {pres.howToRequest.length !== 1 ? "s" : ""}
+                                </span>
+                              )}
+                            </div>
+                            {!isPendingArr(pres.howToRequest) ? (
+                              <div className="space-y-2">
+                                {pres.howToRequest.map((s: any, i: number) => (
+                                  <div
+                                    key={i}
+                                    className="flex items-center justify-between gap-2.5 text-sm bg-white dark:bg-slate-900 rounded-lg border border-slate-200 dark:border-slate-700 px-3 py-2"
+                                  >
+                                    <div className="flex items-center gap-2.5 min-w-0">
+                                      <span className="h-6 w-6 rounded-full bg-purple-100 dark:bg-purple-900/40 text-purple-600 text-[10px] font-bold flex items-center justify-center shrink-0">
+                                        {i + 1}
+                                      </span>
+                                      <div className="min-w-0">
+                                        <p className="font-medium truncate">
+                                          {s.step || `Etapa ${i + 1}`}
+                                        </p>
+                                        <p className="text-xs text-muted-foreground truncate">
+                                          {s.description || "Descrição não informada"}
+                                        </p>
+                                      </div>
+                                    </div>
+                                    <Button
+                                      size="sm"
+                                      variant="outline"
+                                      className="h-7 text-xs shrink-0"
+                                      onClick={goEdit}
+                                    >
+                                      Completar etapa
+                                    </Button>
+                                  </div>
+                                ))}
+                              </div>
+                            ) : (
+                              <PendingInfo label="Como contratar" />
+                            )}
+                          </div>
+                        );
+
+                        const faqBox = (
+                          <div className="rounded-xl border border-blue-100 dark:border-blue-900/40 bg-blue-50/40 dark:bg-blue-950/10 p-4">
+                            <div className="flex items-center justify-between gap-2 mb-3">
+                              <p className="text-sm font-bold flex items-center gap-1.5">
+                                <FileQuestion className="h-3.5 w-3.5 text-blue-500" />
+                                FAQ
+                              </p>
+                              {!isPendingArr(pres.faq) && (
+                                <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400">
+                                  {pres.faq.length} pergunta
+                                  {pres.faq.length !== 1 ? "s" : ""}
+                                </span>
+                              )}
+                            </div>
+                            {!isPendingArr(pres.faq) ? (
+                              <div className="space-y-2">
+                                {pres.faq.map((f: any, i: number) => (
+                                  <details
+                                    key={i}
+                                    className="rounded-lg border border-blue-100 dark:border-blue-900/40 bg-white dark:bg-slate-900 px-3 py-2"
+                                  >
+                                    <summary className="text-sm font-semibold cursor-pointer">
+                                      {f.question || "Pergunta cadastrada"}
+                                    </summary>
+                                    {f.answer && (
+                                      <p className="text-xs text-muted-foreground mt-1.5">
+                                        {f.answer}
+                                      </p>
+                                    )}
+                                  </details>
+                                ))}
+                              </div>
+                            ) : (
+                              <PendingInfo label="FAQ" />
+                            )}
+                          </div>
+                        );
+
+                        // ── ENTREGÁVEIS ─────────────────────────────────────
+                        const entregaveisContent = (
+                          <div className="space-y-4">
+                            <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+                              <div className="rounded-xl border border-red-100 dark:border-red-900/40 bg-red-50/40 dark:bg-red-950/10 p-4">
+                                <p className="text-sm font-bold flex items-center gap-1.5 mb-2 text-red-700 dark:text-red-400">
+                                  <XCircle className="h-3.5 w-3.5" />
+                                  Não incluído
+                                </p>
+                                {!isPendingArr(pres.notIncluded) ? (
+                                  <div className="space-y-1.5">
+                                    {pres.notIncluded.map(
+                                      (d: string, i: number) => (
+                                        <div
+                                          key={i}
+                                          className="flex items-start gap-2 text-sm text-red-800 dark:text-red-300"
+                                        >
+                                          <X className="h-3.5 w-3.5 shrink-0 mt-0.5" />
+                                          {d}
+                                        </div>
+                                      ),
+                                    )}
+                                  </div>
+                                ) : (
+                                  <PendingInfo label="Não incluído" />
+                                )}
+                              </div>
+                              <div className="rounded-xl border border-emerald-100 dark:border-emerald-900/40 bg-emerald-50/40 dark:bg-emerald-950/10 p-4">
+                                <div className="flex items-center justify-between gap-2 mb-2">
+                                  <p className="text-sm font-bold flex items-center gap-1.5 text-emerald-700 dark:text-emerald-400">
+                                    <CheckCircle2 className="h-3.5 w-3.5" />
+                                    Entregas e entregáveis
+                                  </p>
+                                  {!isPendingArr(pres.deliverables) && (
+                                    <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400">
+                                      {pres.deliverables.length} entregáveis
+                                    </span>
+                                  )}
+                                </div>
+                                {!isPendingArr(pres.deliverables) ? (
+                                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-3 gap-y-1.5">
+                                    {pres.deliverables.map(
+                                      (d: string, i: number) => (
+                                        <div
+                                          key={i}
+                                          className="flex items-start gap-2 text-sm text-emerald-800 dark:text-emerald-300"
+                                        >
+                                          <CheckCircle2 className="h-3.5 w-3.5 shrink-0 mt-0.5" />
+                                          {d}
+                                        </div>
+                                      ),
+                                    )}
+                                  </div>
+                                ) : (
+                                  <PendingInfo label="Entregas e entregáveis" />
+                                )}
+                              </div>
+                            </div>
+
+                            {!isPendingArr(pres.requirements) ? (
                               <div className="rounded-xl bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800 p-4">
                                 <p className="text-xs font-semibold text-amber-700 dark:text-amber-400 uppercase tracking-wide mb-2">
                                   Pré-requisitos do cliente
@@ -6283,63 +8173,371 @@ export default function AdminProdutosPage() {
                                   )}
                                 </div>
                               </div>
+                            ) : (
+                              <PendingInfo label="Pré-requisitos do cliente" />
                             )}
 
-                            {/* Como contratar */}
-                            {pres.howToRequest?.length > 0 && (
-                              <div>
-                                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">
-                                  Como contratar ({pres.howToRequest.length}{" "}
-                                  etapas)
+                            {comoContratarBox}
+                            {faqBox}
+                          </div>
+                        );
+
+                        const contratacaoContent = comoContratarBox;
+                        const faqContent = faqBox;
+
+                        const CONTENT: Record<string, React.ReactNode> = {
+                          resumo: resumoContent,
+                          destaques: destaquesContent,
+                          escopo: escopoContent,
+                          entregaveis: entregaveisContent,
+                          contratacao: contratacaoContent,
+                          faq: faqContent,
+                        };
+
+                        return (
+                          <div className="space-y-4">
+                            {header}
+                            {subTabBar}
+                            {CONTENT[presentationSubTab]}
+                          </div>
+                        );
+                      })()}
+                    </TabsContent>
+
+                    <TabsContent value="nomades-habilitados" className="space-y-4 mt-3">
+                      <div className="flex items-start justify-between gap-3 flex-wrap">
+                        <div>
+                          <p className="text-base font-bold leading-tight">
+                            Desempenho do produto
+                          </p>
+                          <p className="text-xs text-muted-foreground mt-0.5 flex items-center gap-1.5">
+                            Acompanhe resultados reais de execução, qualidade e aprovação.
+                            <button className="text-indigo-600 hover:text-indigo-700 font-semibold flex items-center gap-1">
+                              Como são calculadas as métricas
+                              <Info className="h-3 w-3" />
+                            </button>
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                        <div className="rounded-xl border border-slate-200 dark:border-slate-700 px-4 py-3 flex items-center gap-3">
+                          <span className="h-9 w-9 rounded-lg bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 flex items-center justify-center shrink-0">
+                            <Play className="h-4 w-4" />
+                          </span>
+                          <div className="leading-tight">
+                            <p className="text-lg font-bold">0</p>
+                            <p className="text-[11px] text-muted-foreground">execuções</p>
+                          </div>
+                        </div>
+                        <div className="rounded-xl border border-slate-200 dark:border-slate-700 px-4 py-3 flex items-center gap-3">
+                          <span className="h-9 w-9 rounded-lg bg-violet-100 dark:bg-violet-900/30 text-violet-600 dark:text-violet-400 flex items-center justify-center shrink-0">
+                            <ThumbsUp className="h-4 w-4" />
+                          </span>
+                          <div className="leading-tight">
+                            <p className="text-lg font-bold">—</p>
+                            <p className="text-[11px] text-muted-foreground">taxa de aprovação</p>
+                          </div>
+                        </div>
+                        <div className="rounded-xl border border-slate-200 dark:border-slate-700 px-4 py-3 flex items-center gap-3">
+                          <span className="h-9 w-9 rounded-lg bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400 flex items-center justify-center shrink-0">
+                            <ClipboardCheck className="h-4 w-4" />
+                          </span>
+                          <div className="leading-tight">
+                            <p className="text-lg font-bold">0</p>
+                            <p className="text-[11px] text-muted-foreground">tarefas concluídas</p>
+                          </div>
+                        </div>
+                        <div className="rounded-xl border border-slate-200 dark:border-slate-700 px-4 py-3 flex items-center gap-3">
+                          <span className="h-9 w-9 rounded-lg bg-amber-100 dark:bg-amber-900/30 text-amber-600 dark:text-amber-400 flex items-center justify-center shrink-0">
+                            <Users className="h-4 w-4" />
+                          </span>
+                          <div className="leading-tight">
+                            <p className="text-lg font-bold">0</p>
+                            <p className="text-[11px] text-muted-foreground">nômades habilitados</p>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-2.5 rounded-xl border border-blue-100 dark:border-blue-900/40 bg-blue-50/60 dark:bg-blue-950/20 px-4 py-3">
+                        <Info className="h-4 w-4 text-blue-500 shrink-0" />
+                        <p className="text-xs text-blue-800 dark:text-blue-300">
+                          Os indicadores serão exibidos após a primeira execução real deste produto.
+                        </p>
+                      </div>
+
+                      <div className="rounded-2xl border border-dashed border-slate-300 dark:border-slate-700 px-6 py-8 flex items-center gap-6">
+                        <div className="h-20 w-28 rounded-xl bg-gradient-to-br from-blue-50 to-violet-50 dark:from-blue-950/30 dark:to-violet-950/30 border border-slate-200 dark:border-slate-700 flex items-center justify-center shrink-0">
+                          <Gauge className="h-8 w-8 text-blue-400" />
+                        </div>
+                        <div className="flex-1">
+                          <p className="text-base font-bold">
+                            Ainda não há dados de desempenho
+                          </p>
+                          <p className="text-sm text-muted-foreground mt-0.5 max-w-md">
+                            As métricas aparecerão aqui assim que este produto tiver execuções reais.
+                          </p>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="mt-3"
+                          >
+                            Ver como funciona
+                          </Button>
+                        </div>
+                      </div>
+
+                      <div>
+                        <p className="text-sm font-bold mb-2">O que será acompanhado</p>
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                          <div className="rounded-xl border border-slate-200 dark:border-slate-700 px-4 py-3.5 flex items-start gap-3">
+                            <span className="h-9 w-9 rounded-lg bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 flex items-center justify-center shrink-0">
+                              <BarChart3 className="h-4 w-4" />
+                            </span>
+                            <div>
+                              <p className="text-sm font-semibold leading-tight">Execuções</p>
+                              <p className="text-xs text-muted-foreground mt-0.5">
+                                Volume e evolução no período
+                              </p>
+                            </div>
+                          </div>
+                          <div className="rounded-xl border border-slate-200 dark:border-slate-700 px-4 py-3.5 flex items-start gap-3">
+                            <span className="h-9 w-9 rounded-lg bg-violet-100 dark:bg-violet-900/30 text-violet-600 dark:text-violet-400 flex items-center justify-center shrink-0">
+                              <ShieldCheck className="h-4 w-4" />
+                            </span>
+                            <div>
+                              <p className="text-sm font-semibold leading-tight">Qualidade</p>
+                              <p className="text-xs text-muted-foreground mt-0.5">
+                                Avaliações e taxa de aprovação
+                              </p>
+                            </div>
+                          </div>
+                          <div className="rounded-xl border border-slate-200 dark:border-slate-700 px-4 py-3.5 flex items-start gap-3">
+                            <span className="h-9 w-9 rounded-lg bg-amber-100 dark:bg-amber-900/30 text-amber-600 dark:text-amber-400 flex items-center justify-center shrink-0">
+                              <Clock className="h-4 w-4" />
+                            </span>
+                            <div>
+                              <p className="text-sm font-semibold leading-tight">Produtividade</p>
+                              <p className="text-xs text-muted-foreground mt-0.5">
+                                Tarefas concluídas e tempo médio
+                              </p>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </TabsContent>
+
+                    <TabsContent value="complementares" className="space-y-4 mt-3">
+                      {(() => {
+                        const complementaryIds: string[] =
+                          (selectedProduct as any).complementaryProductIds || [];
+                        const complementaryProducts = complementaryIds
+                          .map((id) => safeProducts.find((p) => p.id === id))
+                          .filter(Boolean) as Product[];
+
+                        const complHeader = (
+                          <div className="flex items-start justify-between gap-3 flex-wrap">
+                            <div>
+                              <p className="text-base font-bold leading-tight">
+                                Produtos complementares
+                              </p>
+                              <p className="text-xs text-muted-foreground mt-0.5">
+                                Crie combinações que ampliam a solução e facilitam novas contratações.
+                              </p>
+                            </div>
+                            <div className="flex items-center gap-3">
+                              <button className="text-sm font-semibold text-indigo-600 hover:text-indigo-700 flex items-center gap-1.5">
+                                <Info className="h-3.5 w-3.5" />
+                                Como funciona
+                              </button>
+                              <Button
+                                size="sm"
+                                className="btn-brand border-0 gap-1.5 h-9"
+                                onClick={() => {
+                                  setIsViewSheetOpen(false);
+                                  handleEditProduct(selectedProduct);
+                                }}
+                              >
+                                <Plus className="h-3.5 w-3.5" />
+                                Vincular produto
+                              </Button>
+                            </div>
+                          </div>
+                        );
+
+                        const mandatoryCompl = complementaryProducts.filter(
+                          (cp: any) => cp.isComplementaryMandatory,
+                        ).length;
+
+                        const complStats = (
+                          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                            <div className="rounded-xl border border-slate-200 dark:border-slate-700 px-4 py-3 flex items-center gap-3">
+                              <span className="h-9 w-9 rounded-lg bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 flex items-center justify-center shrink-0">
+                                <Link2 className="h-4 w-4" />
+                              </span>
+                              <div className="leading-tight">
+                                <p className="text-lg font-bold">
+                                  {complementaryProducts.length}
                                 </p>
-                                <div className="space-y-2">
-                                  {pres.howToRequest.map(
-                                    (s: any, i: number) => (
-                                      <div
-                                        key={i}
-                                        className="flex items-start gap-2.5 text-sm"
-                                      >
-                                        <span className="h-5 w-5 rounded-full bg-purple-100 dark:bg-purple-900/40 text-purple-600 text-[10px] font-bold flex items-center justify-center shrink-0 mt-0.5">
-                                          {i + 1}
-                                        </span>
-                                        <div>
-                                          <p className="font-medium">
-                                            {s.step}
-                                          </p>
-                                          <p className="text-xs text-muted-foreground">
-                                            {s.description}
-                                          </p>
-                                        </div>
-                                      </div>
-                                    ),
-                                  )}
+                                <p className="text-[11px] text-muted-foreground">vinculados</p>
+                              </div>
+                            </div>
+                            <div className="rounded-xl border border-slate-200 dark:border-slate-700 px-4 py-3 flex items-center gap-3">
+                              <span className="h-9 w-9 rounded-lg bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 flex items-center justify-center shrink-0">
+                                <CheckSquare className="h-4 w-4" />
+                              </span>
+                              <div className="leading-tight">
+                                <p className="text-lg font-bold">{mandatoryCompl}</p>
+                                <p className="text-[11px] text-muted-foreground">obrigatórios</p>
+                              </div>
+                            </div>
+                            <div className="rounded-xl border border-slate-200 dark:border-slate-700 px-4 py-3 flex items-center gap-3">
+                              <span className="h-9 w-9 rounded-lg bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400 flex items-center justify-center shrink-0">
+                                <Circle className="h-4 w-4" />
+                              </span>
+                              <div className="leading-tight">
+                                <p className="text-lg font-bold">
+                                  {complementaryProducts.length - mandatoryCompl}
+                                </p>
+                                <p className="text-[11px] text-muted-foreground">opcionais</p>
+                              </div>
+                            </div>
+                          </div>
+                        );
+
+                        const howItHelps = (
+                          <div>
+                            <p className="text-sm font-bold mb-2">
+                              Como os complementares ajudam
+                            </p>
+                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                              <div className="rounded-xl border border-slate-200 dark:border-slate-700 px-4 py-3.5 flex items-start gap-3">
+                                <span className="h-9 w-9 rounded-lg bg-pink-100 dark:bg-pink-900/30 text-pink-600 dark:text-pink-400 flex items-center justify-center shrink-0">
+                                  <TrendingUp className="h-4 w-4" />
+                                </span>
+                                <div>
+                                  <p className="text-sm font-semibold leading-tight">
+                                    Venda adicional
+                                  </p>
+                                  <p className="text-xs text-muted-foreground mt-0.5">
+                                    Sugira serviços relacionados
+                                  </p>
                                 </div>
                               </div>
-                            )}
+                              <div className="rounded-xl border border-slate-200 dark:border-slate-700 px-4 py-3.5 flex items-start gap-3">
+                                <span className="h-9 w-9 rounded-lg bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 flex items-center justify-center shrink-0">
+                                  <Puzzle className="h-4 w-4" />
+                                </span>
+                                <div>
+                                  <p className="text-sm font-semibold leading-tight">
+                                    Combinação de soluções
+                                  </p>
+                                  <p className="text-xs text-muted-foreground mt-0.5">
+                                    Monte ofertas mais completas
+                                  </p>
+                                </div>
+                              </div>
+                              <div className="rounded-xl border border-slate-200 dark:border-slate-700 px-4 py-3.5 flex items-start gap-3">
+                                <span className="h-9 w-9 rounded-lg bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400 flex items-center justify-center shrink-0">
+                                  <Users className="h-4 w-4" />
+                                </span>
+                                <div>
+                                  <p className="text-sm font-semibold leading-tight">
+                                    Jornada do cliente
+                                  </p>
+                                  <p className="text-xs text-muted-foreground mt-0.5">
+                                    Conecte os próximos passos
+                                  </p>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        );
 
-                            {/* FAQ */}
-                            {pres.faq?.length > 0 && (
-                              <div>
-                                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">
-                                  FAQ ({pres.faq.length} perguntas)
-                                </p>
-                                <div className="space-y-2">
-                                  {pres.faq.map((f: any, i: number) => (
-                                    <div
-                                      key={i}
-                                      className="rounded-lg border p-3 bg-muted/10"
-                                    >
-                                      <p className="text-sm font-semibold">
-                                        {f.question}
-                                      </p>
-                                      <p className="text-xs text-muted-foreground mt-1">
-                                        {f.answer}
-                                      </p>
-                                    </div>
+                        if (complementaryProducts.length === 0) {
+                          return (
+                            <div className="space-y-4">
+                              {complHeader}
+                              {complStats}
+                              <div className="rounded-2xl border border-dashed border-slate-300 dark:border-slate-700 bg-slate-50/40 dark:bg-slate-900/20 px-6 py-8 flex items-center gap-6">
+                                <div className="flex items-center gap-1 shrink-0">
+                                  {[0, 1, 2].map((i) => (
+                                    <Fragment key={i}>
+                                      <div className="h-12 w-12 rounded-xl border-2 border-dashed border-indigo-200 dark:border-indigo-800 bg-white dark:bg-slate-900 flex items-center justify-center">
+                                        <Package className="h-5 w-5 text-indigo-300" />
+                                      </div>
+                                      {i < 2 && (
+                                        <Link2 className="h-3.5 w-3.5 text-indigo-300 shrink-0" />
+                                      )}
+                                    </Fragment>
                                   ))}
                                 </div>
+                                <div className="flex-1">
+                                  <p className="text-base font-bold">
+                                    Nenhum produto complementar vinculado
+                                  </p>
+                                  <p className="text-sm text-muted-foreground mt-0.5 max-w-md">
+                                    Vincule serviços relacionados para sugerir combinações e construir uma jornada mais completa.
+                                  </p>
+                                </div>
+                                <div className="flex flex-col items-center gap-1.5 shrink-0">
+                                  <Button
+                                    size="sm"
+                                    className="btn-brand border-0"
+                                    onClick={() => {
+                                      setIsViewSheetOpen(false);
+                                      handleEditProduct(selectedProduct);
+                                    }}
+                                  >
+                                    Vincular primeiro produto
+                                  </Button>
+                                  <button
+                                    className="text-xs font-semibold text-indigo-600 hover:text-indigo-700"
+                                    onClick={() => {
+                                      setIsViewSheetOpen(false);
+                                      handleEditProduct(selectedProduct);
+                                    }}
+                                  >
+                                    Editar vínculos
+                                  </button>
+                                </div>
                               </div>
-                            )}
+                              {howItHelps}
+                            </div>
+                          );
+                        }
+                        return (
+                          <div className="space-y-4">
+                            {complHeader}
+                            {complStats}
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                              {complementaryProducts.map((cp) => (
+                                <div
+                                  key={cp.id}
+                                  className="flex items-center gap-3 rounded-xl border border-slate-200 dark:border-slate-700 p-3 hover:bg-slate-50 dark:hover:bg-slate-800/50 cursor-pointer transition-colors"
+                                  onClick={() => handleViewProduct(cp)}
+                                >
+                                  {cp.productImagePreview || (cp as any).image ? (
+                                    <img
+                                      src={cp.productImagePreview || (cp as any).image}
+                                      alt={cp.name}
+                                      className="h-10 w-10 rounded-lg object-cover border shrink-0"
+                                    />
+                                  ) : (
+                                    <div className="h-10 w-10 rounded-lg bg-linear-to-br from-blue-500 to-violet-600 flex items-center justify-center shrink-0">
+                                      <Package className="h-4 w-4 text-white" />
+                                    </div>
+                                  )}
+                                  <div className="min-w-0 flex-1">
+                                    <p className="text-sm font-medium truncate">{cp.name}</p>
+                                    <p className="text-xs text-emerald-600 font-semibold">
+                                      {formatCurrency(cp.finalPrice || 0)}
+                                    </p>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                            {howItHelps}
                           </div>
                         );
                       })()}
@@ -6361,7 +8559,8 @@ export default function AdminProdutosPage() {
                   </div>
                 )}
                 {/* Data strip */}
-                <div className="flex items-center gap-2 px-5 py-2 border-b border-slate-100 dark:border-slate-800 flex-wrap">
+                <div className="flex items-center justify-between gap-2 px-5 py-3 border-b border-slate-100 dark:border-slate-800 flex-wrap">
+                <div className="flex items-center gap-2 flex-wrap">
                   <span
                     className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[11px] font-semibold ${
                       selectedProduct.isActive
@@ -6419,18 +8618,9 @@ export default function AdminProdutosPage() {
                     </>
                   )}
                 </div>
-                {/* Action buttons */}
-                <div className="flex items-center justify-between px-5 py-2.5">
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => setIsViewSheetOpen(false)}
-                  >
-                    Fechar
-                  </Button>
                   <Button
                     size="sm"
-                    className="btn-brand border-0"
+                    className="btn-brand border-0 shrink-0"
                     onClick={() => {
                       setIsViewSheetOpen(false);
                       handleEditProduct(selectedProduct);
@@ -6438,6 +8628,16 @@ export default function AdminProdutosPage() {
                   >
                     <Pencil className="h-4 w-4 mr-2" />
                     Editar Produto
+                  </Button>
+                </div>
+                {/* Action buttons */}
+                <div className="px-5 py-2.5">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setIsViewSheetOpen(false)}
+                  >
+                    Fechar
                   </Button>
                 </div>
               </div>
@@ -6459,17 +8659,107 @@ export default function AdminProdutosPage() {
         open={isProductSheetOpen}
         onClose={() => setIsProductSheetOpen(false)}
         hideHeader
+        pin={
+          selectedProduct
+            ? {
+                id: `produtos-edit-${selectedProduct.id}`,
+                label: `Editar: ${selectedProduct.name}`,
+                icon: Pencil,
+                path: "/admin/produtos",
+                activateKey: `edit:${selectedProduct.id}`,
+              }
+            : {
+                id: "produtos-create",
+                label: "Novo Produto",
+                icon: Plus,
+                path: "/admin/produtos",
+                activateKey: "create",
+              }
+        }
         footer={
           <div className="flex items-center gap-2 w-full">
             <Button
               variant="ghost"
               size="sm"
-              onClick={resetForm}
+              onClick={() => {
+                setIsProductSheetOpen(false);
+                resetForm();
+              }}
               className="gap-1.5 text-xs"
             >
               <X className="h-3.5 w-3.5" />
               Cancelar
             </Button>
+            {selectedProduct && (
+              <Popover
+                open={versionHistory.open}
+                onOpenChange={(open) =>
+                  open ? handleOpenVersionHistory() : setVersionHistory((v) => ({ ...v, open: false }))
+                }
+              >
+                <PopoverTrigger asChild>
+                  <Button variant="outline" size="sm" className="gap-1.5 text-xs">
+                    <History className="h-3.5 w-3.5" />
+                    Histórico
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent align="start" className="w-80 p-0 max-h-96 overflow-y-auto">
+                  <div className="px-3 py-2.5 border-b border-slate-100 dark:border-slate-700">
+                    <p className="text-xs font-semibold text-slate-700 dark:text-slate-300">
+                      Histórico de versões
+                    </p>
+                    <p className="text-[11px] text-slate-400">
+                      Snapshot automático a cada vez que o produto é salvo
+                    </p>
+                  </div>
+                  {versionHistory.loading && (
+                    <div className="flex items-center gap-2 px-3 py-4 text-xs text-slate-500">
+                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                      Carregando…
+                    </div>
+                  )}
+                  {versionHistory.error && (
+                    <p className="px-3 py-3 text-xs text-red-600 dark:text-red-400">
+                      {versionHistory.error}
+                    </p>
+                  )}
+                  {!versionHistory.loading && !versionHistory.error && versionHistory.versions.length === 0 && (
+                    <p className="px-3 py-4 text-xs text-slate-400">
+                      Nenhuma versão anterior ainda — o histórico começa a partir do próximo salvamento.
+                    </p>
+                  )}
+                  {versionHistory.versions.map((v) => (
+                    <div
+                      key={v.id}
+                      className="flex items-center justify-between gap-2 px-3 py-2.5 border-b border-slate-50 dark:border-slate-800 last:border-0"
+                    >
+                      <div className="min-w-0">
+                        <p className="text-xs font-medium text-slate-700 dark:text-slate-300 truncate">
+                          {new Date(v.created_at).toLocaleString("pt-BR")}
+                        </p>
+                        {v.name && (
+                          <p className="text-[11px] text-slate-400 truncate">{v.name}</p>
+                        )}
+                      </div>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        disabled={versionHistory.restoring === v.id}
+                        onClick={() => handleRequestRestoreVersion(v)}
+                        className="h-7 px-2 text-[11px] gap-1 shrink-0"
+                      >
+                        {versionHistory.restoring === v.id ? (
+                          <Loader2 className="h-3 w-3 animate-spin" />
+                        ) : (
+                          <RotateCcw className="h-3 w-3" />
+                        )}
+                        Restaurar
+                      </Button>
+                    </div>
+                  ))}
+                </PopoverContent>
+              </Popover>
+            )}
             <div className="ml-auto flex items-center gap-2">
               <Button
                 variant="outline"
@@ -6491,7 +8781,7 @@ export default function AdminProdutosPage() {
               </Button>
               <Button
                 size="sm"
-                onClick={handleSaveProduct}
+                onClick={() => setIsSaveConfirmOpen(true)}
                 disabled={isSavingProduct}
                 className="btn-brand gap-1.5 text-xs"
               >
@@ -6532,7 +8822,59 @@ export default function AdminProdutosPage() {
 
           <div className="flex-1 overflow-auto">
             <div className="p-6">
-              <Tabs defaultValue="info" className="space-y-3">
+              {(missingRequiredItems.length > 0 ||
+                missingRecommendedItems.length > 0) && (
+                <div className="mb-4 rounded-xl border border-amber-300 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/30 overflow-hidden">
+                  <div className="flex items-center gap-2 px-4 py-2.5 border-b border-amber-200 dark:border-amber-800/60">
+                    <AlertTriangle className="h-4 w-4 text-amber-600 dark:text-amber-500 shrink-0" />
+                    <span className="text-sm font-semibold text-amber-800 dark:text-amber-300">
+                      Cadastro incompleto
+                    </span>
+                    <span className="text-xs text-amber-700/80 dark:text-amber-400/80">
+                      {missingRequiredItems.length > 0
+                        ? `${missingRequiredItems.length} obrigatório(s)`
+                        : ""}
+                      {missingRequiredItems.length > 0 &&
+                      missingRecommendedItems.length > 0
+                        ? " · "
+                        : ""}
+                      {missingRecommendedItems.length > 0
+                        ? `${missingRecommendedItems.length} recomendado(s)`
+                        : ""}{" "}
+                      pendente(s) — clique para ir direto ao campo
+                    </span>
+                  </div>
+                  <div className="flex flex-wrap gap-1.5 p-3">
+                    {missingRequiredItems.map((item) => (
+                      <button
+                        key={item.key}
+                        type="button"
+                        onClick={() => jumpToProductField(item.tab, item.key)}
+                        className="inline-flex items-center gap-1.5 text-sm font-medium px-2.5 py-1.5 rounded-lg bg-red-100 hover:bg-red-200 dark:bg-red-950/40 dark:hover:bg-red-950/70 text-red-700 dark:text-red-400 transition-colors"
+                      >
+                        <AlertTriangle className="h-3.5 w-3.5" />
+                        {item.label}
+                      </button>
+                    ))}
+                    {missingRecommendedItems.map((item) => (
+                      <button
+                        key={item.key}
+                        type="button"
+                        onClick={() => jumpToProductField(item.tab, item.key)}
+                        className="inline-flex items-center gap-1.5 text-sm font-medium px-2.5 py-1.5 rounded-lg bg-amber-100 hover:bg-amber-200 dark:bg-amber-900/40 dark:hover:bg-amber-900/70 text-amber-800 dark:text-amber-400 transition-colors"
+                      >
+                        {item.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              <Tabs
+                value={productFormTab}
+                onValueChange={setProductFormTab}
+                className="space-y-3"
+              >
                 <div className="-mx-6 px-6 sticky top-0 z-10 bg-background border-b border-slate-200 dark:border-slate-700">
                   <TooltipProvider>
                     <TabsList className="w-full justify-start bg-transparent p-0 rounded-none gap-0 h-auto border-0 flex-wrap">
@@ -6540,7 +8882,7 @@ export default function AdminProdutosPage() {
                         <TooltipTrigger asChild>
                           <TabsTrigger
                             value="info"
-                            className="relative h-10 px-4 rounded-none bg-transparent border-0 shadow-none text-xs font-medium text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200 data-[state=active]:text-blue-600 data-[state=active]:bg-transparent data-[state=active]:shadow-none gap-1.5 after:absolute after:bottom-0 after:inset-x-0 after:h-0.5 after:bg-blue-500 after:scale-x-0 data-[state=active]:after:scale-x-100 after:transition-transform"
+                            className="relative h-10 px-4 rounded-none bg-transparent border-0 shadow-none text-sm font-medium text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200 data-[state=active]:text-blue-600 data-[state=active]:bg-transparent data-[state=active]:shadow-none gap-1.5 after:absolute after:bottom-0 after:inset-x-0 after:h-0.5 after:bg-blue-500 after:scale-x-0 data-[state=active]:after:scale-x-100 after:transition-transform"
                           >
                             <Package className="h-3.5 w-3.5" />
                             Informações
@@ -6556,7 +8898,7 @@ export default function AdminProdutosPage() {
                         <TooltipTrigger asChild>
                           <TabsTrigger
                             value="apresentacao"
-                            className="relative h-10 px-4 rounded-none bg-transparent border-0 shadow-none text-xs font-medium text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200 data-[state=active]:text-blue-600 data-[state=active]:bg-transparent data-[state=active]:shadow-none gap-1.5 after:absolute after:bottom-0 after:inset-x-0 after:h-0.5 after:bg-blue-500 after:scale-x-0 data-[state=active]:after:scale-x-100 after:transition-transform"
+                            className="relative h-10 px-4 rounded-none bg-transparent border-0 shadow-none text-sm font-medium text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200 data-[state=active]:text-blue-600 data-[state=active]:bg-transparent data-[state=active]:shadow-none gap-1.5 after:absolute after:bottom-0 after:inset-x-0 after:h-0.5 after:bg-blue-500 after:scale-x-0 data-[state=active]:after:scale-x-100 after:transition-transform"
                           >
                             <ImageIcon className="h-3.5 w-3.5" />
                             Apresentação
@@ -6573,13 +8915,13 @@ export default function AdminProdutosPage() {
                         <TooltipTrigger asChild>
                           <TabsTrigger
                             value="complementares"
-                            className="relative h-10 px-4 rounded-none bg-transparent border-0 shadow-none text-xs font-medium text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200 data-[state=active]:text-blue-600 data-[state=active]:bg-transparent data-[state=active]:shadow-none gap-1.5 after:absolute after:bottom-0 after:inset-x-0 after:h-0.5 after:bg-blue-500 after:scale-x-0 data-[state=active]:after:scale-x-100 after:transition-transform"
+                            className="relative h-10 px-4 rounded-none bg-transparent border-0 shadow-none text-sm font-medium text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200 data-[state=active]:text-blue-600 data-[state=active]:bg-transparent data-[state=active]:shadow-none gap-1.5 after:absolute after:bottom-0 after:inset-x-0 after:h-0.5 after:bg-blue-500 after:scale-x-0 data-[state=active]:after:scale-x-100 after:transition-transform"
                           >
                             <Link2 className="h-3.5 w-3.5" />
                             Complementares
                             {productFormData.complementaryProducts.length >
                               0 && (
-                              <span className="ml-0.5 h-4 min-w-4 px-1 rounded-full bg-indigo-100 dark:bg-indigo-900/40 text-indigo-600 dark:text-indigo-400 text-[10px] font-bold flex items-center justify-center">
+                              <span className="ml-0.5 h-4 min-w-4 px-1 rounded-full bg-indigo-100 dark:bg-indigo-900/40 text-indigo-600 dark:text-indigo-400 text-[11px] font-bold flex items-center justify-center">
                                 {productFormData.complementaryProducts.length}
                               </span>
                             )}
@@ -6596,7 +8938,7 @@ export default function AdminProdutosPage() {
                         <TooltipTrigger asChild>
                           <TabsTrigger
                             value="solicitar"
-                            className="relative h-10 px-4 rounded-none bg-transparent border-0 shadow-none text-xs font-medium text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200 data-[state=active]:text-blue-600 data-[state=active]:bg-transparent data-[state=active]:shadow-none gap-1.5 after:absolute after:bottom-0 after:inset-x-0 after:h-0.5 after:bg-blue-500 after:scale-x-0 data-[state=active]:after:scale-x-100 after:transition-transform"
+                            className="relative h-10 px-4 rounded-none bg-transparent border-0 shadow-none text-sm font-medium text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200 data-[state=active]:text-blue-600 data-[state=active]:bg-transparent data-[state=active]:shadow-none gap-1.5 after:absolute after:bottom-0 after:inset-x-0 after:h-0.5 after:bg-blue-500 after:scale-x-0 data-[state=active]:after:scale-x-100 after:transition-transform"
                           >
                             <ListChecks className="h-3.5 w-3.5" />
                             Solicitação
@@ -6613,7 +8955,7 @@ export default function AdminProdutosPage() {
                         <TooltipTrigger asChild>
                           <TabsTrigger
                             value="tarefas"
-                            className="relative h-10 px-4 rounded-none bg-transparent border-0 shadow-none text-xs font-medium text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200 data-[state=active]:text-blue-600 data-[state=active]:bg-transparent data-[state=active]:shadow-none gap-1.5 after:absolute after:bottom-0 after:inset-x-0 after:h-0.5 after:bg-blue-500 after:scale-x-0 data-[state=active]:after:scale-x-100 after:transition-transform"
+                            className="relative h-10 px-4 rounded-none bg-transparent border-0 shadow-none text-sm font-medium text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200 data-[state=active]:text-blue-600 data-[state=active]:bg-transparent data-[state=active]:shadow-none gap-1.5 after:absolute after:bottom-0 after:inset-x-0 after:h-0.5 after:bg-blue-500 after:scale-x-0 data-[state=active]:after:scale-x-100 after:transition-transform"
                           >
                             <Layers className="h-3.5 w-3.5" />
                             Tarefas
@@ -6630,7 +8972,7 @@ export default function AdminProdutosPage() {
                         <TooltipTrigger asChild>
                           <TabsTrigger
                             value="customizacao"
-                            className="relative h-10 px-4 rounded-none bg-transparent border-0 shadow-none text-xs font-medium text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200 data-[state=active]:text-blue-600 data-[state=active]:bg-transparent data-[state=active]:shadow-none gap-1.5 after:absolute after:bottom-0 after:inset-x-0 after:h-0.5 after:bg-blue-500 after:scale-x-0 data-[state=active]:after:scale-x-100 after:transition-transform"
+                            className="relative h-10 px-4 rounded-none bg-transparent border-0 shadow-none text-sm font-medium text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200 data-[state=active]:text-blue-600 data-[state=active]:bg-transparent data-[state=active]:shadow-none gap-1.5 after:absolute after:bottom-0 after:inset-x-0 after:h-0.5 after:bg-blue-500 after:scale-x-0 data-[state=active]:after:scale-x-100 after:transition-transform"
                           >
                             <SlidersHorizontal className="h-3.5 w-3.5" />
                             Opções
@@ -6647,7 +8989,7 @@ export default function AdminProdutosPage() {
                         <TooltipTrigger asChild>
                           <TabsTrigger
                             value="questionario"
-                            className="relative h-10 px-4 rounded-none bg-transparent border-0 shadow-none text-xs font-medium text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200 data-[state=active]:text-blue-600 data-[state=active]:bg-transparent data-[state=active]:shadow-none gap-1.5 after:absolute after:bottom-0 after:inset-x-0 after:h-0.5 after:bg-blue-500 after:scale-x-0 data-[state=active]:after:scale-x-100 after:transition-transform"
+                            className="relative h-10 px-4 rounded-none bg-transparent border-0 shadow-none text-sm font-medium text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200 data-[state=active]:text-blue-600 data-[state=active]:bg-transparent data-[state=active]:shadow-none gap-1.5 after:absolute after:bottom-0 after:inset-x-0 after:h-0.5 after:bg-blue-500 after:scale-x-0 data-[state=active]:after:scale-x-100 after:transition-transform"
                           >
                             <FileQuestion className="h-3.5 w-3.5" />
                             Questionário
@@ -6665,10 +9007,10 @@ export default function AdminProdutosPage() {
                 </div>
 
                 <TabsContent value="info" className="space-y-3 mt-3">
-                  <div className="grid grid-cols-3 gap-3">
-                    <div className="space-y-1.5 bg-card p-3 rounded-lg border">
+                  <div className="grid grid-cols-3 gap-4">
+                    <div className="space-y-2 bg-card p-4 rounded-lg border">
                       <TooltipProvider>
-                        <Label className="text-xs font-semibold flex items-center gap-1">
+                        <Label className="text-sm font-semibold flex items-center gap-1">
                           ID do Produto
                           <Tooltip>
                             <TooltipTrigger asChild>
@@ -6690,14 +9032,17 @@ export default function AdminProdutosPage() {
                           `PROD-${Date.now().toString().slice(-6)}`
                         }
                         readOnly
-                        className="text-xs bg-muted"
+                        className="text-sm bg-muted"
                       />
                     </div>
 
-                    <div className="col-span-2 space-y-1.5 bg-card p-3 rounded-lg border">
-                      <Label className="text-xs font-semibold">
-                        Nome do Produto <span className="text-red-500">*</span>
-                      </Label>
+                    <div id="product-field-name" className="col-span-2 space-y-2 bg-card p-4 rounded-lg border scroll-mt-16">
+                      <div className="flex items-center justify-between gap-2">
+                        <Label className="text-sm font-semibold">
+                          Nome do Produto <span className="text-red-500">*</span>
+                        </Label>
+                        <AiFieldButton fieldName="name" />
+                      </div>
                       <Input
                         placeholder="Ex: Pauta de Conteúdo com 20 temas"
                         value={productFormData.name}
@@ -6707,19 +9052,19 @@ export default function AdminProdutosPage() {
                             name: e.target.value,
                           })
                         }
-                        className="text-xs"
+                        className="text-sm"
                       />
                     </div>
                   </div>
 
                   {/* ── Cover Image ── */}
-                  <div className="rounded-xl border border-slate-200 dark:border-slate-700 overflow-hidden">
+                  <div id="product-field-productImage" className="rounded-xl border border-slate-200 dark:border-slate-700 overflow-hidden scroll-mt-16">
                     <div className="flex items-center gap-2 px-4 py-2.5 border-b border-slate-100 dark:border-slate-700 bg-slate-50/60 dark:bg-slate-800/40">
                       <ImageIcon className="h-3.5 w-3.5 text-blue-500 shrink-0" />
-                      <span className="text-xs font-semibold text-slate-700 dark:text-slate-300">
+                      <span className="text-sm font-semibold text-slate-700 dark:text-slate-300">
                         Imagem de Capa
                       </span>
-                      <span className="text-[10px] text-slate-400 hidden sm:block">
+                      <span className="text-[11px] text-slate-400 hidden sm:block">
                         · aparece no catálogo e nos cards de produto
                       </span>
                       {productFormData.productImagePreview && (
@@ -6731,7 +9076,7 @@ export default function AdminProdutosPage() {
                               productImagePreview: "",
                             })
                           }
-                          className="ml-auto flex items-center gap-1 text-[11px] font-medium text-red-500 hover:text-red-700 transition-colors px-2 py-1 rounded-lg hover:bg-red-50 dark:hover:bg-red-950/30"
+                          className="ml-auto flex items-center gap-1 text-xs font-medium text-red-500 hover:text-red-700 transition-colors px-2 py-1 rounded-lg hover:bg-red-50 dark:hover:bg-red-950/30"
                         >
                           <X className="h-3 w-3" /> Remover
                         </button>
@@ -6753,7 +9098,7 @@ export default function AdminProdutosPage() {
                             />
                             <div className="absolute inset-0 bg-linear-to-t from-black/30 via-transparent to-transparent pointer-events-none" />
                             <div className="absolute bottom-2 left-3">
-                              <span className="text-[10px] font-semibold text-white/90 bg-black/40 px-2 py-0.5 rounded-full backdrop-blur-sm">
+                              <span className="text-[11px] font-semibold text-white/90 bg-black/40 px-2 py-0.5 rounded-full backdrop-blur-sm">
                                 Imagem de capa ativa
                               </span>
                             </div>
@@ -6762,10 +9107,10 @@ export default function AdminProdutosPage() {
                           <div className="w-full h-full flex flex-col items-center justify-center gap-2">
                             <div className="flex flex-col items-center justify-center gap-2 border-2 border-dashed border-slate-200 dark:border-slate-700 rounded-lg w-full h-full">
                               <ImageIcon className="h-8 w-8 text-slate-300 dark:text-slate-600" />
-                              <p className="text-xs text-slate-400 font-medium">
+                              <p className="text-sm text-slate-400 font-medium">
                                 Nenhuma imagem de capa
                               </p>
-                              <p className="text-[10px] text-slate-400">
+                              <p className="text-[11px] text-slate-400">
                                 Cole o caminho abaixo para visualizar
                               </p>
                             </div>
@@ -6773,8 +9118,8 @@ export default function AdminProdutosPage() {
                         )}
                       </div>
                       {/* URL input */}
-                      <div className="px-4 py-3 space-y-1.5 border-t border-slate-100 dark:border-slate-700/60">
-                        <label className="text-[10px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">
+                      <div className="px-4 py-3 space-y-2 border-t border-slate-100 dark:border-slate-700/60">
+                        <label className="text-[11px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">
                           Caminho / URL da imagem
                         </label>
                         <Input
@@ -6786,9 +9131,9 @@ export default function AdminProdutosPage() {
                               productImagePreview: e.target.value,
                             })
                           }
-                          className="text-xs h-8 font-mono"
+                          className="text-sm h-8 font-mono"
                         />
-                        <p className="text-[10px] text-muted-foreground">
+                        <p className="text-[11px] text-muted-foreground">
                           Tamanho recomendado: <strong>800 × 500 px</strong> ·
                           formatos aceitos: JPG, PNG, SVG, WebP
                         </p>
@@ -6800,15 +9145,15 @@ export default function AdminProdutosPage() {
                   <div className="rounded-xl border border-slate-200 dark:border-slate-700 overflow-hidden">
                     <div className="flex items-center gap-2 px-4 py-2.5 border-b border-slate-100 dark:border-slate-700 bg-slate-50/60 dark:bg-slate-800/40">
                       <Grid3x3 className="h-3.5 w-3.5 text-violet-500 shrink-0" />
-                      <span className="text-xs font-semibold text-slate-700 dark:text-slate-300">
+                      <span className="text-sm font-semibold text-slate-700 dark:text-slate-300">
                         Portfólio / Galeria
                       </span>
                       {portfolioImages.length > 0 && (
-                        <span className="text-[10px] font-semibold text-violet-600 bg-violet-100 dark:bg-violet-900/40 px-1.5 py-0.5 rounded-full">
+                        <span className="text-[11px] font-semibold text-violet-600 bg-violet-100 dark:bg-violet-900/40 px-1.5 py-0.5 rounded-full">
                           {portfolioImages.length}
                         </span>
                       )}
-                      <span className="text-[10px] text-slate-400 hidden sm:block">
+                      <span className="text-[11px] text-slate-400 hidden sm:block">
                         · exibido no drawer de detalhes
                       </span>
                       <button
@@ -6826,7 +9171,7 @@ export default function AdminProdutosPage() {
                             },
                           ]);
                         }}
-                        className="ml-auto flex items-center gap-1 text-[11px] font-medium text-violet-600 hover:text-violet-700 transition-colors px-2.5 py-1 rounded-lg hover:bg-violet-50 dark:hover:bg-violet-950/30 border border-violet-200 dark:border-violet-800"
+                        className="ml-auto flex items-center gap-1 text-xs font-medium text-violet-600 hover:text-violet-700 transition-colors px-2.5 py-1 rounded-lg hover:bg-violet-50 dark:hover:bg-violet-950/30 border border-violet-200 dark:border-violet-800"
                       >
                         <Plus className="h-3 w-3" /> Adicionar
                       </button>
@@ -6837,15 +9182,15 @@ export default function AdminProdutosPage() {
                         <div className="h-14 w-14 rounded-2xl bg-slate-100 dark:bg-slate-800 flex items-center justify-center mb-3">
                           <Grid3x3 className="h-6 w-6 text-slate-300 dark:text-slate-600" />
                         </div>
-                        <p className="text-xs text-slate-500 dark:text-slate-400 font-medium">
+                        <p className="text-sm text-slate-500 dark:text-slate-400 font-medium">
                           Nenhuma imagem no portfólio
                         </p>
-                        <p className="text-[10px] text-slate-400 mt-0.5">
+                        <p className="text-[11px] text-slate-400 mt-0.5">
                           Adicione imagens para exibir na galeria do produto
                         </p>
                       </div>
                     ) : (
-                      <div className="p-3 space-y-2 bg-card">
+                      <div className="p-4 space-y-2 bg-card">
                         {/* Grid de thumbnails */}
                         <div className="grid grid-cols-3 gap-2">
                           {portfolioImages.map((img, idx) => (
@@ -6899,7 +9244,7 @@ export default function AdminProdutosPage() {
                                     );
                                   }}
                                   disabled={idx === 0}
-                                  className="h-7 w-7 rounded-lg bg-white/90 text-slate-700 flex items-center justify-center text-xs font-bold hover:bg-white disabled:opacity-25 shadow-sm transition-colors"
+                                  className="h-7 w-7 rounded-lg bg-white/90 text-slate-700 flex items-center justify-center text-sm font-bold hover:bg-white disabled:opacity-25 shadow-sm transition-colors"
                                   title="Mover para esquerda"
                                 >
                                   ←
@@ -6936,7 +9281,7 @@ export default function AdminProdutosPage() {
                                     );
                                   }}
                                   disabled={idx === portfolioImages.length - 1}
-                                  className="h-7 w-7 rounded-lg bg-white/90 text-slate-700 flex items-center justify-center text-xs font-bold hover:bg-white disabled:opacity-25 shadow-sm transition-colors"
+                                  className="h-7 w-7 rounded-lg bg-white/90 text-slate-700 flex items-center justify-center text-sm font-bold hover:bg-white disabled:opacity-25 shadow-sm transition-colors"
                                   title="Mover para direita"
                                 >
                                   →
@@ -6967,14 +9312,14 @@ export default function AdminProdutosPage() {
                           {portfolioImages.map((img, idx) => (
                             <div
                               key={img.id}
-                              className={`rounded-lg border p-2.5 space-y-1.5 transition-all ${
+                              className={`rounded-lg border p-2.5 space-y-2 transition-all ${
                                 img.isMain
                                   ? "border-blue-200 dark:border-blue-800/40 bg-blue-50/40 dark:bg-blue-950/10"
                                   : "border-slate-100 dark:border-slate-800 bg-slate-50/30 dark:bg-slate-900/20"
                               }`}
                             >
                               <div className="flex items-center gap-2 mb-1">
-                                <span className="text-[10px] font-semibold text-muted-foreground">
+                                <span className="text-[11px] font-semibold text-muted-foreground">
                                   Imagem {idx + 1}
                                   {img.isMain ? " · Destaque" : ""}
                                 </span>
@@ -6989,7 +9334,7 @@ export default function AdminProdutosPage() {
                                         })),
                                       )
                                     }
-                                    className="ml-auto text-[10px] font-medium text-blue-600 hover:text-blue-800 px-1.5 py-0.5 rounded-md hover:bg-blue-100 dark:hover:bg-blue-900/30 transition-colors"
+                                    className="ml-auto text-[11px] font-medium text-blue-600 hover:text-blue-800 px-1.5 py-0.5 rounded-md hover:bg-blue-100 dark:hover:bg-blue-900/30 transition-colors"
                                   >
                                     Definir como destaque
                                   </button>
@@ -7006,7 +9351,7 @@ export default function AdminProdutosPage() {
                                   };
                                   setPortfolioImages(updated);
                                 }}
-                                className="text-[11px] h-7 px-2 font-mono"
+                                className="text-xs h-7 px-2 font-mono"
                               />
                               <Input
                                 placeholder="Título (opcional)"
@@ -7019,7 +9364,7 @@ export default function AdminProdutosPage() {
                                   };
                                   setPortfolioImages(updated);
                                 }}
-                                className="text-[11px] h-7 px-2"
+                                className="text-xs h-7 px-2"
                               />
                             </div>
                           ))}
@@ -7032,13 +9377,13 @@ export default function AdminProdutosPage() {
                   <div className="rounded-xl border border-slate-200 dark:border-slate-700 overflow-hidden">
                     <div className="flex items-center gap-2 px-4 py-2.5 bg-slate-50/60 dark:bg-slate-800/40 border-b border-slate-100 dark:border-slate-700">
                       <SlidersHorizontal className="h-3.5 w-3.5 text-slate-500 shrink-0" />
-                      <span className="text-xs font-semibold text-slate-700 dark:text-slate-300">
+                      <span className="text-sm font-semibold text-slate-700 dark:text-slate-300">
                         Classificação e Preço
                       </span>
                     </div>
-                    <div className="p-4 grid grid-cols-2 gap-3">
-                      <div className="space-y-1.5 col-span-2">
-                        <Label className="text-xs font-medium text-muted-foreground">
+                    <div className="p-4 grid grid-cols-2 gap-4">
+                      <div id="product-field-categories" className="space-y-2 col-span-2 scroll-mt-16">
+                        <Label className="text-sm font-medium text-muted-foreground">
                           Categoria <span className="text-red-500">*</span>{" "}
                           <span className="text-slate-400 font-normal">(selecione uma ou mais)</span>
                         </Label>
@@ -7070,7 +9415,7 @@ export default function AdminProdutosPage() {
                                       : current[0] === cat || current.length === 0 ? cat : current[0],
                                   });
                                 }}
-                                className={`px-2.5 py-1 rounded-full text-[11px] font-medium border transition-colors ${
+                                className={`px-2.5 py-1 rounded-full text-xs font-medium border transition-colors ${
                                   selected
                                     ? "bg-blue-600 text-white border-blue-600"
                                     : "bg-transparent text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-700 hover:border-blue-400 hover:text-blue-600"
@@ -7082,9 +9427,9 @@ export default function AdminProdutosPage() {
                           })}
                         </div>
                       </div>
-                      <div className="space-y-1.5">
+                      <div className="space-y-2">
                         <TooltipProvider>
-                          <Label className="text-xs font-medium text-muted-foreground flex items-center gap-1">
+                          <Label className="text-sm font-medium text-muted-foreground flex items-center gap-1">
                             Recorrência
                             <Tooltip>
                               <TooltipTrigger asChild>
@@ -7108,7 +9453,7 @@ export default function AdminProdutosPage() {
                             })
                           }
                         >
-                          <SelectTrigger className="text-xs h-8">
+                          <SelectTrigger className="text-sm h-8">
                             <SelectValue placeholder="Selecione" />
                           </SelectTrigger>
                           <SelectContent>
@@ -7120,9 +9465,9 @@ export default function AdminProdutosPage() {
                           </SelectContent>
                         </Select>
                       </div>
-                      <div className="space-y-1.5">
+                      <div className="space-y-2">
                         <TooltipProvider>
-                          <Label className="text-xs font-medium text-muted-foreground flex items-center gap-1">
+                          <Label className="text-sm font-medium text-muted-foreground flex items-center gap-1">
                             Preço (Calculado){" "}
                             <span className="text-red-500">*</span>
                             <Tooltip>
@@ -7146,7 +9491,7 @@ export default function AdminProdutosPage() {
                               formatCurrency(calculateAutomaticPrice())
                             }
                             readOnly
-                            className="text-xs h-8 bg-emerald-50 dark:bg-emerald-950/20 font-semibold text-emerald-700 dark:text-emerald-400"
+                            className="text-sm h-8 bg-emerald-50 dark:bg-emerald-950/20 font-semibold text-emerald-700 dark:text-emerald-400"
                           />
                           <TooltipProvider>
                             <Tooltip>
@@ -7168,11 +9513,83 @@ export default function AdminProdutosPage() {
                               </TooltipContent>
                             </Tooltip>
                           </TooltipProvider>
+                          <TooltipProvider>
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={handleResearchPricing}
+                                  disabled={pricingResearch.loading}
+                                  className="h-8 px-2 bg-transparent shrink-0 text-violet-600 dark:text-violet-400 border-violet-200 dark:border-violet-800"
+                                >
+                                  {pricingResearch.loading ? (
+                                    <Loader2 className="h-3 w-3 animate-spin" />
+                                  ) : (
+                                    <Sparkles className="h-3 w-3" />
+                                  )}
+                                </Button>
+                              </TooltipTrigger>
+                              <TooltipContent>
+                                <p>
+                                  Pesquisar preço de mercado com IA (busca real
+                                  na internet: freelancer, agência, região)
+                                </p>
+                              </TooltipContent>
+                            </Tooltip>
+                          </TooltipProvider>
                         </div>
                       </div>
-                      <div className="space-y-1.5">
+
+                      {(pricingResearch.loading ||
+                        pricingResearch.text ||
+                        pricingResearch.error) && (
+                        <div className="col-span-2 rounded-xl border border-violet-200 dark:border-violet-800 bg-violet-50/60 dark:bg-violet-950/20 overflow-hidden">
+                          <div className="flex items-center gap-2 px-4 py-2.5 border-b border-violet-200 dark:border-violet-800/60">
+                            <Sparkles className="h-3.5 w-3.5 text-violet-600 dark:text-violet-400 shrink-0" />
+                            <span className="text-sm font-semibold text-violet-800 dark:text-violet-300">
+                              Pesquisa de preço de mercado (IA)
+                            </span>
+                          </div>
+                          <div className="p-4 space-y-3">
+                            {pricingResearch.loading && (
+                              <div className="flex items-center gap-2 text-sm text-violet-600 dark:text-violet-400">
+                                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                Pesquisando preços atuais na internet…
+                              </div>
+                            )}
+                            {pricingResearch.error && (
+                              <p className="text-sm text-red-600 dark:text-red-400">
+                                {pricingResearch.error}
+                              </p>
+                            )}
+                            {pricingResearch.text && (
+                              <p className="text-sm text-slate-700 dark:text-slate-300 whitespace-pre-wrap leading-relaxed">
+                                {pricingResearch.text}
+                              </p>
+                            )}
+                            {pricingResearch.sources.length > 0 && (
+                              <div className="flex flex-wrap gap-x-3 gap-y-1 pt-2 border-t border-violet-200/60 dark:border-violet-800/40">
+                                {pricingResearch.sources.map((s, i) => (
+                                  <a
+                                    key={i}
+                                    href={s.url}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="text-xs text-violet-600 dark:text-violet-400 hover:underline truncate max-w-[220px]"
+                                  >
+                                    {s.title}
+                                  </a>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      )}
+
+                      <div className="space-y-2">
                         <TooltipProvider>
-                          <Label className="text-xs font-medium text-muted-foreground flex items-center gap-1">
+                          <Label className="text-sm font-medium text-muted-foreground flex items-center gap-1">
                             Dias de Entrega{" "}
                             {!_hasEditStages && <span className="text-red-500">*</span>}
                             <Tooltip>
@@ -7190,7 +9607,7 @@ export default function AdminProdutosPage() {
                           </Label>
                         </TooltipProvider>
                         {_hasEditStages ? (
-                          <div className="flex items-center gap-2 h-8 px-3 rounded-md border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/40 text-xs text-slate-600 dark:text-slate-400">
+                          <div className="flex items-center gap-2 h-8 px-3 rounded-md border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/40 text-sm text-slate-600 dark:text-slate-400">
                             <span className="font-semibold text-slate-800 dark:text-slate-200">{_autoDeliveryDays}d</span>
                             <span className="text-slate-400">· calculado das {(_editStages as any[]).length} etapas</span>
                           </div>
@@ -7205,7 +9622,7 @@ export default function AdminProdutosPage() {
                                 deliveryDays: e.target.value,
                               })
                             }
-                            className="text-xs h-8"
+                            className="text-sm h-8"
                             min="0"
                           />
                         )}
@@ -7217,7 +9634,7 @@ export default function AdminProdutosPage() {
                   <div className="rounded-xl border border-slate-200 dark:border-slate-700 overflow-hidden">
                     <div className="flex items-center gap-2 px-4 py-2.5 bg-slate-50/60 dark:bg-slate-800/40 border-b border-slate-100 dark:border-slate-700">
                       <Filter className="h-3.5 w-3.5 text-slate-500 shrink-0" />
-                      <span className="text-xs font-semibold text-slate-700 dark:text-slate-300">
+                      <span className="text-sm font-semibold text-slate-700 dark:text-slate-300">
                         Tags e Subcategorias
                       </span>
                       <TooltipProvider>
@@ -7235,8 +9652,8 @@ export default function AdminProdutosPage() {
                       </TooltipProvider>
                     </div>
                     <div className="p-4 space-y-3">
-                      <div className="space-y-1.5">
-                        <Label className="text-xs font-medium text-muted-foreground">
+                      <div className="space-y-2">
+                        <Label className="text-sm font-medium text-muted-foreground">
                           Tags
                         </Label>
                         <div className="flex flex-wrap gap-2 p-2 rounded-lg bg-muted/30 border border-slate-200 dark:border-slate-700 min-h-[36px]">
@@ -7244,7 +9661,7 @@ export default function AdminProdutosPage() {
                             <Badge
                               key={tag}
                               variant="outline"
-                              className="text-xs font-normal cursor-pointer group"
+                              className="text-sm font-normal cursor-pointer group"
                             >
                               {tag}
                               <button
@@ -7260,15 +9677,15 @@ export default function AdminProdutosPage() {
                             onChange={(e) => setCustomTagInput(e.target.value)}
                             onKeyDown={handleTagInputKeyDown}
                             placeholder="Adicionar tag..."
-                            className="h-6 w-auto text-xs border-0 bg-transparent flex-grow p-0 focus-visible:ring-0 shadow-none min-w-[100px]"
+                            className="h-6 w-auto text-sm border-0 bg-transparent flex-grow p-0 focus-visible:ring-0 shadow-none min-w-[100px]"
                           />
                         </div>
-                        <p className="text-[10px] text-muted-foreground">
+                        <p className="text-[11px] text-muted-foreground">
                           Pressione Enter para adicionar.
                         </p>
                       </div>
-                      <div className="space-y-1.5">
-                        <Label className="text-xs font-medium text-muted-foreground">
+                      <div className="space-y-2">
+                        <Label className="text-sm font-medium text-muted-foreground">
                           Subcategorias
                         </Label>
                         <div className="flex flex-wrap gap-2 p-2 rounded-lg bg-muted/30 border border-slate-200 dark:border-slate-700 min-h-[36px]">
@@ -7276,7 +9693,7 @@ export default function AdminProdutosPage() {
                             <Badge
                               key={subcategory}
                               variant="secondary"
-                              className="text-xs font-normal cursor-pointer group"
+                              className="text-sm font-normal cursor-pointer group"
                             >
                               {subcategory}
                               <button
@@ -7300,7 +9717,7 @@ export default function AdminProdutosPage() {
                                 variant="outline"
                                 size="sm"
                                 onClick={() => toggleSubcategory(sub)}
-                                className="text-xs h-7"
+                                className="text-sm h-7"
                               >
                                 {sub}
                               </Button>
@@ -7314,16 +9731,19 @@ export default function AdminProdutosPage() {
                   <div className="rounded-xl border border-slate-200 dark:border-slate-700 overflow-hidden">
                     <div className="flex items-center gap-2 px-4 py-2.5 bg-slate-50/60 dark:bg-slate-800/40 border-b border-slate-100 dark:border-slate-700">
                       <FileText className="h-3.5 w-3.5 text-slate-500 shrink-0" />
-                      <span className="text-xs font-semibold text-slate-700 dark:text-slate-300">
+                      <span className="text-sm font-semibold text-slate-700 dark:text-slate-300">
                         Textos de Descrição
                       </span>
                     </div>
                     <div className="p-4 space-y-3">
-                      <div className="space-y-1.5">
-                        <Label className="text-xs font-medium text-muted-foreground">
-                          Descrição Detalhada{" "}
-                          <span className="text-red-500">*</span>
-                        </Label>
+                      <div className="space-y-2">
+                        <div className="flex items-center justify-between gap-2">
+                          <Label className="text-sm font-medium text-muted-foreground">
+                            Descrição Detalhada{" "}
+                            <span className="text-red-500">*</span>
+                          </Label>
+                          <AiFieldButton fieldName="description" />
+                        </div>
                         <Textarea
                           placeholder="Uma descrição completa do produto, incluindo escopo, objetivos e o que o cliente receberá."
                           value={productFormData.description}
@@ -7333,13 +9753,16 @@ export default function AdminProdutosPage() {
                               description: e.target.value,
                             })
                           }
-                          className="text-xs min-h-[150px]"
+                          className="text-sm min-h-[150px]"
                         />
                       </div>
-                      <div className="space-y-1.5">
-                        <Label className="text-xs font-medium text-muted-foreground">
-                          Resumo da Descrição
-                        </Label>
+                      <div id="product-field-summaryDescription" className="space-y-2 scroll-mt-16">
+                        <div className="flex items-center justify-between gap-2">
+                          <Label className="text-sm font-medium text-muted-foreground">
+                            Resumo da Descrição
+                          </Label>
+                          <AiFieldButton fieldName="summaryDescription" />
+                        </div>
                         <Textarea
                           placeholder="Um resumo conciso para listagens rápidas ou prévias."
                           value={productFormData.summaryDescription}
@@ -7349,14 +9772,17 @@ export default function AdminProdutosPage() {
                               summaryDescription: e.target.value,
                             })
                           }
-                          className="text-xs min-h-[80px]"
+                          className="text-sm min-h-[80px]"
                         />
                       </div>
-                      <div className="space-y-1.5">
-                        <Label className="text-xs font-medium text-muted-foreground flex items-center gap-1.5">
-                          <AlertTriangle className="h-3 w-3 text-amber-500" />
-                          Atenção na Descrição
-                        </Label>
+                      <div className="space-y-2">
+                        <div className="flex items-center justify-between gap-2">
+                          <Label className="text-sm font-medium text-muted-foreground flex items-center gap-1.5">
+                            <AlertTriangle className="h-3 w-3 text-amber-500" />
+                            Atenção na Descrição
+                          </Label>
+                          <AiFieldButton fieldName="descriptionAttention" />
+                        </div>
                         <Textarea
                           placeholder="Qualquer informação importante que o cliente deve saber antes de comprar."
                           value={productFormData.descriptionAttention}
@@ -7366,7 +9792,7 @@ export default function AdminProdutosPage() {
                               descriptionAttention: e.target.value,
                             })
                           }
-                          className="text-xs min-h-[80px]"
+                          className="text-sm min-h-[80px]"
                         />
                       </div>
                     </div>
@@ -7376,23 +9802,26 @@ export default function AdminProdutosPage() {
                   <div className="rounded-xl border border-slate-200 dark:border-slate-700 overflow-hidden">
                     <div className="flex items-center gap-2 px-4 py-2.5 bg-slate-50/60 dark:bg-slate-800/40 border-b border-slate-100 dark:border-slate-700">
                       <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500 shrink-0" />
-                      <span className="text-xs font-semibold text-slate-700 dark:text-slate-300">
+                      <span className="text-sm font-semibold text-slate-700 dark:text-slate-300">
                         Itens Inclusos e Excluídos
                       </span>
-                      <span className="text-[10px] text-slate-400 hidden sm:block">
+                      <span className="text-sm text-slate-400 hidden sm:block">
                         · pressione Enter para adicionar
                       </span>
                     </div>
-                    <div className="p-4 grid grid-cols-2 gap-3">
-                      <div className="space-y-1.5">
-                        <Label className="text-xs font-medium text-emerald-600 dark:text-emerald-400">
-                          ✓ Incluso
-                        </Label>
+                    <div className="p-4 grid grid-cols-2 gap-4">
+                      <div id="product-field-includedItems" className="space-y-2 scroll-mt-16">
+                        <div className="flex items-center justify-between gap-2">
+                          <Label className="text-sm font-medium text-emerald-600 dark:text-emerald-400">
+                            ✓ Incluso
+                          </Label>
+                          <AiFieldButton fieldName="includedItems" />
+                        </div>
                         <div className="flex flex-wrap gap-1.5 p-2 rounded-lg bg-emerald-50/50 dark:bg-emerald-950/20 border border-emerald-200 dark:border-emerald-800/40 min-h-[40px]">
                           {productFormData.includedItems.map((item, index) => (
                             <Badge
                               key={index}
-                              className="text-xs font-normal bg-emerald-100 text-emerald-800 border-0 cursor-pointer group"
+                              className="text-sm font-normal bg-emerald-100 text-emerald-800 border-0 cursor-pointer group"
                             >
                               {item}
                               <button
@@ -7429,20 +9858,23 @@ export default function AdminProdutosPage() {
                                 e.currentTarget.value = "";
                               }
                             }}
-                            className="h-6 w-auto text-xs border-0 bg-transparent flex-grow p-0 focus-visible:ring-0 shadow-none min-w-[80px]"
+                            className="h-6 w-auto text-sm border-0 bg-transparent flex-grow p-0 focus-visible:ring-0 shadow-none min-w-[80px]"
                           />
                         </div>
                       </div>
-                      <div className="space-y-1.5">
-                        <Label className="text-xs font-medium text-red-500">
-                          ✕ Não incluso
-                        </Label>
+                      <div id="product-field-notIncludedItems" className="space-y-2 scroll-mt-16">
+                        <div className="flex items-center justify-between gap-2">
+                          <Label className="text-sm font-medium text-red-500">
+                            ✕ Não incluso
+                          </Label>
+                          <AiFieldButton fieldName="notIncludedItems" />
+                        </div>
                         <div className="flex flex-wrap gap-1.5 p-2 rounded-lg bg-red-50/50 dark:bg-red-950/20 border border-red-200 dark:border-red-800/40 min-h-[40px]">
                           {productFormData.notIncludedItems.map(
                             (item, index) => (
                               <Badge
                                 key={index}
-                                className="text-xs font-normal bg-red-100 text-red-800 border-0 cursor-pointer group"
+                                className="text-sm font-normal bg-red-100 text-red-800 border-0 cursor-pointer group"
                               >
                                 {item}
                                 <button
@@ -7480,7 +9912,7 @@ export default function AdminProdutosPage() {
                                 e.currentTarget.value = "";
                               }
                             }}
-                            className="h-6 w-auto text-xs border-0 bg-transparent flex-grow p-0 focus-visible:ring-0 shadow-none min-w-[80px]"
+                            className="h-6 w-auto text-sm border-0 bg-transparent flex-grow p-0 focus-visible:ring-0 shadow-none min-w-[80px]"
                           />
                         </div>
                       </div>
@@ -7493,16 +9925,16 @@ export default function AdminProdutosPage() {
                   <div className="rounded-xl border border-slate-200 dark:border-slate-700 overflow-hidden">
                     <div className="flex items-center gap-2 px-4 py-2.5 bg-slate-50/60 dark:bg-slate-800/40 border-b border-slate-100 dark:border-slate-700">
                       <PlayCircle className="h-3.5 w-3.5 text-blue-500 shrink-0" />
-                      <span className="text-xs font-semibold text-slate-700 dark:text-slate-300">
+                      <span className="text-sm font-semibold text-slate-700 dark:text-slate-300">
                         Mídia e Texto
                       </span>
-                      <span className="text-[10px] text-slate-400 hidden sm:block">
+                      <span className="text-[11px] text-slate-400 hidden sm:block">
                         · exibido na página do produto para o cliente
                       </span>
                     </div>
                     <div className="p-4 space-y-3">
-                      <div className="space-y-1.5">
-                        <Label className="text-xs font-medium text-muted-foreground">
+                      <div className="space-y-2">
+                        <Label className="text-sm font-medium text-muted-foreground">
                           Vídeo de Apresentação (URL){" "}
                           <span className="text-red-500">*</span>
                         </Label>
@@ -7517,14 +9949,17 @@ export default function AdminProdutosPage() {
                                 deliveryVideoUrl: e.target.value,
                               })
                             }
-                            className="text-xs"
+                            className="text-sm"
                           />
                         </div>
                       </div>
-                      <div className="space-y-1.5">
-                        <Label className="text-xs font-medium text-muted-foreground">
-                          Texto de Apresentação
-                        </Label>
+                      <div id="product-field-presentation" className="space-y-2 scroll-mt-16">
+                        <div className="flex items-center justify-between gap-2">
+                          <Label className="text-sm font-medium text-muted-foreground">
+                            Texto de Apresentação
+                          </Label>
+                          <AiFieldButton fieldName="presentation" />
+                        </div>
                         <Textarea
                           placeholder="Descreva o que o produto faz e seus principais benefícios."
                           value={productFormData.presentation}
@@ -7534,9 +9969,94 @@ export default function AdminProdutosPage() {
                               presentation: e.target.value,
                             })
                           }
-                          className="text-xs min-h-[100px]"
+                          className="text-sm min-h-[100px]"
                         />
                       </div>
+                    </div>
+                  </div>
+
+                  {/* Apresentação comercial — campos estruturados (Ver Detalhes → Apresentação) */}
+                  <div className="rounded-xl border border-slate-200 dark:border-slate-700 overflow-hidden">
+                    <div className="flex items-center gap-2 px-4 py-2.5 bg-slate-50/60 dark:bg-slate-800/40 border-b border-slate-100 dark:border-slate-700">
+                      <LayoutTemplate className="h-3.5 w-3.5 text-indigo-500 shrink-0" />
+                      <span className="text-sm font-semibold text-slate-700 dark:text-slate-300">
+                        Apresentação Comercial
+                      </span>
+                      <span className="text-[11px] text-slate-400 hidden sm:block">
+                        · exibido nas sub-abas de "Apresentação" em Ver Detalhes
+                      </span>
+                    </div>
+                    <div className="p-4 space-y-4">
+                      <StringListField
+                        label="Destaques"
+                        items={presentationDraft.highlights}
+                        onChange={(v) =>
+                          setPresentationDraft({ ...presentationDraft, highlights: v })
+                        }
+                        placeholder="Ex: Cadastro de até 10 produtos"
+                      />
+                      <StringListField
+                        label="Para quem é"
+                        items={presentationDraft.targetAudience}
+                        onChange={(v) =>
+                          setPresentationDraft({ ...presentationDraft, targetAudience: v })
+                        }
+                        placeholder="Ex: Lojistas que querem vender online"
+                      />
+                      <TitleDescListField
+                        label="O que está incluído"
+                        items={presentationDraft.whatIsIncluded}
+                        onChange={(v) =>
+                          setPresentationDraft({
+                            ...presentationDraft,
+                            whatIsIncluded: v as { title: string; description: string }[],
+                          })
+                        }
+                        titleKey="title"
+                        titlePlaceholder="Ex: Criação e configuração da loja"
+                      />
+                      <StringListField
+                        label="Entregáveis"
+                        items={presentationDraft.deliverables}
+                        onChange={(v) =>
+                          setPresentationDraft({ ...presentationDraft, deliverables: v })
+                        }
+                        placeholder="Ex: Loja publicada e configurada"
+                      />
+                      <StringListField
+                        label="Não incluído"
+                        items={presentationDraft.notIncluded}
+                        onChange={(v) =>
+                          setPresentationDraft({ ...presentationDraft, notIncluded: v })
+                        }
+                        placeholder="Ex: Criação de conteúdo"
+                      />
+                      <StringListField
+                        label="Pré-requisitos do cliente"
+                        items={presentationDraft.requirements}
+                        onChange={(v) =>
+                          setPresentationDraft({ ...presentationDraft, requirements: v })
+                        }
+                        placeholder="Ex: Ter conta ativa na plataforma"
+                      />
+                      <TitleDescListField
+                        label="Como contratar"
+                        items={presentationDraft.howToRequest}
+                        onChange={(v) =>
+                          setPresentationDraft({
+                            ...presentationDraft,
+                            howToRequest: v as { step: string; description: string }[],
+                          })
+                        }
+                        titleKey="step"
+                        titlePlaceholder="Ex: Envio do briefing"
+                      />
+                      <FaqListField
+                        items={presentationDraft.faq}
+                        onChange={(v) =>
+                          setPresentationDraft({ ...presentationDraft, faq: v })
+                        }
+                      />
                     </div>
                   </div>
 
@@ -7544,15 +10064,18 @@ export default function AdminProdutosPage() {
                   <div className="rounded-xl border border-slate-200 dark:border-slate-700 overflow-hidden">
                     <div className="flex items-center gap-2 px-4 py-2.5 bg-slate-50/60 dark:bg-slate-800/40 border-b border-slate-100 dark:border-slate-700">
                       <Trophy className="h-3.5 w-3.5 text-amber-500 shrink-0" />
-                      <span className="text-xs font-semibold text-slate-700 dark:text-slate-300">
+                      <span className="text-sm font-semibold text-slate-700 dark:text-slate-300">
                         Benefícios e Informações
                       </span>
                     </div>
                     <div className="p-4 space-y-3">
-                      <div className="space-y-1.5">
-                        <Label className="text-xs font-medium text-muted-foreground">
-                          Benefícios Chave
-                        </Label>
+                      <div id="product-field-benefits" className="space-y-2 scroll-mt-16">
+                        <div className="flex items-center justify-between gap-2">
+                          <Label className="text-sm font-medium text-muted-foreground">
+                            Benefícios Chave
+                          </Label>
+                          <AiFieldButton fieldName="benefits" />
+                        </div>
                         <Textarea
                           placeholder="Liste os principais benefícios do produto para o cliente."
                           value={productFormData.benefits}
@@ -7562,13 +10085,16 @@ export default function AdminProdutosPage() {
                               benefits: e.target.value,
                             })
                           }
-                          className="text-xs min-h-[100px]"
+                          className="text-sm min-h-[100px]"
                         />
                       </div>
-                      <div className="space-y-1.5">
-                        <Label className="text-xs font-medium text-muted-foreground">
-                          Informações Adicionais
-                        </Label>
+                      <div className="space-y-2">
+                        <div className="flex items-center justify-between gap-2">
+                          <Label className="text-sm font-medium text-muted-foreground">
+                            Informações Adicionais
+                          </Label>
+                          <AiFieldButton fieldName="information" />
+                        </div>
                         <Textarea
                           placeholder="Informações técnicas ou de uso que não se encaixam em outras seções."
                           value={productFormData.information}
@@ -7578,7 +10104,7 @@ export default function AdminProdutosPage() {
                               information: e.target.value,
                             })
                           }
-                          className="text-xs min-h-[100px]"
+                          className="text-sm min-h-[100px]"
                         />
                       </div>
                     </div>
@@ -7590,17 +10116,17 @@ export default function AdminProdutosPage() {
                   <div className="rounded-xl border border-slate-200 dark:border-slate-700 overflow-hidden">
                     <div className="flex items-center gap-2 px-4 py-2.5 bg-slate-50/60 dark:bg-slate-800/40 border-b border-slate-100 dark:border-slate-700">
                       <Link2 className="h-3.5 w-3.5 text-indigo-500 shrink-0" />
-                      <span className="text-xs font-semibold text-slate-700 dark:text-slate-300">
+                      <span className="text-sm font-semibold text-slate-700 dark:text-slate-300">
                         Produtos Complementares
                       </span>
-                      <span className="text-[10px] text-slate-400 hidden sm:block">
+                      <span className="text-[11px] text-slate-400 hidden sm:block">
                         · aparecem no Ver Detalhes como sugestão de upsell
                       </span>
                     </div>
                     <div className="p-4 space-y-3">
                       {/* Currently linked */}
                       <div className="space-y-2">
-                        <Label className="text-xs font-medium text-muted-foreground">
+                        <Label className="text-sm font-medium text-muted-foreground">
                           IDs vinculados (
                           {productFormData.complementaryProducts.length})
                         </Label>
@@ -7612,7 +10138,7 @@ export default function AdminProdutosPage() {
                                 return (
                                   <div
                                     key={id}
-                                    className="flex items-center gap-1.5 px-2.5 py-1 rounded-full border border-indigo-200 dark:border-indigo-700 bg-indigo-50 dark:bg-indigo-950/30 text-xs font-medium text-indigo-700 dark:text-indigo-300"
+                                    className="flex items-center gap-1.5 px-2.5 py-1 rounded-full border border-indigo-200 dark:border-indigo-700 bg-indigo-50 dark:bg-indigo-950/30 text-sm font-medium text-indigo-700 dark:text-indigo-300"
                                   >
                                     <span>{p ? `${id} · ${p.name}` : id}</span>
                                     <button
@@ -7636,14 +10162,14 @@ export default function AdminProdutosPage() {
                             )}
                           </div>
                         ) : (
-                          <p className="text-xs text-muted-foreground italic">
+                          <p className="text-sm text-muted-foreground italic">
                             Nenhum produto vinculado ainda.
                           </p>
                         )}
                       </div>
                       {/* Add product search */}
                       <div className="space-y-2 pt-2 border-t border-slate-100 dark:border-slate-800">
-                        <Label className="text-xs font-medium text-muted-foreground">
+                        <Label className="text-sm font-medium text-muted-foreground">
                           Adicionar produto
                         </Label>
                         <div className="max-h-60 overflow-y-auto space-y-1 border border-slate-200 dark:border-slate-700 rounded-lg p-1">
@@ -7670,10 +10196,10 @@ export default function AdminProdutosPage() {
                                   }))
                                 }
                               >
-                                <span className="text-[10px] font-mono text-muted-foreground w-16 shrink-0">
+                                <span className="text-[11px] font-mono text-muted-foreground w-16 shrink-0">
                                   {p.id}
                                 </span>
-                                <span className="text-xs flex-1 min-w-0 line-clamp-1">
+                                <span className="text-sm flex-1 min-w-0 line-clamp-1">
                                   {p.name}
                                 </span>
                                 <Plus className="h-3.5 w-3.5 text-indigo-400 shrink-0" />
@@ -7691,18 +10217,21 @@ export default function AdminProdutosPage() {
                   <div className="rounded-xl border border-slate-200 dark:border-slate-700 overflow-hidden">
                     <div className="flex items-center gap-2 px-4 py-2.5 bg-slate-50/60 dark:bg-slate-800/40 border-b border-slate-100 dark:border-slate-700">
                       <ClipboardCheck className="h-3.5 w-3.5 text-blue-500 shrink-0" />
-                      <span className="text-xs font-semibold text-slate-700 dark:text-slate-300">
+                      <span className="text-sm font-semibold text-slate-700 dark:text-slate-300">
                         Briefing do Cliente
                       </span>
-                      <span className="text-[10px] text-slate-400 hidden sm:block">
+                      <span className="text-[11px] text-slate-400 hidden sm:block">
                         · o que o cliente deve enviar ao contratar
                       </span>
                     </div>
                     <div className="p-4 space-y-3">
-                      <div className="space-y-1.5">
-                        <Label className="text-xs font-medium text-muted-foreground">
-                          O que solicitar para o cliente?
-                        </Label>
+                      <div id="product-field-requestAttention" className="space-y-2 scroll-mt-16">
+                        <div className="flex items-center justify-between gap-2">
+                          <Label className="text-sm font-medium text-muted-foreground">
+                            O que solicitar para o cliente?
+                          </Label>
+                          <AiFieldButton fieldName="requestAttention" />
+                        </div>
                         <Textarea
                           placeholder="Ex: Arquivo com o logo em vetor, Briefing detalhado, etc."
                           value={productFormData.requestAttention}
@@ -7712,11 +10241,11 @@ export default function AdminProdutosPage() {
                               requestAttention: e.target.value,
                             })
                           }
-                          className="text-xs min-h-[100px]"
+                          className="text-sm min-h-[100px]"
                         />
                       </div>
-                      <div className="space-y-1.5">
-                        <Label className="text-xs font-medium text-muted-foreground">
+                      <div className="space-y-2">
+                        <Label className="text-sm font-medium text-muted-foreground">
                           Itens Excluídos
                         </Label>
                         <div className="flex flex-wrap gap-1.5 p-2 rounded-lg bg-muted/30 border border-slate-200 dark:border-slate-700 min-h-[36px]">
@@ -7724,7 +10253,7 @@ export default function AdminProdutosPage() {
                             <Badge
                               key={index}
                               variant="outline"
-                              className="text-xs font-normal cursor-pointer group"
+                              className="text-sm font-normal cursor-pointer group"
                             >
                               {item}
                               <button
@@ -7761,7 +10290,7 @@ export default function AdminProdutosPage() {
                                 e.currentTarget.value = "";
                               }
                             }}
-                            className="h-6 w-auto text-xs border-0 bg-transparent flex-grow p-0 focus-visible:ring-0 shadow-none min-w-[100px]"
+                            className="h-6 w-auto text-sm border-0 bg-transparent flex-grow p-0 focus-visible:ring-0 shadow-none min-w-[100px]"
                           />
                         </div>
                       </div>
@@ -7772,13 +10301,13 @@ export default function AdminProdutosPage() {
                   <div className="rounded-xl border border-slate-200 dark:border-slate-700 overflow-hidden">
                     <div className="flex items-center gap-2 px-4 py-2.5 bg-slate-50/60 dark:bg-slate-800/40 border-b border-slate-100 dark:border-slate-700">
                       <FileText className="h-3.5 w-3.5 text-violet-500 shrink-0" />
-                      <span className="text-xs font-semibold text-slate-700 dark:text-slate-300">
+                      <span className="text-sm font-semibold text-slate-700 dark:text-slate-300">
                         Contratos e Termos
                       </span>
                     </div>
                     <div className="p-4 space-y-3">
-                      <div className="space-y-1.5">
-                        <Label className="text-xs font-medium text-muted-foreground">
+                      <div className="space-y-2">
+                        <Label className="text-sm font-medium text-muted-foreground">
                           Contrato de Pagamento Único
                         </Label>
                         <Textarea
@@ -7790,11 +10319,11 @@ export default function AdminProdutosPage() {
                               oneTimeContract: e.target.value,
                             })
                           }
-                          className="text-xs min-h-[80px]"
+                          className="text-sm min-h-[80px]"
                         />
                       </div>
-                      <div className="space-y-1.5">
-                        <Label className="text-xs font-medium text-muted-foreground">
+                      <div className="space-y-2">
+                        <Label className="text-sm font-medium text-muted-foreground">
                           Contrato Mensal
                         </Label>
                         <Textarea
@@ -7806,11 +10335,11 @@ export default function AdminProdutosPage() {
                               monthlyContract: e.target.value,
                             })
                           }
-                          className="text-xs min-h-[80px]"
+                          className="text-sm min-h-[80px]"
                         />
                       </div>
-                      <div className="space-y-1.5">
-                        <Label className="text-xs font-medium text-muted-foreground">
+                      <div className="space-y-2">
+                        <Label className="text-sm font-medium text-muted-foreground">
                           Contratos Anteriores
                         </Label>
                         <Textarea
@@ -7822,7 +10351,7 @@ export default function AdminProdutosPage() {
                               previousContracts: e.target.value,
                             })
                           }
-                          className="text-xs min-h-[80px]"
+                          className="text-sm min-h-[80px]"
                         />
                       </div>
                     </div>
@@ -7831,14 +10360,14 @@ export default function AdminProdutosPage() {
 
                 <TabsContent value="tarefas" className="space-y-4 mt-3">
                   {/* ── Cabeçalho + Stats ── */}
-                  <div className="rounded-xl border border-slate-200 dark:border-slate-700 overflow-hidden">
+                  <div id="product-field-tasks" className="rounded-xl border border-slate-200 dark:border-slate-700 overflow-hidden scroll-mt-16">
                     <div className="flex items-center gap-2 px-4 py-2.5 bg-slate-50/60 dark:bg-slate-800/40 border-b border-slate-100 dark:border-slate-700">
                       <Layers className="h-3.5 w-3.5 text-blue-500 shrink-0" />
-                      <span className="text-xs font-semibold text-slate-700 dark:text-slate-300">
+                      <span className="text-sm font-semibold text-slate-700 dark:text-slate-300">
                         Tarefas do Produto
                       </span>
                       {productFormData.tasks.length > 0 && (
-                        <span className="text-[10px] font-bold text-blue-600 bg-blue-100 dark:bg-blue-900/40 px-1.5 py-0.5 rounded-full">
+                        <span className="text-[11px] font-bold text-blue-600 bg-blue-100 dark:bg-blue-900/40 px-1.5 py-0.5 rounded-full">
                           {productFormData.tasks.length}
                         </span>
                       )}
@@ -7846,7 +10375,7 @@ export default function AdminProdutosPage() {
                         size="sm"
                         variant="outline"
                         onClick={() => setShowImportTemplateModal(true)}
-                        className="ml-auto gap-1 text-xs h-7 px-2.5 bg-transparent"
+                        className="ml-auto gap-1 text-sm h-7 px-2.5 bg-transparent"
                       >
                         <FileText className="h-3 w-3" />
                         Importar Modelo
@@ -7897,7 +10426,7 @@ export default function AdminProdutosPage() {
                       <p className="text-sm font-medium text-slate-500">
                         Nenhuma tarefa cadastrada
                       </p>
-                      <p className="text-xs text-slate-400 mt-1">
+                      <p className="text-sm text-slate-400 mt-1">
                         Adicione tarefas ou importe de um modelo
                       </p>
                     </div>
@@ -7912,8 +10441,8 @@ export default function AdminProdutosPage() {
                         className="border border-slate-200 dark:border-slate-700 rounded-xl overflow-hidden p-0 bg-card"
                       >
                         <AccordionTrigger className="hover:no-underline px-4 py-3.5 bg-slate-50/60 dark:bg-slate-800/40 hover:bg-slate-100/80 dark:hover:bg-slate-800/70 transition-colors [&[data-state=open]]:border-b [&[data-state=open]]:border-slate-200 dark:[&[data-state=open]]:border-slate-700 [&[data-state=open]]:bg-blue-50/40 dark:[&[data-state=open]]:bg-blue-950/10">
-                          <div className="flex items-center gap-3 min-w-0 flex-1 pr-2">
-                            <span className="flex items-center justify-center h-7 w-7 rounded-full bg-blue-500 text-white text-xs font-bold shrink-0 shadow-sm">
+                          <div className="flex items-center gap-4 min-w-0 flex-1 pr-2">
+                            <span className="flex items-center justify-center h-7 w-7 rounded-full bg-blue-500 text-white text-sm font-bold shrink-0 shadow-sm">
                               {taskIndex + 1}
                             </span>
                             <div className="flex-1 min-w-0">
@@ -7921,16 +10450,16 @@ export default function AdminProdutosPage() {
                                 {task.name}
                               </p>
                               <div className="flex items-center gap-2 mt-0.5 flex-wrap">
-                                <span className="text-[10px] text-muted-foreground">
+                                <span className="text-[11px] text-muted-foreground">
                                   {(task.steps || []).length} etapa
                                   {(task.steps || []).length !== 1 ? "s" : ""}
                                 </span>
                                 {(task.steps || []).length > 0 && (
                                   <>
-                                    <span className="text-[10px] text-muted-foreground">
+                                    <span className="text-[11px] text-muted-foreground">
                                       ·
                                     </span>
-                                    <span className="text-[10px] text-muted-foreground">
+                                    <span className="text-[11px] text-muted-foreground">
                                       {(task.steps || []).reduce(
                                         (s, st) => s + (st.estimatedHours || 0),
                                         0,
@@ -7946,7 +10475,7 @@ export default function AdminProdutosPage() {
                                 )}
                               </div>
                             </div>
-                            <Badge className="text-xs bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-400 border-0 shrink-0">
+                            <Badge className="text-sm bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-400 border-0 shrink-0">
                               {formatCurrency(task.calculatedCost)}
                             </Badge>
                           </div>
@@ -7958,11 +10487,11 @@ export default function AdminProdutosPage() {
                               <div className="rounded-lg bg-slate-50 dark:bg-slate-800/40 border border-slate-100 dark:border-slate-700 overflow-hidden">
                                 <div className="flex items-center gap-2 px-3 py-2 border-b border-slate-100 dark:border-slate-700">
                                   <ListChecks className="h-3 w-3 text-blue-500 shrink-0" />
-                                  <p className="text-[10px] font-semibold text-slate-600 dark:text-slate-400 uppercase tracking-wider">
+                                  <p className="text-[11px] font-semibold text-slate-600 dark:text-slate-400 uppercase tracking-wider">
                                     {(task.steps || []).length} Etapa
                                     {(task.steps || []).length !== 1 ? "s" : ""}
                                   </p>
-                                  <span className="ml-auto text-[10px] text-muted-foreground">
+                                  <span className="ml-auto text-[11px] text-muted-foreground">
                                     {(task.steps || []).reduce(
                                       (s, st) => s + (st.estimatedHours || 0),
                                       0,
@@ -7985,13 +10514,13 @@ export default function AdminProdutosPage() {
                                       <span className="flex items-center justify-center h-5 w-5 rounded-full bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-400 text-[9px] font-bold shrink-0">
                                         {si + 1}
                                       </span>
-                                      <span className="text-xs text-slate-700 dark:text-slate-300 flex-1 truncate font-medium">
+                                      <span className="text-sm text-slate-700 dark:text-slate-300 flex-1 truncate font-medium">
                                         {step.name}
                                       </span>
-                                      <span className="text-[10px] text-muted-foreground shrink-0">
+                                      <span className="text-[11px] text-muted-foreground shrink-0">
                                         {step.estimatedHours}h
                                       </span>
-                                      <span className="text-[10px] font-semibold text-emerald-600 shrink-0 min-w-14 text-right">
+                                      <span className="text-[11px] font-semibold text-emerald-600 shrink-0 min-w-14 text-right">
                                         {formatCurrency(step.calculatedCost)}
                                       </span>
                                     </div>
@@ -8001,9 +10530,9 @@ export default function AdminProdutosPage() {
                             )}
 
                             {/* Campos */}
-                            <div className="grid grid-cols-4 gap-3">
-                              <div className="space-y-1.5 col-span-3">
-                                <Label className="text-xs font-semibold">
+                            <div className="grid grid-cols-4 gap-4">
+                              <div className="space-y-2 col-span-3">
+                                <Label className="text-sm font-semibold">
                                   Nome da Tarefa
                                 </Label>
                                 <Input
@@ -8019,11 +10548,11 @@ export default function AdminProdutosPage() {
                                       ),
                                     })
                                   }
-                                  className="text-xs h-8"
+                                  className="text-sm h-8"
                                 />
                               </div>
-                              <div className="space-y-1.5">
-                                <Label className="text-xs font-semibold">
+                              <div className="space-y-2">
+                                <Label className="text-sm font-semibold">
                                   Ordem
                                 </Label>
                                 <Input
@@ -8045,13 +10574,13 @@ export default function AdminProdutosPage() {
                                       ),
                                     })
                                   }
-                                  className="text-xs h-8"
+                                  className="text-sm h-8"
                                 />
                               </div>
                             </div>
 
-                            <div className="space-y-1.5">
-                              <Label className="text-xs font-semibold">
+                            <div className="space-y-2">
+                              <Label className="text-sm font-semibold">
                                 Descrição
                               </Label>
                               <Textarea
@@ -8070,12 +10599,12 @@ export default function AdminProdutosPage() {
                                     ),
                                   })
                                 }
-                                className="text-xs min-h-[72px]"
+                                className="text-sm min-h-[72px]"
                                 placeholder="Descreva o objetivo desta tarefa..."
                               />
                             </div>
 
-                            <div className="flex items-center gap-5 flex-wrap p-3 bg-slate-50/60 dark:bg-slate-800/30 rounded-lg border border-slate-100 dark:border-slate-700">
+                            <div className="flex items-center gap-5 flex-wrap p-4 bg-slate-50/60 dark:bg-slate-800/30 rounded-lg border border-slate-100 dark:border-slate-700">
                               <div className="flex items-center gap-2">
                                 <Switch
                                   checked={task.canRunInParallel}
@@ -8094,7 +10623,7 @@ export default function AdminProdutosPage() {
                                     })
                                   }
                                 />
-                                <Label className="text-xs font-medium">
+                                <Label className="text-sm font-medium">
                                   Pode rodar em paralelo
                                 </Label>
                               </div>
@@ -8116,7 +10645,7 @@ export default function AdminProdutosPage() {
                                     })
                                   }
                                 />
-                                <Label className="text-xs font-medium">
+                                <Label className="text-sm font-medium">
                                   Vinculado a Modelo
                                 </Label>
                               </div>
@@ -8135,7 +10664,7 @@ export default function AdminProdutosPage() {
                                     ),
                                   })
                                 }
-                                className="text-xs text-red-500 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-950/20 gap-1.5"
+                                className="text-sm text-red-500 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-950/20 gap-1.5"
                               >
                                 <Trash2 className="h-3.5 w-3.5" />
                                 Remover Tarefa
@@ -8147,7 +10676,7 @@ export default function AdminProdutosPage() {
                                   setSelectedTask(task);
                                   setIsTaskModalOpen(true);
                                 }}
-                                className="text-xs gap-1.5"
+                                className="text-sm gap-1.5"
                               >
                                 <Layers className="h-3.5 w-3.5" />
                                 Gerenciar Etapas
@@ -8161,7 +10690,7 @@ export default function AdminProdutosPage() {
 
                   <Button
                     variant="outline"
-                    className="w-full h-10 text-xs gap-1.5 bg-transparent border-dashed hover:border-blue-300 hover:bg-blue-50/50 dark:hover:bg-blue-950/20 hover:text-blue-600 transition-colors"
+                    className="w-full h-10 text-sm gap-1.5 bg-transparent border-dashed hover:border-blue-300 hover:bg-blue-50/50 dark:hover:bg-blue-950/20 hover:text-blue-600 transition-colors"
                     onClick={() => {
                       // Add new task with default values
                       setProductFormData({
@@ -8219,22 +10748,22 @@ export default function AdminProdutosPage() {
                   <div className="rounded-xl border border-slate-200 dark:border-slate-700 overflow-hidden">
                     <div className="flex items-center gap-2 px-4 py-2.5 bg-slate-50/60 dark:bg-slate-800/40 border-b border-slate-100 dark:border-slate-700">
                       <Layers className="h-3.5 w-3.5 text-blue-500 shrink-0" />
-                      <span className="text-xs font-semibold text-slate-700 dark:text-slate-300">
+                      <span className="text-sm font-semibold text-slate-700 dark:text-slate-300">
                         Variações do Produto
                       </span>
                       {productVariations.length > 0 && (
-                        <span className="text-[10px] font-semibold text-blue-600 bg-blue-100 dark:bg-blue-900/40 px-1.5 py-0.5 rounded-full">
+                        <span className="text-[11px] font-semibold text-blue-600 bg-blue-100 dark:bg-blue-900/40 px-1.5 py-0.5 rounded-full">
                           {productVariations.length}
                         </span>
                       )}
-                      <span className="text-[10px] text-slate-400 hidden sm:block ml-1">
+                      <span className="text-[11px] text-slate-400 hidden sm:block ml-1">
                         · cada variação pode ter preço e prazo distintos
                       </span>
                       <Button
                         variant="outline"
                         size="sm"
                         onClick={addVariation}
-                        className="ml-auto text-xs gap-1 h-7 px-2.5 bg-transparent"
+                        className="ml-auto text-sm gap-1 h-7 px-2.5 bg-transparent"
                       >
                         <Plus className="h-3 w-3" /> Adicionar
                       </Button>
@@ -8242,10 +10771,10 @@ export default function AdminProdutosPage() {
                     {productVariations.length === 0 ? (
                       <div className="flex flex-col items-center justify-center py-8 text-center px-4 bg-card">
                         <Layers className="h-8 w-8 text-slate-200 dark:text-slate-700 mb-2" />
-                        <p className="text-xs text-slate-500 font-medium">
+                        <p className="text-sm text-slate-500 font-medium">
                           Nenhuma variação cadastrada
                         </p>
-                        <p className="text-[10px] text-slate-400 mt-0.5">
+                        <p className="text-[11px] text-slate-400 mt-0.5">
                           Adicione variações para oferecer planos distintos
                         </p>
                       </div>
@@ -8254,7 +10783,7 @@ export default function AdminProdutosPage() {
                         {productVariations.map((variation, index) => (
                           <div key={variation.id} className="p-4 space-y-3">
                             <div className="flex items-center justify-between">
-                              <span className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">
+                              <span className="text-sm font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">
                                 Variação {index + 1}
                               </span>
                               <button
@@ -8264,9 +10793,9 @@ export default function AdminProdutosPage() {
                                 <Trash2 className="h-3.5 w-3.5" />
                               </button>
                             </div>
-                            <div className="grid grid-cols-2 gap-3">
-                              <div className="space-y-1.5 col-span-2">
-                                <Label className="text-xs font-medium text-muted-foreground">
+                            <div className="grid grid-cols-2 gap-4">
+                              <div className="space-y-2 col-span-2">
+                                <Label className="text-sm font-medium text-muted-foreground">
                                   Nome da Variação
                                 </Label>
                                 <Input
@@ -8277,11 +10806,11 @@ export default function AdminProdutosPage() {
                                     })
                                   }
                                   placeholder="Ex: Até 2 campanhas"
-                                  className="text-xs h-8"
+                                  className="text-sm h-8"
                                 />
                               </div>
-                              <div className="space-y-1.5">
-                                <Label className="text-xs font-medium text-muted-foreground">
+                              <div className="space-y-2">
+                                <Label className="text-sm font-medium text-muted-foreground">
                                   Preço (R$)
                                 </Label>
                                 <Input
@@ -8293,13 +10822,13 @@ export default function AdminProdutosPage() {
                                         Number.parseFloat(e.target.value) || 0,
                                     })
                                   }
-                                  className="text-xs h-8"
+                                  className="text-sm h-8"
                                   min="0"
                                   step="0.01"
                                 />
                               </div>
-                              <div className="space-y-1.5">
-                                <Label className="text-xs font-medium text-muted-foreground">
+                              <div className="space-y-2">
+                                <Label className="text-sm font-medium text-muted-foreground">
                                   Prazo (dias)
                                 </Label>
                                 <Input
@@ -8313,12 +10842,12 @@ export default function AdminProdutosPage() {
                                     })
                                   }
                                   placeholder="Ex: 80"
-                                  className="text-xs h-8"
+                                  className="text-sm h-8"
                                   min="0"
                                 />
                               </div>
-                              <div className="space-y-1.5 col-span-2">
-                                <Label className="text-xs font-medium text-muted-foreground">
+                              <div className="space-y-2 col-span-2">
+                                <Label className="text-sm font-medium text-muted-foreground">
                                   Escopo / Entrega
                                 </Label>
                                 <Input
@@ -8329,11 +10858,11 @@ export default function AdminProdutosPage() {
                                     })
                                   }
                                   placeholder="Ex: Gerencia até 2 campanhas simultâneas"
-                                  className="text-xs h-8"
+                                  className="text-sm h-8"
                                 />
                               </div>
-                              <div className="space-y-1.5 col-span-2">
-                                <Label className="text-xs font-medium text-muted-foreground">
+                              <div className="space-y-2 col-span-2">
+                                <Label className="text-sm font-medium text-muted-foreground">
                                   Descrição complementar
                                 </Label>
                                 <Input
@@ -8344,7 +10873,7 @@ export default function AdminProdutosPage() {
                                     })
                                   }
                                   placeholder="Indicado para negócios com..."
-                                  className="text-xs h-8"
+                                  className="text-sm h-8"
                                 />
                               </div>
                             </div>
@@ -8358,11 +10887,11 @@ export default function AdminProdutosPage() {
                   <div className="rounded-xl border border-slate-200 dark:border-slate-700 overflow-hidden">
                     <div className="flex items-center gap-2 px-4 py-2.5 bg-slate-50/60 dark:bg-slate-800/40 border-b border-slate-100 dark:border-slate-700">
                       <Plus className="h-3.5 w-3.5 text-violet-500 shrink-0" />
-                      <span className="text-xs font-semibold text-slate-700 dark:text-slate-300">
+                      <span className="text-sm font-semibold text-slate-700 dark:text-slate-300">
                         Add-ons
                       </span>
                       {productAddOns.length > 0 && (
-                        <span className="text-[10px] font-semibold text-violet-600 bg-violet-100 dark:bg-violet-900/40 px-1.5 py-0.5 rounded-full">
+                        <span className="text-[11px] font-semibold text-violet-600 bg-violet-100 dark:bg-violet-900/40 px-1.5 py-0.5 rounded-full">
                           {productAddOns.length}
                         </span>
                       )}
@@ -8370,7 +10899,7 @@ export default function AdminProdutosPage() {
                         variant="outline"
                         size="sm"
                         onClick={addAddOn}
-                        className="ml-auto text-xs gap-1 h-7 px-2.5 bg-transparent"
+                        className="ml-auto text-sm gap-1 h-7 px-2.5 bg-transparent"
                       >
                         <Plus className="h-3 w-3" /> Adicionar
                       </Button>
@@ -8378,7 +10907,7 @@ export default function AdminProdutosPage() {
                     {productAddOns.length === 0 ? (
                       <div className="flex flex-col items-center justify-center py-8 text-center px-4 bg-card">
                         <DollarSign className="h-8 w-8 text-slate-200 dark:text-slate-700 mb-2" />
-                        <p className="text-xs text-slate-500 font-medium">
+                        <p className="text-sm text-slate-500 font-medium">
                           Nenhum add-on cadastrado
                         </p>
                       </div>
@@ -8387,10 +10916,10 @@ export default function AdminProdutosPage() {
                         {productAddOns.map((addOn, index) => (
                           <div
                             key={addOn.id}
-                            className="grid grid-cols-4 gap-3 p-3 items-end"
+                            className="grid grid-cols-4 gap-4 p-4 items-end"
                           >
-                            <div className="space-y-1.5 col-span-2">
-                              <Label className="text-xs font-medium text-muted-foreground">
+                            <div className="space-y-2 col-span-2">
+                              <Label className="text-sm font-medium text-muted-foreground">
                                 Nome
                               </Label>
                               <Input
@@ -8400,11 +10929,11 @@ export default function AdminProdutosPage() {
                                     name: e.target.value,
                                   })
                                 }
-                                className="text-xs h-8"
+                                className="text-sm h-8"
                               />
                             </div>
-                            <div className="space-y-1.5">
-                              <Label className="text-xs font-medium text-muted-foreground">
+                            <div className="space-y-2">
+                              <Label className="text-sm font-medium text-muted-foreground">
                                 Preço
                               </Label>
                               <Input
@@ -8416,12 +10945,12 @@ export default function AdminProdutosPage() {
                                       Number.parseFloat(e.target.value) || 0,
                                   })
                                 }
-                                className="text-xs h-8"
+                                className="text-sm h-8"
                               />
                             </div>
                             <div className="flex items-end gap-2">
-                              <div className="space-y-1.5 flex-1">
-                                <Label className="text-xs font-medium text-muted-foreground">
+                              <div className="space-y-2 flex-1">
+                                <Label className="text-sm font-medium text-muted-foreground">
                                   Tipo
                                 </Label>
                                 <Select
@@ -8434,7 +10963,7 @@ export default function AdminProdutosPage() {
                                     })
                                   }
                                 >
-                                  <SelectTrigger className="text-xs h-8">
+                                  <SelectTrigger className="text-sm h-8">
                                     <SelectValue placeholder="Selecione" />
                                   </SelectTrigger>
                                   <SelectContent>
@@ -8460,16 +10989,16 @@ export default function AdminProdutosPage() {
                 </TabsContent>
                 <TabsContent value="questionario" className="space-y-3 mt-3">
                   {/* Metadados do questionário */}
-                  <div className="rounded-xl border border-slate-200 dark:border-slate-700 overflow-hidden">
+                  <div id="product-field-questionnaire" className="rounded-xl border border-slate-200 dark:border-slate-700 overflow-hidden scroll-mt-16">
                     <div className="flex items-center gap-2 px-4 py-2.5 bg-slate-50/60 dark:bg-slate-800/40 border-b border-slate-100 dark:border-slate-700">
                       <FileQuestion className="h-3.5 w-3.5 text-violet-500 shrink-0" />
-                      <span className="text-xs font-semibold text-slate-700 dark:text-slate-300">
+                      <span className="text-sm font-semibold text-slate-700 dark:text-slate-300">
                         Configuração do Questionário
                       </span>
                     </div>
                     <div className="p-4 space-y-3">
-                      <div className="space-y-1.5">
-                        <Label className="text-xs font-medium text-muted-foreground">
+                      <div className="space-y-2">
+                        <Label className="text-sm font-medium text-muted-foreground">
                           Título do Questionário
                         </Label>
                         <Input
@@ -8483,11 +11012,11 @@ export default function AdminProdutosPage() {
                               },
                             })
                           }
-                          className="text-xs h-8"
+                          className="text-sm h-8"
                         />
                       </div>
-                      <div className="space-y-1.5">
-                        <Label className="text-xs font-medium text-muted-foreground">
+                      <div className="space-y-2">
+                        <Label className="text-sm font-medium text-muted-foreground">
                           Descrição do Questionário
                         </Label>
                         <Textarea
@@ -8501,7 +11030,7 @@ export default function AdminProdutosPage() {
                               },
                             })
                           }
-                          className="text-xs min-h-[60px]"
+                          className="text-sm min-h-[60px]"
                         />
                       </div>
                     </div>
@@ -8511,11 +11040,11 @@ export default function AdminProdutosPage() {
                   <div className="rounded-xl border border-slate-200 dark:border-slate-700 overflow-hidden">
                     <div className="flex items-center gap-2 px-4 py-2.5 bg-slate-50/60 dark:bg-slate-800/40 border-b border-slate-100 dark:border-slate-700">
                       <ListChecks className="h-3.5 w-3.5 text-blue-500 shrink-0" />
-                      <span className="text-xs font-semibold text-slate-700 dark:text-slate-300">
+                      <span className="text-sm font-semibold text-slate-700 dark:text-slate-300">
                         Perguntas
                       </span>
                       {productQuestions.length > 0 && (
-                        <span className="text-[10px] font-semibold text-blue-600 bg-blue-100 dark:bg-blue-900/40 px-1.5 py-0.5 rounded-full">
+                        <span className="text-[11px] font-semibold text-blue-600 bg-blue-100 dark:bg-blue-900/40 px-1.5 py-0.5 rounded-full">
                           {productQuestions.length}
                         </span>
                       )}
@@ -8523,7 +11052,7 @@ export default function AdminProdutosPage() {
                         variant="outline"
                         size="sm"
                         onClick={addQuestion}
-                        className="ml-auto text-xs gap-1 h-7 px-2.5 bg-transparent"
+                        className="ml-auto text-sm gap-1 h-7 px-2.5 bg-transparent"
                       >
                         <Plus className="h-3 w-3" /> Adicionar
                       </Button>
@@ -8531,10 +11060,10 @@ export default function AdminProdutosPage() {
                     {productQuestions.length === 0 ? (
                       <div className="flex flex-col items-center justify-center py-8 text-center px-4 bg-card">
                         <FileQuestion className="h-8 w-8 text-slate-200 dark:text-slate-700 mb-2" />
-                        <p className="text-xs text-slate-500 font-medium">
+                        <p className="text-sm text-slate-500 font-medium">
                           Nenhuma pergunta cadastrada
                         </p>
-                        <p className="text-[10px] text-slate-400 mt-0.5">
+                        <p className="text-[11px] text-slate-400 mt-0.5">
                           Adicione perguntas para o briefing do cliente
                         </p>
                       </div>
@@ -8542,12 +11071,12 @@ export default function AdminProdutosPage() {
                       <div className="divide-y divide-slate-100 dark:divide-slate-800 bg-card">
                         {productQuestions.map((question, index) => (
                           <div key={question.id} className="p-4 space-y-3">
-                            <div className="flex items-start gap-3">
-                              <span className="flex items-center justify-center w-6 h-6 rounded-full bg-violet-100 dark:bg-violet-900/40 text-violet-700 dark:text-violet-400 text-xs font-bold shrink-0 mt-0.5">
+                            <div className="flex items-start gap-4">
+                              <span className="flex items-center justify-center w-6 h-6 rounded-full bg-violet-100 dark:bg-violet-900/40 text-violet-700 dark:text-violet-400 text-sm font-bold shrink-0 mt-0.5">
                                 {index + 1}
                               </span>
-                              <div className="flex-1 space-y-1.5">
-                                <Label className="text-xs font-medium text-muted-foreground">
+                              <div className="flex-1 space-y-2">
+                                <Label className="text-sm font-medium text-muted-foreground">
                                   Pergunta
                                 </Label>
                                 <Input
@@ -8557,7 +11086,7 @@ export default function AdminProdutosPage() {
                                       question: e.target.value,
                                     })
                                   }
-                                  className="text-xs h-8"
+                                  className="text-sm h-8"
                                 />
                               </div>
                               <button
@@ -8567,9 +11096,9 @@ export default function AdminProdutosPage() {
                                 <Trash2 className="h-3.5 w-3.5" />
                               </button>
                             </div>
-                            <div className="grid grid-cols-3 gap-3 pl-9">
-                              <div className="space-y-1.5">
-                                <Label className="text-xs font-medium text-muted-foreground">
+                            <div className="grid grid-cols-3 gap-4 pl-9">
+                              <div className="space-y-2">
+                                <Label className="text-sm font-medium text-muted-foreground">
                                   Tipo de Resposta
                                 </Label>
                                 <Select
@@ -8580,7 +11109,7 @@ export default function AdminProdutosPage() {
                                     })
                                   }
                                 >
-                                  <SelectTrigger className="text-xs h-8">
+                                  <SelectTrigger className="text-sm h-8">
                                     <SelectValue />
                                   </SelectTrigger>
                                   <SelectContent>
@@ -8602,8 +11131,8 @@ export default function AdminProdutosPage() {
                                   </SelectContent>
                                 </Select>
                               </div>
-                              <div className="space-y-1.5">
-                                <Label className="text-xs font-medium text-muted-foreground">
+                              <div className="space-y-2">
+                                <Label className="text-sm font-medium text-muted-foreground">
                                   Opções (para seleção)
                                 </Label>
                                 <Input
@@ -8617,14 +11146,14 @@ export default function AdminProdutosPage() {
                                     })
                                   }
                                   placeholder="Opção1, Opção2, ..."
-                                  className="text-xs h-8 disabled:opacity-40"
+                                  className="text-sm h-8 disabled:opacity-40"
                                   disabled={
                                     question.type !== "select" &&
                                     question.type !== "multiselect"
                                   }
                                 />
                               </div>
-                              <div className="space-y-1.5 flex items-end">
+                              <div className="space-y-2 flex items-end">
                                 <div className="flex items-center gap-2">
                                   <Switch
                                     checked={question.required}
@@ -8634,7 +11163,7 @@ export default function AdminProdutosPage() {
                                       })
                                     }
                                   />
-                                  <Label className="text-xs font-medium">
+                                  <Label className="text-sm font-medium">
                                     Obrigatória
                                   </Label>
                                 </div>
@@ -8650,7 +11179,7 @@ export default function AdminProdutosPage() {
                                     })
                                   }
                                 />
-                                <Label className="text-xs font-medium text-muted-foreground">
+                                <Label className="text-sm font-medium text-muted-foreground">
                                   IA Assistida
                                 </Label>
                               </div>
@@ -8663,7 +11192,7 @@ export default function AdminProdutosPage() {
                                     })
                                   }
                                 />
-                                <Label className="text-xs font-medium text-muted-foreground">
+                                <Label className="text-sm font-medium text-muted-foreground">
                                   Permite Anexo
                                 </Label>
                               </div>
@@ -8683,10 +11212,10 @@ export default function AdminProdutosPage() {
                   <div className="rounded-xl border border-slate-200 dark:border-slate-700 overflow-hidden">
                     <div className="flex items-center gap-2 px-4 py-2.5 bg-slate-50/60 dark:bg-slate-800/40 border-b border-slate-100 dark:border-slate-700">
                       <Users className="h-3.5 w-3.5 text-blue-500 shrink-0" />
-                      <span className="text-xs font-semibold text-slate-700 dark:text-slate-300">
+                      <span className="text-sm font-semibold text-slate-700 dark:text-slate-300">
                         Nômades Habilitados e Desempenho
                       </span>
-                      <span className="text-[10px] text-slate-400 hidden sm:block">
+                      <span className="text-[11px] text-slate-400 hidden sm:block">
                         · visível apenas para administradores
                       </span>
                     </div>
@@ -8711,10 +11240,10 @@ export default function AdminProdutosPage() {
                           <div className="flex items-center justify-between gap-2 px-4 py-2.5 bg-slate-50/60 dark:bg-slate-800/40 border-b border-slate-100 dark:border-slate-700">
                             <div className="flex items-center gap-2">
                               <Link2 className="h-3.5 w-3.5 text-indigo-500 shrink-0" />
-                              <span className="text-xs font-semibold text-slate-700 dark:text-slate-300">
+                              <span className="text-sm font-semibold text-slate-700 dark:text-slate-300">
                                 Produtos Complementares Vinculados
                               </span>
-                              <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-indigo-100 dark:bg-indigo-900/40 text-indigo-600 dark:text-indigo-400 font-semibold">
+                              <span className="text-[11px] px-1.5 py-0.5 rounded-full bg-indigo-100 dark:bg-indigo-900/40 text-indigo-600 dark:text-indigo-400 font-semibold">
                                 {linkedIds.length}
                               </span>
                             </div>
@@ -8723,7 +11252,7 @@ export default function AdminProdutosPage() {
                                 setIsViewSheetOpen(false);
                                 handleEditProduct(selectedProduct);
                               }}
-                              className="flex items-center gap-1.5 text-[11px] font-medium px-2.5 py-1 rounded-lg bg-indigo-100 dark:bg-indigo-900/40 text-indigo-700 dark:text-indigo-300 hover:bg-indigo-200 dark:hover:bg-indigo-900/60 transition-colors"
+                              className="flex items-center gap-1.5 text-xs font-medium px-2.5 py-1 rounded-lg bg-indigo-100 dark:bg-indigo-900/40 text-indigo-700 dark:text-indigo-300 hover:bg-indigo-200 dark:hover:bg-indigo-900/60 transition-colors"
                             >
                               <Pencil className="h-3 w-3" />
                               Editar vínculos
@@ -8736,7 +11265,7 @@ export default function AdminProdutosPage() {
                                 <p className="text-sm font-medium text-muted-foreground">
                                   Nenhum produto complementar vinculado
                                 </p>
-                                <p className="text-xs text-muted-foreground/70">
+                                <p className="text-sm text-muted-foreground/70">
                                   Clique em "Editar vínculos" para adicionar
                                   produtos complementares.
                                 </p>
@@ -8746,7 +11275,7 @@ export default function AdminProdutosPage() {
                                 {linkedProds.map((cp: any) => (
                                   <div
                                     key={cp.id}
-                                    className="flex items-center gap-3 p-3 rounded-xl border border-indigo-100 dark:border-indigo-900/40 bg-indigo-50/40 dark:bg-indigo-950/20"
+                                    className="flex items-center gap-4 p-4 rounded-xl border border-indigo-100 dark:border-indigo-900/40 bg-indigo-50/40 dark:bg-indigo-950/20"
                                   >
                                     <div className="shrink-0 h-10 w-10 rounded-lg overflow-hidden border border-indigo-100 dark:border-indigo-800 bg-gradient-to-br from-indigo-500 to-purple-600">
                                       {cp.image ? (
@@ -8766,19 +11295,19 @@ export default function AdminProdutosPage() {
                                         {cp.name}
                                       </p>
                                       <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
-                                        <span className="text-[10px] font-mono text-muted-foreground">
+                                        <span className="text-[11px] font-mono text-muted-foreground">
                                           {cp.id}
                                         </span>
-                                        <span className="text-[10px] text-muted-foreground">
+                                        <span className="text-[11px] text-muted-foreground">
                                           ·
                                         </span>
-                                        <span className="text-[10px] text-muted-foreground">
+                                        <span className="text-[11px] text-muted-foreground">
                                           {cp.category}
                                         </span>
-                                        <span className="text-[10px] text-muted-foreground">
+                                        <span className="text-[11px] text-muted-foreground">
                                           ·
                                         </span>
-                                        <span className="text-[10px] font-semibold text-emerald-600">
+                                        <span className="text-[11px] font-semibold text-emerald-600">
                                           {new Intl.NumberFormat("pt-BR", {
                                             style: "currency",
                                             currency: "BRL",
@@ -8791,7 +11320,7 @@ export default function AdminProdutosPage() {
                                     </div>
                                     <Badge
                                       variant="secondary"
-                                      className="text-[10px] shrink-0"
+                                      className="text-[11px] shrink-0"
                                     >
                                       {cp.category}
                                     </Badge>
@@ -8813,10 +11342,10 @@ export default function AdminProdutosPage() {
                             <div className="rounded-xl border border-slate-200 dark:border-slate-700 overflow-hidden">
                               <div className="flex items-center gap-2 px-4 py-2.5 bg-slate-50/60 dark:bg-slate-800/40 border-b border-slate-100 dark:border-slate-700">
                                 <Link2 className="h-3.5 w-3.5 text-slate-400 shrink-0" />
-                                <span className="text-xs font-semibold text-slate-700 dark:text-slate-300">
+                                <span className="text-sm font-semibold text-slate-700 dark:text-slate-300">
                                   Produtos que indicam este como complementar
                                 </span>
-                                <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-500 font-semibold">
+                                <span className="text-[11px] px-1.5 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-500 font-semibold">
                                   {pointingToThis.length}
                                 </span>
                               </div>
@@ -8824,7 +11353,7 @@ export default function AdminProdutosPage() {
                                 {pointingToThis.map((p: any) => (
                                   <div
                                     key={p.id}
-                                    className="flex items-center gap-2 text-xs text-muted-foreground"
+                                    className="flex items-center gap-2 text-sm text-muted-foreground"
                                   >
                                     <Package className="h-3.5 w-3.5 shrink-0" />
                                     <span className="font-mono">{p.id}</span>
@@ -8848,6 +11377,185 @@ export default function AdminProdutosPage() {
     </div>
     </div>
     </div>
+    </div>
+  );
+}
+
+// ─── Editores da Apresentação comercial (aba "Ver Detalhes" → Apresentação) ──
+// Campos estruturados que antes só existiam no seed/import da base antiga e
+// não tinham nenhuma UI de edição — o form só editava a tagline em texto
+// puro. Cada componente abaixo edita um array do objeto `presentation`.
+
+function StringListField({
+  label,
+  items,
+  onChange,
+  placeholder,
+}: {
+  label: string;
+  items: string[];
+  onChange: (items: string[]) => void;
+  placeholder?: string;
+}) {
+  const [draft, setDraft] = useState("");
+  const add = () => {
+    const v = draft.trim();
+    if (!v) return;
+    onChange([...items, v]);
+    setDraft("");
+  };
+  return (
+    <div className="space-y-2">
+      <Label className="text-sm font-medium text-muted-foreground">{label}</Label>
+      <div className="space-y-1.5">
+        {items.map((item, i) => (
+          <div
+            key={i}
+            className="flex items-center gap-2 rounded-lg border border-slate-200 dark:border-slate-700 px-3 py-1.5"
+          >
+            <span className="flex-1 text-sm truncate">{item}</span>
+            <button
+              type="button"
+              onClick={() => onChange(items.filter((_, idx) => idx !== i))}
+              className="text-muted-foreground hover:text-red-500 shrink-0"
+            >
+              <X className="h-3.5 w-3.5" />
+            </button>
+          </div>
+        ))}
+      </div>
+      <div className="flex items-center gap-2">
+        <Input
+          value={draft}
+          onChange={(e) => setDraft(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") {
+              e.preventDefault();
+              add();
+            }
+          }}
+          placeholder={placeholder}
+          className="text-sm"
+        />
+        <Button type="button" size="sm" variant="outline" onClick={add}>
+          <Plus className="h-3.5 w-3.5" />
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+function TitleDescListField({
+  label,
+  items,
+  onChange,
+  titleKey,
+  titlePlaceholder,
+}: {
+  label: string;
+  items: { [k: string]: string }[];
+  onChange: (items: { [k: string]: string }[]) => void;
+  titleKey: string;
+  titlePlaceholder?: string;
+}) {
+  const add = () =>
+    onChange([...items, { [titleKey]: "", description: "" }]);
+  const update = (i: number, patch: { [k: string]: string }) =>
+    onChange(items.map((it, idx) => (idx === i ? { ...it, ...patch } : it)));
+  const remove = (i: number) => onChange(items.filter((_, idx) => idx !== i));
+  return (
+    <div className="space-y-2">
+      <div className="flex items-center justify-between">
+        <Label className="text-sm font-medium text-muted-foreground">{label}</Label>
+        <Button type="button" size="sm" variant="outline" className="h-7 gap-1 text-xs" onClick={add}>
+          <Plus className="h-3 w-3" />
+          Adicionar
+        </Button>
+      </div>
+      <div className="space-y-2">
+        {items.map((item, i) => (
+          <div
+            key={i}
+            className="rounded-lg border border-slate-200 dark:border-slate-700 p-2.5 space-y-1.5"
+          >
+            <div className="flex items-center gap-2">
+              <Input
+                value={item[titleKey] || ""}
+                onChange={(e) => update(i, { [titleKey]: e.target.value })}
+                placeholder={titlePlaceholder}
+                className="text-sm"
+              />
+              <button
+                type="button"
+                onClick={() => remove(i)}
+                className="text-muted-foreground hover:text-red-500 shrink-0"
+              >
+                <X className="h-3.5 w-3.5" />
+              </button>
+            </div>
+            <Input
+              value={item.description || ""}
+              onChange={(e) => update(i, { description: e.target.value })}
+              placeholder="Descrição (opcional)"
+              className="text-xs"
+            />
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function FaqListField({
+  items,
+  onChange,
+}: {
+  items: { question: string; answer: string }[];
+  onChange: (items: { question: string; answer: string }[]) => void;
+}) {
+  const add = () => onChange([...items, { question: "", answer: "" }]);
+  const update = (i: number, patch: Partial<{ question: string; answer: string }>) =>
+    onChange(items.map((it, idx) => (idx === i ? { ...it, ...patch } : it)));
+  const remove = (i: number) => onChange(items.filter((_, idx) => idx !== i));
+  return (
+    <div className="space-y-2">
+      <div className="flex items-center justify-between">
+        <Label className="text-sm font-medium text-muted-foreground">FAQ</Label>
+        <Button type="button" size="sm" variant="outline" className="h-7 gap-1 text-xs" onClick={add}>
+          <Plus className="h-3 w-3" />
+          Adicionar pergunta
+        </Button>
+      </div>
+      <div className="space-y-2">
+        {items.map((item, i) => (
+          <div
+            key={i}
+            className="rounded-lg border border-slate-200 dark:border-slate-700 p-2.5 space-y-1.5"
+          >
+            <div className="flex items-center gap-2">
+              <Input
+                value={item.question}
+                onChange={(e) => update(i, { question: e.target.value })}
+                placeholder="Pergunta"
+                className="text-sm"
+              />
+              <button
+                type="button"
+                onClick={() => remove(i)}
+                className="text-muted-foreground hover:text-red-500 shrink-0"
+              >
+                <X className="h-3.5 w-3.5" />
+              </button>
+            </div>
+            <Textarea
+              value={item.answer}
+              onChange={(e) => update(i, { answer: e.target.value })}
+              placeholder="Resposta"
+              className="text-xs min-h-[60px]"
+            />
+          </div>
+        ))}
+      </div>
     </div>
   );
 }
@@ -8877,51 +11585,54 @@ function CatalogTaskLinkRow({
   const [notesValue, setNotesValue] = useState(link.notes || "");
 
   return (
-    <div className="border border-slate-200 dark:border-slate-800 rounded-xl overflow-hidden">
-      <div className="flex items-center gap-2 px-3 py-2.5">
-        {/* Reorder */}
-        <div className="flex flex-col gap-0.5 shrink-0">
-          <button
-            onClick={onMoveUp}
-            disabled={index === 0}
-            className="p-0.5 rounded hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-          >
-            <ChevronUp className="h-3 w-3 text-slate-500" />
-          </button>
-          <button
-            onClick={onMoveDown}
-            disabled={index === total - 1}
-            className="p-0.5 rounded hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-          >
-            <ChevronDown className="h-3 w-3 text-slate-500" />
-          </button>
+    <div className="border border-slate-200 dark:border-slate-800 rounded-2xl overflow-hidden bg-white dark:bg-slate-900/40">
+      <div className="flex items-center gap-3 px-4 py-3">
+        {/* Reorder (grip visual, up/down on hover) */}
+        <div className="relative shrink-0 group/reorder h-5 w-4">
+          <GripVertical className="h-4 w-4 text-slate-300 group-hover/reorder:opacity-0 transition-opacity" />
+          <div className="absolute inset-0 flex flex-col gap-0.5 opacity-0 group-hover/reorder:opacity-100 transition-opacity">
+            <button
+              onClick={onMoveUp}
+              disabled={index === 0}
+              className="p-0.5 rounded hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+            >
+              <ChevronUp className="h-3 w-3 text-slate-500" />
+            </button>
+            <button
+              onClick={onMoveDown}
+              disabled={index === total - 1}
+              className="p-0.5 rounded hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+            >
+              <ChevronDown className="h-3 w-3 text-slate-500" />
+            </button>
+          </div>
         </div>
         {/* Order badge */}
-        <span className="w-6 h-6 rounded-full bg-indigo-100 dark:bg-indigo-900/40 text-indigo-700 dark:text-indigo-300 text-[10px] font-bold flex items-center justify-center shrink-0">
+        <span className="w-8 h-8 rounded-full bg-indigo-100 dark:bg-indigo-900/40 text-indigo-700 dark:text-indigo-300 text-sm font-bold flex items-center justify-center shrink-0">
           {index + 1}
         </span>
-        {/* Code */}
-        <span className="font-mono text-[10px] text-muted-foreground bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 rounded shrink-0">
-          {task?.code ?? "—"}
-        </span>
-        {/* Name + category */}
+        {/* Name + code + category */}
         <div className="flex-1 min-w-0">
-          <p className="text-sm font-semibold leading-tight truncate">
+          <p className="text-sm font-semibold leading-tight truncate flex items-center gap-2">
             {task?.name ?? "Tarefa"}
+            <span className="font-mono text-[10px] font-normal text-muted-foreground bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 rounded shrink-0">
+              {task?.code ?? "—"}
+            </span>
           </p>
-          <p className="text-[10px] text-muted-foreground truncate">
+          <p className="text-[11px] text-muted-foreground truncate">
             {task?.category}
           </p>
         </div>
         {/* Mandatory toggle */}
         <button
           onClick={onToggleMandatory}
-          className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border transition-colors shrink-0 ${
+          className={`inline-flex items-center gap-1 text-[11px] font-semibold px-2.5 py-1 rounded-full border transition-colors shrink-0 ${
             link.is_mandatory
               ? "bg-emerald-100 text-emerald-700 border-emerald-200 dark:bg-emerald-900/30 dark:text-emerald-400 dark:border-emerald-800"
               : "bg-slate-100 text-slate-500 border-slate-200 hover:bg-emerald-50 hover:text-emerald-600 dark:bg-slate-800 dark:text-slate-400 dark:border-slate-700"
           }`}
         >
+          {link.is_mandatory && <CheckCircle2 className="h-3 w-3" />}
           {link.is_mandatory ? "Obrigatória" : "Opcional"}
         </button>
         {/* Link to Cadastro de Tarefas */}

@@ -597,6 +597,14 @@ class ApiClient {
     return this.del(`/products/${id}`);
   }
 
+  async getProductVersions(id: string | number) {
+    return this.get(`/products/${id}/versions`);
+  }
+
+  async restoreProductVersion(id: string | number, versionId: string) {
+    return this.post(`/products/${id}/versions/${versionId}/restore`, {});
+  }
+
   // ─── Campaigns ────────────────────────────────────────────────────────────
   async getCampaigns(filters?: Record<string, any>) {
     return this.get("/campaigns", filters);
@@ -1160,6 +1168,38 @@ class ApiClient {
   }
   async aiImproveAnswer(body: { question_text: string; current_answer?: string; type?: string }) {
     return this.post("/ai-consultor/improve-answer", body);
+  }
+  async aiImproveProductField(body: {
+    field_label: string;
+    current_value?: string;
+    mode?: "text" | "list";
+    length?: "manter" | "curto" | "medio" | "longo";
+    approach?: "melhorar" | "recriar";
+    context?: {
+      name?: string;
+      category?: string;
+      price?: string | number;
+      other_fields?: Record<string, string>;
+    };
+  }) {
+    return this.post("/ai-consultor/improve-product-field", body);
+  }
+  async aiResearchProductPricing(body: {
+    product_name?: string;
+    category?: string;
+    description?: string;
+  }) {
+    return this.post("/ai-consultor/research-product-pricing", body);
+  }
+  async aiResearchSpecialtyMarket(body: {
+    specialty_name?: string;
+    category?: string;
+    description?: string;
+  }) {
+    return this.post("/ai-consultor/research-specialty-market", body);
+  }
+  async aiResearchEmergingSpecialties(body: { category_hint?: string }) {
+    return this.post("/ai-consultor/research-emerging-specialties", body);
   }
   async submitProjectTaskBriefing(id: string, body: { answers: any[] }) {
     return this.patch(`/project-tasks/${id}/submit-briefing`, body);
