@@ -842,6 +842,15 @@ model Product {
   average_rating    Float    @default(0)
   completion_time   String?
   is_active         Boolean  @default(true)
+  // Se as tarefas geradas por este produto precisam do aceite do cliente
+  // depois do aceite da agência. Regra do produto, não do projeto: é o tipo
+  // de entrega que determina se o cliente confere (identidade visual, sim;
+  // publicação de post recorrente, normalmente não).
+  //
+  // Copiado para `ProjectTask.exige_aprovacao_cliente` na geração — a tarefa
+  // guarda o valor vigente na contratação, para que mudar o produto depois
+  // não altere o que já foi vendido. Ver src/lib/generate-tasks.ts.
+  exige_aprovacao_cliente Boolean @default(true)
   metadata          String?  @db.LongText
   // JSON: extras do frontend (tasks, recurrence, summaryDescription, pricing calc, etc.)
   created_at        DateTime @default(now())

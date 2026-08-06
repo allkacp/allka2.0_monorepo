@@ -34,6 +34,7 @@ export interface BackendProduct {
   completion_time: string | null;
   metadata: string | null;
   is_active: boolean;
+  exige_aprovacao_cliente?: boolean;
   created_at: string;
   updated_at: string;
   variations?: Array<{
@@ -186,6 +187,9 @@ export function backendToFrontendProduct(b: BackendProduct): Product {
     description: b.description ?? "",
     category: b.category,
     isActive: b.is_active,
+    // Ausente em produto antigo (coluna criada depois): assume `true`, que é
+    // o default do banco e o comportamento que a plataforma sempre teve.
+    exigeAprovacaoCliente: b.exige_aprovacao_cliente ?? true,
     createdAt: b.created_at,
     updatedAt: b.updated_at,
     image: b.image ?? undefined,
@@ -305,6 +309,7 @@ export function frontendToBackendProduct(p: Product): Record<string, any> {
     // quando não há demonstrações/descrição/etc.
     demonstrations: demos.length ? JSON.stringify(demos) : undefined,
     is_active: p.isActive,
+    exige_aprovacao_cliente: p.exigeAprovacaoCliente ?? true,
     metadata: JSON.stringify(meta),
     variations: p.variations?.map((v) => ({
       name: v.name,

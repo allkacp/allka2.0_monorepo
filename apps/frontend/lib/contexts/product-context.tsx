@@ -313,6 +313,12 @@ export interface Product {
   // "unico" = 1 CatalogTask ativa vinculada, "pacote" = 2+ — derivado da
   // contagem, não é um campo editável (ver Fase 1 do plano de produtos).
   productType?: "unico" | "pacote";
+  /**
+   * As tarefas deste produto exigem o aceite do cliente depois do aceite da
+   * agência? Copiado para a tarefa na geração; mudar aqui não afeta o que já
+   * foi contratado. Ver migration `produto_exige_aprovacao_cliente`.
+   */
+  exigeAprovacaoCliente?: boolean;
 }
 
 interface ProductContextType {

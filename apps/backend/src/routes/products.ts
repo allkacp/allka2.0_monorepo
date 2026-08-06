@@ -38,6 +38,10 @@ const createSchema = z.object({
   completion_time: z.string().optional(),
   metadata: z.string().optional(),
   is_active: z.boolean().default(false),
+  // Default true, e não false: desligar o aceite do cliente é a exceção, e um
+  // produto criado por integração que esqueça o campo deve seguir a regra
+  // conservadora (cliente confere) em vez de encerrar tarefa sozinho.
+  exige_aprovacao_cliente: z.boolean().default(true),
   variations: z.array(variationSchema).optional(),
   addons: z.array(addonSchema).optional(),
 });

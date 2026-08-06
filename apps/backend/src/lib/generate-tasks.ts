@@ -184,6 +184,11 @@ export async function gerarTarefasDoProjeto(
             title: ct.name,
             description: ct.description ?? null,
             status: "PARA_LANCAMENTO",
+            // Snapshot da regra de aprovação vigente na contratação. Copiar
+            // (em vez de consultar o produto na hora de aprovar) é o mesmo
+            // princípio dos outros `_snapshot` acima: mudar o produto depois
+            // não pode alterar o que já foi vendido.
+            exige_aprovacao_cliente: pp.product.exige_aprovacao_cliente,
             priority: ct.default_priority || "medium",
             sort_order: link.sort_order,
             phase: link.phase || null,

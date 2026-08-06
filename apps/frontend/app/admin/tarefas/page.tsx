@@ -217,7 +217,7 @@ const STATUS_CFG: Record<
   }
 > = {
   PARA_LANCAMENTO: {
-    label: "Para lan\u00e7amento",
+    label: "Para lan\çamento",
     color: "text-slate-600",
     bg: "bg-slate-100",
     border: "border-slate-200",
@@ -225,7 +225,7 @@ const STATUS_CFG: Record<
     group: "pendente",
   },
   EM_LANCAMENTO: {
-    label: "Em lan\u00e7amento",
+    label: "Em lan\çamento",
     color: "text-indigo-700",
     bg: "bg-indigo-50",
     border: "border-indigo-200",
@@ -233,7 +233,7 @@ const STATUS_CFG: Record<
     group: "andamento",
   },
   AGUARDANDO_INFORMACOES: {
-    label: "Aguard. informa\u00e7\u00f5es",
+    label: "Aguard. informa\ç\ões",
     color: "text-orange-700",
     bg: "bg-orange-50",
     border: "border-orange-200",
@@ -249,7 +249,7 @@ const STATUS_CFG: Record<
     group: "pendente",
   },
   LIBERADA_PARA_EXECUCAO: {
-    label: "Enviada p/ execu\u00e7\u00e3o",
+    label: "Enviada p/ execu\ç\ão",
     color: "text-cyan-700",
     bg: "bg-cyan-50",
     border: "border-cyan-200",
@@ -257,7 +257,7 @@ const STATUS_CFG: Record<
     group: "andamento",
   },
   EM_EXECUCAO: {
-    label: "Em execu\u00e7\u00e3o",
+    label: "Em execu\ç\ão",
     color: "text-blue-700",
     bg: "bg-blue-50",
     border: "border-blue-200",
@@ -265,7 +265,7 @@ const STATUS_CFG: Record<
     group: "andamento",
   },
   EM_REVISAO: {
-    label: "Em revis\u00e3o",
+    label: "Em revis\ão",
     color: "text-amber-700",
     bg: "bg-amber-50",
     border: "border-amber-200",
@@ -281,7 +281,7 @@ const STATUS_CFG: Record<
     group: "revisao",
   },
   EM_APROVACAO: {
-    label: "Aprova\u00e7\u00e3o - Ag\u00eancia",
+    label: "Aprova\ç\ão - Ag\ência",
     color: "text-violet-700",
     bg: "bg-violet-50",
     border: "border-violet-200",
@@ -289,7 +289,7 @@ const STATUS_CFG: Record<
     group: "aprovacao",
   },
   APROVACAO_PENDENTE_CLIENTE: {
-    label: "Aprova\u00e7\u00e3o - Cliente",
+    label: "Aprova\ç\ão - Cliente",
     color: "text-purple-700",
     bg: "bg-purple-50",
     border: "border-purple-200",
@@ -313,7 +313,7 @@ const STATUS_CFG: Record<
     group: "problema",
   },
   CONCLUIDA: {
-    label: "Conclu\u00edda",
+    label: "Conclu\ída",
     color: "text-emerald-700",
     bg: "bg-emerald-50",
     border: "border-emerald-200",
@@ -337,7 +337,7 @@ const STATUS_CFG: Record<
     group: "problema",
   },
   AGUARDANDO_NOMADE: {
-    label: "Aguard. n\u00f4made",
+    label: "Aguard. n\ômade",
     color: "text-purple-700",
     bg: "bg-purple-50",
     border: "border-purple-200",
@@ -361,7 +361,7 @@ const STATUS_CFG: Record<
     group: "problema",
   },
   QUALIFICACAO_PENDENTE: {
-    label: "Qualifica\u00e7\u00e3o pendente",
+    label: "Qualifica\ç\ão pendente",
     color: "text-blue-700",
     bg: "bg-blue-50",
     border: "border-blue-200",
@@ -369,7 +369,7 @@ const STATUS_CFG: Record<
     group: "pendente",
   },
   NAO_SEGUIU_ORIENTACOES: {
-    label: "N\u00e3o seguiu orienta\u00e7\u00f5es",
+    label: "N\ão seguiu orienta\ç\ões",
     color: "text-rose-700",
     bg: "bg-rose-50",
     border: "border-rose-200",
@@ -391,7 +391,7 @@ const PRIORITY_CFG: Record<
     bg: "bg-slate-100",
   },
   medium: {
-    label: "M\u00e9dia",
+    label: "M\édia",
     dot: "bg-blue-400",
     text: "text-blue-700",
     bg: "bg-blue-50",
@@ -497,7 +497,7 @@ function isOverdue(t: TarefaOperacional) {
 }
 
 function fmtDate(iso?: string | null, compact = false) {
-  if (!iso) return "\u2014";
+  if (!iso) return "\—";
   return new Date(iso).toLocaleDateString(
     "pt-BR",
     compact
@@ -797,7 +797,7 @@ function AssignNomadeDialog({
         <DialogHeader>
           <DialogTitle className="text-base flex items-center gap-2">
             <UserSearch className="h-4 w-4 text-purple-600" />
-            Atribuir n\u00f4made
+            Atribuir n\ômade
           </DialogTitle>
           <p className="text-xs text-slate-500 mt-1 line-clamp-2">
             {task.title}
@@ -822,7 +822,7 @@ function AssignNomadeDialog({
             <div className="max-h-64 overflow-y-auto space-y-1 border border-slate-200 dark:border-border rounded-lg p-2">
               {filtered.length === 0 ? (
                 <p className="text-sm text-slate-400 text-center py-4">
-                  Nenhum n\u00f4made ativo encontrado.
+                  Nenhum n\ômade ativo encontrado.
                 </p>
               ) : (
                 filtered.map((n: any) => (
@@ -881,7 +881,7 @@ function AssignNomadeDialog({
             className="h-9 text-sm bg-purple-600 hover:bg-purple-700 text-white"
           >
             {saving && <Loader2 className="h-4 w-4 animate-spin mr-1.5" />}
-            Confirmar atribui\u00e7\u00e3o
+            Confirmar atribui\ç\ão
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -1910,8 +1910,8 @@ export default function AdminTarefasPage({
                   Nenhuma tarefa operacional
                 </h2>
                 <p className="text-sm text-slate-400 max-w-sm">
-                  Tarefas s\u00e3o geradas automaticamente quando produtos
-                  s\u00e3o vinculados a projetos.
+                  Tarefas s\ão geradas automaticamente quando produtos
+                  s\ão vinculados a projetos.
                 </p>
               </div>
             </div>
@@ -2051,7 +2051,7 @@ export default function AdminTarefasPage({
                           overdue && "bg-red-50/50 dark:bg-red-950/10",
                         )}
                       >
-                        {/* A\u00e7\u00f5es \u2014 pinned/sticky, matching the platform-wide icon-column recipe */}
+                        {/* A\ç\ões \— pinned/sticky, matching the platform-wide icon-column recipe */}
                         {visibleCols.has("acoes") && (
                           <td
                             className={cn(

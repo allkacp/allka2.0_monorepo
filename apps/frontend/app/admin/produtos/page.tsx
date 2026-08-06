@@ -939,6 +939,7 @@ export default function AdminProdutosPage() {
     price: string;
     deliveryDays: string;
     isActive: boolean;
+    exigeAprovacaoCliente: boolean;
     productImage: File | null;
     productImagePreview: string;
     presentation: string;
@@ -979,6 +980,7 @@ export default function AdminProdutosPage() {
     price: "",
     deliveryDays: "",
     isActive: true,
+    exigeAprovacaoCliente: true,
     productImage: null,
     productImagePreview: "",
     presentation: "",
@@ -1578,6 +1580,9 @@ export default function AdminProdutosPage() {
       previousContracts: (product as any).previousContracts || "",
       status: product.isActive ? "Ativo" : "Inativo",
       isActive: product.isActive,
+      // Produto salvo antes desta coluna existir não traz o campo: assume
+      // `true`, que é o default do banco e o comportamento histórico.
+      exigeAprovacaoCliente: (product as any).exigeAprovacaoCliente ?? true,
       associatedTaskModels: (product as any).associatedTaskModels || [],
       // Update formData for questionnaire and tasks
       questionnaire: (product as any).questionnaire?.questions || [], // Ensure accessing questions array
@@ -2093,6 +2098,7 @@ export default function AdminProdutosPage() {
       category: primaryCategory,
       categories: productFormData.categories,
       isActive: productFormData.isActive,
+      exigeAprovacaoCliente: productFormData.exigeAprovacaoCliente,
       tasks: productTasks, // This should be populated if tasks are managed within the product form
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
@@ -2167,6 +2173,7 @@ export default function AdminProdutosPage() {
       price: "",
       deliveryDays: "",
       isActive: true,
+      exigeAprovacaoCliente: true,
       productImage: null,
       productImagePreview: "",
       presentation: "",
@@ -2413,6 +2420,7 @@ export default function AdminProdutosPage() {
           status: productFormData.status,
           associatedTaskModels: productFormData.associatedTaskModels,
           isActive: productFormData.isActive, // Assuming isActive is part of productFormData
+          exigeAprovacaoCliente: productFormData.exigeAprovacaoCliente,
           // Include questionnaire and tasks from form state
           questionnaire: {
             ...(productFormData.questionnaire as any),
@@ -2465,6 +2473,7 @@ export default function AdminProdutosPage() {
       price: "",
       deliveryDays: "",
       isActive: true,
+      exigeAprovacaoCliente: true,
       productImage: null,
       productImagePreview: "",
       presentation: "",
@@ -2529,6 +2538,7 @@ export default function AdminProdutosPage() {
       category: _draftPrimaryCategory,
       categories: productFormData.categories.length ? productFormData.categories : [_draftPrimaryCategory],
       isActive: false,
+      exigeAprovacaoCliente: productFormData.exigeAprovacaoCliente,
       tasks: [], // Drafts might not have tasks yet, or they could be saved separately
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
@@ -9499,6 +9509,51 @@ export default function AdminProdutosPage() {
                             </SelectItem>
                           </SelectContent>
                         </Select>
+                      </div>
+
+                      {/*
+                        Regra de aprovação do produto. Mora aqui e não no
+                        projeto porque quem determina se o cliente confere é o
+                        tipo de entrega. O valor é copiado para cada tarefa na
+                        geração, então mudar depois não altera contratações
+                        que já aconteceram.
+                      */}
+                      <div className="space-y-2">
+                        <TooltipProvider>
+                          <Label className="text-sm font-medium text-muted-foreground flex items-center gap-1">
+                            Aprovação do cliente
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <Info className="h-3 w-3 text-slate-400 cursor-help" />
+                              </TooltipTrigger>
+                              <TooltipContent>
+                                <p className="max-w-xs">
+                                  Ligado: depois do aceite da agência, a tarefa
+                                  ainda espera o aceite do cliente para
+                                  encerrar. Desligado: o aceite da agência já
+                                  encerra. Vale só para tarefas geradas daqui
+                                  em diante.
+                                </p>
+                              </TooltipContent>
+                            </Tooltip>
+                          </Label>
+                        </TooltipProvider>
+                        <div className="flex items-center gap-2.5 h-8">
+                          <Switch
+                            checked={productFormData.exigeAprovacaoCliente}
+                            onCheckedChange={(checked) =>
+                              setProductFormData({
+                                ...productFormData,
+                                exigeAprovacaoCliente: checked,
+                              })
+                            }
+                          />
+                          <span className="text-sm text-muted-foreground">
+                            {productFormData.exigeAprovacaoCliente
+                              ? "Cliente aprova a entrega"
+                              : "Agência encerra sozinha"}
+                          </span>
+                        </div>
                       </div>
                       <div className="space-y-2">
                         <TooltipProvider>

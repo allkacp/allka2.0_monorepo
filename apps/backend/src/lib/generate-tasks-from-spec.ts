@@ -160,6 +160,16 @@ export async function generateTasksFromSpec(
     );
   }
 
+  // Regra de aprovação do produto, congelada na tarefa igual aos demais
+  // snapshots. Este gerador convive com o `generate-tasks.ts`; sem ler o
+  // produto aqui também, tarefa nascida por especificação ficaria sempre no
+  // default `true` e ignoraria a configuração do produto.
+  const produtoDaTarefa = await tx.product.findUnique({
+    where: { id: params.productId },
+    select: { exige_aprovacao_cliente: true },
+  });
+  const exigeAprovacaoCliente = produtoDaTarefa?.exige_aprovacao_cliente ?? true;
+
   let created = 0;
   let reused = 0;
   let metadataUpdated = 0;
@@ -207,6 +217,7 @@ export async function generateTasksFromSpec(
           name_snapshot: spec.title,
           description: spec.description ?? null,
           status: spec.status ?? "PARA_LANCAMENTO",
+          exige_aprovacao_cliente: exigeAprovacaoCliente,
           priority: spec.priority ?? "medium",
           due_date: spec.dueDate ?? null,
           lider_responsavel_id: spec.liderResponsavelId ?? null,
