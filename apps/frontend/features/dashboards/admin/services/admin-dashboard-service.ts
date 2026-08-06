@@ -1,22 +1,8 @@
-// @ts-nocheck
-import type { ShareConfig } from "../types/admin-dashboard.types";
-
-// ─── Share token generation ───────────────────────────────────────────────────
-
-export const generatePublicToken = (
-  config: ShareConfig,
-  extras?: { profile?: string; period?: object; allowFilterChanges?: boolean },
-): string => {
-  const payload = {
-    target: config.target,
-    permission: config.permission,
-    pin: config.pin ?? null,
-    expiry: config.expiry ? config.expiry.toISOString() : null,
-    issued: new Date().toISOString(),
-    ...(extras?.profile ? { profile: extras.profile } : {}),
-    ...(extras?.period ? { period: extras.period } : {}),
-    ...(extras?.allowFilterChanges !== undefined ? { allowFilterChanges: extras.allowFilterChanges } : {}),
-    v: 2,
-  };
-  return btoa(unescape(encodeURIComponent(JSON.stringify(payload))));
-};
+/**
+ * `generatePublicToken` é o mesmo nas cinco telas de dashboard — o token de
+ * compartilhamento não tem nada de específico do admin. A implementação única
+ * está em features/dashboards/shared/dashboard-common.tsx.
+ *
+ * Mantido como reexport para não alterar os imports do admin-dashboard-page.
+ */
+export { generatePublicToken } from "@/features/dashboards/shared/dashboard-common";
