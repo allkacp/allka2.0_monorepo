@@ -1,7 +1,10 @@
 ﻿// @ts-nocheck
 "use client";
 
-import { useState, useRef, useMemo } from "react";
+// useCallback e useEffect faltavam aqui: a tela usava os dois e quebrava com
+// "useCallback is not defined" em toda carga. O `@ts-nocheck` no topo do
+// arquivo escondeu o erro do compilador — só aparecia no navegador.
+import { useState, useRef, useMemo, useCallback, useEffect } from "react";
 import { Link } from "react-router-dom";
 import {
   CheckSquare,

@@ -106,7 +106,6 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { MetricChartModal } from "@/components/admin/metric-chart-modal";
 import { toPng } from "html-to-image";
-import jsPDF from "jspdf";
 import {
   Accordion,
   AccordionContent,
@@ -1404,6 +1403,8 @@ export default function AdminDashboardPage() {
       const ratio = img.height / img.width;
       const pdfW = 210; // A4 mm
       const pdfH = Math.min(pdfW * ratio, 297);
+      // jsPDF (385 KB) so e necessario ao exportar; carregado sob demanda
+      const { default: jsPDF } = await import("jspdf");
       const pdf = new jsPDF({
         orientation: pdfH > pdfW ? "portrait" : "landscape",
         unit: "mm",
@@ -2792,6 +2793,8 @@ export default function AdminDashboardPage() {
           img.onerror = reject;
         });
 
+        // jsPDF (385 KB) so e necessario ao exportar; carregado sob demanda
+        const { default: jsPDF } = await import("jspdf");
         const pdf = new jsPDF({
           orientation: "portrait",
           unit: "mm",

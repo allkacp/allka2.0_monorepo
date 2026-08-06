@@ -134,7 +134,6 @@ import { SlidePanel } from "@/components/slide-panel";
 import { EmbeddedSlideScreen } from "@/components/embedded-slide-screen";
 import { StandardModalDialog } from "@/components/standard-modal-dialog";
 import { toPng } from "html-to-image";
-import jsPDF from "jspdf";
 import {
   Accordion,
   AccordionContent,
@@ -718,6 +717,8 @@ export function AdminDashboardPage() {
       const ratio = img.height / img.width;
       const pdfW = 210; // A4 mm
       const pdfH = Math.min(pdfW * ratio, 297);
+      // jsPDF (385 KB) so e necessario ao exportar; carregado sob demanda
+      const { default: jsPDF } = await import("jspdf");
       const pdf = new jsPDF({
         orientation: pdfH > pdfW ? "portrait" : "landscape",
         unit: "mm",
@@ -2466,6 +2467,8 @@ export function AdminDashboardPage() {
           img.onerror = reject;
         });
 
+        // jsPDF (385 KB) so e necessario ao exportar; carregado sob demanda
+        const { default: jsPDF } = await import("jspdf");
         const pdf = new jsPDF({
           orientation: "portrait",
           unit: "mm",
