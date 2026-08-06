@@ -154,6 +154,7 @@ import {
   StandardPageBanner,
 } from "@/components/standard-page-shell";
 import { PinToTrayButton } from "@/components/pin-to-tray-button";
+import { LegacyIdBadge } from "@/components/legacy-id-badge";
 import { useConsumePendingActivation } from "@/contexts/open-screens-context";
 
 // ── View mode for the product grid ───────────────────────────────────────────
@@ -367,6 +368,13 @@ function ProdStatCard({
 // Barra de abas responsiva — mede quantas abas cabem na largura disponível
 // e joga o resto num menu "Mais N" (dropdown), em vez de deixar a barra
 // estourar com scroll horizontal. Usada no "Ver Detalhes" do produto.
+// "prod_42" → 42, pra coluna ID mostrar só o número sequencial — mesmo
+// padrão do userCodeToNum em admin/usuarios.
+function productCodeToNum(code?: string | null): number | null {
+  const m = /(\d+)\s*$/.exec(code || "");
+  return m ? parseInt(m[1], 10) : null;
+}
+
 const TAB_BTN_BASE =
   "h-11 px-4 shrink-0 whitespace-nowrap rounded-lg border flex items-center gap-2 text-sm font-medium transition-all";
 function tabBtnClass(isActive: boolean) {
@@ -724,7 +732,10 @@ export default function AdminProdutosPage() {
   const [searchTerm, setSearchTerm] = useState("");
   const [filterCategories, setFilterCategories] = useState<string[]>([]);
   const [filterAreas, setFilterAreas] = useState<string[]>([]);
-  const [filterStatus, setFilterStatus] = useState<string>("all");
+  // Padrão da plataforma: lista mostra só o que está ativo. Inativo é
+  // exceção e só aparece quando a pessoa muda o filtro de propósito — senão
+  // produto descontinuado (ex.: os importados da base antiga) polui a tela.
+  const [filterStatus, setFilterStatus] = useState<string>("active");
   // Aba-filtro "Com tarefas" (barra de filtros rápidos acima da tabela) —
   // separada de filterStatus porque é uma dimensão diferente (tem/não tem
   // tarefas vinculadas, não ativo/inativo).
@@ -2725,7 +2736,8 @@ export default function AdminProdutosPage() {
   const activeFiltersCount = [
     filterCategories.length > 0,
     filterAreas.length > 0,
-    filterStatus !== "all",
+    // "active" é o padrão da tela, não conta como filtro aplicado.
+    filterStatus !== "active",
     sortBy !== "name",
   ].filter(Boolean).length;
 
@@ -3107,6 +3119,7 @@ export default function AdminProdutosPage() {
                         className="h-3.5 w-3.5 rounded border-slate-300"
                       />
                     </th>
+                    <th className="py-3 px-2 text-left text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-[0.04em] w-16">ID</th>
                     <th className="py-3 px-2 text-left text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-[0.04em]">Produto</th>
                     <th className="py-3 px-2 text-left text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-[0.04em] hidden sm:table-cell">Categoria</th>
                     <th className="py-3 px-2 text-left text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-[0.04em] hidden md:table-cell">Tarefas e tempo</th>
@@ -3136,6 +3149,23 @@ export default function AdminProdutosPage() {
                           className="h-3.5 w-3.5 rounded border-slate-300"
                         />
                       </td>
+                      {/* ID sequencial da plataforma (prod_1, prod_2, …) — mesma
+                          ideia da coluna de código em usuários/empresas. Todo
+                          produto tem o seu; o `id` técnico (cuid) nunca aparece. */}
+                      <td className="py-3 px-2">
+                        <div className="flex flex-col gap-0.5">
+                          <span className="text-xs font-mono font-semibold text-slate-500 dark:text-slate-400">
+                            {productCodeToNum((product as any).productCode) ?? "—"}
+                          </span>
+                          {/* Produto consolidado veio de várias entradas antigas:
+                              mostra todas, senão não dá pra achar a origem. */}
+                          <LegacyIdBadge
+                            legacyIds={(product as any).legacyIds}
+                            legacyId={(product as any).legacyId}
+                            entidade="produto"
+                          />
+                        </div>
+                      </td>
                       <td className="py-3 px-2">
                         <div className="flex items-center gap-3">
                           <div className="relative shrink-0">
@@ -3161,9 +3191,13 @@ export default function AdminProdutosPage() {
                               <p className="text-[13px] font-semibold truncate leading-tight">
                                 {product.name}
                               </p>
-                              <span className="text-[10px] font-mono font-bold text-slate-400 dark:text-slate-500 shrink-0">
-                                {(product as any).productCode || product.id}
-                              </span>
+                              {/* O código agora tem coluna própria; aqui fica só
+                                  o código legível por categoria, quando existe. */}
+                              {(product as any).internalCode && (
+                                <span className="text-[10px] font-mono font-bold text-slate-400 dark:text-slate-500 shrink-0">
+                                  {(product as any).internalCode}
+                                </span>
+                              )}
                             </div>
                             <p className="text-[11px] text-muted-foreground truncate max-w-[320px]">
                               {product.description || "Sem descrição"}
@@ -3938,7 +3972,8 @@ export default function AdminProdutosPage() {
           const clearFilters = () => {
             setFilterCategories([]);
             setFilterAreas([]);
-            setFilterStatus("all");
+            // Volta ao padrão da tela (só ativos), não a "todos".
+            setFilterStatus("active");
             setSortBy("name");
             setCurrentPage(1);
           };

@@ -56,6 +56,7 @@ import {
   Check,
 } from "lucide-react";
 import { apiClient } from "@/lib/api-client";
+import { LegacyIdBadge } from "@/components/legacy-id-badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { IconToolbarButton } from "@/components/icon-toolbar-button";
@@ -2268,20 +2269,30 @@ export default function AdminTarefasPage({
                               overflow: "hidden",
                             }}
                           >
-                            {tarefa.task_code || tarefa.code_snapshot ? (
-                              <Tooltip>
-                                <TooltipTrigger asChild>
-                                  <span className="text-xs font-mono font-semibold text-slate-500 dark:text-slate-400 cursor-help">
-                                    {tarefa.task_code ? formatTaskCode(tarefa.task_code) : tarefa.code_snapshot}
-                                  </span>
-                                </TooltipTrigger>
-                                <TooltipContent side="top" className="text-xs">
-                                  Código único da tarefa{tarefa.task_code ? ` (original: ${tarefa.task_code})` : ""}
-                                </TooltipContent>
-                              </Tooltip>
-                            ) : (
-                              <span className="text-slate-300 dark:text-slate-600">—</span>
-                            )}
+                            <div className="flex flex-col gap-0.5">
+                              {tarefa.task_code || tarefa.code_snapshot ? (
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <span className="text-xs font-mono font-semibold text-slate-500 dark:text-slate-400 cursor-help">
+                                      {tarefa.task_code ? formatTaskCode(tarefa.task_code) : tarefa.code_snapshot}
+                                    </span>
+                                  </TooltipTrigger>
+                                  <TooltipContent side="top" className="text-xs">
+                                    Código único da tarefa{tarefa.task_code ? ` (original: ${tarefa.task_code})` : ""}
+                                  </TooltipContent>
+                                </Tooltip>
+                              ) : (
+                                <span className="text-slate-300 dark:text-slate-600">—</span>
+                              )}
+                              {/* Tarefa vinda da plataforma antiga: mostra o número de lá e
+                                  sinaliza quando ela continua no formato antigo (sem modelo
+                                  de tarefa novo por trás). */}
+                              <LegacyIdBadge
+                                legacyId={(tarefa as any).legacy_id}
+                                entidade="tarefa"
+                                modeloAntigo={Boolean((tarefa as any).legacy_model)}
+                              />
+                            </div>
                           </td>
                         )}
 

@@ -153,7 +153,9 @@ const EMPTY_ADVANCED_FILTERS = {
   whatsapp: "",
   location: "",
   types: [] as string[],
-  statuses: [] as string[],
+  // Padrão da plataforma: a lista abre só com empresa ativa. Desmarcar aqui
+  // (ou marcar outro status) traz as demais.
+  statuses: ["active"] as string[],
   accountTypes: [] as string[],
   partnerLevels: [] as string[],
   minUsers: "",

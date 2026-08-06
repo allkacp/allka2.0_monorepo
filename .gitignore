@@ -73,8 +73,12 @@ tmp/
 output/
 instrucoesAI/
 produtos-modelos-questionarios.json
+operacao-tarefas-legado.json
 *elementor*.html
 
 # Dumps de banco (nunca versionar)
 *.sql
 !apps/backend/prisma/migrations/**/*.sql
+
+# Links de primeiro acesso gerados para a migração — tratar como senha
+links-primeiro-acesso*.csv

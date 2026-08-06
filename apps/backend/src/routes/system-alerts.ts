@@ -3,9 +3,31 @@ import type { Request, Response, NextFunction } from "express";
 import { z } from "zod";
 import { prisma } from "../lib/prisma";
 import { verifyToken } from "../middleware/auth";
-import { validate } from "../middleware/validate";
 
 const router = Router();
+
+// ── Escopo por destinatário ───────────────────────────────────────────────────
+//
+// SystemAlert nasceu como mural global do Admin ("nômade não encontrado",
+// "tarefa atrasada"): todas as rotas aqui liam e escreviam sem olhar para quem
+// era o alerta. Com o motor de etapas passaram a existir avisos endereçados
+// (`user_id`, ver migration 20260804160000) — e sem escopo eles ficavam
+// invisíveis para o dono e visíveis para todos os outros.
+//
+//   Admin      → alertas gerais (user_id nulo) + os endereçados a ele
+//   Demais     → só os endereçados a ele
+//
+// O escopo entra em TODAS as rotas, não só na listagem: sem isso qualquer
+// usuário marcaria como lido ou apagaria o alerta de outro. O `read-all`, em
+// particular, marcava o mural inteiro da plataforma.
+
+function escopoDoUsuario(req: Request): Record<string, unknown> {
+  const user = req.user!;
+  const ehAdmin = user.role === "admin" || user.account_type === "admin";
+  return ehAdmin
+    ? { OR: [{ user_id: null }, { user_id: user.id }] }
+    : { user_id: user.id };
+}
 
 // ── Schemas ───────────────────────────────────────────────────────────────────
 
@@ -33,26 +55,28 @@ router.get(
     try {
       const query = listSchema.safeParse(req.query);
       if (!query.success) {
-        res
-          .status(400)
-          .json({
-            error: "Parâmetros inválidos",
-            details: query.error.flatten(),
-          });
+        res.status(400).json({
+          error: "Parâmetros inválidos",
+          details: query.error.flatten(),
+        });
         return;
       }
 
       const { type, severity, is_read, entity_type, entity_id, limit, offset } =
         query.data;
 
-      const where: Record<string, unknown> = {};
-      if (type) where.type = type;
-      if (severity) where.severity = severity;
-      if (is_read !== undefined) where.is_read = is_read;
-      if (entity_type) where.entity_type = entity_type;
-      if (entity_id) where.entity_id = entity_id;
+      const filtros: Record<string, unknown> = {};
+      if (type) filtros.type = type;
+      if (severity) filtros.severity = severity;
+      if (is_read !== undefined) filtros.is_read = is_read;
+      if (entity_type) filtros.entity_type = entity_type;
+      if (entity_id) filtros.entity_id = entity_id;
 
-      const [total, alerts] = await Promise.all([
+      // AND explícito: o escopo usa OR internamente (admin vê geral + os seus),
+      // e espalhar as duas coisas no mesmo objeto faria um sobrescrever o outro.
+      const where = { AND: [filtros, escopoDoUsuario(req)] };
+
+      const [total, alerts, unread] = await Promise.all([
         prisma.systemAlert.count({ where }),
         prisma.systemAlert.findMany({
           where,
@@ -60,15 +84,12 @@ router.get(
           take: limit,
           skip: offset,
         }),
+        prisma.systemAlert.count({
+          where: { AND: [filtros, escopoDoUsuario(req), { is_read: false }] },
+        }),
       ]);
 
-      res.json({
-        data: alerts,
-        total,
-        unread: await prisma.systemAlert.count({
-          where: { ...where, is_read: false },
-        }),
-      });
+      res.json({ data: alerts, total, unread });
     } catch (err) {
       next(err);
     }
@@ -80,10 +101,10 @@ router.get(
 router.get(
   "/unread-count",
   verifyToken,
-  async (_req: Request, res: Response, next: NextFunction) => {
+  async (req: Request, res: Response, next: NextFunction) => {
     try {
       const count = await prisma.systemAlert.count({
-        where: { is_read: false },
+        where: { AND: [{ is_read: false }, escopoDoUsuario(req)] },
       });
       res.json({ count });
     } catch (err) {
@@ -99,15 +120,17 @@ router.patch(
   verifyToken,
   async (req: Request, res: Response, next: NextFunction) => {
     try {
-      const alert = await prisma.systemAlert.findUnique({
-        where: { id: req.params.id as string },
+      // findFirst com escopo em vez de findUnique: alerta de outra pessoa tem
+      // de responder "não encontrado", não ser marcado como lido.
+      const alert = await prisma.systemAlert.findFirst({
+        where: { AND: [{ id: req.params.id as string }, escopoDoUsuario(req)] },
       });
       if (!alert) {
         res.status(404).json({ error: "Alerta não encontrado" });
         return;
       }
       const updated = await prisma.systemAlert.update({
-        where: { id: req.params.id as string },
+        where: { id: alert.id },
         data: { is_read: true, read_at: new Date() },
       });
       res.json(updated);
@@ -122,10 +145,10 @@ router.patch(
 router.patch(
   "/read-all",
   verifyToken,
-  async (_req: Request, res: Response, next: NextFunction) => {
+  async (req: Request, res: Response, next: NextFunction) => {
     try {
       const result = await prisma.systemAlert.updateMany({
-        where: { is_read: false },
+        where: { AND: [{ is_read: false }, escopoDoUsuario(req)] },
         data: { is_read: true, read_at: new Date() },
       });
       res.json({ updated: result.count });
@@ -142,9 +165,15 @@ router.delete(
   verifyToken,
   async (req: Request, res: Response, next: NextFunction) => {
     try {
-      await prisma.systemAlert.delete({
-        where: { id: req.params.id as string },
+      const alert = await prisma.systemAlert.findFirst({
+        where: { AND: [{ id: req.params.id as string }, escopoDoUsuario(req)] },
+        select: { id: true },
       });
+      if (!alert) {
+        res.status(404).json({ error: "Alerta não encontrado" });
+        return;
+      }
+      await prisma.systemAlert.delete({ where: { id: alert.id } });
       res.status(204).send();
     } catch (err) {
       next(err);

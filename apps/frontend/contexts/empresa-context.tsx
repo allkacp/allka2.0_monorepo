@@ -8,6 +8,7 @@ import {
   useCallback,
 } from "react";
 import { apiClient } from "@/lib/api-client";
+import { podeConsultarEmpresa } from "@/lib/conta-logada";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -57,7 +58,25 @@ export interface EmpresaTask {
   projectName: string;
   name: string;
   category: string;
-  status: "available" | "in_progress" | "review" | "done" | "cancelled";
+  /**
+   * Balde grosso, usado pelos cards e pelo dashboard. É derivado de
+   * `rawStatus` — não é o que o banco guarda.
+   */
+  status:
+    | "available"
+    | "in_progress"
+    | "review"
+    | "approval"
+    | "done"
+    | "cancelled";
+  /**
+   * O status real da tarefa (EM_APROVACAO, APROVACAO_PENDENTE_CLIENTE, …).
+   * Necessário porque a decisão de aprovar depende do valor exato, e o balde
+   * acima perde essa informação.
+   */
+  rawStatus: string;
+  /** Está parada esperando o aceite DESTE cliente. */
+  aguardandoMinhaAprovacao: boolean;
   nomadeName?: string;
   value: number;
   dueDate: string;
@@ -112,6 +131,13 @@ export function EmpresaProvider({ children }: { children: React.ReactNode }) {
   const [loading, setLoading] = useState(true);
 
   const refetch = useCallback(async () => {
+    // Contexto montado para todo mundo, mas só a empresa (e o admin) enxerga
+    // estes dados — ver lib/conta-logada.ts. Sem esta guarda, um nômade
+    // logado disparava /clients e levava 403 em toda navegação.
+    if (!podeConsultarEmpresa()) {
+      setLoading(false);
+      return;
+    }
     setLoading(true);
     try {
       // Step 1: load company profile first to know the company ID
@@ -141,7 +167,13 @@ export function EmpresaProvider({ children }: { children: React.ReactNode }) {
       const [projectsRes, invoicesRes, tasksRes] = await Promise.allSettled([
         apiClient.getProjects({ limit: "100", client_id: companyId }),
         apiClient.getInvoices({ limit: "100", company_id: companyId }),
-        apiClient.getTasks({ limit: "500" }),
+        // `/project-tasks`, não `/tasks`. O segundo é a tabela legada de
+        // execuções, cujas linhas vêm com `project_id: null` — o filtro por
+        // projeto logo abaixo nunca casava e o cliente via a lista sempre
+        // vazia. As tarefas reais da plataforma (as que o motor de etapas
+        // movimenta) estão em /project-tasks, já recortadas por empresa no
+        // backend via getTaskScopeWhere.
+        apiClient.getOperationalTasks({ limit: "500" }),
       ]);
 
       let companyProjectIds: string[] = [];
@@ -204,16 +236,26 @@ export function EmpresaProvider({ children }: { children: React.ReactNode }) {
         );
       }
 
-      // Step 3: filter tasks that belong to this company's projects
-      if (tasksRes.status === "fulfilled" && companyProjectIds.length > 0) {
+      // Step 3: tarefas da empresa
+      //
+      // Sem filtrar por `companyProjectIds` aqui: /project-tasks já vem
+      // recortado por empresa no backend, e o filtro local dependia da lista
+      // de projetos ter vindo completa — com o teto de 100, uma tarefa de um
+      // projeto além desse limite sumia da tela sem motivo aparente.
+      if (tasksRes.status === "fulfilled") {
         const tData: any = tasksRes.value;
         const tList = tData.data || (Array.isArray(tData) ? tData : []);
-        const companyTasks = tList.filter((t: any) =>
-          companyProjectIds.includes(String(t.project_id)),
-        );
+        const companyTasks = tList;
 
-        // Map task status from API shape to EmpresaTask shape
+        // Status real da tarefa → balde exibido ao cliente.
+        //
+        // Este mapa só conhecia o vocabulário antigo (pending/review/completed)
+        // e o motor de etapas grava o novo (EM_EXECUCAO, EM_APROVACAO,
+        // APROVACAO_PENDENTE_CLIENTE…). Como o fallback é "available", toda
+        // tarefa real chegava ao cliente como "Disponível" — inclusive as que
+        // estavam paradas esperando o aceite dele.
         const statusMap: Record<string, EmpresaTask["status"]> = {
+          // Vocabulário legado, mantido para dados antigos
           pending: "available",
           available: "available",
           in_progress: "in_progress",
@@ -222,6 +264,31 @@ export function EmpresaProvider({ children }: { children: React.ReactNode }) {
           done: "done",
           cancelled: "cancelled",
           canceled: "cancelled",
+
+          // Vocabulário real da plataforma
+          PARA_LANCAMENTO: "available",
+          EM_LANCAMENTO: "available",
+          AGUARDANDO_INFORMACOES: "available",
+          AGUARDANDO_ETAPA: "available",
+          AGUARDANDO_NOMADE: "available",
+          LIBERADA_PARA_EXECUCAO: "available",
+          LANCAMENTO_ENVIADO_PARA_ANALISE: "in_progress",
+          EM_EXECUCAO: "in_progress",
+          ENTREGA_PENDENTE: "in_progress",
+          ENTREGA_ATRASADA: "in_progress",
+          MELHORIAS_FINAIS: "in_progress",
+          EM_REVISAO: "review",
+          NAO_SEGUIU_ORIENTACOES: "review",
+          REPROVADA: "review",
+          // Aprovação da agência ainda não saiu: para o cliente é entrega em
+          // conferência, não algo que ele possa aceitar.
+          EM_APROVACAO: "approval",
+          APROVACAO_PENDENTE_CLIENTE: "approval",
+          QUALIFICACAO_PENDENTE: "approval",
+          APROVADA: "done",
+          CONCLUIDA: "done",
+          PAUSADA: "cancelled",
+          CANCELADA: "cancelled",
         };
 
         setTasks(
@@ -245,16 +312,25 @@ export function EmpresaProvider({ children }: { children: React.ReactNode }) {
                     );
                   })()
                 : "",
-            name: t.title || t.name || "",
-            category: t.type || t.category || "",
+            name: t.title || t.name_snapshot || t.name || "",
+            // /project-tasks guarda a categoria no snapshot do modelo de tarefa.
+            category: t.category_snapshot || t.catalog_task?.category || t.type || "",
             status: statusMap[t.status] || "available",
-            nomadeName: t.assigned_to_name || undefined,
-            value: t.value || 0,
+            rawStatus: t.status || "",
+            // Só o segundo nível é ação dele. Em EM_APROVACAO a bola ainda
+            // está com a agência, e o backend recusaria o aceite mesmo assim.
+            aguardandoMinhaAprovacao: t.status === "APROVACAO_PENDENTE_CLIENTE",
+            nomadeName:
+              t.nomade_responsavel?.name || t.assignee?.name || t.assigned_to_name || undefined,
+            // ProjectTask não tem campo de valor — ver o comentário na tela
+            // company/tarefas. Fica 0 e a tela não exibe coluna de preço.
+            value: 0,
             dueDate: t.due_date || t.dueDate || "",
-            deliveredAt:
-              t.status === "done" || t.status === "completed"
-                ? t.updated_at || t.delivered_at || undefined
-                : undefined,
+            deliveredAt: ["done", "completed", "CONCLUIDA", "APROVADA"].includes(
+              t.status,
+            )
+              ? t.data_conclusao || t.completed_at || t.updated_at || undefined
+              : undefined,
           })),
         );
       }

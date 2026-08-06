@@ -8,6 +8,7 @@ import {
   useCallback,
 } from "react";
 import { apiClient } from "@/lib/api-client";
+import { podeConsultarAgencia } from "@/lib/conta-logada";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -121,6 +122,11 @@ export function AgenciaProvider({ children }: { children: React.ReactNode }) {
       value.trim().toLowerCase().normalize("NFD").replace(/\p{Diacritic}/gu, "");
 
     async function load() {
+      // Só quem é agência (ou admin) enxerga /agencies — ver lib/conta-logada.ts.
+      if (!podeConsultarAgencia()) {
+        setLoading(false);
+        return;
+      }
       try {
         const [currentUserRes, agenciesRes, projectsRes, invoicesRes] =
           await Promise.allSettled([

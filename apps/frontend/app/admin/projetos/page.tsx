@@ -152,6 +152,7 @@ import {
 import { useProjects } from "@/hooks/useProjects";
 import { usePartner } from "@/contexts/partner-context";
 import { apiClient } from "@/lib/api-client";
+import { LegacyIdBadge } from "@/components/legacy-id-badge";
 import { adaptApiProject, type FrontendProject } from "@/lib/project-adapter";
 import {
   ALLKA_BADGE_CLASS,
@@ -3547,9 +3548,15 @@ export default function AdminProjetosPage({
                                   overflow: "hidden",
                                 }}
                               >
-                                <span className="font-mono text-[11px] text-slate-400 tracking-wide">
-                                  proj_{project.seq ?? "?"}
-                                </span>
+                                <div className="flex flex-col gap-0.5">
+                                  <span className="font-mono text-[11px] text-slate-400 tracking-wide">
+                                    proj_{project.seq ?? "?"}
+                                  </span>
+                                  <LegacyIdBadge
+                                    legacyId={(project as any).legacy_id}
+                                    entidade="projeto"
+                                  />
+                                </div>
                               </td>
                             )}
 

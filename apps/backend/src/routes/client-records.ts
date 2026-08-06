@@ -193,6 +193,8 @@ const updateLinkSchema = z.object({
 type ClientWithLinks = {
   id: string;
   sequence_number: number;
+  // Preenchido só em cliente vindo da importação da plataforma antiga.
+  legacy_id: number | null;
   name: string;
   type: string;
   document: string | null;
@@ -220,6 +222,9 @@ function toClientDTO(c: ClientWithLinks) {
   return {
     id: c.id,
     sequence_number: c.sequence_number,
+    // Número deste cliente na plataforma antiga, quando veio da importação
+    // (ver scripts/import-legacy-platform.ts). Só referência de consulta.
+    legacy_id: c.legacy_id,
     name: c.name,
     type: c.type,
     document: c.document,

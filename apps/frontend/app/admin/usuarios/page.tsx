@@ -110,6 +110,7 @@ import {
 import { createPortal } from "react-dom";
 import { usePlatformUsers } from "@/contexts/platform-users-context";
 import { apiClient } from "@/lib/api-client";
+import { LegacyIdBadge } from "@/components/legacy-id-badge";
 import { useUsers } from "@/hooks/useUsers";
 import {
   DropdownMenu,
@@ -2877,12 +2878,18 @@ export default function UsuariosPage() {
 
                         {visibleCols.has("codigo") && (
                           <td className="py-3 px-4" style={{ borderRight: "1px solid rgba(148,163,184,0.15)" }}>
-                            <span className="text-xs font-mono text-slate-500 dark:text-slate-400">
-                              {(() => {
-                                const n = userCodeToNum(user.user_code);
-                                return n ? `User_${n}` : user.user_code || "—";
-                              })()}
-                            </span>
+                            <div className="flex flex-col gap-0.5">
+                              <span className="text-xs font-mono text-slate-500 dark:text-slate-400">
+                                {(() => {
+                                  const n = userCodeToNum(user.user_code);
+                                  return n ? `User_${n}` : user.user_code || "—";
+                                })()}
+                              </span>
+                              <LegacyIdBadge
+                                legacyId={(user as any).legacy_id}
+                                entidade="usuário"
+                              />
+                            </div>
                           </td>
                         )}
 
@@ -3407,6 +3414,17 @@ export default function UsuariosPage() {
                           <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide mb-1">ID técnico</p>
                           <p className="text-xs font-mono text-slate-500 dark:text-slate-400 truncate">{safe(infoPanelUser.id)}</p>
                         </div>
+                        {/* Só existe em usuário importado da plataforma antiga. */}
+                        {(infoPanelUser as any).legacy_id != null && (
+                          <div className="rounded-lg border border-amber-200 dark:border-amber-900/50 bg-amber-50/50 dark:bg-amber-950/20 p-2">
+                            <p className="text-[10px] font-semibold text-amber-600 dark:text-amber-500 uppercase tracking-wide mb-1">
+                              ID plataforma antiga
+                            </p>
+                            <p className="text-sm font-mono text-amber-700 dark:text-amber-400">
+                              #{(infoPanelUser as any).legacy_id}
+                            </p>
+                          </div>
+                        )}
                         <div className="rounded-lg border border-slate-200 dark:border-slate-700 p-2.5 sm:col-span-2">
                           <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide mb-1">IDs técnicos de vínculo</p>
                           <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-1 text-xs font-mono text-slate-500 dark:text-slate-400">

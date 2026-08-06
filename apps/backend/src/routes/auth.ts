@@ -1,4 +1,5 @@
 import { Router } from "express";
+import { createHash } from "node:crypto";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import { z } from "zod";
@@ -64,6 +65,20 @@ router.post("/login", validate(loginSchema), async (req, res, next) => {
 
     if (!user || !user.is_active) {
       res.status(401).json({ error: "Credenciais inválidas" });
+      return;
+    }
+
+    // Usuário que ainda precisa definir a senha (importado da plataforma
+    // antiga, ou criado sem senha) não entra por aqui — nem com tentativa e
+    // erro, já que o hash guardado é aleatório e inutilizável. A resposta é
+    // deliberadamente distinta de "credenciais inválidas": não é erro do
+    // usuário, é uma etapa que falta.
+    if (user.must_set_password) {
+      res.status(403).json({
+        error: "FIRST_ACCESS_REQUIRED",
+        message:
+          "Esta conta ainda não tem senha definida. Use o link de primeiro acesso para criar a sua.",
+      });
       return;
     }
 
@@ -144,6 +159,94 @@ router.post("/login", validate(loginSchema), async (req, res, next) => {
 // POST /api/auth/logout
 router.post("/logout", (_req, res) => {
   res.json({ message: "Logout realizado com sucesso" });
+});
+
+// ─── Primeiro acesso ────────────────────────────────────────────────────────
+// Fluxo para quem não tem senha: usuário importado da plataforma antiga e
+// nômade cadastrado sem login. O projeto não envia e-mail, então o link é
+// gerado pela operação (ver scripts/preparar-primeiro-acesso.ts) e entregue por
+// fora. O token trafega em texto na URL e é guardado só como hash sha256.
+
+/** Mesmo hash usado na geração do link — ver preparar-primeiro-acesso.ts. */
+function hashToken(token: string): string {
+  return createHash("sha256").update(token).digest("hex");
+}
+
+const definirSenhaSchema = z.object({
+  token: z.string().min(20),
+  password: z.string().min(6),
+});
+
+// GET /api/auth/primeiro-acesso/:token — valida o link antes de mostrar o form
+router.get("/primeiro-acesso/:token", async (req, res, next) => {
+  try {
+    const user = await prisma.user.findUnique({
+      where: { password_setup_token: hashToken(String(req.params.token)) },
+      select: { name: true, email: true, password_setup_expires_at: true, must_set_password: true },
+    });
+
+    if (!user || !user.must_set_password) {
+      res.status(404).json({ error: "Link inválido ou já utilizado" });
+      return;
+    }
+    if (user.password_setup_expires_at && user.password_setup_expires_at < new Date()) {
+      res.status(410).json({ error: "Link expirado. Peça um novo ao administrador." });
+      return;
+    }
+
+    // Devolve só o suficiente pra tela dar as boas-vindas — nada sensível.
+    res.json({ name: user.name, email: user.email });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// POST /api/auth/primeiro-acesso — grava a senha escolhida e libera o acesso
+router.post("/primeiro-acesso", validate(definirSenhaSchema), async (req, res, next) => {
+  try {
+    const { token, password } = req.body as { token: string; password: string };
+    const user = await prisma.user.findUnique({
+      where: { password_setup_token: hashToken(token) },
+    });
+
+    if (!user || !user.must_set_password) {
+      res.status(404).json({ error: "Link inválido ou já utilizado" });
+      return;
+    }
+    if (user.password_setup_expires_at && user.password_setup_expires_at < new Date()) {
+      res.status(410).json({ error: "Link expirado. Peça um novo ao administrador." });
+      return;
+    }
+
+    const atualizado = await prisma.user.update({
+      where: { id: user.id },
+      data: {
+        password_hash: await bcrypt.hash(password, 10),
+        must_set_password: false,
+        // Token é de uso único: some assim que a senha é definida.
+        password_setup_token: null,
+        password_setup_expires_at: null,
+        last_login: new Date(),
+      },
+    });
+
+    // Já entrega o token de sessão: a pessoa acabou de provar quem é e não
+    // precisa digitar a senha de novo na sequência.
+    const jwtToken = jwt.sign(
+      {
+        id: atualizado.id,
+        email: atualizado.email,
+        role: atualizado.role,
+        account_type: atualizado.account_type,
+      },
+      config.JWT_SECRET,
+      { expiresIn: "7d" },
+    );
+    const { password_hash: _pw, password_setup_token: _t, ...safeUser } = atualizado;
+    res.json({ token: jwtToken, user: safeUser });
+  } catch (err) {
+    next(err);
+  }
 });
 
 // GET /api/auth/me

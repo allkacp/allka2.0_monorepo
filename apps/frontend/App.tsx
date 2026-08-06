@@ -124,6 +124,8 @@ const AdminNotificationsPage = React.lazy(
   () => import("@/app/admin/notifications/page"),
 );
 const AdminClientesPage = React.lazy(() => import("@/app/admin/clientes/page"));
+// Lista de agências no Admin — a pasta existia vazia até 2026-08-04.
+const AdminAgenciasPage = React.lazy(() => import("@/app/admin/agencias/page"));
 const AdminConfiguracoesPage = React.lazy(
   () => import("@/app/admin/configuracoes/page"),
 );
@@ -237,6 +239,9 @@ const NomadeLoginPage = React.lazy(() => import("@/app/nomades/login/page"));
 const EmpresaLoginPage = React.lazy(() => import("@/app/company/login/page"));
 const AgencyLoginPage = React.lazy(() => import("@/app/agencia/login/page"));
 const LiderLoginPage = React.lazy(() => import("@/app/lider/login/page"));
+// Definição de senha no primeiro acesso (link com token) — pública, como os
+// logins. Nasce da migração da plataforma antiga.
+const PrimeiroAcessoPage = React.lazy(() => import("@/app/primeiro-acesso/page"));
 
 // ─── Líder Pages ──────────────────────────────────────────────────────────────
 const LeaderDashboardPage = React.lazy(
@@ -618,6 +623,14 @@ export default function App() {
           element={
             <Suspense fallback={<PageLoader />}>
               <LoginPage />
+            </Suspense>
+          }
+        />
+        <Route
+          path="/primeiro-acesso/:token"
+          element={
+            <Suspense fallback={<PageLoader />}>
+              <PrimeiroAcessoPage />
             </Suspense>
           }
         />

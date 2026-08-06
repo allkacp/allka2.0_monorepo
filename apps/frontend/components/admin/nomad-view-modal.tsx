@@ -1,5 +1,6 @@
 ﻿// @ts-nocheck
-import { useState, useEffect } from "react"
+import { useState, useEffect, useCallback } from "react"
+import { apiClient } from "@/lib/api-client"
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogPortal, DialogOverlay } from "@/components/ui/dialog"
 import * as DialogPrimitive from "@radix-ui/react-dialog"
@@ -37,43 +38,135 @@ interface NomadViewModalProps {
   onInvite?: (nomadId: number, role: "platinum" | "leader") => void
 }
 
-const HABILITATION_STATUS_CONFIG = {
-  certificado: { label: "Certificado", Icon: ShieldCheck, className: "bg-green-50 text-green-700 border-green-200" },
-  pendente: { label: "Pendente", Icon: Shield, className: "bg-amber-50 text-amber-700 border-amber-200" },
-  revogado: { label: "Revogado", Icon: ShieldX, className: "bg-red-50 text-red-700 border-red-200" },
+/**
+ * Estado de uma habilitação, derivado de `ativo` + `disponibilidade`.
+ *
+ * Até 2026-08-06 esta aba usava o vocabulário do modelo LEGADO
+ * (certificado/pendente/revogado, de `Qualification`) sobre dados inventados
+ * por `getMockHabilitacoes()` — e os botões só mexiam no estado local, nada
+ * chegava ao banco. O modelo real é `NomadeHabilidade`, que é o que a seleção
+ * automática lê (backend src/lib/selecionar-nomade.ts): não existe "pendente
+ * de aprovação" ali, existe habilitação ativa recebendo ou pausada.
+ */
+const HABILITACAO_CONFIG = {
+  disponivel: {
+    label: "Recebendo",
+    Icon: ShieldCheck,
+    className: "bg-green-50 text-green-700 border-green-200",
+  },
+  pausado: {
+    label: "Pausada",
+    Icon: Shield,
+    className: "bg-amber-50 text-amber-700 border-amber-200",
+  },
+  inativo: {
+    label: "Inativa",
+    Icon: ShieldX,
+    className: "bg-slate-100 text-slate-600 border-slate-200",
+  },
 }
 
-const EXTRA_TASK_TYPES = ["Redação de Artigos", "Otimização SEO", "Edição de Vídeo"]
-
-function getMockHabilitacoes(nomad: Nomad) {
-  const base = nomad.taskTypes?.length ? nomad.taskTypes : ["Criação de Posts", "Design de Logos"]
-  const extras = EXTRA_TASK_TYPES.filter((t) => !base.includes(t)).slice(0, Math.max(0, 5 - base.length))
-  const all = [...base, ...extras]
-  return all.map((tt, i) => ({
-    id: i + 1,
-    taskType: tt,
-    status: base.includes(tt)
-      ? nomad.tasksCompleted > 30
-        ? "certificado"
-        : "pendente"
-      : "pendente",
-    certifiedAt:
-      base.includes(tt) && nomad.tasksCompleted > 30 ? "2025-11-15" : null,
-  }))
+function estadoDa(hab: any): keyof typeof HABILITACAO_CONFIG {
+  if (!hab.ativo) return "inativo"
+  return hab.disponibilidade === "pausado" ? "pausado" : "disponivel"
 }
 
 export function NomadViewModal({ nomad, open, onOpenChange, onEdit, onInvite }: NomadViewModalProps) {
-  const [habilitacoes, setHabilitacoes] = useState(() => getMockHabilitacoes(nomad))
+  const [habilitacoes, setHabilitacoes] = useState<any[]>([])
+  const [carregandoHab, setCarregandoHab] = useState(false)
+  const [erroHab, setErroHab] = useState<string | null>(null)
+  const [processando, setProcessando] = useState<string | null>(null)
+  const [areas, setAreas] = useState<any[]>([])
+  const [novaArea, setNovaArea] = useState("")
+  const [novaCategoria, setNovaCategoria] = useState("")
+  const [adicionando, setAdicionando] = useState(false)
   const [showInvitePanel, setShowInvitePanel] = useState(false)
   const [inviteMessage, setInviteMessage] = useState("")
   const [inviteSent, setInviteSent] = useState(false)
 
+  const carregarHabilitacoes = useCallback(async () => {
+    if (!nomad?.id) return
+    setCarregandoHab(true)
+    setErroHab(null)
+    try {
+      const r: any = await apiClient.getHabilidadesDoNomade(String(nomad.id))
+      setHabilitacoes(Array.isArray(r?.habilidades) ? r.habilidades : [])
+    } catch (e: any) {
+      setErroHab(e?.message ?? "Não foi possível carregar as habilitações.")
+      setHabilitacoes([])
+    } finally {
+      setCarregandoHab(false)
+    }
+  }, [nomad?.id])
+
   useEffect(() => {
-    setHabilitacoes(getMockHabilitacoes(nomad))
     setShowInvitePanel(false)
     setInviteSent(false)
     setInviteMessage("")
-  }, [nomad.id])
+    setNovaArea("")
+    setNovaCategoria("")
+    // Busca só com o modal aberto: a lista de nômades monta um destes por
+    // linha, e carregar todas as habilitações da tela de uma vez seria uma
+    // requisição por nômade sem ninguém olhando.
+    if (open) {
+      carregarHabilitacoes()
+      if (areas.length === 0) {
+        apiClient
+          .getAreasHabilidade()
+          .then((r: any) => setAreas(r?.areas ?? []))
+          .catch(() => setAreas([]))
+      }
+    }
+  }, [nomad?.id, open, carregarHabilitacoes])
+
+  const alterarHabilitacao = async (id: string, dados: Record<string, any>) => {
+    setProcessando(id)
+    setErroHab(null)
+    try {
+      await apiClient.atualizarHabilidadeDoNomade(String(nomad.id), id, dados)
+      await carregarHabilitacoes()
+    } catch (e: any) {
+      setErroHab(e?.message ?? "Não foi possível alterar a habilitação.")
+    } finally {
+      setProcessando(null)
+    }
+  }
+
+  const removerHabilitacao = async (id: string) => {
+    setProcessando(id)
+    setErroHab(null)
+    try {
+      await apiClient.removerHabilidadeDoNomade(String(nomad.id), id)
+      await carregarHabilitacoes()
+    } catch (e: any) {
+      setErroHab(e?.message ?? "Não foi possível remover a habilitação.")
+    } finally {
+      setProcessando(null)
+    }
+  }
+
+  const adicionarHabilitacao = async () => {
+    if (!novaArea) return
+    setAdicionando(true)
+    setErroHab(null)
+    try {
+      await apiClient.criarHabilidadeDoNomade(String(nomad.id), {
+        area: novaArea,
+        categoria_produto: novaCategoria || null,
+      })
+      setNovaArea("")
+      setNovaCategoria("")
+      await carregarHabilitacoes()
+    } catch (e: any) {
+      setErroHab(
+        String(e?.message).includes("já cadastrada")
+          ? "Este nômade já tem essa habilitação."
+          : (e?.message ?? "Não foi possível adicionar."),
+      )
+    } finally {
+      setAdicionando(false)
+    }
+  }
 
   const inviteRole =
     nomad.level === "Gold" ? "platinum"
@@ -101,20 +194,6 @@ export function NomadViewModal({ nomad, open, onOpenChange, onEdit, onInvite }: 
     setInviteSent(true)
     setShowInvitePanel(false)
     setInviteMessage("")
-  }
-
-  const handleHabilitacaoAction = (id, action) => {
-    setHabilitacoes((prev) =>
-      prev.map((h) =>
-        h.id === id
-          ? {
-              ...h,
-              status: action === "approve" ? "certificado" : "revogado",
-              certifiedAt: action === "approve" ? new Date().toISOString().slice(0, 10) : null,
-            }
-          : h
-      )
-    )
   }
 
   const getLevelColor = (level) => {
@@ -496,78 +575,160 @@ export function NomadViewModal({ nomad, open, onOpenChange, onEdit, onInvite }: 
                       Habilitações por Tipo de Tarefa
                     </CardTitle>
                     <CardDescription>
-                      Gerencie as certificações do nômade para cada tipo de tarefa
+                      Define em que áreas a seleção automática pode encontrar este
+                      nômade. Pausar tira da fila sem apagar o histórico.
                     </CardDescription>
                   </CardHeader>
                   <CardContent className="space-y-2">
-                    {habilitacoes.map((hab) => {
-                      const cfg = HABILITATION_STATUS_CONFIG[hab.status] || HABILITATION_STATUS_CONFIG.pendente
-                      const { Icon } = cfg
-                      return (
-                        <div
-                          key={hab.id}
-                          className="flex items-center justify-between p-3 rounded-lg border bg-card hover:bg-muted/50 transition-colors"
+                    {erroHab && (
+                      <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2">
+                        <p className="text-xs font-medium text-red-700">{erroHab}</p>
+                      </div>
+                    )}
+
+                    {/* Adicionar habilitação */}
+                    <div className="flex flex-wrap items-end gap-2 p-3 rounded-lg border border-dashed bg-muted/30">
+                      <div className="flex-1 min-w-[140px]">
+                        <label className="text-[11px] text-muted-foreground block mb-1">Área</label>
+                        <select
+                          value={novaArea}
+                          onChange={(e) => {
+                            setNovaArea(e.target.value)
+                            setNovaCategoria("")
+                          }}
+                          className="w-full h-8 rounded-md border bg-background px-2 text-xs"
                         >
-                          <div className="flex items-center gap-3 min-w-0">
-                            <Icon
-                              className={cn(
-                                "h-4 w-4 shrink-0",
-                                hab.status === "certificado" ? "text-green-600"
-                                : hab.status === "revogado" ? "text-red-500"
-                                : "text-amber-600"
-                              )}
-                            />
-                            <div className="min-w-0">
-                              <p className="text-sm font-medium truncate">{hab.taskType}</p>
-                              {hab.certifiedAt && hab.status === "certificado" && (
-                                <p className="text-[11px] text-muted-foreground">
-                                  Certificado em {formatDate(hab.certifiedAt)}
+                          <option value="">Selecione…</option>
+                          {areas.map((a: any) => (
+                            <option key={a.slug} value={a.slug}>{a.label}</option>
+                          ))}
+                        </select>
+                      </div>
+                      <div className="flex-1 min-w-[160px]">
+                        <label className="text-[11px] text-muted-foreground block mb-1">
+                          Categoria (opcional)
+                        </label>
+                        <select
+                          value={novaCategoria}
+                          onChange={(e) => setNovaCategoria(e.target.value)}
+                          disabled={!novaArea}
+                          className="w-full h-8 rounded-md border bg-background px-2 text-xs disabled:opacity-50"
+                        >
+                          <option value="">Área toda</option>
+                          {(areas.find((a: any) => a.slug === novaArea)?.categorias ?? []).map(
+                            (c: string) => (
+                              <option key={c} value={c}>{c}</option>
+                            ),
+                          )}
+                        </select>
+                      </div>
+                      <Button
+                        size="sm"
+                        className="h-8 text-xs"
+                        disabled={!novaArea || adicionando}
+                        onClick={adicionarHabilitacao}
+                      >
+                        {adicionando ? "Adicionando…" : "Adicionar"}
+                      </Button>
+                    </div>
+
+                    {carregandoHab ? (
+                      <p className="text-sm text-muted-foreground text-center py-6">
+                        Carregando habilitações…
+                      </p>
+                    ) : habilitacoes.length === 0 ? (
+                      <p className="text-sm text-muted-foreground text-center py-6">
+                        Nenhuma habilitação registrada. Sem habilitação, este nômade não é
+                        encontrado pela seleção automática de tarefas.
+                      </p>
+                    ) : (
+                      habilitacoes.map((hab: any) => {
+                        const estado = estadoDa(hab)
+                        const cfg = HABILITACAO_CONFIG[estado]
+                        const { Icon } = cfg
+                        const ocupado = processando === hab.id
+                        return (
+                          <div
+                            key={hab.id}
+                            className="flex items-center justify-between p-3 rounded-lg border bg-card hover:bg-muted/50 transition-colors"
+                          >
+                            <div className="flex items-center gap-3 min-w-0">
+                              <Icon
+                                className={cn(
+                                  "h-4 w-4 shrink-0",
+                                  estado === "disponivel" ? "text-green-600"
+                                  : estado === "pausado" ? "text-amber-600"
+                                  : "text-slate-400",
+                                )}
+                              />
+                              <div className="min-w-0">
+                                {/*
+                                  O modelo de tarefa vem primeiro quando
+                                  existe: habilitações importadas do legado são
+                                  por modelo, e várias compartilham a mesma
+                                  área/categoria — mostrar só a área deixaria
+                                  dezenas de linhas idênticas na tela.
+                                */}
+                                <p className="text-sm font-medium truncate">
+                                  {hab.modelo_tarefa_nome || hab.area}
                                 </p>
-                              )}
+                                <p className="text-[11px] text-muted-foreground truncate">
+                                  {hab.modelo_tarefa_nome
+                                    ? `${hab.area}${hab.categoria_produto ? ` · ${hab.categoria_produto}` : ""} · `
+                                    : hab.categoria_produto
+                                      ? `${hab.categoria_produto} · `
+                                      : ""}
+                                  {hab.nota_media > 0 ? `nota ${hab.nota_media.toFixed(1)} · ` : ""}
+                                  desde {formatDate(hab.created_at)}
+                                </p>
+                              </div>
                             </div>
-                          </div>
-                          <div className="flex items-center gap-2 shrink-0 ml-3">
-                            <Badge variant="outline" className={`text-xs ${cfg.className}`}>
-                              {cfg.label}
-                            </Badge>
-                            {hab.status === "pendente" && (
-                              <>
+                            <div className="flex items-center gap-2 shrink-0 ml-3">
+                              <Badge variant="outline" className={`text-xs ${cfg.className}`}>
+                                {cfg.label}
+                              </Badge>
+                              {estado === "disponivel" && (
                                 <Button
                                   size="sm"
                                   variant="outline"
+                                  disabled={ocupado}
+                                  className="h-7 px-2 text-xs border-amber-300 text-amber-700 hover:bg-amber-50"
+                                  onClick={() =>
+                                    alterarHabilitacao(hab.id, { disponibilidade: "pausado" })
+                                  }
+                                >
+                                  <Shield className="h-3.5 w-3.5 mr-1" />Pausar
+                                </Button>
+                              )}
+                              {estado !== "disponivel" && (
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  disabled={ocupado}
                                   className="h-7 px-2 text-xs border-green-300 text-green-700 hover:bg-green-50"
-                                  onClick={() => handleHabilitacaoAction(hab.id, "approve")}
+                                  onClick={() =>
+                                    alterarHabilitacao(hab.id, {
+                                      disponibilidade: "disponivel",
+                                      ativo: true,
+                                    })
+                                  }
                                 >
-                                  <CheckCircle className="h-3.5 w-3.5 mr-1" />Aprovar
+                                  <CheckCircle className="h-3.5 w-3.5 mr-1" />Reativar
                                 </Button>
-                                <Button
-                                  size="sm"
-                                  variant="outline"
-                                  className="h-7 px-2 text-xs border-red-300 text-red-700 hover:bg-red-50"
-                                  onClick={() => handleHabilitacaoAction(hab.id, "reject")}
-                                >
-                                  <XCircle className="h-3.5 w-3.5 mr-1" />Reprovar
-                                </Button>
-                              </>
-                            )}
-                            {hab.status === "certificado" && (
+                              )}
                               <Button
                                 size="sm"
                                 variant="outline"
+                                disabled={ocupado}
                                 className="h-7 px-2 text-xs border-red-300 text-red-700 hover:bg-red-50"
-                                onClick={() => handleHabilitacaoAction(hab.id, "revoke")}
+                                onClick={() => removerHabilitacao(hab.id)}
                               >
-                                <ShieldX className="h-3.5 w-3.5 mr-1" />Revogar
+                                <ShieldX className="h-3.5 w-3.5 mr-1" />Remover
                               </Button>
-                            )}
+                            </div>
                           </div>
-                        </div>
-                      )
-                    })}
-                    {habilitacoes.length === 0 && (
-                      <p className="text-sm text-muted-foreground text-center py-6">
-                        Nenhuma habilitação registrada para este nômade.
-                      </p>
+                        )
+                      })
                     )}
                   </CardContent>
                 </Card>

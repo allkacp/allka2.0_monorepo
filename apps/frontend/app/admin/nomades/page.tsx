@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -23,6 +23,7 @@ import { NomadEditModal } from "@/components/admin/nomad-edit-modal";
 import { PageHeader } from "@/components/page-header";
 import { useNomades } from "@/hooks/useNomades";
 import { PageLoader } from "@/components/ui/loading";
+import { LegacyIdBadge } from "@/components/legacy-id-badge";
 
 const NOMAD_LEVEL_BADGE: Record<string, { icon: string; className: string }> = {
   Bronze: {
@@ -109,11 +110,77 @@ const availableTaskTypes = [
   "Criação de Textos",
 ];
 
+// Status que a lista esconde por padrão (ver filterStatus === "em_operacao").
+const FORA_DE_OPERACAO = new Set(["inativo", "reprovado"]);
+
 export default function AdminNomadesPage() {
-  const { nomades: apiNomades, loading, error, updateNomade } = useNomades();
+  // `limit: 500` porque TODA a filtragem desta tela é client-side (busca,
+  // nível, status, datas) e a API pagina em 20 por padrão. O efeito era a
+  // lista aparecer vazia: os 20 primeiros que a API devolve são todos
+  // `inativo`, e o filtro padrão ("Em operação") esconde exatamente esses —
+  // sobrava zero card com 397 nômades no banco. 500 é o teto do backend
+  // (parsePagination) e cobre o cadastro inteiro com folga.
+  const { nomades: nomadesDaApi, loading, error, updateNomade } = useNomades({ limit: "500" });
+
+  /**
+   * Normaliza a resposta da API para o formato que os cards desta tela
+   * esperam.
+   *
+   * A tela foi escrita contra um mock com 11 campos que
+   * `GET /api/nomades` nunca devolveu — `earnings`, `rating`,
+   * `tasksCompleted`, `phone`, `joinedDate`, `last_login`, `specialties`,
+   * `products`, `categories`, `taskTypes`, `online_status`. Como a lista
+   * aparecia vazia (a página 1 da API só traz inativos, escondidos pelo filtro
+   * padrão), nada disso chegava a ser lido e a incompatibilidade ficou
+   * invisível; ao carregar a lista de verdade, o primeiro `.join` numa dessas
+   * derrubava a página inteira.
+   *
+   * A conversão fica aqui, num lugar só, em vez de espalhar `?.` por trinta
+   * pontos do JSX. O que não existe no modelo (ganhos por nômade, status
+   * online) vira valor neutro — não há de onde tirar.
+   */
+  const apiNomades = useMemo(
+    () =>
+      (nomadesDaApi ?? []).map((n: any) => ({
+        ...n,
+        phone: n.whatsapp ?? "",
+        rating: n.performance_avg_rating ?? 0,
+        tasksCompleted: n.tasks_completed_total ?? 0,
+        joinedDate: n.registration_date ?? n.created_at ?? null,
+        last_login: n.last_access ?? null,
+        // Sem equivalente no modelo: Nomade não guarda faturamento nem
+        // presença online.
+        earnings: 0,
+        online_status: n.online_status ?? null,
+        // Áreas viraram habilitações (NomadeHabilidade), que não vêm nesta
+        // rota — ver a aba Habilitações do modal, que busca à parte. O que dá
+        // para mostrar aqui é `areas_of_interest`, que vem do import como um
+        // JSON em texto (`["Design e Multimedia","Soluções Web"]`) e sairia
+        // cru na tela se não fosse convertido em lista.
+        specialties: (() => {
+          const bruto = n.areas_of_interest;
+          if (!bruto) return [];
+          if (Array.isArray(bruto)) return bruto.map(String);
+          try {
+            const v = JSON.parse(bruto);
+            return Array.isArray(v) ? v.map(String) : [String(bruto)];
+          } catch {
+            return [String(bruto)];
+          }
+        })(),
+        products: [],
+        categories: [],
+        taskTypes: [],
+      })),
+    [nomadesDaApi],
+  );
   const [searchTerm, setSearchTerm] = useState("");
   const [filterLevel, setFilterLevel] = useState("all");
-  const [filterStatus, setFilterStatus] = useState("all");
+  // Padrão da plataforma: a lista esconde quem está fora de operação. Aqui
+  // não basta "status === ativo" — cadastrado/teste pendente/atenção também
+  // são gente em atividade; o que se esconde por padrão é inativo e
+  // reprovado. "Todos os status" continua mostrando tudo.
+  const [filterStatus, setFilterStatus] = useState("em_operacao");
   const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
   const [filterOnlineStatus, setFilterOnlineStatus] = useState("all");
   const [filterDateFrom, setFilterDateFrom] = useState("");
@@ -138,7 +205,11 @@ export default function AdminNomadesPage() {
       nomade.email.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesLevel = filterLevel === "all" || nomade.level === filterLevel;
     const matchesStatus =
-      filterStatus === "all" || nomade.status === filterStatus;
+      filterStatus === "all"
+        ? true
+        : filterStatus === "em_operacao"
+          ? !FORA_DE_OPERACAO.has(nomade.status)
+          : nomade.status === filterStatus;
     const matchesOnlineStatus =
       filterOnlineStatus === "all" ||
       nomade.online_status === filterOnlineStatus;
@@ -351,6 +422,7 @@ export default function AdminNomadesPage() {
                   onChange={(e) => setFilterStatus(e.target.value)}
                   className="px-4 py-2 border rounded-md"
                 >
+                  <option value="em_operacao">Em operação (padrão)</option>
                   <option value="all">Todos os status</option>
                   <option value="cadastrado">Cadastrado</option>
                   <option value="teste_pendente">Teste Pendente</option>
@@ -570,6 +642,7 @@ export default function AdminNomadesPage() {
                       <h3 className="font-semibold text-base leading-none">
                         {nomade.name}
                       </h3>
+                      <LegacyIdBadge legacyId={nomade.legacy_id} entidade="nômade" />
                       <Badge
                         variant="outline"
                         className={`text-xs py-0 ${(NOMAD_LEVEL_BADGE[nomade.level] ?? NOMAD_LEVEL_BADGE["Bronze"]).className}`}
@@ -606,9 +679,21 @@ export default function AdminNomadesPage() {
                     <p className="text-xs text-gray-600 leading-none">
                       {nomade.email}
                     </p>
+                    {/*
+                      `specialties` NÃO vem de GET /api/nomades — o card foi
+                      escrito para um formato que a API nunca devolveu, e o
+                      `.join` sem guarda derrubava a página inteira. Ficou
+                      escondido enquanto a lista aparecia vazia (a página 1 da
+                      API só traz inativos, que o filtro padrão esconde);
+                      assim que a lista passou a carregar de fato, quebrou.
+                      Áreas de interesse é o campo equivalente que existe.
+                    */}
                     <div className="flex gap-4 mt-1 text-xs text-gray-600">
                       <span>
-                        Especialidades: {nomade.specialties.join(", ")}
+                        Áreas:{" "}
+                        {Array.isArray(nomade.specialties) && nomade.specialties.length
+                          ? nomade.specialties.join(", ")
+                          : (nomade.areas_of_interest || "—")}
                       </span>
                     </div>
                     {nomade.phone && (

@@ -101,6 +101,8 @@ export async function gerarTarefasDoProjeto(
             include: { catalog_task: true },
             orderBy: { sort_order: "asc" },
           },
+          // Usado só no fallback de contratação sem variação definida.
+          variations: { orderBy: { sort_order: "asc" }, select: { id: true } },
         },
       },
     },
@@ -116,7 +118,32 @@ export async function gerarTarefasDoProjeto(
 
   for (const pp of projectProducts) {
     const productName = pp.product_name_snapshot || pp.product.name;
-    const activeLinks = pp.product.task_links;
+    // Modelo amarrado a uma variação só vale para a variação contratada. Os
+    // sem variação (variation_id null) valem sempre — é o caso do pacote, em
+    // que todos os modelos nascem juntos.
+    //
+    // Sem este filtro, produto consolidado da base antiga ("Análise de UX até
+    // 5/10/20/50 páginas", 4 faixas num produto só) gerava as 4 tarefas para
+    // quem contratou uma faixa.
+    let activeLinks = pp.product.task_links.filter(
+      (l) => l.variation_id === null || l.variation_id === pp.variation_id,
+    );
+
+    // Contratação sem variação escolhida num produto que só tem modelos por
+    // variação: em vez de gerar zero tarefas em silêncio, assume a primeira
+    // variação (a que o base_price do produto representa) e avisa. Acontece em
+    // fluxos que criam o vínculo sem passar variation_id.
+    if (activeLinks.length === 0 && pp.variation_id === null) {
+      const primeiraVariacao = pp.product.variations[0]?.id;
+      if (primeiraVariacao) {
+        activeLinks = pp.product.task_links.filter((l) => l.variation_id === primeiraVariacao);
+        if (activeLinks.length > 0) {
+          warnings.push(
+            `Produto "${productName}" foi contratado sem variação definida; assumida a variação padrão para gerar as tarefas.`,
+          );
+        }
+      }
+    }
 
     if (activeLinks.length === 0) {
       produtos_sem_modelo.push(productName);
@@ -180,19 +207,40 @@ export async function gerarTarefasDoProjeto(
         const parsedSteps = parseSteps(ct.steps);
         const stagesToCreate =
           parsedSteps.length > 0
-            ? parsedSteps.map((step, idx) => ({
+            ? parsedSteps.map((step: any, idx) => ({
                 project_task_id: newTask.id,
                 catalog_step_ref: step.id ?? step.code ?? `${ct.id}-step-${idx + 1}`,
                 titulo: step.name ?? step.title ?? step.titulo ?? `Etapa ${idx + 1}`,
                 descricao: step.description ?? step.descricao ?? null,
-                ordem: step.order ?? idx + 1,
+                // Sempre sequencial pela posição no array, nunca o `order` do
+                // modelo: na base antiga o número da etapa se repete (três
+                // etapas "número 1"), e ordem duplicada quebra o motor, que
+                // procura a próxima etapa pela ordem. O array já vem na
+                // sequência correta.
+                ordem: idx + 1,
                 // Primeira etapa disponível (PENDENTE); demais bloqueadas
                 // até a etapa anterior concluir — mesmo status já usado em
                 // todo o resto do sistema para essa dependência sequencial.
                 status: idx === 0 ? "PENDENTE" : "BLOQUEADA",
                 obrigatoria: true,
                 depende_da_etapa_anterior: idx > 0,
-                briefing_necessario: false,
+                briefing_necessario: step.requires_briefing ?? idx === 0,
+                // ── Configuração de execução (motor de etapas) ──
+                // Materializada aqui porque o modelo pode mudar depois; a
+                // tarefa em andamento tem de seguir valendo pelo que foi
+                // contratado. Ver src/lib/stage-engine.ts.
+                executor_type:
+                  step.executorType === "leader" || step.executorType === "internal"
+                    ? step.executorType
+                    : "nomad",
+                categoria: step.categoryName ?? ct.category ?? null,
+                manter_mesmo_nomade: Boolean(step.keepSameNomad),
+                horas_execucao: step.executionHours ?? null,
+                valor_nomade: step.nomadAmount ?? null,
+                oculta_no_prazo: Boolean(step.hideOnProductDeadline),
+                conta_no_prazo: step.countsForProductDeadline !== false,
+                exige_anexo: Boolean(step.requiresConclusionAttachment),
+                config_snapshot: JSON.stringify(step),
               }))
             : [
                 // Template sem etapas cadastradas: não inventamos uma etapa

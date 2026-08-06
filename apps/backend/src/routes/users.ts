@@ -149,6 +149,10 @@ const updateUserSchema = createUserSchema
 const safeSelect = {
   id: true,
   user_code: true,
+  // Número do usuário na plataforma antiga — só preenchido em quem veio da
+  // importação (ver scripts/import-legacy-platform.ts). A UI mostra como
+  // referência de consulta; a numeração oficial continua sendo user_code.
+  legacy_id: true,
   email: true,
   username: true,
   name: true,

@@ -8,6 +8,7 @@ import {
   useEffect,
 } from "react";
 import { apiClient } from "@/lib/api-client";
+import { podeConsultarAgencia } from "@/lib/conta-logada";
 
 interface SidebarSettings {
   backgroundColor: string;
@@ -228,6 +229,9 @@ export function SidebarProvider({ children }: { children: ReactNode }) {
       value.trim().toLowerCase().normalize("NFD").replace(/\p{Diacritic}/gu, "");
 
     async function loadAgencyProfile() {
+      // O nome/logo de agência na sidebar só existe para agência e admin;
+      // para os outros o /agencies volta 403 em toda navegação.
+      if (!podeConsultarAgencia()) return;
       try {
         const [currentUserRes, agenciesRes] = await Promise.allSettled([
           apiClient.getCurrentUser(),

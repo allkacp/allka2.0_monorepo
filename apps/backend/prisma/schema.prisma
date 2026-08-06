@@ -48,6 +48,15 @@ model User {
   inactivity_paused_accessed_at  DateTime?
   inactivity_paused_access_count Int       @default(0)
   reactivation_review_required   Boolean   @default(false)
+  // ── Primeiro acesso ───────────────────────────────────────────────────
+  // Usuário importado da plataforma antiga não herda senha utilizável: ele
+  // define a própria no primeiro acesso. Enquanto must_set_password for true,
+  // o login é recusado com FIRST_ACCESS_REQUIRED.
+  must_set_password              Boolean   @default(false)
+  // Hash sha256 do token do link de primeiro acesso — nunca o token em si,
+  // pra quem lê o banco não conseguir se passar pelo usuário.
+  password_setup_token           String?   @unique @db.VarChar(64)
+  password_setup_expires_at      DateTime?
   created_at                     DateTime  @default(now())
   updated_at                     DateTime  @updatedAt
 
@@ -75,6 +84,14 @@ model User {
   @@index([agency_id])
   @@index([is_active])
   @@index([account_type, is_active])
+
+  // ── Rastreio da plataforma antiga ─────────────────────────────────────
+  // id numérico do registro equivalente no dump legado (Dump20260423.sql).
+  // Só preenchido em registros importados por scripts/import-legacy-*;
+  // serve pra consultar a origem e pra tornar a importação idempotente.
+  // Nunca usar em FK ou lookup técnico — o id real continua sendo o `id`.
+  legacy_id Int? @unique
+
   @@map("users")
 }
 
@@ -217,6 +234,14 @@ model Company {
   coupon_usages   CouponUsage[]
   client_links    ClientLink[]
 
+
+  // ── Rastreio da plataforma antiga ─────────────────────────────────────
+  // id numérico do registro equivalente no dump legado (Dump20260423.sql).
+  // Só preenchido em registros importados por scripts/import-legacy-*;
+  // serve pra consultar a origem e pra tornar a importação idempotente.
+  // Nunca usar em FK ou lookup técnico — o id real continua sendo o `id`.
+  legacy_id Int? @unique
+
   @@map("companies")
 }
 
@@ -315,6 +340,14 @@ model Client {
   @@index([email])
   @@index([status])
   @@index([created_by_user_id])
+
+  // ── Rastreio da plataforma antiga ─────────────────────────────────────
+  // id numérico do registro equivalente no dump legado (Dump20260423.sql).
+  // Só preenchido em registros importados por scripts/import-legacy-*;
+  // serve pra consultar a origem e pra tornar a importação idempotente.
+  // Nunca usar em FK ou lookup técnico — o id real continua sendo o `id`.
+  legacy_id Int? @unique
+
   @@map("clients")
 }
 
@@ -406,6 +439,14 @@ model Agency {
   // PartnerProfile acima) — nullable, a maioria das agências nunca tem um.
   partner_profile   PartnerProfile?
 
+
+  // ── Rastreio da plataforma antiga ─────────────────────────────────────
+  // id numérico do registro equivalente no dump legado (Dump20260423.sql).
+  // Só preenchido em registros importados por scripts/import-legacy-*;
+  // serve pra consultar a origem e pra tornar a importação idempotente.
+  // Nunca usar em FK ou lookup técnico — o id real continua sendo o `id`.
+  legacy_id Int? @unique
+
   @@map("agencies")
 }
 
@@ -459,6 +500,14 @@ model Nomade {
   task_executions     TaskExecution[]
   withdrawal_requests WithdrawalRequest[]
   habilidades         NomadeHabilidade[]
+
+
+  // ── Rastreio da plataforma antiga ─────────────────────────────────────
+  // id numérico do registro equivalente no dump legado (Dump20260423.sql).
+  // Só preenchido em registros importados por scripts/import-legacy-*;
+  // serve pra consultar a origem e pra tornar a importação idempotente.
+  // Nunca usar em FK ou lookup técnico — o id real continua sendo o `id`.
+  legacy_id Int? @unique
 
   @@map("nomades")
 }
@@ -658,6 +707,17 @@ model Project {
   payments        Payment[]
   credentials     ProjectCredential[]
 
+
+  // ── Rastreio da plataforma antiga ─────────────────────────────────────
+  // id numérico do registro equivalente no dump legado (Dump20260423.sql).
+  // Só preenchido em registros importados por scripts/import-legacy-*;
+  // serve pra consultar a origem e pra tornar a importação idempotente.
+  // Nunca usar em FK ou lookup técnico — o id real continua sendo o `id`.
+  legacy_id Int? @unique
+  // clientId da plataforma antiga — Project não tem FK pra Client no modelo
+  // novo, então o vínculo do projeto importado com seu cliente fica aqui.
+  legacy_client_id Int?
+
   @@index([created_by_user_id])
   @@map("projects")
 }
@@ -795,6 +855,14 @@ model Product {
   payment_items    PaymentItem[]
   versions         ProductVersion[]
 
+
+  // ── Rastreio da plataforma antiga ─────────────────────────────────────
+  // id numérico do registro equivalente no dump legado (Dump20260423.sql).
+  // Só preenchido em registros importados por scripts/import-legacy-*;
+  // serve pra consultar a origem e pra tornar a importação idempotente.
+  // Nunca usar em FK ou lookup técnico — o id real continua sendo o `id`.
+  legacy_id Int? @unique
+
   @@map("products")
 }
 
@@ -839,6 +907,7 @@ model ProductVariation {
   // nullable: SQLite ALTER TABLE ADD COLUMN não suporta NOT NULL sem DEFAULT literal
 
   project_products ProjectProduct[]
+  catalog_task_links ProductCatalogTask[]
 
   @@map("product_variations")
 }
@@ -908,6 +977,11 @@ model CatalogTask {
   created_at DateTime @default(now())
   updated_at DateTime @updatedAt
 
+
+  // id do task_template equivalente na plataforma antiga (só em modelos
+  // importados). Ver scripts/import-legacy-task-catalog.ts.
+  legacy_id Int? @unique
+
   product_links ProductCatalogTask[]
   project_tasks ProjectTask[]
 
@@ -925,6 +999,13 @@ model ProductCatalogTask {
   catalog_task CatalogTask @relation(fields: [catalog_task_id], references: [id], onDelete: Cascade)
 
   // Link-specific overrides
+  // Variação a que este modelo pertence. NULL = vale para qualquer variação
+  // (caso do pacote de verdade, em que todos os modelos nascem juntos).
+  // Preenchido nos produtos consolidados da base antiga, onde cada faixa
+  // ("até 5/10/20 páginas") tinha o seu próprio modelo de tarefa.
+  variation_id String?
+  variation    ProductVariation? @relation(fields: [variation_id], references: [id], onDelete: SetNull)
+
   sort_order   Int     @default(0)
   is_mandatory Boolean @default(true)
   phase        String?
@@ -977,6 +1058,14 @@ model ProjectProduct {
   payment_items PaymentItem[]
 
   @@unique([project_id, product_id])
+
+  // ── Rastreio da plataforma antiga ─────────────────────────────────────
+  // id numérico do registro equivalente no dump legado (Dump20260423.sql).
+  // Só preenchido em registros importados por scripts/import-legacy-*;
+  // serve pra consultar a origem e pra tornar a importação idempotente.
+  // Nunca usar em FK ou lookup técnico — o id real continua sendo o `id`.
+  legacy_id Int? @unique
+
   @@map("project_products")
 }
 
@@ -1043,6 +1132,22 @@ model ProjectTask {
   // Prazo de 30 dias para lançar a tarefa — após esta data ela expira automaticamente
   lancamento_expires_at   DateTime?
 
+  // ── Aprovação em dois níveis ──────────────────────────────────────────
+  // Agência confere, depois o cliente. Ver src/lib/stage-engine.ts e
+  // PATCH /api/project-tasks/:id/aprovar | /reprovar.
+  aprovado_agencia_em     DateTime?
+  aprovado_agencia_por    String?
+  aprovado_cliente_em     DateTime?
+  aprovado_cliente_por    String?
+  reprovado_em            DateTime?
+  reprovado_por           String?
+  reprovacao_motivo       String?   @db.LongText
+  reprovacao_nivel        String?
+  // agencia | cliente
+  reprovacoes             Int       @default(0)
+  // Quando falso, o aceite da agência encerra a tarefa (sem etapa de cliente).
+  exige_aprovacao_cliente Boolean   @default(true)
+
   sort_order Int     @default(0)
   fase       String?
   // kept for backward compat
@@ -1070,6 +1175,18 @@ model ProjectTask {
   @@index([assignee_id])
   @@index([nomade_responsavel_id])
   @@index([responsavel_agencia_id])
+
+  // ── Rastreio da plataforma antiga ─────────────────────────────────────
+  // id numérico do registro equivalente no dump legado (Dump20260423.sql).
+  // Só preenchido em registros importados por scripts/import-legacy-*;
+  // serve pra consultar a origem e pra tornar a importação idempotente.
+  // Nunca usar em FK ou lookup técnico — o id real continua sendo o `id`.
+  legacy_id Int? @unique
+  // true = tarefa que veio da plataforma antiga e continua no modelo antigo
+  // (não foi possível adaptá-la ao produto/CatalogTask novo). A UI deve
+  // sinalizar isso; o motor novo não deve assumir etapas/briefing dela.
+  legacy_model Boolean @default(false)
+
   @@index([lider_responsavel_id])
   @@map("project_tasks")
 }
@@ -1095,15 +1212,40 @@ model ProjectTaskStage {
   descricao                 String? @db.LongText
   ordem                     Int     @default(0)
   status                    String  @default("PENDENTE")
-  // PENDENTE | EM_ANDAMENTO | CONCLUIDA | BLOQUEADA
+  // PENDENTE | AGUARDANDO_EXECUTOR | EM_ANDAMENTO | CONCLUIDA | BLOQUEADA
   obrigatoria               Boolean @default(true)
   depende_da_etapa_anterior Boolean @default(true)
   briefing_necessario       Boolean @default(false)
+
+  // ── Motor de execução por etapa ──────────────────────────────────────
+  // Configuração materializada de CatalogTask.steps na geração + estado de
+  // execução. Permite etapa com executor, prazo e pagamento próprios — ver
+  // src/lib/stage-engine.ts e docs/motor-tarefas-legado.md.
+  executor_type       String    @default("nomad")
+  // nomad | leader | internal
+  nomade_id           String?
+  lider_id            String?
+  categoria           String?
+  // especialidade exigida; pode diferir da categoria da tarefa-pai
+  manter_mesmo_nomade Boolean   @default(false)
+  prazo_execucao      DateTime?
+  prazo_aprovacao     DateTime?
+  horas_execucao      Float?
+  valor_nomade        Float?
+  oculta_no_prazo     Boolean   @default(false)
+  conta_no_prazo      Boolean   @default(true)
+  exige_anexo         Boolean   @default(false)
+  config_snapshot     String?   @db.LongText
+  iniciada_em         DateTime?
+  concluida_em        DateTime?
+  concluida_por       String?
   checklist_snapshot        String? @db.LongText
   // JSON: ChecklistItem[]
 
   created_at DateTime @default(now())
   updated_at DateTime @updatedAt
+
+  attachments TaskAttachment[]
 
   @@unique([project_task_id, source_key])
   @@map("project_task_stages")
@@ -1150,8 +1292,15 @@ model TaskAttachment {
   uploaded_by  String?
   // user id or name
 
+  // Etapa a que este anexo pertence. Nulo = anexo da tarefa como um todo
+  // (briefing, referências); preenchido = entrega daquela etapa, que é o que
+  // satisfaz ProjectTaskStage.exige_anexo.
+  project_task_stage_id String?
+  project_task_stage    ProjectTaskStage? @relation(fields: [project_task_stage_id], references: [id], onDelete: Cascade)
+
   created_at DateTime @default(now())
 
+  @@index([project_task_stage_id])
   @@map("task_attachments")
 }
 
@@ -1191,10 +1340,17 @@ model SystemAlert {
   entity_type String?
   // "project_task" | "project" | etc.
   entity_id   String?
+  // Destinatário. Nulo = alerta geral do sistema (comportamento original,
+  // visível ao Admin); preenchido = aviso de uma pessoa só, como "a etapa X
+  // abriu para você".
+  user_id     String?
+  // Para onde a pessoa deve ir ao clicar (ex.: /nomades/minhastarefas).
+  action_url  String?
   is_read     Boolean   @default(false)
   read_at     DateTime?
   created_at  DateTime  @default(now())
 
+  @@index([user_id, is_read])
   @@map("system_alerts")
 }
 
@@ -2024,4 +2180,48 @@ model ProjectCredentialAccessLog {
   @@index([actor_user_id])
   @@index([actor_nomad_id])
   @@map("project_credential_access_logs")
+}
+
+// ─── Arquivo histórico da plataforma antiga ──────────────────────────────────
+// Tabela ISOLADA de propósito: nenhuma FK sai daqui para as tabelas da
+// plataforma, e nenhuma aponta para cá. Os vínculos ficam como ids soltos
+// (projeto_legacy_id, agencia_legacy_id, ...), resolvidos por consulta.
+//
+// É o que permite apagar todo o histórico importado depois com um TRUNCATE,
+// sem quebrar nada nem deixar órfão. Guarda o dado que NÃO vira registro
+// operacional da plataforma nova — hoje o financeiro (faturamento, carteira,
+// repasses), amanhã o que mais for puxado do dump.
+model LegacyRecord {
+  id     String @id @default(cuid())
+  origem String @db.VarChar(60)
+  // bloco de origem: "financeiro", etc.
+  tabela String @db.VarChar(80)
+  // nome da tabela no dump antigo (billing, wallet_transaction, ...)
+
+  legacy_id Int?
+  // id da linha na tabela de origem
+
+  // Vínculos soltos, sem constraint — cruzam com o legacy_id das entidades.
+  projeto_legacy_id Int?
+  agencia_legacy_id Int?
+  cliente_legacy_id Int?
+  nomade_legacy_id  Int?
+  conta_legacy_id   Int?
+
+  valor Float?
+  data  DateTime?
+
+  dados String @db.LongText
+  // linha original inteira, em JSON
+
+  created_at DateTime @default(now())
+
+  @@unique([tabela, legacy_id])
+  @@index([origem])
+  @@index([tabela])
+  @@index([projeto_legacy_id])
+  @@index([agencia_legacy_id])
+  @@index([nomade_legacy_id])
+  @@index([data])
+  @@map("legacy_records")
 }

@@ -14,7 +14,10 @@ const router = Router();
 const linkProductSchema = z.object({
   project_id: z.string().min(1),
   product_id: z.string().min(1),
-  variation_id: z.string().optional(),
+  // Aceita null além de ausente: "sem variação" em JSON é null, e recusar isso
+  // devolvia 400 com mensagem que não explicava nada ("o projeto precisa
+  // possuir pelo menos um produto"), mandando quem integra caçar o erro errado.
+  variation_id: z.string().nullable().optional(),
   recurrence_snapshot: z.enum(["avulso", "mensal"]).optional(),
   preco_final_cliente_snapshot: z.number().min(0).optional(),
   comissao_snapshot: z.number().min(0).optional(),

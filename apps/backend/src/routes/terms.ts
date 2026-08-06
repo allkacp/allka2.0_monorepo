@@ -28,6 +28,52 @@ router.get("/", verifyToken, async (_req, res, next) => {
   }
 });
 
+// ── GET /api/terms/check ─────────────────────────────────────────────────────
+// Termos ativos que ESTE usuário ainda não aceitou.
+//
+// O front chama isto a cada carga do App (ver App.tsx, `checkTerms`) desde
+// sempre, mas a rota nunca existiu: caía em `GET /:id` com id="check",
+// procurava um termo chamado "check" e devolvia 404 em toda navegação de todo
+// portal. Como o catch do front só loga e libera o acesso, o efeito era um
+// erro permanente no console e o bloqueio por termo pendente nunca acontecer.
+//
+// Registrada ANTES de `/:id` de propósito — na ordem inversa o Express engole
+// "check" como parâmetro de novo.
+router.get("/check", verifyToken, async (req, res, next) => {
+  try {
+    const ativos = await prisma.term.findMany({
+      where: { is_active: true },
+      orderBy: { created_at: "desc" },
+    });
+
+    // `target_account_types` vazio/nulo = vale para todos; preenchido, é uma
+    // lista separada por vírgula com os tipos de conta alvo.
+    const doUsuario = ativos.filter((t) => {
+      if (!t.target_account_types) return true;
+      const alvos = t.target_account_types
+        .split(",")
+        .map((s) => s.trim().toLowerCase())
+        .filter(Boolean);
+      return alvos.length === 0 || alvos.includes(String(req.user!.account_type).toLowerCase());
+    });
+
+    if (doUsuario.length === 0) {
+      res.json({ pending: [] });
+      return;
+    }
+
+    const aceitos = await prisma.termAcceptance.findMany({
+      where: { user_id: req.user!.id, term_id: { in: doUsuario.map((t) => t.id) } },
+      select: { term_id: true },
+    });
+    const jaAceitos = new Set(aceitos.map((a) => a.term_id));
+
+    res.json({ pending: doUsuario.filter((t) => !jaAceitos.has(t.id)) });
+  } catch (err) {
+    next(err);
+  }
+});
+
 // GET /api/terms/:id
 router.get("/:id", verifyToken, async (req, res, next) => {
   try {

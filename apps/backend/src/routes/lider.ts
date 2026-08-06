@@ -1,6 +1,7 @@
 import { Router } from "express";
 import type { Request, Response, NextFunction } from "express";
 import { prisma } from "../lib/prisma";
+import { concluirEtapa, atribuirExecutorDaEtapa } from "../lib/stage-engine";
 import { verifyToken } from "../middleware/auth";
 
 const router = Router();
@@ -290,42 +291,38 @@ router.patch("/tasks/:id/stages/:stageId/approve", async (req: Request, res: Res
       });
     }
 
-    // Mark current stage as CONCLUIDA
-    await prisma.projectTaskStage.update({
-      where: { id: stageId },
-      data: { status: "CONCLUIDA", updated_at: new Date() },
-    });
+    // Delega ao motor de etapas em vez de reimplementar a transição aqui.
+    //
+    // Esta rota tinha a sua própria versão da regra, e ela divergia: procurava
+    // a próxima etapa por "ordem maior" (quebra com a ordem repetida que vem da
+    // base antiga), ignorava a continuidade de nômade e concluía a tarefa
+    // direto, pulando a aprovação de quem contratou. O líder aprovar uma etapa
+    // tem de produzir exatamente o mesmo efeito que qualquer outro caminho.
+    const resultado = await prisma.$transaction((tx) =>
+      concluirEtapa(tx, stageId, { userId: req.user!.id }),
+    );
 
-    // Find next stage
-    const allStages = await prisma.projectTaskStage.findMany({
-      where: { project_task_id: id },
-      orderBy: { ordem: "asc" },
-    });
-    const nextStage = allStages.find((s) => s.ordem > stage.ordem && s.status !== "CONCLUIDA");
-
-    let taskStatus: string;
-
-    if (nextStage) {
-      // Unlock next stage
-      await prisma.projectTaskStage.update({
-        where: { id: nextStage.id },
-        data: { status: "EM_ANDAMENTO", updated_at: new Date() },
-      });
-      taskStatus = "EM_EXECUCAO";
-    } else {
-      // All stages complete → task is done
-      taskStatus = "CONCLUIDA";
+    if (resultado.proxima?.status === "AGUARDANDO_EXECUTOR") {
+      atribuirExecutorDaEtapa(resultado.proxima.stageId).catch((err) =>
+        console.error("[stage-engine] atribuir executor:", err),
+      );
     }
 
-    const task = await prisma.projectTask.update({
+    const task = await prisma.projectTask.findUnique({
       where: { id },
-      data: { status: taskStatus, updated_at: new Date() },
-      include: {
-        stages: { orderBy: { ordem: "asc" } },
-      },
+      include: { stages: { orderBy: { ordem: "asc" } } },
     });
 
-    res.json({ task, stage_aprovada: stageId, proxima_etapa: nextStage?.id ?? null });
+    res.json({
+      task,
+      stage_aprovada: stageId,
+      proxima_etapa: resultado.proxima?.stageId ?? null,
+      motor: {
+        proxima_etapa: resultado.proxima,
+        enviada_para_aprovacao: resultado.enviadaParaAprovacao,
+        tarefa_concluida: resultado.tarefaConcluida,
+      },
+    });
   } catch (err) {
     next(err);
   }
@@ -348,13 +345,27 @@ router.patch("/tasks/:id/stages/:stageId/reject", async (req: Request, res: Resp
     });
     if (!stage) return res.status(404).json({ error: "Etapa não encontrada" });
 
-    // Stage stays EM_ANDAMENTO — nomad must revise and resubmit
-    // Record reason on the task
+    // A etapa segue EM_ANDAMENTO — o executor corrige e reenvia.
+    //
+    // O status gravado aqui era "REPROVADA_PELO_LIDER", que não existe na
+    // lista de status do sistema (ver TASK_STATUSES em project-tasks.ts): a
+    // tarefa ficava com um estado que nenhuma outra tela sabia interpretar.
+    // "MELHORIAS_FINAIS" é o status real para "voltou com ajustes a fazer".
+    const anterior = await prisma.projectTask.findUnique({
+      where: { id },
+      select: { observations: true },
+    });
+    const anotacao = `[${new Date().toLocaleDateString("pt-BR")}] Etapa "${stage.titulo}" reprovada pelo líder: ${motivo.trim()}`;
+
     const task = await prisma.projectTask.update({
       where: { id },
       data: {
-        status: "REPROVADA_PELO_LIDER",
-        observations: `[Etapa ${stage.titulo}] ${motivo.trim()}`,
+        status: "MELHORIAS_FINAIS",
+        // Acrescenta em vez de sobrescrever: o histórico de devoluções é o
+        // que o executor lê para entender o que ainda falta.
+        observations: anterior?.observations
+          ? `${anterior.observations}\n${anotacao}`
+          : anotacao,
         updated_at: new Date(),
       },
       include: { stages: { orderBy: { ordem: "asc" } } },
@@ -380,12 +391,21 @@ router.patch("/tasks/:id/stages/:stageId/return", async (req: Request, res: Resp
     });
     if (!stage) return res.status(404).json({ error: "Etapa não encontrada" });
 
-    // Task is returned to agency for corrections
+    // Devolvida para a agência corrigir (briefing/acesso incompleto).
+    const anterior = await prisma.projectTask.findUnique({
+      where: { id },
+      select: { observations: true },
+    });
+    const anotacao = `[${new Date().toLocaleDateString("pt-BR")}] Devolvida à agência na etapa "${stage.titulo}"${motivo?.trim() ? `: ${motivo.trim()}` : ""}`;
+
     const task = await prisma.projectTask.update({
       where: { id },
       data: {
         status: "DEVOLVIDA_PARA_AGENCIA",
-        observations: motivo?.trim() ?? null,
+        // Acrescenta ao histórico em vez de apagar o que já estava anotado.
+        observations: anterior?.observations
+          ? `${anterior.observations}\n${anotacao}`
+          : anotacao,
         updated_at: new Date(),
       },
       include: { stages: { orderBy: { ordem: "asc" } } },

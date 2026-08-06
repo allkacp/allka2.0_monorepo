@@ -59,6 +59,7 @@ import { useSorting, SortableHeader } from "@/hooks/useSorting";
 import { useTableScrollSync } from "@/hooks/useTableScrollSync";
 import { useToast } from "@/components/ui/use-toast";
 import { apiClient } from "@/lib/api-client";
+import { LegacyIdBadge } from "@/components/legacy-id-badge";
 
 // Client é uma entidade real, separada de Company — servida por
 // /api/client-records (NÃO /api/clients, que é o legado sobre Company).
@@ -213,7 +214,10 @@ export default function AdminClientesPage() {
 
   const [filterPanelOpen, setFilterPanelOpen] = useState(false);
   const [colConfigOpen, setColConfigOpen] = useState(false);
-  const [statusFilter, setStatusFilter] = useState<Set<string>>(new Set());
+  // Padrão da plataforma: a lista abre só com quem está ativo. Inativo e
+  // prospecto aparecem quando a pessoa marca no painel de filtros. O backend
+  // só aceita um status por vez, por isso o Set começa com um único valor.
+  const [statusFilter, setStatusFilter] = useState<Set<string>>(new Set(["active"]));
   const [visibleCols, setVisibleCols] = useState<Set<ColKey>>(new Set(DEFAULT_VISIBLE));
   const [pageJumpValue, setPageJumpValue] = useState("");
 
@@ -910,7 +914,10 @@ export default function AdminClientesPage() {
 
                     {visibleCols.has("id") && (
                       <td className="py-3 px-4 text-xs font-mono text-slate-500 dark:text-slate-400 whitespace-nowrap" style={{ borderRight: "1px solid rgba(148,163,184,0.15)" }}>
-                        {formatClientSequenceId(c.sequence_number)}
+                        <div className="flex flex-col gap-0.5">
+                          {formatClientSequenceId(c.sequence_number)}
+                          <LegacyIdBadge legacyId={(c as any).legacy_id} entidade="cliente" />
+                        </div>
                       </td>
                     )}
                     {visibleCols.has("cliente") && (

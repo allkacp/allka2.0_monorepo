@@ -3,6 +3,10 @@
 export interface FrontendProject {
   id: string | number;
   seq?: number | null;
+  /** id deste projeto na plataforma antiga (só em projetos importados). */
+  legacy_id?: number | null;
+  /** id do cliente antigo — Project não tem FK pra Client no modelo novo. */
+  legacy_client_id?: number | null;
   hasOwner?: boolean;
   ownerType?: "agency" | "company" | "partner" | null;
   ownerName?: string | null;
@@ -104,6 +108,10 @@ export function adaptApiProject(api: any): FrontendProject {
   return {
     id: api.id,
     seq: api._seq ?? null,
+    // Número deste projeto na plataforma antiga, quando veio da importação —
+    // só referência de consulta, o identificador é o seq (proj_N).
+    legacy_id: api.legacy_id ?? null,
+    legacy_client_id: api.legacy_client_id ?? null,
     hasOwner: api._hasOwner ?? true,
     ownerType,
     ownerName,

@@ -8,6 +8,14 @@ import { selecionarNomadeParaTarefa } from "../lib/selecionar-nomade";
 import { atribuirLiderParaTarefa } from "../lib/atribuir-lider";
 import { withZeroDateRecovery } from "../lib/clean-zero-datetimes";
 import { combinedProjectWhere } from "../lib/project-scope";
+import {
+  iniciarEtapasDaTarefa,
+  concluirEtapa,
+  atribuirExecutorDaEtapa,
+  aprovarTarefa,
+  reprovarTarefa,
+  nivelPendente,
+} from "../lib/stage-engine";
 
 const router = Router();
 
@@ -48,6 +56,9 @@ type TaskStatus = (typeof TASK_STATUSES)[number];
 
 const STAGE_STATUSES = [
   "PENDENTE",
+  // Etapa aberta pelo motor que ainda não tem executor definido (nômade a
+  // selecionar ou líder a atribuir) — ver src/lib/stage-engine.ts.
+  "AGUARDANDO_EXECUTOR",
   "EM_ANDAMENTO",
   "CONCLUIDA",
   "BLOQUEADA",
@@ -772,12 +783,24 @@ router.patch(
         },
       });
 
-      // Fire-and-forget: attempt nomad auto-selection in background
-      // Response is sent immediately with LIBERADA_PARA_EXECUCAO;
-      // task may transition to EM_EXECUCAO or AGUARDANDO_NOMADE asynchronously.
-      selecionarNomadeParaTarefa(updated.id).catch((err) =>
-        console.error("[selecionar-nomade] Error:", err),
-      );
+      // Tarefa com etapas é conduzida pelo motor: quem define executor e prazo
+      // é a etapa, não a tarefa. Abrir a primeira etapa aqui é o que dá partida
+      // — ver src/lib/stage-engine.ts.
+      const abertura = await iniciarEtapasDaTarefa(prisma, updated.id);
+      if (abertura?.status === "AGUARDANDO_EXECUTOR") {
+        atribuirExecutorDaEtapa(abertura.stageId).catch((err) =>
+          console.error("[stage-engine] atribuir executor:", err),
+        );
+      }
+
+      // Sem etapas, o comportamento antigo segue valendo: seleção de nômade no
+      // nível da tarefa. Fire-and-forget — a resposta sai como
+      // LIBERADA_PARA_EXECUCAO e a transição acontece em seguida.
+      if (!abertura) {
+        selecionarNomadeParaTarefa(updated.id).catch((err) =>
+          console.error("[selecionar-nomade] Error:", err),
+        );
+      }
 
       res.json(updated);
     } catch (err) {
@@ -1279,6 +1302,196 @@ router.get(
   },
 );
 
+// ── PATCH /api/project-tasks/:id/aprovar ─────────────────────────────────────
+// Aceite da entrega. Dois níveis: a agência confere e depois o cliente; a
+// tarefa só encerra no último. Nível é inferido do que já foi aprovado, mas
+// pode ser forçado (ex.: admin registrando o aceite do cliente).
+
+const aprovarSchema = z.object({
+  nivel: z.enum(["agencia", "cliente"]).optional(),
+});
+
+/**
+ * Em que nível esta pessoa pode assinar.
+ *
+ * O `nivel` do corpo não pode valer por si: quem chega pela tela da empresa
+ * mandaria "agencia" e registraria um aceite que não é dele, encerrando a
+ * tarefa sem o primeiro nível. Cada conta assina no seu lado, e só o admin
+ * força o nível — é ele que registra o aceite de quem decidiu por fora
+ * (telefone, e-mail, reunião).
+ */
+function nivelPermitido(
+  accountType: string,
+  role: string,
+  nivelPedido?: "agencia" | "cliente",
+): "agencia" | "cliente" | undefined {
+  if (accountType === "admin" || role === "admin") return nivelPedido;
+  if (accountType === "empresas") return "cliente";
+  // Agência, parceiro e líder são o lado interno de quem contratou.
+  if (accountType === "agencias" || role === "lider") return "agencia";
+  return nivelPedido;
+}
+
+/**
+ * A ordem importa: a agência confere antes do cliente. Sem esta checagem o
+ * cliente conseguiria assinar enquanto a tarefa ainda estava com a agência —
+ * o aceite dele ficaria gravado fora de ordem e a tarefa encerraria sozinha
+ * assim que a agência aprovasse.
+ *
+ * Vale para quem assina do próprio lado. O admin continua podendo forçar,
+ * porque ele registra aceite decidido fora da plataforma.
+ */
+function ordemDeAprovacaoOk(
+  accountType: string,
+  role: string,
+  nivel: "agencia" | "cliente" | undefined,
+  tarefa: {
+    aprovado_agencia_em: Date | null;
+    aprovado_cliente_em: Date | null;
+    exige_aprovacao_cliente: boolean;
+  },
+): boolean {
+  if (accountType === "admin" || role === "admin") return true;
+  if (!nivel) return true; // sem nível explícito o motor infere o pendente
+  return nivelPendente(tarefa) === nivel;
+}
+
+router.patch(
+  "/:id/aprovar",
+  verifyToken,
+  validate(aprovarSchema),
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const scopeWhere = await getTaskScopeWhere(
+        req.user!.id,
+        req.user!.account_type,
+        req.user!.role,
+      );
+      if (scopeWhere === null) {
+        res.status(404).json({ error: "Tarefa não encontrada" });
+        return;
+      }
+      const task = await prisma.projectTask.findFirst({
+        where: applyScope({ id: req.params.id as string }, scopeWhere),
+      });
+      if (!task) {
+        res.status(404).json({ error: "Tarefa não encontrada" });
+        return;
+      }
+
+      const aprovavel = ["EM_APROVACAO", "APROVACAO_PENDENTE_CLIENTE", "EM_REVISAO"];
+      if (!aprovavel.includes(task.status)) {
+        res.status(422).json({
+          error: `Tarefa com status "${task.status}" não está aguardando aprovação.`,
+          current_status: task.status,
+        });
+        return;
+      }
+
+      const nivel = nivelPermitido(
+        req.user!.account_type,
+        req.user!.role,
+        req.body.nivel,
+      );
+      if (
+        !ordemDeAprovacaoOk(req.user!.account_type, req.user!.role, nivel, task)
+      ) {
+        res.status(422).json({
+          error:
+            nivel === "cliente"
+              ? "Esta entrega ainda está em conferência pela agência."
+              : "O aceite deste nível já foi registrado.",
+          nivel_pendente: nivelPendente(task),
+        });
+        return;
+      }
+
+      const resultado = await prisma.$transaction((tx) =>
+        aprovarTarefa(tx, req.params.id as string, {
+          userId: req.user!.id,
+          nivel,
+        }),
+      );
+      res.json(resultado);
+    } catch (err) {
+      next(err);
+    }
+  },
+);
+
+// ── PATCH /api/project-tasks/:id/reprovar ────────────────────────────────────
+// Devolve a tarefa para execução com o motivo, reabrindo a última etapa
+// concluída — é ela que precisa ser refeita.
+
+const reprovarSchema = z.object({
+  motivo: z.string().min(3),
+  nivel: z.enum(["agencia", "cliente"]).optional(),
+});
+
+router.patch(
+  "/:id/reprovar",
+  verifyToken,
+  validate(reprovarSchema),
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const scopeWhere = await getTaskScopeWhere(
+        req.user!.id,
+        req.user!.account_type,
+        req.user!.role,
+      );
+      if (scopeWhere === null) {
+        res.status(404).json({ error: "Tarefa não encontrada" });
+        return;
+      }
+      const task = await prisma.projectTask.findFirst({
+        where: applyScope({ id: req.params.id as string }, scopeWhere),
+      });
+      if (!task) {
+        res.status(404).json({ error: "Tarefa não encontrada" });
+        return;
+      }
+
+      const reprovavel = ["EM_APROVACAO", "APROVACAO_PENDENTE_CLIENTE", "EM_REVISAO"];
+      if (!reprovavel.includes(task.status)) {
+        res.status(422).json({
+          error: `Tarefa com status "${task.status}" não está aguardando aprovação.`,
+          current_status: task.status,
+        });
+        return;
+      }
+
+      const nivel = nivelPermitido(
+        req.user!.account_type,
+        req.user!.role,
+        req.body.nivel,
+      );
+      if (
+        !ordemDeAprovacaoOk(req.user!.account_type, req.user!.role, nivel, task)
+      ) {
+        res.status(422).json({
+          error:
+            nivel === "cliente"
+              ? "Esta entrega ainda está em conferência pela agência."
+              : "Este nível de aprovação já foi resolvido.",
+          nivel_pendente: nivelPendente(task),
+        });
+        return;
+      }
+
+      const resultado = await prisma.$transaction((tx) =>
+        reprovarTarefa(tx, req.params.id as string, {
+          userId: req.user!.id,
+          motivo: req.body.motivo,
+          nivel,
+        }),
+      );
+      res.json(resultado);
+    } catch (err) {
+      next(err);
+    }
+  },
+);
+
 // ── PATCH /api/project-tasks/:id/stages/:stageId ─────────────────────────────
 
 router.patch(
@@ -1318,35 +1531,39 @@ router.patch(
         return;
       }
 
+      // Concluir etapa é o gatilho do motor: encerra esta, abre a seguinte
+      // (herdando o nômade quando a configuração pede continuidade) e encerra
+      // a tarefa quando não sobra etapa obrigatória. Ver src/lib/stage-engine.ts.
+      if (req.body.status === "CONCLUIDA") {
+        const resultado = await prisma.$transaction((tx) =>
+          concluirEtapa(tx, req.params.stageId as string, { userId: req.user!.id }),
+        );
+
+        // Etapa seguinte que depende de nômade novo: a escolha roda fora da
+        // transação, como já acontece na liberação da tarefa.
+        if (resultado.proxima?.status === "AGUARDANDO_EXECUTOR") {
+          atribuirExecutorDaEtapa(resultado.proxima.stageId).catch((err) =>
+            console.error("[stage-engine] atribuir executor:", err),
+          );
+        }
+
+        const etapaAtualizada = await prisma.projectTaskStage.findUnique({
+          where: { id: req.params.stageId as string },
+        });
+        res.json({
+          ...etapaAtualizada,
+          motor: {
+            proxima_etapa: resultado.proxima,
+            tarefa_concluida: resultado.tarefaConcluida,
+          },
+        });
+        return;
+      }
+
       const updated = await prisma.projectTaskStage.update({
         where: { id: req.params.stageId as string },
         data: { status: req.body.status },
       });
-
-      // Auto-complete parent task when all mandatory stages are done
-      if (req.body.status === "CONCLUIDA") {
-        const remaining = await prisma.projectTaskStage.count({
-          where: {
-            project_task_id: req.params.id as string,
-            obrigatoria: true,
-            status: { not: "CONCLUIDA" },
-          },
-        });
-        if (remaining === 0) {
-          const parent = await prisma.projectTask.findUnique({
-            where: { id: req.params.id as string },
-            select: { status: true },
-          });
-          if (parent && !["CONCLUIDA", "CANCELADA"].includes(parent.status)) {
-            await prisma.projectTask.update({
-              where: { id: req.params.id as string },
-              data: {
-                status: "EM_APROVACAO",
-              },
-            });
-          }
-        }
-      }
 
       res.json(updated);
     } catch (err) {

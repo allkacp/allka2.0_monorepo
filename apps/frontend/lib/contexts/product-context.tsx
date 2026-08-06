@@ -256,6 +256,14 @@ export interface Product {
   // Código público sequencial ("prod_1"...) usado na URL e na UI — nunca
   // usar no lugar de `id` pra update/delete/lookup técnico.
   productCode?: string;
+  // Código legível por categoria ("ALK-DES-007"), vindo do metadata. Só
+  // exibição, complementar ao productCode sequencial.
+  internalCode?: string;
+  // Rastreio da plataforma antiga: legacyId é o registro que originou este
+  // produto; legacyIds lista todas as entradas antigas que ele absorveu ao
+  // ser consolidado (cada uma virou uma variação).
+  legacyId?: number;
+  legacyIds?: number[];
   name: string;
   description: string;
   category: string;

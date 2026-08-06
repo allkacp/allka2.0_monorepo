@@ -6,6 +6,7 @@ import React, {
   useEffect,
 } from "react";
 import { apiClient } from "@/lib/api-client";
+import { podeConsultarClientes } from "@/lib/conta-logada";
 import type {
   User,
   Permission,
@@ -71,6 +72,9 @@ export function PlatformUsersProvider({
   useEffect(() => {
     let cancelled = false;
     async function load() {
+      // /clients (Companies) é de quem administra clientes. Um nômade logado
+      // pedia 500 empresas e levava 403 — ver lib/conta-logada.ts.
+      if (!podeConsultarClientes()) return;
       try {
         const [usersRes, companiesRes] = await Promise.allSettled([
           apiClient.getUsers({ limit: "500" }),

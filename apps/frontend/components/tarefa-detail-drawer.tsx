@@ -66,7 +66,14 @@ import { cn } from "@/lib/utils";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-type StageStatus = "PENDENTE" | "EM_ANDAMENTO" | "CONCLUIDA" | "BLOQUEADA";
+type StageStatus =
+  | "PENDENTE"
+  // Etapa aberta pelo motor sem executor definido ainda (nômade em seleção ou
+  // líder a atribuir) — ver src/lib/stage-engine.ts no backend.
+  | "AGUARDANDO_EXECUTOR"
+  | "EM_ANDAMENTO"
+  | "CONCLUIDA"
+  | "BLOQUEADA";
 
 interface TaskStage {
   id: string;
@@ -79,7 +86,35 @@ interface TaskStage {
   checklist_snapshot: string | null;
   created_at: string;
   updated_at: string;
+  // ── Motor de execução por etapa ──
+  executor_type?: "nomad" | "leader" | "internal";
+  nomade_id?: string | null;
+  lider_id?: string | null;
+  categoria?: string | null;
+  manter_mesmo_nomade?: boolean;
+  prazo_execucao?: string | null;
+  horas_execucao?: number | null;
+  valor_nomade?: number | null;
+  conta_no_prazo?: boolean;
+  exige_anexo?: boolean;
+  iniciada_em?: string | null;
+  concluida_em?: string | null;
 }
+
+const EXECUTOR_CFG: Record<string, { label: string; className: string }> = {
+  nomad: {
+    label: "Nômade",
+    className: "bg-violet-50 text-violet-700 border-violet-200 dark:bg-violet-900/20 dark:text-violet-300 dark:border-violet-800",
+  },
+  leader: {
+    label: "Líder da área",
+    className: "bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-900/20 dark:text-amber-300 dark:border-amber-800",
+  },
+  internal: {
+    label: "Interno Allka",
+    className: "bg-slate-100 text-slate-700 border-slate-300 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-600",
+  },
+};
 
 // ─── Stage status config ─────────────────────────────────────────────────────
 
@@ -100,6 +135,14 @@ const STAGE_STATUS_CFG: Record<
     bg: "bg-slate-100",
     border: "border-slate-200",
     dot: "bg-slate-400",
+    icon: Clock,
+  },
+  AGUARDANDO_EXECUTOR: {
+    label: "Aguardando executor",
+    color: "text-orange-700",
+    bg: "bg-orange-50",
+    border: "border-orange-200",
+    dot: "bg-orange-500",
     icon: Clock,
   },
   EM_ANDAMENTO: {
@@ -465,6 +508,48 @@ export function TarefaDetailDrawer({
   const [updatingStageId, setUpdatingStageId] = useState<string | null>(null);
   const [pauseStage, setPauseStage] = useState<TaskStage | null>(null);
   const [pauseSaving, setPauseSaving] = useState(false);
+  // O que o motor fez depois de concluir uma etapa (abriu a seguinte, herdou
+  // nômade, encerrou a tarefa). Sem isso a ação parece não ter efeito.
+  const [motorAviso, setMotorAviso] = useState<string | null>(null);
+
+  // Aprovação da entrega
+  const [reprovacaoMotivo, setReprovacaoMotivo] = useState("");
+  const [aprovacaoSalvando, setAprovacaoSalvando] = useState(false);
+  const [aprovacaoAviso, setAprovacaoAviso] = useState<string | null>(null);
+
+  /**
+   * Registra o aceite ou a devolução da entrega. Devolver reabre a última
+   * etapa concluída no backend — é ela que precisa ser refeita.
+   */
+  const registrarAprovacao = async (acao: "aprovar" | "reprovar") => {
+    setAprovacaoSalvando(true);
+    setAprovacaoAviso(null);
+    try {
+      if (acao === "aprovar") {
+        const r: any = await apiClient.aprovarTarefa(tarefa.id);
+        setAprovacaoAviso(
+          r?.concluida
+            ? "Entrega aprovada — tarefa encerrada."
+            : `Aceite da ${r?.nivel} registrado. Agora aguarda a aprovação do ${r?.proximoNivel}.`,
+        );
+      } else {
+        const r: any = await apiClient.reprovarTarefa(tarefa.id, reprovacaoMotivo.trim());
+        setAprovacaoAviso(
+          r?.etapaReaberta
+            ? "Devolvida para ajuste — a última etapa foi reaberta para o executor."
+            : "Devolvida para ajuste.",
+        );
+        setReprovacaoMotivo("");
+      }
+      // Avisa a tela-mãe pra recarregar a lista — o status da tarefa mudou.
+      // (`onSaved` não existe neste componente; o callback real é este.)
+      onStatusChange?.(tarefa, acao === "aprovar" ? "APROVADA" : "EM_EXECUCAO");
+    } catch (e: any) {
+      setAprovacaoAviso(e?.message ?? "Não foi possível registrar. Tente novamente.");
+    } finally {
+      setAprovacaoSalvando(false);
+    }
+  };
 
   // Reset on drawer open/close
   useEffect(() => {
@@ -536,11 +621,30 @@ export function TarefaDetailDrawer({
   const updateStageStatus = async (stage: TaskStage, status: StageStatus) => {
     setUpdatingStageId(stage.id);
     try {
-      const updated = await apiClient.updateProjectTaskStage(
+      const updated: any = await apiClient.updateProjectTaskStage(
         tarefa.id,
         stage.id,
         { status },
       );
+
+      // Concluir etapa aciona o motor no backend: ele abre a seguinte (às
+      // vezes herdando o nômade) e pode encerrar a tarefa. Recarrega a lista
+      // inteira em vez de remendar só a etapa alterada, senão a tela mostra
+      // um estado que já não é o do servidor.
+      if (status === "CONCLUIDA" && updated?.motor) {
+        await loadStages();
+        const proxima = updated.motor.proxima_etapa;
+        setMotorAviso(
+          updated.motor.tarefa_concluida
+            ? "Última etapa concluída — a tarefa foi encerrada."
+            : proxima
+              ? `Etapa concluída. Abriu "${proxima.titulo}"${proxima.herdou_nomade ? " com o mesmo nômade" : proxima.status === "AGUARDANDO_EXECUTOR" ? " — aguardando executor" : ""}.`
+              : "Etapa concluída.",
+        );
+        setTimeout(() => setMotorAviso(null), 6000);
+        return;
+      }
+
       setStages((prev) =>
         prev.map((s) => (s.id === stage.id ? { ...s, ...updated } : s)),
       );
@@ -1263,6 +1367,14 @@ export function TarefaDetailDrawer({
                   />
                 ) : (
                   <div className="space-y-3">
+                    {/* Retorno do motor: o que aconteceu depois da conclusão. */}
+                    {motorAviso && (
+                      <div className="rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 dark:border-blue-800 dark:bg-blue-900/20">
+                        <p className="text-xs font-medium text-blue-800 dark:text-blue-300">
+                          {motorAviso}
+                        </p>
+                      </div>
+                    )}
                     <div className="flex items-center justify-between mb-4">
                       <SectionTitle>Etapas ({stages.length})</SectionTitle>
                       <div className="flex items-center gap-2 text-xs text-slate-500">
@@ -1288,7 +1400,7 @@ export function TarefaDetailDrawer({
                       />
                     </div>
 
-                    {stages.map((stage) => {
+                    {stages.map((stage, indice) => {
                       const scfg =
                         STAGE_STATUS_CFG[stage.status as StageStatus] ??
                         STAGE_STATUS_CFG.PENDENTE;
@@ -1326,7 +1438,10 @@ export function TarefaDetailDrawer({
                               ) : stage.status === "BLOQUEADA" ? (
                                 <PauseCircle className="h-4 w-4" />
                               ) : (
-                                stage.ordem + 1
+                                // Posição na lista, não `ordem`: há dados com
+                                // ordem base 0 (geração antiga) e base 1
+                                // (motor), e somar 1 quebrava um dos dois.
+                                indice + 1
                               )}
                             </div>
 
@@ -1355,7 +1470,72 @@ export function TarefaDetailDrawer({
                                         Briefing
                                       </span>
                                     )}
+
+                                    {/* ── Configuração do motor de etapas ──
+                                        Quem executa, continuidade de pessoa,
+                                        prazo e esforço são definidos por etapa
+                                        — não pela tarefa. */}
+                                    {stage.executor_type && (
+                                      <span
+                                        className={cn(
+                                          "text-[10px] px-1.5 py-0.5 rounded-full font-semibold border",
+                                          EXECUTOR_CFG[stage.executor_type]?.className ??
+                                            EXECUTOR_CFG.nomad.className,
+                                        )}
+                                        title="Quem executa esta etapa"
+                                      >
+                                        {EXECUTOR_CFG[stage.executor_type]?.label ??
+                                          stage.executor_type}
+                                      </span>
+                                    )}
+                                    {stage.manter_mesmo_nomade && (
+                                      <span
+                                        className="text-[10px] bg-violet-50 text-violet-700 border border-violet-200 px-1.5 py-0.5 rounded-full font-semibold dark:bg-violet-900/20 dark:text-violet-300 dark:border-violet-800"
+                                        title="A etapa seguinte fica com o mesmo nômade, sem voltar para a fila"
+                                      >
+                                        ↻ mantém nômade
+                                      </span>
+                                    )}
+                                    {stage.categoria && (
+                                      <span className="text-[10px] bg-slate-50 text-slate-600 border border-slate-200 px-1.5 py-0.5 rounded-full font-semibold dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700">
+                                        {stage.categoria}
+                                      </span>
+                                    )}
+                                    {stage.conta_no_prazo === false && (
+                                      <span
+                                        className="text-[10px] bg-slate-50 text-slate-500 border border-dashed border-slate-300 px-1.5 py-0.5 rounded-full font-semibold"
+                                        title="Não soma no prazo mostrado ao cliente"
+                                      >
+                                        fora do prazo
+                                      </span>
+                                    )}
                                   </div>
+
+                                  {(stage.prazo_execucao ||
+                                    stage.horas_execucao ||
+                                    stage.valor_nomade) && (
+                                    <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-2 text-[11px] text-slate-500 dark:text-slate-400">
+                                      {stage.prazo_execucao && (
+                                        <span className="inline-flex items-center gap-1">
+                                          <Clock className="h-3 w-3" />
+                                          Prazo{" "}
+                                          {new Date(stage.prazo_execucao).toLocaleDateString("pt-BR")}
+                                        </span>
+                                      )}
+                                      {stage.horas_execucao ? (
+                                        <span>{stage.horas_execucao}h de execução</span>
+                                      ) : null}
+                                      {stage.valor_nomade ? (
+                                        <span>
+                                          R${" "}
+                                          {stage.valor_nomade.toLocaleString("pt-BR", {
+                                            minimumFractionDigits: 2,
+                                          })}{" "}
+                                          ao executor
+                                        </span>
+                                      ) : null}
+                                    </div>
+                                  )}
                                 </div>
 
                                 {/* Actions dropdown */}
@@ -1384,7 +1564,8 @@ export function TarefaDetailDrawer({
                                       Ver detalhes
                                     </DropdownMenuItem>
                                     <DropdownMenuSeparator />
-                                    {stage.status === "PENDENTE" && (
+                                    {(stage.status === "PENDENTE" ||
+                                      stage.status === "AGUARDANDO_EXECUTOR") && (
                                       <DropdownMenuItem
                                         className="text-xs gap-2 text-blue-700"
                                         onClick={() =>
@@ -1395,7 +1576,9 @@ export function TarefaDetailDrawer({
                                         }
                                       >
                                         <Rocket className="h-3.5 w-3.5" />{" "}
-                                        Lançar etapa
+                                        {stage.status === "AGUARDANDO_EXECUTOR"
+                                          ? "Iniciar mesmo assim"
+                                          : "Lançar etapa"}
                                       </DropdownMenuItem>
                                     )}
                                     {stage.status === "EM_ANDAMENTO" && (
@@ -1509,11 +1692,134 @@ export function TarefaDetailDrawer({
 
             {/* ══ ITENS PARA APROVAÇÃO ══════════════════════════════════ */}
             {tab === "aprovacao" && (
-              <div className="p-6">
-                <EmptyState
-                  icon={ThumbsUp}
-                  message="Itens para aprovação serão exibidos aqui."
-                />
+              <div className="p-6 space-y-4">
+                {/* Aprovação em dois níveis: a agência confere a entrega e,
+                    quando o produto exige, o cliente também. A tarefa só
+                    encerra no último aceite — ver src/lib/stage-engine.ts. */}
+                {(() => {
+                  const t = tarefa as any;
+                  const aguardando = [
+                    "EM_APROVACAO",
+                    "APROVACAO_PENDENTE_CLIENTE",
+                    "EM_REVISAO",
+                  ].includes(tarefa.status);
+                  const nivelAtual = !t.aprovado_agencia_em ? "agencia" : "cliente";
+
+                  return (
+                    <>
+                      <div className="rounded-xl border border-slate-200 dark:border-slate-700 p-4">
+                        <SectionTitle>Aceites da entrega</SectionTitle>
+                        <div className="mt-3 space-y-2">
+                          <div className="flex items-center gap-2 text-sm">
+                            {t.aprovado_agencia_em ? (
+                              <CheckCircle2 className="h-4 w-4 text-emerald-600 shrink-0" />
+                            ) : (
+                              <Clock className="h-4 w-4 text-slate-400 shrink-0" />
+                            )}
+                            <span className="font-medium text-slate-700 dark:text-slate-200">
+                              Agência
+                            </span>
+                            <span className="text-xs text-slate-500">
+                              {t.aprovado_agencia_em
+                                ? `aprovou em ${new Date(t.aprovado_agencia_em).toLocaleDateString("pt-BR")}`
+                                : "aguardando conferência"}
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-2 text-sm">
+                            {t.aprovado_cliente_em ? (
+                              <CheckCircle2 className="h-4 w-4 text-emerald-600 shrink-0" />
+                            ) : (
+                              <Clock className="h-4 w-4 text-slate-400 shrink-0" />
+                            )}
+                            <span className="font-medium text-slate-700 dark:text-slate-200">
+                              Cliente
+                            </span>
+                            <span className="text-xs text-slate-500">
+                              {t.exige_aprovacao_cliente === false
+                                ? "não exigido neste produto"
+                                : t.aprovado_cliente_em
+                                  ? `aprovou em ${new Date(t.aprovado_cliente_em).toLocaleDateString("pt-BR")}`
+                                  : "aguardando conferência"}
+                            </span>
+                          </div>
+                        </div>
+
+                        {t.reprovacoes > 0 && (
+                          <div className="mt-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 dark:border-amber-800 dark:bg-amber-900/20">
+                            <p className="text-xs font-semibold text-amber-800 dark:text-amber-300">
+                              Devolvida {t.reprovacoes}{" "}
+                              {t.reprovacoes === 1 ? "vez" : "vezes"}
+                              {t.reprovacao_nivel ? ` (última pela ${t.reprovacao_nivel})` : ""}
+                            </p>
+                            {t.reprovacao_motivo && (
+                              <p className="text-xs text-amber-700 dark:text-amber-400 mt-0.5">
+                                {t.reprovacao_motivo}
+                              </p>
+                            )}
+                          </div>
+                        )}
+                      </div>
+
+                      {aguardando ? (
+                        <div className="rounded-xl border border-slate-200 dark:border-slate-700 p-4">
+                          <p className="text-sm text-slate-600 dark:text-slate-300 mb-3">
+                            Registrando o aceite da <strong>{nivelAtual}</strong>.
+                          </p>
+                          <textarea
+                            value={reprovacaoMotivo}
+                            onChange={(e) => setReprovacaoMotivo(e.target.value)}
+                            placeholder="Motivo da devolução (obrigatório para reprovar)"
+                            rows={3}
+                            className="w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-2 text-sm outline-none focus:border-[#2558FF]"
+                          />
+                          {aprovacaoAviso && (
+                            <div className="mt-3 rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 dark:border-blue-800 dark:bg-blue-900/20">
+                              <p className="text-xs font-medium text-blue-800 dark:text-blue-300">
+                                {aprovacaoAviso}
+                              </p>
+                            </div>
+                          )}
+                          <div className="flex items-center gap-2 mt-3">
+                            <button
+                              disabled={aprovacaoSalvando}
+                              onClick={() => registrarAprovacao("aprovar")}
+                              className="inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-3 py-2 text-sm font-semibold text-white disabled:opacity-50"
+                            >
+                              {aprovacaoSalvando ? (
+                                <Loader2 className="h-4 w-4 animate-spin" />
+                              ) : (
+                                <ThumbsUp className="h-4 w-4" />
+                              )}
+                              Aprovar entrega
+                            </button>
+                            <button
+                              disabled={aprovacaoSalvando || reprovacaoMotivo.trim().length < 3}
+                              onClick={() => registrarAprovacao("reprovar")}
+                              title={
+                                reprovacaoMotivo.trim().length < 3
+                                  ? "Descreva o motivo para devolver"
+                                  : undefined
+                              }
+                              className="inline-flex items-center gap-2 rounded-lg border border-red-300 px-3 py-2 text-sm font-semibold text-red-700 disabled:opacity-40 dark:border-red-800 dark:text-red-400"
+                            >
+                              <PauseCircle className="h-4 w-4" />
+                              Devolver para ajuste
+                            </button>
+                          </div>
+                        </div>
+                      ) : (
+                        <EmptyState
+                          icon={ThumbsUp}
+                          message={
+                            tarefa.status === "CONCLUIDA"
+                              ? "Entrega aprovada e tarefa encerrada."
+                              : "A entrega ainda não chegou à etapa de aprovação."
+                          }
+                        />
+                      )}
+                    </>
+                  );
+                })()}
               </div>
             )}
 

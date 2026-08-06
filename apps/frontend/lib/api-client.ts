@@ -148,6 +148,136 @@ class ApiClient {
     return res;
   }
 
+  // ─── Nômade: o próprio trabalho ───────────────────────────────────────────
+  // O nômade não tem acesso a /project-tasks (escopo nega "nomades"); o
+  // trabalho dele vem por estas rotas, já recortado por etapa.
+
+  async getMinhasTarefasNomade(escopo: "abertas" | "concluidas" = "abertas") {
+    return this.get("/nomades/me/tarefas", { escopo });
+  }
+
+  /** Entrega a etapa; o motor abre a seguinte e devolve o que aconteceu. */
+  async concluirMinhaEtapa(stageId: string) {
+    return this.patch(`/nomades/me/etapas/${stageId}/concluir`, {});
+  }
+
+  // Entregas da etapa. O sistema não guarda binário — anexo é sempre uma URL
+  // (Drive, Figma, etc.), mesmo padrão do resto da plataforma.
+  async getEntregasDaEtapa(stageId: string) {
+    return this.get(`/nomades/me/etapas/${stageId}/entregas`);
+  }
+
+  async anexarEntregaNaEtapa(
+    stageId: string,
+    dados: { name: string; url: string; observations?: string },
+  ) {
+    return this.post(`/nomades/me/etapas/${stageId}/entregas`, dados);
+  }
+
+  async removerEntregaDaEtapa(stageId: string, anexoId: string) {
+    return this.del(`/nomades/me/etapas/${stageId}/entregas/${anexoId}`);
+  }
+
+  /** Números do nômade: alimenta dashboard, ganhos e histórico. */
+  async getResumoNomade() {
+    return this.get("/nomades/me/resumo");
+  }
+
+  /** Etapas abertas que ele pode assumir, filtradas por afinidade. */
+  async getTarefasDisponiveisNomade() {
+    return this.get("/nomades/me/disponiveis");
+  }
+
+  async aceitarEtapa(stageId: string) {
+    return this.patch(`/nomades/me/etapas/${stageId}/aceitar`, {});
+  }
+
+  /**
+   * Habilitações do nômade, já cruzadas com as áreas que existem na
+   * plataforma — "não habilitado" é ausência de registro, então quem faz o
+   * cruzamento é o backend.
+   */
+  async getMinhasHabilidades() {
+    return this.get("/nomades/me/habilidades");
+  }
+
+  /** Cadastro do próprio nômade. */
+  async getMeuPerfilNomade() {
+    return this.get("/nomades/me");
+  }
+
+  /**
+   * Edita o próprio cadastro. Só contato, endereço, PIX e preferências — o
+   * backend recusa nível/pontuação/status, que não são campo de formulário.
+   */
+  async atualizarMeuPerfilNomade(dados: Record<string, any>) {
+    return this.patch("/nomades/me", dados);
+  }
+
+  /** Escada de níveis e a posição do nômade nela. */
+  async getMeuPrograma() {
+    return this.get("/nomades/me/programa");
+  }
+
+  // ─── Habilitações (admin) ──────────────────────────────────────────────────
+  // NomadeHabilidade — o que a seleção automática lê para decidir quem recebe
+  // cada tarefa (ver backend src/lib/selecionar-nomade.ts). Escrita é restrita
+  // a admin no backend.
+
+  /** Áreas canônicas da plataforma, com as categorias de cada uma. */
+  async getAreasHabilidade() {
+    return this.get("/habilidades/areas");
+  }
+
+  async getHabilidadesDoNomade(nomadeId: string) {
+    return this.get(`/habilidades/nomade/${nomadeId}`);
+  }
+
+  async criarHabilidadeDoNomade(nomadeId: string, dados: Record<string, any>) {
+    return this.post(`/habilidades/nomade/${nomadeId}`, dados);
+  }
+
+  async atualizarHabilidadeDoNomade(
+    nomadeId: string,
+    id: string,
+    dados: Record<string, any>,
+  ) {
+    return this.patch(`/habilidades/nomade/${nomadeId}/${id}`, dados);
+  }
+
+  async removerHabilidadeDoNomade(nomadeId: string, id: string) {
+    return this.del(`/habilidades/nomade/${nomadeId}/${id}`);
+  }
+
+  // ─── Aprovação da entrega (dois níveis) ───────────────────────────────────
+  // Agência confere primeiro; o cliente depois, quando o produto exige. A
+  // tarefa só encerra no último aceite — ver src/lib/stage-engine.ts.
+
+  async aprovarTarefa(taskId: string, nivel?: "agencia" | "cliente") {
+    return this.patch(`/project-tasks/${taskId}/aprovar`, nivel ? { nivel } : {});
+  }
+
+  /** Devolve para execução com o motivo e reabre a última etapa concluída. */
+  async reprovarTarefa(taskId: string, motivo: string, nivel?: "agencia" | "cliente") {
+    return this.patch(`/project-tasks/${taskId}/reprovar`, { motivo, ...(nivel ? { nivel } : {}) });
+  }
+
+  // ─── Primeiro acesso ──────────────────────────────────────────────────────
+  // Usuário sem senha definida (importado da plataforma antiga ou nômade que
+  // nunca teve login) chega por link com token e define a própria senha.
+
+  /** Valida o link antes de mostrar o formulário; devolve nome e e-mail. */
+  async validarPrimeiroAcesso(token: string) {
+    return this.get(`/auth/primeiro-acesso/${encodeURIComponent(token)}`);
+  }
+
+  /** Define a senha e já devolve sessão iniciada. */
+  async definirSenhaPrimeiroAcesso(token: string, password: string) {
+    const res = await this.post("/auth/primeiro-acesso", { token, password });
+    if (res?.token) this.setToken(res.token);
+    return res;
+  }
+
   async getCurrentUser() {
     return this.get("/auth/me");
   }

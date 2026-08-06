@@ -66,6 +66,12 @@ export interface BackendProduct {
 }
 
 interface ProductMetadata {
+  // Código legível por categoria gerado na importação do catálogo antigo
+  // (ex.: "ALK-DES-007"). Só exibição — o identificador sequencial da
+  // plataforma continua sendo product_code ("prod_7").
+  code?: string;
+  // Ids do(s) produto(s) da plataforma antiga que deram origem a este.
+  legacyIds?: number[];
   tasks?: Task[];
   recurrence?: string;
   deliveryDays?: string;
@@ -171,6 +177,11 @@ export function backendToFrontendProduct(b: BackendProduct): Product {
   return {
     id: String(b.id),
     productCode: b.product_code ?? undefined,
+    internalCode: meta.code,
+    legacyId: (b as any).legacy_id ?? undefined,
+    // Produto consolidado absorveu várias entradas antigas (as faixas que
+    // viraram variação) — a lista completa fica aqui.
+    legacyIds: meta.legacyIds ?? [],
     name: b.name,
     description: b.description ?? "",
     category: b.category,

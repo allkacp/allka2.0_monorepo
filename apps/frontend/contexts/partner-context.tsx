@@ -8,6 +8,7 @@ import {
   useCallback,
 } from "react";
 import { apiClient } from "@/lib/api-client";
+import { podeConsultarPartner } from "@/lib/conta-logada";
 import type {
   PartnerProfile,
   PartnerStats,
@@ -51,6 +52,13 @@ export function PartnerProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     let cancelled = false;
     async function load() {
+      // Partner é a Agency com perfil ativo, nunca um login próprio. Pedir
+      // isto logado como nômade ou empresa é 403 garantido — ver
+      // lib/conta-logada.ts.
+      if (!podeConsultarPartner()) {
+        setLoading(false);
+        return;
+      }
       try {
         const [meRes, commissionsRes, withdrawalsRes] = await Promise.allSettled([
           apiClient.getPartnerMe(),

@@ -41,6 +41,11 @@ export const AREAS_CANONICAS = [
   { slug: "Conteúdo",     label: "Conteúdo",       categorias: ["Gestão de Redes Sociais", "Copywriting", "Blog"] },
   { slug: "Web",          label: "Web",            categorias: ["Desenvolvimento Web", "E-commerce", "Landing Pages"] },
   { slug: "Audiovisual",  label: "Audiovisual",    categorias: ["Vídeo", "Motion", "Podcast"] },
+  // Adicionada em 2026-08-06 para a importação das habilitações da plataforma
+  // antiga: a categoria "Estratégico e Vendas" de lá não cabia em nenhuma das
+  // cinco acima, e mapeá-la para Performance colocaria quem faz proposta
+  // comercial na fila de quem gerencia anúncios.
+  { slug: "Estratégico",  label: "Estratégico",    categorias: ["Estratégico e Vendas", "Consultoria", "Comercial"] },
 ] as const;
 
 // GET /api/habilidades/areas
@@ -70,7 +75,28 @@ router.get("/nomade/:nomadeId", async (req: Request, res: Response, next: NextFu
       orderBy: [{ area: "asc" }, { created_at: "asc" }],
     });
 
-    res.json({ habilidades });
+    // Nome do modelo de tarefa junto.
+    //
+    // `modelo_tarefa_id` é link suave (sem FK, ver schema), então não vem por
+    // include — precisa da busca em separado. Sem isso a tela mostra várias
+    // linhas visualmente idênticas: quem foi habilitado em 66 modelos da mesma
+    // área/categoria via 66 vezes "Audiovisual · Design e Multimedia", sem
+    // como distinguir uma da outra para pausar ou remover.
+    const ids = [...new Set(habilidades.map((h) => h.modelo_tarefa_id).filter(Boolean))] as string[];
+    const modelos = ids.length
+      ? await prisma.catalogTask.findMany({
+          where: { id: { in: ids } },
+          select: { id: true, name: true },
+        })
+      : [];
+    const nomePorId = new Map(modelos.map((m) => [m.id, m.name]));
+
+    res.json({
+      habilidades: habilidades.map((h) => ({
+        ...h,
+        modelo_tarefa_nome: h.modelo_tarefa_id ? (nomePorId.get(h.modelo_tarefa_id) ?? null) : null,
+      })),
+    });
   } catch (err) {
     next(err);
   }
@@ -87,6 +113,31 @@ router.post("/nomade/:nomadeId", requireAdmin, async (req: Request, res: Respons
     // Verify nomad exists
     const nomade = await prisma.nomade.findUnique({ where: { id: nomadeId }, select: { id: true } });
     if (!nomade) return res.status(404).json({ error: "Nômade não encontrado" });
+
+    // Checagem explícita de duplicata, e não só o P2002 do catch abaixo.
+    //
+    // A unique do modelo é [nomade_id, area, categoria_produto, produto_id,
+    // modelo_tarefa_id], e no MySQL cada NULL num índice único é tratado como
+    // valor distinto. Quando o admin cadastra pela tela, `produto_id` e
+    // `modelo_tarefa_id` vêm nulos — então o banco aceitava a mesma
+    // habilitação repetidas vezes e o P2002 nunca era lançado. Verificado:
+    // dois POST idênticos devolviam 201 duas vezes.
+    const jaExiste = await prisma.nomadeHabilidade.findFirst({
+      where: {
+        nomade_id: nomadeId,
+        area,
+        categoria_produto: categoria_produto ?? null,
+        produto_id: produto_id ?? null,
+        modelo_tarefa_id: modelo_tarefa_id ?? null,
+      },
+      select: { id: true },
+    });
+    if (jaExiste) {
+      return res.status(409).json({
+        error: "Habilidade já cadastrada para este nômade com os mesmos parâmetros",
+        id: jaExiste.id,
+      });
+    }
 
     const habilidade = await prisma.nomadeHabilidade.create({
       data: {

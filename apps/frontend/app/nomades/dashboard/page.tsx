@@ -42,7 +42,7 @@ import { PageLoader } from "@/components/ui/loading";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { toPng } from "html-to-image";
-import { useTasks } from "@/hooks/useTasks";
+import { apiClient } from "@/lib/api-client";
 import { useSidebar } from "@/contexts/sidebar-context";
 import { useAppFrameMetrics } from "@/hooks/useAppFrameMetrics";
 import {
@@ -725,12 +725,39 @@ function CustomizePanel({
 // ─── Main page ────────────────────────────────────────────────────────────────
 
 export default function NomadeDashboardPage() {
-  const {
-    tasks: allTasks,
-    loading,
-    error,
-    refetch,
-  } = useTasks({ limit: "200" });
+  // As tarefas do nômade NÃO vêm de /project-tasks: aquele endpoint nega
+  // account_type "nomades" de propósito, então o dashboard recebia lista vazia
+  // e mostrava tudo zerado. O trabalho dele vem de /nomades/me/tarefas, já
+  // recortado por etapa — ver routes/nomades.ts.
+  const [allTasks, setAllTasks] = useState<any[]>([]);
+  const [resumo, setResumo] = useState<any>(null);
+  const [disponiveis, setDisponiveis] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  const refetch = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const [tarefas, res, disp] = await Promise.all([
+        apiClient.getMinhasTarefasNomade("abertas"),
+        apiClient.getResumoNomade(),
+        apiClient.getTarefasDisponiveisNomade(),
+      ]);
+      setAllTasks(Array.isArray((tarefas as any)?.data) ? (tarefas as any).data : []);
+      setResumo(res);
+      setDisponiveis(Array.isArray((disp as any)?.data) ? (disp as any).data : []);
+    } catch (e: any) {
+      setError(e?.message ?? "Não foi possível carregar seus dados.");
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    refetch();
+  }, [refetch]);
+
   const dashboardRef = useRef<HTMLDivElement>(null);
 
   const [widgets, setWidgets] = useState<NomadeWidget[]>(() => loadWidgets());
@@ -769,13 +796,9 @@ export default function NomadeDashboardPage() {
     );
   }, [allTasks, userId]);
 
-  const availableTasks = useMemo(
-    () =>
-      allTasks.filter((t: any) =>
-        ["PARA_LANCAMENTO", "EM_LANCAMENTO", "available"].includes(t.status),
-      ),
-    [allTasks],
-  );
+  // Disponíveis são as ETAPAS abertas que ele pode assumir, não tarefas com
+  // status "para lançamento" — lançar é ato da agência, não do nômade.
+  const availableTasks = disponiveis;
 
   const activeTasks = useMemo(
     () =>
@@ -807,24 +830,11 @@ export default function NomadeDashboardPage() {
     [myTasks],
   );
 
-  // ── Earnings from done tasks ──────────────────────────────────────────────
-  const totalEarned = useMemo(
-    () =>
-      doneTasks.reduce(
-        (s: number, t: any) => s + (t.value ?? t.payment ?? t.valor ?? 0),
-        0,
-      ),
-    [doneTasks],
-  );
-
-  const activeEarnings = useMemo(
-    () =>
-      activeTasks.reduce(
-        (s: number, t: any) => s + (t.value ?? t.payment ?? t.valor ?? 0),
-        0,
-      ),
-    [activeTasks],
-  );
+  // ── Ganhos ────────────────────────────────────────────────────────────────
+  // Vêm do resumo, que soma por ETAPA executada. Somar pelo valor da tarefa
+  // contaria o trabalho dos outros executores dela.
+  const totalEarned = resumo?.ganhos?.total_concluido ?? 0;
+  const activeEarnings = resumo?.ganhos?.previsto_em_aberto ?? 0;
 
   // ── Status distribution ───────────────────────────────────────────────────
   const taskStatusDist = useMemo(() => {
