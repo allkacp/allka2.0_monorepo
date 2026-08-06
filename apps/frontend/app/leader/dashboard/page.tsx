@@ -6299,7 +6299,7 @@ export default function AdminDashboardPage() {
                       text: "text-destructive",
                     },
                     {
-                      to: "/admin/relatorios",
+                      to: "/leader/relatorios",
                       icon: FileText,
                       label: "Relatórios Financeiros",
                       desc: "Visualizar receitas e pagamentos",
@@ -6559,7 +6559,7 @@ export default function AdminDashboardPage() {
                       text: "text-info",
                     },
                     {
-                      to: "/admin/nomades",
+                      to: "/leader/nomades",
                       icon: UserCheck,
                       label: "Gerenciar Nômades",
                       desc: "Ver e gerenciar a base de nômades",
@@ -6568,7 +6568,7 @@ export default function AdminDashboardPage() {
                       text: "text-success",
                     },
                     {
-                      to: "/admin/projetos",
+                      to: "/leader/projetos",
                       icon: Briefcase,
                       label: "Ver Projetos",
                       desc: "Todos os projetos ativos",
@@ -6595,7 +6595,7 @@ export default function AdminDashboardPage() {
                       text: "text-violet-600 dark:text-violet-400",
                     },
                     {
-                      to: "/admin/relatorios",
+                      to: "/leader/relatorios",
                       icon: FileText,
                       label: "Relatórios",
                       desc: "Financeiro e operacional",
@@ -7316,7 +7316,7 @@ export default function AdminDashboardPage() {
                         icon: Shield,
                       },
                       {
-                        to: "/admin/relatorios",
+                        to: "/leader/relatorios",
                         label: "Relatórios Financeiros",
                         desc: "Visualizar receitas e pagamentos",
                         border: "border-success/20",

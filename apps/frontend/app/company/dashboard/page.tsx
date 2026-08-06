@@ -5663,7 +5663,7 @@ export default function AdminDashboardPage() {
                 {(
                   [
                     {
-                      to: "/admin/usuarios",
+                      to: "/company/usuarios",
                       icon: Users,
                       label: "Gerenciar Usuários",
                       desc: "Criar, editar e desativar contas",
@@ -5681,7 +5681,7 @@ export default function AdminDashboardPage() {
                       text: "text-destructive",
                     },
                     {
-                      to: "/admin/relatorios",
+                      to: "/company/relatorios",
                       icon: FileText,
                       label: "Relatórios Financeiros",
                       desc: "Visualizar receitas e pagamentos",
@@ -5932,7 +5932,7 @@ export default function AdminDashboardPage() {
                 {(
                   [
                     {
-                      to: "/admin/usuarios",
+                      to: "/company/usuarios",
                       icon: Users,
                       label: "Gerenciar Usuários",
                       desc: "Criar, editar e desativar contas",
@@ -5950,7 +5950,7 @@ export default function AdminDashboardPage() {
                       text: "text-success",
                     },
                     {
-                      to: "/admin/projetos",
+                      to: "/company/projetos",
                       icon: Briefcase,
                       label: "Ver Projetos",
                       desc: "Todos os projetos ativos",
@@ -5977,7 +5977,7 @@ export default function AdminDashboardPage() {
                       text: "text-violet-600 dark:text-violet-400",
                     },
                     {
-                      to: "/admin/relatorios",
+                      to: "/company/relatorios",
                       icon: FileText,
                       label: "Relatórios",
                       desc: "Financeiro e operacional",
@@ -6826,7 +6826,7 @@ export default function AdminDashboardPage() {
                   {(
                     [
                       {
-                        to: "/admin/usuarios",
+                        to: "/company/usuarios",
                         label: "Gerenciar Usuários",
                         desc: "Criar, editar e desativar contas",
                         border: "border-info/20",
@@ -6844,7 +6844,7 @@ export default function AdminDashboardPage() {
                         icon: Shield,
                       },
                       {
-                        to: "/admin/relatorios",
+                        to: "/company/relatorios",
                         label: "Relatórios Financeiros",
                         desc: "Visualizar receitas e pagamentos",
                         border: "border-success/20",
