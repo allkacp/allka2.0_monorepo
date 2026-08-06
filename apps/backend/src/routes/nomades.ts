@@ -63,6 +63,14 @@ router.get("/", verifyToken, async (req, res, next) => {
               wallet_transactions: true,
             },
           },
+          // Áreas em que a pessoa está habilitada. A tela de admin filtrava
+          // por "produtos/categorias/tipos de tarefa" que esta rota nunca
+          // devolveu — filtros que não filtravam nada. Área é o dado real
+          // equivalente, e é o mesmo que a seleção automática usa.
+          habilidades: {
+            where: { ativo: true },
+            select: { area: true, disponibilidade: true },
+          },
         },
         skip,
         take: limit,
@@ -70,7 +78,25 @@ router.get("/", verifyToken, async (req, res, next) => {
       }),
     ]);
 
-    res.json({ data, total, page, limit });
+    res.json({
+      data: data.map((n) => {
+        const { habilidades, ...resto } = n;
+        return {
+          ...resto,
+          // Lista enxuta para a tela: as áreas distintas, e quantas delas
+          // estão de fato recebendo tarefa.
+          areas: [...new Set(habilidades.map((h) => h.area))].sort(),
+          areas_disponiveis: [
+            ...new Set(
+              habilidades.filter((h) => h.disponibilidade === "disponivel").map((h) => h.area),
+            ),
+          ].sort(),
+        };
+      }),
+      total,
+      page,
+      limit,
+    });
   } catch (err) {
     next(err);
   }

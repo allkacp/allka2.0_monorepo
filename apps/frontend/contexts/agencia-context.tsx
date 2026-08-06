@@ -213,6 +213,30 @@ export function AgenciaProvider({ children }: { children: React.ReactNode }) {
               tasksTotal: p._count?.task_executions || p.tasksTotal || 0,
             })),
           );
+
+          /*
+           * Corrige o cabeçalho, que mostrava "Projetos 0" mesmo com projeto
+           * na tela.
+           *
+           * `totalProjects` e `currentMrr` vinham do objeto de /agencies, e a
+           * API não devolve nenhum dos dois — caíam sempre no `|| 0`. Aqui os
+           * projetos já foram carregados e recortados para esta agência, então
+           * dá para contar de verdade em vez de exibir um campo inexistente.
+           *
+           * MRR = soma do valor dos projetos em andamento. É a melhor
+           * aproximação com o que existe no modelo; não há campo de receita
+           * recorrente por agência.
+           */
+          const emAndamento = scopedList.filter(
+            (p: any) => !["completed", "cancelled"].includes(String(p.status ?? "")),
+          );
+          const mrr = emAndamento.reduce(
+            (soma: number, p: any) => soma + (Number(p.budget ?? p.value ?? 0) || 0),
+            0,
+          );
+          setProfile((prev) =>
+            prev ? { ...prev, totalProjects: scopedList.length, currentMrr: mrr } : prev,
+          );
         }
         if (invoicesRes.status === "fulfilled") {
           const data: any = invoicesRes.value;

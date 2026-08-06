@@ -88,27 +88,10 @@ const NOMAD_STATUS_CONFIG: Record<
   },
 };
 
-const availableProducts = [
-  "Marketing Digital",
-  "Branding",
-  "Desenvolvimento",
-  "SEO",
-  "Conteúdo",
-];
-const availableCategories = [
-  "Design",
-  "Marketing",
-  "Tecnologia",
-  "Comunicação",
-];
-const availableTaskTypes = [
-  "Criação de Posts",
-  "Design de Logos",
-  "Desenvolvimento Frontend",
-  "Otimização SEO",
-  "Redação de Artigos",
-  "Criação de Textos",
-];
+// As listas fixas de produtos/categorias/tipos de tarefa que existiam aqui
+// alimentavam filtros que não filtravam nada — comparavam com campos que a
+// API não devolve. Foram substituídas pelo filtro de área de habilitação,
+// montado a partir dos dados reais que chegam em GET /api/nomades.
 
 // Status que a lista esconde por padrão (ver filterStatus === "em_operacao").
 const FORA_DE_OPERACAO = new Set(["inativo", "reprovado"]);
@@ -182,14 +165,13 @@ export default function AdminNomadesPage() {
   // reprovado. "Todos os status" continua mostrando tudo.
   const [filterStatus, setFilterStatus] = useState("em_operacao");
   const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
-  const [filterOnlineStatus, setFilterOnlineStatus] = useState("all");
   const [filterDateFrom, setFilterDateFrom] = useState("");
   const [filterDateTo, setFilterDateTo] = useState("");
   const [filterLastAccessFrom, setFilterLastAccessFrom] = useState("");
   const [filterLastAccessTo, setFilterLastAccessTo] = useState("");
-  const [filterProducts, setFilterProducts] = useState<string[]>([]);
-  const [filterCategories, setFilterCategories] = useState<string[]>([]);
-  const [filterTaskTypes, setFilterTaskTypes] = useState<string[]>([]);
+  // Área de habilitação — substitui os antigos filtros de produtos/categorias/
+  // tipos de tarefa, que liam campos inexistentes na resposta da API.
+  const [filterAreas, setFilterAreas] = useState<string[]>([]);
   const [selectedNomad, setSelectedNomad] = useState<any | null>(null);
   const [isViewModalOpen, setIsViewModalOpen] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
@@ -210,10 +192,6 @@ export default function AdminNomadesPage() {
         : filterStatus === "em_operacao"
           ? !FORA_DE_OPERACAO.has(nomade.status)
           : nomade.status === filterStatus;
-    const matchesOnlineStatus =
-      filterOnlineStatus === "all" ||
-      nomade.online_status === filterOnlineStatus;
-
     // Filter by registration date range
     const matchesDateFrom =
       !filterDateFrom ||
@@ -229,64 +207,34 @@ export default function AdminNomadesPage() {
       !filterLastAccessTo ||
       new Date(nomade.last_login) <= new Date(filterLastAccessTo);
 
-    const matchesProducts =
-      filterProducts.length === 0 ||
-      filterProducts.some((product) => nomade.products.includes(product));
-    const matchesCategories =
-      filterCategories.length === 0 ||
-      filterCategories.some((category) => nomade.categories.includes(category));
-    const matchesTaskTypes =
-      filterTaskTypes.length === 0 ||
-      filterTaskTypes.some((taskType) => nomade.taskTypes.includes(taskType));
+    const matchesAreas =
+      filterAreas.length === 0 ||
+      filterAreas.some((area) => (nomade.areas ?? []).includes(area));
 
     return (
       matchesSearch &&
       matchesLevel &&
       matchesStatus &&
-      matchesOnlineStatus &&
       matchesDateFrom &&
       matchesDateTo &&
       matchesLastAccessFrom &&
       matchesLastAccessTo &&
-      matchesProducts &&
-      matchesCategories &&
-      matchesTaskTypes
+      matchesAreas
     );
   });
 
+  /** Áreas que aparecem de fato entre os nômades carregados. */
+  const areasDisponiveis = useMemo(
+    () => [...new Set(apiNomades.flatMap((n: any) => n.areas ?? []))].sort() as string[],
+    [apiNomades],
+  );
+
   const clearAdvancedFilters = () => {
-    setFilterOnlineStatus("all");
     setFilterDateFrom("");
     setFilterDateTo("");
     setFilterLastAccessFrom("");
     setFilterLastAccessTo("");
-    setFilterProducts([]);
-    setFilterCategories([]);
-    setFilterTaskTypes([]);
-  };
-
-  const toggleProduct = (product: string) => {
-    setFilterProducts((prev) =>
-      prev.includes(product)
-        ? prev.filter((p) => p !== product)
-        : [...prev, product],
-    );
-  };
-
-  const toggleCategory = (category: string) => {
-    setFilterCategories((prev) =>
-      prev.includes(category)
-        ? prev.filter((c) => c !== category)
-        : [...prev, category],
-    );
-  };
-
-  const toggleTaskType = (taskType: string) => {
-    setFilterTaskTypes((prev) =>
-      prev.includes(taskType)
-        ? prev.filter((t) => t !== taskType)
-        : [...prev, taskType],
-    );
+    setFilterAreas([]);
   };
 
   const handleView = (nomad: any) => {
@@ -463,25 +411,14 @@ export default function AdminNomadesPage() {
                   </Button>
                 </div>
 
+                {/*
+                  Havia um filtro "Status Online" aqui. A plataforma não
+                  registra presença de nômade em lugar nenhum — o campo
+                  `online_status` não existe no modelo nem na resposta da API,
+                  então o seletor nunca mudou a lista. Removido em vez de
+                  mantido como enfeite.
+                */}
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                  {/* Online Status Filter */}
-                  <div className="space-y-2">
-                    <label className="text-xs font-medium text-muted-foreground">
-                      Status Online
-                    </label>
-                    <select
-                      value={filterOnlineStatus}
-                      onChange={(e) => setFilterOnlineStatus(e.target.value)}
-                      className="w-full px-3 py-2 border rounded-md text-sm bg-background"
-                    >
-                      <option value="all">Todos</option>
-                      <option value="online">Online</option>
-                      <option value="offline">Offline</option>
-                      <option value="busy">Ocupado</option>
-                      <option value="away">Ausente</option>
-                    </select>
-                  </div>
-
                   {/* Registration Date From */}
                   <div className="space-y-2">
                     <label className="text-xs font-medium text-muted-foreground">
@@ -535,74 +472,48 @@ export default function AdminNomadesPage() {
                   </div>
                 </div>
 
+                {/*
+                  Filtro por ÁREA DE HABILITAÇÃO.
+
+                  Substitui três filtros que não filtravam nada: Produtos,
+                  Categorias e Tipos de Tarefa liam campos (`products`,
+                  `categories`, `taskTypes`) que GET /api/nomades nunca
+                  devolveu — clicar nos badges não mudava a lista.
+
+                  Área é o dado real equivalente: é o que a seleção automática
+                  usa para escolher quem recebe cada tarefa
+                  (src/lib/selecionar-nomade.ts).
+                */}
                 <div className="space-y-4 pt-4 border-t">
-                  {/* Products Filter */}
                   <div className="space-y-2">
                     <label className="text-xs font-medium text-muted-foreground">
-                      Produtos
+                      Área de habilitação
                     </label>
-                    <div className="flex flex-wrap gap-2">
-                      {availableProducts.map((product) => (
-                        <Badge
-                          key={product}
-                          variant={
-                            filterProducts.includes(product)
-                              ? "default"
-                              : "outline"
-                          }
-                          className="cursor-pointer hover:bg-blue-100 transition-colors"
-                          onClick={() => toggleProduct(product)}
-                        >
-                          {product}
-                        </Badge>
-                      ))}
-                    </div>
-                  </div>
-
-                  {/* Categories Filter */}
-                  <div className="space-y-2">
-                    <label className="text-xs font-medium text-muted-foreground">
-                      Categorias
-                    </label>
-                    <div className="flex flex-wrap gap-2">
-                      {availableCategories.map((category) => (
-                        <Badge
-                          key={category}
-                          variant={
-                            filterCategories.includes(category)
-                              ? "default"
-                              : "outline"
-                          }
-                          className="cursor-pointer hover:bg-purple-100 transition-colors"
-                          onClick={() => toggleCategory(category)}
-                        >
-                          {category}
-                        </Badge>
-                      ))}
-                    </div>
-                  </div>
-
-                  {/* Task Types Filter */}
-                  <div className="space-y-2">
-                    <label className="text-xs font-medium text-muted-foreground">
-                      Tipos de Tarefa
-                    </label>
-                    <div className="flex flex-wrap gap-2">
-                      {availableTaskTypes.map((taskType) => (
-                        <Badge
-                          key={taskType}
-                          variant={
-                            filterTaskTypes.includes(taskType)
-                              ? "default"
-                              : "outline"
-                          }
-                          className="cursor-pointer hover:bg-green-100 transition-colors"
-                          onClick={() => toggleTaskType(taskType)}
-                        >
-                          {taskType}
-                        </Badge>
-                      ))}
-                    </div>
+                    {areasDisponiveis.length === 0 ? (
+                      <p className="text-xs text-muted-foreground/70">
+                        Nenhum nômade habilitado ainda. As habilitações são
+                        cadastradas na aba “Habilitações” de cada nômade.
+                      </p>
+                    ) : (
+                      <div className="flex flex-wrap gap-2">
+                        {areasDisponiveis.map((area) => (
+                          <Badge
+                            key={area}
+                            variant={filterAreas.includes(area) ? "default" : "outline"}
+                            className="cursor-pointer hover:bg-blue-100 transition-colors"
+                            onClick={() =>
+                              setFilterAreas((prev) =>
+                                prev.includes(area)
+                                  ? prev.filter((a) => a !== area)
+                                  : [...prev, area],
+                              )
+                            }
+                          >
+                            {area}
+                          </Badge>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 </div>
 
