@@ -52,7 +52,12 @@ interface CheckoutFlowProps {
   onBack: () => void;
   onComplete: (data: CheckoutData) => void;
   preselectedClient?: Client | CreateClientRequest;
-  preselectedProject?: Project | CreateProjectRequest;
+  /**
+   * Projeto ja existente ou rascunho a criar. Aceita Project parcial porque
+   * quem pre-seleciona (project-create-new-panel) monta um rascunho que ainda
+   * nao foi persistido — sem client_id/created_by/created_at/updated_at.
+   */
+  preselectedProject?: Partial<Project> | CreateProjectRequest;
   payerType?: "agency" | "company" | "nomad";
   savedCards?: Array<{
     id: string;

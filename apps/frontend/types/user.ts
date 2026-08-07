@@ -1,3 +1,5 @@
+import type { ProjectStatus } from "./api";
+
 export interface UserLGPD {
   consent_given: boolean;
   consent_date: string;
@@ -63,6 +65,34 @@ export interface User {
     latitude?: number;
     longitude?: number;
   };
+
+  // ── Campos achatados de user.profile ──────────────────────────────────
+  // GET /api/admin/users devolve o profile achatado na raiz do usuário
+  // (ver flattenProfile em routes/users.ts), mas nada disso estava
+  // declarado aqui — o painel de usuário lia tudo por baixo de um
+  // @ts-nocheck.
+  /** Numeração oficial do usuário na plataforma. */
+  user_code?: string;
+  /** Número na plataforma antiga; só em quem veio da importação. */
+  legacy_id?: number | null;
+  username?: string;
+  social_name?: string;
+  birth_date?: string;
+  gender?: string;
+  cpf?: string;
+  rg?: string;
+  whatsapp?: string;
+  phone_secondary?: string;
+  zip_code?: string;
+  street?: string;
+  number?: string;
+  complement?: string;
+  neighborhood?: string;
+  city?: string;
+  state?: string;
+  country?: string;
+  admin_notes?: string;
+  internal_notes?: string;
   company_associations?: CompanyAssociation[];
   agency_associations?: AgencyAssociation[];
   active_company_id?: string;
@@ -359,7 +389,7 @@ export interface Project {
   name: string;
   description?: string;
   company_id: number;
-  status: "active" | "completed" | "paused" | "cancelled";
+  status: ProjectStatus;
   start_date?: string;
   end_date?: string;
   created_at: string;

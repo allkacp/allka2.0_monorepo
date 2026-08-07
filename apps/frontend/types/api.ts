@@ -19,13 +19,31 @@ export interface Client {
   updated_at: string
 }
 
+/**
+ * Ciclo de vida do projeto. A uniao listava so quatro valores em dois
+ * arquivos diferentes, mas a plataforma usa o ciclo completo — ver os rotulos
+ * em admin/projetos (getStatusBadge) e o painel de criacao, que monta o
+ * projeto com "awaiting-payment".
+ */
+export type ProjectStatus =
+  | "draft"
+  | "negotiation"
+  | "planning"
+  | "pending-approval"
+  | "awaiting-payment"
+  | "in-progress"
+  | "active"
+  | "paused"
+  | "completed"
+  | "cancelled"
+
 export interface Project {
   id: number
   name: string
   description?: string
   client_id: number
   created_by: number
-  status: "active" | "completed" | "paused" | "cancelled"
+  status: ProjectStatus
   start_date?: string
   end_date?: string
   created_at: string

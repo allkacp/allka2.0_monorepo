@@ -1,4 +1,3 @@
-// @ts-nocheck
 import { cn } from "@/lib/utils";
 import { TooltipContent } from "@/components/ui/tooltip";
 
@@ -97,7 +96,11 @@ import {
   ResponsiveContainer,
 } from "recharts";
 import { useState, useEffect } from "react";
-import { User as UserType } from "@/types/user";
+import type {
+  User as UserType,
+  UserRole,
+  Permission,
+} from "@/types/user";
 import { useToast } from "@/hooks/use-toast";
 import {
   usePlatformUsers,
@@ -291,7 +294,9 @@ export function UserViewSlidePanel({
   const [isSaving, setIsSaving] = useState(false);
   const [editedData, setEditedData] = useState<Partial<UserType>>({});
   const [isContaEditMode, setIsContaEditMode] = useState(false);
-  const [contaEditedData, setContaEditedData] = useState<Partial<UserType>>({});
+  const [contaEditedData, setContaEditedData] = useState<
+    Partial<UserType> & { status?: string }
+  >({});
   const [selectedPermissions, setSelectedPermissions] = useState<string[]>([]);
   const [searchPermissions, setSearchPermissions] = useState("");
   const [filterCategory, setFilterCategory] = useState<string | null>(null);
@@ -368,7 +373,14 @@ export function UserViewSlidePanel({
   // Permissions
   const [isPermissionsEditMode, setIsPermissionsEditMode] = useState(false);
   const [permissionsEditedData, setPermissionsEditedData] = useState<{
-    role?: string;
+    role?: UserRole;
+    /**
+     * Ids das permissoes marcadas. NAO e `Permission[]`: a grade desta tela
+     * oferece ids que nao existem na uniao Permission de types/user.ts
+     * ("view_financial", "assign_tasks", "view_reports", "export_reports",
+     * "view_metrics", "access_settings"). Manter como string preserva o que a
+     * tela ja fazia; alinhar os dois vocabularios e uma decisao de produto.
+     */
     permissions?: string[];
   }>({});
   const [showPermissionsConfirmDialog, setShowPermissionsConfirmDialog] =
@@ -486,7 +498,7 @@ export function UserViewSlidePanel({
   const [walletStatusFilter, setWalletStatusFilter] = useState("all");
 
   // Linked Entities (Permissions Tab) — derived from context
-  const contextUser = user?.id ? getUserById(Number(user.id)) : null;
+  const contextUser = user?.id ? getUserById(user.id) : null;
   const companyAssociations = contextUser?.company_associations || [];
   const [showAddCompany, setShowAddCompany] = useState(false);
   const [linkSearchQuery, setLinkSearchQuery] = useState("");
@@ -579,7 +591,17 @@ export function UserViewSlidePanel({
 
   const { toast } = useToast();
 
-  const fakeUser = createFakeUserData(user);
+  /**
+   * O usuario como esta tela o exibe. Alem do User da API, ela le tres campos
+   * que hoje nao tem origem: `wallet_balance` e `status` nao existem no
+   * modelo User (wallet_balance e da Agency) e `tipo` e uma variante pt-BR de
+   * account_type. Ficam declarados e opcionais em vez de escondidos.
+   */
+  const fakeUser: UserType & {
+    wallet_balance?: number;
+    status?: string;
+    tipo?: string;
+  } = createFakeUserData(user);
 
   // Usar dados persistidos se existirem, caso contrário usar fakeUser
   const displayUser = { ...fakeUser, ...persistedUserData };
@@ -845,11 +867,15 @@ export function UserViewSlidePanel({
     setEditedData((prev) => ({ ...prev, [field]: value }));
   };
 
-  const getDisplayValue = (field: string) => {
-    return (
+  const getDisplayValue = (field: string): string => {
+    const valor =
       editedData[field as keyof typeof editedData] ??
-      fakeUser[field as keyof UserType]
-    );
+      fakeUser[field as keyof typeof fakeUser];
+    // So campos escalares sao exibidos por aqui. Booleano e objeto viram
+    // "" — e o que o React ja renderizava (nada) antes de o tipo existir.
+    if (valor == null || typeof valor === "boolean" || typeof valor === "object")
+      return "";
+    return String(valor);
   };
 
   const handleExport = () => {
@@ -957,11 +983,15 @@ export function UserViewSlidePanel({
     }
   };
 
-  const getDadosDisplayValue = (field: string) => {
-    return (
+  const getDadosDisplayValue = (field: string): string => {
+    const valor =
       dadosEditedData[field as keyof typeof dadosEditedData] ??
-      displayUser[field as keyof UserType]
-    );
+      displayUser[field as keyof typeof displayUser];
+    // So campos escalares sao exibidos por aqui. Booleano e objeto viram
+    // "" — e o que o React ja renderizava (nada) antes de o tipo existir.
+    if (valor == null || typeof valor === "boolean" || typeof valor === "object")
+      return "";
+    return String(valor);
   };
 
   const handleDadosSaveClick = () => {
@@ -1013,11 +1043,15 @@ export function UserViewSlidePanel({
     setFinancialEditedData((prev) => ({ ...prev, [field]: value }));
   };
 
-  const getFinancialDisplayValue = (field: string) => {
-    return (
+  const getFinancialDisplayValue = (field: string): string => {
+    const valor =
       financialEditedData[field as keyof typeof financialEditedData] ??
-      displayUser[field as keyof UserType]
-    );
+      displayUser[field as keyof typeof displayUser];
+    // So campos escalares sao exibidos por aqui. Booleano e objeto viram
+    // "" — e o que o React ja renderizava (nada) antes de o tipo existir.
+    if (valor == null || typeof valor === "boolean" || typeof valor === "object")
+      return "";
+    return String(valor);
   };
 
   const handleFinancialSaveClick = () => {
@@ -1494,8 +1528,8 @@ export function UserViewSlidePanel({
   const handlePermissionsEditMode = () => {
     setIsPermissionsEditMode(true);
     setPermissionsEditedData({
-      role: displayUser.role as string,
-      permissions: (displayUser.permissions as string[]) || [],
+      role: displayUser.role,
+      permissions: displayUser.permissions || [],
     });
   };
 
@@ -1532,7 +1566,9 @@ export function UserViewSlidePanel({
       setPersistedUserData((prev) => ({
         ...prev,
         role: updatedRole,
-        permissions: updatedPermissions,
+        // ver a nota em permissionsEditedData: os ids da grade e a uniao
+        // Permission ainda nao sao o mesmo vocabulario
+        permissions: updatedPermissions as Permission[],
       }));
       toast({
         title: "Sucesso!",
@@ -1644,11 +1680,15 @@ export function UserViewSlidePanel({
     setContaEditedData((prev) => ({ ...prev, [field]: value }));
   };
 
-  const getContaDisplayValue = (field: string) => {
-    return (
+  const getContaDisplayValue = (field: string): string => {
+    const valor =
       contaEditedData[field as keyof typeof contaEditedData] ??
-      displayUser[field as keyof UserType]
-    );
+      displayUser[field as keyof typeof displayUser];
+    // So campos escalares sao exibidos aqui. Booleano e objeto viram "" —
+    // e o que o React ja renderizava (nada) antes de o tipo existir.
+    if (valor == null || typeof valor === "boolean" || typeof valor === "object")
+      return "";
+    return String(valor);
   };
 
   const getInitials = (name: string) =>
@@ -3602,7 +3642,7 @@ export function UserViewSlidePanel({
                                 key={item.id}
                                 onClick={() => {
                                   if (!user?.id) return;
-                                  addCompanyLink(Number(user.id), {
+                                  addCompanyLink(user.id, {
                                     id: Date.now(),
                                     user_id: Number(user.id),
                                     company_id: item.id,
@@ -3702,7 +3742,7 @@ export function UserViewSlidePanel({
                                     onClick={() =>
                                       user?.id &&
                                       removeCompanyLink(
-                                        Number(user.id),
+                                        user.id,
                                         assoc.company_id,
                                       )
                                     }
@@ -3783,7 +3823,7 @@ export function UserViewSlidePanel({
                                                     ),
                                                   };
                                                   updateCompanyLink(
-                                                    Number(user.id),
+                                                    user.id,
                                                     assoc.company_id,
                                                     {
                                                       company_permissions:
@@ -3826,7 +3866,7 @@ export function UserViewSlidePanel({
                                                 onClick={() => {
                                                   if (!user?.id) return;
                                                   upsertProjectMembership(
-                                                    Number(user.id),
+                                                    user.id,
                                                     assoc.company_id,
                                                     {
                                                       project_id: proj.id,
@@ -3864,7 +3904,7 @@ export function UserViewSlidePanel({
                                                 onClick={() =>
                                                   user?.id &&
                                                   removeProjectMembership(
-                                                    Number(user.id),
+                                                    user.id,
                                                     assoc.company_id,
                                                     m.project_id,
                                                   )
@@ -3903,7 +3943,7 @@ export function UserViewSlidePanel({
                                                             perm.id,
                                                           ];
                                                       upsertProjectMembership(
-                                                        Number(user.id),
+                                                        user.id,
                                                         assoc.company_id,
                                                         {
                                                           ...m,
@@ -4405,7 +4445,7 @@ export function UserViewSlidePanel({
           <LgpdTabContent
             user={user}
             onUpdate={(updates) => {
-              if (user?.id) updateUser(Number(user.id), updates);
+              if (user?.id) updateUser(user.id, updates);
               setPersistedUserData((prev) => ({ ...(prev ?? {}), ...updates }));
             }}
           />
@@ -4525,7 +4565,7 @@ export function UserViewSlidePanel({
                   onChange={(e) =>
                     setCardFormData({ ...cardFormData, number: e.target.value })
                   }
-                  maxLength="19"
+                  maxLength={19}
                   className="border-slate-300 font-mono"
                 />
               </div>
@@ -4543,7 +4583,7 @@ export function UserViewSlidePanel({
                         expiry: e.target.value,
                       })
                     }
-                    maxLength="5"
+                    maxLength={5}
                     className="border-slate-300"
                   />
                 </div>
@@ -5247,7 +5287,7 @@ export function UserViewSlidePanel({
                   <Input
                     type="text"
                     placeholder="000000"
-                    maxLength="6"
+                    maxLength={6}
                     value={twoFAVerificationCode}
                     onChange={(e) =>
                       setTwoFAVerificationCode(

@@ -1,5 +1,5 @@
-// @ts-nocheck
 import type React from "react";
+import type { ProjectStatus as ApiProjectStatus } from "@/types/api";
 import { useState, useEffect, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -94,7 +94,7 @@ type ProjectStatus =
   | "in-progress"
   | "paused"
   | "completed"
-  | "canceled";
+  | "cancelled";
 
 const PROJECT_STATUS_CONFIG: Record<
   ProjectStatus,
@@ -162,7 +162,7 @@ const PROJECT_STATUS_CONFIG: Record<
     btn: "bg-emerald-50 text-emerald-700 hover:bg-emerald-100",
     btnSelected: "bg-emerald-500 text-white shadow-md scale-105",
   },
-  canceled: {
+  cancelled: {
     label: "Cancelado",
     dot: "bg-red-500",
     color: "bg-red-100 text-red-800",
@@ -430,7 +430,9 @@ export function ProjectCreateNewPanel({
 
   const buildFormFromInitial = (): FormData => ({
     ...EMPTY_FORM,
-    ...(initialData ?? {}),
+    // initialData vem de fora com tipos frouxos (companyType como string);
+    // o formato do formulario e quem manda aqui
+    ...((initialData ?? {}) as Partial<FormData>),
     permitePortfolio:
       initialData?.permitePortfolio ?? true,
     sincronizadoBitrix: isAdmin
@@ -894,7 +896,7 @@ export function ProjectCreateNewPanel({
   };
 
   const buildProject = (
-    status: string,
+    status: ApiProjectStatus,
     products?: { name: string; price: number; qty: number }[],
   ) => ({
     id: Date.now(),
@@ -4159,7 +4161,16 @@ export function ProjectCreateNewPanel({
             onBack={() => setShowCheckout(false)}
             onComplete={handleCheckoutComplete}
             preselectedClient={buildPreselectedClient()}
-            preselectedProject={buildProject("awaiting-payment")}
+            /*
+              buildProject monta o rascunho no formato DESTA tela (client e o
+              nome do cliente, nao o objeto Client da API) e ele ainda nao foi
+              persistido. O CheckoutFlow ja o trata assim internamente. Unico
+              ponto onde os dois formatos se encontram — marcado de proposito
+              em vez de alargar o tipo do checkout.
+            */
+            preselectedProject={
+              buildProject("awaiting-payment") as never
+            }
             projectId={preCreatedProjectId ?? undefined}
             checkoutMode={checkoutPayerMode}
             clientTotalRef={calculateClientPayTotal()}
