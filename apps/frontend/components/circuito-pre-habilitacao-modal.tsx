@@ -71,7 +71,8 @@ export function CircuitoPreHabilitacaoModal({
   test,
   open,
   onOpenChange,
-  onConfirmStart,
+  // opcional: no preview do admin nao ha o que iniciar (ver o guard abaixo)
+  onConfirmStart = undefined,
   previewMode = false,
 }) {
   const [step, setStep] = useState(0);

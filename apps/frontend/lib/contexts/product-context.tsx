@@ -25,6 +25,8 @@ export interface Step {
   estimatedHours: number;
   specialtyId: number | null;
   specialty?: number | null; // alias usado pela UI para lookup
+  /** Area de atuacao da etapa; usada no filtro de produtos por area. */
+  area?: string;
   experienceLevel: "iniciante" | "junior" | "pleno" | "senior" | null;
   calculatedCost: number;
   internalGuidance?: string;
@@ -71,7 +73,7 @@ export interface Task {
   dependencies: string[];
   canRunInParallel: boolean;
   steps: Step[];
-  questionnaire: Questionnaire | null;
+  questionnaire?: Questionnaire | null;
   calculatedCost: number;
   // campos de conteúdo interno
   objective?: string;
@@ -79,6 +81,50 @@ export interface Task {
   condition?: string;
   taskCategory?: string;
   requiresAccess?: boolean;
+
+  // ── Campos usados pelo cadastro de produtos ────────────────────────────
+  // A tela admin/produtos ja gravava e lia todos estes; faltavam na
+  // interface, e o `@ts-nocheck` daquele arquivo escondia a diferenca.
+  /** Codigo da tarefa no catalogo, ou "AUTO-GERADO-<ts>" quando avulsa. */
+  code?: string;
+  /** Especialidade/categoria de quem executa. */
+  specialty?: string;
+  /** Horas estimadas de execucao. */
+  executionTime?: number;
+  executionDeadline?: number;
+  deliveryDeadline?: number;
+  adjustmentDeadline?: number;
+  /** Prazo (em dias) para o aprovador responder a entrega. */
+  approvalDeadline?: number;
+  /** Aviso destacado para quem executa a tarefa. */
+  attentionText?: string;
+  /** Procedimento operacional padrao da tarefa. */
+  pop?: string;
+  /** Arquivos de apoio anexados a tarefa. */
+  complementaryFiles?: unknown[];
+  /** Itens que o revisor confere antes de aprovar. */
+  verificationItems?: unknown[];
+  keepNextStepWithNomadLeader?: boolean;
+  delegateToLeader?: boolean;
+  liberateAfterSend?: boolean;
+  requireFinalFiles?: boolean;
+  isInternalStep?: boolean;
+  concludeOnRejection?: boolean;
+  hideFromClient?: boolean;
+  hasVariations?: boolean;
+  noConditions?: boolean;
+  showAccess?: boolean;
+  hideInProducts?: boolean;
+  dontCountDeadline?: boolean;
+  dontCountValue?: boolean;
+  hasAdditionals?: boolean;
+  /** Valor calculado automaticamente a partir de tempo x especialidade. */
+  automaticValue?: number;
+  /** Posicao da tarefa dentro do produto. */
+  order?: number;
+  /** Modelo de tarefa de origem, quando importada do catalogo. */
+  templateId?: string;
+  isLinkedToTemplate?: boolean;
 }
 
 export interface ProductVariation {
@@ -283,7 +329,7 @@ export interface Product {
   image?: string;
   productImagePreview?: string;
   recurrence?: string;
-  deliveryDays?: string;
+  deliveryDays?: string | number;
   tags?: string[];
   summaryDescription?: string;
   // campos estruturais do produto

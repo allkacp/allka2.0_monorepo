@@ -1,8 +1,3 @@
-// @ts-nocheck
-// PENDENTE: removendo este supressor aparecem 33 erros de tipo — todos de
-// descompasso entre os adapters e os tipos da tela (propriedade inexistente,
-// argumento incompativel). As classes que QUEBRAM a tela (nome nao definido,
-// chave duplicada, numero de argumentos) ja foram corrigidas em 2026-08-07.
 import { SheetFooter } from "@/components/ui/sheet";
 import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover";
 import {
@@ -151,7 +146,16 @@ import { ModalBrandHeader } from "@/components/ui/modal-brand-header";
 import { CopyLinkButton } from "@/components/copy-link-button";
 import { NeonBadge } from "@/components/neon-badge";
 import { useSpecialties } from "@/lib/contexts/specialty-context";
-import type { Task } from "@/types/product"; // Assuming Task type is defined in types/product
+// O import era de "@/types/product", que NAO exporta Task — o comentario
+// original dizia "Assuming Task type is defined in types/product". O tipo que
+// esta pagina usa (com code, specialty, executionTime, etapas) e o do
+// product-context, o mesmo que o restante do fluxo de produtos consome.
+import type {
+  Task,
+  Product as ContextProduct,
+  Questionnaire as ContextQuestionnaire,
+  ProductPresentation,
+} from "@/lib/contexts/product-context";
 import { formatCurrency } from "@/lib/utils";
 import {
   STANDARD_SHELL_PANEL_CLASS,
@@ -629,32 +633,23 @@ interface TaskStep {
 //   canExecuteInParallel?: boolean // Renamed from canRunInParallel for consistency in import logic
 // }
 
-// Added type for Product to ensure consistency
-type Product = {
-  id: string;
-  name: string;
-  description: string | undefined;
-  category: string;
-  isActive: boolean;
-  tasks: Task[];
-  createdAt: string;
-  updatedAt: string;
-  totalTasksCost: number;
-  qualificationFee: number;
-  subtotal: number;
-  taxes: number;
-  operationalFee: number;
-  partnerCommission: number;
-  finalPrice: number;
-  price: number;
-  deliveryDays: number;
-  productImagePreview?: string;
+/**
+ * O tipo de produto usado nesta tela. Era uma redeclaracao independente que
+ * foi divergindo do Product do product-context (presentation como string em
+ * vez de objeto, questionnaire com outro formato, campos faltando) — e como
+ * o arquivo tinha @ts-nocheck, a divergencia so aparecia em runtime.
+ *
+ * Agora estende o tipo real: o que os dois tem em comum vem do contexto
+ * (produto do contexto entra aqui e volta pra la sem conversao), e abaixo
+ * ficam so os campos que existem apenas nesta tela, todos opcionais.
+ */
+type Product = ContextProduct & {
+  price?: number;
+  status?: string;
   deliveryVideoUrl?: string;
-  presentation?: string;
   benefits?: string;
   information?: string;
   descriptionAttention?: string;
-  summaryDescription?: string;
   includedItems?: string[];
   notIncludedItems?: string[];
   complementaryProducts?: string[];
@@ -662,45 +657,19 @@ type Product = {
   oneTimeContract?: string;
   monthlyContract?: string;
   previousContracts?: string;
-  status: string;
   associatedTaskModels?: string[];
-  recurrence?: string;
   subcategories?: string[];
-  tags?: string[];
   questions?: Question[];
   additionalImages?: string[];
-  variations?: Array<{
-    id: string;
-    name: string;
-    description?: string;
-    price: number;
-    priceModifier?: number;
-    deadlineDays?: number;
-    scopeDescription?: string;
-    features?: string[];
-    sortOrder?: number;
-    isActive?: boolean;
-  }>;
-  addOns?: Array<{
-    id: string;
-    name: string;
-    price: number;
-    category: "creative_type" | "extra";
-  }>;
-  questionnaire?: {
-    title: string;
-    description: string;
-    questions: Question[];
-  };
-  // Add other fields from Product type if they exist
+  // Campos legados/derivados que a tela ainda le dinamicamente.
+  [key: string]: any;
 };
 
 // Define Questionnaire type as it was undeclared
-type Questionnaire = {
-  title: string;
-  description: string;
-  questions: Question[];
-};
+// O questionario e o mesmo tipo do product-context; a tela mantinha uma
+// terceira declaracao propria, que divergia do que `task.questionnaire`
+// realmente carrega.
+type Questionnaire = ContextQuestionnaire;
 
 // Mock default tax rates, assuming these are defined elsewhere or constants
 const DEFAULT_TAX_RATES = {
@@ -962,15 +931,15 @@ export default function AdminProdutosPage() {
     status: string;
     associatedTaskModels: string[];
     description: string;
-    mainImage: string;
-    videoUrl: string;
-    deadline: string;
-    questionnaire: Array<{
-      id: string;
-      question: string;
-      type: string;
-      required: boolean;
-    }>;
+    /**
+     * Titulo e descricao do questionario do produto. Era declarado como
+     * `Array<pergunta>` e inicializado com `[]`, mas NENHUM ponto do arquivo
+     * usa como lista: as perguntas vivem em `productQuestions`, e tanto os
+     * inputs quanto os tres caminhos de salvar leem `.title`/`.description`.
+     * Com o array, os campos abriam vazios e digitar neles espalhava o array
+     * num objeto.
+     */
+    questionnaire: { title: string; description: string };
     tasks: Task[];
     excludedItems: string[];
   }>({
@@ -1004,11 +973,8 @@ export default function AdminProdutosPage() {
     associatedTaskModels: [],
     // Fields from updates for editing
     description: "",
-    mainImage: "",
-    videoUrl: "",
-    deadline: "",
     // Questionnaire and Tasks fields
-    questionnaire: [],
+    questionnaire: { title: "", description: "" },
     tasks: [],
     excludedItems: [],
   });
@@ -1091,7 +1057,7 @@ export default function AdminProdutosPage() {
     original: unknown,
     tagline: string,
     draft: typeof presentationDraft,
-  ): unknown => ({
+  ): ProductPresentation => ({
     ...(original && typeof original === "object" ? (original as object) : {}),
     tagline,
     highlights: draft.highlights,
@@ -1589,7 +1555,10 @@ export default function AdminProdutosPage() {
       exigeAprovacaoCliente: (product as any).exigeAprovacaoCliente ?? true,
       associatedTaskModels: (product as any).associatedTaskModels || [],
       // Update formData for questionnaire and tasks
-      questionnaire: (product as any).questionnaire?.questions || [], // Ensure accessing questions array
+      questionnaire: {
+        title: (product as any).questionnaire?.title || "",
+        description: (product as any).questionnaire?.description || "",
+      },
       tasks: product.tasks || [], // Use tasks from the product object
       includedItems: (product as any).includedItems || [],
       notIncludedItems: (product as any).notIncludedItems || [],
@@ -1600,7 +1569,10 @@ export default function AdminProdutosPage() {
       setPresentationDraft({
         highlights: cleanStringArr(pres?.highlights),
         targetAudience: cleanStringArr(pres?.targetAudience),
-        whatIsIncluded: cleanPointArr(pres?.whatIsIncluded, "title"),
+        whatIsIncluded: cleanPointArr(pres?.whatIsIncluded, "title") as {
+          title: string;
+          description: string;
+        }[],
         deliverables: cleanStringArr(pres?.deliverables),
         notIncluded: cleanStringArr(pres?.notIncluded),
         requirements: cleanStringArr(pres?.requirements),
@@ -2197,11 +2169,8 @@ export default function AdminProdutosPage() {
       associatedTaskModels: [],
       // Resetting fields added for editing
       description: "",
-      mainImage: "",
-      videoUrl: "",
-      deadline: "",
       // Resetting questionnaire and tasks
-      questionnaire: [],
+      questionnaire: { title: "", description: "" },
       tasks: [],
       excludedItems: [],
     });
@@ -2436,7 +2405,11 @@ export default function AdminProdutosPage() {
           },
           excludedItems: productFormData.excludedItems,
           updatedAt: new Date().toISOString(),
-        });
+          // `price` aqui é legado desta tela: o backend grava base_price a
+          // partir de finalPrice (ver product-adapter). O tipo local de
+          // Product já o declara, então a conversão só evita o erro de
+          // propriedade desconhecida no literal.
+        } as Product);
         toast({
           title: "Sucesso",
           description: "Produto atualizado com sucesso!",
@@ -2497,11 +2470,8 @@ export default function AdminProdutosPage() {
       associatedTaskModels: [],
       // Fields from updates for editing
       description: "",
-      mainImage: "",
-      videoUrl: "",
-      deadline: "",
       // Resetting questionnaire and tasks
-      questionnaire: [],
+      questionnaire: { title: "", description: "" },
       tasks: [],
       excludedItems: [],
     });
