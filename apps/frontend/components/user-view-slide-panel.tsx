@@ -375,6 +375,8 @@ export function UserViewSlidePanel({
   const [isPermissionsEditMode, setIsPermissionsEditMode] = useState(false);
   const [permissionsEditedData, setPermissionsEditedData] = useState<{
     role?: UserRole;
+    /** Perfil de acesso escolhido; `null` remove o vínculo. */
+    admin_profile_id?: string | null;
     /**
      * Ids das permissoes marcadas. NAO e `Permission[]`: a grade desta tela
      * oferece ids que nao existem na uniao Permission de types/user.ts
@@ -511,6 +513,33 @@ export function UserViewSlidePanel({
     owner_name?: string;
   } | null>(null);
   const [orgWalletLoading, setOrgWalletLoading] = useState(false);
+
+  /**
+   * Perfis de acesso cadastrados (AdminProfile). Esta lista era fixa no
+   * código — "Gerente de Operações", "Suporte N1"... — e a escolha ia parar
+   * no campo `role`, não no perfil. Os perfis de verdade vêm de
+   * /api/permissions/profiles e o vínculo é `admin_profile_id`.
+   */
+  const [accessProfiles, setAccessProfiles] = useState<
+    { id: string; name: string; description?: string | null; is_master: boolean }[]
+  >([]);
+
+  useEffect(() => {
+    if (!open) return;
+    let cancelado = false;
+    apiClient
+      .getPermissionProfiles()
+      .then((res: any) => {
+        if (!cancelado) setAccessProfiles(Array.isArray(res) ? res : (res?.data ?? []));
+      })
+      .catch(() => {
+        // Só admin lê os perfis; para os demais a seção fica vazia.
+        if (!cancelado) setAccessProfiles([]);
+      });
+    return () => {
+      cancelado = true;
+    };
+  }, [open]);
 
   /** De quem e a carteira que este painel mostra. */
   const walletOwner = (() => {
@@ -1608,6 +1637,7 @@ export function UserViewSlidePanel({
     setIsPermissionsEditMode(true);
     setPermissionsEditedData({
       role: displayUser.role,
+      admin_profile_id: displayUser.admin_profile_id ?? null,
       permissions: displayUser.permissions || [],
     });
   };
@@ -1631,11 +1661,23 @@ export function UserViewSlidePanel({
     try {
       if (!user?.id) throw new Error("ID do usuário não encontrado");
       const updatedRole = permissionsEditedData.role || displayUser.role;
-      await apiClient.updateUser(String(user.id), { role: updatedRole });
-      setPersistedUserData((prev) => ({ ...prev, role: updatedRole }));
+      const perfilEscolhido =
+        permissionsEditedData.admin_profile_id !== undefined
+          ? permissionsEditedData.admin_profile_id
+          : (displayUser.admin_profile_id ?? null);
+
+      await apiClient.updateUser(String(user.id), {
+        role: updatedRole,
+        admin_profile_id: perfilEscolhido,
+      });
+      setPersistedUserData((prev) => ({
+        ...prev,
+        role: updatedRole,
+        admin_profile_id: perfilEscolhido,
+      }));
       toast({
         title: "Sucesso!",
-        description: "Função do usuário atualizada",
+        description: "Função e perfil de acesso atualizados",
       });
       setIsPermissionsEditMode(false);
       setPermissionsEditedData({});
@@ -3503,77 +3545,96 @@ export function UserViewSlidePanel({
             <div className="flex-1 overflow-y-auto px-[50px] pb-6 space-y-3">
               {/* PERFIS DE PERMISSÃO */}
               {(() => {
-                const systemProfiles = [
-                  {
-                    id: "super-admin",
-                    name: "Super Admin",
-                    desc: "Acesso total ao sistema",
-                    color: "bg-red-100 text-red-700 border-red-200",
-                    dot: "bg-red-500",
-                  },
-                  {
-                    id: "gerente-ops",
-                    name: "Gerente de Operações",
-                    desc: "Gestão de projetos e nômades",
-                    color: "bg-blue-100 text-blue-700 border-blue-200",
-                    dot: "bg-blue-500",
-                  },
-                  {
-                    id: "analista-fin",
-                    name: "Analista Financeiro",
-                    desc: "Acesso a relatórios financeiros",
-                    color: "bg-amber-100 text-amber-700 border-amber-200",
-                    dot: "bg-amber-500",
-                  },
-                  {
-                    id: "suporte",
-                    name: "Suporte N1",
-                    desc: "Atendimento e tickets básicos",
-                    color: "bg-green-100 text-green-700 border-green-200",
-                    dot: "bg-green-500",
-                  },
-                  {
-                    id: "leitura",
-                    name: "Somente Leitura",
-                    desc: "Visualização sem alterações",
-                    color: "bg-slate-100 text-slate-600 border-slate-200",
-                    dot: "bg-slate-400",
-                  },
+                // Perfis reais, vindos de /api/permissions/profiles. Antes
+                // esta lista era fixa no código ("Gerente de Operações",
+                // "Suporte N1"...) e a escolha era gravada em `role`, não no
+                // perfil — nada aqui chegava ao servidor.
+                const perfilAtual =
+                  permissionsEditedData.admin_profile_id !== undefined
+                    ? permissionsEditedData.admin_profile_id
+                    : (displayUser.admin_profile_id ?? null);
+
+                const cores = [
+                  { color: "bg-red-100 text-red-700 border-red-200", dot: "bg-red-500" },
+                  { color: "bg-blue-100 text-blue-700 border-blue-200", dot: "bg-blue-500" },
+                  { color: "bg-amber-100 text-amber-700 border-amber-200", dot: "bg-amber-500" },
+                  { color: "bg-green-100 text-green-700 border-green-200", dot: "bg-green-500" },
                 ];
-                const currentProfile =
-                  permissionsEditedData.role || "gerente-ops";
+
                 return (
                   <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
                     <div className="flex items-center gap-2 px-4 py-2.5 border-b border-slate-100">
                       <Shield className="h-3.5 w-3.5 text-blue-600" />
                       <span className="text-xs font-semibold text-slate-700 uppercase tracking-wide">
-                        Perfil de Permissão
+                        Perfil de Acesso
                       </span>
                       <span className="ml-auto text-xs text-slate-400">
                         Definidos em Permissões
                       </span>
                     </div>
                     <div className="p-3 grid grid-cols-1 gap-1.5">
-                      {systemProfiles.map((profile) => {
-                        const isSelected = currentProfile === profile.id;
+                      {accessProfiles.length === 0 && (
+                        <p className="text-xs text-slate-400 px-1 py-2">
+                          Nenhum perfil de acesso cadastrado.
+                        </p>
+                      )}
+
+                      {/* Sem perfil: o usuário vale só pela Função. É o
+                          estado de quem nunca teve perfil atribuído. */}
+                      {accessProfiles.length > 0 && (
+                        <div
+                          onClick={() =>
+                            isPermissionsEditMode &&
+                            handlePermissionsFieldChange("admin_profile_id", null)
+                          }
+                          className={`flex items-center gap-3 px-3 py-2 rounded-lg border transition-all ${isPermissionsEditMode ? "cursor-pointer" : "cursor-default"} ${perfilAtual === null ? "border-blue-300 bg-blue-50" : "border-transparent hover:border-slate-200 hover:bg-slate-50"}`}
+                        >
+                          <span className="h-2 w-2 rounded-full flex-shrink-0 bg-slate-400" />
+                          <div className="flex-1 min-w-0">
+                            <div className="text-sm font-medium text-slate-900 leading-tight">
+                              Sem perfil
+                            </div>
+                            <div className="text-xs text-slate-500 truncate">
+                              Acesso definido apenas pela Função
+                            </div>
+                          </div>
+                          {perfilAtual === null && (
+                            <Badge className="text-[10px] px-1.5 py-0 bg-blue-100 text-blue-700 border border-blue-200 flex-shrink-0">
+                              Ativo
+                            </Badge>
+                          )}
+                        </div>
+                      )}
+
+                      {accessProfiles.map((profile, i) => {
+                        const isSelected = perfilAtual === profile.id;
+                        const cor = cores[i % cores.length];
                         return (
                           <div
                             key={profile.id}
                             onClick={() =>
                               isPermissionsEditMode &&
-                              handlePermissionsFieldChange("role", profile.id)
+                              handlePermissionsFieldChange(
+                                "admin_profile_id",
+                                profile.id,
+                              )
                             }
                             className={`flex items-center gap-3 px-3 py-2 rounded-lg border transition-all ${isPermissionsEditMode ? "cursor-pointer" : "cursor-default"} ${isSelected ? "border-blue-300 bg-blue-50" : "border-transparent hover:border-slate-200 hover:bg-slate-50"}`}
                           >
                             <span
-                              className={`h-2 w-2 rounded-full flex-shrink-0 ${profile.dot}`}
+                              className={`h-2 w-2 rounded-full flex-shrink-0 ${cor.dot}`}
                             />
                             <div className="flex-1 min-w-0">
                               <div className="text-sm font-medium text-slate-900 leading-tight">
                                 {profile.name}
+                                {profile.is_master && (
+                                  <span className="ml-1.5 text-[10px] font-semibold text-red-600">
+                                    acesso total
+                                  </span>
+                                )}
                               </div>
                               <div className="text-xs text-slate-500 truncate">
-                                {profile.desc}
+                                {profile.description || "Sem descrição"}
                               </div>
                             </div>
                             {isSelected && (

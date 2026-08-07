@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { z } from "zod";
 import { prisma } from "../lib/prisma";
-import { verifyToken, requireRole } from "../middleware/auth";
+import { verifyToken, requireRole, requirePermission } from "../middleware/auth";
 import { validate } from "../middleware/validate";
 
 const router = Router();
@@ -21,7 +21,7 @@ const permissionSchema = z.object({
 });
 
 // GET /api/permissions/profiles
-router.get("/profiles", verifyToken, requireRole("admin"), async (_req, res, next) => {
+router.get("/profiles", verifyToken, requireRole("admin"), requirePermission("sistema", "view"), async (_req, res, next) => {
   try {
     const profiles = await prisma.adminProfile.findMany({
       include: {
@@ -37,7 +37,7 @@ router.get("/profiles", verifyToken, requireRole("admin"), async (_req, res, nex
 });
 
 // GET /api/permissions/profiles/:id
-router.get("/profiles/:id", verifyToken, requireRole("admin"), async (req, res, next) => {
+router.get("/profiles/:id", verifyToken, requireRole("admin"), requirePermission("sistema", "view"), async (req, res, next) => {
   try {
     const profile = await prisma.adminProfile.findUnique({
       where: { id: (((req.params.id as string) as string) as string) },
@@ -54,7 +54,7 @@ router.get("/profiles/:id", verifyToken, requireRole("admin"), async (req, res, 
 });
 
 // POST /api/permissions/profiles
-router.post("/profiles", verifyToken, requireRole("admin"), validate(profileSchema), async (req, res, next) => {
+router.post("/profiles", verifyToken, requireRole("admin"), requirePermission("sistema", "create"), validate(profileSchema), async (req, res, next) => {
   try {
     const profile = await prisma.adminProfile.create({ data: req.body });
     res.status(201).json(profile);
@@ -64,7 +64,7 @@ router.post("/profiles", verifyToken, requireRole("admin"), validate(profileSche
 });
 
 // PUT /api/permissions/profiles/:id
-router.put("/profiles/:id", verifyToken, requireRole("admin"), validate(profileSchema.partial()), async (req, res, next) => {
+router.put("/profiles/:id", verifyToken, requireRole("admin"), requirePermission("sistema", "edit"), validate(profileSchema.partial()), async (req, res, next) => {
   try {
     const profile = await prisma.adminProfile.update({
       where: { id: (((req.params.id as string) as string) as string) },
@@ -78,7 +78,7 @@ router.put("/profiles/:id", verifyToken, requireRole("admin"), validate(profileS
 });
 
 // DELETE /api/permissions/profiles/:id
-router.delete("/profiles/:id", verifyToken, requireRole("admin"), async (req, res, next) => {
+router.delete("/profiles/:id", verifyToken, requireRole("admin"), requirePermission("sistema", "delete"), async (req, res, next) => {
   try {
     await prisma.adminProfile.delete({ where: { id: (((req.params.id as string) as string) as string) } });
     res.status(204).send();

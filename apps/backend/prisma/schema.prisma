@@ -36,7 +36,11 @@ model User {
   avatar                         String?   @db.LongText
   phone                          String?
   position                       String?
+  // Perfil de acesso (opcional). Sem perfil, o usuario vale so pela role —
+  // e o que o requirePermission usa para nao trancar quem ja trabalhava
+  // assim. Ver migration 20260807140000_perfil_de_acesso_do_usuario.
   admin_profile_id               String?
+  admin_profile                  AdminProfile? @relation(fields: [admin_profile_id], references: [id], onDelete: SetNull)
   company_id                     String?
   company                        Company?  @relation("CompanyMembers", fields: [company_id], references: [id])
   // ── Vínculo de subusuário (membro) com Agency — nullable: Admin, Nomad,
@@ -87,6 +91,7 @@ model User {
   @@index([account_type])
   @@index([company_id])
   @@index([agency_id])
+  @@index([admin_profile_id])
   @@index([status])
   @@index([is_active])
   @@index([account_type, is_active])
@@ -1565,6 +1570,7 @@ model AdminProfile {
   updated_at  DateTime @updatedAt
 
   permissions AdminPermission[]
+  users       User[]
 
   @@map("admin_profiles")
 }

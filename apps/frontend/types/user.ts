@@ -49,6 +49,12 @@ export interface User {
    * suspenso. `is_active` continua existindo e anda em sincronia (ativo =>
    * true) — o backend mantém os dois juntos no update.
    */
+  /**
+   * Perfil de acesso (AdminProfile) atribuido. `null`/ausente = usuario vale
+   * so pela role, que e o comportamento de quem nunca teve perfil.
+   */
+  admin_profile_id?: string | null;
+  admin_profile?: { id: string; name: string; is_master: boolean } | null;
   status?: UserStatus;
   account_type: AccountType;
   account_sub_type: AccountSubType | null;

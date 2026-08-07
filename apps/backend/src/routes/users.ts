@@ -2,7 +2,11 @@ import { Router } from "express";
 import bcrypt from "bcryptjs";
 import { z } from "zod";
 import { prisma } from "../lib/prisma";
-import { verifyToken, requireRole } from "../middleware/auth";
+import {
+  verifyToken,
+  requireRole,
+  requirePermission,
+} from "../middleware/auth";
 import { validate, parsePagination } from "../middleware/validate";
 import { generateNextUserCode } from "../lib/user-code";
 import { claimNextOrgSequenceNumber } from "../lib/company-sequence";
@@ -120,6 +124,9 @@ const createUserSchema = z.object({
   account_type: z.string().default("empresas"),
   // Situação da conta; ver migration 20260807120000_status_do_usuario.
   status: z.enum(["ativo", "inativo", "pausado", "suspenso"]).optional(),
+  // Perfil de acesso; `null` remove o vínculo (usuário volta a valer só pela
+  // role, que é o comportamento de quem nunca teve perfil).
+  admin_profile_id: z.string().nullable().optional(),
   phone: z.string().optional(),
   avatar: z.string().optional(),
   company_id: z.string().optional(),
@@ -152,6 +159,11 @@ const safeSelect = {
   id: true,
   user_code: true,
   status: true,
+  // Perfil de acesso (AdminProfile). É o que o middleware requirePermission
+  // consulta para autorizar; sem isto o frontend não tinha como exibir nem
+  // atribuir o perfil de um usuário.
+  admin_profile_id: true,
+  admin_profile: { select: { id: true, name: true, is_master: true } },
   // Número do usuário na plataforma antiga — só preenchido em quem veio da
   // importação (ver scripts/import-legacy-platform.ts). A UI mostra como
   // referência de consulta; a numeração oficial continua sendo user_code.
@@ -563,6 +575,7 @@ router.delete(
   "/:id",
   verifyToken,
   requireRole("admin"),
+  requirePermission("usuarios", "delete"),
   async (req, res, next) => {
     try {
       await prisma.user.delete({ where: { id: (req.params.id as string) } });

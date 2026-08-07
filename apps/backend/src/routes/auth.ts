@@ -283,7 +283,20 @@ router.get("/me", verifyToken, async (req, res, next) => {
         avatar: true,
         phone: true,
         is_active: true,
+        status: true,
         created_at: true,
+        // Perfil de acesso e as permissoes que ele concede. O frontend usa
+        // isto para esconder o que o usuario nao pode fazer; a autorizacao
+        // de verdade e no servidor (middleware requirePermission).
+        admin_profile: {
+          select: {
+            id: true,
+            name: true,
+            is_master: true,
+            is_active: true,
+            permissions: { select: { module: true, action: true } },
+          },
+        },
         owned_agency: {
           select: {
             id: true,
