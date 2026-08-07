@@ -1,4 +1,8 @@
 // @ts-nocheck
+// PENDENTE: removendo este supressor aparecem 33 erros de tipo — todos de
+// descompasso entre os adapters e os tipos da tela (propriedade inexistente,
+// argumento incompativel). As classes que QUEBRAM a tela (nome nao definido,
+// chave duplicada, numero de argumentos) ja foram corrigidas em 2026-08-07.
 import { SheetFooter } from "@/components/ui/sheet";
 import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover";
 import {
@@ -4744,7 +4748,11 @@ export default function AdminProdutosPage() {
               className="ml-auto btn-brand"
               onClick={() => {
                 setIsPricingModalOpen(false);
-                if (selectedProduct) openProductSheet(selectedProduct);
+                // Era `openProductSheet(...)`, funcao que nao existe — clicar
+                // em "Editar Produto" aqui quebrava a tela. A funcao correta e
+                // `handleEditProduct`, que preenche o formulario com o produto
+                // e abre a folha de edicao.
+                if (selectedProduct) handleEditProduct(selectedProduct);
               }}
             >
               <Edit className="h-4 w-4 mr-2" />

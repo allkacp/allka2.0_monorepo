@@ -1,4 +1,3 @@
-// @ts-nocheck
 "use client";
 
 import React, {
@@ -915,8 +914,23 @@ export default function AdminTarefasPage({
   const [currentPage, setCurrentPage] = useState(1);
 
   // Sorting
-  const { sortKey, sortDir, handleSort, sortData } =
-    useSorting<TarefaOperacional>();
+  /**
+   * O `sortKey` nao e so `keyof TarefaOperacional`: a tabela tambem ordena
+   * por campos derivados de relacao (`project_title`, `client_name`,
+   * `product_name`, `nomade_name`, `agencia_name`) e por `atraso`, que e
+   * calculado. O tipo restrito fazia o TypeScript apontar esses `case` como
+   * impossiveis — mas eles funcionam: quem ordena e o switch abaixo.
+   */
+  const { sortKey, sortDir, handleSort, sortData } = useSorting<
+    TarefaOperacional & {
+      project_title: string;
+      client_name: string;
+      product_name: string;
+      nomade_name: string;
+      agencia_name: string;
+      atraso: number;
+    }
+  >();
 
   // Column config
   const [visibleCols, setVisibleCols] = useState<Set<ColKey>>(

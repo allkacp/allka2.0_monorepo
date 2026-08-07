@@ -1,4 +1,8 @@
 // @ts-nocheck
+// PENDENTE: removendo este supressor aparecem 28 erros de tipo — todos de
+// descompasso entre os adapters e os tipos da tela (propriedade inexistente,
+// argumento incompativel). As classes que QUEBRAM a tela (nome nao definido,
+// chave duplicada, numero de argumentos) ja foram corrigidas em 2026-08-07.
 import React, {
   useState,
   useEffect,

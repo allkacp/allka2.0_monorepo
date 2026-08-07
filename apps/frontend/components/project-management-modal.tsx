@@ -148,7 +148,12 @@ interface Project {
   id: number;
   name: string;
   client: string;
-  company: string;
+  /**
+   * Opcional: o modal nao le este campo em lugar nenhum (o nome do cliente
+   * sai de `client`), mas exigi-lo quebrava a passagem de um FrontendProject,
+   * que nao tem `company`.
+   */
+  company?: string;
   type: string;
   status: string;
   progress: number;

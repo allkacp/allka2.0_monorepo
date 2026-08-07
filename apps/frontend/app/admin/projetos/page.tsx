@@ -1,4 +1,3 @@
-// @ts-nocheck
 import { useState, useMemo, useRef, useCallback, useEffect } from "react";
 import { useItemsPerPage } from "@/lib/use-items-per-page";
 import {
@@ -262,7 +261,9 @@ export default function AdminProjetosPage({
   const [filterAgency, setFilterAgency] = useState("all");
   const [filterValueRange, setFilterValueRange] = useState("all");
   const [filterDateRange, setFilterDateRange] = useState("all");
-  const [filterFromLead, setFilterFromLead] = useState("all");
+  const [filterFromLead, setFilterFromLead] = useState<
+    "all" | "lead" | "non-lead"
+  >("all");
   const [filterConsultant, setFilterConsultant] = useState("all");
   const [filterPriceMin, setFilterPriceMin] = useState("");
   const [filterPriceMax, setFilterPriceMax] = useState("");
@@ -1198,10 +1199,13 @@ export default function AdminProjetosPage({
       type: p.type,
       budget: p.budget,
       spent: p.spent,
-      company: p.company,
+      // Eram `p.company` e `p.dueDate`, que nao existem em FrontendProject:
+      // as duas colunas saiam VAZIAS em todo CSV/PDF exportado. Os campos
+      // reais sao `client` (nome do cliente) e `deadline` (prazo).
+      company: p.client,
       agency: p.agency,
       createdDate: p.createdDate,
-      dueDate: p.dueDate,
+      dueDate: p.deadline,
       progress: p.progress,
     }));
 
@@ -1610,7 +1614,7 @@ export default function AdminProjetosPage({
       agencia: projectToClone.agency,
       tipo: projectToClone.type,
       dataInicio: projectToClone.startDate ?? "",
-      prazo: projectToClone.deadline ?? projectToClone.endDate ?? "",
+      prazo: projectToClone.deadline ?? "",
       descricao: projectToClone.description ?? "",
       status: "draft",
       permitePortfolio: projectToClone.portfolioPermission ?? false,
@@ -3069,10 +3073,10 @@ export default function AdminProjetosPage({
                 <div className="inline-flex rounded-lg bg-muted p-1 shrink-0">
                   <Button
                     size="sm"
-                    variant={viewMode === "accordion" ? "default" : "ghost"}
+                    variant={(viewMode as string) === "accordion" ? "default" : "ghost"}
                     onClick={() => setViewMode("accordion")}
                     className={`h-7 px-2.5 rounded-md transition-all text-xs ${
-                      viewMode === "accordion"
+                      (viewMode as string) === "accordion"
                         ? "bg-gradient-to-r from-blue-500 to-purple-600 text-white shadow-sm"
                         : "hover:bg-background"
                     }`}
@@ -3082,10 +3086,10 @@ export default function AdminProjetosPage({
                   </Button>
                   <Button
                     size="sm"
-                    variant={viewMode === "kanban" ? "default" : "ghost"}
+                    variant={(viewMode as string) === "kanban" ? "default" : "ghost"}
                     onClick={() => setViewMode("kanban")}
                     className={`h-7 px-2.5 rounded-md transition-all text-xs ${
-                      viewMode === "kanban"
+                      (viewMode as string) === "kanban"
                         ? "bg-gradient-to-r from-blue-500 to-purple-600 text-white shadow-sm"
                         : "hover:bg-background"
                     }`}
@@ -3095,10 +3099,10 @@ export default function AdminProjetosPage({
                   </Button>
                   <Button
                     size="sm"
-                    variant={viewMode === "planner" ? "default" : "ghost"}
+                    variant={(viewMode as string) === "planner" ? "default" : "ghost"}
                     onClick={() => setViewMode("planner")}
                     className={`h-7 px-2.5 rounded-md transition-all text-xs ${
-                      viewMode === "planner"
+                      (viewMode as string) === "planner"
                         ? "bg-gradient-to-r from-blue-500 to-purple-600 text-white shadow-sm"
                         : "hover:bg-background"
                     }`}
@@ -4450,11 +4454,11 @@ export default function AdminProjetosPage({
                                     Origem
                                   </label>
                                   <div className="flex gap-1.5">
-                                    {[
+                                    {([
                                       { value: "all", label: "Todos" },
                                       { value: "lead", label: "De Lead" },
                                       { value: "non-lead", label: "Outros" },
-                                    ].map(({ value, label }) => (
+                                    ] as const).map(({ value, label }) => (
                                       <button
                                         key={value}
                                         onClick={() => setFilterFromLead(value)}
@@ -4679,10 +4683,10 @@ export default function AdminProjetosPage({
                 <div className="inline-flex rounded-lg bg-muted p-1 shrink-0">
                   <Button
                     size="sm"
-                    variant={viewMode === "accordion" ? "default" : "ghost"}
+                    variant={(viewMode as string) === "accordion" ? "default" : "ghost"}
                     onClick={() => setViewMode("accordion")}
                     className={`h-7 px-2.5 rounded-md transition-all text-xs ${
-                      viewMode === "accordion"
+                      (viewMode as string) === "accordion"
                         ? "bg-gradient-to-r from-blue-500 to-purple-600 text-white shadow-sm"
                         : "hover:bg-background"
                     }`}
@@ -4692,10 +4696,10 @@ export default function AdminProjetosPage({
                   </Button>
                   <Button
                     size="sm"
-                    variant={viewMode === "kanban" ? "default" : "ghost"}
+                    variant={(viewMode as string) === "kanban" ? "default" : "ghost"}
                     onClick={() => setViewMode("kanban")}
                     className={`h-7 px-2.5 rounded-md transition-all text-xs ${
-                      viewMode === "kanban"
+                      (viewMode as string) === "kanban"
                         ? "bg-gradient-to-r from-blue-500 to-purple-600 text-white shadow-sm"
                         : "hover:bg-background"
                     }`}
@@ -4705,10 +4709,10 @@ export default function AdminProjetosPage({
                   </Button>
                   <Button
                     size="sm"
-                    variant={viewMode === "planner" ? "default" : "ghost"}
+                    variant={(viewMode as string) === "planner" ? "default" : "ghost"}
                     onClick={() => setViewMode("planner")}
                     className={`h-7 px-2.5 rounded-md transition-all text-xs ${
-                      viewMode === "planner"
+                      (viewMode as string) === "planner"
                         ? "bg-gradient-to-r from-blue-500 to-purple-600 text-white shadow-sm"
                         : "hover:bg-background"
                     }`}
@@ -5399,7 +5403,10 @@ export default function AdminProjetosPage({
           destructive
         />
         <ProjectManagementModal
-          project={selectedProject}
+          // FrontendProject.id e string|number (projetos importados usam cuid);
+          // o modal declara number. Nao ha conversao segura — o modal so usa o
+          // id para lookup, entao passa como esta.
+          project={selectedProject as unknown as React.ComponentProps<typeof ProjectManagementModal>["project"]}
           open={modalOpen}
           onOpenChange={(open) => {
             setModalOpen(open);
