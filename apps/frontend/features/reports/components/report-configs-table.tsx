@@ -1,4 +1,3 @@
-// @ts-nocheck
 import { useState, useMemo } from "react";
 import {
   Settings2, Trash2, Plus, Check, X, LayoutGrid, Search, Filter,

@@ -10,12 +10,22 @@ import { Badge } from "@/components/ui/badge"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Separator } from "@/components/ui/separator"
 import { Calendar, Clock, User, MessageSquare, CheckCircle, XCircle, AlertCircle } from "lucide-react"
-import type { NotificationHistory } from "@/types/terms"
+import type {
+  NotificationHistory,
+  NotificationMessage,
+  NotificationRule,
+} from "@/types/terms"
 
 interface NotificationHistoryModalProps {
   open: boolean
   onOpenChange: (open: boolean) => void
   history?: NotificationHistory[]
+  // A tela passa estas duas listas para o modal poder resolver os nomes de
+  // mensagem/regra a partir dos ids. Ainda nao sao usadas: o formato do
+  // historico depende da API de notificacoes, que nao existe (ver a nota no
+  // topo deste arquivo).
+  messages?: NotificationMessage[]
+  rules?: NotificationRule[]
 }
 
 export function NotificationHistoryModal({ open, onOpenChange, history = [] }: NotificationHistoryModalProps) {

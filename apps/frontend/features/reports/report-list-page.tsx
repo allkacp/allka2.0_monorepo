@@ -1,4 +1,3 @@
-// @ts-nocheck
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { useSidebar } from "@/contexts/sidebar-context";
 import { usePartner } from "@/contexts/partner-context";

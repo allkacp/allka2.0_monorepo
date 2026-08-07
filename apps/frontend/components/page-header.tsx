@@ -10,7 +10,7 @@ import {
 
 interface PageHeaderProps {
   title: string | ReactNode
-  description?: string
+  description?: ReactNode
   subtitle?: string
   actions?: ReactNode
   className?: string

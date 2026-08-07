@@ -1,4 +1,3 @@
-// @ts-nocheck
 export { AdminDashboardPage } from "./admin-dashboard-page";
 export * from "./types/admin-dashboard.types";
 export * from "./constants/admin-dashboard.constants";

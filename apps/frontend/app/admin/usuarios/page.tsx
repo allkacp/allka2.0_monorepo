@@ -1,4 +1,3 @@
-// @ts-nocheck
 import { useState, useEffect, useRef, useMemo } from "react";
 import { useItemsPerPage } from "@/lib/use-items-per-page";
 import { useNavigate, useParams } from "react-router-dom";
@@ -237,8 +236,24 @@ export default function UsuariosPage() {
     toggleColumnFilter,
     clearColumnFilter,
   } = useSorting<User>();
-  const [users, setUsers] = useState<User[]>([]);
-  const [filteredUsers, setFilteredUsers] = useState<User[]>([]);
+/**
+ * O usuário como esta tela trabalha: o User da API, mais o vínculo
+ * enriquecido que /api/admin/users devolve (profile_link_*), mais dois
+ * campos derivados no próprio componente a partir de last_login.
+ */
+type UsuarioDaLista = User & {
+  has_profile_link?: boolean | null;
+  profile_link_type?: string | null;
+  profile_link_name?: string | null;
+  profile_link_status?: string | null;
+  /** Faixa de inatividade calculada por computeInactivityBucket. */
+  inactivity_bucket?: string;
+  /** Pausa automática por inatividade; "grudenta" (ver o useEffect). */
+  auto_paused?: boolean;
+};
+
+  const [users, setUsers] = useState<UsuarioDaLista[]>([]);
+  const [filteredUsers, setFilteredUsers] = useState<UsuarioDaLista[]>([]);
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
   const [isViewDialogOpen, setIsViewDialogOpen] = useState(false);
   const [viewStartInEditMode, setViewStartInEditMode] = useState(false);
@@ -391,7 +406,7 @@ export default function UsuariosPage() {
   // Pagination
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useItemsPerPage("admin-usuarios", 10);
-  const [paginatedUsers, setPaginatedUsers] = useState<User[]>([]);
+  const [paginatedUsers, setPaginatedUsers] = useState<UsuarioDaLista[]>([]);
 
   useEffect(() => {
     // Map API users — bucket de inatividade calculado a partir do
@@ -465,7 +480,7 @@ export default function UsuariosPage() {
 
         // Human-readable role label for text search
         const roleLabel = (() => {
-          switch (user.role) {
+          switch (user.role as string) {
             case "company_admin":
               return "company admin";
             case "company_user":
@@ -542,9 +557,16 @@ export default function UsuariosPage() {
           return false;
         if (roleFilter === "nomad" && user.role !== "nomad") return false;
         if (roleFilter === "admin" && user.role !== "admin") return false;
-        if (roleFilter === "financial" && user.role !== "financial")
+        // "financial" e "team_allka" não existem como função no banco (os
+        // valores reais são company_financial, agency_consultant, lider,
+        // nomad_admin...). Estes dois filtros nunca encontram ninguém; ficam
+        // aqui para não passarem a devolver a lista inteira.
+        if (roleFilter === "financial" && (user.role as string) !== "financial")
           return false;
-        if (roleFilter === "team_allka" && user.role !== "team_allka")
+        if (
+          roleFilter === "team_allka" &&
+          (user.role as string) !== "team_allka"
+        )
           return false;
         if (roleFilter === "partner" && user.role !== "partner") return false;
       }
@@ -657,9 +679,7 @@ export default function UsuariosPage() {
       if (advancedFilters.plan !== "all") {
         // Mock plan filter - in real app would check user.plan field
         const userPlan =
-          user.account_type === "company" || user.account_type === "empresas"
-            ? "premium"
-            : "free";
+          user.account_type === "empresas" ? "premium" : "free";
         if (userPlan !== advancedFilters.plan) return false;
       }
 
@@ -723,7 +743,7 @@ export default function UsuariosPage() {
     });
   };
 
-  const openInfoPanel = (user: User) => {
+  const openInfoPanel = (user: UsuarioDaLista) => {
     setInfoPanelUser(user);
     setInfoPanelOpen(true);
   };
@@ -882,9 +902,10 @@ export default function UsuariosPage() {
       phone: "",
       whatsapp: "",
       hasWhatsapp: "all",
-      accountTypes: [],
-      roles: [],
-      statuses: [],
+      accountTypes: [] as string[],
+      roles: [] as string[],
+      statuses: [] as string[],
+      linkStatus: [] as string[],
       registrationDateFrom: "",
       registrationDateTo: "",
       lastAccessDateFrom: "",
@@ -917,7 +938,7 @@ export default function UsuariosPage() {
     advancedFilters.lastAccessDateTo ||
     advancedFilters.plan !== "all";
 
-  const handleUserAction = (user: User, action: string) => {
+  const handleUserAction = (user: UsuarioDaLista, action: string) => {
     setSelectedUser(user);
 
     switch (action) {
@@ -1666,9 +1687,10 @@ export default function UsuariosPage() {
                               phone: "",
                               whatsapp: "",
                               hasWhatsapp: "all",
-                              accountTypes: [],
-                              roles: [],
-                              statuses: [],
+                              accountTypes: [] as string[],
+                              roles: [] as string[],
+                              statuses: [] as string[],
+                              linkStatus: [] as string[],
                               registrationDateFrom: "",
                               registrationDateTo: "",
                               lastAccessDateFrom: "",
@@ -2902,17 +2924,13 @@ export default function UsuariosPage() {
                                     className={`text-xs font-bold text-white bg-gradient-to-br ${
                                       user.account_type === "admin"
                                         ? "from-indigo-500 to-indigo-800"
-                                        : user.account_type === "company" ||
-                                            user.account_type === "empresas"
+                                        : user.account_type === "empresas"
                                           ? "from-violet-500 to-purple-700"
-                                          : user.account_type === "agency" ||
-                                              user.account_type === "agencias"
+                                          : user.account_type === "agencias"
                                             ? "from-orange-500 to-rose-600"
-                                            : user.account_type === "parceiro" ||
-                                                user.account_type === "partner"
+                                            : user.account_type === "parceiro"
                                               ? "from-pink-500 to-rose-700"
-                                              : user.account_type === "lider" ||
-                                                  user.account_type === "leader"
+                                              : user.account_type === "lider"
                                                 ? "from-amber-500 to-orange-700"
                                                 : "from-blue-500 to-blue-700"
                                     }`}

@@ -1,4 +1,3 @@
-// @ts-nocheck
 import { useState, useMemo, useRef, useCallback, useEffect } from "react";
 import { useItemsPerPage } from "@/lib/use-items-per-page";
 import { useLocation } from "react-router-dom";
@@ -178,6 +177,7 @@ export default function EmpresaProjetosPage() {
         createdDate: p.startDate
           ? new Date(p.startDate).toLocaleDateString("pt-BR")
           : "",
+        createdAt: p.startDate ?? "",
         startDate: p.startDate ?? "",
         deadline: p.deliveryDate ?? p.completedDate ?? "",
         team: p.teamMembers?.length ?? p.nomadeCount ?? 0,
@@ -210,7 +210,9 @@ export default function EmpresaProjetosPage() {
   const [filterAgency, setFilterAgency] = useState("all");
   const [filterValueRange, setFilterValueRange] = useState("all");
   const [filterDateRange, setFilterDateRange] = useState("all");
-  const [filterFromLead, setFilterFromLead] = useState("all");
+  const [filterFromLead, setFilterFromLead] = useState<
+    "all" | "lead" | "non-lead"
+  >("all");
   const [filterConsultant, setFilterConsultant] = useState("all");
   const [filterPriceMin, setFilterPriceMin] = useState("");
   const [filterPriceMax, setFilterPriceMax] = useState("");
@@ -1047,10 +1049,10 @@ export default function EmpresaProjetosPage() {
       type: p.type,
       budget: p.budget,
       spent: p.spent,
-      company: p.company,
+      company: p.client,
       agency: p.agency,
       createdDate: p.createdDate,
-      dueDate: p.dueDate,
+      dueDate: p.deadline,
       progress: p.progress,
     }));
 
@@ -1337,7 +1339,7 @@ export default function EmpresaProjetosPage() {
       agencia: projectToClone.agency,
       tipo: projectToClone.type,
       dataInicio: projectToClone.startDate ?? "",
-      prazo: projectToClone.deadline ?? projectToClone.endDate ?? "",
+      prazo: projectToClone.deadline ?? "",
       descricao: projectToClone.description ?? "",
       status: "draft",
       permitePortfolio: projectToClone.portfolioPermission ?? false,
@@ -2283,7 +2285,7 @@ export default function EmpresaProjetosPage() {
         })()}
 
         {/* ── View toggle ── */}
-        {viewMode === "accordion" ? (
+        {(viewMode as "accordion" | "kanban" | "planner") === "accordion" ? (
           <>
             <Card className="border border-slate-200/70 shadow-sm overflow-hidden">
               {/* ── Toolbar ── */}
@@ -3476,7 +3478,7 @@ export default function EmpresaProjetosPage() {
                                       { value: "all", label: "Todos" },
                                       { value: "lead", label: "De Lead" },
                                       { value: "non-lead", label: "Outros" },
-                                    ].map(({ value, label }) => (
+                                    ].map(({ value, label }: { value: "all" | "lead" | "non-lead"; label: string }) => (
                                       <button
                                         key={value}
                                         onClick={() => setFilterFromLead(value)}

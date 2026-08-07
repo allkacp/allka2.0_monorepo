@@ -1,4 +1,3 @@
-// @ts-nocheck
 import { useState, useMemo } from "react";
 import { Search } from "lucide-react";
 import { Input } from "@/components/ui/input";
@@ -131,7 +130,7 @@ function IndicatorCard({ indicator }: { indicator: IndicatorDefinition }) {
 // ─── Summary row ──────────────────────────────────────────────────────────────
 
 function SummaryRow() {
-  const s = DATA_AVAILABILITY_SUMMARY;
+  const s = DATA_AVAILABILITY_SUMMARY.indicators;
   return (
     <div className="flex flex-wrap gap-3 mb-4">
       <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
@@ -147,7 +146,7 @@ function SummaryRow() {
         {s.missing} indisponíveis
       </div>
       <span className="text-sm text-muted-foreground">
-        — {s.total} indicadores no catálogo
+        — {s.available + s.partial + s.missing} indicadores no catálogo
       </span>
     </div>
   );

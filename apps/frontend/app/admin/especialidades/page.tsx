@@ -1,6 +1,6 @@
-// @ts-nocheck
 "use client";
 
+import type { BadgeColor } from "@/lib/badge-styles";
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { apiClient } from "@/lib/api-client";
 import { Button } from "@/components/ui/button";
@@ -68,8 +68,17 @@ function SpecialtyAvatar({ index }) {
 
 // ── Category badge color — deterministic hash so the same free-text
 // category always renders with the same NeonBadge color. ───────────────────
-const CATEGORY_COLORS = ["blue", "violet", "emerald", "orange", "teal", "pink", "amber", "indigo"];
-function categoryColor(category) {
+const CATEGORY_COLORS = [
+  "blue",
+  "violet",
+  "emerald",
+  "orange",
+  "teal",
+  "pink",
+  "amber",
+  "indigo",
+] as const satisfies readonly BadgeColor[];
+function categoryColor(category: string | null | undefined): BadgeColor {
   if (!category) return "slate";
   let hash = 0;
   for (let i = 0; i < category.length; i++) hash = (hash * 31 + category.charCodeAt(i)) >>> 0;
@@ -556,7 +565,11 @@ export default function AdminEspecialidadesPage() {
     </div>
   );
 
-  const CountText = ({ side = "bottom" }) => (
+  const CountText = ({
+    side = "bottom",
+  }: {
+    side?: "top" | "right" | "bottom" | "left";
+  }) => (
     <TooltipProvider delayDuration={400}>
       <Tooltip>
         <TooltipTrigger asChild>
@@ -971,7 +984,7 @@ export default function AdminEspecialidadesPage() {
                   setPage(1);
                 }}
               />
-              <NeonBadge color={color}>{label}</NeonBadge>
+              <NeonBadge color={color as BadgeColor}>{label}</NeonBadge>
             </label>
           ))}
         </div>
@@ -1291,11 +1304,11 @@ export default function AdminEspecialidadesPage() {
       {/* Confirm delete */}
       <ConfirmationDialog
         open={!!deleteTarget}
-        onOpenChange={(open) => !open && setDeleteTarget(null)}
+        onClose={() => setDeleteTarget(null)}
         title="Remover Especialidade"
-        description="Tem certeza? Esta ação não pode ser desfeita."
-        confirmLabel="Remover"
-        variant="destructive"
+        message="Tem certeza? Esta ação não pode ser desfeita."
+        confirmText="Remover"
+        destructive
         onConfirm={handleDelete}
       />
     </div>

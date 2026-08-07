@@ -1,4 +1,3 @@
-// @ts-nocheck
 import { useState, useEffect } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -32,6 +31,7 @@ import {
   Check,
   X as XIcon,
   Info,
+  Zap,
 } from "lucide-react"
 import { Switch } from "@/components/ui/switch"
 import { NotificationMessageModal } from "@/components/admin/notification-message-modal"

@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * OpenScreensContext — "Bandeja de Telas" global, estilo Alt+Tab.
  *

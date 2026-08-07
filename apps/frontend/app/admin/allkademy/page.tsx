@@ -1,4 +1,3 @@
-// @ts-nocheck
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { useSidebar } from "@/contexts/sidebar-context";
 import { apiClient } from "@/lib/api-client";
@@ -392,7 +391,7 @@ export default function AdminAllkademyPage() {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const filters = { limit: pageSize, page };
+      const filters: Record<string, unknown> = { limit: pageSize, page };
       if (statusFilter !== "all") filters.is_published = statusFilter === "published" ? "true" : "false";
       if (categoryFilter !== "all") filters.category = categoryFilter;
       const res = await apiClient.getCourses(filters);
@@ -437,8 +436,8 @@ export default function AdminAllkademyPage() {
   }, [courses, search]);
 
   const categories = useMemo(() => {
-    const set = new Set();
-    courses.forEach((c) => c.category && set.add(c.category));
+    const set = new Set<string>();
+    courses.forEach((c) => c.category && set.add(String(c.category)));
     return Array.from(set).sort();
   }, [courses]);
 
@@ -660,7 +659,11 @@ export default function AdminAllkademyPage() {
     </div>
   );
 
-  const CountText = ({ side = "bottom" }) => (
+  const CountText = ({
+    side = "bottom",
+  }: {
+    side?: "top" | "right" | "bottom" | "left";
+  }) => (
     <TooltipProvider delayDuration={400}>
       <Tooltip>
         <TooltipTrigger asChild>

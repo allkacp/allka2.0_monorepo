@@ -1,4 +1,3 @@
-// @ts-nocheck
 import { ProductCatalogView } from "@/components/product-catalog-view";
 import {
   STANDARD_SHELL_PANEL_CLASS,

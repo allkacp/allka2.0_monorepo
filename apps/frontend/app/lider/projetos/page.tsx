@@ -1,4 +1,3 @@
-// @ts-nocheck
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from "react";
@@ -89,7 +88,9 @@ export default function LiderProjetosPage() {
   const [error, setError] = useState<string | null>(null);
   const [itemsPerPage, setItemsPerPage] = useItemsPerPage("lider-projetos", 10);
   const pageRef = useRef<HTMLDivElement>(null);
-  const searchTimeout = useRef<ReturnType<typeof setTimeout>>();
+  const searchTimeout = useRef<ReturnType<typeof setTimeout> | undefined>(
+    undefined,
+  );
 
   const load = useCallback(async () => {
     setLoading(true);

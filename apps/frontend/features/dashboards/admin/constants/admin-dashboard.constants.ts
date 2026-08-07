@@ -1,4 +1,3 @@
-// @ts-nocheck
 import type { ManualDataEntry } from "../types/admin-dashboard.types";
 
 // ─── Inline fallback mock data generator ──────────────────────────────────────

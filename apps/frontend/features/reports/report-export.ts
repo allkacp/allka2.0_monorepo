@@ -1,4 +1,3 @@
-// @ts-nocheck
 // Real PDF export for the report catalog cards ("Visualizar"/"Baixar").
 // Reuses the html-to-image + jsPDF pipeline already established in
 // lib/proposal-export.ts for the same kind of single-page A4 snapshot.

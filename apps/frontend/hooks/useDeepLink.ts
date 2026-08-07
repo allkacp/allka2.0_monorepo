@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * useDeepLink — generic hook for URL-param-based drawer/modal opening.
  *

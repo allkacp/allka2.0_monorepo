@@ -1,5 +1,5 @@
-// @ts-nocheck
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
+import type { BadgeColor } from "@/lib/badge-styles";
 import { useItemsPerPage } from "@/lib/use-items-per-page";
 import { useSidebar } from "@/contexts/sidebar-context";
 import { apiClient } from "@/lib/api-client";
@@ -173,7 +173,7 @@ const WALLET_OWNER_COLORS: Record<string, string> = {
   partner:  "bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/30 dark:text-emerald-400",
   platform: "bg-slate-100 text-slate-600 border-slate-200 dark:bg-slate-800/50 dark:text-slate-300",
 };
-const WALLET_OWNER_COLOR_TOKEN: Record<string, string> = { company: "blue", agency: "violet", nomad: "amber", partner: "emerald", platform: "slate" };
+const WALLET_OWNER_COLOR_TOKEN: Record<string, BadgeColor> = { company: "blue", agency: "violet", nomad: "amber", partner: "emerald", platform: "slate" };
 
 const WALLET_STATUS_LABELS: Record<string, string> = {
   active:    "Ativa",
@@ -2473,7 +2473,7 @@ export default function AdminFinanceiroPage() {
                             ) : <span className="text-slate-300 dark:text-slate-600 text-xs">—</span>}
                           </td>
                           <td className="px-4 py-3">
-                            <NeonBadge color={WALLET_STATUS_COLOR[w.status] || "slate"}>
+                            <NeonBadge color={(WALLET_STATUS_COLOR[w.status] || "slate") as BadgeColor}>
                               {WALLET_STATUS_LABELS[w.status] || w.status}
                             </NeonBadge>
                           </td>
@@ -2688,7 +2688,7 @@ export default function AdminFinanceiroPage() {
             <div className="flex flex-wrap items-center gap-2">
               <AdvancedDateFilter
                 dateRange={concilDateRange}
-                onDateRangeChange={(r) => { setConcilDateRange(r); setConcilPage(1); }}
+                onDateChange={(r) => { setConcilDateRange(r); setConcilPage(1); }}
               />
               {concilDateRange && (
                 <button onClick={() => { setConcilDateRange(undefined); setConcilPage(1); }}
@@ -3520,11 +3520,11 @@ export default function AdminFinanceiroPage() {
       {/* ── Confirmar exclusão fatura ──────────────────────────────── */}
       <ConfirmationDialog
         open={!!deleteTarget}
-        onOpenChange={(open) => !open && setDeleteTarget(null)}
+        onClose={() => setDeleteTarget(null)}
         title="Excluir Fatura"
-        description="Tem certeza? Esta ação não pode ser desfeita."
-        confirmLabel="Excluir"
-        variant="destructive"
+        message="Tem certeza? Esta ação não pode ser desfeita."
+        confirmText="Excluir"
+        destructive
         onConfirm={handleDeleteInvoice}
       />
 
@@ -3653,11 +3653,11 @@ export default function AdminFinanceiroPage() {
       {/* ── Confirmar exclusão despesa ─────────────────────────────── */}
       <ConfirmationDialog
         open={!!expDeleteTarget}
-        onOpenChange={(open) => !open && setExpDeleteTarget(null)}
+        onClose={() => setExpDeleteTarget(null)}
         title="Excluir Despesa"
-        description="Tem certeza? Esta ação não pode ser desfeita."
-        confirmLabel="Excluir"
-        variant="destructive"
+        message="Tem certeza? Esta ação não pode ser desfeita."
+        confirmText="Excluir"
+        destructive
         onConfirm={handleDeleteExpense}
       />
 

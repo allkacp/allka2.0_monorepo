@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * Estado global mínimo do painel de Notificações — precisa viver fora do
  * Header porque o pin da Bandeja de Telas (reaberto de qualquer página)

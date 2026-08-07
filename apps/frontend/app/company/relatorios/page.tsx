@@ -1,4 +1,3 @@
-// @ts-nocheck
 import { useState, useMemo } from "react";
 import { useSidebar } from "@/contexts/sidebar-context";
 import { useEmpresa } from "@/contexts/empresa-context";

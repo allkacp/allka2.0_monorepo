@@ -1,4 +1,3 @@
-// @ts-nocheck
 
 // ── Placeholder Schema ──────────────────────────────────────────────────────────
 
@@ -187,7 +186,7 @@ export function buildProposalData(
     const nome = p.nome ?? p.name ?? "";
     const qty = p.quantidade ?? p.qty ?? 1;
     const unitVal = p.valorUnitario ?? p.valor ?? p.price ?? 0;
-    const totalVal = p.valorTotal ?? qty * unitVal ?? 0;
+    const totalVal = p.valorTotal ?? qty * unitVal;
     return {
       PRODUTO_NOME: nome,
       PRODUTO_QTD: qty,
@@ -199,7 +198,7 @@ export function buildProposalData(
   const total = rawProdutos.reduce((acc: number, p: any) => {
     const qty = p.quantidade ?? p.qty ?? 1;
     const unitVal = p.valorUnitario ?? p.valor ?? p.price ?? 0;
-    return acc + (p.valorTotal ?? qty * unitVal ?? 0);
+    return acc + (p.valorTotal ?? qty * unitVal);
   }, 0);
 
   const today = new Date().toLocaleDateString("pt-BR");

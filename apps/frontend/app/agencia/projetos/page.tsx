@@ -1,4 +1,3 @@
-// @ts-nocheck
 "use client";
 
 import { useLocation } from "react-router-dom";

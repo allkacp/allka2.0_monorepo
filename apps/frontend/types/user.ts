@@ -372,13 +372,28 @@ export type AccountType =
   | "lider";
 export type AccountSubType = "company" | "in-house" | null;
 
+/**
+ * Função do usuário. A união listava sete valores, quatro dos quais em uso
+ * real não estavam aqui — conferido contra o banco, que tem: admin,
+ * agency_admin, agency_consultant, company_admin, company_financial, lider,
+ * nomad, nomad_admin.
+ *
+ * `company_user`/`agency_user` seguem declarados por retrocompatibilidade
+ * (aparecem como padrão em vários pontos do código). `partner` também fica:
+ * Partner deixou de ser perfil próprio, mas registros antigos podem carregar
+ * o valor.
+ */
 export type UserRole =
-  | "company_admin"
-  | "company_user"
-  | "agency_admin"
-  | "agency_user"
-  | "nomad"
   | "admin"
+  | "agency_admin"
+  | "agency_consultant"
+  | "agency_user"
+  | "company_admin"
+  | "company_financial"
+  | "company_user"
+  | "lider"
+  | "nomad"
+  | "nomad_admin"
   | "partner";
 
 export type Permission =

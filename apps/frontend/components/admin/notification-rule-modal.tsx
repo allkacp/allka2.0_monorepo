@@ -13,13 +13,18 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Switch } from "@/components/ui/switch"
 import { Badge } from "@/components/ui/badge"
 import { X, Plus } from "lucide-react"
-import type { NotificationRule } from "@/types/terms"
+import type {
+  NotificationRule,
+  NotificationMessage,
+} from "@/types/terms"
 
 interface NotificationRuleModalProps {
   open: boolean
   onOpenChange: (open: boolean) => void
   rule?: NotificationRule
   onSave: (rule: Partial<NotificationRule>) => void
+  // Passada pela tela para escolher a mensagem da regra; ver a nota no topo.
+  messages?: NotificationMessage[]
 }
 
 export function NotificationRuleModal({ open, onOpenChange, rule, onSave }: NotificationRuleModalProps) {
