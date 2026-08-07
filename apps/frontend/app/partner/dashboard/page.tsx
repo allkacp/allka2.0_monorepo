@@ -1,4 +1,3 @@
-﻿// @ts-nocheck
 import { DashboardShellFrame } from "@/features/dashboards/shared/dashboard-shell-frame";
 import { useDashboardScrollCompact } from "@/hooks/useDashboardScrollCompact";
 import {
@@ -1290,7 +1289,7 @@ export default function AdminDashboardPage() {
   type WidgetConfig = Omit<Widget, "size">;
 
   const [widgets, setWidgets] = useState<WidgetState[]>(() =>
-    [
+    ([
       { id: "metrics", type: "metrics", visible: true, order: 0 },
       { id: "ltv", type: "ltv", visible: true, order: 1 }, // Added LTV widget visible by default
       { id: "mrr", type: "mrr", visible: true, order: 2 },
@@ -1376,7 +1375,7 @@ export default function AdminDashboardPage() {
         visible: true,
         order: 27,
       },
-    ].filter((w) => ROLE_WIDGET_IDS.has(w.type)),
+    ] as WidgetState[]).filter((w) => ROLE_WIDGET_IDS.has(w.type)),
   );
 
   const [draggedWidget, setDraggedWidget] = useState<string | null>(null); // Use string for widget id
@@ -2654,6 +2653,11 @@ export default function AdminDashboardPage() {
         statusOverview: "Visão geral por status",
         accountsReceivable: "À receber",
       partnerProgram: "Programa Partner",
+      // Widgets exclusivos do admin: nao aparecem nesta tela, mas o Record
+      // precisa cobrir o WidgetType inteiro. Faltavam desde antes — o
+      // `@ts-nocheck` do arquivo escondia.
+      userDistribution: "Distribuição de usuários",
+      activeUsers: "Usuários ativos",
     };
     return titles[widgetType] || widgetType;
   };
@@ -2898,26 +2902,22 @@ export default function AdminDashboardPage() {
                 </p>
                 <div className="flex items-center gap-2 pr-7">
                   <div className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[10px] font-semibold bg-white/20 text-white">
-                    {metricType === "partnerLevel" ? (
-                      <Award className="h-3 w-3" />
-                    ) : metric.trend === "up" ? (
+                    {/*
+                      Este bloco so roda dentro do
+                      `if (metricType === "commissionsGenerated")` logo acima,
+                      entao os testes contra "partnerLevel" e "conversionRate"
+                      nunca eram verdadeiros — codigo morto herdado do card
+                      generico. Mantido so o ramo que de fato executava.
+                    */}
+                    {metric.trend === "up" ? (
                       <TrendingUp className="h-3 w-3" />
                     ) : (
                       <TrendingDown className="h-3 w-3" />
                     )}
-                    {metricType === "partnerLevel"
-                      ? "Nível atual"
-                      : metric.trend === "up"
-                        ? "+"
-                        : "-"}
-                    {metricType === "partnerLevel"
-                      ? metric.value
-                      : Math.abs(metric.change)}
-                    {metricType === "conversionRate" ? "%" : ""}
+                    {metric.trend === "up" ? "+" : "-"}
+                    {Math.abs(metric.change)}
                   </div>
-                  <span className="text-[10px] text-white/60">
-                    {metricType === "partnerLevel" ? "nível atual" : "vs. anterior"}
-                  </span>
+                  <span className="text-[10px] text-white/60">vs. anterior</span>
                 </div>
               </div>
             </Link>
@@ -2938,26 +2938,16 @@ export default function AdminDashboardPage() {
               </p>
               <div className="flex items-center gap-2 pr-7">
                 <div className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[10px] font-semibold bg-white/20 text-white">
-                  {metricType === "partnerLevel" ? (
-                    <Award className="h-3 w-3" />
-                  ) : metric.trend === "up" ? (
+                  {/* Mesmo caso do bloco acima: unico ramo alcancavel. */}
+                  {metric.trend === "up" ? (
                     <TrendingUp className="h-3 w-3" />
                   ) : (
                     <TrendingDown className="h-3 w-3" />
                   )}
-                  {metricType === "partnerLevel"
-                    ? "Nível atual"
-                    : metric.trend === "up"
-                      ? "+"
-                      : "-"}
-                  {metricType === "partnerLevel"
-                    ? metric.value
-                    : Math.abs(metric.change)}
-                  {metricType === "conversionRate" ? "%" : ""}
+                  {metric.trend === "up" ? "+" : "-"}
+                  {Math.abs(metric.change)}
                 </div>
-                <span className="text-[10px] text-white/60">
-                  {metricType === "partnerLevel" ? "nível atual" : "vs. anterior"}
-                </span>
+                <span className="text-[10px] text-white/60">vs. anterior</span>
               </div>
             </div>
           )}
@@ -3117,7 +3107,7 @@ export default function AdminDashboardPage() {
   // ── Widget Details Modal ───────────────────────────────────────────────────
   const WidgetDetailsModal = () => {
     if (!detailsWidgetId) return null;
-    const title = getWidgetTitle(detailsWidgetId);
+    const title = getWidgetTitle(detailsWidgetId as WidgetType);
 
     // Resolve effective period for this widget (uses per-widget override if any)
     const widgetInstance = widgets.find((w) => w.type === detailsWidgetId);
@@ -3186,7 +3176,21 @@ export default function AdminDashboardPage() {
       switch (detailsWidgetId) {
         case "metrics": {
           const mp = getMetricsForPeriod();
-          const revenueBreakdown = mp.revenue.breakdown;
+          // `getMetricsForPeriod` do parceiro devolve metricas de indicacao e
+          // comissao — nao tem `revenue`. O acesso direto `mp.revenue.breakdown`
+          // estourava um TypeError se este ramo rodasse; ficou escondido pelo
+          // `@ts-nocheck` do arquivo.
+          const revenueBreakdown = (
+            mp as {
+              revenue?: {
+                breakdown?: {
+                  creditPlan: { value: string; change: number };
+                  recurring: { value: string; change: number };
+                  oneTime: { value: string; change: number };
+                };
+              };
+            }
+          ).revenue?.breakdown;
           return (
             <div className="space-y-4">
               <div className="grid grid-cols-2 gap-3">
@@ -4007,11 +4011,12 @@ export default function AdminDashboardPage() {
                 <div className="grid grid-cols-2 gap-4">
                   {(() => {
                     // Compute widget-specific metrics based on per-widget period override
-                    const wp = effectivePeriod as { periodKey?: string };
-                    const widgetBase = getMetricsForPeriod(
-                      undefined,
-                      wp.periodKey,
-                    );
+                    // `getMetricsForPeriod` do parceiro nao recebe parametros:
+                    // o recorte de periodo ja vem aplicado em `dashboardData`.
+                    // A chamada passava dois argumentos que eram descartados em
+                    // silencio — copiados da versao do lider, que tem outra
+                    // assinatura.
+                    const widgetBase = getMetricsForPeriod();
                     const widgetMetrics = !apiStats
                       ? widgetBase
                       : {

@@ -13,6 +13,44 @@ export interface DashboardStats {
   agencies?: { total: number }
   partners?: { total: number }
   catalogProducts?: { total: number }
+
+  // ── Blocos que GET /api/dashboard/stats tambem devolve ────────────────────
+  // O tipo acima descrevia so a primeira metade da resposta; a rota manda
+  // mais 15 blocos que os dashboards leem. Como os arquivos de dashboard
+  // tinham `@ts-nocheck`, o descompasso nunca apareceu — ao remover o
+  // supressor, viraram 13 erros de "propriedade nao existe".
+  //
+  // Todos opcionais porque a resposta varia com o escopo de quem chama.
+  revenue?: { total: number; growth?: number; creditPlan?: number; recurring?: number; oneTime?: number; projected?: number }
+  mrr?: { total: number; growth?: number; trendData?: number[] }
+  churn?: { inactiveAccounts?: number; cancelledProjects?: number; revenueChurn?: number; revenueChurnRate?: number }
+  averageTicket?: { general?: number; perProject?: number; trendData?: number[] }
+  ltv?: { value: number }
+  activeProjects?: { total: number; growth?: number }
+  accountsReceivable?: { total: number; received: number }
+  nomads?: { total: number; active: number; newInPeriod?: number; growth?: number }
+  statusOverview?: { active?: number; trial?: number; suspended?: number; cancelled?: number; total?: number }
+  creditPlans?: Record<string, unknown>
+  platformActivities?: { actionsExecuted?: number }
+  despesasOperacionais?: unknown
+  despesasPorCategoria?: unknown
+  /**
+   * Hoje a rota devolve APENAS `activePartners`. O dashboard do parceiro le
+   * `invitesSent`, `accepted` e `mrrGenerated` — que nao vem da API e caem no
+   * `?? 0`, ou seja, aparecem zerados. Declarados como opcionais para
+   * registrar a lacuna em vez de escondê-la.
+   */
+  partnerProgram?: {
+    activePartners?: number
+    total?: number
+    invitesSent?: number
+    accepted?: number
+    mrrGenerated?: number
+    diamond?: number
+    platinum?: number
+    gold?: number
+    silver?: number
+  }
 }
 
 export interface RecentActivity {
