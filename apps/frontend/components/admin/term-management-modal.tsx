@@ -1,4 +1,3 @@
-// @ts-nocheck
 import { useState } from "react"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
@@ -32,7 +31,9 @@ export function TermManagementModal({ open, onOpenChange, term, onSave, mode = "
     name: string
     content: string
     version: string
-    type: string
+    // mesma uniao fechada do termo — era `string` aqui, e so por isso o
+    // formulario nao casava com o que onSave recebe
+    type: Term["type"]
     acceptance_level: "empresa" | "usuario"
     target_account_types: ("empresas" | "agencias" | "nomades")[]
     is_mandatory: boolean
@@ -41,7 +42,7 @@ export function TermManagementModal({ open, onOpenChange, term, onSave, mode = "
     name: term?.name || "",
     content: term?.content || "",
     version: term?.version || "1.0",
-    type: term?.type || "terms_of_service",
+    type: (term?.type || "terms_of_service") as Term["type"],
     acceptance_level: term?.acceptance_level || "empresa",
     target_account_types: term?.target_account_types || ["empresas"],
     is_mandatory: term?.is_mandatory ?? true,
@@ -103,7 +104,11 @@ export function TermManagementModal({ open, onOpenChange, term, onSave, mode = "
             <Label>Tipo de Documento</Label>
             <Select
               value={formData.type}
-              onValueChange={(value) => setFormData((prev) => ({ ...prev, type: value }))}
+              onValueChange={(value) => setFormData((prev) => ({
+                  ...prev,
+                  // o Select devolve string; o termo trabalha com uma uniao fechada
+                  type: value as Term["type"],
+                }))}
             >
               <SelectTrigger>
                 <SelectValue />

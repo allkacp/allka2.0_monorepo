@@ -534,13 +534,7 @@ export function ProjectsManagementTab({
         <ProjectManagementModal
           open={modalOpen}
           onOpenChange={setModalOpen}
-          /*
-            ProjectManagementModal declara o proprio `Project` (com agency,
-            consultant, createdDate...), que diverge do FrontendProject que o
-            hook devolve. Conversao explicita ate os dois serem unificados —
-            aquele arquivo ainda esta sob @ts-nocheck.
-          */
-          project={selectedProject as never}
+          project={selectedProject}
           mode={modalMode}
           onEdit={() => setModalMode("edit")}
           onClone={() => handleCloneProject(selectedProject)}

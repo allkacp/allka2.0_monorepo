@@ -1,4 +1,9 @@
 // @ts-nocheck
+// Este modal foi escrito contra um formato de notificacao diferente do que
+// types/terms.ts declara (trigger_event/conditions/target_audience aqui,
+// trigger_type/trigger_config/target_* la). A tela /admin/notifications e
+// inteiramente mock, sem rota no backend, entao alinhar os dois depende de
+// definir a API primeiro — o supressor fica ate la.
 import { useState } from "react"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"

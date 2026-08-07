@@ -1,4 +1,3 @@
-// @ts-nocheck
 import {
   Trash2,
   Edit2,
@@ -90,7 +89,7 @@ const ROLE_OPTIONS = [
 ];
 
 interface UserListItem {
-  id: number;
+  id: string;
   name: string;
   email: string;
   avatar: string;
@@ -112,7 +111,7 @@ interface UserListItem {
    * acima é só o rótulo derivado disso pra exibição. */
   role?: string;
   /** ID of the corresponding platform User record */
-  platformUserId?: number;
+  platformUserId?: string;
   /** Platform-level permissions (flat list, managed by platform admin) */
   platform_permissions?: string[];
 }
@@ -191,7 +190,6 @@ export function CompanyUsersTab({
   const companyContextUsers = useMemo<UserListItem[]>(() => {
     const matched = contextUsers.filter((u) => {
       if (type === "agency") return String(u.agency_id) === String(companyId);
-      if (type === "partner") return String(u.partner_id) === String(companyId);
       return (
         u.company_associations?.some(
           (a) => String(a.company_id) === String(companyId),
@@ -446,8 +444,8 @@ export function CompanyUsersTab({
 
   const [confirmDialog, setConfirmDialog] = useState({
     open: false,
-    action: null as "block" | "delete" | null,
-    userId: null as number | null,
+    action: null as "block" | "unblock" | "delete" | null,
+    userId: null as string | null,
   });
 
   const handleViewDetails = (user: UserListItem) => {
@@ -681,7 +679,7 @@ export function CompanyUsersTab({
     }
   };
 
-  const handleBlockToggle = (userId: number, e: React.MouseEvent) => {
+  const handleBlockToggle = (userId: string, e: React.MouseEvent) => {
     e.stopPropagation();
     const user = userList.find((u) => u.id === userId);
     if (user && !user.isBlocked) {
@@ -699,7 +697,7 @@ export function CompanyUsersTab({
     }
   };
 
-  const handleDeleteUser = (userId: number, e: React.MouseEvent) => {
+  const handleDeleteUser = (userId: string, e: React.MouseEvent) => {
     e.stopPropagation();
     setConfirmDialog({
       open: true,
@@ -733,7 +731,7 @@ export function CompanyUsersTab({
       }
     } else if (confirmDialog.action === "delete" && confirmDialog.userId) {
       // Remove the platform-level company association so user-view-slide-panel stays in sync
-      removeCompanyLink(confirmDialog.userId, companyId);
+      removeCompanyLink(confirmDialog.userId, Number(companyId));
       setUserList((prevUsers) =>
         prevUsers.filter((user) => user.id !== confirmDialog.userId),
       );
@@ -757,7 +755,7 @@ export function CompanyUsersTab({
     addCompanyLink(platformUser.id, {
       id: 0,
       user_id: platformUser.id,
-      company_id: companyId,
+      company_id: Number(companyId),
       company_name: companyName || String(companyId),
       role: platformUser.role || "company_user",
       permissions: [],
@@ -770,7 +768,7 @@ export function CompanyUsersTab({
     onUserCreated?.(platformUser);
     // 3. Create a local UserListItem entry linked to the platform user
     const newListItem: UserListItem = {
-      id: Math.max(...userList.map((u) => u.id), 0) + 1,
+      id: platformUser.id,
       name: platformUser.name,
       email: platformUser.email,
       avatar: platformUser.name.substring(0, 2).toUpperCase(),
@@ -2288,7 +2286,7 @@ export function CompanyUsersTab({
                           ? getUserById(selectedUser.platformUserId)
                           : null;
                         const assoc = platformUser?.company_associations?.find(
-                          (a) => a.company_id === companyId,
+                          (a) => String(a.company_id) === String(companyId),
                         );
                         const memberships = assoc?.project_memberships || [];
                         const availableProjects = (
@@ -2335,7 +2333,7 @@ export function CompanyUsersTab({
                                           if (selectedUser?.platformUserId) {
                                             upsertProjectMembership(
                                               selectedUser.platformUserId,
-                                              companyId,
+                                              Number(companyId),
                                               {
                                                 project_id: proj.id,
                                                 project_name: proj.name,
@@ -2386,7 +2384,7 @@ export function CompanyUsersTab({
                                           if (selectedUser?.platformUserId) {
                                             removeProjectMembership(
                                               selectedUser.platformUserId,
-                                              companyId,
+                                              Number(companyId),
                                               membership.project_id,
                                             );
                                           }
@@ -2428,7 +2426,7 @@ export function CompanyUsersTab({
                                                   );
                                               upsertProjectMembership(
                                                 selectedUser.platformUserId,
-                                                companyId,
+                                                Number(companyId),
                                                 {
                                                   ...membership,
                                                   permissions: newPerms,

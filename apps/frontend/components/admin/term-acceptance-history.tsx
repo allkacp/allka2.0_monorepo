@@ -1,11 +1,13 @@
-// @ts-nocheck
 import { useState } from "react"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
-import { DataTable } from "@/components/data-table"
+import {
+  DataTable,
+  type DataTableColumn,
+} from "@/components/data-table"
 import { Search, Download, Calendar, User, FileText, Building2 } from "lucide-react"
 import type { TermAcceptance } from "@/types/terms"
 
@@ -59,38 +61,38 @@ export function TermAcceptanceHistory({ open, onOpenChange, acceptances = MOCK_A
     a.click()
   }
 
-  const columns = [
+  const columns: DataTableColumn<TermAcceptance>[] = [
     {
-      accessorKey: "user_name",
-      header: "Usuário",
-      cell: ({ row }: any) => (
+      field: "user_name",
+      headerName: "Usuário",
+      renderCell: (_value, row) => (
         <div className="flex items-center gap-2">
           <User className="h-4 w-4 text-gray-400" />
           <div>
-            <div className="font-medium">{row.original.user_name}</div>
-            <div className="text-xs text-gray-500">{row.original.user_email}</div>
+            <div className="font-medium">{row.user_name}</div>
+            <div className="text-xs text-gray-500">{row.user_email}</div>
           </div>
         </div>
       ),
     },
     {
-      accessorKey: "term_name",
-      header: "Termo",
-      cell: ({ row }: any) => (
+      field: "term_name",
+      headerName: "Termo",
+      renderCell: (_value, row) => (
         <div className="flex items-center gap-2">
           <FileText className="h-4 w-4 text-gray-400" />
           <div>
-            <div className="font-medium text-sm">{row.original.term_name}</div>
-            <div className="text-xs text-gray-500">v{row.original.term_version}</div>
+            <div className="font-medium text-sm">{row.term_name}</div>
+            <div className="text-xs text-gray-500">v{row.term_version}</div>
           </div>
         </div>
       ),
     },
     {
-      accessorKey: "acceptance_level",
-      header: "Nível",
-      cell: ({ row }: any) =>
-        row.original.acceptance_level === "empresa" ? (
+      field: "acceptance_level",
+      headerName: "Nível",
+      renderCell: (_value, row) =>
+        row.acceptance_level === "empresa" ? (
           <div className="flex items-center gap-1 text-blue-700">
             <Building2 className="h-3.5 w-3.5" />
             <span className="text-xs font-medium">Empresa</span>
@@ -103,35 +105,42 @@ export function TermAcceptanceHistory({ open, onOpenChange, acceptances = MOCK_A
         ),
     },
     {
-      accessorKey: "accepted_at",
-      header: "Data de Aceite",
-      cell: ({ row }: any) => (
+      field: "accepted_at",
+      headerName: "Data de Aceite",
+      renderCell: (_value, row) => (
         <div className="flex items-center gap-2">
           <Calendar className="h-4 w-4 text-gray-400" />
           <div>
-            <div className="text-sm">{new Date(row.original.accepted_at).toLocaleDateString("pt-BR")}</div>
+            <div className="text-sm">
+              {new Date(row.accepted_at).toLocaleDateString("pt-BR")}
+            </div>
             <div className="text-xs text-gray-500">
-              {new Date(row.original.accepted_at).toLocaleTimeString("pt-BR")}
+              {new Date(row.accepted_at).toLocaleTimeString("pt-BR")}
             </div>
           </div>
         </div>
       ),
     },
     {
-      accessorKey: "ip_address",
-      header: "IP",
-      cell: ({ row }: any) => <code className="text-xs bg-gray-100 px-2 py-1 rounded">{row.original.ip_address}</code>,
+      field: "ip_address",
+      headerName: "IP",
+      renderCell: (_value, row) => (
+        <code className="text-xs bg-gray-100 px-2 py-1 rounded">
+          {row.ip_address}
+        </code>
+      ),
     },
     {
-      accessorKey: "is_current",
-      header: "Status",
-      cell: ({ row }: any) => (
-        <Badge variant={row.original.is_current ? "default" : "secondary"}>
-          {row.original.is_current ? "Atual" : "Histórico"}
+      field: "is_current",
+      headerName: "Status",
+      renderCell: (_value, row) => (
+        <Badge variant={row.is_current ? "default" : "secondary"}>
+          {row.is_current ? "Atual" : "Histórico"}
         </Badge>
       ),
     },
   ]
+
 
   const content = (
     <div className="space-y-4">
@@ -183,7 +192,7 @@ export function TermAcceptanceHistory({ open, onOpenChange, acceptances = MOCK_A
         </Card>
       </div>
 
-      <DataTable columns={columns} data={filteredAcceptances} searchKey="user_name" />
+      <DataTable columns={columns} rows={filteredAcceptances} />
     </div>
   )
 

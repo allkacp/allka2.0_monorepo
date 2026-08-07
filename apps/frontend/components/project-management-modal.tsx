@@ -1,5 +1,5 @@
-// @ts-nocheck
 import { CopyLinkButton } from "@/components/copy-link-button";
+import type { FrontendProject } from "@/lib/project-adapter";
 import { Textarea } from "@/components/ui/textarea";
 import { RichTextEditor } from "@/components/ui/rich-text-editor";
 import { Label } from "@/components/ui/label";
@@ -144,26 +144,10 @@ import {
   PROPOSAL_LOOP_PLACEHOLDERS,
 } from "@/lib/proposal-export";
 
-interface Project {
-  id: number;
-  name: string;
-  client: string;
-  /**
-   * Opcional: o modal nao le este campo em lugar nenhum (o nome do cliente
-   * sai de `client`), mas exigi-lo quebrava a passagem de um FrontendProject,
-   * que nao tem `company`.
-   */
-  company?: string;
-  type: string;
-  status: string;
-  progress: number;
-  budget: number;
-  spent: number;
-  startDate: string;
-  deadline: string;
-  team: number;
-  nomades: string[];
-}
+// O modal declarava um `Project` proprio, subconjunto do que o adapter
+// realmente entrega — e passar o projeto de verdade so funcionava com
+// conversao forcada. E o mesmo tipo.
+type Project = FrontendProject;
 
 interface ProjectManagementModalProps {
   project: Project | null;
@@ -321,7 +305,7 @@ export function ProjectManagementModal({
     consultor: project?.consultant || "Equipe Lamego",
     emailConsultor: project?.consultantEmail || "contato@lamego.com.vc",
     cliente: project?.client || "Florescer",
-    dataCriacao: project?.createdDate || project?.created_at || "19/02/2025",
+    dataCriacao: project?.createdDate || project?.createdAt || "19/02/2025",
     permitePortfolio: project?.portfolioPermission ?? false,
     sincronizadoBitrix: project?.bitrixSync ?? false,
     lifecycle: (project?.lifecycle === "mensal" ? "Mensal" : "Avulso") as
@@ -360,7 +344,7 @@ export function ProjectManagementModal({
         consultor: project.consultant || "Equipe Lamego",
         emailConsultor: project.consultantEmail || "contato@lamego.com.vc",
         cliente: project.client || "Florescer",
-        dataCriacao: project.createdDate || project.created_at || "19/02/2025",
+        dataCriacao: project.createdDate || project.createdAt || "19/02/2025",
         permitePortfolio: project.portfolioPermission ?? false,
         sincronizadoBitrix: project.bitrixSync ?? false,
         lifecycle: (project.lifecycle === "mensal" ? "Mensal" : "Avulso") as
@@ -519,9 +503,10 @@ export function ProjectManagementModal({
           desconto: 0,
           descontoPercentual: 0,
           agencia: project.agency || "—",
-          agenciaId: project.agency_id || null,
-          cliente: project.client?.name || project.client || "—",
-          clienteId: project.client_id || null,
+          agenciaId:
+            project.ownerType === "agency" ? (project.ownerId ?? null) : null,
+          cliente: project.client || "—",
+          clienteId: project.legacy_client_id ?? null,
           formaPagamento: payment.payment_method || "CARTAO_TESTE",
           competencia: payment.paid_at
             ? new Date(payment.paid_at).toLocaleDateString("pt-BR", {
@@ -584,13 +569,11 @@ export function ProjectManagementModal({
   const [editedProject, setEditedProject] = useState<Partial<Project> | null>(
     null,
   );
-  const [editedProducts, setEditedProducts] = useState<any[]>([]);
 
   // Initialize edited data when switching to edit mode
   React.useEffect(() => {
     if (mode === "edit" && project) {
       setEditedProject({ ...project });
-      setEditedProducts(project.products || []);
       setIsDadosProjEditMode(true);
     }
   }, [mode, project]);
