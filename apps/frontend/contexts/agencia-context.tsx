@@ -79,6 +79,8 @@ export interface AgenciaProfile {
   name: string;
   cnpj: string;
   email: string;
+  /** Telefone de contato da agencia; nem toda agencia preenche. */
+  phone?: string;
   plan: string;
   planDiscount: number;
   partnerName?: string;
@@ -165,6 +167,7 @@ export function AgenciaProvider({ children }: { children: React.ReactNode }) {
               name: activeAgencyName || source.name || "",
               cnpj: source.document || source.cnpj || "",
               email: source.email || "",
+              phone: source.phone || source.whatsapp || "",
               plan: source.plan || source.planType || "",
               planDiscount: source.planDiscount || 0,
               partnerName: source.partnerName || "",

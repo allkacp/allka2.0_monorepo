@@ -1,4 +1,3 @@
-// @ts-nocheck
 // Lançamento em lote — para produtos "pacote" (2+ ProjectTask do mesmo
 // ProjectProduct). Mesma ideia do TaskLaunchDrawer (apps/frontend/components/
 // task-launch-drawer.tsx), mas operando sobre VÁRIAS tarefas de uma vez: um

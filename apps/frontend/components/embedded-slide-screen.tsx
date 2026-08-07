@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * EmbeddedSlideScreen — painel que desliza POR CIMA do conteúdo de uma
  * página, mas contido dentro do próprio painel branco (não cobre a tela

@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * QuickContactActions — grupo de 4 botões de ação rápida de comunicação.
  * Renderiza no header do UserViewSlidePanel.

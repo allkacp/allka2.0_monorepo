@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * CopyLinkButton — small button that copies window.location.href and shows a toast.
  * Place in drawer/modal headers.

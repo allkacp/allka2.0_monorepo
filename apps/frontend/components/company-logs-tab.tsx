@@ -1,4 +1,3 @@
-﻿// @ts-nocheck
 import { useState, useMemo, type CSSProperties } from "react"
 import { useItemsPerPage } from "@/lib/use-items-per-page"
 import { ConfirmationDialog } from "@/components/confirmation-dialog"

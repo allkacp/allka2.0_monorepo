@@ -1,4 +1,3 @@
-﻿// @ts-nocheck
 import { useState, useMemo } from "react";
 import { useItemsPerPage } from "@/lib/use-items-per-page";
 import { ProjectManagementModal } from "@/components/project-management-modal";
@@ -30,6 +29,10 @@ import {
 } from "@/components/ui/tooltip";
 import { useProjects } from "@/hooks/useProjects";
 import type { FrontendProject } from "@/lib/project-adapter";
+
+// O arquivo usava `Project` sem que o nome existisse — e o que o hook
+// devolve.
+type Project = FrontendProject;
 
 interface ProjectsManagementTabProps {
   company?: {
@@ -330,8 +333,8 @@ export function ProjectsManagementTab({
             )}
           </div>
           <ItemsPerPageSelect
-            value={itemsPerPage}
-            onChange={handleItemsPerPageChange}
+            value={String(itemsPerPage)}
+            onValueChange={(v) => handleItemsPerPageChange(Number(v))}
           />
         </div>
 
@@ -531,7 +534,13 @@ export function ProjectsManagementTab({
         <ProjectManagementModal
           open={modalOpen}
           onOpenChange={setModalOpen}
-          project={selectedProject}
+          /*
+            ProjectManagementModal declara o proprio `Project` (com agency,
+            consultant, createdDate...), que diverge do FrontendProject que o
+            hook devolve. Conversao explicita ate os dois serem unificados —
+            aquele arquivo ainda esta sob @ts-nocheck.
+          */
+          project={selectedProject as never}
           mode={modalMode}
           onEdit={() => setModalMode("edit")}
           onClone={() => handleCloneProject(selectedProject)}

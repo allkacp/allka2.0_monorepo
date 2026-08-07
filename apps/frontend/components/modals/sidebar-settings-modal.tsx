@@ -1,4 +1,3 @@
-// @ts-nocheck
 import type React from "react";
 import { useState, useEffect, useRef, useMemo } from "react";
 import { Sheet, SheetContent } from "@/components/ui/sheet";
@@ -1259,7 +1258,15 @@ export function SidebarSettingsModal({
                               isCustom: true,
                               id: p.id,
                             })),
-                          ].map((preset) => (
+                          ].map(
+                            (preset: {
+                              name: string;
+                              url: string;
+                              description: string;
+                              accentColor: string;
+                              isCustom?: boolean;
+                              id?: string;
+                            }) => (
                             <div
                               key={preset.url}
                               className="relative group shrink-0"

@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * HeaderFloatingTools — modo escuro e tamanho de fonte, como ícones
  * flutuantes fixos abaixo da Bandeja de Telas (mesmo estilo do chat/bandeja/

@@ -1,4 +1,3 @@
-// @ts-nocheck
 import { useState, useEffect, useRef, useCallback } from "react";
 import { EmbeddedSlideScreen } from "@/components/embedded-slide-screen";
 import { Button } from "@/components/ui/button";

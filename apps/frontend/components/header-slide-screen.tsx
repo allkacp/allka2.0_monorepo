@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * HeaderSlideScreen — mesma linguagem visual do <EmbeddedSlideScreen> (Tela
  * Slide: cantos arredondados, gradiente de marca, X, entrada com

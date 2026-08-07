@@ -1,4 +1,3 @@
-﻿// @ts-nocheck
 import {
   Search,
   Bell,
@@ -309,12 +308,15 @@ export function Header({ transparent = false }: { transparent?: boolean } = {}) 
         }
 
         const settled = await Promise.allSettled(promises);
+        // Mesmo formato do estado `searchResults` declarado acima: o
+        // navState viaja no state da rota para a tela ja abrir filtrada.
         const results: {
           type: string;
           label: string;
           sub: string;
           path: string;
           icon: any;
+          navState?: Record<string, string>;
         }[] = [];
 
         settled.forEach((res, i) => {
@@ -1181,7 +1183,8 @@ export function Header({ transparent = false }: { transparent?: boolean } = {}) 
           accountType === "agencias" ? "agency"
           : accountType === "empresas" ? "company"
           : accountType === "nomades" ? "nomad"
-          : accountType === "parceiros" ? "partner"
+          // Partner nao e um account_type proprio: e uma Agency com
+          // PartnerProfile ativo, entao cai no ramo "agency" acima.
           : "admin"
         }
         agencyFinancial={accountType === "agencias" && agencia.profile ? {

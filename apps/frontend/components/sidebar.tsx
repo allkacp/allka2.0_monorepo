@@ -1,4 +1,3 @@
-// @ts-nocheck
 import type React from "react";
 
 import { useState, useEffect, useRef, Fragment } from "react";
@@ -639,7 +638,14 @@ export function Sidebar({ transparent = false }: { transparent?: boolean } = {})
   const agenciaTotalProjects = agencia.profile?.totalProjects ?? 0;
   const agenciaMrr = agencia.profile?.currentMrr ?? 0;
 
-  const [nomadUser, setNomadUser] = useState<{ name?: string; level?: string; nivel?: string; doneTasks?: number } | null>(null);
+  const [nomadUser, setNomadUser] = useState<{
+    name?: string;
+    // variantes pt-BR que algumas respostas da API usam
+    nome?: string;
+    level?: string;
+    nivel?: string;
+    doneTasks?: number;
+  } | null>(null);
   useEffect(() => {
     if (accountType !== "nomades") return;
     try {

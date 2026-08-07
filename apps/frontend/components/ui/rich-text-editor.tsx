@@ -1,4 +1,3 @@
-// @ts-nocheck
 import { useEditor, EditorContent } from "@tiptap/react"
 import StarterKit from "@tiptap/starter-kit"
 import Underline from "@tiptap/extension-underline"
@@ -122,7 +121,7 @@ export function RichTextEditor({
     if (!editor) return
     const currentHtml = editor.getHTML()
     if (currentHtml !== value) {
-      editor.commands.setContent(value || "", false)
+      editor.commands.setContent(value || "", { emitUpdate: false })
     }
   }, [value, editor])
 

@@ -37,6 +37,7 @@ import {
   FileDown,
   Loader2,
   ChevronRight,
+  Lock,
 } from "lucide-react";
 import type { MockClientItem, MockCompanyItem } from "@/lib/mock-companies";
 import { SearchableSelect } from "@/components/ui/searchable-select";

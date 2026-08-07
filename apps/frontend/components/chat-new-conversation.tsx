@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * ChatNewConversation — picker de usuário para iniciar nova conversa no chat.
  */

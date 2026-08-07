@@ -1,4 +1,3 @@
-// @ts-nocheck
 import {
   useFontScale,
   FONT_SCALE_LEVELS,

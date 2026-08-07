@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * Tela Global com tabela principal — padrão de shell congelado a partir de
  * /admin/empresas em 2026-07-16. Qualquer ajuste aqui se propaga pra todas

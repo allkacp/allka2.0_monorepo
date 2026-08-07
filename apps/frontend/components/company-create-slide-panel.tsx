@@ -1,4 +1,3 @@
-// @ts-nocheck
 import type React from "react";
 import { useState, useEffect, useRef } from "react";
 import { Button } from "@/components/ui/button";
@@ -294,8 +293,9 @@ export function CompanyCreateSlidePanel({
         cnpj: formData.cnpj || undefined,
         email: formData.emailPrincipal || undefined,
         phone: formData.telefone || undefined,
-        status:
-          formData.status === "ativo" ? "ativo" : formData.status || "ativo",
+        // O backend aceita string livre (default "ativo"); esta tela
+        // trabalha com "active"/"inactive"/"pending".
+        status: formData.status || "active",
         address: addressParts.join(", ") || undefined,
         description: formData.razaoSocial || undefined,
       });
@@ -320,7 +320,7 @@ export function CompanyCreateSlidePanel({
 
   const updateField = (
     field: keyof FormData,
-    value: string | CompanyStatus,
+    value: FormData[keyof FormData],
   ) => {
     setFormData((prev) => ({ ...prev, [field]: value }));
     if (errors[field]) {

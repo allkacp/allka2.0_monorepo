@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * ChatWidget — painel de chat estilo WhatsApp Web + Workana.
  * Gatilho: ícone flutuante fixo no canto superior direito da tela.

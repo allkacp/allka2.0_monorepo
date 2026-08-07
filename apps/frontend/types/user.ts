@@ -37,6 +37,8 @@ export interface User {
   email: string;
   name: string;
   phone?: string;
+  /** Foto do usuario; a API devolve em GET /api/admin/users. */
+  avatar?: string;
   account_type: AccountType;
   account_sub_type: AccountSubType | null;
   company_id?: string;

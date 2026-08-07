@@ -1,4 +1,3 @@
-﻿// @ts-nocheck
 /**
  * ExportExtratoModal â€” Excel / PDF / PNG + compartilhar com senha
  * Renderizado dentro do SheetContent (sem portal) para evitar conflito Radix.

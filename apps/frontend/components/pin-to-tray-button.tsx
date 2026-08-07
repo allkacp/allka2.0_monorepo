@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * PinToTrayButton — ícone de pin (+ tooltip) que adiciona/remove a página
  * atual da Bandeja de Telas global. Opt-in: só entra na bandeja se o

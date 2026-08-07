@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * StandardModalDialog — popup centralizado (com fundo escurecido), pro caso
  * de uma ação pontual que não é uma "tela" (não faz sentido ir pra Bandeja

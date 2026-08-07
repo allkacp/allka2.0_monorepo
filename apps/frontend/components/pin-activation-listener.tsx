@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * Consome ativações da Bandeja de Telas para os painéis GLOBAIS que não são
  * "páginas" (Cesta, Notificações) — essas não têm uma rota própria pra

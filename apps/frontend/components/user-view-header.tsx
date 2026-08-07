@@ -1,4 +1,3 @@
-// @ts-nocheck
 import React, { useState, useRef, useEffect } from "react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
@@ -23,9 +22,11 @@ import { useSidebar } from "@/contexts/sidebar-context";
 import { ModalBrandHeader } from "@/components/ui/modal-brand-header";
 import { QuickContactActions } from "@/components/quick-contact-actions";
 import { CopyLinkButton } from "@/components/copy-link-button";
+import type { User } from "@/types/user";
 
 interface UserViewHeaderProps {
-  user: UserType;
+  // `wallet_balance` so existe em algumas respostas da API.
+  user: User & { wallet_balance?: number };
   isEditMode: boolean;
   isSaving: boolean;
   onSave: () => void;

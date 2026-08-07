@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * OpenScreensTray — ícone flutuante fixo logo abaixo do ícone de chat, mesmo
  * estilo (ícone puro, sem fundo, tooltip no hover). Sempre visível — se não
