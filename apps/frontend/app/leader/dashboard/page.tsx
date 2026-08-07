@@ -3885,7 +3885,7 @@ export default function AdminDashboardPage() {
           const maxTrend = Math.max(1, ...mPaW.trendData);
           return (
             <div className="space-y-4">
-              <div className="grid grid-cols-3 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
                 {[
                   { label: "MAU", value: mPaW.mau.toLocaleString("pt-BR") },
                   { label: "DAU", value: mPaW.dau.toLocaleString("pt-BR") },
@@ -4297,7 +4297,7 @@ export default function AdminDashboardPage() {
                 </div>
               </div>
               {/* Trend summary */}
-              <div className="grid grid-cols-3 gap-2">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
                 {[
                   {
                     label: "Menor",
@@ -5269,7 +5269,7 @@ export default function AdminDashboardPage() {
                   </p>
                 </div>
               </div>
-              <div className="grid grid-cols-3 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
                 {[
                   {
                     label: "Novos no período",
@@ -5894,7 +5894,7 @@ export default function AdminDashboardPage() {
           return (
             <div className="space-y-4">
               {/* Type summary */}
-              <div className="grid grid-cols-3 gap-2.5">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5">
                 {(
                   [
                     {
@@ -5979,7 +5979,7 @@ export default function AdminDashboardPage() {
           return (
             <div className="space-y-4">
               {/* KPI invite stats */}
-              <div className="grid grid-cols-3 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
                 <div className="p-4 rounded-xl border border-border/40 bg-muted/30 text-center">
                   <p className="text-2xl font-bold">{mpP.invitesSent}</p>
                   <p className="text-xs text-muted-foreground mt-0.5">
@@ -6159,7 +6159,7 @@ export default function AdminDashboardPage() {
           return (
             <div className="space-y-4">
               {/* Header summary */}
-              <div className="grid grid-cols-4 gap-2">
+              <div className="grid grid-cols-2 lg:grid-cols-4 gap-2">
                 {(
                   ["Master", "Financeiro", "Comercial", "Operacional"] as const
                 ).map((role, i) => {
@@ -6370,7 +6370,7 @@ export default function AdminDashboardPage() {
               ) : (
                 <>
                   {/* Top 3 podium */}
-                  <div className="grid grid-cols-3 gap-2.5">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5">
                     {topPerformers.slice(0, 3).map((performer, index) => {
                       const mc = [
                         {
@@ -9734,7 +9734,7 @@ export default function AdminDashboardPage() {
 
               {/* Métricas adicionais */}
               <div className="rounded-lg border bg-card p-4">
-                <div className="grid grid-cols-3 gap-2 text-center">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 text-center">
                   <div>
                     <p className="text-[10px] text-muted-foreground mb-1 leading-tight">
                       Novos no período
@@ -10037,7 +10037,7 @@ export default function AdminDashboardPage() {
               </CardHeader>
               <CardContent className="px-4 pb-4 space-y-4">
                 {/* Top 3 — large cards */}
-                <div className="grid grid-cols-3 gap-2">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
                   {agTop3.map((agency, idx) => (
                     <div
                       key={agency.id}
@@ -10824,7 +10824,7 @@ export default function AdminDashboardPage() {
             </CardHeader>
             <CardContent className="px-4 pb-4 space-y-3">
               {/* Invite stats 3-col */}
-              <div className="grid grid-cols-3 gap-2">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
                 {(
                   [
                     {
@@ -11899,7 +11899,7 @@ export default function AdminDashboardPage() {
               onValueChange={setShareActiveTab}
               className="w-full"
             >
-              <TabsList className="grid grid-cols-3 w-full">
+              <TabsList className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 w-full">
                 <TabsTrigger value="permission">Permissão</TabsTrigger>
                 <TabsTrigger value="pin">PIN</TabsTrigger>
                 <TabsTrigger value="expiry">Expiração</TabsTrigger>
@@ -12745,7 +12745,7 @@ export default function AdminDashboardPage() {
                         {draftWidgets.length}
                       </span>
                     </div>
-                    <div className="grid grid-cols-3 gap-3">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
                       {draftWidgets.map((widget) => {
                         const libItem = widgetLibrary.find(
                           (l) => l.id === widget.type,

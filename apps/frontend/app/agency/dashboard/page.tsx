@@ -11645,7 +11645,7 @@ export default function AdminDashboardPage() {
               onValueChange={setShareActiveTab}
               className="w-full"
             >
-              <TabsList className="grid grid-cols-3 w-full">
+              <TabsList className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 w-full">
                 <TabsTrigger value="permission">Permissão</TabsTrigger>
                 <TabsTrigger value="pin">PIN</TabsTrigger>
                 <TabsTrigger value="expiry">Expiração</TabsTrigger>
@@ -12498,7 +12498,7 @@ export default function AdminDashboardPage() {
                         {draftWidgets.length}
                       </span>
                     </div>
-                    <div className="grid grid-cols-3 gap-3">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
                       {draftWidgets.map((widget) => {
                         const libItem = widgetLibrary.find(
                           (l) => l.id === widget.type,
