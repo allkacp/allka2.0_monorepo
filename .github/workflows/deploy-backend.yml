@@ -69,8 +69,18 @@ jobs:
           tags: |
             ${{ steps.images.outputs.backend_image }}
             ${{ steps.images.outputs.backend_latest }}
-          cache-from: type=gha,scope=backend
-          cache-to: type=gha,scope=backend,mode=max
+          # Cache de layers desligado de proposito.
+          #
+          # Com `type=gha` as imagens publicadas passaram a sair com codigo
+          # antigo: a imagem backend:2040672, construida em 07/08, nao tinha
+          # nada do que entrou desde 03/08 (sem stage-engine, sem
+          # must_set_password) — enquanto o mesmo Dockerfile, construido
+          # localmente a partir do mesmo commit, produzia o codigo correto.
+          # Ou seja: o deploy vinha "funcionando" e publicando codigo velho.
+          #
+          # Build sem cache leva alguns minutos a mais e e o unico jeito de
+          # garantir que o que sobe e o que esta no commit. So religar depois
+          # de entender por que a chave de cache nao invalidava.
 
       - name: Validate required deploy secrets
         shell: bash
