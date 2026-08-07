@@ -175,8 +175,28 @@ jobs:
             fi
           done
           ssh "${SSH_OPTS[@]}" "$remote" "mkdir -p '${VPS_DEPLOY_PATH}/infra/caddy'"
+
+          # Preserva o pin do outro serviço.
+          #
+          # Este workflow fixa só a imagem do serviço que ele constrói; para o
+          # outro ele escreve a tag móvel `dev`. Como o .env é copiado
+          # inteiro, subir um serviço estava trocando a imagem do outro pela
+          # `dev` — foi assim que um deploy de frontend rebaixou o backend
+          # que tinha acabado de subir fixado no commit.
+          #
+          # Lê o valor que já está no VPS e o repõe depois da cópia. Na
+          # primeira vez (sem .env remoto) não há o que preservar e vale a
+          # `dev` mesmo.
+          BACKEND_IMAGE_ATUAL="$(ssh "${SSH_OPTS[@]}" "$remote" "grep '^BACKEND_IMAGE=' '${VPS_DEPLOY_PATH}/.env' 2>/dev/null | cut -d= -f2-" || true)"
+
           scp "${SCP_OPTS[@]}" .deploy/docker-compose.yml "$remote:${VPS_DEPLOY_PATH}/docker-compose.yml"
           scp "${SCP_OPTS[@]}" .deploy/.env               "$remote:${VPS_DEPLOY_PATH}/.env"
+
+          if [ -n "${BACKEND_IMAGE_ATUAL}" ]; then
+            echo "Preservando BACKEND_IMAGE=${BACKEND_IMAGE_ATUAL}"
+            ssh "${SSH_OPTS[@]}" "$remote" \
+              "sed -i 's|^BACKEND_IMAGE=.*|BACKEND_IMAGE=${BACKEND_IMAGE_ATUAL}|' '${VPS_DEPLOY_PATH}/.env'"
+          fi
           scp "${SCP_OPTS[@]}" .deploy/infra/caddy/Caddyfile "$remote:${VPS_DEPLOY_PATH}/infra/caddy/Caddyfile"
 
       - name: Deploy frontend on VPS
