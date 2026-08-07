@@ -5,6 +5,13 @@ import React, {
   useCallback,
   useMemo,
 } from "react";
+import type {
+  Company,
+  CompanyType as CompanyEntityType,
+  CompanyStatus as CompanyEntityStatus,
+  CompanyTypeFilter,
+  CompanyStatusFilter,
+} from "@/types/company";
 import { useItemsPerPage } from "@/lib/use-items-per-page";
 import { useNavigate, useParams } from "react-router-dom";
 import { PageLoader } from "@/components/ui/loading";
@@ -137,8 +144,11 @@ const gradientMap: Record<string, string> = {
 // Agency (Company.partner_status), não uma organização separada com
 // cadastro/listagem próprios. Ver "Convidar para Partner" na linha da
 // tabela de Agency e o modal de convite em company-view-slide-panel.tsx.
-type CompanyType = "all" | "company" | "agency" | "nomad";
-type CompanyStatus = "all" | "active" | "inactive" | "pending";
+// Os seletores de filtro aceitam "all"; a entidade nao. Sao dois tipos
+// diferentes, e misturar os dois era o que travava passar a empresa para
+// os paineis de ver/editar.
+type CompanyType = CompanyTypeFilter;
+type CompanyStatus = CompanyStatusFilter;
 
 // Única fonte de verdade pro estado "sem nenhum filtro avançado ativo" —
 // usada no valor inicial do useState, no reset do modal "Filtros avançados"
@@ -168,7 +178,7 @@ const EMPTY_ADVANCED_FILTERS = {
 };
 
 const EMPTY_CREATE_WITH_OWNER_FORM = {
-  type: "company" as Exclude<CompanyType, "all">,
+  type: "company" as CompanyEntityType,
   organizationName: "",
   name: "",
   email: "",
@@ -219,107 +229,6 @@ const EMPTY_CREATE_WITH_OWNER_FORM = {
   nomadPixKeyType: "cpf",
 };
 
-type Company = {
-  /** Sequencial de exibicao (emp_1, emp_2...), usado na URL e na tela. */
-  id: number;
-  /**
-   * Id real do registro na API (cuid). O `id` acima e so o sequencial —
-   * usar ele numa chamada de API nao encontra nada. Ja era gravado pelo
-   * adapter e lido em varios pontos; faltava declarar.
-   */
-  _apiId?: string;
-  /** Plano contratado, quando a empresa tem um. */
-  plan?: string;
-  /** Situacao no programa de parceria, quando houve convite. */
-  partner_status?: string;
-  sequence_number?: number;
-  name: string;
-  legal_name?: string;
-  /**
-   * "all" e valor de FILTRO, nao tipo de empresa — o resto do arquivo ja usa
-   * `Exclude<CompanyType, "all">` nos lugares certos; so o campo da entidade
-   * tinha ficado com a union inteira, e era o que impedia passar a empresa
-   * para os paineis de ver/editar (que declaram o tipo sem "all").
-   */
-  type: Exclude<CompanyType, "all">;
-  email: string;
-  phone: string;
-  phone_secondary?: string;
-  whatsapp?: string;
-  website?: string;
-  document: string;
-  ie?: string;
-  location: string;
-  /** Os paineis de ver/editar restringem a "premium" | "independent". */
-  account_type?: "premium" | "independent";
-  partner_level?: string;
-  program_level?: "bronze" | "silver" | "gold" | "platinum" | "diamond";
-  is_partner?: boolean;
-  /** "all" e filtro, nao situacao da empresa — mesmo caso do `type`. */
-  status: Exclude<CompanyStatus, "all">;
-  users_count: number;
-  /**
-   * Metricas de uso: a API nem sempre devolve (dependem de telemetria).
-   * Eram obrigatorias no tipo, o que fazia toda conversao do adapter falhar.
-   */
-  users_online?: number;
-  projects_count: number;
-  created_at: string;
-  mau?: number;
-  dau?: number;
-  bitrix_id?: string;
-  asaas_id?: string;
-  avatar?: string;
-  zip_code?: string;
-  street?: string;
-  number?: string;
-  complement?: string;
-  neighborhood?: string;
-  city?: string;
-  state?: string;
-  country?: string;
-  pix_key?: string;
-  pix_type?: string;
-  bank_name?: string;
-  bank_agency?: string;
-  bank_account?: string;
-  bank_account_type?: string;
-  admin_notes?: string;
-  internal_notes?: string;
-  social_links?: { id: string; platform: string; url: string }[];
-  lgpd?: {
-    dpo_name?: string;
-    dpo_email?: string;
-    dpo_phone?: string;
-    privacy_policy_accepted: boolean;
-    policy_accepted_at?: string;
-    policy_version?: string;
-    data_processing_purposes?: string[];
-    security_incidents?: {
-      date: string;
-      description: string;
-      resolved: boolean;
-    }[];
-  };
-  // Commercial contact
-  commercial_contact_name?: string;
-  commercial_contact_role?: string;
-  commercial_contact_email?: string;
-  commercial_contact_phone?: string;
-  commercial_contact_whatsapp?: string;
-  commercial_contact_preferred_channel?: string;
-  commercial_contact_notes?: string;
-  // Financial contact
-  financial_contact_name?: string;
-  financial_contact_role?: string;
-  financial_contact_email?: string;
-  financial_contact_phone?: string;
-  financial_contact_whatsapp?: string;
-  financial_contact_preferred_channel?: string;
-  financial_contact_notes?: string;
-  financial_contact_user_id?: string;
-  use_master_as_financial_fallback?: boolean;
-};
 
 // Companies loaded from API via useCompanies hook
 
@@ -370,7 +279,7 @@ const avatarColors = [
 const avatarColor = (id: number) => avatarColors[id % avatarColors.length];
 
 // Ícone por tipo de conta — só usado pelas abas do Novo Cadastro (ETAPA 9).
-const CREATE_TYPE_TAB_ICON: Record<Exclude<CompanyType, "all">, React.ElementType> = {
+const CREATE_TYPE_TAB_ICON: Record<CompanyEntityType, React.ElementType> = {
   company: Building2,
   agency: Briefcase,
   nomad: MapPin,
@@ -385,10 +294,10 @@ function CreateTypeTabs({
   getLabel,
   getInfo,
 }: {
-  value: Exclude<CompanyType, "all">;
-  onChange: (t: Exclude<CompanyType, "all">) => void;
-  getLabel: (t: Exclude<CompanyType, "all">) => string;
-  getInfo: (t: Exclude<CompanyType, "all">) => string;
+  value: CompanyEntityType;
+  onChange: (t: CompanyEntityType) => void;
+  getLabel: (t: CompanyEntityType) => string;
+  getInfo: (t: CompanyEntityType) => string;
 }) {
   const TAB_ORDER = ["company", "agency", "nomad"] as const;
   const tabRefs = React.useRef<Record<string, HTMLButtonElement | null>>({});
@@ -1719,7 +1628,7 @@ export default function EmpresasPage() {
   // aqui: não é um tipo de conta criável (é upgrade de uma Agency já
   // existente — ver "Convidar para Partner" na linha da tabela).
   const CREATE_TYPE_CONFIG: Record<
-    Exclude<CompanyType, "all">,
+    CompanyEntityType,
     { account_type: string; role: string; needsOrgName: boolean; orgLabel: string; entityLabel: string }
   > = {
     company: { account_type: "empresas", role: "company_admin", needsOrgName: true, orgLabel: "Nome da Empresa", entityLabel: "Empresa" },
@@ -1790,7 +1699,7 @@ export default function EmpresasPage() {
   // site foi inventada — o backend aceita esses campos como string livre.
   const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
   const validateCreateWithOwnerForm = (f: typeof createWithOwnerForm) => {
-    const cfg = CREATE_TYPE_CONFIG[f.type as Exclude<CompanyType, "all">];
+    const cfg = CREATE_TYPE_CONFIG[f.type as CompanyEntityType];
     const errors: Record<string, string> = {};
     if (cfg.needsOrgName && !f.organizationName.trim()) {
       const orgFieldId = f.type === "agency" ? "create-agency-org-name" : "create-company-org-name";
@@ -1875,7 +1784,7 @@ export default function EmpresasPage() {
   const handleCreateCompanyWithOwner = async () => {
     if (createWithOwnerSubmitting) return;
     const f = createWithOwnerForm;
-    const cfg = CREATE_TYPE_CONFIG[f.type as Exclude<CompanyType, "all">];
+    const cfg = CREATE_TYPE_CONFIG[f.type as CompanyEntityType];
     const errors = validateCreateWithOwnerForm(f);
     if (Object.keys(errors).length > 0) {
       setCreateWithOwnerErrors(errors);
@@ -2243,7 +2152,7 @@ export default function EmpresasPage() {
       icon={Users}
       title="Usuário Principal"
       description={
-        CREATE_TYPE_CONFIG[createWithOwnerForm.type as Exclude<CompanyType, "all">].needsOrgName
+        CREATE_TYPE_CONFIG[createWithOwnerForm.type as CompanyEntityType].needsOrgName
           ? "Será o administrador desta conta — pode criar e gerenciar os demais usuários da equipe depois."
           : "Login de acesso desta conta."
       }
@@ -2251,7 +2160,7 @@ export default function EmpresasPage() {
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <div className="space-y-2">
           <Label htmlFor="create-company-name">
-            Nome {CREATE_TYPE_CONFIG[createWithOwnerForm.type as Exclude<CompanyType, "all">].needsOrgName ? "do responsável" : "completo"}{" "}
+            Nome {CREATE_TYPE_CONFIG[createWithOwnerForm.type as CompanyEntityType].needsOrgName ? "do responsável" : "completo"}{" "}
             <span className="text-red-500">*</span>
           </Label>
           <Input
@@ -5473,21 +5382,16 @@ export default function EmpresasPage() {
               setSelectedCompany(null);
               navigate("/admin/empresas", { replace: true });
             }}
-            /*
-              Os paineis declaram o proprio `Company`, que divergiu do desta
-              pagina (social_links, metricas de uso, unions com "all").
-              Conversao explicita ate os tres tipos serem unificados.
-            */
-            company={selectedCompany as never}
+            company={selectedCompany}
             onCompanyUpdate={(updatedCompany) => {
               // Update the companies list with the new data
               setCompanies(
                 companies.map((c) =>
-                  c.id === updatedCompany.id ? (updatedCompany as never) : c,
+                  c.id === updatedCompany.id ? updatedCompany : c,
                 ),
               );
               // Update the selected company to reflect changes
-              setSelectedCompany(updatedCompany as never);
+              setSelectedCompany(updatedCompany);
             }}
           />
           <CompanyEditSlidePanel
@@ -5496,12 +5400,7 @@ export default function EmpresasPage() {
               setEditPanelOpen(false);
               setSelectedCompany(null);
             }}
-            /*
-              Os paineis declaram o proprio `Company`, que divergiu do desta
-              pagina (social_links, metricas de uso, unions com "all").
-              Conversao explicita ate os tres tipos serem unificados.
-            */
-            company={selectedCompany as never}
+            company={selectedCompany}
             onSave={handleSaveCompany}
           />
         </>

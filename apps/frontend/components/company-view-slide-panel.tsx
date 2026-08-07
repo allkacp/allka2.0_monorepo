@@ -1,4 +1,3 @@
-// @ts-nocheck
 import {
   X,
   Building2,
@@ -91,68 +90,12 @@ import {
 import { AddressMapPicker } from "@/components/address/address-map-picker";
 import { useState, useEffect, useRef } from "react";
 
-type CompanyType = "company" | "agency" | "nomad";
-type CompanyStatus = "active" | "inactive" | "pending";
+import type {
+  Company,
+  CompanyType,
+  CompanyStatus,
+} from "@/types/company";
 
-interface Company {
-  id: number;
-  _apiId?: string;
-  name: string;
-  legal_name?: string;
-  type: CompanyType;
-  email: string;
-  phone: string;
-  phone_secondary?: string;
-  whatsapp?: string;
-  website?: string;
-  document: string;
-  ie?: string;
-  location: string;
-  account_type?: string;
-  partner_level?: string;
-  status: CompanyStatus;
-  users_count: number;
-  /** Metrica de uso: a API nem sempre devolve. */
-  users_online?: number;
-  projects_count: number;
-  created_at: string;
-  avatar?: string;
-  zip_code?: string;
-  street?: string;
-  number?: string;
-  complement?: string;
-  neighborhood?: string;
-  city?: string;
-  state?: string;
-  country?: string;
-  pix_key?: string;
-  pix_type?: string;
-  bank_name?: string;
-  bank_agency?: string;
-  bank_account?: string;
-  bank_account_type?: string;
-  admin_notes?: string;
-  internal_notes?: string;
-  social_links: SocialLink[];
-  // Commercial contact person
-  commercial_contact_name?: string;
-  commercial_contact_role?: string;
-  commercial_contact_email?: string;
-  commercial_contact_phone?: string;
-  commercial_contact_whatsapp?: string;
-  commercial_contact_preferred_channel?: string;
-  commercial_contact_notes?: string;
-  // Financial contact person
-  financial_contact_name?: string;
-  financial_contact_role?: string;
-  financial_contact_email?: string;
-  financial_contact_phone?: string;
-  financial_contact_whatsapp?: string;
-  financial_contact_preferred_channel?: string;
-  financial_contact_notes?: string;
-  financial_contact_user_id?: string;
-  use_master_as_financial_fallback?: boolean;
-}
 
 interface CompanyViewSlidePanelProps {
   open: boolean;
@@ -368,7 +311,10 @@ export function CompanyViewSlidePanel({
   const [adminActionModal, setAdminActionModal] = useState<string | null>(null);
   const [adminFormData, setAdminFormData] = useState({
     creditPlan: company.partner_level || "basic",
-    accountType: company.type || "company",
+    // Rotulo exibido no seletor ("Company Independente", "Agency"...),
+    // nao o `type` da empresa: o typeMap de handleConfirmAdminAction e
+    // indexado por rotulo. handleOpenAdminAction preenche antes de abrir.
+    accountType: String(company.type || "company"),
     chargeDate: "",
     paymentDate: "",
     dueDate: "",
@@ -651,7 +597,9 @@ export function CompanyViewSlidePanel({
     const newStatement = {
       id: `stmt_${Date.now()}`,
       date: new Date().toISOString(),
-      type: (companyWalletType === "add" ? "credit" : "debit") as const,
+      type: (companyWalletType === "add" ? "credit" : "debit") as
+        | "credit"
+        | "debit",
       amount,
       reason: companyWalletReason,
       balanceAfter: newBalance,
@@ -713,7 +661,7 @@ export function CompanyViewSlidePanel({
     if (adminActionModal === "change-account") {
       const typeMap: Record<
         string,
-        { type: CompanyType; account_type?: string }
+        { type: CompanyType; account_type?: Company["account_type"] }
       > = {
         "Company Dependente": { type: "company", account_type: undefined },
         "Company Independente": {
@@ -774,7 +722,7 @@ export function CompanyViewSlidePanel({
         title: "Convite enviado",
         description: `"${company.name}" foi convidada para virar Partner.`,
       });
-      onCompanyUpdate?.({ partner_status: "invited" });
+      onCompanyUpdate?.({ ...company, partner_status: "invited" });
     } catch (error) {
       toast({
         title: "Erro ao convidar",
@@ -1206,15 +1154,14 @@ export function CompanyViewSlidePanel({
     }
   };
 
-  // Real users linked to this org — o campo de vínculo muda por tipo
-  // (Company usa company_id/company_associations, Agency usa agency_id,
-  // Partner usa partner_id). Antes só checava company_id, então Agency e
-  // Partner sempre apareciam com 0 usuários mesmo tendo o principal
-  // criado junto (users.ts seta agency_id/partner_id na criação atômica).
+  // Real users linked to this org — o campo de vínculo muda por tipo:
+  // Company usa company_id/company_associations e Agency usa agency_id.
+  // Antes só checava company_id, então Agency aparecia com 0 usuários mesmo
+  // tendo o principal criado junto (users.ts seta agency_id na criação
+  // atômica).
   const companyApiId = company._apiId ?? String(company.id);
   const companyUsers = contextUsers.filter((u) => {
     if (company.type === "agency") return u.agency_id === companyApiId;
-    if (company.type === "partner") return u.partner_id === companyApiId;
     return (
       u.company_associations?.some(
         (a) => String(a.company_id) === companyApiId,

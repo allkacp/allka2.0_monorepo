@@ -1,4 +1,3 @@
-// @ts-nocheck
 import { useState, useEffect } from "react";
 import { ConfirmationDialog } from "@/components/confirmation-dialog";
 import {
@@ -88,50 +87,12 @@ import { CompanyStatusSelector } from "@/components/company-status-selector";
 import { apiClient } from "@/lib/api-client";
 import { UserViewSlidePanel } from "@/components/user-view-slide-panel";
 
-type CompanyType = "company" | "agency" | "nomad";
-type CompanyStatus = "active" | "inactive" | "pending";
+import type {
+  Company,
+  CompanyType,
+  CompanyStatus,
+} from "@/types/company";
 
-interface Company {
-  id: number;
-  name: string;
-  type: CompanyType;
-  email: string;
-  phone: string;
-  document: string;
-  location: string;
-  account_type?: "independent" | "premium";
-  partner_level?: "basic" | "premium" | "enterprise";
-  status: CompanyStatus;
-  users_count: number;
-  /** Metrica de uso: a API nem sempre devolve. */
-  users_online?: number;
-  projects_count: number;
-  created_at: string;
-  // Added for export functions
-  cnpj?: string;
-  website?: string;
-  address?: string;
-  street?: string;
-  number?: string;
-  neighborhood?: string;
-  city?: string;
-  state?: string;
-  zip_code?: string;
-  pix_key?: string;
-  pix_type?: string;
-  lat?: number;
-  lng?: number;
-  plan?: string;
-  activeUsers?: number;
-  totalUsers?: number;
-  projects?: number;
-  segment?: string;
-  description?: string;
-  logo?: string;
-  observations?: string;
-  avatar?: string;
-  // ... potentially other fields
-}
 
 // Rótulo de campo padrão do formulário (compacto: text-[11px] uppercase)
 // com ícone de info opcional que mostra uma explicação em tooltip ao passar
