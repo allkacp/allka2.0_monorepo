@@ -1,4 +1,3 @@
-﻿// @ts-nocheck
 import { DashboardShellFrame } from "@/features/dashboards/shared/dashboard-shell-frame";
 import { WidgetCard } from "@/features/dashboards/shared/widget-card";
 import { useDashboardScrollCompact } from "@/hooks/useDashboardScrollCompact";
@@ -1254,7 +1253,7 @@ export default function AdminDashboardPage() {
   type WidgetConfig = Omit<Widget, "size">;
 
   const [widgets, setWidgets] = useState<WidgetState[]>(() =>
-    [
+    ([
       { id: "metrics", type: "metrics", visible: true, order: 0 },
       { id: "ltv", type: "ltv", visible: true, order: 1 }, // Added LTV widget visible by default
       { id: "mrr", type: "mrr", visible: true, order: 2 },
@@ -1340,7 +1339,7 @@ export default function AdminDashboardPage() {
         visible: true,
         order: 27,
       },
-    ].filter((w) => ROLE_WIDGET_IDS.has(w.type)),
+    ] as WidgetState[]).filter((w) => ROLE_WIDGET_IDS.has(w.type)),
   );
 
   const [draggedWidget, setDraggedWidget] = useState<string | null>(null); // Use string for widget id
@@ -2698,7 +2697,9 @@ export default function AdminDashboardPage() {
     customTitle?: string,
   ): string => {
     if (customTitle) return customTitle;
-    const titles: Record<WidgetType, string> = {
+    // Partial: cada tela so titula os widgets do proprio papel; o acesso
+    // abaixo cai em `|| widgetType` para qualquer outro.
+    const titles: Partial<Record<WidgetType, string>> = {
       metrics: "Métricas da Agency",
       activity: "Atividade Recente da Agency",
       alerts: "Alertas da Agency",
@@ -3039,7 +3040,9 @@ export default function AdminDashboardPage() {
             )}
             {metric.trend === "up" ? "+" : "-"}
             {Math.abs(metric.change)}
-            {metricType === "avgRating" ? " pts" : "%"}
+            {/* "avgRating" e metrica do admin, nao existe no MetricType da
+                agencia — o teste nunca era verdadeiro. */}
+            {"%"}
           </div>
           <span className="text-[10px] text-white/60">vs. anterior</span>
         </div>
@@ -3113,7 +3116,7 @@ export default function AdminDashboardPage() {
   // (visibleDetailsWidgetId); esta função só lê, nunca declara.
   const WidgetDetailsModal = () => {
     if (!visibleDetailsWidgetId) return null;
-    const title = getWidgetTitle(visibleDetailsWidgetId);
+    const title = getWidgetTitle(visibleDetailsWidgetId as WidgetType);
 
     // Resolve effective period for this widget (uses per-widget override if any)
     const widgetInstance = widgets.find((w) => w.type === visibleDetailsWidgetId);

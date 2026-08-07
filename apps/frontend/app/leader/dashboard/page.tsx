@@ -1,4 +1,3 @@
-﻿// @ts-nocheck
 import { DashboardShellFrame } from "@/features/dashboards/shared/dashboard-shell-frame";
 import { useDashboardScrollCompact } from "@/hooks/useDashboardScrollCompact";
 import { WIDGETS_BY_ROLE } from "@/lib/dashboard-widget-roles";
@@ -515,13 +514,23 @@ import {
   generatePublicToken,
 } from "@/features/dashboards/shared/dashboard-common";
 
+/**
+ * Metricas do Leader.
+ *
+ * Esta union estava com os valores do ADMIN (totalUsers, companies, revenue,
+ * avgRating) — herdados do copiar-colar — enquanto a tela inteira trabalha
+ * com as metricas de area abaixo, que sao o que `getMetricsForPeriod`
+ * devolve. O `@ts-nocheck` do arquivo escondia o descompasso.
+ */
 type MetricType =
-  | "totalUsers"
-  | "activeUsers"
-  | "companies"
-  | "activeProjects"
-  | "revenue"
-  | "avgRating";
+  | "qualificationTasks"
+  | "briefingsToReview"
+  | "deliveriesAwaitingAnalysis"
+  | "tasksInExecution"
+  | "tasksReturned"
+  | "tasksOverdue"
+  | "approvalsToday"
+  | "activeNomadsArea";
 const ROLE_WIDGET_IDS = new Set<string>(WIDGETS_BY_ROLE["LEADER"]);
 
 const METRIC_NAV: Record<string, string> = {
@@ -1402,7 +1411,7 @@ export default function AdminDashboardPage() {
   type WidgetConfig = Omit<Widget, "size">;
 
   const [widgets, setWidgets] = useState<WidgetState[]>(() =>
-    [
+    ([
       { id: "metrics", type: "metrics", visible: true, order: 0 },
       { id: "ltv", type: "ltv", visible: true, order: 1 }, // Added LTV widget visible by default
       { id: "mrr", type: "mrr", visible: true, order: 2 },
@@ -1488,7 +1497,7 @@ export default function AdminDashboardPage() {
         visible: true,
         order: 27,
       },
-    ].filter((w) => ROLE_WIDGET_IDS.has(w.type)),
+    ] as WidgetState[]).filter((w) => ROLE_WIDGET_IDS.has(w.type)),
   );
 
   const [draggedWidget, setDraggedWidget] = useState<string | null>(null); // Use string for widget id
@@ -3060,7 +3069,9 @@ export default function AdminDashboardPage() {
     customTitle?: string,
   ): string => {
     if (customTitle) return customTitle;
-    const titles: Record<WidgetType, string> = {
+    // Partial: cada tela so titula os widgets do proprio papel; o acesso
+    // abaixo cai em `|| widgetType` para qualquer outro.
+    const titles: Partial<Record<WidgetType, string>> = {
       metrics: "Métricas da Área",
       activity: "Atividade Recente da Área",
       alerts: "Alertas do Leader",
@@ -3180,63 +3191,6 @@ export default function AdminDashboardPage() {
     let shadowClass: string;
 
     switch (metricType) {
-      case "qualificationTasks":
-        bgColor = "from-blue-400 to-blue-600";
-        gradientFrom = "from-blue-600/10";
-        cardBgGradient = "from-blue-500 to-blue-700";
-        borderClass = "border-2 border-blue-300/70 dark:border-blue-300/50";
-        shadowClass = "";
-        break;
-      case "briefingsToReview":
-        bgColor = "from-violet-400 to-violet-600";
-        gradientFrom = "from-violet-600/10";
-        cardBgGradient = "from-violet-500 to-purple-700";
-        borderClass =
-          "border-2 border-violet-300/70 dark:border-violet-300/50";
-        shadowClass = "";
-        break;
-      case "deliveriesAwaitingAnalysis":
-        bgColor = "from-amber-400 to-amber-600";
-        gradientFrom = "from-amber-600/10";
-        cardBgGradient = "from-amber-500 to-orange-600";
-        borderClass = "border-2 border-amber-300/70 dark:border-amber-300/50";
-        shadowClass = "";
-        break;
-      case "tasksInExecution":
-        bgColor = "from-emerald-400 to-emerald-600";
-        gradientFrom = "from-emerald-600/10";
-        cardBgGradient = "from-emerald-500 to-teal-600";
-        borderClass = "border-2 border-emerald-300/70 dark:border-emerald-300/50";
-        shadowClass = "";
-        break;
-      case "tasksReturned":
-        bgColor = "from-red-400 to-rose-600";
-        gradientFrom = "from-red-600/10";
-        cardBgGradient = "from-red-500 to-rose-700";
-        borderClass = "border-2 border-red-300/70 dark:border-red-300/50";
-        shadowClass = "";
-        break;
-      case "tasksOverdue":
-        bgColor = "from-orange-400 to-orange-600";
-        gradientFrom = "from-orange-600/10";
-        cardBgGradient = "from-orange-500 to-rose-600";
-        borderClass = "border-2 border-orange-300/70 dark:border-orange-300/50";
-        shadowClass = "";
-        break;
-      case "approvalsToday":
-        bgColor = "from-cyan-400 to-cyan-600";
-        gradientFrom = "from-cyan-600/10";
-        cardBgGradient = "from-cyan-500 to-sky-700";
-        borderClass = "border-2 border-cyan-300/70 dark:border-cyan-300/50";
-        shadowClass = "";
-        break;
-      case "activeNomadsArea":
-        bgColor = "from-purple-400 to-purple-600";
-        gradientFrom = "from-purple-600/10";
-        cardBgGradient = "from-purple-500 to-fuchsia-700";
-        borderClass = "border-2 border-purple-300/70 dark:border-purple-300/50";
-        shadowClass = "";
-        break;
       default:
         bgColor = "from-muted to-muted-foreground";
         gradientFrom = "from-muted/5";
@@ -3444,10 +3398,12 @@ export default function AdminDashboardPage() {
               )}
               {metric.trend === "up" ? "+" : "-"}
               {Math.abs(metric.change)}
-              {metricType === "activeNomadsArea" ? "" : "%"}
+              {/* O ramo de "activeNomadsArea" ja retornou la em cima (linha
+                  ~3224), entao aqui o valor nunca e esse — testes mortos. */}
+              {"%"}
             </div>
             <span className="text-[10px] text-white/60">
-              {metricType === "activeNomadsArea" ? "da área" : "vs. anterior"}
+              vs. anterior
             </span>
           </div>
         </div>
@@ -3477,7 +3433,7 @@ export default function AdminDashboardPage() {
   // ── Widget Details Modal ───────────────────────────────────────────────────
   const WidgetDetailsModal = () => {
     if (!detailsWidgetId) return null;
-    const title = getWidgetTitle(detailsWidgetId);
+    const title = getWidgetTitle(detailsWidgetId as WidgetType);
 
     // Resolve effective period for this widget (uses per-widget override if any)
     const widgetInstance = widgets.find((w) => w.type === detailsWidgetId);
@@ -3534,33 +3490,14 @@ export default function AdminDashboardPage() {
           icon: <Activity className="h-6 w-6" />,
           subtitle: "Engajamento e atividades da área",
         },
-        statusOverview: {
-          icon: <LayoutGrid className="h-6 w-6" />,
-          subtitle: "Status de projetos e tarefas",
-        },
-        tasks: {
-          icon: <CheckSquare className="h-6 w-6" />,
-          subtitle: "Tarefas e execução",
-        },
-        nomadsIndicators: {
-          icon: <Users className="h-6 w-6" />,
-          subtitle: "KPIs de desempenho e qualidade",
-        },
-        activity: {
-          icon: <Activity className="h-6 w-6" />,
-          subtitle: "Atividades recentes",
-        },
-        alerts: {
-          icon: <Bell className="h-6 w-6" />,
-          subtitle: "Alertas e notificações",
-        },
+        // As chaves genericas que existiam aqui (statusOverview, tasks,
+        // nomadsIndicators, activity, alerts e quickActions) eram DUPLICATAS
+        // das definidas acima e, por vencerem no objeto literal, apagavam as
+        // legendas proprias do Leader ("Alertas que pedem acao do Leader"
+        // virava "Alertas e notificacoes"). Removidas.
         performers: {
           icon: <Award className="h-6 w-6" />,
           subtitle: "Top performers",
-        },
-        quickActions: {
-          icon: <Zap className="h-6 w-6" />,
-          subtitle: "Ações rápidas",
         },
         partnerProgram: {
           icon: <Award className="h-6 w-6" />,

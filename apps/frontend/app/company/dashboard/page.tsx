@@ -1,4 +1,3 @@
-﻿// @ts-nocheck
 import { WIDGETS_BY_ROLE } from "@/lib/dashboard-widget-roles";
 import { COMPANY_PRESETS, buildWidgets, DASHBOARD_STORAGE_KEY, CURRENT_DASHBOARD_KEY } from "@/lib/dashboard-presets-by-role";
 import { DashboardShellFrame } from "@/features/dashboards/shared/dashboard-shell-frame";
@@ -68,6 +67,11 @@ import {
   Share2,
   SlidersHorizontal,
   ImageDown,
+  // Faltavam: <Database /> no selo "Manual" do widget e <Copy /> no painel
+  // de compartilhamento. Renderizar qualquer um dos dois quebrava a tela com
+  // "Database is not defined" — escondido pelo @ts-nocheck do arquivo.
+  Database,
+  Copy,
 } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
 import { format, subDays, startOfMonth, endOfMonth, subMonths } from "date-fns";
@@ -1197,7 +1201,7 @@ export default function AdminDashboardPage() {
   type WidgetConfig = Omit<Widget, "size">;
 
   const [widgets, setWidgets] = useState<WidgetState[]>(() =>
-    [
+    ([
       { id: "metrics", type: "metrics", visible: true, order: 0 },
       { id: "ltv", type: "ltv", visible: true, order: 1 }, // Added LTV widget visible by default
       { id: "mrr", type: "mrr", visible: true, order: 2 },
@@ -1283,7 +1287,7 @@ export default function AdminDashboardPage() {
         visible: true,
         order: 27,
       },
-    ].filter((w) => ROLE_WIDGET_IDS.has(w.type)),
+    ] as WidgetState[]).filter((w) => ROLE_WIDGET_IDS.has(w.type)),
   );
 
   const [draggedWidget, setDraggedWidget] = useState<string | null>(null); // Use string for widget id
@@ -2627,7 +2631,9 @@ export default function AdminDashboardPage() {
     customTitle?: string,
   ): string => {
     if (customTitle) return customTitle;
-    const titles: Record<WidgetType, string> = {
+    // Partial: cada tela so titula os widgets do proprio papel; o acesso
+    // abaixo cai em `|| widgetType` para qualquer outro.
+    const titles: Partial<Record<WidgetType, string>> = {
       metrics: "Métricas Principais",
       activity: "Atividade Recente",
       alerts: "Alertas Rápidos",
@@ -2736,47 +2742,11 @@ export default function AdminDashboardPage() {
     let shadowClass: string;
 
     switch (metricType) {
-      case "totalUsers":
-        bgColor = "from-blue-400 to-blue-600";
-        gradientFrom = "from-blue-600/10";
-        cardBgGradient = "from-blue-500 to-blue-700";
-        borderClass = "border-2 border-blue-300/70 dark:border-blue-300/50";
-        shadowClass = "";
-        break;
-      case "activeUsers":
-        bgColor = "from-emerald-400 to-emerald-600";
-        gradientFrom = "from-emerald-600/10";
-        cardBgGradient = "from-emerald-500 to-teal-600";
-        borderClass =
-          "border-2 border-emerald-300/70 dark:border-emerald-300/50";
-        shadowClass = "";
-        break;
-      case "companies":
-        bgColor = "from-violet-400 to-violet-600";
-        gradientFrom = "from-violet-600/10";
-        cardBgGradient = "from-violet-500 to-purple-700";
-        borderClass = "border-2 border-violet-300/70 dark:border-violet-300/50";
-        shadowClass = "";
-        break;
       case "activeProjects":
         bgColor = "from-blue-400 to-blue-600";
         gradientFrom = "from-blue-600/10";
         cardBgGradient = "from-blue-500 to-indigo-600";
         borderClass = "border-2 border-blue-300/70 dark:border-blue-300/50";
-        shadowClass = "";
-        break;
-      case "revenue":
-        bgColor = "from-green-400 to-green-600";
-        gradientFrom = "from-green-600/10";
-        cardBgGradient = "from-green-500 to-emerald-700";
-        borderClass = "border-2 border-green-300/70 dark:border-green-300/50";
-        shadowClass = "";
-        break;
-      case "avgRating":
-        bgColor = "from-amber-400 to-amber-600";
-        gradientFrom = "from-amber-600/10";
-        cardBgGradient = "from-amber-500 to-orange-600";
-        borderClass = "border-2 border-amber-300/70 dark:border-amber-300/50";
         shadowClass = "";
         break;
       case "tasksToLaunch":
@@ -2836,7 +2806,6 @@ export default function AdminDashboardPage() {
       approvalsPending: "/company/tarefas",
       contractedValueMonth: "/company/faturas",
       pendingPayments: "/company/faturas",
-      revenue: "/company/faturas",
       estimatedMargin: "/company/relatorios",
       proposalsAwaitingClient: "/company/projetos",
     };
@@ -2850,11 +2819,6 @@ export default function AdminDashboardPage() {
       contractedValueMonth: "Valor total contratado no período. Clique para ver o financeiro.",
       estimatedMargin: "Margem bruta estimada = Receita − CMV. Indica a rentabilidade. Clique para ver relatórios.",
       pendingPayments: "Total a receber das faturas em aberto. Clique para ver o financeiro detalhado.",
-      revenue: "Receita total gerada no período. Clique para ver o resumo financeiro.",
-      avgRating: "Avaliação média dos projetos e entregas no período.",
-      totalUsers: "Total de usuários ativos na plataforma.",
-      activeUsers: "Usuários que acessaram a plataforma no período.",
-      companies: "Empresas ativas na plataforma.",
     };
 
     const navDest = metricNav[metricType];
@@ -2892,12 +2856,12 @@ export default function AdminDashboardPage() {
             </div>
           </div>
           <p className="text-2xl font-bold text-white leading-none flex-1 flex items-center">
-            {typeof metric.value === "number" ? metric.value.toLocaleString() : metric.value}
+            {metric.value}
           </p>
           <div className="flex items-center gap-2 pr-7">
             <div className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[10px] font-semibold bg-white/20 text-white">
               {metric.trend === "up" ? <TrendingUp className="h-3 w-3" /> : <TrendingDown className="h-3 w-3" />}
-              {metric.trend === "up" ? "+" : "-"}{Math.abs(metric.change)}{metricType === "avgRating" ? " pts" : "%"}
+              {metric.trend === "up" ? "+" : "-"}{Math.abs(metric.change)}{"%"}
             </div>
             <span className="text-[10px] text-white/60">vs. anterior</span>
           </div>
@@ -2962,15 +2926,15 @@ export default function AdminDashboardPage() {
           </div>
         </div>
         <p className="text-2xl font-bold text-white leading-none flex-1 flex items-center">
-          {typeof metric.value === "number" ? metric.value.toLocaleString() : metric.value}
+          {metric.value}
         </p>
         <div className="flex items-center gap-2 pr-7">
           <div className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[10px] font-semibold bg-white/20 text-white">
             {metric.trend === "up" ? <TrendingUp className="h-3 w-3" /> : <TrendingDown className="h-3 w-3" />}
-            {metric.trend === "up" ? "+" : "-"}{Math.abs(metric.change)}{metricType === "avgRating" ? " pts" : "%"}
+            {metric.trend === "up" ? "+" : "-"}{Math.abs(metric.change)}{"%"}
           </div>
           <span className="text-[10px] text-white/60">
-            {metricType === "avgRating" ? "/ 5.0" : "vs. anterior"}
+            vs. anterior
           </span>
         </div>
       </div>
@@ -3026,7 +2990,7 @@ export default function AdminDashboardPage() {
   // ── Widget Details Modal ───────────────────────────────────────────────────
   const WidgetDetailsModal = () => {
     if (!detailsWidgetId) return null;
-    const title = getWidgetTitle(detailsWidgetId);
+    const title = getWidgetTitle(detailsWidgetId as WidgetType);
 
     // Resolve effective period for this widget (uses per-widget override if any)
     const widgetInstance = widgets.find((w) => w.type === detailsWidgetId);
@@ -4077,14 +4041,12 @@ export default function AdminDashboardPage() {
                       {metricCards
                         .filter((m) => !m.visible)
                         .map((metricCard) => {
-                          const metricNames: Record<MetricType, string> = {
-                            totalUsers: "Total de Usuários",
-                            activeUsers: "Usuários Ativos",
-                            companies: "Empresas",
-                            activeProjects: "Projetos Ativos",
-                            revenue: "Receita",
-                            avgRating: "Avaliação Média",
-                          };
+                          // Havia aqui um `metricNames` local com as metricas
+                          // do ADMIN (totalUsers, companies, revenue...), que
+                          // sombreava o do escopo externo. Como as chaves nao
+                          // batem com as metricas da empresa, a lista de
+                          // metricas ocultas saia com nome vazio. Agora usa o
+                          // metricNames de cima, que tem os nomes certos.
                           return (
                             <Button
                               key={metricCard.id}
@@ -4112,33 +4074,21 @@ export default function AdminDashboardPage() {
                       ? widgetBase
                       : {
                           ...widgetBase,
-                          totalUsers: {
-                            ...widgetBase.totalUsers,
-                            value: (
-                              apiStats.nomades?.total ?? 0
-                            ).toLocaleString("pt-BR"),
-                          },
-                          activeUsers: {
-                            ...widgetBase.activeUsers,
-                            value: (
-                              apiStats.nomades?.active ?? 0
-                            ).toLocaleString("pt-BR"),
-                          },
-                          companies: {
-                            ...widgetBase.companies,
-                            value: (
-                              apiStats.companies?.total ?? 0
-                            ).toLocaleString("pt-BR"),
-                          },
+                           // Havia aqui sobrescritas para totalUsers,
+                           // activeUsers, companies e revenue — metricas do
+                           // ADMIN, que nao existem no MetricType da empresa.
+                           // Escreviam dado real da API em chaves que nenhum
+                           // card lia, enquanto as metricas da empresa seguiam
+                           // com valor gerado. Removidas.
+                           //
+                           // PENDENTE: so `activeProjects` recebe valor da API.
+                           // As outras 7 metricas da empresa ainda nao tem
+                           // origem definida no endpoint de stats.
                           activeProjects: {
                             ...widgetBase.activeProjects,
                             value: (
                               apiStats.projects?.active ?? 0
                             ).toLocaleString("pt-BR"),
-                          },
-                          revenue: {
-                            ...widgetBase.revenue,
-                            value: `R$ ${((apiStats.financial?.totalRevenue ?? 0) / 1000).toFixed(1)}k`,
                           },
                         };
                     return metricCards

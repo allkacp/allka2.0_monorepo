@@ -2626,7 +2626,9 @@ export default function AdminDashboardPage() {
     customTitle?: string,
   ): string => {
     if (customTitle) return customTitle;
-    const titles: Record<WidgetType, string> = {
+    // Partial: cada tela so titula os widgets do proprio papel; o acesso
+    // abaixo cai em `|| widgetType` para qualquer outro.
+    const titles: Partial<Record<WidgetType, string>> = {
         metrics: "Métricas do Partner",
       activity: "Atividade Recente",
       alerts: "Alertas Rápidos",
