@@ -27,6 +27,11 @@ model User {
   // empresas | agencias | nomades | admin
   // ("parceiro" não existe mais — Partner não é um account_type próprio,
   // é um status na Agency do usuário; ver PartnerProfile.agency_id.)
+  // Situacao da conta: ativo | inativo | pausado | suspenso.
+  // `is_active` e mantido em sincronia (ativo => true) porque indices e
+  // consultas de toda a plataforma dependem dele. Ver a migration
+  // 20260807120000_status_do_usuario e a regra de login em routes/auth.ts.
+  status                         String    @default("ativo")
   is_active                      Boolean   @default(true)
   avatar                         String?   @db.LongText
   phone                          String?
@@ -82,6 +87,7 @@ model User {
   @@index([account_type])
   @@index([company_id])
   @@index([agency_id])
+  @@index([status])
   @@index([is_active])
   @@index([account_type, is_active])
 

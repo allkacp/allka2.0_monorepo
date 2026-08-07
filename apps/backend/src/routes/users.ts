@@ -118,6 +118,8 @@ const createUserSchema = z.object({
   username: z.string().optional(),
   role: z.string().default("company_user"),
   account_type: z.string().default("empresas"),
+  // Situação da conta; ver migration 20260807120000_status_do_usuario.
+  status: z.enum(["ativo", "inativo", "pausado", "suspenso"]).optional(),
   phone: z.string().optional(),
   avatar: z.string().optional(),
   company_id: z.string().optional(),
@@ -149,6 +151,7 @@ const updateUserSchema = createUserSchema
 const safeSelect = {
   id: true,
   user_code: true,
+  status: true,
   // Número do usuário na plataforma antiga — só preenchido em quem veio da
   // importação (ver scripts/import-legacy-platform.ts). A UI mostra como
   // referência de consulta; a numeração oficial continua sendo user_code.
@@ -522,6 +525,16 @@ router.put("/:id", verifyToken, validate(updateUserSchema), async (req, res, nex
     const data: Record<string, any> = { ...rest };
     if (password) {
       data["password_hash"] = await bcrypt.hash(password, 10);
+    }
+
+    // `status` e `is_active` sao a mesma informacao em dois formatos: o
+    // primeiro diz QUAL a situacao, o segundo se ela permite acesso. Indices e
+    // consultas de toda a plataforma usam is_active, entao os dois andam
+    // juntos — mexer num sem o outro deixaria a conta em estado incoerente.
+    if (typeof data.status === "string") {
+      data.is_active = data.status === "ativo";
+    } else if (typeof data.is_active === "boolean" && data.status === undefined) {
+      data.status = data.is_active ? "ativo" : "inativo";
     }
 
     const id = req.params.id as string;

@@ -63,7 +63,15 @@ router.post("/login", validate(loginSchema), async (req, res, next) => {
 
     const user = await prisma.user.findUnique({ where: { email } });
 
-    if (!user || !user.is_active) {
+    // Situação da conta decidida pelo admin (ver migration
+    // 20260807120000_status_do_usuario). Pausada/suspensa também tem
+    // is_active=false, então precisa passar pelo gate abaixo para receber o
+    // motivo certo — que só é revelado depois da senha conferida, para não
+    // permitir descobrir quais e-mails existem.
+    const bloqueadaPelaSituacao =
+      user?.status === "pausado" || user?.status === "suspenso";
+
+    if (!user || (!user.is_active && !bloqueadaPelaSituacao)) {
       res.status(401).json({ error: "Credenciais inválidas" });
       return;
     }
@@ -85,6 +93,17 @@ router.post("/login", validate(loginSchema), async (req, res, next) => {
     const valid = await bcrypt.compare(password, user.password_hash);
     if (!valid) {
       res.status(401).json({ error: "Credenciais inválidas" });
+      return;
+    }
+
+    // Senha certa, mas a conta não está liberada.
+    if (bloqueadaPelaSituacao) {
+      res.status(403).json({
+        error:
+          user.status === "pausado"
+            ? "Conta pausada pela administração. Entre em contato com o suporte para reativar."
+            : "Conta suspensa. Entre em contato com o suporte.",
+      });
       return;
     }
 

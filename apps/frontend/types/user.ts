@@ -34,6 +34,9 @@ export interface CompanyLGPD {
   }[];
 }
 
+/** Situação da conta. Só "ativo" permite login (ver routes/auth.ts). */
+export type UserStatus = "ativo" | "inativo" | "pausado" | "suspenso";
+
 export interface User {
   id: string;
   email: string;
@@ -41,6 +44,12 @@ export interface User {
   phone?: string;
   /** Foto do usuario; a API devolve em GET /api/admin/users. */
   avatar?: string;
+  /**
+   * Situação da conta decidida pelo admin: ativo | inativo | pausado |
+   * suspenso. `is_active` continua existindo e anda em sincronia (ativo =>
+   * true) — o backend mantém os dois juntos no update.
+   */
+  status?: UserStatus;
   account_type: AccountType;
   account_sub_type: AccountSubType | null;
   company_id?: string;

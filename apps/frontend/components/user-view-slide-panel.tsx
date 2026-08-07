@@ -99,6 +99,7 @@ import { useState, useEffect, useCallback } from "react";
 import type {
   User as UserType,
   UserRole,
+  UserStatus,
   Permission,
 } from "@/types/user";
 import { useToast } from "@/hooks/use-toast";
@@ -649,8 +650,7 @@ export function UserViewSlidePanel({
    * account_type. Ficam declarados e opcionais em vez de escondidos.
    */
   const fakeUser: UserType & {
-    wallet_balance?: number;
-    status?: string;
+    /** Variante pt-BR de account_type que algumas respostas usam. */
     tipo?: string;
   } = createFakeUserData(user);
 
@@ -1799,23 +1799,32 @@ export function UserViewSlidePanel({
     }
   };
 
-  const handleStatusChange = (newStatus: "ativo" | "inativo") => {
+  const handleStatusChange = (newStatus: UserStatus) => {
     if (!isContaEditMode) return;
-    handleContaFieldChange("is_active", newStatus === "ativo");
+    // O backend deriva is_active a partir daqui (ver routes/users.ts).
+    handleContaFieldChange("status", newStatus);
   };
 
-  const getCurrentStatus = (): "ativo" | "inativo" => {
-    // Prioridade: editado > persistido
-    const ativo = contaEditedData.is_active ?? displayUser.is_active ?? true;
-    return ativo ? "ativo" : "inativo";
+  const getCurrentStatus = (): UserStatus => {
+    // Prioridade: editado > persistido. Usuário antigo sem `status` cai no
+    // is_active, que é o que existia antes da coluna.
+    return (
+      contaEditedData.status ??
+      displayUser.status ??
+      (displayUser.is_active === false ? "inativo" : "ativo")
+    );
   };
 
-  const getStatusBadgeColor = (status: "ativo" | "inativo") => {
+  const getStatusBadgeColor = (status: UserStatus) => {
     switch (status) {
       case "ativo":
         return "bg-emerald-100 text-emerald-700 border-emerald-300";
       case "inativo":
         return "bg-slate-100 text-slate-700 border-slate-300";
+      case "pausado":
+        return "bg-amber-100 text-amber-700 border-amber-300";
+      case "suspenso":
+        return "bg-red-100 text-red-700 border-red-300";
       default:
         return "bg-slate-100 text-slate-700 border-slate-300";
     }
@@ -2831,6 +2840,21 @@ export function UserViewSlidePanel({
                                 inactive:
                                   "bg-white text-slate-600 border-slate-300 hover:border-slate-400",
                               },
+                              {
+                                value: "pausado",
+                                label: "Pausado",
+                                active:
+                                  "bg-amber-500 text-white border-amber-500",
+                                inactive:
+                                  "bg-white text-slate-600 border-slate-300 hover:border-amber-400 hover:text-amber-600",
+                              },
+                              {
+                                value: "suspenso",
+                                label: "Suspenso",
+                                active: "bg-red-500 text-white border-red-500",
+                                inactive:
+                                  "bg-white text-slate-600 border-slate-300 hover:border-red-400 hover:text-red-600",
+                              },
                             ] as const
                           ).map((s) => (
                             <button
@@ -2847,13 +2871,24 @@ export function UserViewSlidePanel({
                           className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold ${
                             getCurrentStatus() === "ativo"
                               ? "bg-emerald-500 text-white"
-                              : "bg-slate-300 text-slate-700"
+                              : getCurrentStatus() === "inativo"
+                                ? "bg-slate-300 text-slate-700"
+                                : getCurrentStatus() === "pausado"
+                                  ? "bg-amber-100 text-amber-700"
+                                  : "bg-red-100 text-red-700"
                           }`}
                         >
-                          {getCurrentStatus() === "ativo" ? (
+                          {getCurrentStatus() === "ativo" && (
                             <CheckCircle className="h-3.5 w-3.5" />
-                          ) : (
+                          )}
+                          {getCurrentStatus() === "inativo" && (
                             <PauseCircle className="h-3.5 w-3.5" />
+                          )}
+                          {getCurrentStatus() === "pausado" && (
+                            <Clock className="h-3.5 w-3.5" />
+                          )}
+                          {getCurrentStatus() === "suspenso" && (
+                            <XCircle className="h-3.5 w-3.5" />
                           )}
                           {getCurrentStatus().charAt(0).toUpperCase() +
                             getCurrentStatus().slice(1)}
@@ -4895,7 +4930,7 @@ export function UserViewSlidePanel({
                 <span className="text-emerald-600 font-bold">
                   R${" "}
                   {(creditType === "blocked"
-                    ? (displayUser.wallet_balance as number) || 0
+                    ? saldoCarteira
                     : saldoCarteira +
                       parseFloat(creditAmount)
                   ).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
