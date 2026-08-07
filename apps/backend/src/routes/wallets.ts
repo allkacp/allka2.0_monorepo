@@ -78,6 +78,9 @@ router.get("/stats", verifyToken, async (req, res, next) => {
     const fromRaw   = getQueryString(req.query.from);
     const toRaw     = getQueryString(req.query.to);
     const ownerType = getQueryString(req.query.owner_type);
+    // Permite buscar a carteira de um dono especifico (o painel de usuario
+    // usa isso para achar a carteira da empresa/agencia do usuario).
+    const ownerId   = getQueryString(req.query.owner_id);
 
     const walletWhere: Record<string, any> = {};
     if (ownerType && ownerType !== "all") walletWhere.owner_type = ownerType;
@@ -285,6 +288,9 @@ router.get("/conciliation", verifyToken, async (req, res, next) => {
     const fromRaw   = getQueryString(req.query.from);
     const toRaw     = getQueryString(req.query.to);
     const ownerType = getQueryString(req.query.owner_type);
+    // Permite buscar a carteira de um dono especifico (o painel de usuario
+    // usa isso para achar a carteira da empresa/agencia do usuario).
+    const ownerId   = getQueryString(req.query.owner_id);
     const walletId  = getQueryString(req.query.wallet_id);
     const impact    = getQueryString(req.query.impact); // bank_in | bank_out | all
     const origin    = getQueryString(req.query.origin); // specific type (payment, withdrawal …)
@@ -398,12 +404,16 @@ router.get("/", verifyToken, async (req, res, next) => {
   try {
     const { page, limit, skip } = parsePagination(req.query);
     const ownerType = getQueryString(req.query.owner_type);
+    // Permite buscar a carteira de um dono especifico (o painel de usuario
+    // usa isso para achar a carteira da empresa/agencia do usuario).
+    const ownerId   = getQueryString(req.query.owner_id);
     const status    = getQueryString(req.query.status);
     const search    = getQueryString(req.query.search);
     const minBal    = req.query.min_balance ? parseFloat(getQueryString(req.query.min_balance) ?? "") : undefined;
 
     const where: Record<string, any> = {};
     if (ownerType && ownerType !== "all") where.owner_type = ownerType;
+    if (ownerId) where.owner_id = ownerId;
     if (status    && status    !== "all") where.status     = status;
     if (minBal !== undefined) {
       if (minBal === 0) where.balance = 0;

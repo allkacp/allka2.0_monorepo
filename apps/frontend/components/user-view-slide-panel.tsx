@@ -95,7 +95,7 @@ import {
   Tooltip as RechartsTooltip,
   ResponsiveContainer,
 } from "recharts";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import type {
   User as UserType,
   UserRole,
@@ -496,6 +496,57 @@ export function UserViewSlidePanel({
 
   // Carteira (agency)
   const [walletStatusFilter, setWalletStatusFilter] = useState("all");
+
+  /**
+   * Carteira da organizacao a que o usuario pertence. `null` enquanto carrega
+   * ou quando a organizacao ainda nao tem carteira aberta — nesse caso a tela
+   * diz isso, em vez de mostrar R$ 0,00 como se fosse saldo real.
+   */
+  const [orgWallet, setOrgWallet] = useState<{
+    id: string;
+    balance: number;
+    blocked_balance?: number;
+    owner_type: string;
+    owner_name?: string;
+  } | null>(null);
+  const [orgWalletLoading, setOrgWalletLoading] = useState(false);
+
+  /** De quem e a carteira que este painel mostra. */
+  const walletOwner = (() => {
+    if (!user) return null;
+    if (user.account_type === "agencias" && user.agency_id)
+      return { owner_type: "agency", owner_id: user.agency_id };
+    if (user.account_type === "empresas" && user.company_id)
+      return { owner_type: "company", owner_id: user.company_id };
+    return null;
+  })();
+
+  const carregarCarteira = useCallback(async () => {
+    if (!walletOwner) {
+      setOrgWallet(null);
+      return;
+    }
+    setOrgWalletLoading(true);
+    try {
+      const res: any = await apiClient.getWallets({
+        owner_type: walletOwner.owner_type,
+        owner_id: walletOwner.owner_id,
+        limit: "1",
+      });
+      setOrgWallet(res?.data?.[0] ?? null);
+    } catch {
+      setOrgWallet(null);
+    } finally {
+      setOrgWalletLoading(false);
+    }
+  }, [walletOwner?.owner_type, walletOwner?.owner_id]);
+
+  useEffect(() => {
+    if (open) carregarCarteira();
+  }, [open, carregarCarteira]);
+
+  /** Saldo exibido: o da carteira da organizacao, ou 0 quando nao ha. */
+  const saldoCarteira = orgWallet?.balance ?? 0;
 
   // Linked Entities (Permissions Tab) — derived from context
   const contextUser = user?.id ? getUserById(user.id) : null;
@@ -1165,7 +1216,7 @@ export function UserViewSlidePanel({
     setIsApplyingWallet(true);
     try {
       const amount = parseFloat(creditAmount);
-      const currentBalance = (displayUser.wallet_balance as number) || 0;
+      const currentBalance = saldoCarteira;
       let newBalance = currentBalance;
 
       if (creditType === "immediate") {
@@ -1183,13 +1234,26 @@ export function UserViewSlidePanel({
         admin: "Admin User",
       };
 
+      if (!orgWallet) {
+        toast({
+          title: "Sem carteira",
+          description:
+            "A organização deste usuário ainda não tem carteira aberta. Crie a carteira em Financeiro.",
+          variant: "destructive",
+        });
+        return;
+      }
+      await apiClient.createWalletAdjustment(orgWallet.id, {
+        direction: "credit",
+        amount,
+        description: creditReason?.trim() || "Crédito manual",
+        // Crédito bloqueado ainda não tem lançamento próprio no ledger; fica
+        // registrado na descrição até existir o tipo "block" na API.
+        category: creditType === "blocked" ? "Crédito bloqueado" : "Crédito",
+      });
+      await carregarCarteira();
       if (creditType === "blocked") {
         setBlockedBalance((prev) => prev + amount);
-      } else {
-        setPersistedUserData((prev) => ({
-          ...prev,
-          wallet_balance: newBalance,
-        }));
       }
 
       setWalletStatements([newStatement, ...walletStatements]);
@@ -1490,7 +1554,7 @@ export function UserViewSlidePanel({
     setIsApplyingWallet(true);
     try {
       const adjustValue = parseFloat(walletAdjustValue);
-      const currentBalance = (displayUser.wallet_balance as number) || 0;
+      const currentBalance = saldoCarteira;
       const newBalance =
         walletAdjustType === "add"
           ? currentBalance + adjustValue
@@ -1505,7 +1569,22 @@ export function UserViewSlidePanel({
         return;
       }
 
-      setPersistedUserData((prev) => ({ ...prev, wallet_balance: newBalance }));
+      if (!orgWallet) {
+        toast({
+          title: "Sem carteira",
+          description:
+            "A organização deste usuário ainda não tem carteira aberta. Crie a carteira em Financeiro.",
+          variant: "destructive",
+        });
+        return;
+      }
+      await apiClient.createWalletAdjustment(orgWallet.id, {
+        direction: walletAdjustType === "add" ? "credit" : "debit",
+        amount: adjustValue,
+        description: walletAdjustReason?.trim() || "Ajuste manual",
+        category: "Ajuste",
+      });
+      await carregarCarteira();
       toast({
         title: "Sucesso!",
         description: `Saldo atualizado para R$ ${newBalance.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`,
@@ -1543,14 +1622,6 @@ export function UserViewSlidePanel({
     setPermissionsEditedData((prev) => ({ ...prev, [field]: value }));
   };
 
-  const handlePermissionToggle = (permission: string) => {
-    const currentPerms = permissionsEditedData.permissions || [];
-    const newPerms = currentPerms.includes(permission)
-      ? currentPerms.filter((p) => p !== permission)
-      : [...currentPerms, permission];
-    setPermissionsEditedData((prev) => ({ ...prev, permissions: newPerms }));
-  };
-
   const handlePermissionsSaveClick = () => {
     setShowPermissionsConfirmDialog(true);
   };
@@ -1560,19 +1631,11 @@ export function UserViewSlidePanel({
     try {
       if (!user?.id) throw new Error("ID do usuário não encontrado");
       const updatedRole = permissionsEditedData.role || displayUser.role;
-      const updatedPermissions =
-        permissionsEditedData.permissions || displayUser.permissions;
       await apiClient.updateUser(String(user.id), { role: updatedRole });
-      setPersistedUserData((prev) => ({
-        ...prev,
-        role: updatedRole,
-        // ver a nota em permissionsEditedData: os ids da grade e a uniao
-        // Permission ainda nao sao o mesmo vocabulario
-        permissions: updatedPermissions as Permission[],
-      }));
+      setPersistedUserData((prev) => ({ ...prev, role: updatedRole }));
       toast({
         title: "Sucesso!",
-        description: "Permissões atualizadas com sucesso",
+        description: "Função do usuário atualizada",
       });
       setIsPermissionsEditMode(false);
       setPermissionsEditedData({});
@@ -1736,57 +1799,23 @@ export function UserViewSlidePanel({
     }
   };
 
-  const handleStatusChange = (
-    newStatus: "ativo" | "inativo" | "pausado" | "suspenso",
-  ) => {
+  const handleStatusChange = (newStatus: "ativo" | "inativo") => {
     if (!isContaEditMode) return;
-    handleContaFieldChange("status", newStatus);
+    handleContaFieldChange("is_active", newStatus === "ativo");
   };
 
-  const handleLevelChange = (newLevel: "free" | "premium" | "vip") => {
-    if (!isContaEditMode) return;
-    handleContaFieldChange("account_type", newLevel);
+  const getCurrentStatus = (): "ativo" | "inativo" => {
+    // Prioridade: editado > persistido
+    const ativo = contaEditedData.is_active ?? displayUser.is_active ?? true;
+    return ativo ? "ativo" : "inativo";
   };
 
-  const getCurrentStatus = (): "ativo" | "inativo" | "pausado" | "suspenso" => {
-    // Prioridade: editado > persistido > padrão
-    return (
-      (contaEditedData.status as any) ?? (displayUser.status as any) ?? "ativo"
-    );
-  };
-
-  const getCurrentLevel = (): "free" | "premium" | "vip" => {
-    return (
-      (contaEditedData.account_type as any) ??
-      (displayUser.account_type as any) ??
-      "premium"
-    );
-  };
-
-  const handleAccountStatusUpdate = (
-    newStatus: "ativo" | "inativo" | "pausado" | "suspenso",
-  ) => {
-    if (!isContaEditMode) return;
-    handleContaFieldChange("status", newStatus);
-  };
-
-  const handleAccountLevelUpdate = (newLevel: "free" | "premium" | "vip") => {
-    if (!isContaEditMode) return;
-    handleContaFieldChange("account_type", newLevel);
-  };
-
-  const getStatusBadgeColor = (
-    status: "ativo" | "inativo" | "pausado" | "suspenso",
-  ) => {
+  const getStatusBadgeColor = (status: "ativo" | "inativo") => {
     switch (status) {
       case "ativo":
         return "bg-emerald-100 text-emerald-700 border-emerald-300";
       case "inativo":
         return "bg-slate-100 text-slate-700 border-slate-300";
-      case "pausado":
-        return "bg-amber-100 text-amber-700 border-amber-300";
-      case "suspenso":
-        return "bg-red-100 text-red-700 border-red-300";
       default:
         return "bg-slate-100 text-slate-700 border-slate-300";
     }
@@ -2329,8 +2358,7 @@ export function UserViewSlidePanel({
                           );
                         return (
                           <Badge className="bg-blue-600 text-[10px] px-1.5 py-0">
-                            {getCurrentLevel().charAt(0).toUpperCase() +
-                              getCurrentLevel().slice(1)}
+                            {userAccountType || "—"}
                           </Badge>
                         );
                       })()}
@@ -2803,21 +2831,6 @@ export function UserViewSlidePanel({
                                 inactive:
                                   "bg-white text-slate-600 border-slate-300 hover:border-slate-400",
                               },
-                              {
-                                value: "pausado",
-                                label: "Pausado",
-                                active:
-                                  "bg-amber-500 text-white border-amber-500",
-                                inactive:
-                                  "bg-white text-slate-600 border-slate-300 hover:border-amber-400 hover:text-amber-600",
-                              },
-                              {
-                                value: "suspenso",
-                                label: "Suspenso",
-                                active: "bg-red-500 text-white border-red-500",
-                                inactive:
-                                  "bg-white text-slate-600 border-slate-300 hover:border-red-400 hover:text-red-600",
-                              },
                             ] as const
                           ).map((s) => (
                             <button
@@ -2834,24 +2847,13 @@ export function UserViewSlidePanel({
                           className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold ${
                             getCurrentStatus() === "ativo"
                               ? "bg-emerald-500 text-white"
-                              : getCurrentStatus() === "inativo"
-                                ? "bg-slate-300 text-slate-700"
-                                : getCurrentStatus() === "pausado"
-                                  ? "bg-amber-100 text-amber-700"
-                                  : "bg-red-100 text-red-700"
+                              : "bg-slate-300 text-slate-700"
                           }`}
                         >
-                          {getCurrentStatus() === "ativo" && (
+                          {getCurrentStatus() === "ativo" ? (
                             <CheckCircle className="h-3.5 w-3.5" />
-                          )}
-                          {getCurrentStatus() === "inativo" && (
+                          ) : (
                             <PauseCircle className="h-3.5 w-3.5" />
-                          )}
-                          {getCurrentStatus() === "pausado" && (
-                            <Clock className="h-3.5 w-3.5" />
-                          )}
-                          {getCurrentStatus() === "suspenso" && (
-                            <XCircle className="h-3.5 w-3.5" />
                           )}
                           {getCurrentStatus().charAt(0).toUpperCase() +
                             getCurrentStatus().slice(1)}
@@ -3981,6 +3983,12 @@ export function UserViewSlidePanel({
                   <span className="text-xs font-semibold text-slate-700 uppercase tracking-wide">
                     Permissões Individuais
                   </span>
+                  <span
+                    className="text-[10px] text-slate-400 normal-case"
+                    title="A permissão do usuário vem do perfil de acesso (Admin > Permissões). Esta lista é informativa e não é gravada por esta tela."
+                  >
+                    (somente leitura)
+                  </span>
                   <Badge className="ml-1 text-[10px] px-1.5 bg-emerald-100 text-emerald-700 border-0">
                     {isPermissionsEditMode
                       ? (permissionsEditedData.permissions || []).length
@@ -4068,11 +4076,9 @@ export function UserViewSlidePanel({
                           return (
                             <button
                               key={perm.id}
-                              onClick={() =>
-                                isPermissionsEditMode &&
-                                handlePermissionToggle(perm.id)
-                              }
-                              disabled={!isPermissionsEditMode}
+                              // Somente leitura: ver a nota acima — nada
+                              // aqui e persistido hoje.
+                              disabled
                               className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs font-medium border transition-all ${isPermissionsEditMode ? "cursor-pointer" : "cursor-default"} ${isActive ? "bg-emerald-50 text-emerald-700 border-emerald-200" : "bg-slate-50 text-slate-400 border-slate-200"} ${isPermissionsEditMode && isActive ? "hover:bg-red-50 hover:text-red-600 hover:border-red-200" : ""} ${isPermissionsEditMode && !isActive ? "hover:bg-emerald-50 hover:text-emerald-700 hover:border-emerald-200" : ""}`}
                             >
                               {isActive ? (
@@ -4656,10 +4662,9 @@ export function UserViewSlidePanel({
                 <span className="text-slate-600">Saldo Atual:</span>
                 <span className="font-semibold">
                   R${" "}
-                  {((displayUser.wallet_balance as number) || 0).toLocaleString(
-                    "pt-BR",
-                    { minimumFractionDigits: 2 },
-                  )}
+                  {saldoCarteira.toLocaleString("pt-BR", {
+                    minimumFractionDigits: 2,
+                  })}
                 </span>
               </div>
               <div className="flex justify-between text-xs text-slate-500">
@@ -4679,9 +4684,9 @@ export function UserViewSlidePanel({
                   R${" "}
                   {(
                     (walletAdjustType === "add"
-                      ? ((displayUser.wallet_balance as number) || 0) +
+                      ? saldoCarteira +
                         parseFloat(walletAdjustValue)
-                      : ((displayUser.wallet_balance as number) || 0) -
+                      : saldoCarteira -
                         parseFloat(walletAdjustValue)) || 0
                   ).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
                 </span>
@@ -4725,13 +4730,7 @@ export function UserViewSlidePanel({
                   {permissionsEditedData.role}
                 </span>
               </div>
-              <div className="flex justify-between">
-                <span className="text-slate-600">Permissões:</span>
-                <span className="font-semibold">
-                  {(permissionsEditedData.permissions || []).length} permissões
-                  ativas
-                </span>
-              </div>
+
             </div>
             <div className="flex gap-3">
               <AlertDialogCancel>Cancelar</AlertDialogCancel>
@@ -4897,7 +4896,7 @@ export function UserViewSlidePanel({
                   R${" "}
                   {(creditType === "blocked"
                     ? (displayUser.wallet_balance as number) || 0
-                    : ((displayUser.wallet_balance as number) || 0) +
+                    : saldoCarteira +
                       parseFloat(creditAmount)
                   ).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
                 </span>
