@@ -1,8 +1,3 @@
-// @ts-nocheck
-// PENDENTE: removendo este supressor aparecem 28 erros de tipo — todos de
-// descompasso entre os adapters e os tipos da tela (propriedade inexistente,
-// argumento incompativel). As classes que QUEBRAM a tela (nome nao definido,
-// chave duplicada, numero de argumentos) ja foram corrigidas em 2026-08-07.
 import React, {
   useState,
   useEffect,
@@ -225,11 +220,28 @@ const EMPTY_CREATE_WITH_OWNER_FORM = {
 };
 
 type Company = {
+  /** Sequencial de exibicao (emp_1, emp_2...), usado na URL e na tela. */
   id: number;
+  /**
+   * Id real do registro na API (cuid). O `id` acima e so o sequencial —
+   * usar ele numa chamada de API nao encontra nada. Ja era gravado pelo
+   * adapter e lido em varios pontos; faltava declarar.
+   */
+  _apiId?: string;
+  /** Plano contratado, quando a empresa tem um. */
+  plan?: string;
+  /** Situacao no programa de parceria, quando houve convite. */
+  partner_status?: string;
   sequence_number?: number;
   name: string;
   legal_name?: string;
-  type: CompanyType;
+  /**
+   * "all" e valor de FILTRO, nao tipo de empresa — o resto do arquivo ja usa
+   * `Exclude<CompanyType, "all">` nos lugares certos; so o campo da entidade
+   * tinha ficado com a union inteira, e era o que impedia passar a empresa
+   * para os paineis de ver/editar (que declaram o tipo sem "all").
+   */
+  type: Exclude<CompanyType, "all">;
   email: string;
   phone: string;
   phone_secondary?: string;
@@ -238,17 +250,23 @@ type Company = {
   document: string;
   ie?: string;
   location: string;
-  account_type?: string;
+  /** Os paineis de ver/editar restringem a "premium" | "independent". */
+  account_type?: "premium" | "independent";
   partner_level?: string;
   program_level?: "bronze" | "silver" | "gold" | "platinum" | "diamond";
   is_partner?: boolean;
-  status: CompanyStatus;
+  /** "all" e filtro, nao situacao da empresa — mesmo caso do `type`. */
+  status: Exclude<CompanyStatus, "all">;
   users_count: number;
-  users_online: number;
+  /**
+   * Metricas de uso: a API nem sempre devolve (dependem de telemetria).
+   * Eram obrigatorias no tipo, o que fazia toda conversao do adapter falhar.
+   */
+  users_online?: number;
   projects_count: number;
   created_at: string;
-  mau: number;
-  dau: number;
+  mau?: number;
+  dau?: number;
   bitrix_id?: string;
   asaas_id?: string;
   avatar?: string;
@@ -5455,16 +5473,21 @@ export default function EmpresasPage() {
               setSelectedCompany(null);
               navigate("/admin/empresas", { replace: true });
             }}
-            company={selectedCompany}
+            /*
+              Os paineis declaram o proprio `Company`, que divergiu do desta
+              pagina (social_links, metricas de uso, unions com "all").
+              Conversao explicita ate os tres tipos serem unificados.
+            */
+            company={selectedCompany as never}
             onCompanyUpdate={(updatedCompany) => {
               // Update the companies list with the new data
               setCompanies(
                 companies.map((c) =>
-                  c.id === updatedCompany.id ? updatedCompany : c,
+                  c.id === updatedCompany.id ? (updatedCompany as never) : c,
                 ),
               );
               // Update the selected company to reflect changes
-              setSelectedCompany(updatedCompany);
+              setSelectedCompany(updatedCompany as never);
             }}
           />
           <CompanyEditSlidePanel
@@ -5473,7 +5496,12 @@ export default function EmpresasPage() {
               setEditPanelOpen(false);
               setSelectedCompany(null);
             }}
-            company={selectedCompany}
+            /*
+              Os paineis declaram o proprio `Company`, que divergiu do desta
+              pagina (social_links, metricas de uso, unions com "all").
+              Conversao explicita ate os tres tipos serem unificados.
+            */
+            company={selectedCompany as never}
             onSave={handleSaveCompany}
           />
         </>

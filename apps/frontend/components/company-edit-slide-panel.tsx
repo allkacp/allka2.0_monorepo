@@ -103,7 +103,8 @@ interface Company {
   partner_level?: "basic" | "premium" | "enterprise";
   status: CompanyStatus;
   users_count: number;
-  users_online: number;
+  /** Metrica de uso: a API nem sempre devolve. */
+  users_online?: number;
   projects_count: number;
   created_at: string;
   // Added for export functions

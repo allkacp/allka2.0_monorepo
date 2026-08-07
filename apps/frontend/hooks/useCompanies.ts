@@ -11,6 +11,17 @@ export interface ApiCompany {
   status: string
   segment: string | null
   address: string | null
+  // O endpoint de clientes aceita e devolve o endereco desmembrado e os dados
+  // de recebimento (ver o schema em src/routes/clients.ts). Faltavam aqui, o
+  // que fazia o TypeScript recusar o payload de salvar da tela de empresas.
+  number?: string | null
+  neighborhood?: string | null
+  city?: string | null
+  state?: string | null
+  zip_code?: string | null
+  pix_key?: string | null
+  pix_key_type?: string | null
+  observations?: string | null
   description: string | null
   logo: string | null
   website: string | null
