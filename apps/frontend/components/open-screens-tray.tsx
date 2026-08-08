@@ -29,7 +29,11 @@ export function OpenScreensTray() {
     // clique num ícone da bandeja com um desses painéis aberto era
     // interceptado pela área de fechar por cima, fechando o painel em vez
     // de ativar a tela pinada (só o segundo clique funcionava).
-    <div className="fixed top-[125px] right-[8px] z-65">
+    // Some no celular: e `fixed` na borda direita e, numa tela de 390px,
+    // cai por cima do banner da pagina — o selo com a contagem aparecia
+    // cortado atravessando o gradiente. As telas fixadas seguem acessiveis
+    // pelo menu.
+    <div className="hidden xl:block fixed top-[125px] right-[8px] z-65">
       <Popover open={open} onOpenChange={setOpen}>
         <PopoverTrigger asChild>
           <button

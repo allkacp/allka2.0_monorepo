@@ -1239,28 +1239,55 @@ type UsuarioDaLista = User & {
     return last >= ago;
   }).length;
 
-  const statsHistory = {
-    total: {
-      data: [8, 10, 11, 13, 14, 14, 15, 16, 16, 17, 17, totalUsers],
-      prev: 17,
+  /**
+   * Série dos últimos 12 meses e valor do mês anterior, calculados a partir
+   * de `created_at` — quantos usuários já existiam ao fim de cada mês.
+   *
+   * Antes isto era inventado: a série era `[8, 10, 11, ..., 17]` e o mês
+   * anterior valia 17, fixos no código. Com 500 usuários reais na base, a
+   * comparação contra 17 produzia "+2841% vs. anterior" nos cards — número
+   * correto na conta e sem sentido nenhum na tela.
+   *
+   * `active90` fica sem comparativo de propósito: depende de `last_login`,
+   * e não dá para reconstruir quem estava ativo há três meses olhando só o
+   * estado de hoje. Preferi não exibir a inventar.
+   */
+  const statsHistory = useMemo(() => {
+    const agora = new Date();
+    // Fim de cada um dos últimos 12 meses (o último é "agora").
+    const marcos = Array.from({ length: 12 }, (_, i) =>
+      i === 11
+        ? agora
+        : new Date(agora.getFullYear(), agora.getMonth() - (10 - i), 1),
+    );
+
+    const existiaEm = (u: UsuarioDaLista, limite: Date) =>
+      !!u.created_at && new Date(u.created_at) < limite;
+
+    const serie = (filtro: (u: UsuarioDaLista) => boolean) =>
+      marcos.map(
+        (limite) => users.filter((u) => filtro(u) && existiaEm(u, limite)).length,
+      );
+
+    const daSerie = (dados: number[]) => ({
+      data: dados,
+      // penúltimo marco = fim do mês passado
+      prev: dados[dados.length - 2] ?? 0,
       label: "mês passado",
-    },
-    active: {
-      data: [6, 8, 9, 10, 11, 12, 12, 13, 14, 14, 15, activeUsers],
-      prev: 15,
-      label: "mês passado",
-    },
-    admins: {
-      data: [1, 1, 2, 2, 2, 2, 3, 3, 3, 3, 3, adminUsers],
-      prev: 3,
-      label: "mês passado",
-    },
-    active90: {
-      data: [7, 9, 10, 11, 12, 13, 13, 14, 15, 15, 16, active90],
-      prev: 16,
-      label: "mês passado",
-    },
-  };
+    });
+
+    return {
+      total: daSerie(serie(() => true)),
+      active: daSerie(serie((u) => u.is_active !== false)),
+      admins: daSerie(serie((u) => u.role === "admin")),
+      active90: {
+        data: serie(() => true),
+        // sem histórico de last_login, não há com o que comparar
+        prev: null as number | null,
+        label: "mês passado",
+      },
+    };
+  }, [users]);
 
   const StatCard = ({
     label,
@@ -1275,7 +1302,8 @@ type UsuarioDaLista = User & {
   }: {
     label: string;
     value: number;
-    prevValue: number;
+    /** `null` quando não há histórico com que comparar. */
+    prevValue: number | null;
     prevLabel: string;
     pct: number;
     up: boolean;
@@ -1319,7 +1347,7 @@ type UsuarioDaLista = User & {
                   <div className="flex items-center justify-between gap-4 mb-2">
                     <span className="text-xs text-slate-500">{prevLabel}</span>
                     <span className="text-sm font-semibold text-slate-600">
-                      {prevValue}
+                      {prevValue === null ? "—" : prevValue}
                     </span>
                   </div>
                   <div
@@ -1354,18 +1382,41 @@ type UsuarioDaLista = User & {
               <p className="text-lg font-bold leading-none text-white">
                 {value}
               </p>
-              <div className="inline-flex items-center gap-1 mt-0.5 px-1.5 py-0.5 rounded-md bg-white/20">
-                {up ? (
-                  <TrendingUp className="h-2.5 w-2.5 text-white" />
-                ) : (
-                  <TrendingDown className="h-2.5 w-2.5 text-white" />
-                )}
-                <span className="text-[9px] font-semibold text-white">
-                  {up ? "+" : "-"}
-                  {pct}%
-                </span>
-                <span className="text-[9px] text-white/60">vs. anterior</span>
-              </div>
+              {(() => {
+                if (prevValue === null) {
+                  return (
+                    <span className="inline-block mt-0.5 text-[9px] text-white/60">
+                      sem histórico para comparar
+                    </span>
+                  );
+                }
+
+                /*
+                 * Percentual só informa quando a base é razoável. A
+                 * importação da plataforma antiga trouxe ~1.050 usuários no
+                 * mesmo dia, então o mês anterior tem uma dezena e a conta
+                 * dá "+8233%" — número correto e inútil. Nesses casos vale
+                 * mais a variação absoluta.
+                 */
+                const delta = value - prevValue;
+                const baseFraca = prevValue < 10 || pct > 999;
+                const Seta = up ? TrendingUp : TrendingDown;
+                return (
+                  <div className="inline-flex items-center gap-1 mt-0.5 px-1.5 py-0.5 rounded-md bg-white/20">
+                    <Seta className="h-2.5 w-2.5 text-white" />
+                    <span className="text-[9px] font-semibold text-white">
+                      {baseFraca
+                        ? `${delta >= 0 ? "+" : ""}${delta}`
+                        : `${up ? "+" : "-"}${pct}%`}
+                    </span>
+                    {/* No celular o card tem ~190px: este texto empurrava o
+                        gráfico para fora e ele aparecia cortado na borda. */}
+                    <span className="hidden sm:inline text-[9px] text-white/60">
+                      {baseFraca ? "no mês" : "vs. anterior"}
+                    </span>
+                  </div>
+                );
+              })()}
             </div>
             <div className="flex-shrink-0">
               <Sparkline

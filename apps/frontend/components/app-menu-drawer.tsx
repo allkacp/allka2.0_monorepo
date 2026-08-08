@@ -5,6 +5,8 @@ import { useLocation } from "react-router-dom"
 import { cn } from "@/lib/utils"
 import { useAccountType } from "@/contexts/account-type-context"
 import { useSidebar } from "@/contexts/sidebar-context"
+import { useTheme } from "next-themes"
+import { useFontScale } from "@/hooks/useFontScale"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -38,6 +40,8 @@ import {
   Package,
   LogOut,
   Home,
+  Sun,
+  Moon,
 } from "lucide-react"
 
 const navigationConfig = {
@@ -183,6 +187,10 @@ export function AppMenuDrawer({ open, onClose }: AppMenuDrawerProps) {
   const pathname = location.pathname
   const { accountType, accountSubType, isPartnerActive } = useAccountType()
   const { userProfile } = useSidebar()
+  // Aparência: no desktop estes controles vivem na barra flutuante da borda
+  // direita, que no celular caía em cima do conteúdo.
+  const { theme, setTheme } = useTheme()
+  const { increase, decrease } = useFontScale()
   const [expandedItems, setExpandedItems] = useState<string[]>([])
 
   const getNavigationItems = () => {
@@ -362,6 +370,48 @@ export function AppMenuDrawer({ open, onClose }: AppMenuDrawerProps) {
                   </Link>
                 )
               })}
+            </div>
+          </div>
+
+          {/* Aparência — no desktop estes dois controles ficam na barra
+              flutuante da borda direita, que não cabe no celular. */}
+          <div className="px-6 pb-2">
+            <p className="text-[11px] font-semibold text-white/50 uppercase tracking-wider mb-2">
+              Aparência
+            </p>
+            <div className="flex items-center gap-2">
+              <Button
+                variant="ghost"
+                className="flex-1 justify-start text-white hover:bg-white/10 rounded-xl"
+                onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
+              >
+                {theme === "dark" ? (
+                  <Sun className="h-5 w-5 mr-2" />
+                ) : (
+                  <Moon className="h-5 w-5 mr-2" />
+                )}
+                {theme === "dark" ? "Modo claro" : "Modo escuro"}
+              </Button>
+              <div className="flex items-center gap-1">
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  aria-label="Diminuir fonte"
+                  className="text-white hover:bg-white/10 rounded-xl"
+                  onClick={decrease}
+                >
+                  <span className="text-sm font-bold">A-</span>
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  aria-label="Aumentar fonte"
+                  className="text-white hover:bg-white/10 rounded-xl"
+                  onClick={increase}
+                >
+                  <span className="text-base font-bold">A+</span>
+                </Button>
+              </div>
             </div>
           </div>
 
