@@ -1,0 +1,26 @@
+{
+  "name": "ALLKA — Plataforma de Gestão",
+  "short_name": "ALLKA",
+  "description": "Gestão de projetos, tarefas e nômades",
+  "lang": "pt-BR",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#f1f5f9",
+  "theme_color": "#0f172a",
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "/logo-allka-icon.png",
+      "sizes": "497x508",
+      "type": "image/png",
+      "purpose": "any"
+    }
+  ]
+}

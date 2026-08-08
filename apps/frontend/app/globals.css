@@ -2003,3 +2003,61 @@
   width: 0;
   height: 0;
 }
+
+/* ─── Acabamento de aplicativo no celular ───────────────────────────────────
+ *
+ * Só o que muda a sensação de uso; nada aqui altera layout no desktop.
+ */
+@media (max-width: 767px) {
+  /*
+   * O iOS dá zoom ao focar um campo com fonte menor que 16px. A plataforma
+   * tem escala de fonte configurável e o padrão deixa a raiz em 15px — então
+   * `text-base` (1rem) cai para 15px e o zoom acontece mesmo com o Input
+   * usando o tamanho certo. A regra abaixo fixa 16px em px, imune à escala.
+   */
+  input:not([type="checkbox"]):not([type="radio"]),
+  select,
+  textarea {
+    font-size: 16px;
+  }
+
+  /* Tira o retângulo cinza que o toque desenha sobre botões e links. */
+  a,
+  button,
+  [role="button"],
+  [role="tab"],
+  [role="menuitem"] {
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  /*
+   * Evita que o "puxar para baixo" no topo de uma lista recarregue a página
+   * ou arraste a tela inteira — o efeito elástico é o que mais denuncia que
+   * não é um app.
+   */
+  html,
+  body {
+    overscroll-behavior-y: contain;
+  }
+}
+
+/*
+ * Rolagem com inércia dentro de painéis e modais. Sem isto, áreas com
+ * `overflow: auto` param secas no fim do gesto.
+ */
+[class*="overflow-y-auto"],
+[class*="overflow-auto"] {
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Respeita quem pediu menos animação no sistema. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

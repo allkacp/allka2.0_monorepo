@@ -3,7 +3,29 @@
   <head>
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/favicon.ico" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <!--
+      `viewport-fit=cover` é o que faz `env(safe-area-inset-*)` valer alguma
+      coisa no iOS. A plataforma já tinha regras de safe-area no globals.css
+      (.pb-safe-area, o padding da barra inferior), mas sem isto o env()
+      devolve 0 e o conteúdo passava por baixo do notch e do indicador de
+      home.
+    -->
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, viewport-fit=cover"
+    />
+
+    <!-- Cor da barra do navegador; acompanha o tema claro/escuro. -->
+    <meta name="theme-color" media="(prefers-color-scheme: light)" content="#f1f5f9" />
+    <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#0f172a" />
+
+    <!-- Instalável na tela inicial, abrindo sem a barra do navegador. -->
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="ALLKA" />
+    <link rel="apple-touch-icon" href="/logo-allka-icon.png" />
     <meta name="description" content="Plataforma completa de gestão de projetos e tarefas" />
     <title>ALLKA - Plataforma de Gestão</title>
     <!-- Anti-flash: aplica a escala de fonte salva antes do primeiro render -->
