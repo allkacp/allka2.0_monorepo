@@ -21,6 +21,10 @@ const router = Router();
  * Então: enviar uma notificação cria `system_alerts` para o público-alvo, e o
  * histórico é a lista desses alertas. Nada de registrar entregas que não
  * aconteceram.
+ *
+ * Depende da migration 20260808020000_notificacoes: sem ela as tabelas
+ * notification_messages/notification_rules não existem e toda rota daqui
+ * responde erro.
  */
 
 const messageSchema = z.object({
