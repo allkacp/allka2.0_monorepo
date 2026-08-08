@@ -1,0 +1,17 @@
+# Arquivos que precisam chegar com LF independentemente do sistema de quem
+# clona. O repositório é desenvolvido no Windows, onde o git converte para
+# CRLF ao gravar na árvore de trabalho — e alguns formatos não toleram o \r.
+#
+# O caso que motivou isto: o `.dockerignore` estava com CRLF, e o parser do
+# Docker não descarta o \r. Cada padrão virava `.git\r`, `node_modules\r`,
+# `apps/*/dist\r` — nenhum casava com nada. Na prática o arquivo inteiro era
+# inócuo e todo o build ia com `.git` e `node_modules` dentro do contexto.
+.dockerignore text eol=lf
+.gitignore     text eol=lf
+Dockerfile     text eol=lf
+*.Dockerfile   text eol=lf
+
+# Scripts executados dentro de containers Linux e no runner do CI.
+*.sh  text eol=lf
+*.yml text eol=lf
+*.yaml text eol=lf
