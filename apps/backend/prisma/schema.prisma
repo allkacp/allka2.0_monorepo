@@ -1370,8 +1370,56 @@ model SystemAlert {
   read_at     DateTime?
   created_at  DateTime  @default(now())
 
+  // De qual mensagem de notificacao este alerta nasceu, quando veio de um
+  // envio da tela /admin/notifications. Nulo nos alertas do proprio sistema
+  // (motor de etapas, avisos automaticos). E o que forma o historico de
+  // envios, sem tabela paralela.
+  notification_message_id String?
+  notification_message    NotificationMessage? @relation(fields: [notification_message_id], references: [id], onDelete: SetNull)
+
   @@index([user_id, is_read])
+  @@index([notification_message_id])
   @@map("system_alerts")
+}
+
+// ─── Notificacoes ─────────────────────────────────────────────────────────────
+//
+// A tela /admin/notifications oferecia cinco canais (email, whatsapp, popup,
+// banner, push) e nenhum deles existe no backend. O canal que funciona e o
+// aviso dentro da plataforma (SystemAlert). Ver a migration
+// 20260808020000_notificacoes.
+
+model NotificationMessage {
+  id         String   @id @default(cuid())
+  name       String
+  title      String
+  content    String   @db.LongText
+  is_active  Boolean  @default(true)
+  created_by String?
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  rules  NotificationRule[]
+  alerts SystemAlert[]
+
+  @@index([is_active])
+  @@map("notification_messages")
+}
+
+model NotificationRule {
+  id         String              @id @default(cuid())
+  message_id String
+  message    NotificationMessage @relation(fields: [message_id], references: [id], onDelete: Cascade)
+  name       String
+  is_active  Boolean             @default(true)
+  // Publico-alvo: listas de account_type e de role. Vazias = todos.
+  target_account_types Json?
+  target_roles         Json?
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  @@index([message_id])
+  @@map("notification_rules")
 }
 
 // ─── Financial ────────────────────────────────────────────────────────────────

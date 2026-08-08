@@ -1,4 +1,6 @@
-import { useState, useEffect } from "react"
+import { useState, useEffect, useCallback } from "react"
+import { useToast } from "@/hooks/use-toast"
+import { apiClient } from "@/lib/api-client"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -93,110 +95,42 @@ export default function NotificationsManagementPage() {
   const [showRuleModal, setShowRuleModal] = useState(false)
   const [showHistoryModal, setShowHistoryModal] = useState(false)
   const [loading, setLoading] = useState(true)
+  const { toast } = useToast()
 
   // Pré-configurações
   const [expandedType, setExpandedType] = useState<string | null>(null)
   const [preconfigs, setPreconfigs] = useState(DEFAULT_PRECONFIGS)
 
   // Mock data - replace with API calls
-  const mockMessages: NotificationMessage[] = [
-    {
-      id: "msg-1",
-      name: "Boas-vindas Agência",
-      title: "Bem-vindo à Allka!",
-      content: "Olá {user_name}, seja bem-vindo à plataforma Allka...",
-      message_type: "html",
-      has_images: true,
-      has_videos: false,
-      is_active: true,
-      created_at: "2024-01-15T10:00:00Z",
-      updated_at: "2024-01-20T14:30:00Z",
-      created_by: "admin-1",
-      attachments: [],
-    },
-    {
-      id: "msg-2",
-      name: "Projeto Atrasado",
-      title: "Atenção: Projeto com atraso",
-      content: "Seu projeto {project_name} está com {delay_days} dias de atraso...",
-      message_type: "text",
-      has_images: false,
-      has_videos: false,
-      is_active: true,
-      created_at: "2024-01-18T09:00:00Z",
-      updated_at: "2024-01-18T09:00:00Z",
-      created_by: "admin-2",
-      attachments: [],
-    },
-  ]
-
-  const mockRules: NotificationRule[] = [
-    {
-      id: "rule-1",
-      message_id: "msg-1",
-      name: "Boas-vindas Automático",
-      is_active: true,
-      target_account_types: ["agency"],
-      target_account_levels: [],
-      target_project_status: [],
-      target_custom_filters: {},
-      channels: [
-        { type: "email", is_enabled: true, config: {} },
-        { type: "in_app_popup", is_enabled: true, config: {} },
-      ],
-      trigger_type: "event",
-      trigger_config: { event: "account_created" },
-      created_at: "2024-01-15T10:00:00Z",
-      updated_at: "2024-01-15T10:00:00Z",
-      created_by: "admin-1",
-    },
-    {
-      id: "rule-2",
-      message_id: "msg-2",
-      name: "Alerta Projeto Atrasado",
-      is_active: true,
-      target_account_types: ["agency"],
-      target_account_levels: [],
-      target_project_status: ["em_andamento"],
-      target_custom_filters: {},
-      channels: [
-        { type: "email", is_enabled: true, config: {} },
-        { type: "whatsapp", is_enabled: true, config: {} },
-      ],
-      trigger_type: "conditional",
-      trigger_config: { condition: "project_overdue", days: 3 },
-      created_at: "2024-01-18T09:00:00Z",
-      updated_at: "2024-01-18T09:00:00Z",
-      created_by: "admin-2",
-    },
-  ]
-
-  const mockHistory: NotificationHistory[] = [
-    {
-      id: "hist-1",
-      rule_id: "rule-1",
-      message_id: "msg-1",
-      recipient_id: "agency-123",
-      recipient_name: "João Silva",
-      recipient_email: "joao@empresa.com",
-      channel: "email",
-      status: "delivered",
-      sent_at: "2024-01-20T10:30:00Z",
-      delivered_at: "2024-01-20T10:31:00Z",
-      opened_at: "2024-01-20T11:15:00Z",
-      metadata: {},
-    },
-  ]
+  // Esta tela funcionava inteiramente em memória — mensagens, regras e
+  // histórico eram arrays no componente e nada era gravado. Agora vem de
+  // /api/notifications. O único canal de entrega é o aviso dentro da
+  // plataforma; ver o comentário no topo de routes/notifications.ts.
+  const carregar = useCallback(async () => {
+    setLoading(true)
+    try {
+      const [msgs, rls, hist] = await Promise.all([
+        apiClient.getNotificationMessages(),
+        apiClient.getNotificationRules(),
+        apiClient.getNotificationHistory(),
+      ])
+      setMessages((msgs as any) ?? [])
+      setRules((rls as any) ?? [])
+      setHistory((hist as any) ?? [])
+    } catch (e: any) {
+      toast({
+        title: "Não foi possível carregar as notificações",
+        description: e?.message,
+        variant: "destructive",
+      })
+    } finally {
+      setLoading(false)
+    }
+  }, [toast])
 
   useEffect(() => {
-    // Simulate API calls
-    setTimeout(() => {
-      setMessages(mockMessages)
-      setRules(mockRules)
-      setHistory(mockHistory)
-      setLoading(false)
-    }, 1000)
-  }, [])
+    carregar()
+  }, [carregar])
 
   const getChannelIcon = (channel: string) => {
     const icons = {
@@ -569,7 +503,51 @@ export default function NotificationsManagementPage() {
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end">
                       <DropdownMenuItem onClick={() => { setSelectedRule(rule); setShowRuleModal(true) }}><Edit className="mr-2 h-3.5 w-3.5" />Editar</DropdownMenuItem>
-                      <DropdownMenuItem className="text-red-600"><Trash2 className="mr-2 h-3.5 w-3.5" />Excluir</DropdownMenuItem>
+                      {/* Envio de verdade: cria um aviso na plataforma para
+                          cada pessoa do público da regra. */}
+                      <DropdownMenuItem
+                        onClick={async () => {
+                          try {
+                            const r: any = await apiClient.sendNotificationMessage(
+                              (rule as any).message_id,
+                              { rule_id: rule.id },
+                            )
+                            await carregar()
+                            toast({
+                              title: "Notificação enviada",
+                              description: `${r?.sent ?? 0} pessoa(s) receberam o aviso na plataforma.`,
+                            })
+                          } catch (e: any) {
+                            toast({
+                              title: "Não foi possível enviar",
+                              description: e?.message,
+                              variant: "destructive",
+                            })
+                          }
+                        }}
+                      >
+                        <Send className="mr-2 h-3.5 w-3.5" />
+                        Enviar agora
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
+                        className="text-red-600"
+                        onClick={async () => {
+                          try {
+                            await apiClient.deleteNotificationRule(rule.id)
+                            await carregar()
+                            toast({ title: "Regra removida" })
+                          } catch (e: any) {
+                            toast({
+                              title: "Não foi possível remover",
+                              description: e?.message,
+                              variant: "destructive",
+                            })
+                          }
+                        }}
+                      >
+                        <Trash2 className="mr-2 h-3.5 w-3.5" />
+                        Excluir
+                      </DropdownMenuItem>
                     </DropdownMenuContent>
                   </DropdownMenu>
                 </div>
@@ -592,13 +570,32 @@ export default function NotificationsManagementPage() {
             {/* Canal performance */}
             <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-5">
               <p className="text-sm font-semibold text-slate-800 dark:text-white mb-4">Performance por Canal</p>
+              <p className="text-[11px] text-slate-400 -mt-3 mb-4">
+                O único canal implementado é o aviso dentro da plataforma. E-mail,
+                WhatsApp e push aparecem aqui como pendentes porque o backend não
+                tem serviço de envio para eles.
+              </p>
               <div className="space-y-4">
-                {[
-                  { icon: Mail, label: "E-mail", rate: 68, rateLabel: "68% abertura", sent: "1.247 enviados", color: "#3b82f6" },
-                  { icon: MessageCircle, label: "WhatsApp", rate: 89, rateLabel: "89% entrega", sent: "456 enviados", color: "#22c55e" },
-                  { icon: Bell, label: "In-App", rate: 92, rateLabel: "92% visualização", sent: "789 enviados", color: "#8b5cf6" },
-                  { icon: Bell, label: "Push", rate: 54, rateLabel: "54% abertura", sent: "312 enviados", color: "#f59e0b" },
-                ].map(({ icon: Icon, label, rate, rateLabel, sent, color }) => (
+                {(() => {
+                  // Números reais do histórico: cada envio cria um aviso, e
+                  // "aberto" é o aviso marcado como lido.
+                  const enviados = history.length
+                  const abertos = history.filter((h: any) => h.status === "opened").length
+                  const taxa = enviados > 0 ? Math.round((abertos / enviados) * 100) : 0
+                  return [
+                    {
+                      icon: Bell,
+                      label: "Na plataforma",
+                      rate: taxa,
+                      rateLabel: `${taxa}% aberto`,
+                      sent: `${enviados.toLocaleString("pt-BR")} enviados`,
+                      color: "#8b5cf6",
+                    },
+                    { icon: Mail, label: "E-mail", rate: 0, rateLabel: "não implementado", sent: "—", color: "#cbd5e1" },
+                    { icon: MessageCircle, label: "WhatsApp", rate: 0, rateLabel: "não implementado", sent: "—", color: "#cbd5e1" },
+                    { icon: Bell, label: "Push", rate: 0, rateLabel: "não implementado", sent: "—", color: "#cbd5e1" },
+                  ]
+                })().map(({ icon: Icon, label, rate, rateLabel, sent, color }) => (
                   <div key={label} className="space-y-1.5">
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-2">
@@ -622,7 +619,7 @@ export default function NotificationsManagementPage() {
             <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-5">
               <p className="text-sm font-semibold text-slate-800 dark:text-white mb-4">Modelos Mais Enviados</p>
               <div className="space-y-3">
-                {(messages.length > 0 ? messages : [{ id: "x1", name: "Boas-vindas Agência", title: "Bem-vindo à Allka!", sends: 892 }, { id: "x2", name: "Projeto Atrasado", title: "Atenção: Projeto com atraso", sends: 341 }]).slice(0, 4).map((message, index) => (
+                {messages.slice(0, 4).map((message, index) => (
                   <div key={message.id} className="flex items-center gap-3">
                     <span className="flex items-center justify-center w-5 h-5 rounded-full bg-slate-100 dark:bg-slate-700 text-[10px] font-bold text-slate-500 shrink-0">
                       {index + 1}
@@ -660,23 +657,26 @@ export default function NotificationsManagementPage() {
         open={showMessageModal}
         onOpenChange={setShowMessageModal}
         message={selectedMessage}
-        onSave={(messageData) => {
-          if (selectedMessage) {
-            // Edit existing message
-            const updatedMessages = messages.map((m) => (m.id === selectedMessage.id ? { ...m, ...messageData } : m))
-            setMessages(updatedMessages)
-          } else {
-            // Create new message
-            const newMessage: NotificationMessage = {
-              id: `msg-${Date.now()}`,
-              ...messageData,
-              is_active: true,
-              created_at: new Date().toISOString(),
-              updated_at: new Date().toISOString(),
-              created_by: "current-admin",
-              attachments: [],
-            } as NotificationMessage
-            setMessages([...messages, newMessage])
+        onSave={async (messageData) => {
+          try {
+            const corpo = {
+              name: (messageData as any).name ?? (messageData as any).title,
+              title: (messageData as any).title,
+              content: (messageData as any).content,
+            }
+            if (selectedMessage) {
+              await apiClient.updateNotificationMessage(selectedMessage.id, corpo)
+            } else {
+              await apiClient.createNotificationMessage(corpo)
+            }
+            await carregar()
+            toast({ title: "Mensagem salva" })
+          } catch (e: any) {
+            toast({
+              title: "Não foi possível salvar",
+              description: e?.message,
+              variant: "destructive",
+            })
           }
           setSelectedMessage(null)
           setShowMessageModal(false)
@@ -688,22 +688,29 @@ export default function NotificationsManagementPage() {
         onOpenChange={setShowRuleModal}
         rule={selectedRule}
         messages={messages}
-        onSave={(ruleData) => {
-          if (selectedRule) {
-            // Edit existing rule
-            const updatedRules = rules.map((r) => (r.id === selectedRule.id ? { ...r, ...ruleData } : r))
-            setRules(updatedRules)
-          } else {
-            // Create new rule
-            const newRule: NotificationRule = {
-              id: `rule-${Date.now()}`,
-              ...ruleData,
-              is_active: true,
-              created_at: new Date().toISOString(),
-              updated_at: new Date().toISOString(),
-              created_by: "current-admin",
-            } as NotificationRule
-            setRules([...rules, newRule])
+        onSave={async (ruleData) => {
+          try {
+            const d = ruleData as any
+            const corpo = {
+              message_id: d.message_id,
+              name: d.name,
+              // Publico: listas vazias significam "todos" no backend.
+              target_account_types: d.target_account_types ?? [],
+              target_roles: d.target_roles ?? [],
+            }
+            if (selectedRule) {
+              await apiClient.updateNotificationRule(selectedRule.id, corpo)
+            } else {
+              await apiClient.createNotificationRule(corpo)
+            }
+            await carregar()
+            toast({ title: "Regra salva" })
+          } catch (e: any) {
+            toast({
+              title: "Não foi possível salvar a regra",
+              description: e?.message,
+              variant: "destructive",
+            })
           }
           setSelectedRule(null)
           setShowRuleModal(false)

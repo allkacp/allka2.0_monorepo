@@ -621,6 +621,40 @@ class ApiClient {
   }
 
   // ─── Agencies ─────────────────────────────────────────────────────────────
+  // ─── Notificações ─────────────────────────────────────────────────────────
+  // Só existe um canal de entrega: o aviso dentro da plataforma
+  // (system_alerts). Ver o comentário no topo de routes/notifications.ts.
+  async getNotificationMessages() {
+    return this.get("/notifications/messages");
+  }
+  async createNotificationMessage(data: Record<string, any>) {
+    return this.post("/notifications/messages", data);
+  }
+  async updateNotificationMessage(id: string, data: Record<string, any>) {
+    return this.put(`/notifications/messages/${id}`, data);
+  }
+  async deleteNotificationMessage(id: string) {
+    return this.del(`/notifications/messages/${id}`);
+  }
+  async sendNotificationMessage(id: string, data: Record<string, any>) {
+    return this.post(`/notifications/messages/${id}/send`, data);
+  }
+  async getNotificationRules() {
+    return this.get("/notifications/rules");
+  }
+  async createNotificationRule(data: Record<string, any>) {
+    return this.post("/notifications/rules", data);
+  }
+  async updateNotificationRule(id: string, data: Record<string, any>) {
+    return this.put(`/notifications/rules/${id}`, data);
+  }
+  async deleteNotificationRule(id: string) {
+    return this.del(`/notifications/rules/${id}`);
+  }
+  async getNotificationHistory(params?: Record<string, any>) {
+    return this.get("/notifications/history", params);
+  }
+
   /** Números do programa de parceria (convites, níveis, ganhos). */
   async getPartnerStats() {
     return this.get("/agencies/partner-stats");
