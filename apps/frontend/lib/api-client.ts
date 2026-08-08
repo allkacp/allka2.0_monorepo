@@ -621,6 +621,14 @@ class ApiClient {
   }
 
   // ─── Agencies ─────────────────────────────────────────────────────────────
+  /**
+   * Emite um link de primeiro acesso para o usuário definir a própria senha.
+   * Cada chamada invalida o link anterior — é o comportamento de "reenviar".
+   */
+  async emitirPrimeiroAcesso(id: string) {
+    return this.post(`/users/${id}/primeiro-acesso`, {});
+  }
+
   // ─── Notificações ─────────────────────────────────────────────────────────
   // Só existe um canal de entrega: o aviso dentro da plataforma
   // (system_alerts). Ver o comentário no topo de routes/notifications.ts.

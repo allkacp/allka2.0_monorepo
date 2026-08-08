@@ -53,6 +53,7 @@ import {
   XCircle,
   Loader2,
   Link2,
+  KeyRound,
 } from "lucide-react";
 import { useSorting, SortableHeader } from "@/hooks/useSorting";
 import { useTableScrollSync } from "@/hooks/useTableScrollSync";
@@ -917,6 +918,40 @@ type UsuarioDaLista = User & {
     advancedFilters.lastAccessDateFrom ||
     advancedFilters.lastAccessDateTo ||
     advancedFilters.plan !== "all";
+
+  /**
+   * Emite um link de primeiro acesso e copia para a área de transferência.
+   *
+   * Existe por causa da importação da plataforma antiga: 1.044 usuários
+   * entraram sem senha utilizável e só conseguem acessar por esse link. Os
+   * links foram gerados em lote por script, mas quando alguém perdia o seu, a
+   * única saída era rodar script no servidor. A plataforma não envia e-mail,
+   * então quem atende copia e repassa.
+   */
+  const [emitindoAcesso, setEmitindoAcesso] = useState<string | null>(null);
+  const emitirPrimeiroAcesso = async (user: UsuarioDaLista) => {
+    setEmitindoAcesso(user.id);
+    try {
+      const r: any = await apiClient.emitirPrimeiroAcesso(String(user.id));
+      const link = String(r?.link ?? "");
+      const absoluto = link.startsWith("http")
+        ? link
+        : `${window.location.origin}${link}`;
+      await navigator.clipboard.writeText(absoluto).catch(() => {});
+      toast({
+        title: "Link copiado",
+        description: `${user.name} define a senha por este link. O anterior deixou de valer.`,
+      });
+    } catch (e: any) {
+      toast({
+        title: "Não foi possível emitir o link",
+        description: e?.message,
+        variant: "destructive",
+      });
+    } finally {
+      setEmitindoAcesso(null);
+    }
+  };
 
   const handleUserAction = (user: UsuarioDaLista, action: string) => {
     setSelectedUser(user);
@@ -2853,6 +2888,30 @@ type UsuarioDaLista = User & {
                                 <TooltipContent className="text-xs font-medium">Clique para visualizar todas as informações</TooltipContent>
                               </Tooltip>
                             </TooltipProvider>
+                            {/* Link de primeiro acesso — só faz sentido para
+                                quem ainda não definiu senha. */}
+                            {(user as any).must_set_password && (
+                              <TooltipProvider delayDuration={400}>
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <button
+                                      type="button"
+                                      disabled={emitindoAcesso === user.id}
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        emitirPrimeiroAcesso(user);
+                                      }}
+                                      className="h-[26px] w-[26px] flex items-center justify-center rounded-[8px] bg-white dark:bg-slate-800 border border-[#e8edf5] dark:border-slate-700 text-amber-500 shadow-[0_4px_10px_rgba(15,23,42,0.06)] hover:bg-amber-500 hover:text-white hover:border-transparent transition-all duration-150 disabled:opacity-50"
+                                    >
+                                      <KeyRound className="h-3.5 w-3.5" />
+                                    </button>
+                                  </TooltipTrigger>
+                                  <TooltipContent>
+                                    Copiar link de primeiro acesso
+                                  </TooltipContent>
+                                </Tooltip>
+                              </TooltipProvider>
+                            )}
                             <TooltipProvider delayDuration={400}>
                               <Tooltip>
                                 <TooltipTrigger asChild>
@@ -2868,6 +2927,30 @@ type UsuarioDaLista = User & {
                                 </TooltipContent>
                               </Tooltip>
                             </TooltipProvider>
+                            {/* Link de primeiro acesso — só faz sentido para
+                                quem ainda não definiu senha. */}
+                            {(user as any).must_set_password && (
+                              <TooltipProvider delayDuration={400}>
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <button
+                                      type="button"
+                                      disabled={emitindoAcesso === user.id}
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        emitirPrimeiroAcesso(user);
+                                      }}
+                                      className="h-[26px] w-[26px] flex items-center justify-center rounded-[8px] bg-white dark:bg-slate-800 border border-[#e8edf5] dark:border-slate-700 text-amber-500 shadow-[0_4px_10px_rgba(15,23,42,0.06)] hover:bg-amber-500 hover:text-white hover:border-transparent transition-all duration-150 disabled:opacity-50"
+                                    >
+                                      <KeyRound className="h-3.5 w-3.5" />
+                                    </button>
+                                  </TooltipTrigger>
+                                  <TooltipContent>
+                                    Copiar link de primeiro acesso
+                                  </TooltipContent>
+                                </Tooltip>
+                              </TooltipProvider>
+                            )}
                             <TooltipProvider delayDuration={400}>
                               <Tooltip>
                                 <TooltipTrigger asChild>
@@ -2883,6 +2966,30 @@ type UsuarioDaLista = User & {
                                 </TooltipContent>
                               </Tooltip>
                             </TooltipProvider>
+                            {/* Link de primeiro acesso — só faz sentido para
+                                quem ainda não definiu senha. */}
+                            {(user as any).must_set_password && (
+                              <TooltipProvider delayDuration={400}>
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <button
+                                      type="button"
+                                      disabled={emitindoAcesso === user.id}
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        emitirPrimeiroAcesso(user);
+                                      }}
+                                      className="h-[26px] w-[26px] flex items-center justify-center rounded-[8px] bg-white dark:bg-slate-800 border border-[#e8edf5] dark:border-slate-700 text-amber-500 shadow-[0_4px_10px_rgba(15,23,42,0.06)] hover:bg-amber-500 hover:text-white hover:border-transparent transition-all duration-150 disabled:opacity-50"
+                                    >
+                                      <KeyRound className="h-3.5 w-3.5" />
+                                    </button>
+                                  </TooltipTrigger>
+                                  <TooltipContent>
+                                    Copiar link de primeiro acesso
+                                  </TooltipContent>
+                                </Tooltip>
+                              </TooltipProvider>
+                            )}
                             <TooltipProvider delayDuration={400}>
                               <Tooltip>
                                 <TooltipTrigger asChild>
@@ -2904,6 +3011,30 @@ type UsuarioDaLista = User & {
                                 </TooltipContent>
                               </Tooltip>
                             </TooltipProvider>
+                            {/* Link de primeiro acesso — só faz sentido para
+                                quem ainda não definiu senha. */}
+                            {(user as any).must_set_password && (
+                              <TooltipProvider delayDuration={400}>
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <button
+                                      type="button"
+                                      disabled={emitindoAcesso === user.id}
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        emitirPrimeiroAcesso(user);
+                                      }}
+                                      className="h-[26px] w-[26px] flex items-center justify-center rounded-[8px] bg-white dark:bg-slate-800 border border-[#e8edf5] dark:border-slate-700 text-amber-500 shadow-[0_4px_10px_rgba(15,23,42,0.06)] hover:bg-amber-500 hover:text-white hover:border-transparent transition-all duration-150 disabled:opacity-50"
+                                    >
+                                      <KeyRound className="h-3.5 w-3.5" />
+                                    </button>
+                                  </TooltipTrigger>
+                                  <TooltipContent>
+                                    Copiar link de primeiro acesso
+                                  </TooltipContent>
+                                </Tooltip>
+                              </TooltipProvider>
+                            )}
                             <TooltipProvider delayDuration={400}>
                               <Tooltip>
                                 <TooltipTrigger asChild>

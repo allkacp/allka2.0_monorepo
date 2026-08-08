@@ -1,6 +1,7 @@
 import { Router } from "express";
 import bcrypt from "bcryptjs";
 import { z } from "zod";
+import { createHash, randomBytes } from "node:crypto";
 import { prisma } from "../lib/prisma";
 import {
   verifyToken,
@@ -159,6 +160,9 @@ const safeSelect = {
   id: true,
   user_code: true,
   status: true,
+  // Quem ainda não definiu a própria senha (importados da plataforma antiga).
+  // A tela de usuários usa isto para oferecer o link de primeiro acesso.
+  must_set_password: true,
   // Perfil de acesso (AdminProfile). É o que o middleware requirePermission
   // consulta para autorizar; sem isto o frontend não tinha como exibir nem
   // atribuir o perfil de um usuário.
@@ -569,6 +573,68 @@ router.put("/:id", verifyToken, validate(updateUserSchema), async (req, res, nex
     next(err);
   }
 });
+
+// POST /api/users/:id/primeiro-acesso — emite um link para a pessoa definir
+// a própria senha.
+//
+// Nasce da importação da plataforma antiga: 1.044 usuários entraram sem senha
+// utilizável e só conseguem acessar por um link de primeiro acesso. Os links
+// foram gerados em lote por scripts/preparar-primeiro-acesso.ts, mas até aqui
+// não havia como emitir um do painel — quando alguém perdia o link, a saída
+// era rodar script no servidor.
+//
+// Emite um token novo a cada chamada: o anterior deixa de valer. É o
+// comportamento correto para "reenviar o link", e evita que um link antigo
+// vazado continue servindo.
+//
+// A plataforma não envia e-mail (não há serviço configurado), então o link é
+// devolvido aqui para quem está atendendo repassar.
+router.post(
+  "/:id/primeiro-acesso",
+  verifyToken,
+  requireRole("admin"),
+  requirePermission("usuarios", "edit"),
+  async (req, res, next) => {
+    try {
+      const id = req.params.id as string;
+      const user = await prisma.user.findUnique({
+        where: { id },
+        select: { id: true, name: true, email: true },
+      });
+      if (!user) {
+        res.status(404).json({ error: "Usuário não encontrado" });
+        return;
+      }
+
+      const token = randomBytes(32).toString("hex");
+      const hash = createHash("sha256").update(token).digest("hex");
+      const validadeDias = 90;
+      const expira = new Date(Date.now() + validadeDias * 24 * 60 * 60 * 1000);
+
+      await prisma.user.update({
+        where: { id },
+        data: {
+          must_set_password: true,
+          password_setup_token: hash,
+          password_setup_expires_at: expira,
+          // Invalida a senha atual: enquanto não definir a nova, ninguém
+          // entra com a antiga. `must_set_password` já bloqueia o login, mas
+          // deixar o hash velho no banco é guardar credencial sem motivo.
+          password_hash: await bcrypt.hash(randomBytes(24).toString("hex"), 10),
+        },
+      });
+
+      const base = process.env.APP_URL ?? process.env.FRONTEND_URL ?? "";
+      res.status(201).json({
+        user: { id: user.id, name: user.name, email: user.email },
+        link: `${base}/primeiro-acesso/${token}`,
+        expira_em: expira.toISOString(),
+      });
+    } catch (err) {
+      next(err);
+    }
+  },
+);
 
 // DELETE /api/users/:id
 router.delete(

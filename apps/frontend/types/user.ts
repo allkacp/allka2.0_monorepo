@@ -86,6 +86,12 @@ export interface User {
   // (ver flattenProfile em routes/users.ts), mas nada disso estava
   // declarado aqui — o painel de usuário lia tudo por baixo de um
   // @ts-nocheck.
+  /**
+   * Ainda não definiu a própria senha — caso dos importados da plataforma
+   * antiga. Enquanto for true, a pessoa só entra pelo link de primeiro
+   * acesso (ver POST /api/users/:id/primeiro-acesso).
+   */
+  must_set_password?: boolean;
   /** Numeração oficial do usuário na plataforma. */
   user_code?: string;
   /** Número na plataforma antiga; só em quem veio da importação. */
