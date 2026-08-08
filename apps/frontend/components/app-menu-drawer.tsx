@@ -42,6 +42,7 @@ import {
   Home,
   Sun,
   Moon,
+  AlertTriangle,
 } from "lucide-react"
 
 const navigationConfig = {
@@ -371,6 +372,20 @@ export function AppMenuDrawer({ open, onClose }: AppMenuDrawerProps) {
                 )
               })}
             </div>
+          </div>
+
+          {/* Central de Atenções — no desktop tem ícone próprio na barra
+              flutuante da direita, escondida no celular por cair em cima do
+              conteúdo. Sem esta entrada a tela ficaria inalcançável. */}
+          <div className="px-6 pb-3">
+            <Link
+              to={accountType === "agencias" ? "/agency/tarefas" : "/admin/alertas"}
+              onClick={onClose}
+              className="flex items-center gap-3 rounded-xl p-3 text-white hover:bg-white/10"
+            >
+              <AlertTriangle className="h-5 w-5" />
+              <span className="text-sm font-medium">Central de Atenções</span>
+            </Link>
           </div>
 
           {/* Aparência — no desktop estes dois controles ficam na barra

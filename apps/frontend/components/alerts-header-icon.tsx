@@ -141,7 +141,7 @@ export function AlertsHeaderIcon() {
     <>
       {/* Alert icon — floating, fixo abaixo da Bandeja de Telas */}
       <div
-        className="fixed top-[165px] right-[8px] z-50 group"
+        className="hidden xl:block fixed top-[165px] right-[8px] z-50 group"
         onMouseEnter={() => setTooltipVisible(true)}
         onMouseLeave={() => setTooltipVisible(false)}
       >

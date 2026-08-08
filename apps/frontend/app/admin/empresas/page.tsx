@@ -5,6 +5,7 @@ import React, {
   useCallback,
   useMemo,
 } from "react";
+import { useTelaEstreita } from "@/hooks/useTelaEstreita";
 import type {
   Company,
   CompanyType as CompanyEntityType,
@@ -802,7 +803,27 @@ export default function EmpresasPage() {
       return next;
     });
   };
-  const visibleColumnsList = allColumns.filter((c) => visibleCols.has(c.key));
+  /**
+   * Colunas que sobrevivem numa tela de celular. As demais continuam
+   * escolhidas pelo usuário e voltam sozinhas no desktop — a preferência
+   * salva em localStorage NÃO é alterada aqui, senão configurar a tabela no
+   * computador seria desfeito por abrir no telefone.
+   */
+  const COLUNAS_NO_CELULAR = new Set<ColKey>([
+    "acoes",
+    "empresa",
+    "status",
+  ] as ColKey[]);
+  const telaEstreita = useTelaEstreita();
+  const mostrarCol = useCallback(
+    (k: ColKey) =>
+      visibleCols.has(k) && (!telaEstreita || COLUNAS_NO_CELULAR.has(k)),
+    // COLUNAS_NO_CELULAR é constante entre renders
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [visibleCols, telaEstreita],
+  );
+
+  const visibleColumnsList = allColumns.filter((c) => mostrarCol(c.key));
 
   // ── Column resize ──────────────────────────────────────────────
   const allDefaultWidths: Record<ColKey, number> = {
@@ -2767,7 +2788,7 @@ export default function EmpresasPage() {
                   }`}
                 >
                   {/* Actions — pinned to the left, first column */}
-                  {visibleCols.has("acoes") && (
+                  {mostrarCol("acoes") && (
                     <td
                       className={`px-1 py-2 transition-colors ${
                         rowIndex % 2 === 0
@@ -2882,7 +2903,7 @@ export default function EmpresasPage() {
                   )}
 
                   {/* ID */}
-                  {visibleCols.has("id") && (
+                  {mostrarCol("id") && (
                     <td
                       className="px-4 py-3"
                       style={{
@@ -2898,7 +2919,7 @@ export default function EmpresasPage() {
                   )}
 
                   {/* Company */}
-                  {visibleCols.has("empresa") && (
+                  {mostrarCol("empresa") && (
                     <td
                       className="px-4 py-3"
                       style={{
@@ -3003,7 +3024,7 @@ export default function EmpresasPage() {
                   )}
 
                   {/* Contact */}
-                  {visibleCols.has("contato") && (
+                  {mostrarCol("contato") && (
                     <td
                       className="px-4 py-3"
                       style={{
@@ -3059,7 +3080,7 @@ export default function EmpresasPage() {
                   )}
 
                   {/* CNPJ + Users */}
-                  {visibleCols.has("cnpj") && (
+                  {mostrarCol("cnpj") && (
                     <td
                       className="px-4 py-3"
                       style={{
@@ -3084,7 +3105,7 @@ export default function EmpresasPage() {
                   )}
 
                   {/* Status */}
-                  {visibleCols.has("status") && (
+                  {mostrarCol("status") && (
                     <td
                       className="px-4 py-3"
                       style={{
@@ -3120,7 +3141,7 @@ export default function EmpresasPage() {
                   )}
 
                   {/* Plan */}
-                  {visibleCols.has("plano") && (
+                  {mostrarCol("plano") && (
                     <td
                       className="px-4 py-3"
                       style={{
@@ -3273,7 +3294,7 @@ export default function EmpresasPage() {
                   )}
 
                   {/* Type */}
-                  {visibleCols.has("tipo") && (
+                  {mostrarCol("tipo") && (
                     <td
                       className="px-4 py-3"
                       style={{
@@ -3332,7 +3353,7 @@ export default function EmpresasPage() {
                   )}
 
                   {/* Membro Desde */}
-                  {visibleCols.has("membro_desde") && (
+                  {mostrarCol("membro_desde") && (
                     <td
                       className="px-4 py-3"
                       style={{
