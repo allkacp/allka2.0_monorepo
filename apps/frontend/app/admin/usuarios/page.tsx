@@ -2696,7 +2696,7 @@ type UsuarioDaLista = User & {
               onScroll={handleTableScroll}
               className="overflow-x-auto allka-table-scroll-body"
             >
-              <table className="w-full text-xs min-w-[960px]">
+              <table className="tabela-cartao w-full text-xs min-w-[960px]">
                 <thead>
                   <tr className="border-b border-slate-200/60 dark:border-slate-700/60">
                     <th
@@ -2930,7 +2930,7 @@ type UsuarioDaLista = User & {
                         </td>
 
                         {visibleCols.has("codigo") && (
-                          <td className="py-3 px-4" style={{ borderRight: "1px solid rgba(148,163,184,0.15)" }}>
+                          <td data-rotulo="ID" className="py-3 px-4" style={{ borderRight: "1px solid rgba(148,163,184,0.15)" }}>
                             <div className="flex flex-col gap-0.5">
                               <span className="text-xs font-mono text-slate-500 dark:text-slate-400">
                                 {(() => {
@@ -2947,7 +2947,7 @@ type UsuarioDaLista = User & {
                         )}
 
                         {visibleCols.has("usuario") && (
-                          <td className="py-3 px-4" style={{ borderRight: "1px solid rgba(148,163,184,0.15)" }}>
+                          <td data-rotulo="Usuário" className="py-3 px-4" style={{ borderRight: "1px solid rgba(148,163,184,0.15)" }}>
                             <div className="flex items-center gap-2.5">
                               <div className="relative">
                                 <Avatar className="h-10 w-10 shadow-sm">
@@ -3022,7 +3022,7 @@ type UsuarioDaLista = User & {
                         )}
 
                         {visibleCols.has("contato") && (
-                          <td className="py-3 px-4" style={{ borderRight: "1px solid rgba(148,163,184,0.15)" }}>
+                          <td data-rotulo="Contato" className="py-3 px-4" style={{ borderRight: "1px solid rgba(148,163,184,0.15)" }}>
                             <div className="flex items-center gap-1">
                               <TooltipProvider>
                                 <Tooltip>
@@ -3063,7 +3063,7 @@ type UsuarioDaLista = User & {
                         )}
 
                         {visibleCols.has("tipo_funcao") && (
-                          <td className="py-3 px-4" style={{ borderRight: "1px solid rgba(148,163,184,0.15)" }}>
+                          <td data-rotulo="Tipo / Função" className="py-3 px-4" style={{ borderRight: "1px solid rgba(148,163,184,0.15)" }}>
                             <div className="space-y-0.5">
                               <NeonBadge color={accountBadge.badgeColor}>
                                 {accountBadge.label}
@@ -3096,7 +3096,7 @@ type UsuarioDaLista = User & {
                         )}
 
                         {visibleCols.has("vinculo") && (
-                          <td className="py-3 px-4" style={{ borderRight: "1px solid rgba(148,163,184,0.15)" }}>
+                          <td data-rotulo="Conta vinculada" className="py-3 px-4" style={{ borderRight: "1px solid rgba(148,163,184,0.15)" }}>
                             {(() => {
                               const linked = getLinkedAccount(user);
                               if (linked === "unknown")
@@ -3127,7 +3127,7 @@ type UsuarioDaLista = User & {
                         )}
 
                         {visibleCols.has("status") && (
-                          <td className="py-3 px-4" style={{ borderRight: "1px solid rgba(148,163,184,0.15)" }}>
+                          <td data-rotulo="Status" className="py-3 px-4" style={{ borderRight: "1px solid rgba(148,163,184,0.15)" }}>
                             <div className="space-y-1">
                               {user.auto_paused ? (
                                 <span className="allka-badge allka-badge-status-pausado">
@@ -3159,7 +3159,7 @@ type UsuarioDaLista = User & {
                         )}
 
                         {visibleCols.has("ultimo_acesso") && (
-                          <td className="py-3 px-4">
+                          <td data-rotulo="Último acesso" className="py-3 px-4">
                             <div className="space-y-0.5">
                               <p className="text-xs font-medium text-slate-900 dark:text-slate-100">
                                 {user.last_login

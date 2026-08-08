@@ -2171,7 +2171,7 @@ export default function AdminProjetosPage({
           {/* Table */}
           <div className="rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 shadow-sm overflow-hidden">
             <div className="overflow-x-auto allka-table-scroll">
-              <table className="w-full text-sm min-w-150">
+              <table className="tabela-cartao w-full text-sm min-w-150">
                 <thead>
                   <tr className="border-b border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/60">
                     <th className="text-left px-4 py-2.5 text-xs font-semibold text-slate-500 uppercase tracking-wide w-28">
@@ -2278,24 +2278,24 @@ export default function AdminProjetosPage({
                         key={p.id}
                         className={idx % 2 === 1 ? "bg-slate-50/50 dark:bg-slate-900/30" : ""}
                       >
-                        <td className="px-4 py-3" style={{ borderRight: "1px solid rgba(148,163,184,0.15)" }}>
+                        <td data-rotulo="ID" className="px-4 py-3" style={{ borderRight: "1px solid rgba(148,163,184,0.15)" }}>
                           <span className="font-mono text-xs text-slate-400">
                             proj_{(p as any).seq ?? "?"}
                           </span>
                         </td>
-                        <td className="px-5 py-3 font-medium text-slate-700 dark:text-slate-200">
+                        <td data-rotulo="Projeto" className="px-5 py-3 font-medium text-slate-700 dark:text-slate-200">
                           {p.projectName}
                         </td>
-                        <td className="px-4 py-3 text-slate-500 dark:text-slate-400">
+                        <td data-rotulo="Empresa" className="px-4 py-3 text-slate-500 dark:text-slate-400">
                           {p.companyName}
                         </td>
-                        <td className="px-4 py-3 text-slate-400 text-xs">
+                        <td data-rotulo="Categoria" className="px-4 py-3 text-slate-400 text-xs">
                           {p.serviceCategory}
                         </td>
-                        <td className="px-4 py-3 text-right tabular-nums font-medium text-slate-700 dark:text-slate-200">
+                        <td data-rotulo="Valor" className="px-4 py-3 text-right tabular-nums font-medium text-slate-700 dark:text-slate-200">
                           {fmtPartnerRefBRL(p.projectValue)}
                         </td>
-                        <td className="px-4 py-3 text-right">
+                        <td data-rotulo="Comissão" className="px-4 py-3 text-right">
                           <span className="tabular-nums font-semibold text-emerald-600">
                             {fmtPartnerRefBRL(p.commissionGenerated)}
                           </span>
@@ -2303,12 +2303,12 @@ export default function AdminProjetosPage({
                             {cc.label}
                           </span>
                         </td>
-                        <td className="px-4 py-3">
+                        <td data-rotulo="Status" className="px-4 py-3">
                           <span className={`text-xs px-1.5 py-0.5 rounded font-semibold ${sc.color}`}>
                             {sc.label}
                           </span>
                         </td>
-                        <td className="px-4 py-3 text-xs text-slate-400">
+                        <td data-rotulo="Contratado" className="px-4 py-3 text-xs text-slate-400">
                           {fmtPartnerRefDate(p.contractedAt)}
                         </td>
                       </tr>
@@ -3214,7 +3214,7 @@ export default function AdminProjetosPage({
                 className="overflow-x-auto allka-table-scroll-body"
               >
                 <table
-                  className="w-full text-xs"
+                  className="tabela-cartao w-full text-xs"
                   style={{
                     tableLayout: "fixed",
                     minWidth: visibleCols.reduce(
@@ -3544,7 +3544,7 @@ export default function AdminProjetosPage({
 
                             {/* ID */}
                             {visibleCols.includes("id") && (
-                              <td
+                              <td data-rotulo="#"
                                 className="px-5 py-3.5"
                                 style={{
                                   borderRight:
@@ -3566,7 +3566,7 @@ export default function AdminProjetosPage({
 
                             {/* Projeto */}
                             {visibleCols.includes("name") && (
-                              <td
+                              <td data-rotulo="Projeto"
                                 className="px-5 py-3.5"
                                 style={{
                                   borderRight:
@@ -3611,7 +3611,7 @@ export default function AdminProjetosPage({
 
                             {/* Cliente */}
                             {visibleCols.includes("client") && (
-                              <td
+                              <td data-rotulo="Cliente"
                                 className="px-5 py-3.5"
                                 style={{
                                   borderRight:
@@ -3630,7 +3630,7 @@ export default function AdminProjetosPage({
 
                             {/* Conta responsável */}
                             {visibleCols.includes("owner") && (
-                              <td
+                              <td data-rotulo="Conta responsável"
                                 className="px-5 py-3.5"
                                 style={{
                                   borderRight:
@@ -3690,7 +3690,7 @@ export default function AdminProjetosPage({
 
                             {/* Empresa (agency/company/nomad) */}
                             {visibleCols.includes("agency") && (
-                              <td
+                              <td data-rotulo="Empresa"
                                 className="px-5 py-3.5"
                                 style={{
                                   borderRight:
@@ -3728,7 +3728,7 @@ export default function AdminProjetosPage({
 
                             {/* Tipo */}
                             {visibleCols.includes("type") && (
-                              <td
+                              <td data-rotulo="Tipo"
                                 className="px-5 py-3.5"
                                 style={{
                                   borderRight:
@@ -3744,7 +3744,7 @@ export default function AdminProjetosPage({
 
                             {/* Status */}
                             {visibleCols.includes("status") && (
-                              <td
+                              <td data-rotulo="Status"
                                 className="px-5 py-3.5"
                                 style={{
                                   borderRight:
@@ -3758,7 +3758,7 @@ export default function AdminProjetosPage({
 
                             {/* Progresso */}
                             {visibleCols.includes("progress") && (
-                              <td
+                              <td data-rotulo="Progresso"
                                 className="px-5 py-3.5"
                                 style={{
                                   borderRight:
@@ -3782,7 +3782,7 @@ export default function AdminProjetosPage({
 
                             {/* Orçamento */}
                             {visibleCols.includes("budget") && (
-                              <td
+                              <td data-rotulo="Orçamento"
                                 className="px-5 py-3.5"
                                 style={{
                                   borderRight:
@@ -3801,7 +3801,7 @@ export default function AdminProjetosPage({
 
                             {/* Equipe */}
                             {visibleCols.includes("team") && (
-                              <td
+                              <td data-rotulo="Equipe"
                                 className="px-5 py-3.5"
                                 style={{
                                   borderRight:
@@ -3820,7 +3820,7 @@ export default function AdminProjetosPage({
 
                             {/* Criação */}
                             {visibleCols.includes("created") && (
-                              <td
+                              <td data-rotulo="Criação"
                                 className="px-5 py-3.5"
                                 style={{
                                   borderRight:

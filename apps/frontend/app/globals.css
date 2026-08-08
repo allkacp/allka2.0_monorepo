@@ -2112,3 +2112,118 @@
    * aplica a elemento inline — fica registrado para não parecer esquecimento.
    */
 }
+
+/* ─── Tabela vira cartão no celular ─────────────────────────────────────────
+ *
+ * A plataforma tem 64 tabelas em 49 arquivos, de 8 a 14 colunas. Num aparelho
+ * de 390px isso vira uma planilha para arrastar de lado — funciona, mas é o
+ * que mais separa "site que abre no celular" de "aplicativo".
+ *
+ * Em vez de reescrever cada tabela, a conversão é feita aqui, uma vez. Cada
+ * tabela adere marcando a si mesma com `tabela-cartao` e cada célula com
+ * `data-rotulo="Nome da coluna"` — no desktop nada muda.
+ *
+ *   <table className="tabela-cartao">
+ *     <tbody><tr><td data-rotulo="Cliente">Acme</td>…
+ *
+ * A célula sem `data-rotulo` (ações, seleção) aparece sem legenda, ocupando
+ * a linha inteira — é o comportamento que se quer para os botões do rodapé
+ * do cartão.
+ */
+@media (max-width: 767px) {
+  table.tabela-cartao,
+  table.tabela-cartao tbody,
+  table.tabela-cartao tr,
+  table.tabela-cartao td {
+    display: block;
+    width: auto;
+  }
+
+  /* O cabeçalho vira a legenda de cada célula; some como linha. */
+  table.tabela-cartao thead,
+  table.tabela-cartao colgroup {
+    display: none;
+  }
+
+  table.tabela-cartao {
+    /* solta a largura fixa que as tabelas usam no desktop */
+    table-layout: auto !important;
+    min-width: 0 !important;
+  }
+
+  table.tabela-cartao tr {
+    margin-bottom: 0.625rem;
+    border: 1px solid rgb(226 232 240);
+    border-radius: 0.75rem;
+    padding: 0.5rem 0.75rem;
+    background: white;
+    box-shadow: 0 1px 2px rgb(0 0 0 / 0.04);
+  }
+  .dark table.tabela-cartao tr {
+    border-color: rgb(51 65 85);
+    background: rgb(15 23 42);
+  }
+
+  table.tabela-cartao td {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    padding: 0.375rem 0 !important;
+    border: 0 !important;
+    text-align: right;
+    /* a célula fixa do desktop não faz sentido dentro do cartão */
+    position: static !important;
+    min-height: 44px;
+  }
+
+  table.tabela-cartao td[data-rotulo]::before {
+    content: attr(data-rotulo);
+    flex: 0 0 auto;
+    margin-right: auto;
+    text-align: left;
+    font-size: 0.6875rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    color: rgb(100 116 139);
+  }
+  .dark table.tabela-cartao td[data-rotulo]::before {
+    color: rgb(148 163 184);
+  }
+
+  /* Linha de estado vazio (colSpan) fica centrada, sem virar cartão. */
+  table.tabela-cartao td[colspan] {
+    justify-content: center;
+    text-align: center;
+    border-top: 0 !important;
+    margin-top: 0;
+  }
+
+  /* Célula vazia não vira linha em branco no cartão. */
+  table.tabela-cartao td:empty {
+    display: none;
+  }
+
+  /*
+   * Ações: no desktop são a primeira coluna, fixa à esquerda. Dentro do
+   * cartão isso as jogava para o topo, com o fundo cinza da célula fixa
+   * aparecendo como uma faixa solta. Vão para o fim, sem legenda e sem o
+   * fundo herdado.
+   */
+  table.tabela-cartao tr {
+    display: flex;
+    flex-direction: column;
+  }
+  table.tabela-cartao td:not([data-rotulo]) {
+    order: 99;
+    justify-content: flex-start;
+    border-top: 1px solid rgb(241 245 249) !important;
+    margin-top: 0.25rem;
+    padding-top: 0.5rem !important;
+    background: transparent !important;
+  }
+  .dark table.tabela-cartao td:not([data-rotulo]) {
+    border-top-color: rgb(30 41 59) !important;
+  }
+}
