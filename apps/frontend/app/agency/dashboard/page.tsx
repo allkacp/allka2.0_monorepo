@@ -715,7 +715,59 @@ export default function AdminDashboardPage() {
   const tasksW = dashboardData.tasks;
   const niW = dashboardData.nomadsIndicators;
   const auW = dashboardData.activeUsers;
-  const ppW = dashboardData.partnerProgram;
+  /**
+   * Programa Partner com números reais. O widget exibia constantes escritas
+   * no código (38 partners, 124 convites, R$ 22.400 de MRR). Agora vêm de
+   * GET /api/agencies/partner-stats, que lê PartnerProfile (ciclo do convite)
+   * e Agency.partner_level.
+   */
+  const [partnerStats, setPartnerStats] = useState<{
+    total: number;
+    invitesSent: number;
+    pending: number;
+    accepted: number;
+    diamond: number;
+    platinum: number;
+    gold: number;
+    silver: number;
+    bronze: number;
+    totalEarned: number;
+  } | null>(null);
+
+  useEffect(() => {
+    let cancelado = false;
+    apiClient
+      .getPartnerStats()
+      .then((r: any) => {
+        if (!cancelado) setPartnerStats(r);
+      })
+      .catch(() => {
+        // Sem acesso ou sem rede: o widget cai no que já vinha do
+        // dashboardData em vez de sumir.
+        if (!cancelado) setPartnerStats(null);
+      });
+    return () => {
+      cancelado = true;
+    };
+  }, []);
+
+  const ppW = partnerStats
+    ? {
+        ...dashboardData.partnerProgram,
+        total: partnerStats.total,
+        invitesSent: partnerStats.invitesSent,
+        pending: partnerStats.pending,
+        accepted: partnerStats.accepted,
+        diamond: partnerStats.diamond,
+        platinum: partnerStats.platinum,
+        gold: partnerStats.gold,
+        silver: partnerStats.silver,
+        bronze: partnerStats.bronze,
+        // O painel chamava isto de "MRR gerado", número que a plataforma não
+        // registra. O que existe é quanto os partners já ganharam.
+        mrrGenerated: partnerStats.totalEarned,
+      }
+    : dashboardData.partnerProgram;
 
   const periodOptions = [
     { type: "today" as const, label: "Hoje" },

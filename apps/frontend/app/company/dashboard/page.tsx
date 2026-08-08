@@ -1931,6 +1931,20 @@ export default function AdminDashboardPage() {
 
     const fmtK = (v: number) => v >= 1000 ? `R$ ${(v / 1000).toFixed(1)}k` : `R$ ${v.toLocaleString("pt-BR")}`;
 
+    // "Aguardando o cliente" é a fila do segundo nível de aprovação: a
+    // agência já aprovou e a tarefa espera o aceite desta empresa. O contexto
+    // expõe o status real em `rawStatus` (ver contexts/empresa-context.tsx).
+    const aguardandoClienteCur = empresaTasks.filter(
+      (t) =>
+        t.rawStatus === "APROVACAO_PENDENTE_CLIENTE" &&
+        inRange(t.dueDate, from, to),
+    ).length;
+    const aguardandoClientePrev = empresaTasks.filter(
+      (t) =>
+        t.rawStatus === "APROVACAO_PENDENTE_CLIENTE" &&
+        inRange(t.dueDate, prevFrom, prevTo),
+    ).length;
+
     return {
       activeProjects: {
         value: activeCur.toLocaleString("pt-BR"),
@@ -1953,9 +1967,11 @@ export default function AdminDashboardPage() {
         trend: "up" as const,
       },
       proposalsAwaitingClient: {
-        value: "0",
-        change: 0,
-        trend: "up" as const,
+        value: aguardandoClienteCur.toLocaleString("pt-BR"),
+        change: pct(aguardandoClienteCur, aguardandoClientePrev),
+        trend: (aguardandoClienteCur <= aguardandoClientePrev
+          ? "up"
+          : "down") as "up" | "down",
       },
       contractedValueMonth: {
         value: fmtK(contractedCur),
@@ -1966,6 +1982,13 @@ export default function AdminDashboardPage() {
         value: "—",
         change: 0,
         trend: "up" as const,
+        /**
+         * Sem origem por definição: margem é a diferença entre o que a
+         * plataforma cobra e o que paga aos nômades — dado do Admin. Esta é
+         * a visão de quem contrata, que não tem esse custo. O card fica com
+         * a explicação em vez de um número inventado.
+         */
+        indisponivel: "Indicador do Admin; a empresa não tem o custo interno",
       },
       pendingPayments: {
         value: fmtK(pendingCur),

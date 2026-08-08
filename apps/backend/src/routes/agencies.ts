@@ -125,6 +125,59 @@ router.get("/", verifyToken, async (req, res, next) => {
   }
 });
 
+// GET /api/agencies/partner-stats — números do programa de parceria
+//
+// O widget "Programa Partner" do dashboard de agência exibia estes números
+// chumbados no código (38 partners, 124 convites, R$ 22.400 de MRR...). Aqui
+// eles passam a sair do que existe: PartnerProfile guarda o ciclo do convite
+// (invited | active | declined | suspended) e o nível fica em
+// Agency.partner_level.
+router.get("/partner-stats", verifyToken, async (_req, res, next) => {
+  try {
+    const [porStatus, porNivel, somas] = await Promise.all([
+      prisma.partnerProfile.groupBy({ by: ["status"], _count: true }),
+      // Só conta o nível de quem de fato é partner ativo — toda Agency tem um
+      // partner_level preenchido (bronze por padrão), inclusive quem nunca foi
+      // convidada; contar todas infla o quadro de níveis.
+      prisma.agency.groupBy({
+        by: ["partner_level"],
+        _count: true,
+        where: { partner_profile: { status: "active" } },
+      }),
+      prisma.partnerProfile.aggregate({
+        _sum: { total_earned: true, balance: true },
+      }),
+    ]);
+
+    const contar = (st: string) =>
+      porStatus.find((x) => x.status === st)?._count ?? 0;
+    const nivel = (n: string) =>
+      porNivel.find((x) => x.partner_level === n)?._count ?? 0;
+
+    res.json({
+      // convites enviados = todo PartnerProfile já criado, em qualquer estado
+      invitesSent: porStatus.reduce((acc, x) => acc + x._count, 0),
+      pending: contar("invited"),
+      accepted: contar("active"),
+      declined: contar("declined"),
+      suspended: contar("suspended"),
+      total: contar("active"),
+      diamond: nivel("diamond"),
+      platinum: nivel("platinum"),
+      gold: nivel("gold"),
+      silver: nivel("silver"),
+      bronze: nivel("bronze"),
+      // Quanto os partners já ganharam e o que ainda está em carteira. Não é
+      // "MRR gerado" — esse número exigiria atribuir receita recorrente à
+      // indicação, o que a plataforma ainda não registra.
+      totalEarned: somas._sum.total_earned ?? 0,
+      currentBalance: somas._sum.balance ?? 0,
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
 // GET /api/agencies/:id
 router.get("/:id", verifyToken, async (req, res, next) => {
   try {

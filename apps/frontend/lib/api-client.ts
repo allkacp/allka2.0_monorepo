@@ -621,6 +621,11 @@ class ApiClient {
   }
 
   // ─── Agencies ─────────────────────────────────────────────────────────────
+  /** Números do programa de parceria (convites, níveis, ganhos). */
+  async getPartnerStats() {
+    return this.get("/agencies/partner-stats");
+  }
+
   async getAgencies(filters?: Record<string, any>) {
     return this.get("/agencies", filters);
   }
