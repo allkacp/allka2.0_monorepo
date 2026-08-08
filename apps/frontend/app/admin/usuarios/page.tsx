@@ -56,7 +56,7 @@ import {
 } from "lucide-react";
 import { useSorting, SortableHeader } from "@/hooks/useSorting";
 import { useTableScrollSync } from "@/hooks/useTableScrollSync";
-import type { User } from "@/types/user";
+import type { User, UserRole } from "@/types/user";
 import { UserViewSlidePanel } from "@/components/user-view-slide-panel";
 import { SlidePanel } from "@/components/slide-panel";
 import { StandardModalDialog } from "@/components/standard-modal-dialog";
@@ -263,7 +263,24 @@ type UsuarioDaLista = User & {
   const [deletionReason, setDeletionReason] = useState("");
   const [deletionReasonError, setDeletionReasonError] = useState("");
   const [searchTerm, setSearchTerm] = useState("");
-  const [roleFilter, setRoleFilter] = useState("all");
+  /**
+   * Funções que existem de fato na plataforma (conferido contra o banco).
+   * O filtro avançado oferecia só "admin"/"user", e decidia pelo texto:
+   * `role.includes("admin")` — o que fazia company_admin e agency_admin
+   * contarem como administradores da plataforma. E havia um filtro por função
+   * específica que nenhum controle da tela chegava a acionar, com dois nomes
+   * ("financial", "team_allka") que não existem em lugar nenhum.
+   */
+  const FUNCOES: { value: UserRole; label: string }[] = [
+    { value: "admin", label: "Administrador" },
+    { value: "agency_admin", label: "Admin de agência" },
+    { value: "agency_consultant", label: "Consultor de agência" },
+    { value: "company_admin", label: "Admin de empresa" },
+    { value: "company_financial", label: "Financeiro da empresa" },
+    { value: "lider", label: "Líder" },
+    { value: "nomad", label: "Nômade" },
+    { value: "nomad_admin", label: "Admin de nômades" },
+  ];
   const [currentUserId] = useState("1");
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
 
@@ -546,30 +563,6 @@ type UsuarioDaLista = User & {
         if (statusFilter === "inactive" && user.is_active) return false;
       }
 
-      if (roleFilter !== "all") {
-        if (roleFilter === "company_admin" && user.role !== "company_admin")
-          return false;
-        if (roleFilter === "company_user" && user.role !== "company_user")
-          return false;
-        if (roleFilter === "agency_admin" && user.role !== "agency_admin")
-          return false;
-        if (roleFilter === "agency_user" && user.role !== "agency_user")
-          return false;
-        if (roleFilter === "nomad" && user.role !== "nomad") return false;
-        if (roleFilter === "admin" && user.role !== "admin") return false;
-        // "financial" e "team_allka" não existem como função no banco (os
-        // valores reais são company_financial, agency_consultant, lider,
-        // nomad_admin...). Estes dois filtros nunca encontram ninguém; ficam
-        // aqui para não passarem a devolver a lista inteira.
-        if (roleFilter === "financial" && (user.role as string) !== "financial")
-          return false;
-        if (
-          roleFilter === "team_allka" &&
-          (user.role as string) !== "team_allka"
-        )
-          return false;
-        if (roleFilter === "partner" && user.role !== "partner") return false;
-      }
 
       // Advanced filters — identificação
       if (advancedFilters.name.trim()) {
@@ -623,18 +616,7 @@ type UsuarioDaLista = User & {
 
       // Advanced filters — função
       if (advancedFilters.roles.length > 0) {
-        const r = (user.role || "").toLowerCase();
-        const isAdmin =
-          r.includes("admin") ||
-          r === "admin" ||
-          r === "team_allka" ||
-          r === "financial";
-        const match = advancedFilters.roles.some((role) => {
-          if (role === "admin") return isAdmin;
-          if (role === "user") return !isAdmin;
-          return false;
-        });
-        if (!match) return false;
+        if (!advancedFilters.roles.includes(user.role || "")) return false;
       }
 
       // Advanced filters — status
@@ -688,7 +670,7 @@ type UsuarioDaLista = User & {
 
     setFilteredUsers(filtered);
     setCurrentPage(1);
-  }, [users, searchTerm, statusFilter, roleFilter, advancedFilters]);
+  }, [users, searchTerm, statusFilter, advancedFilters]);
 
   // Pagination effect
   useEffect(() => {
@@ -894,7 +876,6 @@ type UsuarioDaLista = User & {
   const clearFilters = () => {
     setSearchTerm("");
     setStatusFilter("all");
-    setRoleFilter("all");
     setAdvancedFilters({
       name: "",
       email: "",
@@ -931,7 +912,6 @@ type UsuarioDaLista = User & {
   const hasActiveFilters =
     searchTerm ||
     statusFilter !== "all" ||
-    roleFilter !== "all" ||
     advancedFilters.registrationDateFrom ||
     advancedFilters.registrationDateTo ||
     advancedFilters.lastAccessDateFrom ||
@@ -2155,7 +2135,7 @@ type UsuarioDaLista = User & {
                                     Função
                                   </label>
                                   <div className="flex flex-wrap gap-2">
-                                    {["admin", "user"].map((role) => (
+                                    {FUNCOES.map(({ value: role, label }) => (
                                       <label
                                         key={role}
                                         className="flex items-center gap-2 cursor-pointer"
@@ -2182,8 +2162,8 @@ type UsuarioDaLista = User & {
                                           }}
                                           className="rounded border-slate-300 dark:border-slate-600"
                                         />
-                                        <span className="text-sm text-slate-700 dark:text-slate-300 capitalize">
-                                          {role}
+                                        <span className="text-sm text-slate-700 dark:text-slate-300">
+                                          {label}
                                         </span>
                                       </label>
                                     ))}

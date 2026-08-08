@@ -5108,7 +5108,7 @@ export default function AdminDashboardPage() {
             icon: <Briefcase className="h-4 w-4" />,
             iconBg: "bg-blue-500/10",
             iconColor: "text-blue-500",
-            href: "/admin/projects",
+            href: "/lider/projetos",
             items: [
               {
                 label: "Andamento",
@@ -5157,7 +5157,7 @@ export default function AdminDashboardPage() {
             icon: <CheckSquare className="h-4 w-4" />,
             iconBg: "bg-violet-500/10",
             iconColor: "text-violet-500",
-            href: "/admin/tasks",
+            href: "/lider/tarefas",
             items: [
               {
                 label: "Contratadas",
@@ -5198,7 +5198,7 @@ export default function AdminDashboardPage() {
             icon: <Users className="h-4 w-4" />,
             iconBg: "bg-cyan-500/10",
             iconColor: "text-cyan-500",
-            href: "/admin/leads",
+            href: "/lider/projetos",
             items: [
               {
                 label: "Novos",

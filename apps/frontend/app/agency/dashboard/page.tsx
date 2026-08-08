@@ -2205,117 +2205,7 @@ export default function AdminDashboardPage() {
     },
   ];
 
-  const permissionMatrixData = [
-    {
-      module: "Usuários",
-      master: true,
-      financeiro: false,
-      comercial: true,
-      operacional: false,
-    },
-    {
-      module: "Financeiro",
-      master: true,
-      financeiro: true,
-      comercial: false,
-      operacional: false,
-    },
-    {
-      module: "Projetos",
-      master: true,
-      financeiro: false,
-      comercial: true,
-      operacional: true,
-    },
-    {
-      module: "Relatórios",
-      master: true,
-      financeiro: true,
-      comercial: true,
-      operacional: true,
-    },
-    {
-      module: "Configurações",
-      master: true,
-      financeiro: false,
-      comercial: false,
-      operacional: false,
-    },
-    {
-      module: "Disputas",
-      master: true,
-      financeiro: false,
-      comercial: false,
-      operacional: true,
-    },
-  ];
 
-  const managementToolsData = [
-    {
-      title: "Gerenciar Permissões",
-      description: "Criar e editar perfis administrativos",
-      color:
-        "from-destructive/10 to-destructive/20 dark:from-destructive/5 dark:to-destructive/10",
-      hoverColor:
-        "hover:from-destructive/20 hover:to-destructive/30 dark:hover:from-destructive/10 dark:hover:to-destructive/15",
-      textColor: "text-destructive-foreground",
-      subTextColor: "text-destructive",
-      href: "/admin/permissoes",
-    },
-    {
-      title: "Gerenciar Usuários",
-      description: "Criar, editar e desativar contas",
-      color: "from-info/10 to-info/20 dark:from-info/5 dark:to-info/10",
-      hoverColor:
-        "hover:from-info/20 hover:to-info/30 dark:hover:from-info/10 dark:hover:to-info/15",
-      textColor: "text-info-foreground",
-      subTextColor: "text-info",
-      href: "/admin/usuarios",
-    },
-    {
-      title: "Relatórios Financeiros",
-      description: "Visualizar receitas e pagamentos",
-      color:
-        "from-success/10 to-success/20 dark:from-success/5 dark:to-success/10",
-      hoverColor:
-        "hover:from-success/20 hover:to-success/30 dark:hover:from-success/10 dark:hover:to-success/15",
-      textColor: "text-success-foreground",
-      subTextColor: "text-success",
-      href: "/admin/relatorios",
-    },
-    {
-      title: "Configurações da Plataforma",
-      description: "Ajustar parâmetros do sistema",
-      color:
-        "from-primary/10 to-primary/20 dark:from-primary/5 dark:to-primary/10",
-      hoverColor:
-        "hover:from-primary/20 hover:to-primary/30 dark:hover:from-primary/10 dark:hover:to-primary/15",
-      textColor: "text-primary-foreground",
-      subTextColor: "text-primary",
-      href: "/admin/configuracoes",
-    },
-    {
-      title: "Resolver Disputas",
-      description: "Mediar conflitos entre usuários",
-      color:
-        "from-warning/10 to-warning/20 dark:from-warning/5 dark:to-warning/10",
-      hoverColor:
-        "hover:from-warning/20 hover:to-warning/30 dark:hover:from-warning/10 dark:hover:to-warning/15",
-      textColor: "text-warning-foreground",
-      subTextColor: "text-warning",
-      href: "/admin/disputas",
-    },
-    {
-      title: "Logs do Sistema",
-      description: "Monitorar atividades e erros",
-      color: "from-muted to-muted/50 dark:from-muted/50 dark:to-muted/30",
-      hoverColor:
-        "hover:from-muted/80 hover:to-muted/60 dark:hover:from-muted/60 dark:hover:to-muted/40",
-      textColor: "text-foreground",
-      subTextColor: "text-muted-foreground",
-      href: "/admin/logs",
-    },
-  ];
 
   const getAlertIcon = (type: string) => {
     switch (type) {
@@ -4309,10 +4199,10 @@ export default function AdminDashboardPage() {
                       text: "text-info",
                     },
                     {
-                      to: "/admin/nomades",
+                      to: "/agency/tarefas",
                       icon: UserCheck,
-                      label: "Gerenciar Nômades",
-                      desc: "Ver e gerenciar a base de nômades",
+                      label: "Tarefas em Execução",
+                      desc: "Acompanhar o que os nômades estão fazendo",
                       border: "border-success/20",
                       bg: "bg-success/5",
                       text: "text-success",
@@ -4327,19 +4217,19 @@ export default function AdminDashboardPage() {
                       text: "text-chart-4",
                     },
                     {
-                      to: "/admin/configuracoes",
+                      to: "/agency/clientes",
                       icon: Settings,
-                      label: "Configurações",
-                      desc: "Ajustar parâmetros do sistema",
+                      label: "Clientes",
+                      desc: "Cadastro e histórico dos seus clientes",
                       border: "border-warning/20",
                       bg: "bg-warning/5",
                       text: "text-warning",
                     },
                     {
-                      to: "/admin/permissoes",
+                      to: "/agency/usuarios",
                       icon: Key,
-                      label: "Permissões",
-                      desc: "Perfis e acessos administrativos",
+                      label: "Usuários",
+                      desc: "Quem tem acesso e com qual função",
                       border: "border-violet-200 dark:border-violet-800",
                       bg: "bg-violet-50 dark:bg-violet-950/20",
                       text: "text-violet-600 dark:text-violet-400",
@@ -5519,7 +5409,7 @@ export default function AdminDashboardPage() {
             icon: <Briefcase className="h-4 w-4" />,
             iconBg: "bg-blue-500/10",
             iconColor: "text-blue-500",
-            href: "/admin/projects",
+            href: "/agency/projetos",
             items: [
               {
                 label: "Andamento",
@@ -5568,7 +5458,7 @@ export default function AdminDashboardPage() {
             icon: <CheckSquare className="h-4 w-4" />,
             iconBg: "bg-violet-500/10",
             iconColor: "text-violet-500",
-            href: "/admin/tasks",
+            href: "/agency/tarefas",
             items: [
               {
                 label: "Contratadas",
@@ -5609,7 +5499,7 @@ export default function AdminDashboardPage() {
             icon: <Users className="h-4 w-4" />,
             iconBg: "bg-cyan-500/10",
             iconColor: "text-cyan-500",
-            href: "/admin/leads",
+            href: "/agency/projetos",
             items: [
               {
                 label: "Novos",
