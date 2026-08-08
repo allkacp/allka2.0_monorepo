@@ -27,6 +27,22 @@ export interface LoginRoleConfig {
   outlinedFontSize?: string;
   /** Tipo de acesso que esta página de login representa */
   accessType: AccessTypeId;
+  /**
+   * Perfis que compartilham esta mesma tela de login.
+   *
+   * Existe por causa de Agency e Partner: Partner não é um login próprio — é
+   * a mesma Agency com o convite aceito (ver PartnerProfile). Antes não havia
+   * como saber, na tela, qual dos dois se está testando. Escolher aqui troca
+   * o e-mail sugerido e para onde o login leva; o `accessType` continua o
+   * mesmo, porque para o backend os dois são a mesma coisa.
+   */
+  perfis?: {
+    id: string;
+    label: string;
+    email: string;
+    redirectPath: string;
+    descricao?: string;
+  }[];
 }
 
 // ─── Access Types ───────────────────────────────────────────────────────────
@@ -200,7 +216,12 @@ export function LoginPageTemplate({ config }: Props) {
   const [locale, setLocale] = useState<Locale>(() => {
     return (localStorage.getItem("allka_login_locale") as Locale) ?? "pt";
   });
-  const [email, setEmail] = useState(config.defaultEmail);
+  const [perfilId, setPerfilId] = useState(config.perfis?.[0]?.id ?? "");
+  const perfil = config.perfis?.find((p) => p.id === perfilId);
+  const [email, setEmail] = useState(
+    config.perfis?.[0]?.email ?? config.defaultEmail,
+  );
+  const destino = perfil?.redirectPath ?? config.redirectPath;
   const [password, setPassword] = useState(config.defaultPassword ?? "");
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -227,10 +248,10 @@ export function LoginPageTemplate({ config }: Props) {
   useEffect(() => {
     const token = localStorage.getItem("allka_token");
     if (token && token !== "mock-jwt-1") {
-      navigate(config.redirectPath, { replace: true });
+      navigate(destino, { replace: true });
       return;
     }
-  }, [navigate, config.redirectPath]);
+  }, [navigate, destino]);
 
   const switchLocale = (l: Locale) => {
     setLocale(l);
@@ -259,7 +280,7 @@ export function LoginPageTemplate({ config }: Props) {
         if (res.user)
           localStorage.setItem("allka_user", JSON.stringify(res.user));
         localStorage.removeItem("allka_logged_out");
-        navigate(config.redirectPath, { replace: true });
+        navigate(destino, { replace: true });
       } else {
         setErrorMsg(ui.errorLogin);
       }
@@ -519,6 +540,44 @@ export function LoginPageTemplate({ config }: Props) {
             </div>
 
             <form onSubmit={handleSubmit} className="space-y-4">
+              {config.perfis && config.perfis.length > 1 && (
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wider">
+                    Entrar como
+                  </Label>
+                  <div className="grid grid-cols-2 gap-2">
+                    {config.perfis.map((op) => {
+                      const ativo = op.id === perfilId;
+                      return (
+                        <button
+                          key={op.id}
+                          type="button"
+                          onClick={() => {
+                            setPerfilId(op.id);
+                            setEmail(op.email);
+                            setErrorMsg(null);
+                          }}
+                          className={`rounded-lg border px-3 py-2 text-left transition-all ${
+                            ativo
+                              ? "border-primary bg-primary/5 ring-1 ring-primary/30"
+                              : "border-slate-200 dark:border-slate-700 hover:border-slate-300"
+                          }`}
+                        >
+                          <span className="block text-sm font-semibold text-slate-800 dark:text-slate-100">
+                            {op.label}
+                          </span>
+                          {op.descricao && (
+                            <span className="block text-[11px] text-slate-500 leading-tight">
+                              {op.descricao}
+                            </span>
+                          )}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
               <div className="space-y-1.5">
                 <Label
                   htmlFor="email"

@@ -11,6 +11,25 @@ const config: LoginRoleConfig = {
   redirectPath: "/agency/dashboard",
   accessType: "AGENCY",
   devUser: { email: "gabriel@lamego.com.vc" },
+  // Partner não tem login próprio: é uma Agency com o convite aceito. O
+  // seletor existe para dar para escolher, na tela, qual das duas visões
+  // testar — a conta do Valdério é a única Partner ativa hoje.
+  perfis: [
+    {
+      id: "agency",
+      label: "Agência",
+      email: "gabriel@lamego.com.vc",
+      redirectPath: "/agency/dashboard",
+      descricao: "Painel padrão da agência",
+    },
+    {
+      id: "partner",
+      label: "Partner",
+      email: "valderio@lamego.com.vc",
+      redirectPath: "/partner/dashboard",
+      descricao: "Agência com programa de parceria",
+    },
+  ],
   translations: {
     pt: {
       tag: "Allka Agency",

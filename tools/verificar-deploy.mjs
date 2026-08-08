@@ -75,25 +75,53 @@ const CAMINHOS = {
   frontend: "apps/frontend docker/frontend.prod.Dockerfile .github/workflows/deploy-frontend.yml",
 };
 
+/** `a` é ancestral de `b` (ou o próprio)? */
+function contem(a, b) {
+  try {
+    sh(`git merge-base --is-ancestor ${a} ${b}`);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 console.log(`commit publicado em ${REMOTO}/main : ${publicado}\n`);
 const esperado = {};
 for (const servico of ["backend", "frontend"]) {
   esperado[servico] = sh(
     `git log -1 --format=%h --abbrev=7 ${REMOTO}/main -- ${CAMINHOS[servico]}`,
   );
-  const tag = tags[servico] ?? "(não está rodando)";
-  const ok = tag === esperado[servico];
+  const tag = tags[servico] ?? "";
+
+  // Rodar um commit MAIS NOVO que o último a tocar no serviço não é
+  // divergência: um deploy manual (workflow_dispatch) reconstrói no HEAD
+  // mesmo sem mudança nos caminhos daquele serviço. O que importa é o
+  // commit em produção conter a última mudança do serviço e existir na
+  // branch publicada — não ser exatamente igual.
+  const naBranch = tag ? contem(tag, publicado) : false;
+  const temAMudanca = tag ? contem(esperado[servico], tag) : false;
+  const ok = naBranch && temAMudanca;
   if (!ok) problemas++;
+
+  const motivo = !tag
+    ? "não está rodando"
+    : !naBranch
+      ? `${tag} não está em ${REMOTO}/main`
+      : `${tag} é anterior a ${esperado[servico]}`;
   console.log(
-    `  ${ok ? "ok   " : "ATRÁS"}  ${servico.padEnd(9)} rodando ${tag}` +
-      (ok ? "" : `, esperado ${esperado[servico]}`),
+    `  ${ok ? "ok   " : "ATRÁS"}  ${servico.padEnd(9)} rodando ${tag || "—"}` +
+      (ok
+        ? tag === esperado[servico]
+          ? ""
+          : ` (inclui ${esperado[servico]}, a última mudança do serviço)`
+        : ` — ${motivo}`),
   );
 }
 
 // ── a tag bate, mas o conteúdo confere? ─────────────────────────────────────
 // Só a tag não basta: foi exatamente esse o primeiro modo de falha. Procura
 // no dist do container uma marca que só existe no código atual.
-if (tags.backend === esperado.backend) {
+if (tags.backend && contem(esperado.backend, tags.backend)) {
   const marcaLocal = sh(
     "git grep -c requirePermission -- apps/backend/src/middleware/auth.ts || true",
   );
