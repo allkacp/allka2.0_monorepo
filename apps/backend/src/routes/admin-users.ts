@@ -17,6 +17,9 @@ const ALLOWED_SORT = ["name", "email", "created_at", "last_login", "role", "acco
 const enrichedSelect = {
   id: true,
   user_code: true,
+  // A tela de usuários precisa saber quem ainda não definiu senha, para
+  // oferecer o link de primeiro acesso (POST /api/users/:id/primeiro-acesso).
+  must_set_password: true,
   email: true,
   username: true,
   name: true,
