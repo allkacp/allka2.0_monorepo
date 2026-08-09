@@ -58,6 +58,9 @@ jobs:
           short_sha="${GITHUB_SHA::7}"
           echo "backend_image=${REGISTRY}/${repo}/backend:${short_sha}" >> "$GITHUB_OUTPUT"
           echo "backend_latest=${REGISTRY}/${repo}/backend:dev" >> "$GITHUB_OUTPUT"
+          # ${repo} ja vem em minusculas (GHCR exige); reaproveitar aqui evita
+          # repetir a normalizacao na referencia do cache.
+          echo "backend_buildcache=${REGISTRY}/${repo}/backend:buildcache" >> "$GITHUB_OUTPUT"
           echo "frontend_image=${REGISTRY}/${repo}/frontend:dev" >> "$GITHUB_OUTPUT"
 
       - name: Set up Docker Buildx
@@ -79,18 +82,21 @@ jobs:
           tags: |
             ${{ steps.images.outputs.backend_image }}
             ${{ steps.images.outputs.backend_latest }}
-          # Cache de layers desligado de proposito.
+          # Cache de layers em registry, e não `type=gha`.
           #
-          # Com `type=gha` as imagens publicadas passaram a sair com codigo
-          # antigo: a imagem backend:2040672, construida em 07/08, nao tinha
-          # nada do que entrou desde 03/08 (sem stage-engine, sem
-          # must_set_password) — enquanto o mesmo Dockerfile, construido
-          # localmente a partir do mesmo commit, produzia o codigo correto.
-          # Ou seja: o deploy vinha "funcionando" e publicando codigo velho.
+          # O `type=gha` publicava imagens carimbadas com o SHA certo e código
+          # de dias antes (ver aa89a0c). Ficou desligado desde então, ao custo
+          # de alguns minutos por build. Volta agora por outro backend — o
+          # próprio GHCR —, que é um caminho de armazenamento diferente do que
+          # apresentou o problema.
           #
-          # Build sem cache leva alguns minutos a mais e e o unico jeito de
-          # garantir que o que sobe e o que esta no commit. So religar depois
-          # de entender por que a chave de cache nao invalidava.
+          # Como não há confirmação da causa original (exige os logs do
+          # Actions), a rede de proteção é `npm run verificar:deploy`, que
+          # confere o CONTEÚDO da imagem em produção e não só a tag. Se voltar
+          # a sair código velho, desligar de novo é uma linha.
+          cache-from: type=registry,ref=${{ steps.images.outputs.backend_buildcache }}
+          cache-to: type=registry,ref=${{ steps.images.outputs.backend_buildcache }},mode=max
+
 
       - name: Validate required deploy secrets
         shell: bash
