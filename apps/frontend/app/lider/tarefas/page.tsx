@@ -441,7 +441,7 @@ export default function LiderTarefasPage() {
         {!loading && filtered.length > 0 && (
           <div className="overflow-x-auto allka-table-scroll">
             <table
-              className="text-sm"
+              className="tabela-cartao text-sm"
               style={{ tableLayout: "fixed", width: "100%", minWidth: 960 }}
             >
               <colgroup>
@@ -501,7 +501,7 @@ export default function LiderTarefasPage() {
                       )}
                     >
                       {/* Código */}
-                      <td className="px-5 py-3.5" style={{ borderRight: "1px solid rgba(148,163,184,0.15)", overflow: "hidden" }}>
+                      <td data-rotulo="Código" className="px-5 py-3.5" style={{ borderRight: "1px solid rgba(148,163,184,0.15)", overflow: "hidden" }}>
                         {code ? (
                           <span className="text-[11px] font-mono font-bold bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-300 border border-blue-100 dark:border-blue-800 px-1.5 py-0.5 rounded">
                             {code}
@@ -512,14 +512,14 @@ export default function LiderTarefasPage() {
                       </td>
 
                       {/* Tarefa */}
-                      <td className="px-5 py-3.5" style={{ borderRight: "1px solid rgba(148,163,184,0.15)", overflow: "hidden" }}>
+                      <td data-rotulo="Tarefa" className="px-5 py-3.5" style={{ borderRight: "1px solid rgba(148,163,184,0.15)", overflow: "hidden" }}>
                         <p className="text-sm font-semibold text-slate-800 dark:text-slate-200 truncate leading-snug" title={title}>
                           {title}
                         </p>
                       </td>
 
                       {/* Produto */}
-                      <td className="px-5 py-3.5" style={{ borderRight: "1px solid rgba(148,163,184,0.15)", overflow: "hidden" }}>
+                      <td data-rotulo="Produto" className="px-5 py-3.5" style={{ borderRight: "1px solid rgba(148,163,184,0.15)", overflow: "hidden" }}>
                         <div className="flex items-center gap-1.5 min-w-0">
                           <Package className="h-3.5 w-3.5 text-purple-400 shrink-0" />
                           <span className="text-sm text-slate-700 dark:text-slate-300 truncate" title={product}>{product}</span>
@@ -527,7 +527,7 @@ export default function LiderTarefasPage() {
                       </td>
 
                       {/* Projeto */}
-                      <td className="px-5 py-3.5" style={{ borderRight: "1px solid rgba(148,163,184,0.15)", overflow: "hidden" }}>
+                      <td data-rotulo="Projeto" className="px-5 py-3.5" style={{ borderRight: "1px solid rgba(148,163,184,0.15)", overflow: "hidden" }}>
                         <div className="flex items-center gap-1.5 min-w-0">
                           <FolderOpen className="h-3.5 w-3.5 text-slate-400 shrink-0" />
                           <span className="text-sm text-slate-700 dark:text-slate-300 truncate" title={project}>{project}</span>
@@ -535,7 +535,7 @@ export default function LiderTarefasPage() {
                       </td>
 
                       {/* Cliente */}
-                      <td className="px-5 py-3.5" style={{ borderRight: "1px solid rgba(148,163,184,0.15)", overflow: "hidden" }}>
+                      <td data-rotulo="Cliente" className="px-5 py-3.5" style={{ borderRight: "1px solid rgba(148,163,184,0.15)", overflow: "hidden" }}>
                         {client ? (
                           <div className="flex items-center gap-1.5 min-w-0">
                             <Building2 className="h-3.5 w-3.5 text-slate-400 shrink-0" />
@@ -547,7 +547,7 @@ export default function LiderTarefasPage() {
                       </td>
 
                       {/* Prazo */}
-                      <td className="px-5 py-3.5" style={{ borderRight: "1px solid rgba(148,163,184,0.15)", overflow: "hidden" }}>
+                      <td data-rotulo="Prazo" className="px-5 py-3.5" style={{ borderRight: "1px solid rgba(148,163,184,0.15)", overflow: "hidden" }}>
                         {task.due_date ? (
                           <div>
                             <span className={cn(
@@ -574,7 +574,7 @@ export default function LiderTarefasPage() {
                       </td>
 
                       {/* Status */}
-                      <td className="px-5 py-3.5" style={{ borderRight: "1px solid rgba(148,163,184,0.15)", overflow: "hidden" }}>
+                      <td data-rotulo="Status" className="px-5 py-3.5" style={{ borderRight: "1px solid rgba(148,163,184,0.15)", overflow: "hidden" }}>
                         <StatusBadge status={task.status} />
                       </td>
 

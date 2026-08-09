@@ -214,7 +214,7 @@ export default function AdminAgenciasPage() {
               </div>
             ) : (
               <div className="overflow-x-auto">
-                <table className="w-full text-sm">
+                <table className="tabela-cartao w-full text-sm">
                   <thead>
                     <tr className="border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50">
                       {["ID", "Agência", "Responsável", "Contato", "Local", "Vínculos", "Status"].map(
@@ -241,7 +241,7 @@ export default function AdminAgenciasPage() {
                             i % 2 === 1 && "bg-slate-50/50 dark:bg-slate-900/30",
                           )}
                         >
-                          <td className="py-3 px-4 align-top">
+                          <td data-rotulo="ID" className="py-3 px-4 align-top">
                             <div className="flex flex-col gap-0.5">
                               <span className="text-xs font-mono font-semibold text-slate-500 dark:text-slate-400">
                                 {a.sequence_number ?? "—"}
@@ -249,7 +249,7 @@ export default function AdminAgenciasPage() {
                               <LegacyIdBadge legacyId={a.legacy_id} entidade="agência" />
                             </div>
                           </td>
-                          <td className="py-3 px-4 align-top">
+                          <td data-rotulo="Agência" className="py-3 px-4 align-top">
                             <p className="font-semibold text-slate-800 dark:text-slate-100 leading-tight">
                               {a.name}
                             </p>
@@ -257,7 +257,7 @@ export default function AdminAgenciasPage() {
                               <p className="text-[11px] text-slate-400 font-mono mt-0.5">{a.cnpj}</p>
                             )}
                           </td>
-                          <td className="py-3 px-4 align-top">
+                          <td data-rotulo="Responsável" className="py-3 px-4 align-top">
                             <p className="text-slate-700 dark:text-slate-300">
                               {dono?.name ?? "—"}
                             </p>
@@ -265,20 +265,20 @@ export default function AdminAgenciasPage() {
                               <p className="text-[11px] text-slate-400">{dono.email}</p>
                             )}
                           </td>
-                          <td className="py-3 px-4 align-top text-slate-600 dark:text-slate-300">
+                          <td data-rotulo="Contato" className="py-3 px-4 align-top text-slate-600 dark:text-slate-300">
                             <p>{a.email ?? "—"}</p>
                             {a.phone && <p className="text-[11px] text-slate-400">{a.phone}</p>}
                           </td>
-                          <td className="py-3 px-4 align-top text-slate-600 dark:text-slate-300 whitespace-nowrap">
+                          <td data-rotulo="Local" className="py-3 px-4 align-top text-slate-600 dark:text-slate-300 whitespace-nowrap">
                             {[a.city, a.state].filter(Boolean).join(" / ") || "—"}
                           </td>
-                          <td className="py-3 px-4 align-top whitespace-nowrap">
+                          <td data-rotulo="Vínculos" className="py-3 px-4 align-top whitespace-nowrap">
                             <span className="inline-flex items-center gap-1 text-xs text-slate-600 dark:text-slate-300">
                               <Users className="h-3.5 w-3.5 text-slate-400" />
                               {a._count?.members ?? 0} usuários
                             </span>
                           </td>
-                          <td className="py-3 px-4 align-top">
+                          <td data-rotulo="Status" className="py-3 px-4 align-top">
                             <span
                               className={cn(
                                 "inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-semibold",
