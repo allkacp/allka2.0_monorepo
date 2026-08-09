@@ -17,9 +17,19 @@ permissions:
   contents: read
   packages: write
 
+# Os dois deploys compartilham o MESMO grupo de concorrência de propósito.
+#
+# Eles terminam no mesmo VPS, mexendo no mesmo .env e rodando o mesmo
+# `docker compose up -d`. Com grupos separados os dois rodavam em paralelo
+# quando um push tocava backend e frontend — e nas duas vezes em que isso
+# aconteceu (2882259 e e06c506) só o frontend subiu, sem erro visível. Push
+# que tocava só o backend (a834786) subia normal.
+#
+# `cancel-in-progress: false` para enfileirar em vez de cancelar: cancelar o
+# deploy do backend no meio deixaria o VPS num estado indefinido.
 concurrency:
-  group: deploy-backend
-  cancel-in-progress: true
+  group: deploy-vps
+  cancel-in-progress: false
 
 env:
   REGISTRY: ghcr.io
