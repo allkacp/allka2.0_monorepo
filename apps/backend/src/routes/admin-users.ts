@@ -168,6 +168,11 @@ function mapUser(u: EnrichedUser) {
     nomad_id: u.nomade?.id ?? null,
     nomad_name: u.nomade?.name ?? null,
     leader_areas: activeLiderAreas.map((a) => a.area_nome),
+    // Quem ainda não definiu a própria senha (importados da plataforma
+    // antiga). A tela de usuários usa para oferecer o link de primeiro
+    // acesso. Precisa estar aqui, e não só no select: mapUser monta a
+    // resposta campo a campo.
+    must_set_password: u.must_set_password,
     has_profile_link,
     profile_link_type,
     profile_link_name,
