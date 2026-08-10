@@ -245,7 +245,7 @@ export default function PartnerSaques() {
               />
             </div>
             <div className="overflow-x-auto allka-table-scroll">
-            <table className="w-full text-sm min-w-150">
+            <table className="tabela-cartao w-full text-sm min-w-150">
               <thead>
                 <tr className="border-b border-slate-100 dark:border-slate-800">
                   <th className="text-left px-5 py-2.5 text-xs font-semibold text-slate-500 uppercase tracking-wide">
@@ -277,13 +277,13 @@ export default function PartnerSaques() {
                           : ""
                       }
                     >
-                      <td className="px-5 py-3 font-bold tabular-nums text-slate-700 dark:text-slate-200">
+                      <td data-rotulo="Valor" className="px-5 py-3 font-bold tabular-nums text-slate-700 dark:text-slate-200">
                         {fmtBRL(w.amount)}
                       </td>
-                      <td className="px-4 py-3 text-xs text-slate-500">
+                      <td data-rotulo="Chave PIX" className="px-4 py-3 text-xs text-slate-500">
                         {w.pixKey}
                       </td>
-                      <td className="px-4 py-3">
+                      <td data-rotulo="Status" className="px-4 py-3">
                         <span
                           className={`inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded font-semibold ${sc.bg}`}
                         >
@@ -291,13 +291,13 @@ export default function PartnerSaques() {
                           {sc.label}
                         </span>
                       </td>
-                      <td className="px-4 py-3 text-xs text-slate-400">
+                      <td data-rotulo="Solicitado em" className="px-4 py-3 text-xs text-slate-400">
                         {fmtDateTime(w.requestedAt)}
                       </td>
-                      <td className="px-4 py-3 text-xs text-slate-400">
+                      <td data-rotulo="Processado em" className="px-4 py-3 text-xs text-slate-400">
                         {w.reviewedAt ? fmtDateTime(w.reviewedAt) : "—"}
                       </td>
-                      <td className="px-4 py-3 text-xs text-slate-400">
+                      <td data-rotulo="Obs." className="px-4 py-3 text-xs text-slate-400">
                         {w.notes ?? "—"}
                       </td>
                     </tr>

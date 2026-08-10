@@ -185,7 +185,7 @@ export default function PartnerComissoes() {
       {/* Table */}
       <div className="rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 shadow-sm overflow-hidden">
         <div className="overflow-x-auto allka-table-scroll">
-        <table className="w-full text-sm min-w-150">
+        <table className="tabela-cartao w-full text-sm min-w-150">
           <thead>
             <tr className="border-b border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/60">
               <th className="text-left px-5 py-2.5 text-xs font-semibold text-slate-500 uppercase tracking-wide">
@@ -279,7 +279,7 @@ export default function PartnerComissoes() {
                     idx % 2 === 1 ? "bg-slate-50/50 dark:bg-slate-900/30" : ""
                   }
                 >
-                  <td className="px-5 py-3">
+                  <td data-rotulo="Origem" className="px-5 py-3">
                     <span
                       className={`text-[10px] px-1.5 py-0.5 rounded font-semibold ${src.bg}`}
                     >
@@ -289,26 +289,26 @@ export default function PartnerComissoes() {
                       {c.sourceName}
                     </span>
                   </td>
-                  <td className="px-4 py-3 text-slate-600 dark:text-slate-300 text-xs">
+                  <td data-rotulo="Empresa" className="px-4 py-3 text-slate-600 dark:text-slate-300 text-xs">
                     {c.companyName}
                   </td>
-                  <td className="px-4 py-3 text-slate-500 dark:text-slate-400 text-xs">
+                  <td data-rotulo="Projeto" className="px-4 py-3 text-slate-500 dark:text-slate-400 text-xs">
                     {c.projectName ?? "—"}
                   </td>
-                  <td className="px-4 py-3 text-right tabular-nums text-slate-600 dark:text-slate-300 text-xs">
+                  <td data-rotulo="Valor Projeto" className="px-4 py-3 text-right tabular-nums text-slate-600 dark:text-slate-300 text-xs">
                     {c.projectValue ? fmtBRL(c.projectValue) : "—"}
                   </td>
-                  <td className="px-4 py-3 text-right tabular-nums font-semibold text-emerald-600">
+                  <td data-rotulo="Comissão" className="px-4 py-3 text-right tabular-nums font-semibold text-emerald-600">
                     {fmtBRL(c.commissionAmount)}
                   </td>
-                  <td className="px-4 py-3">
+                  <td data-rotulo="Status" className="px-4 py-3">
                     <span
                       className={`text-[10px] px-1.5 py-0.5 rounded font-semibold ${sc.bg}`}
                     >
                       {sc.label}
                     </span>
                   </td>
-                  <td className="px-4 py-3 text-xs text-slate-400">
+                  <td data-rotulo="Convertido" className="px-4 py-3 text-xs text-slate-400">
                     {fmtDate(c.convertedAt)}
                   </td>
                 </tr>

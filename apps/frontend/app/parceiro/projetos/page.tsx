@@ -348,7 +348,7 @@ export default function PartnerProjetos() {
       {/* Table */}
       <div className="rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 shadow-sm overflow-hidden">
         <div className="overflow-x-auto allka-table-scroll">
-          <table className="w-full text-sm min-w-150">
+          <table className="tabela-cartao w-full text-sm min-w-150">
             <thead>
               <tr className="border-b border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/60">
                 <th className="text-left px-4 py-2.5 text-xs font-semibold text-slate-500 uppercase tracking-wide w-28">
@@ -457,24 +457,24 @@ export default function PartnerProjetos() {
                       idx % 2 === 1 ? "bg-slate-50/50 dark:bg-slate-900/30" : ""
                     }
                   >
-                    <td className="px-4 py-3" style={{ borderRight: "1px solid rgba(148,163,184,0.15)" }}>
+                    <td data-rotulo="ID" className="px-4 py-3" style={{ borderRight: "1px solid rgba(148,163,184,0.15)" }}>
                       <span className="font-mono text-xs text-slate-400">
                         proj_{(p as any).seq ?? "?"}
                       </span>
                     </td>
-                    <td className="px-5 py-3 font-medium text-slate-700 dark:text-slate-200">
+                    <td data-rotulo="Projeto" className="px-5 py-3 font-medium text-slate-700 dark:text-slate-200">
                       {p.projectName}
                     </td>
-                    <td className="px-4 py-3 text-slate-500 dark:text-slate-400">
+                    <td data-rotulo="Empresa" className="px-4 py-3 text-slate-500 dark:text-slate-400">
                       {p.companyName}
                     </td>
-                    <td className="px-4 py-3 text-slate-400 text-xs">
+                    <td data-rotulo="Categoria" className="px-4 py-3 text-slate-400 text-xs">
                       {p.serviceCategory}
                     </td>
-                    <td className="px-4 py-3 text-right tabular-nums font-medium text-slate-700 dark:text-slate-200">
+                    <td data-rotulo="Valor" className="px-4 py-3 text-right tabular-nums font-medium text-slate-700 dark:text-slate-200">
                       {fmtBRL(p.projectValue)}
                     </td>
-                    <td className="px-4 py-3 text-right">
+                    <td data-rotulo="Comissão" className="px-4 py-3 text-right">
                       <span className="tabular-nums font-semibold text-emerald-600">
                         {fmtBRL(p.commissionGenerated)}
                       </span>
@@ -484,14 +484,14 @@ export default function PartnerProjetos() {
                         {cc.label}
                       </span>
                     </td>
-                    <td className="px-4 py-3">
+                    <td data-rotulo="Status" className="px-4 py-3">
                       <span
                         className={`text-xs px-1.5 py-0.5 rounded font-semibold ${sc.color}`}
                       >
                         {sc.label}
                       </span>
                     </td>
-                    <td className="px-4 py-3 text-xs text-slate-400">
+                    <td data-rotulo="Contratado" className="px-4 py-3 text-xs text-slate-400">
                       {fmtDate(p.contractedAt)}
                     </td>
                   </tr>

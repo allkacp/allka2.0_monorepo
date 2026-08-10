@@ -1328,7 +1328,7 @@ export default function CampanhasPage() {
           </div>
         ) : (
           <div ref={itemTableScrollRef} onScroll={handleItemTableScroll} className="overflow-x-auto allka-table-scroll-body">
-            <table className="w-full text-xs min-w-[960px]">
+            <table className="tabela-cartao w-full text-xs min-w-[960px]">
               <thead>
                 <tr className="border-b border-slate-200/60 dark:border-slate-700/60">
                   <th
@@ -1481,7 +1481,7 @@ export default function CampanhasPage() {
                     </td>
 
                     {itemVisibleCols.has("nome") && (
-                      <td className="py-3 px-4" style={{ borderRight: "1px solid rgba(148,163,184,0.15)" }}>
+                      <td data-rotulo="Nome / Código" className="py-3 px-4" style={{ borderRight: "1px solid rgba(148,163,184,0.15)" }}>
                         <div className="flex items-center gap-2.5">
                           <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${row.kind === "campaign" ? "bg-blue-100 dark:bg-blue-900/30" : "bg-violet-100 dark:bg-violet-900/30"}`}>
                             {row.kind === "campaign" ? (
@@ -1500,14 +1500,14 @@ export default function CampanhasPage() {
                       </td>
                     )}
                     {itemVisibleCols.has("tipo") && (
-                      <td className="py-3 px-4" style={{ borderRight: "1px solid rgba(148,163,184,0.15)" }}>
+                      <td data-rotulo="Tipo" className="py-3 px-4" style={{ borderRight: "1px solid rgba(148,163,184,0.15)" }}>
                         <NeonBadge color={row.kind === "campaign" ? "blue" : "purple"}>
                           {row.kind === "campaign" ? "Campanha" : "Cupom"}
                         </NeonBadge>
                       </td>
                     )}
                     {itemVisibleCols.has("status") && (
-                      <td className="py-3 px-4" style={{ borderRight: "1px solid rgba(148,163,184,0.15)" }}>
+                      <td data-rotulo="Status" className="py-3 px-4" style={{ borderRight: "1px solid rgba(148,163,184,0.15)" }}>
                         <span className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-[11px] font-bold w-fit border ${statusTone[row.status] ?? statusTone.ended}`}>
                           <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${statusDot[row.status] ?? statusDot.ended}`} />
                           {statusLabel[row.status] ?? row.status}
@@ -1515,7 +1515,7 @@ export default function CampanhasPage() {
                       </td>
                     )}
                     {itemVisibleCols.has("valor") && (
-                      <td className="py-3 px-4" style={{ borderRight: "1px solid rgba(148,163,184,0.15)" }}>
+                      <td data-rotulo="Comissão / Desconto" className="py-3 px-4" style={{ borderRight: "1px solid rgba(148,163,184,0.15)" }}>
                         <p className="text-sm font-semibold text-slate-700 dark:text-slate-300">{row.valueLabel}</p>
                         {row.kind === "campaign" && (
                           <p className="text-[11px] text-slate-400">{getCommissionTypeLabel(row.campaign!.commissionType)}</p>
@@ -1523,7 +1523,7 @@ export default function CampanhasPage() {
                       </td>
                     )}
                     {itemVisibleCols.has("vinculado") && (
-                      <td className="py-3 px-4" style={{ borderRight: "1px solid rgba(148,163,184,0.15)" }}>
+                      <td data-rotulo="Vinculado a" className="py-3 px-4" style={{ borderRight: "1px solid rgba(148,163,184,0.15)" }}>
                         {row.linkedUserName ? (
                           <span className="inline-flex items-center gap-1.5 text-sm text-slate-700 dark:text-slate-300">
                             <User className="h-3.5 w-3.5 text-slate-400" />
@@ -1535,7 +1535,7 @@ export default function CampanhasPage() {
                       </td>
                     )}
                     {itemVisibleCols.has("uso") && (
-                      <td className="py-3 px-4 text-center" style={{ borderRight: "1px solid rgba(148,163,184,0.15)" }}>
+                      <td data-rotulo="Uso / Indicações" className="py-3 px-4 text-center" style={{ borderRight: "1px solid rgba(148,163,184,0.15)" }}>
                         <span className="inline-flex items-center gap-1 font-semibold text-sm text-slate-700 dark:text-slate-300">
                           <Users className="h-3.5 w-3.5 text-emerald-500" />
                           {row.usageLabel}
@@ -1543,7 +1543,7 @@ export default function CampanhasPage() {
                       </td>
                     )}
                     {itemVisibleCols.has("total_pago") && (
-                      <td className="py-3 px-4" style={{ borderRight: "1px solid rgba(148,163,184,0.15)" }}>
+                      <td data-rotulo="Total pago" className="py-3 px-4" style={{ borderRight: "1px solid rgba(148,163,184,0.15)" }}>
                         {row.totalPaid !== null ? (
                           <span className="text-sm font-semibold text-slate-700 dark:text-slate-300">R$ {row.totalPaid.toLocaleString()}</span>
                         ) : (
@@ -1552,7 +1552,7 @@ export default function CampanhasPage() {
                       </td>
                     )}
                     {itemVisibleCols.has("validade") && (
-                      <td className="py-3 px-4 text-xs text-slate-500 dark:text-slate-400">
+                      <td data-rotulo="Validade" className="py-3 px-4 text-xs text-slate-500 dark:text-slate-400">
                         {row.validFrom ? new Date(row.validFrom).toLocaleDateString("pt-BR") : "—"}
                         {" — "}
                         {row.validUntil ? new Date(row.validUntil).toLocaleDateString("pt-BR") : "—"}

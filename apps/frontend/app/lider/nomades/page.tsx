@@ -148,7 +148,7 @@ export default function LiderNomadesPage() {
           </div>
         ) : (
           <div className="overflow-x-auto allka-table-scroll">
-            <table className="w-full text-sm">
+            <table className="tabela-cartao w-full text-sm">
               <thead>
                 <tr className="text-xs text-slate-400 uppercase tracking-wide border-b border-slate-100 dark:border-border">
                   <th className="px-5 py-3 text-left font-medium">Nome</th>
@@ -163,13 +163,13 @@ export default function LiderNomadesPage() {
               <tbody className="divide-y divide-slate-50 dark:divide-border">
                 {nomades.map((n) => (
                   <tr key={n.id} className="hover:bg-slate-50 dark:hover:bg-muted/40 transition-colors">
-                    <td className="px-5 py-3 font-medium text-slate-800 dark:text-foreground">{n.name}</td>
-                    <td className="px-5 py-3 text-slate-500 dark:text-muted-foreground">{n.email}</td>
-                    <td className="px-5 py-3"><LevelBadge level={n.level} /></td>
-                    <td className="px-5 py-3"><StatusBadge status={n.status} /></td>
-                    <td className="px-5 py-3 text-right font-semibold text-slate-700 dark:text-foreground">{n.score}</td>
-                    <td className="px-5 py-3 text-right text-slate-600 dark:text-muted-foreground">{n.tasks_completed_total}</td>
-                    <td className="px-5 py-3 text-right text-slate-600 dark:text-muted-foreground">
+                    <td data-rotulo="Nome" className="px-5 py-3 font-medium text-slate-800 dark:text-foreground">{n.name}</td>
+                    <td data-rotulo="E-mail" className="px-5 py-3 text-slate-500 dark:text-muted-foreground">{n.email}</td>
+                    <td data-rotulo="Nível" className="px-5 py-3"><LevelBadge level={n.level} /></td>
+                    <td data-rotulo="Status" className="px-5 py-3"><StatusBadge status={n.status} /></td>
+                    <td data-rotulo="Score" className="px-5 py-3 text-right font-semibold text-slate-700 dark:text-foreground">{n.score}</td>
+                    <td data-rotulo="Tarefas Concluídas" className="px-5 py-3 text-right text-slate-600 dark:text-muted-foreground">{n.tasks_completed_total}</td>
+                    <td data-rotulo="Avaliação" className="px-5 py-3 text-right text-slate-600 dark:text-muted-foreground">
                       {n.performance_avg_rating ? n.performance_avg_rating.toFixed(1) : "—"}
                     </td>
                   </tr>

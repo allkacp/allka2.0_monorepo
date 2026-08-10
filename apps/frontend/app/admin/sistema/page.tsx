@@ -1174,7 +1174,7 @@ export default function AdminSistemaPage() {
                 </div>
               ) : (
                 <div ref={logTableScrollRef} onScroll={handleLogTableScroll} className="overflow-x-auto allka-table-scroll">
-                  <table className="w-full text-xs min-w-[760px]">
+                  <table className="tabela-cartao w-full text-xs min-w-[760px]">
                     <thead>
                       <tr className="border-b border-slate-200/60 dark:border-slate-700/60">
                         <th
@@ -1244,19 +1244,19 @@ export default function AdminSistemaPage() {
                                 </TooltipProvider>
                               </div>
                             </td>
-                            <td className="py-3 px-4 text-[11px] text-slate-400 tabular-nums whitespace-nowrap" style={{ borderRight: "1px solid rgba(148,163,184,0.15)" }}>
+                            <td data-rotulo="Data/Hora" className="py-3 px-4 text-[11px] text-slate-400 tabular-nums whitespace-nowrap" style={{ borderRight: "1px solid rgba(148,163,184,0.15)" }}>
                               {log.ts}
                             </td>
-                            <td className="py-3 px-4 font-medium text-slate-700 dark:text-slate-200" style={{ borderRight: "1px solid rgba(148,163,184,0.15)" }}>
+                            <td data-rotulo="Conector" className="py-3 px-4 font-medium text-slate-700 dark:text-slate-200" style={{ borderRight: "1px solid rgba(148,163,184,0.15)" }}>
                               {log.connector}
                             </td>
-                            <td className="py-3 px-4" style={{ borderRight: "1px solid rgba(148,163,184,0.15)" }}>
+                            <td data-rotulo="Ação" className="py-3 px-4" style={{ borderRight: "1px solid rgba(148,163,184,0.15)" }}>
                               {act && <NeonBadge color={act.color}>{act.label}</NeonBadge>}
                             </td>
-                            <td className="py-3 px-4 text-slate-500 dark:text-slate-400" style={{ borderRight: "1px solid rgba(148,163,184,0.15)" }}>
+                            <td data-rotulo="Usuário" className="py-3 px-4 text-slate-500 dark:text-slate-400" style={{ borderRight: "1px solid rgba(148,163,184,0.15)" }}>
                               {log.user}
                             </td>
-                            <td className="py-3 px-4">
+                            <td data-rotulo="Resultado" className="py-3 px-4">
                               <NeonBadge color={isError ? "red" : "emerald"}>{isError ? log.result : "✓ sucesso"}</NeonBadge>
                             </td>
                           </tr>

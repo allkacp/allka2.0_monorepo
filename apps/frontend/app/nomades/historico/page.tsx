@@ -273,7 +273,7 @@ export default function NomadesHistoricoPage() {
                 {/* Tabela */}
                 <div className="rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 shadow-sm overflow-hidden">
                   <div className="overflow-x-auto allka-table-scroll">
-                    <table className="w-full text-sm">
+                    <table className="tabela-cartao w-full text-sm">
                       <thead>
                         <tr className="text-xs text-slate-400 bg-slate-50 dark:bg-slate-800/50 border-b border-slate-100 dark:border-slate-800">
                           <th className="px-4 py-3 text-left font-medium">
@@ -297,23 +297,23 @@ export default function NomadesHistoricoPage() {
                           const noPrazo = saiuNoPrazo(h)
                           return (
                             <tr key={h.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/30 transition-colors">
-                              <td className="px-4 py-3">
+                              <td data-rotulo="Etapa" className="px-4 py-3">
                                 <p className="font-medium text-slate-700 dark:text-slate-200 truncate max-w-44">{h.titulo}</p>
                                 <p className="text-xs text-slate-400 truncate max-w-44">
                                   {h.tarefa}
                                   {h.task_code ? ` · ${h.task_code}` : ""}
                                 </p>
                               </td>
-                              <td className="px-4 py-3 text-slate-500 text-xs">
+                              <td data-rotulo="Projeto" className="px-4 py-3 text-slate-500 text-xs">
                                 <span className="truncate block max-w-36">{h.projeto ?? "—"}</span>
                               </td>
-                              <td className="px-4 py-3 text-slate-500 text-xs whitespace-nowrap">
+                              <td data-rotulo="Concluída em" className="px-4 py-3 text-slate-500 text-xs whitespace-nowrap">
                                 {fmtData(h.concluida_em)}
                               </td>
-                              <td className="px-4 py-3 text-right font-semibold text-slate-700 dark:text-slate-200 whitespace-nowrap">
+                              <td data-rotulo="Valor" className="px-4 py-3 text-right font-semibold text-slate-700 dark:text-slate-200 whitespace-nowrap">
                                 {h.valor ? fmtBRL(h.valor) : "—"}
                               </td>
-                              <td className="px-4 py-3 text-center">
+                              <td data-rotulo="Prazo" className="px-4 py-3 text-center">
                                 {noPrazo === null ? (
                                   <span className="text-slate-300 text-xs">—</span>
                                 ) : noPrazo ? (

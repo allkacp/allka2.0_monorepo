@@ -211,7 +211,7 @@ export default function LiderProjetosPage() {
           </div>
         ) : (
           <div className="overflow-x-auto allka-table-scroll">
-            <table className="w-full text-sm min-w-[640px]">
+            <table className="tabela-cartao w-full text-sm min-w-[640px]">
               <thead>
                 <tr className="border-b border-border/60 bg-muted/30">
                   <th className="text-left py-3 px-4 font-semibold text-xs text-muted-foreground uppercase tracking-wide">Projeto</th>
@@ -225,23 +225,23 @@ export default function LiderProjetosPage() {
               <tbody className="divide-y divide-border/40">
                 {projects.map((p) => (
                   <tr key={p.id} className="hover:bg-muted/20 transition-colors">
-                    <td className="py-3 px-4">
+                    <td data-rotulo="Projeto" className="py-3 px-4">
                       <div className="font-medium text-slate-900 dark:text-white">{p.title}</div>
                       {p.type && <div className="text-xs text-muted-foreground mt-0.5">{p.type}</div>}
                     </td>
-                    <td className="py-3 px-4 text-sm text-slate-700 dark:text-slate-300">
+                    <td data-rotulo="Empresa" className="py-3 px-4 text-sm text-slate-700 dark:text-slate-300">
                       {p.client?.name ?? <span className="text-muted-foreground/60">—</span>}
                     </td>
-                    <td className="py-3 px-4 text-sm text-slate-700 dark:text-slate-300">
+                    <td data-rotulo="Agência" className="py-3 px-4 text-sm text-slate-700 dark:text-slate-300">
                       {p.agency ?? <span className="text-muted-foreground/60">—</span>}
                     </td>
-                    <td className="py-3 px-4">
+                    <td data-rotulo="Status" className="py-3 px-4">
                       <StatusBadge status={p.status} />
                     </td>
-                    <td className="py-3 px-4 text-right font-medium text-slate-900 dark:text-white">
+                    <td data-rotulo="Valor" className="py-3 px-4 text-right font-medium text-slate-900 dark:text-white">
                       {p.value ? fmt(p.value) : <span className="text-muted-foreground/60">—</span>}
                     </td>
-                    <td className="py-3 px-4 text-sm text-muted-foreground">
+                    <td data-rotulo="Criado em" className="py-3 px-4 text-sm text-muted-foreground">
                       <div className="flex items-center gap-1">
                         <Calendar className="h-3.5 w-3.5" />
                         {fmtDate(p.created_at)}

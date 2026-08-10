@@ -148,7 +148,7 @@ export default function LiderHistoricoPage() {
           </div>
         ) : (
           <div className="overflow-x-auto allka-table-scroll">
-            <table className="w-full text-sm">
+            <table className="tabela-cartao w-full text-sm">
               <thead>
                 <tr className="text-xs text-slate-400 uppercase tracking-wide border-b border-slate-100 dark:border-border">
                   <th className="px-5 py-3 text-left font-medium">Código</th>
@@ -162,23 +162,23 @@ export default function LiderHistoricoPage() {
               <tbody className="divide-y divide-slate-50 dark:divide-border">
                 {tasks.map((task: any) => (
                   <tr key={task.id} className="hover:bg-slate-50 dark:hover:bg-muted/30 transition-colors">
-                    <td className="px-5 py-3 font-mono text-xs text-slate-500 whitespace-nowrap">
+                    <td data-rotulo="Código" className="px-5 py-3 font-mono text-xs text-slate-500 whitespace-nowrap">
                       {task.task_code ?? task.code_snapshot ?? "—"}
                     </td>
-                    <td className="px-5 py-3 text-slate-800 dark:text-slate-100 max-w-[180px] truncate">
+                    <td data-rotulo="Tarefa" className="px-5 py-3 text-slate-800 dark:text-slate-100 max-w-[180px] truncate">
                       {task.title ?? task.name_snapshot ?? "—"}
                     </td>
-                    <td className="px-5 py-3 text-slate-500 max-w-[130px] truncate whitespace-nowrap">
+                    <td data-rotulo="Produto" className="px-5 py-3 text-slate-500 max-w-[130px] truncate whitespace-nowrap">
                       {task.project_product?.product_name_snapshot ??
                         task.project_product?.product?.name ?? "—"}
                     </td>
-                    <td className="px-5 py-3 text-slate-500 whitespace-nowrap">
+                    <td data-rotulo="Projeto" className="px-5 py-3 text-slate-500 whitespace-nowrap">
                       {task.project?.name ?? "—"}
                     </td>
-                    <td className="px-5 py-3">
+                    <td data-rotulo="Status" className="px-5 py-3">
                       <StatusBadge status={task.status} />
                     </td>
-                    <td className="px-5 py-3 text-slate-500 whitespace-nowrap">
+                    <td data-rotulo="Data" className="px-5 py-3 text-slate-500 whitespace-nowrap">
                       {fmtDate(task.created_at)}
                     </td>
                   </tr>
