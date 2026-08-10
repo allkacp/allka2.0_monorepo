@@ -180,7 +180,7 @@ export function BulkTaskLaunchDrawer({
           if (entry.briefingQuestions.length === 0) return entry;
           const questionsPayload = entry.briefingQuestions.map((q, idx) => ({
             question_key: getQuestionKey(q, idx),
-            question_text: q.question_text ?? q.label ?? `Pergunta ${idx + 1}`,
+            question_text: q.question_text ?? q.question ?? q.label ?? `Pergunta ${idx + 1}`,
             type: q.type,
             options: q.options,
             required: q.required,
@@ -223,7 +223,7 @@ export function BulkTaskLaunchDrawer({
 
   async function handleImproveAnswer(entry: TaskEntry, question: any, idx: number) {
     const key = getQuestionKey(question, idx);
-    const questionText = question.question_text ?? question.label ?? `Pergunta ${idx + 1}`;
+    const questionText = question.question_text ?? question.question ?? question.label ?? `Pergunta ${idx + 1}`;
     const currentAnswer = entry.answers[key]?.answer ?? "";
     try {
       const res: any = await apiClient.aiImproveAnswer({
@@ -253,7 +253,7 @@ export function BulkTaskLaunchDrawer({
                   q.type === "multiple_choice" ? (a.selected_options ?? []).join(", ") : (a.answer ?? "");
                 return {
                   question_key: key,
-                  question_text: q.question_text ?? q.label ?? `Pergunta ${idx + 1}`,
+                  question_text: q.question_text ?? q.question ?? q.label ?? `Pergunta ${idx + 1}`,
                   answer: answerText,
                   ...(q.type === "link" && a.links?.length ? { links: JSON.stringify(a.links) } : {}),
                 };
@@ -272,7 +272,7 @@ export function BulkTaskLaunchDrawer({
 
   function renderQuestion(entry: TaskEntry, q: any, idx: number) {
     const key = getQuestionKey(q, idx);
-    const label = q.question_text ?? q.label ?? `Pergunta ${idx + 1}`;
+    const label = q.question_text ?? q.question ?? q.label ?? `Pergunta ${idx + 1}`;
     const a = entry.answers[key] ?? {};
     const isMissing = q.required && missingForEntry(entry).some((mq, i) => getQuestionKey(mq, i) === key);
     const wasAiFilled = aiFilledKeys.has(`${entry.task.id}:${key}`);

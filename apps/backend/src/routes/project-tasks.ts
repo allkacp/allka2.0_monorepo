@@ -866,9 +866,21 @@ router.get(
             if (!q.question_key) {
               q.question_key = q.key ?? `q_${idx}`;
             }
-            // Normalize text field
+            // Normalize text field.
+            //
+            // `question` e `instructions` são o formato que veio da
+            // importação da plataforma antiga (as perguntas trazem
+            // legacyQuestionId) e também o que o cadastro de produtos grava.
+            // Sem eles na lista, toda pergunta importada caía no rótulo
+            // genérico "Pergunta N" e a dica sumia — o briefing ficava
+            // impossível de responder sem adivinhar.
             if (!q.question_text) {
-              q.question_text = q.text ?? q.label ?? `Pergunta ${idx + 1}`;
+              q.question_text =
+                q.question ?? q.text ?? q.label ?? `Pergunta ${idx + 1}`;
+            }
+            // Dica exibida abaixo do enunciado (ex.: "Ex: Gerar mais vendas").
+            if (!q.description) {
+              q.description = q.instructions ?? q.hint ?? undefined;
             }
             // Normalize vocabulário antigo de `type` (usado em alguns catálogos
             // seedados: "text"/"textarea"/"multiselect") pro vocabulário que o

@@ -332,7 +332,7 @@ export function TaskLaunchDrawer({
       }
       return {
         question_key: key,
-        question_text: q.question_text ?? q.label ?? `Pergunta ${idx + 1}`,
+        question_text: q.question_text ?? q.question ?? q.label ?? `Pergunta ${idx + 1}`,
         answer: answerText,
         ...(q.type === "link" && a.links?.length
           ? { links: JSON.stringify(a.links) }
@@ -430,7 +430,7 @@ export function TaskLaunchDrawer({
 
     questions.forEach((q: any, idx: number) => {
       const key = getQuestionKey(q, idx);
-      const label = (q.question_text ?? q.label ?? "").toLowerCase();
+      const label = (q.question_text ?? q.question ?? q.label ?? "").toLowerCase();
       const type = q.type ?? "text_short";
 
       // For select/multiple_choice: check if any option appears in the text first
@@ -488,7 +488,7 @@ export function TaskLaunchDrawer({
     try {
       const questionsPayload = briefingQuestions.map((q, idx) => ({
         question_key: getQuestionKey(q, idx),
-        question_text: q.question_text ?? q.label ?? `Pergunta ${idx + 1}`,
+        question_text: q.question_text ?? q.question ?? q.label ?? `Pergunta ${idx + 1}`,
         type: q.type,
         options: q.options,
         required: q.required,
@@ -536,7 +536,7 @@ export function TaskLaunchDrawer({
   // ── Handle "Melhorar com IA" on a single question (manual mode) ──────────
   async function handleImproveAnswer(question: any, idx: number) {
     const key = getQuestionKey(question, idx);
-    const questionText = question.question_text ?? question.label ?? `Pergunta ${idx + 1}`;
+    const questionText = question.question_text ?? question.question ?? question.label ?? `Pergunta ${idx + 1}`;
     const currentAnswer = answers[key]?.answer ?? "";
     setImprovingKey(key);
     try {
@@ -561,7 +561,7 @@ export function TaskLaunchDrawer({
   // ── Render: Briefing question ──────────────────────────────────────────────
   function renderQuestion(q: any, idx: number) {
     const key = getQuestionKey(q, idx);
-    const label = q.question_text ?? q.label ?? `Pergunta ${idx + 1}`;
+    const label = q.question_text ?? q.question ?? q.label ?? `Pergunta ${idx + 1}`;
     const a = answers[key] ?? {};
     const isMissing =
       q.required &&
