@@ -188,7 +188,7 @@ export default function AgenciaUsuariosPage() {
         ) : users.length === 0 ? (
           <div className="py-16 text-center text-sm text-slate-400">Nenhum usuário cadastrado ainda.</div>
         ) : (
-          <table className="w-full text-sm">
+          <table className="tabela-cartao w-full text-sm">
             <thead>
               <tr className="border-b border-slate-200/60 dark:border-slate-800">
                 <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">ID</th>
@@ -202,8 +202,8 @@ export default function AgenciaUsuariosPage() {
             <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
               {users.map((u) => (
                 <tr key={u.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/40">
-                  <td className="px-4 py-3 font-mono text-xs text-slate-500">{u.user_code || "—"}</td>
-                  <td className="px-4 py-3">
+                  <td data-rotulo="ID" className="px-4 py-3 font-mono text-xs text-slate-500">{u.user_code || "—"}</td>
+                  <td data-rotulo="Usuário" className="px-4 py-3">
                     <p className="flex items-center gap-1.5 font-semibold text-xs text-slate-900 dark:text-slate-100">
                       {u.name}
                       {isPrincipal(u) && (
@@ -219,12 +219,12 @@ export default function AgenciaUsuariosPage() {
                       <Mail className="h-3 w-3" /> {u.email}
                     </p>
                   </td>
-                  <td className="px-4 py-3">
+                  <td data-rotulo="Função" className="px-4 py-3">
                     <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold border bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-500/10 dark:text-blue-300 dark:border-blue-400/20">
                       {isPrincipal(u) ? "Administrador" : "Usuário"}
                     </span>
                   </td>
-                  <td className="px-4 py-3">
+                  <td data-rotulo="Status" className="px-4 py-3">
                     <span
                       className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold ${
                         u.is_active
@@ -235,7 +235,7 @@ export default function AgenciaUsuariosPage() {
                       {u.is_active ? "Ativo" : "Bloqueado"}
                     </span>
                   </td>
-                  <td className="px-4 py-3 text-xs text-slate-500">
+                  <td data-rotulo="Criado em" className="px-4 py-3 text-xs text-slate-500">
                     {new Date(u.created_at).toLocaleDateString("pt-BR")}
                   </td>
                   <td className="px-4 py-3 text-right">

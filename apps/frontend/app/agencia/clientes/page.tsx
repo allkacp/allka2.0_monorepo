@@ -750,7 +750,7 @@ export default function AgenciaClientesPage() {
           </div>
         ) : (
           <div ref={tableScrollRef} onScroll={handleTableScroll} className="overflow-x-auto allka-table-scroll-body">
-            <table className="w-full text-xs min-w-[900px]">
+            <table className="tabela-cartao w-full text-xs min-w-[900px]">
               <thead>
                 <tr className="border-b border-slate-200/60 dark:border-slate-700/60">
                   <th
@@ -840,12 +840,12 @@ export default function AgenciaClientesPage() {
                     </td>
 
                     {visibleCols.has("id") && (
-                      <td className="py-3 px-4 text-xs font-mono text-slate-500 dark:text-slate-400 whitespace-nowrap" style={{ borderRight: "1px solid rgba(148,163,184,0.15)" }}>
+                      <td data-rotulo="ID" className="py-3 px-4 text-xs font-mono text-slate-500 dark:text-slate-400 whitespace-nowrap" style={{ borderRight: "1px solid rgba(148,163,184,0.15)" }}>
                         {formatClientSequenceId(c.sequence_number)}
                       </td>
                     )}
                     {visibleCols.has("cliente") && (
-                      <td className="py-3 px-4" style={{ borderRight: "1px solid rgba(148,163,184,0.15)" }}>
+                      <td data-rotulo="Cliente" className="py-3 px-4" style={{ borderRight: "1px solid rgba(148,163,184,0.15)" }}>
                         <div className="flex items-center gap-3">
                           <ClientAvatar client={c} index={i} />
                           <div className="min-w-0 flex-1">
@@ -856,7 +856,7 @@ export default function AgenciaClientesPage() {
                       </td>
                     )}
                     {visibleCols.has("segmento") && (
-                      <td className="py-3 px-4" style={{ borderRight: "1px solid rgba(148,163,184,0.15)" }}>
+                      <td data-rotulo="Segmento" className="py-3 px-4" style={{ borderRight: "1px solid rgba(148,163,184,0.15)" }}>
                         {c.segment ? (
                           <span className="inline-flex items-center gap-1 text-[13px] text-slate-600 dark:text-slate-400">
                             <Tag className="h-3 w-3" />{c.segment}
@@ -867,7 +867,7 @@ export default function AgenciaClientesPage() {
                       </td>
                     )}
                     {visibleCols.has("contato") && (
-                      <td className="py-3 px-4" style={{ borderRight: "1px solid rgba(148,163,184,0.15)" }}>
+                      <td data-rotulo="Contato" className="py-3 px-4" style={{ borderRight: "1px solid rgba(148,163,184,0.15)" }}>
                         <div className="space-y-1">
                           {c.email ? (
                             <a href={`mailto:${c.email}`} className="flex items-center gap-1.5 text-[13px] text-slate-500 dark:text-slate-300 hover:text-blue-600 dark:hover:text-blue-400 transition-colors">
@@ -898,14 +898,14 @@ export default function AgenciaClientesPage() {
                       </td>
                     )}
                     {visibleCols.has("tipo") && (
-                      <td className="py-3 px-4" style={{ borderRight: "1px solid rgba(148,163,184,0.15)" }}>
+                      <td data-rotulo="Tipo" className="py-3 px-4" style={{ borderRight: "1px solid rgba(148,163,184,0.15)" }}>
                         <NeonBadge color={c.type === "pj" ? "blue" : "violet"} tooltip={c.type === "pj" ? "Pessoa Jurídica" : "Pessoa Física"}>
                           {c.type === "pj" ? "PJ" : "PF"}
                         </NeonBadge>
                       </td>
                     )}
                     {visibleCols.has("status") && (
-                      <td className="py-3 px-4" style={{ borderRight: "1px solid rgba(148,163,184,0.15)" }}>
+                      <td data-rotulo="Status" className="py-3 px-4" style={{ borderRight: "1px solid rgba(148,163,184,0.15)" }}>
                         <span className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-[11px] font-bold w-fit border ${STATUS_DOT_CLASSES[c.status] ?? STATUS_DOT_CLASSES.active}`}>
                           <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${STATUS_DOT_BG[c.status] ?? STATUS_DOT_BG.active}`} />
                           {STATUS_CONFIG[c.status]?.label ?? c.status ?? "Ativo"}
@@ -913,7 +913,7 @@ export default function AgenciaClientesPage() {
                       </td>
                     )}
                     {visibleCols.has("cadastro") && (
-                      <td className="py-3 px-4 text-xs text-slate-500 dark:text-slate-400">
+                      <td data-rotulo="Cadastro" className="py-3 px-4 text-xs text-slate-500 dark:text-slate-400">
                         {c.created_at ? fmtDate(c.created_at) : "—"}
                       </td>
                     )}

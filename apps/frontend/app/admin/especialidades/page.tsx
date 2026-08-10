@@ -759,7 +759,7 @@ export default function AdminEspecialidadesPage() {
           </div>
         ) : (
           <div ref={tableScrollRef} onScroll={handleTableScroll} className="overflow-x-auto allka-table-scroll-body">
-            <table className="w-full text-xs min-w-[960px]">
+            <table className="tabela-cartao w-full text-xs min-w-[960px]">
               <thead>
                 <tr className="border-b border-slate-200/60 dark:border-slate-700/60">
                   <th
@@ -867,7 +867,7 @@ export default function AdminEspecialidadesPage() {
                     </td>
 
                     {visibleCols.has("nome") && (
-                      <td className="py-3 px-4" style={{ borderRight: "1px solid rgba(148,163,184,0.15)" }}>
+                      <td data-rotulo="Especialidade" className="py-3 px-4" style={{ borderRight: "1px solid rgba(148,163,184,0.15)" }}>
                         <div className="flex items-center gap-3">
                           <SpecialtyAvatar index={i} />
                           <div className="min-w-0 flex-1">
@@ -877,7 +877,7 @@ export default function AdminEspecialidadesPage() {
                       </td>
                     )}
                     {visibleCols.has("categoria") && (
-                      <td className="py-3 px-4" style={{ borderRight: "1px solid rgba(148,163,184,0.15)" }}>
+                      <td data-rotulo="Categoria" className="py-3 px-4" style={{ borderRight: "1px solid rgba(148,163,184,0.15)" }}>
                         {s.category ? (
                           <NeonBadge color={categoryColor(s.category)} className="capitalize">{s.category}</NeonBadge>
                         ) : (
@@ -886,19 +886,19 @@ export default function AdminEspecialidadesPage() {
                       </td>
                     )}
                     {visibleCols.has("descricao") && (
-                      <td className="py-3 px-4 max-w-[280px]" style={{ borderRight: "1px solid rgba(148,163,184,0.15)" }}>
+                      <td data-rotulo="Descrição" className="py-3 px-4 max-w-[280px]" style={{ borderRight: "1px solid rgba(148,163,184,0.15)" }}>
                         <p className="text-xs text-slate-500 dark:text-slate-400 truncate">{s.description || "—"}</p>
                       </td>
                     )}
                     {visibleCols.has("valor") && (
-                      <td className="py-3 px-4" style={{ borderRight: "1px solid rgba(148,163,184,0.15)" }}>
+                      <td data-rotulo="R$/h" className="py-3 px-4" style={{ borderRight: "1px solid rgba(148,163,184,0.15)" }}>
                         <span className="text-xs font-semibold tabular-nums text-emerald-700 dark:text-emerald-400">
                           {s.hourly_rate > 0 ? `R$ ${Number(s.hourly_rate).toFixed(2)}/h` : "—"}
                         </span>
                       </td>
                     )}
                     {visibleCols.has("ia") && (
-                      <td className="py-3 px-4" style={{ borderRight: "1px solid rgba(148,163,184,0.15)" }}>
+                      <td data-rotulo="IA" className="py-3 px-4" style={{ borderRight: "1px solid rgba(148,163,184,0.15)" }}>
                         {s.ai_enabled ? (
                           <NeonBadge color="violet" tooltip={s.ai_model ? `Modelo: ${s.ai_model}` : undefined}>
                             <Bot className="h-2.5 w-2.5 mr-1 inline" />
@@ -910,7 +910,7 @@ export default function AdminEspecialidadesPage() {
                       </td>
                     )}
                     {visibleCols.has("status") && (
-                      <td className="py-3 px-4" style={{ borderRight: "1px solid rgba(148,163,184,0.15)" }}>
+                      <td data-rotulo="Status" className="py-3 px-4" style={{ borderRight: "1px solid rgba(148,163,184,0.15)" }}>
                         <span className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-[11px] font-bold w-fit border ${s.is_active ? STATUS_DOT_CLASSES.active : STATUS_DOT_CLASSES.inactive}`}>
                           <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${s.is_active ? STATUS_DOT_BG.active : STATUS_DOT_BG.inactive}`} />
                           {s.is_active ? "Ativa" : "Inativa"}

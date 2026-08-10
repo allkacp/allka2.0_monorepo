@@ -147,7 +147,7 @@ export default function EmpresaFaturas() {
       {/* Invoice list */}
       <div className="bg-white rounded-xl border border-slate-100 shadow-sm overflow-hidden">
         <div className="overflow-x-auto">
-          <table className="w-full text-sm">
+          <table className="tabela-cartao w-full text-sm">
             <thead>
               <tr className="border-b border-slate-100 bg-slate-50">
                 <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wide">
@@ -230,19 +230,19 @@ export default function EmpresaFaturas() {
                       key={invoice.id}
                       className="hover:bg-slate-50/50 transition-colors"
                     >
-                      <td className="px-4 py-3 font-mono text-xs text-slate-600">
+                      <td data-rotulo="Descrição" className="px-4 py-3 font-mono text-xs text-slate-600">
                         #{invoice.number}
                       </td>
-                      <td className="px-4 py-3 text-slate-900 font-medium">
+                      <td data-rotulo="Valor" className="px-4 py-3 text-slate-900 font-medium">
                         {invoice.description}
                       </td>
-                      <td className="px-4 py-3 text-right font-semibold text-slate-900">
+                      <td data-rotulo="Emissão" className="px-4 py-3 text-right font-semibold text-slate-900">
                         {fmtBRL(invoice.amount)}
                       </td>
-                      <td className="px-4 py-3 text-xs text-slate-500">
+                      <td data-rotulo="Vencimento" className="px-4 py-3 text-xs text-slate-500">
                         {fmtDate(invoice.issuedAt)}
                       </td>
-                      <td className="px-4 py-3 text-xs text-slate-500">
+                      <td data-rotulo="Status" className="px-4 py-3 text-xs text-slate-500">
                         {fmtDate(invoice.dueDate)}
                       </td>
                       <td className="px-4 py-3">

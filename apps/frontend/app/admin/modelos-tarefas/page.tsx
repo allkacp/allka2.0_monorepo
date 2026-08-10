@@ -2163,7 +2163,7 @@ export default function AdminModelosTarefasPage() {
               onScroll={handleTableScroll}
               className="overflow-x-auto allka-table-scroll-body"
             >
-              <table className="w-full text-sm min-w-[800px]">
+              <table className="tabela-cartao w-full text-sm min-w-[800px]">
                 <thead
                   style={{
                     position: "sticky",
@@ -2406,7 +2406,7 @@ export default function AdminModelosTarefasPage() {
 
                         {/* Código */}
                         {isCol("code") && (
-                          <td className="px-3 py-3 pl-4">
+                          <td data-rotulo="Código" className="px-3 py-3 pl-4">
                             <span className="text-xs font-mono font-semibold text-slate-500 dark:text-slate-400">
                               {formatModelCode(codeOrdinals.get(model.id))}
                             </span>
@@ -2415,7 +2415,7 @@ export default function AdminModelosTarefasPage() {
 
                         {/* Nome */}
                         {isCol("name") && (
-                          <td className="px-3 py-3">
+                          <td data-rotulo="Nome do modelo" className="px-3 py-3">
                             <button
                               className="text-left w-full"
                               onClick={() => {
@@ -2440,7 +2440,7 @@ export default function AdminModelosTarefasPage() {
 
                         {/* Categoria */}
                         {isCol("category") && (
-                          <td className="px-3 py-3">
+                          <td data-rotulo="Categoria" className="px-3 py-3">
                             <span className="text-sm text-slate-600 line-clamp-1">
                               {model.category}
                             </span>
@@ -2454,7 +2454,7 @@ export default function AdminModelosTarefasPage() {
 
                         {/* Tipo */}
                         {isCol("type") && (
-                          <td className="px-3 py-3">
+                          <td data-rotulo="Tipo" className="px-3 py-3">
                             <NeonBadge color={TYPE_BADGE_COLOR[model.task_type] ?? "blue"}>
                               {tc.label}
                             </NeonBadge>
@@ -2463,7 +2463,7 @@ export default function AdminModelosTarefasPage() {
 
                         {/* Status */}
                         {isCol("status") && (
-                          <td className="px-3 py-3">
+                          <td data-rotulo="Status" className="px-3 py-3">
                             {updatingThis ? (
                               <InlineLoader
                                 text="..."
@@ -2511,7 +2511,7 @@ export default function AdminModelosTarefasPage() {
 
                         {/* Produtos vinculados */}
                         {isCol("links") && (
-                          <td className="px-3 py-3">
+                          <td data-rotulo="Produtos vinculados" className="px-3 py-3">
                             {linkCount > 0 ? (
                               <Tooltip>
                                 <TooltipTrigger asChild>
@@ -2574,7 +2574,7 @@ export default function AdminModelosTarefasPage() {
 
                         {/* Atualizado */}
                         {isCol("updated_at") && (
-                          <td className="px-3 py-3">
+                          <td data-rotulo="Atualizado" className="px-3 py-3">
                             <span className="text-sm text-slate-500">
                               {fmtDate(model.updated_at)}
                             </span>
