@@ -855,7 +855,7 @@ export default function AdminSistemaPage() {
               </Badge>
             </div>
             <div className="overflow-x-auto">
-              <table className="w-full text-sm">
+              <table className="tabela-cartao w-full text-sm">
                 <thead>
                   <tr className="border-b border-slate-200/60 dark:border-slate-700/60">
                     <th className="text-left py-3 px-4 text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wide">
@@ -880,15 +880,15 @@ export default function AdminSistemaPage() {
                         ? "bg-[#F1F4F9] dark:bg-[oklch(0.14_0.026_258)] hover:bg-[#D9E1ED] dark:hover:bg-[oklch(0.21_0.024_258)]"
                         : "bg-[#DCE3EE] dark:bg-[oklch(0.185_0.024_258)] hover:bg-[#C7D2E3] dark:hover:bg-[oklch(0.21_0.024_258)]"}
                     >
-                      <td className="py-3 px-4">
+                      <td data-rotulo="Serviço" className="py-3 px-4">
                         <span className="flex items-center gap-2 font-medium text-slate-700 dark:text-slate-200">
                           <ServiceDot status={svc.status} />
                           {svc.name}
                         </span>
                       </td>
-                      <td className="py-3 px-4 text-xs text-slate-400 hidden sm:table-cell">Reiniciado {svc.restart}</td>
-                      <td className="py-3 px-4 text-right text-xs font-semibold text-slate-600 dark:text-slate-400 tabular-nums">{svc.uptime}</td>
-                      <td className="py-3 px-4 text-center">
+                      <td data-rotulo="Reiniciado" className="py-3 px-4 text-xs text-slate-400 hidden sm:table-cell">Reiniciado {svc.restart}</td>
+                      <td data-rotulo="Uptime" className="py-3 px-4 text-right text-xs font-semibold text-slate-600 dark:text-slate-400 tabular-nums">{svc.uptime}</td>
+                      <td data-rotulo="Status" className="py-3 px-4 text-center">
                         <NeonBadge color={svc.status === "operational" ? "emerald" : svc.status === "degraded" ? "amber" : "red"}>
                           {svc.status === "operational" ? "Operacional" : svc.status === "degraded" ? "Degradado" : "Offline"}
                         </NeonBadge>
@@ -934,7 +934,7 @@ export default function AdminSistemaPage() {
               </div>
             </div>
             <div className="overflow-x-auto">
-              <table className="w-full text-sm">
+              <table className="tabela-cartao w-full text-sm">
                 <thead>
                   <tr className="border-b border-slate-200/60 dark:border-slate-700/60">
                     <th className="text-left py-3 px-4 text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wide">
@@ -959,14 +959,14 @@ export default function AdminSistemaPage() {
                           ? "bg-[#F1F4F9] dark:bg-[oklch(0.14_0.026_258)] hover:bg-[#D9E1ED] dark:hover:bg-[oklch(0.21_0.024_258)]"
                           : "bg-[#DCE3EE] dark:bg-[oklch(0.185_0.024_258)] hover:bg-[#C7D2E3] dark:hover:bg-[oklch(0.21_0.024_258)]"}
                       >
-                        <td className="py-3 px-4">
+                        <td data-rotulo="Nível" className="py-3 px-4">
                           <NeonBadge color={log.level === "error" ? "red" : log.level === "warning" ? "amber" : "blue"} className="inline-flex items-center gap-1">
                             <Ico className="h-3 w-3" />
                             {lv.label}
                           </NeonBadge>
                         </td>
-                        <td className="py-3 px-4 text-xs text-slate-600 dark:text-slate-400 leading-relaxed">{log.msg}</td>
-                        <td className="py-3 px-4 text-right text-[11px] text-slate-400 tabular-nums whitespace-nowrap">{log.ts}</td>
+                        <td data-rotulo="Mensagem" className="py-3 px-4 text-xs text-slate-600 dark:text-slate-400 leading-relaxed">{log.msg}</td>
+                        <td data-rotulo="Quando" className="py-3 px-4 text-right text-[11px] text-slate-400 tabular-nums whitespace-nowrap">{log.ts}</td>
                       </tr>
                     );
                   })}

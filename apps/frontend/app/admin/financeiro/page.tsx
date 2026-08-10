@@ -1564,7 +1564,7 @@ export default function AdminFinanceiroPage() {
         {activeTab === "faturas" && (
           <Card className="overflow-hidden">
             <div ref={tableScrollRef} onScroll={handleTableScroll} className="overflow-x-auto allka-table-scroll-body">
-              <table className="w-full text-sm min-w-[600px]">
+              <table className="tabela-cartao w-full text-sm min-w-[600px]">
                 <thead style={{ position: "sticky", top: 0, zIndex: 2, background: "var(--table-head)", boxShadow: "0 1px 0 rgba(148,163,184,0.3)" }}>
                   <tr>
                     <th className="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide whitespace-nowrap">
@@ -1619,12 +1619,12 @@ export default function AdminFinanceiroPage() {
                         <tr key={inv.id} className={idx % 2 === 0
                           ? "group bg-[#F1F4F9] dark:bg-[oklch(0.14_0.026_258)] hover:bg-[#D9E1ED] dark:hover:bg-[oklch(0.21_0.024_258)]"
                           : "group bg-[#DCE3EE] dark:bg-[oklch(0.185_0.024_258)] hover:bg-[#C7D2E3] dark:hover:bg-[oklch(0.21_0.024_258)]"}>
-                          <td className="px-4 py-3">
+                          <td data-rotulo="Nº / Descrição" className="px-4 py-3">
                             <p className="font-medium text-slate-800 dark:text-slate-200 text-xs">{inv.invoice_number || <span className="text-slate-400">—</span>}</p>
                             {inv.description && <p className="text-[11px] text-slate-400 mt-0.5 max-w-[180px] truncate">{inv.description}</p>}
                           </td>
                           {invVisibleCols.has("empresa") && (
-                            <td className="px-4 py-3">
+                            <td data-rotulo="Empresa" className="px-4 py-3">
                               <div className="flex items-center gap-1.5">
                                 <Building2 className="h-3.5 w-3.5 text-slate-400 shrink-0" />
                                 <span className="text-xs font-medium text-slate-700 dark:text-slate-300">{inv.company?.name || "—"}</span>
@@ -1632,7 +1632,7 @@ export default function AdminFinanceiroPage() {
                             </td>
                           )}
                           {invVisibleCols.has("projeto") && (
-                            <td className="px-4 py-3">
+                            <td data-rotulo="Projeto" className="px-4 py-3">
                               <div className="flex items-center gap-1.5">
                                 <FolderOpen className="h-3.5 w-3.5 text-slate-400 shrink-0" />
                                 <span className="text-xs text-slate-600 dark:text-slate-400 max-w-[140px] truncate">{inv.project?.title || "—"}</span>
@@ -1640,10 +1640,10 @@ export default function AdminFinanceiroPage() {
                             </td>
                           )}
                           {invVisibleCols.has("valor") && (
-                            <td className="px-4 py-3 text-right font-bold tabular-nums text-slate-800 dark:text-slate-200">{fmt(inv.amount)}</td>
+                            <td data-rotulo="Valor" className="px-4 py-3 text-right font-bold tabular-nums text-slate-800 dark:text-slate-200">{fmt(inv.amount)}</td>
                           )}
                           {invVisibleCols.has("vencimento") && (
-                            <td className="px-4 py-3">
+                            <td data-rotulo="Vencimento" className="px-4 py-3">
                               <div className="flex items-center gap-1">
                                 <Calendar className="h-3.5 w-3.5 text-slate-400 shrink-0" />
                                 <span className={`text-xs ${isOverdue ? "text-red-600 font-semibold" : "text-slate-500 dark:text-slate-400"}`}>{fmtDate(inv.due_date)}</span>
@@ -1652,7 +1652,7 @@ export default function AdminFinanceiroPage() {
                             </td>
                           )}
                           {invVisibleCols.has("status") && (
-                            <td className="px-4 py-3">
+                            <td data-rotulo="Status" className="px-4 py-3">
                               <NeonBadge color={INVOICE_STATUS_COLOR[inv.status] || "slate"}>
                                 {INVOICE_STATUS_LABELS[inv.status] || inv.status}
                               </NeonBadge>
@@ -1784,7 +1784,7 @@ export default function AdminFinanceiroPage() {
             </div>
 
             <div ref={tableScrollRef} onScroll={handleTableScroll} className="overflow-x-auto allka-table-scroll-body">
-              <table className="w-full text-sm min-w-[600px]">
+              <table className="tabela-cartao w-full text-sm min-w-[600px]">
                 <thead style={{ position: "sticky", top: 0, zIndex: 2, background: "var(--table-head)", boxShadow: "0 1px 0 rgba(148,163,184,0.3)" }}>
                   <tr>
                     <th className="text-left px-5 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide">
@@ -1823,17 +1823,17 @@ export default function AdminFinanceiroPage() {
                       <tr key={w.id} className={idx % 2 === 0
                         ? "group bg-[#F1F4F9] dark:bg-[oklch(0.14_0.026_258)] hover:bg-[#D9E1ED] dark:hover:bg-[oklch(0.21_0.024_258)]"
                         : "group bg-[#DCE3EE] dark:bg-[oklch(0.185_0.024_258)] hover:bg-[#C7D2E3] dark:hover:bg-[oklch(0.21_0.024_258)]"}>
-                        <td className="px-5 py-3">
+                        <td data-rotulo="Parceiro" className="px-5 py-3">
                           <p className="font-medium text-slate-800 dark:text-slate-200 text-xs">{w.nomade?.user?.name || "—"}</p>
                           <p className="text-[11px] text-slate-400">{w.nomade?.user?.email || ""}</p>
                         </td>
-                        <td className="px-4 py-3">
+                        <td data-rotulo="Chave PIX" className="px-4 py-3">
                           <p className="text-xs font-medium text-slate-600 dark:text-slate-400">{w.pix_key || "—"}</p>
                           <p className="text-[10px] text-slate-400 uppercase">{w.pix_key_type || ""}</p>
                         </td>
-                        <td className="px-4 py-3 text-right font-bold tabular-nums text-slate-800 dark:text-slate-200">{fmt(w.amount || 0)}</td>
-                        <td className="px-4 py-3 text-xs text-slate-500 dark:text-slate-400">{fmtDateTime(w.created_at)}</td>
-                        <td className="px-4 py-3">
+                        <td data-rotulo="Valor" className="px-4 py-3 text-right font-bold tabular-nums text-slate-800 dark:text-slate-200">{fmt(w.amount || 0)}</td>
+                        <td data-rotulo="Solicitado em" className="px-4 py-3 text-xs text-slate-500 dark:text-slate-400">{fmtDateTime(w.created_at)}</td>
+                        <td data-rotulo="Status" className="px-4 py-3">
                           <NeonBadge color={WD_STATUS_COLOR[w.status] || "slate"}>
                             {WD_STATUS_LABELS[w.status] || w.status}
                           </NeonBadge>
@@ -1946,7 +1946,7 @@ export default function AdminFinanceiroPage() {
             </div>
 
             <div className="overflow-x-auto allka-table-scroll-body">
-              <table className="w-full text-sm min-w-[700px]">
+              <table className="tabela-cartao w-full text-sm min-w-[700px]">
                 <thead style={{ position: "sticky", top: 0, zIndex: 2, background: "var(--table-head)", boxShadow: "0 1px 0 rgba(148,163,184,0.3)" }}>
                   <tr>
                     <th className="text-left px-5 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide">
@@ -1986,18 +1986,18 @@ export default function AdminFinanceiroPage() {
                       <tr key={w.id} className={idx % 2 === 0
                         ? "group bg-[#F1F4F9] dark:bg-[oklch(0.14_0.026_258)] hover:bg-[#D9E1ED] dark:hover:bg-[oklch(0.21_0.024_258)]"
                         : "group bg-[#DCE3EE] dark:bg-[oklch(0.185_0.024_258)] hover:bg-[#C7D2E3] dark:hover:bg-[oklch(0.21_0.024_258)]"}>
-                        <td className="px-5 py-3">
+                        <td data-rotulo="Partner" className="px-5 py-3">
                           <p className="font-medium text-slate-800 dark:text-slate-200 text-xs">{w.partnerName || "—"}</p>
                           <p className="text-[11px] text-slate-400">{w.partnerEmail || ""}</p>
                         </td>
-                        <td className="px-4 py-3">
+                        <td data-rotulo="Chave PIX" className="px-4 py-3">
                           <p className="text-xs font-medium text-slate-600 dark:text-slate-400">{w.pixKey || "—"}</p>
                           <p className="text-[10px] text-slate-400 uppercase">{w.pixKeyType || ""}</p>
                         </td>
-                        <td className="px-4 py-3 text-right font-bold tabular-nums text-slate-800 dark:text-slate-200">{fmt(w.amount || 0)}</td>
-                        <td className="px-4 py-3 text-xs text-slate-500 dark:text-slate-400">{fmtDateTime(w.requestedAt)}</td>
-                        <td className="px-4 py-3 text-xs text-slate-500 dark:text-slate-400">{w.paidAt ? fmtDateTime(w.paidAt) : "—"}</td>
-                        <td className="px-4 py-3">
+                        <td data-rotulo="Valor" className="px-4 py-3 text-right font-bold tabular-nums text-slate-800 dark:text-slate-200">{fmt(w.amount || 0)}</td>
+                        <td data-rotulo="Solicitado em" className="px-4 py-3 text-xs text-slate-500 dark:text-slate-400">{fmtDateTime(w.requestedAt)}</td>
+                        <td data-rotulo="Processado em" className="px-4 py-3 text-xs text-slate-500 dark:text-slate-400">{w.paidAt ? fmtDateTime(w.paidAt) : "—"}</td>
+                        <td data-rotulo="Status" className="px-4 py-3">
                           <NeonBadge color={PARTNER_WD_STATUS_COLOR[w.status] || "slate"}>
                             {PARTNER_WD_STATUS_LABELS[w.status] || w.status}
                           </NeonBadge>
@@ -2111,7 +2111,7 @@ export default function AdminFinanceiroPage() {
               </div>
 
               <div ref={tableScrollRef} onScroll={handleTableScroll} className="overflow-x-auto allka-table-scroll-body">
-                <table className="w-full text-sm min-w-[600px]">
+                <table className="tabela-cartao w-full text-sm min-w-[600px]">
                   <thead style={{ position: "sticky", top: 0, zIndex: 2, background: "var(--table-head)", boxShadow: "0 1px 0 rgba(148,163,184,0.3)" }}>
                     <tr>
                       <th className="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide">
@@ -2157,15 +2157,15 @@ export default function AdminFinanceiroPage() {
                           <tr key={exp.id} className={idx % 2 === 0
                             ? "group bg-[#F1F4F9] dark:bg-[oklch(0.14_0.026_258)] hover:bg-[#D9E1ED] dark:hover:bg-[oklch(0.21_0.024_258)]"
                             : "group bg-[#DCE3EE] dark:bg-[oklch(0.185_0.024_258)] hover:bg-[#C7D2E3] dark:hover:bg-[oklch(0.21_0.024_258)]"}>
-                            <td className="px-4 py-3">
+                            <td data-rotulo="Nome" className="px-4 py-3">
                               <p className="font-medium text-slate-800 dark:text-slate-200 text-xs">{exp.name}</p>
                               {exp.description && <p className="text-[11px] text-slate-400 mt-0.5 max-w-[200px] truncate">{exp.description}</p>}
                               {exp.payment_method && <p className="text-[10px] text-slate-400 mt-0.5">{exp.payment_method}</p>}
                             </td>
-                            <td className="px-4 py-3">
+                            <td data-rotulo="Categoria" className="px-4 py-3">
                               <span className="text-xs text-slate-600 dark:text-slate-400">{exp.category}</span>
                             </td>
-                            <td className="px-4 py-3">
+                            <td data-rotulo="Tipo" className="px-4 py-3">
                               <NeonBadge color={exp.type === "fixa" ? "blue" : "violet"}>
                                 {exp.type === "fixa" ? "Fixa" : "Variável"}
                               </NeonBadge>
@@ -2173,13 +2173,13 @@ export default function AdminFinanceiroPage() {
                                 <p className="text-[10px] text-slate-400 mt-0.5">{exp.recurrence}</p>
                               )}
                             </td>
-                            <td className="px-4 py-3 text-xs text-slate-500 dark:text-slate-400">{exp.competence_month || "—"}</td>
-                            <td className="px-4 py-3">
+                            <td data-rotulo="Competência" className="px-4 py-3 text-xs text-slate-500 dark:text-slate-400">{exp.competence_month || "—"}</td>
+                            <td data-rotulo="Vencimento" className="px-4 py-3">
                               <span className={`text-xs ${isOverdue ? "text-red-600 font-semibold" : "text-slate-500 dark:text-slate-400"}`}>{fmtDate(exp.due_date)}</span>
                               {exp.paid_at && <p className="text-[10px] text-emerald-600 mt-0.5">Pago em {fmtDate(exp.paid_at)}</p>}
                             </td>
-                            <td className="px-4 py-3 text-right font-bold tabular-nums text-slate-800 dark:text-slate-200">{fmt(exp.amount)}</td>
-                            <td className="px-4 py-3">
+                            <td data-rotulo="Valor" className="px-4 py-3 text-right font-bold tabular-nums text-slate-800 dark:text-slate-200">{fmt(exp.amount)}</td>
+                            <td data-rotulo="Status" className="px-4 py-3">
                               <NeonBadge color={EXP_STATUS_COLOR[exp.status] || "slate"}>
                                 {EXP_STATUS_LABELS[exp.status] || exp.status}
                               </NeonBadge>
@@ -2411,7 +2411,7 @@ export default function AdminFinanceiroPage() {
             {/* Wallet table */}
             <Card className="overflow-hidden">
               <div ref={tableScrollRef} onScroll={handleTableScroll} className="overflow-x-auto allka-table-scroll-body">
-                <table className="w-full text-sm min-w-[600px]">
+                <table className="tabela-cartao w-full text-sm min-w-[600px]">
                   <thead style={{ position: "sticky", top: 0, zIndex: 2, background: "var(--table-head)", boxShadow: "0 1px 0 rgba(148,163,184,0.3)" }}>
                     <tr>
                       <th className="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide">
@@ -2452,32 +2452,32 @@ export default function AdminFinanceiroPage() {
                         <tr key={w.id} className={idx % 2 === 0
                           ? "group bg-[#F1F4F9] dark:bg-[oklch(0.14_0.026_258)] hover:bg-[#D9E1ED] dark:hover:bg-[oklch(0.21_0.024_258)]"
                           : "group bg-[#DCE3EE] dark:bg-[oklch(0.185_0.024_258)] hover:bg-[#C7D2E3] dark:hover:bg-[oklch(0.21_0.024_258)]"}>
-                          <td className="px-4 py-3">
+                          <td data-rotulo="Titular" className="px-4 py-3">
                             <p className="font-medium text-slate-800 dark:text-slate-200 text-xs">{w.owner_name}</p>
                             {w.owner_email && <p className="text-[11px] text-slate-400 mt-0.5">{w.owner_email}</p>}
                             {w.owner_cnpj  && <p className="text-[10px] text-slate-400">{w.owner_cnpj}</p>}
                           </td>
-                          <td className="px-4 py-3">
+                          <td data-rotulo="Perfil" className="px-4 py-3">
                             <NeonBadge color={WALLET_OWNER_COLOR_TOKEN[w.owner_type] || "slate"}>
                               {WALLET_OWNER_LABELS[w.owner_type] || w.owner_type}
                             </NeonBadge>
                           </td>
-                          <td className="px-4 py-3 text-right">
+                          <td data-rotulo="Saldo" className="px-4 py-3 text-right">
                             <p className={`font-bold tabular-nums text-sm ${w.balance > 0 ? "text-emerald-600 dark:text-emerald-400" : "text-slate-400"}`}>
                               {fmt(w.balance)}
                             </p>
                           </td>
-                          <td className="px-4 py-3 text-right">
+                          <td data-rotulo="Bloqueado" className="px-4 py-3 text-right">
                             {w.blocked_balance > 0 ? (
                               <p className="text-amber-600 font-semibold text-xs tabular-nums">{fmt(w.blocked_balance)}</p>
                             ) : <span className="text-slate-300 dark:text-slate-600 text-xs">—</span>}
                           </td>
-                          <td className="px-4 py-3">
+                          <td data-rotulo="Status" className="px-4 py-3">
                             <NeonBadge color={(WALLET_STATUS_COLOR[w.status] || "slate") as BadgeColor}>
                               {WALLET_STATUS_LABELS[w.status] || w.status}
                             </NeonBadge>
                           </td>
-                          <td className="px-4 py-3 text-xs text-slate-400 dark:text-slate-500">{fmtDate(w.updated_at)}</td>
+                          <td data-rotulo="Atualizada" className="px-4 py-3 text-xs text-slate-400 dark:text-slate-500">{fmtDate(w.updated_at)}</td>
                           <td
                             className={idx % 2 === 0
                               ? "px-4 py-3 bg-[#ECEFF4] group-hover:bg-[#D9E1ED] dark:bg-[oklch(0.14_0.026_258)] dark:group-hover:bg-[oklch(0.21_0.024_258)]"
@@ -2560,7 +2560,7 @@ export default function AdminFinanceiroPage() {
             {/* Squad table */}
             <Card className="overflow-hidden">
               <div ref={tableScrollRef} onScroll={handleTableScroll} className="overflow-x-auto allka-table-scroll-body">
-                <table className="w-full text-sm min-w-[600px]">
+                <table className="tabela-cartao w-full text-sm min-w-[600px]">
                   <thead style={{ position: "sticky", top: 0, zIndex: 2, background: "var(--table-head)", boxShadow: "0 1px 0 rgba(148,163,184,0.3)" }}>
                     <tr>
                       <th className="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide">Empresa</th>
@@ -2608,29 +2608,29 @@ export default function AdminFinanceiroPage() {
                           const st = statusMap[sq.status] || { label: sq.status, color: "slate" };
                           return (
                             <tr key={sq.id} className={idx % 2 === 0 ? "group bg-[#F1F4F9] dark:bg-[oklch(0.14_0.026_258)] hover:bg-[#D9E1ED] dark:hover:bg-[oklch(0.21_0.024_258)]" : "group bg-[#DCE3EE] dark:bg-[oklch(0.185_0.024_258)] hover:bg-[#C7D2E3] dark:hover:bg-[oklch(0.21_0.024_258)]"}>
-                              <td className="px-4 py-3">
+                              <td data-rotulo="Empresa" className="px-4 py-3">
                                 <p className="font-medium text-slate-800 dark:text-slate-200 text-xs">{sq.company?.name ?? "—"}</p>
                                 {sq.company?.cnpj && <p className="text-[10px] text-slate-400">{sq.company.cnpj}</p>}
                               </td>
-                              <td className="px-4 py-3 text-right">
+                              <td data-rotulo="Limite" className="px-4 py-3 text-right">
                                 <span className="font-bold tabular-nums text-xs text-purple-600 dark:text-purple-400">{fmt(sq.credit_limit)}</span>
                               </td>
-                              <td className="px-4 py-3 text-right">
+                              <td data-rotulo="Mínimo/mês" className="px-4 py-3 text-right">
                                 <span className="font-semibold tabular-nums text-xs text-slate-600 dark:text-slate-300">{fmt(sq.monthly_minimum)}</span>
                               </td>
-                              <td className="px-4 py-3 text-right">
+                              <td data-rotulo="Saldo carteira" className="px-4 py-3 text-right">
                                 <span className={`font-bold tabular-nums text-xs ${walletBalance >= 0 ? "text-emerald-600 dark:text-emerald-400" : "text-red-600 dark:text-red-400"}`}>{fmt(walletBalance)}</span>
                               </td>
-                              <td className="px-4 py-3 text-right">
+                              <td data-rotulo="Disponível" className="px-4 py-3 text-right">
                                 <span className={`font-bold tabular-nums text-xs ${available > 0 ? "text-blue-600 dark:text-blue-400" : "text-red-600 dark:text-red-400"}`}>{fmt(available)}</span>
                               </td>
-                              <td className="px-4 py-3 text-center">
+                              <td data-rotulo="Fechamento" className="px-4 py-3 text-center">
                                 <span className="text-xs text-slate-500">Dia {sq.billing_day}</span>
                               </td>
-                              <td className="px-4 py-3 text-center">
+                              <td data-rotulo="Prazo" className="px-4 py-3 text-center">
                                 <span className="text-xs text-slate-500">{sq.payment_terms}d</span>
                               </td>
-                              <td className="px-4 py-3">
+                              <td data-rotulo="Status" className="px-4 py-3">
                                 <NeonBadge color={st.color}>{st.label}</NeonBadge>
                               </td>
                               <td
@@ -2785,7 +2785,7 @@ export default function AdminFinanceiroPage() {
             {/* Tabela de conciliação */}
             <Card className="overflow-hidden">
               <div ref={tableScrollRef} onScroll={handleTableScroll} className="overflow-x-auto allka-table-scroll-body">
-                <table className="w-full text-sm min-w-[600px]">
+                <table className="tabela-cartao w-full text-sm min-w-[600px]">
                   <thead style={{ position: "sticky", top: 0, zIndex: 2, background: "var(--table-head)", boxShadow: "0 1px 0 rgba(148,163,184,0.3)" }}>
                     <tr>
                       <th className="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide whitespace-nowrap">
@@ -2829,34 +2829,34 @@ export default function AdminFinanceiroPage() {
                         const originLabels = { payment: "Pagamento", pix: "PIX", boleto: "Boleto", card: "Cartão", plan: "Plano", recharge: "Recarga", additional_credit: "Créd. Adicional", invoice_payment: "Fatura", invoice: "Fatura", squad_payment: "Squad", withdrawal: "Saque", transfer: "Transferência", refund: "Reembolso", chargeback: "Estorno", bank_fee: "Taxa Bancária", external_payment: "Pag. Externo" };
                         return (
                           <tr key={entry.id} className={idx % 2 === 0 ? "group bg-[#F1F4F9] dark:bg-[oklch(0.14_0.026_258)] hover:bg-[#D9E1ED] dark:hover:bg-[oklch(0.21_0.024_258)]" : "group bg-[#DCE3EE] dark:bg-[oklch(0.185_0.024_258)] hover:bg-[#C7D2E3] dark:hover:bg-[oklch(0.21_0.024_258)]"}>
-                            <td className="px-4 py-3 text-xs text-slate-500 whitespace-nowrap">{fmtDateTime(entry.created_at)}</td>
-                            <td className="px-4 py-3">
+                            <td data-rotulo="Data/Hora" className="px-4 py-3 text-xs text-slate-500 whitespace-nowrap">{fmtDateTime(entry.created_at)}</td>
+                            <td data-rotulo="Titular" className="px-4 py-3">
                               <p className="font-medium text-slate-800 dark:text-slate-200 text-xs leading-tight">{entry.wallet?.owner_name ?? "—"}</p>
                               {entry.wallet?.owner_email && <p className="text-[10px] text-slate-400">{entry.wallet.owner_email}</p>}
                             </td>
-                            <td className="px-4 py-3">
+                            <td data-rotulo="Perfil" className="px-4 py-3">
                               <NeonBadge color={ownerColors[entry.wallet?.owner_type] || "slate"}>
                                 {ownerLabels[entry.wallet?.owner_type] || entry.wallet?.owner_type || "—"}
                               </NeonBadge>
                             </td>
-                            <td className="px-4 py-3">
+                            <td data-rotulo="Tipo" className="px-4 py-3">
                               <NeonBadge color={isBankIn ? "emerald" : "red"} className="inline-flex items-center gap-1">
                                 {isBankIn ? <ArrowUpCircle className="h-2.5 w-2.5" /> : <ArrowDownCircle className="h-2.5 w-2.5" />}
                                 {isBankIn ? "Entrada real" : "Saída real"}
                               </NeonBadge>
                             </td>
-                            <td className="px-4 py-3">
+                            <td data-rotulo="Origem" className="px-4 py-3">
                               <span className="text-[11px] text-slate-600 dark:text-slate-400 font-medium">{originLabels[entry.type] || entry.type}</span>
                             </td>
-                            <td className="px-4 py-3 max-w-xs">
+                            <td data-rotulo="Descrição" className="px-4 py-3 max-w-xs">
                               <p className="text-xs text-slate-700 dark:text-slate-300 truncate" title={entry.description}>{entry.description}</p>
                             </td>
-                            <td className="px-4 py-3 text-right">
+                            <td data-rotulo="Valor" className="px-4 py-3 text-right">
                               <span className={`font-bold tabular-nums text-sm ${isBankIn ? "text-emerald-600 dark:text-emerald-400" : "text-red-600 dark:text-red-400"}`}>
                                 {isBankIn ? "+" : "−"}{fmt(entry.amount)}
                               </span>
                             </td>
-                            <td className="px-4 py-3">
+                            <td data-rotulo="Referência" className="px-4 py-3">
                               {entry.reference_type ? (
                                 <div>
                                   <p className="text-[10px] font-semibold text-slate-500 uppercase">{entry.reference_type}</p>

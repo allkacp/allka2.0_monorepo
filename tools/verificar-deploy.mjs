@@ -25,6 +25,7 @@ import { execSync } from "node:child_process";
 const VPS = process.env.ALLKA_VPS ?? "root@2.24.203.121";
 const CHAVE = process.env.ALLKA_SSH_KEY ?? `${process.env.HOME}/.ssh/allka_deploy`;
 const REMOTO = process.env.ALLKA_REMOTE ?? "allka2";
+const DOMINIO = process.env.ALLKA_DOMINIO ?? "allka.store";
 
 function sh(cmd) {
   return execSync(cmd, { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] }).trim();
@@ -139,6 +140,43 @@ if (tags.backend && contem(esperado.backend, tags.backend)) {
     console.log(
       `\n  ${confere ? "ok " : "IMAGEM VELHA"}  conteúdo do backend ${
         confere ? "confere com o código" : "NÃO corresponde à tag"
+      }`,
+    );
+  }
+}
+
+// ── conteúdo do frontend ────────────────────────────────────────────────────
+//
+// Mesma checagem do backend, agora que o cache de layers voltou (686b682): a
+// tag bater não prova que o build saiu do código atual — foi exatamente esse
+// o modo de falha do `type=gha`. Procura no bundle servido uma marca que só
+// existe depois de uma mudança recente.
+if (tags.frontend && contem(esperado.frontend, tags.frontend)) {
+  const MARCA = "tabela-cartao";
+  const noRepo = sh(
+    `git grep -c "${MARCA}" -- apps/frontend/app/globals.css || true`,
+  );
+  if (noRepo && noRepo !== "0") {
+    let achou = false;
+    try {
+      // O CSS entra num bundle com hash no nome; varre os assets servidos.
+      const html = sh(`curl -s https://${DOMINIO}/`);
+      const cssRefs = [...html.matchAll(/href="([^"]+\.css)"/g)].map((m) => m[1]);
+      for (const ref of cssRefs) {
+        const url = ref.startsWith("http") ? ref : `https://${DOMINIO}${ref}`;
+        const css = sh(`curl -s "${url}"`);
+        if (css.includes(MARCA)) {
+          achou = true;
+          break;
+        }
+      }
+    } catch {
+      achou = false;
+    }
+    if (!achou) problemas++;
+    console.log(
+      `  ${achou ? "ok " : "BUNDLE VELHO"}  conteúdo do frontend ${
+        achou ? "confere com o código" : "NÃO corresponde à tag"
       }`,
     );
   }

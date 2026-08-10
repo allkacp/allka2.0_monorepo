@@ -347,7 +347,7 @@ export default function ComissionamentosPage() {
             </CardHeader>
             <CardContent>
               <div className="overflow-x-auto">
-                <table className="w-full min-w-150">
+                <table className="tabela-cartao w-full min-w-150">
                   <thead>
                     <tr className="border-b">
                       <th className="text-left p-3"><SortableHeader label="Líder" field="leader" type="text" sortKey={sortKey ? String(sortKey) : null} sortDir={sortDir} onSort={handleSort} /></th>
@@ -369,13 +369,13 @@ export default function ComissionamentosPage() {
 
                         return (
                           <tr key={category.id} className="border-b hover:bg-gray-50">
-                            <td className="p-3 font-medium">{category.leader}</td>
-                            <td className="p-3">{category.name}</td>
-                            <td className="p-3 text-green-600">R$ {category.fixedSalary.toLocaleString()}</td>
-                            <td className="p-3 text-blue-600">R$ {commissionEarned.toLocaleString()}</td>
-                            <td className="p-3 font-semibold">R$ {totalEarned.toLocaleString()}</td>
-                            <td className="p-3">R$ {category.monthlyRevenue.toLocaleString()}</td>
-                            <td className="p-3">
+                            <td data-rotulo="Líder" className="p-3 font-medium">{category.leader}</td>
+                            <td data-rotulo="Categoria" className="p-3">{category.name}</td>
+                            <td data-rotulo="Salário Fixo" className="p-3 text-green-600">R$ {category.fixedSalary.toLocaleString()}</td>
+                            <td data-rotulo="Comissão" className="p-3 text-blue-600">R$ {commissionEarned.toLocaleString()}</td>
+                            <td data-rotulo="Total Ganho" className="p-3 font-semibold">R$ {totalEarned.toLocaleString()}</td>
+                            <td data-rotulo="Receita Gerada" className="p-3">R$ {category.monthlyRevenue.toLocaleString()}</td>
+                            <td data-rotulo="ROI" className="p-3">
                               <NeonBadge
                                 color={
                                   Number.parseFloat(roi) > 200

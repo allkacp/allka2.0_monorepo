@@ -887,7 +887,7 @@ export default function AdminConfiguracoesPage() {
             )}
 
             <div className="overflow-x-auto">
-              <table className="w-full text-sm">
+              <table className="tabela-cartao w-full text-sm">
                 <thead>
                   <tr className="border-b border-slate-200/60 dark:border-slate-700/60">
                     <th className="text-center py-3 px-4 text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wide">Ações</th>
@@ -909,13 +909,13 @@ export default function AdminConfiguracoesPage() {
                         ? "bg-[#F1F4F9] dark:bg-[oklch(0.14_0.026_258)] hover:bg-[#D9E1ED] dark:hover:bg-[oklch(0.21_0.024_258)]"
                         : "bg-[#DCE3EE] dark:bg-[oklch(0.185_0.024_258)] hover:bg-[#C7D2E3] dark:hover:bg-[oklch(0.21_0.024_258)]"}
                     >
-                      <td className="py-2 px-4">
+                      <td data-rotulo="Ações" className="py-2 px-4">
                         <div className="flex items-center justify-center gap-1">
                           <IconActionButton icon={Pencil} tooltip="Editar" onClick={() => openEditBox(b)} tone="text-blue-500" />
                           <IconActionButton icon={Trash2} tooltip="Excluir" onClick={() => deleteBox(b.id)} tone="text-red-400" />
                         </div>
                       </td>
-                      <td className="py-3 px-4">
+                      <td data-rotulo="Label" className="py-3 px-4">
                         <span className="flex items-center gap-2 font-semibold text-slate-700 dark:text-slate-200">
                           <span className="h-7 w-7 rounded-lg bg-blue-50 dark:bg-blue-950/30 flex items-center justify-center shrink-0">
                             <Mail className="h-3.5 w-3.5 text-blue-500" />
@@ -923,9 +923,9 @@ export default function AdminConfiguracoesPage() {
                           {b.label}
                         </span>
                       </td>
-                      <td className="py-3 px-4 text-slate-500 dark:text-slate-400">{b.email}</td>
-                      <td className="py-3 px-4 text-xs text-slate-400 max-w-[280px] truncate">{b.description || "—"}</td>
-                      <td className="py-3 px-4 text-center">
+                      <td data-rotulo="E-mail" className="py-3 px-4 text-slate-500 dark:text-slate-400">{b.email}</td>
+                      <td data-rotulo="Descrição" className="py-3 px-4 text-xs text-slate-400 max-w-[280px] truncate">{b.description || "—"}</td>
+                      <td data-rotulo="Ativa" className="py-3 px-4 text-center">
                         <Switch checked={b.active} onCheckedChange={() => toggleBox(b.id)} />
                       </td>
                     </tr>
@@ -1210,7 +1210,7 @@ export default function AdminConfiguracoesPage() {
               </p>
             ) : (
               <div className="overflow-x-auto">
-                <table className="w-full text-sm">
+                <table className="tabela-cartao w-full text-sm">
                   <thead>
                     <tr className="border-b border-slate-200/60 dark:border-slate-700/60">
                       <th className="text-center py-3 px-4 text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wide">Ações</th>
@@ -1233,7 +1233,7 @@ export default function AdminConfiguracoesPage() {
                           ? "bg-[#F1F4F9] dark:bg-[oklch(0.14_0.026_258)] hover:bg-[#D9E1ED] dark:hover:bg-[oklch(0.21_0.024_258)]"
                           : "bg-[#DCE3EE] dark:bg-[oklch(0.185_0.024_258)] hover:bg-[#C7D2E3] dark:hover:bg-[oklch(0.21_0.024_258)]"}
                       >
-                        <td className="py-2 px-4">
+                        <td data-rotulo="Ações" className="py-2 px-4">
                           <div className="flex items-center justify-center gap-1">
                             <IconActionButton icon={TestTube2} tooltip="Testar" onClick={() => testWa(n)} tone="text-blue-500" />
                             {n.status === "connected" && (
@@ -1242,7 +1242,7 @@ export default function AdminConfiguracoesPage() {
                             <IconActionButton icon={Trash2} tooltip="Excluir" onClick={() => deleteWa(n.id)} tone="text-red-400" />
                           </div>
                         </td>
-                        <td className="py-3 px-4">
+                        <td data-rotulo="Label" className="py-3 px-4">
                           <span className="flex items-center gap-2 font-semibold text-slate-700 dark:text-slate-200">
                             <span className="h-7 w-7 rounded-lg bg-green-50 dark:bg-green-950/30 flex items-center justify-center shrink-0">
                               <MessageSquare className="h-3.5 w-3.5 text-green-600" />
@@ -1250,12 +1250,12 @@ export default function AdminConfiguracoesPage() {
                             {n.label}
                           </span>
                         </td>
-                        <td className="py-3 px-4 text-slate-500 dark:text-slate-400 font-mono">{n.phone}</td>
-                        <td className="py-3 px-4">
+                        <td data-rotulo="Número" className="py-3 px-4 text-slate-500 dark:text-slate-400 font-mono">{n.phone}</td>
+                        <td data-rotulo="Tipo" className="py-3 px-4">
                           <NeonBadge color="blue" className="text-[9px] h-4 px-1.5 py-0">{n.type}</NeonBadge>
                         </td>
-                        <td className="py-3 px-4"><StatusPill connected={n.status === "connected"} /></td>
-                        <td className="py-3 px-4 text-xs text-slate-400">{n.lastActivity}</td>
+                        <td data-rotulo="Status" className="py-3 px-4"><StatusPill connected={n.status === "connected"} /></td>
+                        <td data-rotulo="Última atividade" className="py-3 px-4 text-xs text-slate-400">{n.lastActivity}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -1416,7 +1416,7 @@ export default function AdminConfiguracoesPage() {
             description="Conecte as contas oficiais da ALLKA para publicação e analytics"
           >
             <div className="rounded-xl border border-slate-200 dark:border-slate-700 overflow-hidden">
-              <table className="w-full text-sm">
+              <table className="tabela-cartao w-full text-sm">
                 <thead>
                   <tr className="border-b border-slate-200/60 dark:border-slate-700/60">
                     <th className="text-center py-3 px-4 text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wide">Ações</th>
@@ -1437,7 +1437,7 @@ export default function AdminConfiguracoesPage() {
                           ? "bg-[#F1F4F9] dark:bg-[oklch(0.14_0.026_258)] hover:bg-[#D9E1ED] dark:hover:bg-[oklch(0.21_0.024_258)]"
                           : "bg-[#DCE3EE] dark:bg-[oklch(0.185_0.024_258)] hover:bg-[#C7D2E3] dark:hover:bg-[oklch(0.21_0.024_258)]"}
                       >
-                        <td className="py-2 px-4">
+                        <td data-rotulo="Ações" className="py-2 px-4">
                           <div className="flex items-center justify-center">
                             <Button
                               size="sm"
@@ -1457,7 +1457,7 @@ export default function AdminConfiguracoesPage() {
                             </Button>
                           </div>
                         </td>
-                        <td className="py-3 px-4">
+                        <td data-rotulo="Rede" className="py-3 px-4">
                           <span className="flex items-center gap-2 font-semibold text-slate-700 dark:text-slate-200">
                             <span className="h-7 w-7 rounded-lg flex items-center justify-center shrink-0" style={{ background: s.color }}>
                               <SIcon className="h-3.5 w-3.5 text-white" />
@@ -1465,8 +1465,8 @@ export default function AdminConfiguracoesPage() {
                             {s.name}
                           </span>
                         </td>
-                        <td className="py-3 px-4 text-xs text-slate-400">{s.connected && s.handle ? s.handle : "—"}</td>
-                        <td className="py-3 px-4"><StatusPill connected={s.connected} /></td>
+                        <td data-rotulo="Conta" className="py-3 px-4 text-xs text-slate-400">{s.connected && s.handle ? s.handle : "—"}</td>
+                        <td data-rotulo="Status" className="py-3 px-4"><StatusPill connected={s.connected} /></td>
                       </tr>
                     );
                   })}
@@ -1625,7 +1625,7 @@ export default function AdminConfiguracoesPage() {
               </p>
             ) : (
               <div className="overflow-x-auto">
-                <table className="w-full text-sm">
+                <table className="tabela-cartao w-full text-sm">
                   <thead>
                     <tr className="border-b border-slate-200/60 dark:border-slate-700/60">
                       <th className="text-center py-3 px-4 text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wide">Ações</th>
@@ -1649,14 +1649,14 @@ export default function AdminConfiguracoesPage() {
                             ? "bg-[#F1F4F9] dark:bg-[oklch(0.14_0.026_258)] hover:bg-[#D9E1ED] dark:hover:bg-[oklch(0.21_0.024_258)]"
                             : "bg-[#DCE3EE] dark:bg-[oklch(0.185_0.024_258)] hover:bg-[#C7D2E3] dark:hover:bg-[oklch(0.21_0.024_258)]"}
                         >
-                          <td className="py-2 px-4">
+                          <td data-rotulo="Ações" className="py-2 px-4">
                             <div className="flex items-center justify-center gap-1">
                               <IconActionButton icon={TestTube2} tooltip="Testar" onClick={() => testWh(w)} tone="text-blue-500" />
                               <IconActionButton icon={Pencil} tooltip="Editar" onClick={() => openEditWh(w)} tone="text-violet-500" />
                               <IconActionButton icon={Trash2} tooltip="Excluir" onClick={() => deleteWh(w.id)} tone="text-red-400" />
                             </div>
                           </td>
-                          <td className="py-3 px-4">
+                          <td data-rotulo="Nome" className="py-3 px-4">
                             <span className="flex items-center gap-2 font-semibold text-slate-700 dark:text-slate-200">
                               <span className="h-7 w-7 rounded-lg bg-violet-50 dark:bg-violet-950/30 flex items-center justify-center shrink-0">
                                 <Zap className="h-3.5 w-3.5 text-violet-500" />
@@ -1664,15 +1664,15 @@ export default function AdminConfiguracoesPage() {
                               {w.name}
                             </span>
                           </td>
-                          <td className="py-3 px-4">
+                          <td data-rotulo="Método" className="py-3 px-4">
                             <NeonBadge color="slate" className="text-[9px] h-4 px-1.5 py-0 font-mono">{w.method}</NeonBadge>
                           </td>
-                          <td className="py-3 px-4">
+                          <td data-rotulo="Evento" className="py-3 px-4">
                             {ev ? <NeonBadge color="violet" className="text-[9px] h-4 px-1.5 py-0">{ev.label}</NeonBadge> : <span className="text-slate-300 dark:text-slate-600">—</span>}
                           </td>
-                          <td className="py-3 px-4 text-xs text-slate-400 font-mono max-w-[220px] truncate">{w.url}</td>
-                          <td className="py-3 px-4 text-xs text-slate-400">{w.lastTriggered}</td>
-                          <td className="py-3 px-4 text-center">
+                          <td data-rotulo="URL" className="py-3 px-4 text-xs text-slate-400 font-mono max-w-[220px] truncate">{w.url}</td>
+                          <td data-rotulo="Último disparo" className="py-3 px-4 text-xs text-slate-400">{w.lastTriggered}</td>
+                          <td data-rotulo="Ativo" className="py-3 px-4 text-center">
                             <Switch checked={w.active} onCheckedChange={() => toggleWh(w.id)} />
                           </td>
                         </tr>

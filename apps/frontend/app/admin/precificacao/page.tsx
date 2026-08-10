@@ -687,7 +687,7 @@ const PrecificacaoPage = () => {
             </div>
 
             <div className="overflow-x-auto rounded-lg border border-gray-200">
-              <table className="w-full border-collapse text-sm">
+              <table className="tabela-cartao w-full border-collapse text-sm">
                 <thead>
                   <tr className="bg-gradient-to-r from-blue-600 to-purple-600 text-white">
                     <th className="text-left p-3 font-semibold text-xs">
@@ -738,23 +738,23 @@ const PrecificacaoPage = () => {
                         index % 2 === 0 ? "bg-white" : "bg-gray-50"
                       }`}
                     >
-                      <td className="p-3 font-medium text-gray-900 flex items-center gap-2">
+                      <td data-rotulo="Especialidade" className="p-3 font-medium text-gray-900 flex items-center gap-2">
                         <Award className="h-3.5 w-3.5 text-blue-600 shrink-0" />
                         <span className="text-xs">{specialty.name}</span>
                       </td>
-                      <td className="p-3 text-center text-gray-700 font-semibold text-xs">
+                      <td data-rotulo="Iniciante" className="p-3 text-center text-gray-700 font-semibold text-xs">
                         R$ {specialty.rates.iniciante.toFixed(2)}
                       </td>
-                      <td className="p-3 text-center text-gray-700 font-semibold text-xs">
+                      <td data-rotulo="Júnior" className="p-3 text-center text-gray-700 font-semibold text-xs">
                         R$ {specialty.rates.junior.toFixed(2)}
                       </td>
-                      <td className="p-3 text-center text-gray-700 font-semibold text-xs">
+                      <td data-rotulo="Pleno" className="p-3 text-center text-gray-700 font-semibold text-xs">
                         R$ {specialty.rates.pleno.toFixed(2)}
                       </td>
-                      <td className="p-3 text-center text-gray-700 font-semibold text-xs">
+                      <td data-rotulo="Sênior" className="p-3 text-center text-gray-700 font-semibold text-xs">
                         R$ {specialty.rates.senior.toFixed(2)}
                       </td>
-                      <td className="p-3 text-center">
+                      <td data-rotulo="Nômades" className="p-3 text-center">
                         <span className="bg-green-50 text-green-700 border-green-200 rounded-lg px-2 py-0.5 font-semibold text-xs">
                           {specialty.activeNomades}
                         </span>

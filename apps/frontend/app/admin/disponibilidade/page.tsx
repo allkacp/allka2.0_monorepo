@@ -855,7 +855,7 @@ export default function AdminDisponibilidadePage() {
             onScroll={handleTableScroll}
             className="overflow-x-auto allka-table-scroll-body"
           >
-            <table className="w-full text-sm min-w-150">
+            <table className="tabela-cartao w-full text-sm min-w-150">
               <thead style={theadStyle}>
                 <tr>
                   <th className="text-center px-2 py-3 text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide whitespace-nowrap" style={acoesThStyle}>
@@ -913,7 +913,7 @@ export default function AdminDisponibilidadePage() {
                             : "bg-[#DCE3EE] dark:bg-[oklch(0.185_0.024_258)] hover:bg-[#C7D2E3] dark:hover:bg-[oklch(0.21_0.024_258)]"
                         }`}
                       >
-                        <td className={acoesTdClass(i)} style={acoesTdStyle}>
+                        <td data-rotulo="Ações" className={acoesTdClass(i)} style={acoesTdStyle}>
                           <div className="flex items-center justify-center">
                             <TooltipProvider delayDuration={400}>
                               <Tooltip>
@@ -930,7 +930,7 @@ export default function AdminDisponibilidadePage() {
                             </TooltipProvider>
                           </div>
                         </td>
-                        <td className="px-4 py-3">
+                        <td data-rotulo="Status" className="px-4 py-3">
                           <div className="flex items-center gap-2">
                             <Farol light={g.light} />
                             <NeonBadge color={lm.badgeColor} className="font-semibold whitespace-nowrap">
@@ -938,7 +938,7 @@ export default function AdminDisponibilidadePage() {
                             </NeonBadge>
                           </div>
                         </td>
-                        <td className="px-4 py-3">
+                        <td data-rotulo="Especialidade" className="px-4 py-3">
                           <div className="flex items-center gap-2">
                             <div className="p-1.5 rounded-md bg-blue-50 dark:bg-blue-950/30 shrink-0">
                               <Briefcase className="h-3 w-3 text-blue-400" />
@@ -948,15 +948,15 @@ export default function AdminDisponibilidadePage() {
                             </span>
                           </div>
                         </td>
-                        <td className="px-4 py-3">
+                        <td data-rotulo="Categoria" className="px-4 py-3">
                           <NeonBadge color="slate" className="capitalize">
                             {g.category}
                           </NeonBadge>
                         </td>
-                        <td className="px-4 py-3 text-xs font-bold tabular-nums text-slate-700 dark:text-slate-300">
+                        <td data-rotulo="Total" className="px-4 py-3 text-xs font-bold tabular-nums text-slate-700 dark:text-slate-300">
                           {g.total}
                         </td>
-                        <td className="px-4 py-3">
+                        <td data-rotulo="Disponíveis" className="px-4 py-3">
                           <span
                             style={{
                               color:
@@ -972,10 +972,10 @@ export default function AdminDisponibilidadePage() {
                             {g.active}
                           </span>
                         </td>
-                        <td className="px-4 py-3 text-xs tabular-nums text-slate-500">
+                        <td data-rotulo="Em Atividade" className="px-4 py-3 text-xs tabular-nums text-slate-500">
                           {g.total - g.active}
                         </td>
-                        <td className="px-4 py-3">
+                        <td data-rotulo="Utilização" className="px-4 py-3">
                           <div className="flex items-center gap-2">
                             <span
                               style={{
@@ -998,7 +998,7 @@ export default function AdminDisponibilidadePage() {
                             </div>
                           </div>
                         </td>
-                        <td className="px-4 py-3 text-xs text-slate-500 tabular-nums whitespace-nowrap">
+                        <td data-rotulo="R$/h" className="px-4 py-3 text-xs text-slate-500 tabular-nums whitespace-nowrap">
                           {g.hourly_rate > 0
                             ? `R$ ${Number(g.hourly_rate).toFixed(2)}/h`
                             : "—"}
@@ -1019,7 +1019,7 @@ export default function AdminDisponibilidadePage() {
             onScroll={handleTableScroll}
             className="overflow-x-auto allka-table-scroll-body"
           >
-            <table className="w-full text-sm min-w-150">
+            <table className="tabela-cartao w-full text-sm min-w-150">
               <thead style={theadStyle}>
                 <tr>
                   <th className="text-center px-2 py-3 text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide whitespace-nowrap" style={acoesThStyle}>
@@ -1088,7 +1088,7 @@ export default function AdminDisponibilidadePage() {
                             : "bg-[#DCE3EE] dark:bg-[oklch(0.185_0.024_258)] hover:bg-[#C7D2E3] dark:hover:bg-[oklch(0.21_0.024_258)]"
                         }`}
                       >
-                        <td className={acoesTdClass(i)} style={acoesTdStyle}>
+                        <td data-rotulo="Ações" className={acoesTdClass(i)} style={acoesTdStyle}>
                           <div className="flex items-center justify-center">
                             <TooltipProvider delayDuration={400}>
                               <Tooltip>
@@ -1105,7 +1105,7 @@ export default function AdminDisponibilidadePage() {
                             </TooltipProvider>
                           </div>
                         </td>
-                        <td className="px-4 py-3">
+                        <td data-rotulo="Status" className="px-4 py-3">
                           <div className="flex items-center gap-2">
                             <Farol light={g.light} />
                             <NeonBadge color={lm.badgeColor} className="font-semibold whitespace-nowrap">
@@ -1113,7 +1113,7 @@ export default function AdminDisponibilidadePage() {
                             </NeonBadge>
                           </div>
                         </td>
-                        <td className="px-4 py-3 max-w-50">
+                        <td data-rotulo="Tarefa" className="px-4 py-3 max-w-50">
                           <div className="flex items-center gap-2">
                             <div className="p-1.5 rounded-md bg-violet-50 dark:bg-violet-950/30 shrink-0">
                               <ListChecks className="h-3 w-3 text-violet-400" />
@@ -1123,15 +1123,15 @@ export default function AdminDisponibilidadePage() {
                             </span>
                           </div>
                         </td>
-                        <td className="px-4 py-3">
+                        <td data-rotulo="Categoria" className="px-4 py-3">
                           <NeonBadge color="slate" className="capitalize">
                             {g.category}
                           </NeonBadge>
                         </td>
-                        <td className="px-4 py-3 text-xs font-bold tabular-nums text-slate-700 dark:text-slate-300">
+                        <td data-rotulo="Total" className="px-4 py-3 text-xs font-bold tabular-nums text-slate-700 dark:text-slate-300">
                           {g.total}
                         </td>
-                        <td className="px-4 py-3">
+                        <td data-rotulo="Aguardando Nômade" className="px-4 py-3">
                           {g.waiting > 0 ? (
                             <span
                               style={{
@@ -1162,10 +1162,10 @@ export default function AdminDisponibilidadePage() {
                             </span>
                           )}
                         </td>
-                        <td className="px-4 py-3 text-xs tabular-nums text-slate-500">
+                        <td data-rotulo="Em Execução" className="px-4 py-3 text-xs tabular-nums text-slate-500">
                           {g.inProgress}
                         </td>
-                        <td className="px-4 py-3">
+                        <td data-rotulo="Aguardando há" className="px-4 py-3">
                           <span
                             style={{
                               fontSize: 12,
