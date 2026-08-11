@@ -43,6 +43,8 @@ import expensesRouter from "./routes/expenses";
 import walletsRouter from "./routes/wallets";
 import squadRouter from "./routes/squad";
 import aiConsultorRouter from "./routes/ai-consultor";
+import aiKnowledgeBaseRouter from "./routes/ai-knowledge-base";
+import aiUsageRouter from "./routes/ai-usage";
 import { prisma } from "./lib/prisma";
 import { errorHandler } from "./middleware/error";
 
@@ -180,6 +182,11 @@ app.use("/api/squad", squadRouter);
 // Consultor IA — preencher/melhorar briefing de tarefas via Gemini, embasado
 // na base de conhecimento PLAC (ver lib/ai-consultor.ts e ai-knowledge-base.ts)
 app.use("/api/ai-consultor", aiConsultorRouter);
+// Bases de conhecimento administráveis da IA (admin > Configurações) — ver
+// lib/ai-knowledge-base.ts para como o conteúdo chega até o Consultor IA.
+app.use("/api/ai-knowledge-base", aiKnowledgeBaseRouter);
+// Controle de custo de IA (admin > Configurações) — ver lib/ai-usage-tracker.ts
+app.use("/api/ai-usage", aiUsageRouter);
 
 // ─── 404 Handler ──────────────────────────────────────────────────────────────
 

@@ -196,6 +196,7 @@ export function AdminDashboardPage() {
       | "this_month"
       | "last_month"
       | "this_quarter"
+      | "all_time"
       | "custom";
     from?: Date;
     to?: Date;
@@ -293,6 +294,9 @@ export function AdminDashboardPage() {
         const quarter = Math.floor(now.getMonth() / 3);
         const firstDayOfQuarter = new Date(now.getFullYear(), quarter * 3, 1);
         return { from: firstDayOfQuarter, to: today };
+      case "all_time":
+        // Cobre também os dados da plataforma antiga (importados até 2026-04-23).
+        return { from: new Date(2000, 0, 1), to: today };
       case "custom":
         return {
           from: customFrom || today,
@@ -363,6 +367,7 @@ export function AdminDashboardPage() {
     { type: "this_month" as const, label: "Este mês" },
     { type: "last_month" as const, label: "Mês passado" },
     { type: "this_quarter" as const, label: "Trimestre atual" },
+    { type: "all_time" as const, label: "Todo o período (inclui plataforma antiga)" },
     { type: "custom" as const, label: "Intervalo personalizado" },
   ];
 

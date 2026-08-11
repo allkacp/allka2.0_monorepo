@@ -29,6 +29,8 @@ const questionSchema = z.object({
 const fillBriefingSchema = z.object({
   free_text: z.string().min(1, "Descreva as informações do cliente antes de enviar"),
   questions: z.array(questionSchema).min(1),
+  project_id: z.string().optional(),
+  use_project_documents: z.boolean().optional(),
 });
 
 // POST /api/ai-consultor/fill-briefing
@@ -38,8 +40,13 @@ router.post(
   validate(fillBriefingSchema),
   async (req, res, next) => {
     try {
-      const { free_text, questions } = req.body as z.infer<typeof fillBriefingSchema>;
-      const answers = await fillBriefingWithAI(free_text, questions);
+      const { free_text, questions, project_id, use_project_documents } = req.body as z.infer<
+        typeof fillBriefingSchema
+      >;
+      const answers = await fillBriefingWithAI(free_text, questions, {
+        projectId: project_id,
+        useProjectDocuments: use_project_documents,
+      });
       res.json({ answers });
     } catch (err) {
       next(err);

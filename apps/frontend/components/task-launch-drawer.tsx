@@ -175,6 +175,10 @@ function fmtBytes(bytes: number): string {
 // ─── Props ───────────────────────────────────────────────────────────────────
 interface TaskLaunchDrawerProps {
   task: any;
+  // Projeto dono da tarefa — usado só pra checar se há documentos de
+  // contexto (aba "Documentos" do projeto) e oferecer o uso deles no
+  // "Preencher com Assistente" (ver handleAIFill abaixo).
+  projectId?: string;
   onClose: () => void;
   onReleased: (taskId: string) => void;
   onTaskUpdated?: (task: any) => void;
@@ -183,6 +187,7 @@ interface TaskLaunchDrawerProps {
 // ─── Main Component ───────────────────────────────────────────────────────────
 export function TaskLaunchDrawer({
   task,
+  projectId,
   onClose,
   onReleased,
   onTaskUpdated,
@@ -215,6 +220,19 @@ export function TaskLaunchDrawer({
   // "Melhorar com IA" por pergunta (modo manual) — guarda a question_key em
   // andamento pra mostrar o spinner só naquele botão específico.
   const [improvingKey, setImprovingKey] = useState<string | null>(null);
+
+  // Documentos de contexto do projeto (aba "Documentos") — se houver algum,
+  // oferece a opção de usá-los como base extra no "Preencher com Assistente".
+  const effectiveProjectId = projectId || currentTask?.project_id || task?.project_id;
+  const [projectDocumentCount, setProjectDocumentCount] = useState(0);
+  const [useProjectDocuments, setUseProjectDocuments] = useState(false);
+  useEffect(() => {
+    if (!effectiveProjectId) return;
+    apiClient
+      .getProjectDocuments(String(effectiveProjectId))
+      .then((res: any) => setProjectDocumentCount(res?.documents?.length ?? 0))
+      .catch(() => setProjectDocumentCount(0));
+  }, [effectiveProjectId]);
 
   // ── Initialize ─────────────────────────────────────────────────────────────
   useEffect(() => {
@@ -496,6 +514,8 @@ export function TaskLaunchDrawer({
       const res: any = await apiClient.aiFillBriefing({
         free_text: aiText,
         questions: questionsPayload,
+        project_id: useProjectDocuments ? effectiveProjectId : undefined,
+        use_project_documents: useProjectDocuments,
       });
       const suggested: Record<string, string> = {};
       for (const a of res?.answers ?? []) {
@@ -933,6 +953,21 @@ export function TaskLaunchDrawer({
               Sobrescrever respostas já preenchidas
             </Label>
           </div>
+
+          {/* Usar documentos do projeto (aba "Documentos") como contexto extra */}
+          {projectDocumentCount > 0 && (
+            <div className="flex items-start gap-2 rounded-lg border border-violet-200 bg-violet-50 px-3 py-2.5">
+              <Checkbox
+                id="use-project-documents"
+                checked={useProjectDocuments}
+                onCheckedChange={(checked) => setUseProjectDocuments(!!checked)}
+                className="mt-0.5"
+              />
+              <Label htmlFor="use-project-documents" className="text-sm text-violet-800 cursor-pointer">
+                Usar os {projectDocumentCount} documento{projectDocumentCount > 1 ? "s" : ""} do projeto (aba "Documentos") como base extra pra entender este cliente
+              </Label>
+            </div>
+          )}
 
           {/* Error state */}
           {aiError && (

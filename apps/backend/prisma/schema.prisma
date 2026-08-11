@@ -717,6 +717,7 @@ model Project {
   project_tasks   ProjectTask[]
   payments        Payment[]
   credentials     ProjectCredential[]
+  attachments     ProjectAttachment[]
 
 
   // ── Rastreio da plataforma antiga ─────────────────────────────────────
@@ -1322,6 +1323,154 @@ model TaskAttachment {
 
   @@index([project_task_stage_id])
   @@map("task_attachments")
+}
+
+// ─── ProjectAttachment ───────────────────────────────────────────────────────
+// Documentos de CONTEXTO do projeto (PDF/DOC/imagens) — diferente de
+// TaskAttachment (entrega/referência de UMA tarefa). Servem de base pra IA
+// entender o cliente ao preencher briefing de tarefas, quando o usuário optar
+// por isso no "Preencher com Assistente" (ver fillBriefingWithAI em
+// ai-consultor.ts). Arquivo fica em disco local
+// (uploads/project-documents/<project_id>/<file_name>), só o metadado aqui.
+model ProjectAttachment {
+  id         String  @id @default(cuid())
+  project_id String
+  project    Project @relation(fields: [project_id], references: [id], onDelete: Cascade)
+
+  name        String
+  // nome original mostrado ao usuário
+  file_name   String
+  // nome gerado em disco (evita colisão/traversal)
+  mime_type   String?
+  size        Int?
+  uploaded_by String?
+
+  created_at DateTime @default(now())
+
+  @@index([project_id])
+  @@map("project_attachments")
+}
+
+// ─── AIKnowledgeCategory / AIKnowledgeDocument ────────────────────────────────
+// Bases de conhecimento administráveis que alimentam diferentes fluxos de IA
+// (Gemini) — uma categoria por finalidade (briefing/PLAC, produtos, etc.),
+// gerenciadas pelo admin em Configurações. Arquivo fica em disco local
+// (uploads/knowledge-base/<category_key>/<file_name>), só o metadado aqui.
+// A categoria "briefing" recebe automaticamente, na primeira subida do
+// servidor, os arquivos que já existiam em instrucoesAI/ (ver
+// lib/ai-knowledge-base.ts) — não perde o que já estava configurado.
+model AIKnowledgeCategory {
+  id          String   @id @default(cuid())
+  key         String   @unique
+  // slug estável usado no código (ex: "briefing", "produtos") — não muda
+  // mesmo que o nome exibido mude.
+  name        String
+  description String?  @db.Text
+  created_at  DateTime @default(now())
+  updated_at  DateTime @updatedAt
+
+  documents AIKnowledgeDocument[]
+
+  @@map("ai_knowledge_categories")
+}
+
+model AIKnowledgeDocument {
+  id          String              @id @default(cuid())
+  category_id String
+  category    AIKnowledgeCategory @relation(fields: [category_id], references: [id], onDelete: Cascade)
+
+  name        String
+  file_name   String
+  mime_type   String?
+  size        Int?
+  uploaded_by String?
+
+  created_at DateTime @default(now())
+
+  @@index([category_id])
+  @@map("ai_knowledge_documents")
+}
+
+// ─── AIServiceConfig / AIModelPricing / AIUsageLog ────────────────────────────
+// Controle de custo de IA (admin > Configurações > "Uso e Custos de IA").
+// Um AIServiceConfig por provedor plugado na plataforma (hoje só "gemini",
+// desenhado pra caber outros — OpenAI, Claude — sem mudar o formato). Preço
+// por modelo fica em AIModelPricing, editável pelo admin (o valor inicial é
+// só uma estimativa — não existe API de billing em tempo real pela chave que
+// usamos hoje, então o custo é sempre CALCULADO a partir dos tokens
+// devolvidos pela própria resposta do Gemini × o preço configurado aqui, não
+// puxado do Google). Cada chamada real vira uma linha em AIUsageLog, com o
+// custo já calculado no momento (preço muda depois não reescreve histórico).
+model AIServiceConfig {
+  id                  String   @id @default(cuid())
+  key                 String   @unique
+  // slug estável ("gemini") — não muda mesmo que o nome de exibição mude.
+  name                String
+  provider            String?
+  monthly_budget_usd  Float?
+  // teto mensal opcional; null = sem teto configurado (só acompanha o gasto).
+  alert_threshold_pct Int      @default(80)
+  is_active           Boolean  @default(true)
+  created_at          DateTime @default(now())
+  updated_at          DateTime @updatedAt
+
+  model_pricing AIModelPricing[]
+  usage_logs    AIUsageLog[]
+
+  @@map("ai_service_configs")
+}
+
+model AIModelPricing {
+  id                        String          @id @default(cuid())
+  service_id                String
+  service                   AIServiceConfig @relation(fields: [service_id], references: [id], onDelete: Cascade)
+
+  model                     String
+  // Como este modelo é cobrado — nem toda IA cobra por token: geração de
+  // imagem/vídeo costuma ser por unidade. "tokens" usa os dois campos por
+  // milhão abaixo; qualquer outro valor usa `unit_price` (preço de UMA
+  // unidade — 1 imagem, 1 segundo de vídeo, 1 chamada, o que fizer sentido
+  // pro provedor).
+  pricing_unit              String          @default("tokens")
+  // "tokens" | "image" | "video_second" | "request" | "minute"
+  input_price_per_million   Float?
+  // preço em `currency` por 1.000.000 de tokens de entrada (só pricing_unit = "tokens")
+  output_price_per_million  Float?
+  // preço em `currency` por 1.000.000 de tokens de saída, inclui "thinking" (só pricing_unit = "tokens")
+  unit_price                Float?
+  // preço em `currency` por 1 unidade (pricing_unit != "tokens")
+  currency                  String          @default("USD")
+
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  @@unique([service_id, model])
+  @@map("ai_model_pricing")
+}
+
+model AIUsageLog {
+  id                 String          @id @default(cuid())
+  service_id         String
+  service            AIServiceConfig @relation(fields: [service_id], references: [id], onDelete: Cascade)
+
+  model              String
+  feature            String
+  // qual fluxo chamou: "fill-briefing" | "improve-answer" |
+  // "improve-product-field" | "research-product-pricing" | ...
+  prompt_tokens      Int             @default(0)
+  completion_tokens  Int             @default(0)
+  total_tokens       Int             @default(0)
+  units              Int             @default(0)
+  // usado quando o modelo é cobrado por unidade (pricing_unit != "tokens") —
+  // ex: 1 imagem gerada, 30 (segundos) de vídeo.
+  estimated_cost_usd Float           @default(0)
+  user_id            String?
+
+  created_at DateTime @default(now())
+
+  @@index([service_id])
+  @@index([created_at])
+  @@map("ai_usage_logs")
 }
 
 // ─── TaskAssignmentHistory ────────────────────────────────────────────────────

@@ -1,6 +1,7 @@
 ﻿// @ts-nocheck
-import { useState, useMemo, useRef } from "react";
+import { useState, useMemo, useRef, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
+import { apiClient } from "@/lib/api-client";
 import { useSidebar } from "@/contexts/sidebar-context";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -61,6 +62,13 @@ import {
   UserPlus,
   X,
   Sliders,
+  Database,
+  Upload,
+  Download,
+  FolderOpen,
+  BrainCircuit,
+  DollarSign,
+  Cpu,
 } from "lucide-react";
 import {
   STANDARD_SHELL_PANEL_CLASS,
@@ -390,6 +398,276 @@ export default function AdminConfiguracoesPage() {
   useSidebar();
   const { toast } = useToast();
   const navigate = useNavigate();
+
+  // ── Base de Conhecimento IA ──
+  // Diferente das outras abas desta tela (ainda locais/mock): esta já fala
+  // de verdade com o backend (/api/ai-knowledge-base) — o conteúdo alimenta
+  // o Consultor IA (briefing) e o redator de produtos (ver ai-consultor.ts).
+  const [kbCategories, setKbCategories] = useState([]);
+  const [kbLoadingCategories, setKbLoadingCategories] = useState(false);
+  const [kbSelectedCategory, setKbSelectedCategory] = useState(null); // key
+  const [kbDocuments, setKbDocuments] = useState([]);
+  const [kbLoadingDocuments, setKbLoadingDocuments] = useState(false);
+  const [kbUploading, setKbUploading] = useState(false);
+  const [kbAddingCategory, setKbAddingCategory] = useState(false);
+  const [kbCategoryForm, setKbCategoryForm] = useState({ key: "", name: "", description: "" });
+  const kbFileInputRef = useRef(null);
+
+  async function loadKbCategories() {
+    setKbLoadingCategories(true);
+    try {
+      const res = await apiClient.getKnowledgeCategories();
+      const cats = res?.categories || [];
+      setKbCategories(cats);
+      setKbSelectedCategory((prev) => prev || cats[0]?.key || null);
+    } catch (err) {
+      toast({ title: "Erro ao carregar categorias", description: err?.message, variant: "destructive" });
+    } finally {
+      setKbLoadingCategories(false);
+    }
+  }
+
+  async function loadKbDocuments(key) {
+    if (!key) return;
+    setKbLoadingDocuments(true);
+    try {
+      const res = await apiClient.getKnowledgeDocuments(key);
+      setKbDocuments(res?.documents || []);
+    } catch (err) {
+      toast({ title: "Erro ao carregar documentos", description: err?.message, variant: "destructive" });
+    } finally {
+      setKbLoadingDocuments(false);
+    }
+  }
+
+  useEffect(() => {
+    loadKbCategories();
+  }, []);
+
+  useEffect(() => {
+    if (kbSelectedCategory) loadKbDocuments(kbSelectedCategory);
+  }, [kbSelectedCategory]);
+
+  async function handleKbFileSelected(e) {
+    const file = e.target.files?.[0];
+    if (!file || !kbSelectedCategory) return;
+    setKbUploading(true);
+    try {
+      await apiClient.uploadKnowledgeDocument(kbSelectedCategory, file);
+      toast({ title: "Documento adicionado à base" });
+      await Promise.all([loadKbDocuments(kbSelectedCategory), loadKbCategories()]);
+    } catch (err) {
+      toast({ title: "Erro ao enviar arquivo", description: err?.message, variant: "destructive" });
+    } finally {
+      setKbUploading(false);
+      if (kbFileInputRef.current) kbFileInputRef.current.value = "";
+    }
+  }
+
+  async function handleKbDeleteDocument(doc) {
+    if (!window.confirm(`Remover "${doc.name}" desta base de conhecimento?`)) return;
+    try {
+      await apiClient.deleteKnowledgeDocument(doc.id);
+      toast({ title: "Documento removido" });
+      await Promise.all([loadKbDocuments(kbSelectedCategory), loadKbCategories()]);
+    } catch (err) {
+      toast({ title: "Erro ao remover", description: err?.message, variant: "destructive" });
+    }
+  }
+
+  async function handleKbDownload(doc) {
+    try {
+      const blob = await apiClient.downloadKnowledgeDocument(doc.id);
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = doc.name;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      toast({ title: "Erro ao baixar arquivo", description: err?.message, variant: "destructive" });
+    }
+  }
+
+  async function handleCreateKbCategory() {
+    if (!kbCategoryForm.key.trim() || !kbCategoryForm.name.trim()) {
+      toast({ title: "Preencha chave e nome da categoria", variant: "destructive" });
+      return;
+    }
+    try {
+      await apiClient.createKnowledgeCategory({
+        key: kbCategoryForm.key.trim(),
+        name: kbCategoryForm.name.trim(),
+        description: kbCategoryForm.description.trim() || undefined,
+      });
+      toast({ title: "Categoria criada" });
+      setKbCategoryForm({ key: "", name: "", description: "" });
+      setKbAddingCategory(false);
+      await loadKbCategories();
+    } catch (err) {
+      toast({ title: "Erro ao criar categoria", description: err?.message, variant: "destructive" });
+    }
+  }
+
+  function formatKbFileSize(bytes) {
+    if (!bytes) return "—";
+    if (bytes < 1024) return `${bytes}B`;
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)}KB`;
+    return `${(bytes / 1024 / 1024).toFixed(1)}MB`;
+  }
+
+  const kbSelectedCategoryData = kbCategories.find((c) => c.key === kbSelectedCategory);
+
+  // ── Uso e Custos de IA ──
+  const [aiUsageServices, setAiUsageServices] = useState([]);
+  const [aiUsageLoading, setAiUsageLoading] = useState(false);
+  const [aiBudgetDrafts, setAiBudgetDrafts] = useState({}); // { [key]: { monthly_budget_usd, alert_threshold_pct } }
+  const [aiPricingDrafts, setAiPricingDrafts] = useState({}); // { [pricingId]: { input_price_per_million, output_price_per_million } }
+  const [savingAiKey, setSavingAiKey] = useState(null);
+  const [savingPricingId, setSavingPricingId] = useState(null);
+
+  async function loadAIUsageSummary() {
+    setAiUsageLoading(true);
+    try {
+      const res = await apiClient.getAIUsageSummary();
+      const services = res?.services || [];
+      setAiUsageServices(services);
+      setAiBudgetDrafts((prev) => {
+        const next = { ...prev };
+        for (const s of services) {
+          if (!next[s.key]) {
+            next[s.key] = { monthly_budget_usd: s.monthly_budget_usd ?? "", alert_threshold_pct: s.alert_threshold_pct };
+          }
+        }
+        return next;
+      });
+      setAiPricingDrafts((prev) => {
+        const next = { ...prev };
+        for (const s of services) {
+          for (const p of s.model_pricing) {
+            if (!next[p.id]) {
+              next[p.id] = { input_price_per_million: p.input_price_per_million ?? 0, output_price_per_million: p.output_price_per_million ?? 0, unit_price: p.unit_price ?? 0 };
+            }
+          }
+        }
+        return next;
+      });
+    } catch (err) {
+      toast({ title: "Erro ao carregar uso de IA", description: err?.message, variant: "destructive" });
+    } finally {
+      setAiUsageLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    loadAIUsageSummary();
+  }, []);
+
+  async function handleSaveAIBudget(key) {
+    const draft = aiBudgetDrafts[key] || {};
+    setSavingAiKey(key);
+    try {
+      await apiClient.updateAIServiceConfig(key, {
+        monthly_budget_usd: draft.monthly_budget_usd === "" || draft.monthly_budget_usd == null ? null : Number(draft.monthly_budget_usd),
+        alert_threshold_pct: Number(draft.alert_threshold_pct) || 80,
+      });
+      toast({ title: "Orçamento atualizado" });
+      await loadAIUsageSummary();
+    } catch (err) {
+      toast({ title: "Erro ao salvar orçamento", description: err?.message, variant: "destructive" });
+    } finally {
+      setSavingAiKey(null);
+    }
+  }
+
+  async function handleSaveAIPricing(pricingId) {
+    const draft = aiPricingDrafts[pricingId] || {};
+    setSavingPricingId(pricingId);
+    try {
+      await apiClient.updateAIModelPricing(pricingId, {
+        input_price_per_million: draft.input_price_per_million !== undefined ? Number(draft.input_price_per_million) || 0 : undefined,
+        output_price_per_million: draft.output_price_per_million !== undefined ? Number(draft.output_price_per_million) || 0 : undefined,
+        unit_price: draft.unit_price !== undefined ? Number(draft.unit_price) || 0 : undefined,
+      });
+      toast({ title: "Preço atualizado" });
+      await loadAIUsageSummary();
+    } catch (err) {
+      toast({ title: "Erro ao salvar preço", description: err?.message, variant: "destructive" });
+    } finally {
+      setSavingPricingId(null);
+    }
+  }
+
+  function fmtUsd(v) {
+    return `US$ ${(v ?? 0).toFixed(2)}`;
+  }
+
+  const [showNewAiService, setShowNewAiService] = useState(false);
+  const [newAiServiceForm, setNewAiServiceForm] = useState({ key: "", name: "", provider: "" });
+  const [savingNewAiService, setSavingNewAiService] = useState(false);
+
+  async function handleCreateAIService() {
+    if (!newAiServiceForm.key.trim() || !newAiServiceForm.name.trim()) {
+      toast({ title: "Preencha chave e nome do serviço", variant: "destructive" });
+      return;
+    }
+    setSavingNewAiService(true);
+    try {
+      await apiClient.createAIService({
+        key: newAiServiceForm.key.trim(),
+        name: newAiServiceForm.name.trim(),
+        provider: newAiServiceForm.provider.trim() || undefined,
+      });
+      toast({ title: "Serviço de IA cadastrado" });
+      setNewAiServiceForm({ key: "", name: "", provider: "" });
+      setShowNewAiService(false);
+      await loadAIUsageSummary();
+    } catch (err) {
+      toast({ title: "Erro ao cadastrar serviço", description: err?.message, variant: "destructive" });
+    } finally {
+      setSavingNewAiService(false);
+    }
+  }
+
+  const PRICING_UNIT_LABELS = {
+    tokens: "Por token (texto)",
+    image: "Por imagem",
+    video_second: "Por segundo de vídeo",
+    request: "Por chamada",
+    minute: "Por minuto",
+  };
+
+  const [newModelForms, setNewModelForms] = useState({}); // { [serviceKey]: { open, model, pricing_unit, input_price_per_million, output_price_per_million, unit_price } }
+  const [savingNewModelKey, setSavingNewModelKey] = useState(null);
+
+  function getNewModelForm(key) {
+    return newModelForms[key] || { open: false, model: "", pricing_unit: "tokens", input_price_per_million: "", output_price_per_million: "", unit_price: "" };
+  }
+
+  async function handleCreateAIModel(serviceKey) {
+    const form = getNewModelForm(serviceKey);
+    if (!form.model.trim()) {
+      toast({ title: "Informe o nome do modelo", variant: "destructive" });
+      return;
+    }
+    setSavingNewModelKey(serviceKey);
+    try {
+      await apiClient.createAIModelPricing(serviceKey, {
+        model: form.model.trim(),
+        pricing_unit: form.pricing_unit,
+        input_price_per_million: form.pricing_unit === "tokens" ? Number(form.input_price_per_million) || 0 : undefined,
+        output_price_per_million: form.pricing_unit === "tokens" ? Number(form.output_price_per_million) || 0 : undefined,
+        unit_price: form.pricing_unit !== "tokens" ? Number(form.unit_price) || 0 : undefined,
+      });
+      toast({ title: "Modelo cadastrado" });
+      setNewModelForms((prev) => ({ ...prev, [serviceKey]: { open: false, model: "", pricing_unit: "tokens", input_price_per_million: "", output_price_per_million: "", unit_price: "" } }));
+      await loadAIUsageSummary();
+    } catch (err) {
+      toast({ title: "Erro ao cadastrar modelo", description: err?.message, variant: "destructive" });
+    } finally {
+      setSavingNewModelKey(null);
+    }
+  }
 
   // ── Geral ──
   const [general, setGeneral] = useState({
@@ -727,6 +1005,12 @@ export default function AdminConfiguracoesPage() {
           </TabsTrigger>
           <TabsTrigger value="appearance" className="text-xs px-3 h-8">
             Aparência
+          </TabsTrigger>
+          <TabsTrigger value="knowledge-base" className="text-xs px-3 h-8">
+            Base de Conhecimento IA
+          </TabsTrigger>
+          <TabsTrigger value="ai-usage" className="text-xs px-3 h-8">
+            Uso e Custos de IA
           </TabsTrigger>
         </TabsList>
 
@@ -1927,6 +2211,551 @@ export default function AdminConfiguracoesPage() {
               </Button>
             </div>
           </SectionCard>
+        </TabsContent>
+
+        {/* ─── BASE DE CONHECIMENTO IA ──────────────────────────────────────── */}
+        <TabsContent value="knowledge-base" className="space-y-4">
+          <div className="grid grid-cols-2 gap-3">
+            <GradientStat label="Categorias" value={kbCategories.length} icon={FolderOpen} color="violet" />
+            <GradientStat
+              label="Documentos"
+              value={kbCategories.reduce((sum, c) => sum + (c.document_count || 0), 0)}
+              icon={FileText}
+              color="blue"
+            />
+          </div>
+
+          <Card className="border border-slate-200/70 dark:border-slate-700/60 shadow-sm overflow-hidden">
+            <div className="flex items-center gap-3 px-5 py-3 border-b border-slate-200/70 dark:border-slate-700/60 bg-slate-50/60 dark:bg-slate-900/30 flex-wrap">
+              <div className="p-1.5 rounded-lg bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shrink-0">
+                <BrainCircuit className="h-4 w-4 text-slate-500" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <h3 className="text-sm font-semibold text-slate-700 dark:text-slate-200 leading-tight">
+                  Bases de Conhecimento da IA
+                </h3>
+                <p className="text-xs text-slate-400">
+                  Documentos que alimentam cada fluxo de IA da plataforma — se você mudar os arquivos aqui, a IA já passa a usar o conteúdo novo na próxima chamada.
+                </p>
+              </div>
+              <Button
+                size="sm"
+                variant="outline"
+                className="h-7 gap-1.5 text-xs shrink-0"
+                onClick={() => setKbAddingCategory((v) => !v)}
+              >
+                <Plus className="h-3 w-3" /> Nova categoria
+              </Button>
+            </div>
+
+            {kbAddingCategory && (
+              <div className="px-5 py-4 border-b border-dashed border-blue-200 dark:border-blue-800 bg-blue-50/40 dark:bg-blue-950/15 space-y-3">
+                <p className="text-[10px] font-semibold text-blue-600 dark:text-blue-400 uppercase tracking-wide">
+                  Nova categoria (banco de documentos)
+                </p>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  <div className="space-y-1">
+                    <Label className="text-[11px]">
+                      Chave <span className="text-red-500">*</span>
+                    </Label>
+                    <Input
+                      className="h-8 text-xs"
+                      placeholder="ex: nomades_agencias"
+                      value={kbCategoryForm.key}
+                      onChange={(e) => setKbCategoryForm((f) => ({ ...f, key: e.target.value.trim().toLowerCase().replace(/[^a-z0-9_]/g, "_") }))}
+                    />
+                  </div>
+                  <div className="space-y-1 sm:col-span-2">
+                    <Label className="text-[11px]">
+                      Nome <span className="text-red-500">*</span>
+                    </Label>
+                    <Input
+                      className="h-8 text-xs"
+                      placeholder="Ex: Respostas a Nômades e Agências"
+                      value={kbCategoryForm.name}
+                      onChange={(e) => setKbCategoryForm((f) => ({ ...f, name: e.target.value }))}
+                    />
+                  </div>
+                  <div className="space-y-1 sm:col-span-3">
+                    <Label className="text-[11px]">Descrição</Label>
+                    <Input
+                      className="h-8 text-xs"
+                      placeholder="Pra que fluxo de IA esta categoria serve?"
+                      value={kbCategoryForm.description}
+                      onChange={(e) => setKbCategoryForm((f) => ({ ...f, description: e.target.value }))}
+                    />
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Button size="sm" className="h-7 text-xs" onClick={handleCreateKbCategory}>
+                    Criar categoria
+                  </Button>
+                  <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => setKbAddingCategory(false)}>
+                    Cancelar
+                  </Button>
+                </div>
+              </div>
+            )}
+
+            <div className="flex flex-wrap gap-1.5 px-5 py-3 border-b border-slate-100 dark:border-slate-800">
+              {kbLoadingCategories && kbCategories.length === 0 && (
+                <p className="text-xs text-slate-400">Carregando categorias…</p>
+              )}
+              {kbCategories.map((cat) => (
+                <button
+                  key={cat.key}
+                  onClick={() => setKbSelectedCategory(cat.key)}
+                  className={`px-3 h-8 rounded-lg text-xs font-medium border transition-colors flex items-center gap-1.5 ${
+                    kbSelectedCategory === cat.key
+                      ? "bg-gradient-to-br from-[#2558FF] via-[#6E2C96] to-[#D92293] text-white border-transparent"
+                      : "bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:border-slate-300"
+                  }`}
+                >
+                  <FolderOpen className="h-3 w-3" />
+                  {cat.name}
+                  <span className={`text-[10px] ${kbSelectedCategory === cat.key ? "text-white/70" : "text-slate-400"}`}>
+                    ({cat.document_count})
+                  </span>
+                </button>
+              ))}
+            </div>
+
+            {kbSelectedCategoryData && (
+              <div className="px-5 py-3 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between gap-3 flex-wrap">
+                <div className="min-w-0">
+                  <p className="text-xs text-slate-500 dark:text-slate-400">
+                    {kbSelectedCategoryData.description || "Sem descrição."}
+                  </p>
+                </div>
+                <div>
+                  <input
+                    ref={kbFileInputRef}
+                    type="file"
+                    accept=".pdf,.txt,.md,.docx"
+                    className="hidden"
+                    onChange={handleKbFileSelected}
+                  />
+                  <Button
+                    size="sm"
+                    className="h-7 gap-1.5 text-xs shrink-0"
+                    disabled={kbUploading}
+                    onClick={() => kbFileInputRef.current?.click()}
+                  >
+                    <Upload className="h-3 w-3" /> {kbUploading ? "Enviando…" : "Adicionar documento"}
+                  </Button>
+                </div>
+              </div>
+            )}
+
+            <div className="overflow-x-auto">
+              <table className="tabela-cartao w-full text-sm">
+                <thead>
+                  <tr className="border-b border-slate-200/60 dark:border-slate-700/60">
+                    <th className="text-center py-3 px-4 text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wide">Ações</th>
+                    <th className="text-left py-3 px-4 text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wide">Documento</th>
+                    <th className="text-left py-3 px-4 text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wide">Tamanho</th>
+                    <th className="text-left py-3 px-4 text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wide">Enviado por</th>
+                    <th className="text-left py-3 px-4 text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wide">Data</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {kbDocuments.map((doc, i) => (
+                    <tr
+                      key={doc.id}
+                      className={i % 2 === 0
+                        ? "bg-[#F1F4F9] dark:bg-[oklch(0.14_0.026_258)] hover:bg-[#D9E1ED] dark:hover:bg-[oklch(0.21_0.024_258)]"
+                        : "bg-[#DCE3EE] dark:bg-[oklch(0.185_0.024_258)] hover:bg-[#C7D2E3] dark:hover:bg-[oklch(0.21_0.024_258)]"}
+                    >
+                      <td data-rotulo="Ações" className="py-2 px-4">
+                        <div className="flex items-center justify-center gap-1">
+                          <IconActionButton icon={Download} tooltip="Baixar" onClick={() => handleKbDownload(doc)} tone="text-blue-500" />
+                          <IconActionButton icon={Trash2} tooltip="Excluir" onClick={() => handleKbDeleteDocument(doc)} tone="text-red-400" />
+                        </div>
+                      </td>
+                      <td data-rotulo="Documento" className="py-3 px-4">
+                        <span className="flex items-center gap-2 font-semibold text-slate-700 dark:text-slate-200">
+                          <span className="h-7 w-7 rounded-lg bg-blue-50 dark:bg-blue-950/30 flex items-center justify-center shrink-0">
+                            <FileText className="h-3.5 w-3.5 text-blue-500" />
+                          </span>
+                          {doc.name}
+                        </span>
+                      </td>
+                      <td data-rotulo="Tamanho" className="py-3 px-4 text-slate-500 dark:text-slate-400">{formatKbFileSize(doc.size)}</td>
+                      <td data-rotulo="Enviado por" className="py-3 px-4 text-slate-500 dark:text-slate-400">{doc.uploaded_by || "—"}</td>
+                      <td data-rotulo="Data" className="py-3 px-4 text-slate-500 dark:text-slate-400">
+                        {doc.created_at ? new Date(doc.created_at).toLocaleDateString("pt-BR") : "—"}
+                      </td>
+                    </tr>
+                  ))}
+                  {!kbLoadingDocuments && kbSelectedCategory && kbDocuments.length === 0 && (
+                    <tr>
+                      <td colSpan={5} className="py-8 text-center text-xs text-slate-400">
+                        Nenhum documento nesta categoria ainda.
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+            <div className="px-5 py-2.5 border-t border-slate-100 dark:border-slate-800 bg-slate-50/40 dark:bg-slate-900/20">
+              <p className="text-[10px] text-slate-400">
+                Formatos aceitos: PDF, TXT, MD, DOCX (imagens ficam guardadas mas não entram no texto lido pela IA).
+              </p>
+            </div>
+          </Card>
+        </TabsContent>
+
+        {/* ─── USO E CUSTOS DE IA ───────────────────────────────────────────── */}
+        <TabsContent value="ai-usage" className="space-y-4">
+          {aiUsageLoading && aiUsageServices.length === 0 && (
+            <p className="text-xs text-slate-400">Carregando…</p>
+          )}
+
+          {!aiUsageLoading && aiUsageServices.length === 0 && (
+            <div className="border border-slate-200/80 rounded-xl bg-white dark:bg-slate-900 px-4 py-10 text-center text-slate-400 text-xs">
+              Nenhum serviço de IA registrado ainda.
+            </div>
+          )}
+
+          <div className="grid grid-cols-3 gap-3">
+            <GradientStat
+              label="Gasto este mês"
+              value={`$${aiUsageServices.reduce((sum, s) => sum + (s.spend_this_month_usd || 0), 0).toFixed(2)}`}
+              icon={DollarSign}
+              color="emerald"
+            />
+            <GradientStat
+              label="Chamadas este mês"
+              value={aiUsageServices.reduce((sum, s) => sum + (s.calls_this_month || 0), 0)}
+              icon={Zap}
+              color="blue"
+            />
+            <GradientStat
+              label="Serviços ativos"
+              value={aiUsageServices.filter((s) => s.is_active).length}
+              icon={Cpu}
+              color="violet"
+            />
+          </div>
+
+          <div className="flex justify-end">
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-7 gap-1.5 text-xs"
+              onClick={() => setShowNewAiService((v) => !v)}
+            >
+              <Plus className="h-3 w-3" /> Novo serviço de IA
+            </Button>
+          </div>
+
+          {showNewAiService && (
+            <Card className="border border-dashed border-blue-200 dark:border-blue-800 bg-blue-50/40 dark:bg-blue-950/15 p-4 space-y-3">
+              <p className="text-[10px] font-semibold text-blue-600 dark:text-blue-400 uppercase tracking-wide">
+                Novo serviço de IA (ex: geração de imagem, vídeo, outro provedor de texto)
+              </p>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div className="space-y-1">
+                  <Label className="text-[11px]">Chave <span className="text-red-500">*</span></Label>
+                  <Input
+                    className="h-8 text-xs"
+                    placeholder="ex: openai_dalle"
+                    value={newAiServiceForm.key}
+                    onChange={(e) => setNewAiServiceForm((f) => ({ ...f, key: e.target.value.trim().toLowerCase().replace(/[^a-z0-9_]/g, "_") }))}
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-[11px]">Nome <span className="text-red-500">*</span></Label>
+                  <Input
+                    className="h-8 text-xs"
+                    placeholder="Ex: OpenAI DALL·E"
+                    value={newAiServiceForm.name}
+                    onChange={(e) => setNewAiServiceForm((f) => ({ ...f, name: e.target.value }))}
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-[11px]">Provedor</Label>
+                  <Input
+                    className="h-8 text-xs"
+                    placeholder="Ex: OpenAI"
+                    value={newAiServiceForm.provider}
+                    onChange={(e) => setNewAiServiceForm((f) => ({ ...f, provider: e.target.value }))}
+                  />
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                <Button size="sm" className="h-7 text-xs" disabled={savingNewAiService} onClick={handleCreateAIService}>
+                  {savingNewAiService ? "Salvando…" : "Cadastrar serviço"}
+                </Button>
+                <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => setShowNewAiService(false)}>
+                  Cancelar
+                </Button>
+              </div>
+              <p className="text-[10px] text-slate-400">
+                Isso só cadastra o serviço pra controle de custo/orçamento — a chamada de verdade pra essa API ainda precisa ser implementada.
+              </p>
+            </Card>
+          )}
+
+          {aiUsageServices.map((service) => {
+            const draft = aiBudgetDrafts[service.key] || { monthly_budget_usd: "", alert_threshold_pct: 80 };
+            const pct = service.budget_used_pct;
+            const barColor = service.alert ? "bg-red-500" : pct != null && pct >= (draft.alert_threshold_pct || 80) * 0.7 ? "bg-amber-500" : "bg-emerald-500";
+            return (
+              <Card key={service.key} className="border border-slate-200/70 dark:border-slate-700/60 shadow-sm overflow-hidden">
+                <div className="flex items-center gap-3 px-5 py-3 border-b border-slate-200/70 dark:border-slate-700/60 bg-slate-50/60 dark:bg-slate-900/30 flex-wrap">
+                  <div className="p-1.5 rounded-lg bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shrink-0">
+                    <Cpu className="h-4 w-4 text-slate-500" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <h3 className="text-sm font-semibold text-slate-700 dark:text-slate-200 leading-tight">
+                      {service.name}
+                    </h3>
+                    <p className="text-xs text-slate-400">
+                      {service.provider || "—"} · {service.calls_all_time} chamadas no total · {fmtUsd(service.spend_all_time_usd)} gasto total (estimado)
+                    </p>
+                  </div>
+                  {service.alert && (
+                    <span className="flex items-center gap-1 text-[10px] bg-red-100 text-red-600 px-2 py-1 rounded-full font-semibold border border-red-200">
+                      <AlertCircle className="h-3 w-3" /> Perto do teto
+                    </span>
+                  )}
+                </div>
+
+                <div className="p-5 space-y-4">
+                  {/* Orçamento mensal */}
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 items-end">
+                    <div className="space-y-1">
+                      <Label className="text-[11px]">Teto mensal (US$)</Label>
+                      <Input
+                        type="number"
+                        className="h-8 text-xs"
+                        placeholder="Sem teto"
+                        value={draft.monthly_budget_usd}
+                        onChange={(e) =>
+                          setAiBudgetDrafts((prev) => ({ ...prev, [service.key]: { ...draft, monthly_budget_usd: e.target.value } }))
+                        }
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <Label className="text-[11px]">Alertar ao atingir (%)</Label>
+                      <Input
+                        type="number"
+                        className="h-8 text-xs"
+                        value={draft.alert_threshold_pct}
+                        onChange={(e) =>
+                          setAiBudgetDrafts((prev) => ({ ...prev, [service.key]: { ...draft, alert_threshold_pct: e.target.value } }))
+                        }
+                      />
+                    </div>
+                    <Button
+                      size="sm"
+                      className="h-8 text-xs"
+                      disabled={savingAiKey === service.key}
+                      onClick={() => handleSaveAIBudget(service.key)}
+                    >
+                      {savingAiKey === service.key ? "Salvando…" : "Salvar orçamento"}
+                    </Button>
+                  </div>
+
+                  {service.monthly_budget_usd != null && (
+                    <div>
+                      <div className="flex items-center justify-between text-[10px] text-slate-400 mb-1">
+                        <span>{fmtUsd(service.spend_this_month_usd)} de {fmtUsd(service.monthly_budget_usd)} este mês</span>
+                        <span>{pct != null ? `${pct}%` : "—"}</span>
+                      </div>
+                      <div className="h-2 rounded-full bg-slate-100 dark:bg-slate-800 overflow-hidden">
+                        <div className={`h-full ${barColor} transition-all`} style={{ width: `${Math.min(100, pct || 0)}%` }} />
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Stats rápidos */}
+                  <div className="grid grid-cols-3 gap-2.5">
+                    <div className="p-3 rounded-xl border bg-slate-50 dark:bg-slate-900/40 border-slate-200 dark:border-slate-700">
+                      <p className="text-[10px] text-slate-400">Hoje</p>
+                      <p className="text-sm font-bold">{fmtUsd(service.spend_today_usd)}</p>
+                      <p className="text-[10px] text-slate-400">{service.calls_today} chamada{service.calls_today === 1 ? "" : "s"}</p>
+                    </div>
+                    <div className="p-3 rounded-xl border bg-slate-50 dark:bg-slate-900/40 border-slate-200 dark:border-slate-700">
+                      <p className="text-[10px] text-slate-400">Este mês</p>
+                      <p className="text-sm font-bold">{fmtUsd(service.spend_this_month_usd)}</p>
+                      <p className="text-[10px] text-slate-400">{service.calls_this_month} chamada{service.calls_this_month === 1 ? "" : "s"} · {service.tokens_this_month.toLocaleString("pt-BR")} tokens</p>
+                    </div>
+                    <div className="p-3 rounded-xl border bg-slate-50 dark:bg-slate-900/40 border-slate-200 dark:border-slate-700">
+                      <p className="text-[10px] text-slate-400">Total (desde sempre)</p>
+                      <p className="text-sm font-bold">{fmtUsd(service.spend_all_time_usd)}</p>
+                      <p className="text-[10px] text-slate-400">{service.calls_all_time} chamadas</p>
+                    </div>
+                  </div>
+
+                  {/* Uso por fluxo este mês */}
+                  {service.by_feature_this_month.length > 0 && (
+                    <div>
+                      <p className="text-[10px] font-semibold text-slate-500 uppercase tracking-wide mb-1.5">Por fluxo este mês</p>
+                      <div className="space-y-1">
+                        {service.by_feature_this_month.map((f) => (
+                          <div key={f.feature} className="flex items-center justify-between text-xs px-3 py-1.5 rounded-lg bg-slate-50 dark:bg-slate-900/40">
+                            <span className="text-slate-600 dark:text-slate-300">{f.feature}</span>
+                            <span className="text-slate-400">{f.calls}x · {fmtUsd(f.cost_usd)}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Preço por modelo */}
+                  <div>
+                    <div className="flex items-center justify-between mb-1.5">
+                      <p className="text-[10px] font-semibold text-slate-500 uppercase tracking-wide">
+                        Preço por modelo (editável — sem API de billing em tempo real, o custo é calculado por aqui)
+                      </p>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="h-6 gap-1 text-[10px]"
+                        onClick={() => setNewModelForms((prev) => ({ ...prev, [service.key]: { ...getNewModelForm(service.key), open: !getNewModelForm(service.key).open } }))}
+                      >
+                        <Plus className="h-2.5 w-2.5" /> Novo modelo
+                      </Button>
+                    </div>
+
+                    {getNewModelForm(service.key).open && (() => {
+                      const nf = getNewModelForm(service.key);
+                      return (
+                        <div className="mb-2 p-3 rounded-lg border border-dashed border-blue-200 dark:border-blue-800 bg-blue-50/40 dark:bg-blue-950/15 space-y-2">
+                          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                            <div className="space-y-1">
+                              <Label className="text-[10px]">Modelo</Label>
+                              <Input
+                                className="h-7 text-xs"
+                                placeholder="ex: dall-e-3"
+                                value={nf.model}
+                                onChange={(e) => setNewModelForms((prev) => ({ ...prev, [service.key]: { ...nf, model: e.target.value } }))}
+                              />
+                            </div>
+                            <div className="space-y-1">
+                              <Label className="text-[10px]">Cobrança</Label>
+                              <select
+                                className="h-7 text-xs w-full rounded-md border border-input bg-background px-2"
+                                value={nf.pricing_unit}
+                                onChange={(e) => setNewModelForms((prev) => ({ ...prev, [service.key]: { ...nf, pricing_unit: e.target.value } }))}
+                              >
+                                {Object.entries(PRICING_UNIT_LABELS).map(([k, l]) => (
+                                  <option key={k} value={k}>{l}</option>
+                                ))}
+                              </select>
+                            </div>
+                            {nf.pricing_unit === "tokens" ? (
+                              <>
+                                <div className="space-y-1">
+                                  <Label className="text-[10px]">US$/1M entrada</Label>
+                                  <Input type="number" step="0.01" className="h-7 text-xs" value={nf.input_price_per_million}
+                                    onChange={(e) => setNewModelForms((prev) => ({ ...prev, [service.key]: { ...nf, input_price_per_million: e.target.value } }))} />
+                                </div>
+                                <div className="space-y-1">
+                                  <Label className="text-[10px]">US$/1M saída</Label>
+                                  <Input type="number" step="0.01" className="h-7 text-xs" value={nf.output_price_per_million}
+                                    onChange={(e) => setNewModelForms((prev) => ({ ...prev, [service.key]: { ...nf, output_price_per_million: e.target.value } }))} />
+                                </div>
+                              </>
+                            ) : (
+                              <div className="space-y-1 sm:col-span-2">
+                                <Label className="text-[10px]">US$ por unidade</Label>
+                                <Input type="number" step="0.001" className="h-7 text-xs" value={nf.unit_price}
+                                  onChange={(e) => setNewModelForms((prev) => ({ ...prev, [service.key]: { ...nf, unit_price: e.target.value } }))} />
+                              </div>
+                            )}
+                          </div>
+                          <Button size="sm" className="h-7 text-xs" disabled={savingNewModelKey === service.key} onClick={() => handleCreateAIModel(service.key)}>
+                            {savingNewModelKey === service.key ? "Salvando…" : "Cadastrar modelo"}
+                          </Button>
+                        </div>
+                      );
+                    })()}
+
+                    <div className="overflow-x-auto">
+                      <table className="tabela-cartao w-full text-sm">
+                        <thead>
+                          <tr className="border-b border-slate-200/60 dark:border-slate-700/60">
+                            <th className="text-left py-2 px-3 text-[10px] font-bold text-slate-500 uppercase tracking-wide">Modelo</th>
+                            <th className="text-left py-2 px-3 text-[10px] font-bold text-slate-500 uppercase tracking-wide">Cobrança</th>
+                            <th className="text-left py-2 px-3 text-[10px] font-bold text-slate-500 uppercase tracking-wide">Preço</th>
+                            <th className="text-center py-2 px-3 text-[10px] font-bold text-slate-500 uppercase tracking-wide">Ações</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {service.model_pricing.map((p, i) => {
+                            const isTokens = p.pricing_unit === "tokens" || !p.pricing_unit;
+                            const pd = aiPricingDrafts[p.id] || {
+                              input_price_per_million: p.input_price_per_million ?? 0,
+                              output_price_per_million: p.output_price_per_million ?? 0,
+                              unit_price: p.unit_price ?? 0,
+                            };
+                            return (
+                              <tr key={p.id} className={i % 2 === 0 ? "bg-[#F1F4F9] dark:bg-[oklch(0.14_0.026_258)]" : "bg-[#DCE3EE] dark:bg-[oklch(0.185_0.024_258)]"}>
+                                <td className="py-2 px-3 font-mono text-xs">{p.model}</td>
+                                <td className="py-2 px-3 text-[10px] text-slate-500">{PRICING_UNIT_LABELS[p.pricing_unit] || p.pricing_unit}</td>
+                                <td className="py-2 px-3">
+                                  {isTokens ? (
+                                    <div className="flex items-center gap-1.5">
+                                      <Input
+                                        type="number"
+                                        step="0.01"
+                                        title="US$ por 1M tokens de entrada"
+                                        className="h-7 text-xs w-20"
+                                        value={pd.input_price_per_million}
+                                        onChange={(e) =>
+                                          setAiPricingDrafts((prev) => ({ ...prev, [p.id]: { ...pd, input_price_per_million: e.target.value } }))
+                                        }
+                                      />
+                                      <span className="text-slate-300 text-[10px]">/</span>
+                                      <Input
+                                        type="number"
+                                        step="0.01"
+                                        title="US$ por 1M tokens de saída"
+                                        className="h-7 text-xs w-20"
+                                        value={pd.output_price_per_million}
+                                        onChange={(e) =>
+                                          setAiPricingDrafts((prev) => ({ ...prev, [p.id]: { ...pd, output_price_per_million: e.target.value } }))
+                                        }
+                                      />
+                                    </div>
+                                  ) : (
+                                    <Input
+                                      type="number"
+                                      step="0.001"
+                                      title="US$ por unidade"
+                                      className="h-7 text-xs w-24"
+                                      value={pd.unit_price}
+                                      onChange={(e) =>
+                                        setAiPricingDrafts((prev) => ({ ...prev, [p.id]: { ...pd, unit_price: e.target.value } }))
+                                      }
+                                    />
+                                  )}
+                                </td>
+                                <td className="py-2 px-3 text-center">
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    className="h-7 text-[10px]"
+                                    disabled={savingPricingId === p.id}
+                                    onClick={() => handleSaveAIPricing(p.id)}
+                                  >
+                                    {savingPricingId === p.id ? "Salvando…" : "Salvar"}
+                                  </Button>
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                </div>
+              </Card>
+            );
+          })}
         </TabsContent>
       </Tabs>
     </div>

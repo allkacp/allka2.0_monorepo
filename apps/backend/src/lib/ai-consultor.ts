@@ -4,7 +4,8 @@
 // persona/instruções que o usuário copiou do Gem + a base de conhecimento
 // PLAC (ver ai-knowledge-base.ts) — mesma fundamentação, chamada pelo backend.
 import { GoogleGenAI } from "@google/genai";
-import { getKnowledgeBaseText } from "./ai-knowledge-base";
+import { getCategoryKnowledgeText, getProjectDocumentsText } from "./ai-knowledge-base";
+import { recordAIUsage, usageFromGeminiResponse } from "./ai-usage-tracker";
 
 const MODEL = "gemini-2.5-flash";
 const IMAGE_MODEL = "gemini-2.5-flash-image";
@@ -28,11 +29,11 @@ Você é um analista empresarial que vai responder de forma técnica as questõe
 
 Sempre embase suas respostas na nossa metodologia PLAC (anexada como base de conhecimento) e sempre indique ao empresário que preencheu a calculadora que adote o PLAC para resolver os problemas, indicando o que do PLAC se aplica para atingir escalabilidade e lucratividade no negócio.
 A allka.com.vc é a solução para as empresas de consultoria e agências de marketing — mostre sempre, de forma prática, a forma de corrigir os problemas.
-Importante: as respostas devem ser resumidas e objetivas.
+Importante: o tamanho da resposta deve seguir a natureza da pergunta — um dado objetivo (nome, URL, prazo, valor) merece resposta curta e direta, sem enrolação. Já uma pergunta aberta, estratégica ou que peça ideias/conteúdo (ex: proposta de página, estrutura de campanha, argumentos de venda) deve ser desenvolvida por completo, com todos os parágrafos, tópicos ou seções que o assunto realmente exigir — nunca corte uma resposta assim numa frase só para parecer objetivo. Acima de tudo, siga o que o texto fornecido pedir sobre tamanho/escopo: se o cliente ou a agência pedir explicitamente algo pequeno, resumido, direto ou só um exemplo rápido, respeite isso e reduza a resposta de acordo — mesmo numa pergunta aberta — em vez de expandir por padrão.
 `.trim();
 
 async function buildSystemInstruction(): Promise<string> {
-  const kb = await getKnowledgeBaseText();
+  const kb = await getCategoryKnowledgeText("briefing");
   return `${GEM_PERSONA}
 
 Contexto de uso atual: aqui você está ajudando a preencher e melhorar respostas do questionário de briefing de TAREFAS dentro de projetos de clientes na plataforma allka — não a calculadora original, mas o mesmo espírito consultivo (técnico, embasado no PLAC, resumido e objetivo) se aplica.
@@ -55,6 +56,17 @@ export interface FilledAnswer {
   answer: string;
 }
 
+export interface FillBriefingOptions {
+  /** Projeto de onde vieram os documentos de contexto (ver ProjectAttachment).
+   * Só é usado quando useProjectDocuments também é true. */
+  projectId?: string;
+  /** true quando a agência confirmou, na tela, que quer usar os documentos
+   * do projeto (PDFs/docs/imagens anexados na aba "Documentos") como base
+   * extra pra entender o cliente. Quando false/ausente, a IA usa só o texto
+   * livre fornecido na hora + o Consultor PLAC, exatamente como antes. */
+  useProjectDocuments?: boolean;
+}
+
 /** "Preencher com Assistente": recebe um texto livre (briefing colado pelo
  * usuário) e devolve uma resposta sugerida para cada pergunta do
  * questionário, embasada no PLAC. A agência revisa/ajusta antes de salvar —
@@ -62,6 +74,7 @@ export interface FilledAnswer {
 export async function fillBriefingWithAI(
   freeText: string,
   questions: BriefingQuestion[],
+  options: FillBriefingOptions = {},
 ): Promise<FilledAnswer[]> {
   if (questions.length === 0) return [];
 
@@ -75,6 +88,19 @@ export async function fillBriefingWithAI(
     )
     .join("\n");
 
+  let projectDocsSection = "";
+  if (options.useProjectDocuments && options.projectId) {
+    const docsText = await getProjectDocumentsText(options.projectId);
+    if (docsText) {
+      projectDocsSection = `
+
+Documentos do projeto (contexto adicional sobre ESTE cliente específico, anexados pela agência na aba "Documentos" do projeto — a agência pediu explicitamente pra você usar isso; priorize sobre suposições genéricas quando complementar ou detalhar o que está no texto livre acima):
+"""
+${docsText}
+"""`;
+    }
+  }
+
   const prompt = `Perguntas do questionário de briefing:
 ${questionsList}
 
@@ -82,11 +108,13 @@ Informações fornecidas pela agência (texto livre, pode ser briefing do client
 """
 ${freeText}
 """
+${projectDocsSection}
 
 Regras para responder:
 - Perguntas de tipo "select" ou "multiple_choice": a resposta deve ser EXATAMENTE igual a uma das "opções válidas" listadas (copie o texto da opção, não parafraseie, não combine explicação com a opção). Se nenhuma opção corresponder à informação disponível, use a opção mais próxima ou "Não sei" se existir.
 - Perguntas objetivas/factuais (ex: URL, valor, nome, data, endereço, quantidade — geralmente tipo "text_short"): responda só com o dado em si, direto e sem comentário adicional. NÃO mencione PLAC, 4F's ou allka.com.vc nessas respostas.
-- Perguntas abertas/estratégicas (tipo "text_long", ex: objetivos, público-alvo, contexto do problema): pode ser um pouco mais elaborado e, só quando fizer sentido real para aquela pergunta específica, mencionar brevemente como o PLAC se aplica — sem forçar em toda resposta.
+- Perguntas abertas/estratégicas (tipo "text_long", ex: objetivos, público-alvo, contexto do problema, ideias de conteúdo/página): desenvolva de verdade, sem se prender a uma frase curta. Se a pergunta pedir uma ideia, proposta ou estrutura (ex: sugestão de página, campanha, argumento de venda), escreva um texto completo — com parágrafos e, quando fizer sentido, seções nomeadas (ex: "Hero:", "Seção X:", "Prova social:", "Chamada para ação:") — cobrindo o assunto de verdade em vez de resumir. Só quando fizer sentido real para aquela pergunta específica, mencione brevemente como o PLAC se aplica — sem forçar em toda resposta.
+- Se o texto fornecido pelo cliente/agência pedir explicitamente algo pequeno, resumido, direto ou reduzido (mesmo para uma pergunta aberta), respeite esse pedido e encurte a resposta de acordo, em vez de expandir por padrão.
 - Se a informação para uma pergunta específica não estiver disponível no texto, responda com uma string vazia para aquela pergunta (não invente dados do cliente).
 - Devolva TODAS as perguntas, uma resposta por "question_key".`;
 
@@ -118,6 +146,8 @@ Regras para responder:
     },
   });
 
+  await recordAIUsage({ model: MODEL, feature: "fill-briefing", ...usageFromGeminiResponse(response) });
+
   const text = response.text;
   if (!text) return [];
   const parsed = JSON.parse(text) as { answers: FilledAnswer[] };
@@ -144,7 +174,7 @@ ${currentAnswer || "(vazio — ainda não respondido)"}
 ${
   isFactual
     ? "Esta é uma pergunta objetiva/factual (dado curto: URL, valor, nome, data, opção etc.). Apenas corrija clareza/ortografia do dado, sem adicionar explicações, contexto ou menções a PLAC/allka — o resultado deve continuar curto e direto."
-    : "Reescreva essa resposta de forma mais clara, técnica e objetiva, mantendo as informações originais (não invente dados novos do cliente) e embasando na metodologia PLAC quando fizer sentido real para o contexto desta pergunta específica — sem forçar a menção se não for relevante."
+    : "Reescreva essa resposta de forma mais clara e técnica, mantendo as informações originais (não invente dados novos do cliente) e embasando na metodologia PLAC quando fizer sentido real para o contexto desta pergunta específica — sem forçar a menção se não for relevante. Se a pergunta pedir uma ideia, proposta ou estrutura (ex: sugestão de página, campanha, argumento de venda), desenvolva por completo — parágrafos e, quando fizer sentido, seções nomeadas (ex: \"Hero:\", \"Seção X:\", \"Chamada para ação:\") — não resuma numa frase só apenas para parecer objetivo. Mas se a pergunta ou o rascunho pedir explicitamente algo pequeno, resumido ou reduzido, respeite esse pedido e mantenha a resposta curta em vez de expandir."
 }
 Devolva APENAS o texto da resposta melhorada, sem aspas, sem preâmbulo, sem explicações extras.`;
 
@@ -158,19 +188,32 @@ Devolva APENAS o texto da resposta melhorada, sem aspas, sem preâmbulo, sem exp
     },
   });
 
+  await recordAIUsage({ model: MODEL, feature: "improve-answer", ...usageFromGeminiResponse(response) });
+
   return (response.text ?? "").trim();
 }
 
 // Persona separada da do "Consultor PLAC" acima — aqui a IA escreve/melhora
 // texto de catálogo de produto (marketing/vendas), não responde briefing de
-// tarefa embasado em PLAC. Não usa buildSystemInstruction/base PLAC de
-// propósito: o contexto é diferente (copy de produto, não consultoria).
+// tarefa embasado em PLAC. Usa a base de conhecimento da categoria
+// "produtos" (admin > Configurações > Base de Conhecimento IA), não a de
+// "briefing" — contexto diferente (copy de produto, não consultoria PLAC).
 const PRODUCT_COPYWRITER_PERSONA = `
 Você é um redator especialista em catálogo de produtos da allka.com.vc, uma plataforma de marketplace de serviços de marketing e criação para agências e empresas.
 Seu trabalho é escrever ou melhorar o texto de UM campo do cadastro de um produto do catálogo: claro, objetivo, com poder de venda, em português do Brasil.
 Nunca invente números, prazos, garantias ou funcionalidades que não estejam no contexto fornecido — se faltar informação, escreva de forma genérica mas honesta.
 O campo é exibido como texto puro (sem renderização de markdown) — não use "**negrito**", "# títulos" nem outra sintaxe markdown.
 `.trim();
+
+async function buildProductSystemInstruction(): Promise<string> {
+  const kb = await getCategoryKnowledgeText("produtos");
+  if (!kb) return PRODUCT_COPYWRITER_PERSONA;
+  return `${PRODUCT_COPYWRITER_PERSONA}
+
+=== MATERIAL DE REFERÊNCIA (catálogo de produtos — use como base quando fizer sentido, não cite nomes de arquivo) ===
+${kb}
+=== FIM DO MATERIAL DE REFERÊNCIA ===`;
+}
 
 export interface ProductFieldContext {
   name?: string;
@@ -273,10 +316,12 @@ ${
     model: MODEL,
     contents: prompt,
     config: {
-      systemInstruction: PRODUCT_COPYWRITER_PERSONA,
+      systemInstruction: await buildProductSystemInstruction(),
       temperature: 0.6,
     },
   });
+
+  await recordAIUsage({ model: MODEL, feature: "improve-product-field", ...usageFromGeminiResponse(response) });
 
   return (response.text ?? "").trim();
 }
@@ -353,6 +398,8 @@ Traga na resposta:
     },
   });
 
+  await recordAIUsage({ model: MODEL, feature: "research-product-pricing", ...usageFromGeminiResponse(response) });
+
   return { research_text: (response.text ?? "").trim(), sources: extractSources(response) };
 }
 
@@ -387,6 +434,8 @@ Traga na resposta:
     },
   });
 
+  await recordAIUsage({ model: MODEL, feature: "research-specialty-market", ...usageFromGeminiResponse(response) });
+
   return { research_text: (response.text ?? "").trim(), sources: extractSources(response) };
 }
 
@@ -415,6 +464,8 @@ Liste de 5 a 10 especialidades emergentes que uma plataforma de marketplace de s
       tools: [{ googleSearch: {} }],
     },
   });
+
+  await recordAIUsage({ model: MODEL, feature: "research-emerging-specialties", ...usageFromGeminiResponse(response) });
 
   return { research_text: (response.text ?? "").trim(), sources: extractSources(response) };
 }

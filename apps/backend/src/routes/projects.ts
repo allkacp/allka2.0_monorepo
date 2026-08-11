@@ -1,10 +1,13 @@
 import { Router } from "express";
+import fs from "fs";
+import multer from "multer";
 import { z } from "zod";
 import { prisma } from "../lib/prisma";
 import { verifyToken } from "../middleware/auth";
 import { validate, parsePagination } from "../middleware/validate";
 import { gerarTarefasDoProjeto } from "../lib/generate-tasks";
 import { withProjectCode } from "../lib/create-project";
+import { ensureUploadDir, generateStoredFileName, uploadedFilePath, deleteUploadedFile } from "../lib/file-storage";
 import {
   getProjectScope,
   scopeToWhere,
@@ -387,6 +390,137 @@ router.get("/:id/files", verifyToken, async (req, res, next) => {
       approvedFiles,
       allFiles: enriched,
     });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// ─── Documentos do projeto (ProjectAttachment) ───────────────────────────────
+// Diferente de /:id/files (anexos de tarefas, agregados): estes são
+// documentos de CONTEXTO do projeto (PDF/DOC/imagens) que a agência sobe uma
+// vez pro projeto — servem de base pra IA entender o cliente quando alguém
+// optar por isso no "Preencher com Assistente" de uma tarefa (ver
+// fillBriefingWithAI em lib/ai-consultor.ts).
+
+async function assertProjectAccess(req: any, res: any, projectId: string) {
+  const parent = await prisma.project.findUnique({
+    where: { id: projectId },
+    select: { agency: true, client_id: true, agency_id: true, company_id: true, partner_id: true },
+  });
+  if (!parent) {
+    res.status(404).json({ error: "Projeto não encontrado" });
+    return null;
+  }
+  if (!(await projectVisibleToUser(prisma, req.user!, parent))) {
+    res.status(403).json({ error: "Acesso negado" });
+    return null;
+  }
+  return parent;
+}
+
+// GET /api/projects/:id/documents
+router.get("/:id/documents", verifyToken, async (req, res, next) => {
+  try {
+    const projectId = req.params.id as string;
+    if (!(await assertProjectAccess(req, res, projectId))) return;
+
+    const documents = await prisma.projectAttachment.findMany({
+      where: { project_id: projectId },
+      orderBy: { created_at: "desc" },
+    });
+    res.json({ documents });
+  } catch (err) {
+    next(err);
+  }
+});
+
+const projectDocumentsUpload = multer({
+  storage: multer.diskStorage({
+    destination: (req, _file, cb) => {
+      cb(null, ensureUploadDir(`project-documents/${req.params.id}`));
+    },
+    filename: (_req, file, cb) => cb(null, generateStoredFileName(file.originalname)),
+  }),
+  limits: { fileSize: 30 * 1024 * 1024 },
+});
+
+// POST /api/projects/:id/documents — upload de 1 documento de contexto
+router.post(
+  "/:id/documents",
+  verifyToken,
+  async (req, res, next) => {
+    try {
+      const projectId = req.params.id as string;
+      if (!(await assertProjectAccess(req, res, projectId))) return;
+      next();
+    } catch (err) {
+      next(err);
+    }
+  },
+  projectDocumentsUpload.single("file"),
+  async (req, res, next) => {
+    try {
+      if (!req.file) {
+        res.status(400).json({ error: "Nenhum arquivo enviado" });
+        return;
+      }
+      const document = await prisma.projectAttachment.create({
+        data: {
+          project_id: req.params.id as string,
+          name: req.file.originalname,
+          file_name: req.file.filename,
+          mime_type: req.file.mimetype,
+          size: req.file.size,
+          uploaded_by: req.user?.email ?? null,
+        },
+      });
+      res.status(201).json(document);
+    } catch (err) {
+      next(err);
+    }
+  },
+);
+
+// GET /api/projects/:id/documents/:docId/download
+router.get("/:id/documents/:docId/download", verifyToken, async (req, res, next) => {
+  try {
+    const projectId = req.params.id as string;
+    if (!(await assertProjectAccess(req, res, projectId))) return;
+
+    const document = await prisma.projectAttachment.findFirst({
+      where: { id: req.params.docId as string, project_id: projectId },
+    });
+    if (!document) {
+      res.status(404).json({ error: "Documento não encontrado" });
+      return;
+    }
+    const filePath = uploadedFilePath(`project-documents/${projectId}`, document.file_name);
+    if (!fs.existsSync(filePath)) {
+      res.status(404).json({ error: "Arquivo não encontrado em disco" });
+      return;
+    }
+    res.download(filePath, document.name);
+  } catch (err) {
+    next(err);
+  }
+});
+
+// DELETE /api/projects/:id/documents/:docId
+router.delete("/:id/documents/:docId", verifyToken, async (req, res, next) => {
+  try {
+    const projectId = req.params.id as string;
+    if (!(await assertProjectAccess(req, res, projectId))) return;
+
+    const document = await prisma.projectAttachment.findFirst({
+      where: { id: req.params.docId as string, project_id: projectId },
+    });
+    if (!document) {
+      res.status(404).json({ error: "Documento não encontrado" });
+      return;
+    }
+    await prisma.projectAttachment.delete({ where: { id: document.id } });
+    deleteUploadedFile(`project-documents/${projectId}`, document.file_name);
+    res.json({ success: true });
   } catch (err) {
     next(err);
   }

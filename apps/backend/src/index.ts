@@ -2,6 +2,8 @@ import { config } from "./config";
 import app from "./app";
 import { prisma } from "./lib/prisma";
 import { cleanZeroDatetimes } from "./lib/clean-zero-datetimes";
+import { ensureDefaultKnowledgeCategories } from "./lib/ai-knowledge-base";
+import { ensureDefaultAIServices } from "./lib/ai-usage-tracker";
 
 // Mascara a URL do banco: mantém apenas o caminho do arquivo, omite credenciais
 function maskDatabaseUrl(url: string): string {
@@ -62,6 +64,14 @@ async function main() {
 
   // Auto-fix invalid '0000-00-00' datetimes (MySQL only) — they crash Prisma queries
   await cleanZeroDatetimes(prisma, true);
+
+  // Cria as categorias padrão da Base de Conhecimento IA (briefing/produtos/
+  // nômades-agências) e migra os PDFs que já existiam em instrucoesAI/ pra
+  // dentro da categoria "briefing", na primeira vez — idempotente.
+  await ensureDefaultKnowledgeCategories();
+  // Registro de custo de IA (AIServiceConfig "gemini" + preço de partida dos
+  // modelos) — ver Configurações > Uso e Custos de IA.
+  await ensureDefaultAIServices();
 
   await logStartupState();
 

@@ -2898,6 +2898,7 @@ export function ProjectViewSlidePanel({
       {launchDrawerOpen && launchDrawerTask && (
         <TaskLaunchDrawer
           task={launchDrawerTask}
+          projectId={project?.id ? String(project.id) : undefined}
           onClose={() => {
             setLaunchDrawerOpen(false);
             setLaunchDrawerTask(null);

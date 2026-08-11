@@ -690,6 +690,73 @@ export function ProjectManagementModal({
     }
   }, [activeModalTab, project?.id]);
 
+  // Documentos de CONTEXTO do projeto (aba "Documentos" — diferente de
+  // "Arquivos" acima, que são entregas/referências de tarefas). Servem de
+  // base pra IA entender o cliente ao preencher briefing, quando a agência
+  // optar por isso no TaskLaunchDrawer (ver fillBriefingWithAI no backend).
+  const [projectDocuments, setProjectDocuments] = useState<any[]>([]);
+  const [projectDocumentsLoading, setProjectDocumentsLoading] = useState(false);
+  const [uploadingProjectDocument, setUploadingProjectDocument] = useState(false);
+  const projectDocumentInputRef = useRef<HTMLInputElement>(null);
+
+  function reloadProjectDocuments() {
+    if (!project?.id) return;
+    setProjectDocumentsLoading(true);
+    apiClient
+      .getProjectDocuments(String(project.id))
+      .then((res: any) => setProjectDocuments(res?.documents ?? []))
+      .catch(() => setProjectDocuments([]))
+      .finally(() => setProjectDocumentsLoading(false));
+  }
+
+  React.useEffect(() => {
+    if (activeModalTab === "documentos" && project?.id) {
+      reloadProjectDocuments();
+    }
+  }, [activeModalTab, project?.id]);
+
+  async function handleProjectDocumentSelected(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file || !project?.id) return;
+    setUploadingProjectDocument(true);
+    try {
+      await apiClient.uploadProjectDocument(String(project.id), file);
+      toast({ title: "Documento adicionado ao projeto" });
+      reloadProjectDocuments();
+    } catch (err: any) {
+      toast({ title: "Erro ao enviar documento", description: err?.message, variant: "destructive" });
+    } finally {
+      setUploadingProjectDocument(false);
+      if (projectDocumentInputRef.current) projectDocumentInputRef.current.value = "";
+    }
+  }
+
+  async function handleDeleteProjectDocument(doc: any) {
+    if (!project?.id || !window.confirm(`Remover "${doc.name}" dos documentos do projeto?`)) return;
+    try {
+      await apiClient.deleteProjectDocument(String(project.id), doc.id);
+      toast({ title: "Documento removido" });
+      reloadProjectDocuments();
+    } catch (err: any) {
+      toast({ title: "Erro ao remover documento", description: err?.message, variant: "destructive" });
+    }
+  }
+
+  async function handleDownloadProjectDocument(doc: any) {
+    if (!project?.id) return;
+    try {
+      const blob = await apiClient.downloadProjectDocument(String(project.id), doc.id);
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = doc.name;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (err: any) {
+      toast({ title: "Erro ao baixar documento", description: err?.message, variant: "destructive" });
+    }
+  }
+
   // Project dashboard lazy load
   const [dashboardData, setDashboardData] = useState<any>(null);
   const [dashboardLoading, setDashboardLoading] = useState(false);
@@ -1837,7 +1904,7 @@ export function ProjectManagementModal({
                 className="w-full flex flex-col h-full"
               >
                 <div className="flex-shrink-0 bg-white dark:bg-background px-[50px] pt-0 pb-[10px] overflow-x-auto">
-                  <TabsList className="grid w-max grid-cols-8 gap-1 bg-transparent p-0 h-auto">
+                  <TabsList className="grid w-max grid-cols-9 gap-1 bg-transparent p-0 h-auto">
                     <TabsTrigger
                       value="dashboard"
                       className="px-4 py-2 text-xs font-medium rounded-lg border border-transparent data-[state=active]:bg-blue-100 data-[state=active]:text-blue-700 data-[state=active]:border-blue-300 hover:bg-slate-100"
@@ -1867,6 +1934,12 @@ export function ProjectManagementModal({
                       className="px-4 py-2 text-xs font-medium rounded-lg border border-transparent data-[state=active]:bg-blue-100 data-[state=active]:text-blue-700 data-[state=active]:border-blue-300 hover:bg-slate-100"
                     >
                       Arquivos
+                    </TabsTrigger>
+                    <TabsTrigger
+                      value="documentos"
+                      className="px-4 py-2 text-xs font-medium rounded-lg border border-transparent data-[state=active]:bg-blue-100 data-[state=active]:text-blue-700 data-[state=active]:border-blue-300 hover:bg-slate-100"
+                    >
+                      Documentos
                     </TabsTrigger>
                     <TabsTrigger
                       value="cofre"
@@ -3231,6 +3304,99 @@ export function ProjectManagementModal({
                     {!projectFilesLoading && !projectFilesData && (
                       <div className="border border-slate-200/80 rounded-xl overflow-hidden shadow-sm bg-white px-4 py-10 text-center text-slate-400 text-xs">
                         Abra esta aba para carregar os arquivos do projeto.
+                      </div>
+                    )}
+                  </div>
+                </TabsContent>
+
+                <TabsContent
+                  value="documentos"
+                  className="p-0 m-0 flex-1 overflow-y-auto bg-slate-200"
+                >
+                  <div className="px-[50px] pt-[25px] pb-[80px] space-y-4">
+                    {/* Header */}
+                    <div className="flex items-center justify-between pb-1">
+                      <div>
+                        <h3 className="text-sm font-semibold text-slate-900">
+                          Documentos do Projeto
+                        </h3>
+                        <p className="text-[11px] text-slate-400 mt-0.5">
+                          PDFs, docs e imagens sobre este cliente/projeto — contrato, briefing recebido, materiais de marca etc.
+                        </p>
+                      </div>
+                      <div>
+                        <input
+                          ref={projectDocumentInputRef}
+                          type="file"
+                          accept=".pdf,.doc,.docx,.txt,.md,image/*"
+                          className="hidden"
+                          onChange={handleProjectDocumentSelected}
+                        />
+                        <button
+                          onClick={() => projectDocumentInputRef.current?.click()}
+                          disabled={uploadingProjectDocument}
+                          className="flex items-center gap-2 h-8 px-4 rounded-lg bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white text-xs font-semibold shadow-sm shadow-blue-200 transition-all disabled:opacity-60"
+                        >
+                          <Upload className="h-3.5 w-3.5" />
+                          {uploadingProjectDocument ? "Enviando…" : "Adicionar Documento"}
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Aviso: isso alimenta a IA */}
+                    <div className="flex items-start gap-2.5 rounded-xl border border-violet-200 bg-violet-50 px-4 py-3 text-violet-800">
+                      <Info className="h-4 w-4 shrink-0 mt-0.5" />
+                      <p className="text-[11px] leading-relaxed">
+                        <span className="font-semibold">Estes documentos podem ser usados pela IA.</span>{" "}
+                        Ao lançar uma tarefa e usar "Preencher com Assistente" no briefing, você pode optar por deixar a IA consultar o que estiver aqui pra entender melhor este cliente específico — além do texto que você colar na hora.
+                      </p>
+                    </div>
+
+                    {/* Loading state */}
+                    {projectDocumentsLoading && (
+                      <div className="flex items-center justify-center py-16">
+                        <Loader2 className="h-6 w-6 animate-spin text-slate-400" />
+                      </div>
+                    )}
+
+                    {/* Empty state */}
+                    {!projectDocumentsLoading && projectDocuments.length === 0 && (
+                      <div className="border border-slate-200/80 rounded-xl overflow-hidden shadow-sm bg-white px-4 py-10 text-center text-slate-400 text-xs">
+                        Nenhum documento adicionado a este projeto ainda.
+                      </div>
+                    )}
+
+                    {/* List */}
+                    {!projectDocumentsLoading && projectDocuments.length > 0 && (
+                      <div className="border border-slate-200/80 rounded-xl overflow-hidden shadow-sm bg-white divide-y divide-slate-100">
+                        {projectDocuments.map((doc: any) => (
+                          <div key={doc.id} className="flex items-center gap-3 px-4 py-3">
+                            <span className="h-8 w-8 rounded-lg bg-blue-50 flex items-center justify-center shrink-0">
+                              <FileText className="h-4 w-4 text-blue-500" />
+                            </span>
+                            <div className="min-w-0 flex-1">
+                              <p className="text-xs font-semibold text-slate-700 truncate">{doc.name}</p>
+                              <p className="text-[10px] text-slate-400">
+                                {doc.uploaded_by ? `${doc.uploaded_by} · ` : ""}
+                                {doc.created_at ? new Date(doc.created_at).toLocaleDateString("pt-BR") : ""}
+                              </p>
+                            </div>
+                            <button
+                              onClick={() => handleDownloadProjectDocument(doc)}
+                              title="Baixar"
+                              className="h-7 w-7 flex items-center justify-center rounded-lg text-slate-400 hover:text-blue-600 hover:bg-blue-50"
+                            >
+                              <Download className="h-3.5 w-3.5" />
+                            </button>
+                            <button
+                              onClick={() => handleDeleteProjectDocument(doc)}
+                              title="Excluir"
+                              className="h-7 w-7 flex items-center justify-center rounded-lg text-slate-400 hover:text-red-500 hover:bg-red-50"
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </button>
+                          </div>
+                        ))}
                       </div>
                     )}
                   </div>
@@ -7429,6 +7595,7 @@ export function ProjectManagementModal({
       {launchDrawerOpen && launchDrawerTask && (
         <TaskLaunchDrawer
           task={launchDrawerTask}
+          projectId={project?.id ? String(project.id) : undefined}
           onClose={() => {
             setLaunchDrawerOpen(false);
             setLaunchDrawerTask(null);

@@ -133,6 +133,47 @@ class ApiClient {
     return this.request<T>("DELETE", path, body);
   }
 
+  // Upload multipart (não passa por request(): não pode forçar
+  // Content-Type: application/json, o fetch precisa gerar o boundary sozinho).
+  private async uploadFile<T = any>(path: string, file: File): Promise<T> {
+    const formData = new FormData();
+    formData.append("file", file);
+    const token = this.getToken();
+    const res = await fetch(`${API_BASE_URL}${path}`, {
+      method: "POST",
+      headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+      body: formData,
+    });
+    if (!res.ok) {
+      if (res.status === 401) {
+        this.clearToken();
+        if (typeof window !== "undefined") {
+          window.dispatchEvent(new CustomEvent("allka:unauthorized"));
+        }
+      }
+      let msg = `HTTP ${res.status}`;
+      let body: Record<string, any> | undefined;
+      try {
+        body = await res.json();
+        msg = body?.error || body?.message || msg;
+      } catch {}
+      throw new ApiError(msg, res.status, body);
+    }
+    return res.json();
+  }
+
+  // Download autenticado (link direto não funciona: a rota exige Bearer
+  // token no header, que um <a href> não envia) — o chamador transforma o
+  // Blob num link temporário (URL.createObjectURL) pra disparar o download.
+  private async downloadBlob(path: string): Promise<Blob> {
+    const token = this.getToken();
+    const res = await fetch(`${API_BASE_URL}${path}`, {
+      headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+    });
+    if (!res.ok) throw new ApiError(`HTTP ${res.status}`, res.status);
+    return res.blob();
+  }
+
   // ─── Auth ──────────────────────────────────────────────────────────────────
   async login(email: string, password: string, accessType?: string) {
     const body: Record<string, string> = { email, password };
@@ -1303,6 +1344,22 @@ class ApiClient {
   async getProjectFiles(projectId: string) {
     return this.get(`/projects/${projectId}/files`);
   }
+  // ─── Documentos de contexto do projeto (aba "Documentos") ──────────────────
+  // Diferente de getProjectFiles (entregas/referências de tarefas): estes são
+  // PDFs/docs/imagens sobre o cliente/projeto em si, que a IA pode usar como
+  // base extra ao preencher briefing de tarefas (ver aiFillBriefing abaixo).
+  async getProjectDocuments(projectId: string) {
+    return this.get(`/projects/${projectId}/documents`);
+  }
+  async uploadProjectDocument(projectId: string, file: File) {
+    return this.uploadFile(`/projects/${projectId}/documents`, file);
+  }
+  async deleteProjectDocument(projectId: string, documentId: string) {
+    return this.del(`/projects/${projectId}/documents/${documentId}`);
+  }
+  async downloadProjectDocument(projectId: string, documentId: string) {
+    return this.downloadBlob(`/projects/${projectId}/documents/${documentId}/download`);
+  }
   async getProjectDashboard(projectId: string) {
     return this.get(`/projects/${projectId}/dashboard`);
   }
@@ -1340,6 +1397,8 @@ class ApiClient {
   async aiFillBriefing(body: {
     free_text: string;
     questions: { question_key: string; question_text: string; type?: string; options?: string[]; required?: boolean }[];
+    project_id?: string;
+    use_project_documents?: boolean;
   }) {
     return this.post("/ai-consultor/fill-briefing", body);
   }
@@ -1377,6 +1436,58 @@ class ApiClient {
   }
   async aiResearchEmergingSpecialties(body: { category_hint?: string }) {
     return this.post("/ai-consultor/research-emerging-specialties", body);
+  }
+  // ─── Base de Conhecimento IA (admin > Configurações) ───────────────────────
+  // "Bancos" de documentos por finalidade de IA (briefing/PLAC, produtos...),
+  // consultados pelo Consultor IA acima. Só admin gerencia.
+  async getKnowledgeCategories() {
+    return this.get("/ai-knowledge-base/categories");
+  }
+  async createKnowledgeCategory(body: { key: string; name: string; description?: string }) {
+    return this.post("/ai-knowledge-base/categories", body);
+  }
+  async getKnowledgeDocuments(categoryKey: string) {
+    return this.get(`/ai-knowledge-base/categories/${categoryKey}/documents`);
+  }
+  async uploadKnowledgeDocument(categoryKey: string, file: File) {
+    return this.uploadFile(`/ai-knowledge-base/categories/${categoryKey}/documents`, file);
+  }
+  async deleteKnowledgeDocument(documentId: string) {
+    return this.del(`/ai-knowledge-base/documents/${documentId}`);
+  }
+  async downloadKnowledgeDocument(documentId: string) {
+    return this.downloadBlob(`/ai-knowledge-base/documents/${documentId}/download`);
+  }
+  // ─── Uso e Custos de IA (admin > Configurações) ────────────────────────────
+  async getAIUsageSummary() {
+    return this.get("/ai-usage/summary");
+  }
+  async updateAIServiceConfig(
+    key: string,
+    body: { monthly_budget_usd?: number | null; alert_threshold_pct?: number; is_active?: boolean },
+  ) {
+    return this.put(`/ai-usage/services/${key}`, body);
+  }
+  async createAIService(body: { key: string; name: string; provider?: string }) {
+    return this.post("/ai-usage/services", body);
+  }
+  async createAIModelPricing(
+    serviceKey: string,
+    body: {
+      model: string;
+      pricing_unit: "tokens" | "image" | "video_second" | "request" | "minute";
+      input_price_per_million?: number;
+      output_price_per_million?: number;
+      unit_price?: number;
+    },
+  ) {
+    return this.post(`/ai-usage/services/${serviceKey}/models`, body);
+  }
+  async updateAIModelPricing(
+    pricingId: string,
+    body: { input_price_per_million?: number; output_price_per_million?: number; unit_price?: number },
+  ) {
+    return this.put(`/ai-usage/pricing/${pricingId}`, body);
   }
   async submitProjectTaskBriefing(id: string, body: { answers: any[] }) {
     return this.patch(`/project-tasks/${id}/submit-briefing`, body);

@@ -119,7 +119,12 @@ router.get("/stats", verifyToken, async (req, res, next) => {
 });
 
 // GET /api/dashboard/revenue?from=&to=
-// Returns real invoice-based revenue breakdown for the given date range.
+// Returns real invoice-based revenue breakdown for the given date range —
+// somado ao faturamento da plataforma antiga (legacy_records, tabela
+// "project_invoice"), que nunca virou Invoice de propósito (ver
+// docs/importacao-plataforma-antiga.md, arquivo isolado). Sem isso, a
+// "Receita" some pra todo o histórico anterior à importação nova, mesmo tendo
+// R$ 3,68 milhões faturados registrados no legado.
 router.get("/revenue", verifyToken, async (req, res, next) => {
   try {
     const fromParam = req.query.from as string | undefined;
@@ -134,7 +139,7 @@ router.get("/revenue", verifyToken, async (req, res, next) => {
       { paid_at: null as any, created_at: dateWhere },
     ];
 
-    const [totalRevenue, recurringRevenue, oneTimeRevenue, creditPlanRevenue] =
+    const [totalRevenue, recurringRevenue, oneTimeRevenue, creditPlanRevenue, legacyInvoices] =
       await Promise.all([
         prisma.invoice.aggregate({
           _sum: { amount: true },
@@ -153,12 +158,39 @@ router.get("/revenue", verifyToken, async (req, res, next) => {
           _sum: { amount: true },
           where: { status: "paid", OR: paidDateOr, project_id: null },
         }),
+        prisma.legacyRecord.findMany({
+          where: { tabela: "project_invoice", data: dateWhere, valor: { not: null } },
+          select: { valor: true, projeto_legacy_id: true },
+        }),
       ]);
 
-    const total = totalRevenue._sum.amount ?? 0;
-    const recurring = recurringRevenue._sum.amount ?? 0;
-    const oneTime = oneTimeRevenue._sum.amount ?? 0;
+    // Faturas do legado só têm o id do projeto antigo — busca o lifecycle
+    // (mensal/avulso) dos projetos importados pra somar na mesma categoria
+    // que a fatura nativa equivalente usaria.
+    const legacyProjectIds = [
+      ...new Set(legacyInvoices.map((r) => r.projeto_legacy_id).filter((v): v is number => v != null)),
+    ];
+    const legacyProjects = legacyProjectIds.length
+      ? await prisma.project.findMany({
+          where: { legacy_id: { in: legacyProjectIds } },
+          select: { legacy_id: true, lifecycle: true },
+        })
+      : [];
+    const lifecycleByLegacyId = new Map(legacyProjects.map((p) => [p.legacy_id, p.lifecycle]));
+
+    let legacyRecurring = 0;
+    let legacyOneTime = 0;
+    for (const r of legacyInvoices) {
+      const valor = r.valor ?? 0;
+      const lifecycle = r.projeto_legacy_id != null ? lifecycleByLegacyId.get(r.projeto_legacy_id) : null;
+      if (lifecycle === "mensal") legacyRecurring += valor;
+      else legacyOneTime += valor;
+    }
+
+    const recurring = (recurringRevenue._sum.amount ?? 0) + legacyRecurring;
+    const oneTime = (oneTimeRevenue._sum.amount ?? 0) + legacyOneTime;
     const creditPlan = creditPlanRevenue._sum.amount ?? 0;
+    const total = (totalRevenue._sum.amount ?? 0) + legacyRecurring + legacyOneTime;
 
     res.json({
       total,
