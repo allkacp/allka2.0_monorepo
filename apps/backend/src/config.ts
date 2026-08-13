@@ -12,6 +12,15 @@ const envSchema = z.object({
   NODE_ENV: z
     .enum(["development", "production", "test"])
     .default("development"),
+  PRODUCT_FEEDBACK_ENABLED: z
+    .enum(["true", "false"])
+    .default("false")
+    .transform((v) => v === "true"),
+  ROADMAP_API_URL: z.string().optional(),
+  ROADMAP_HMAC_KEY_ID: z.string().optional(),
+  ROADMAP_HMAC_SECRET: z.string().optional(),
+  ROADMAP_REQUEST_TIMEOUT_MS: z.coerce.number().int().positive().default(5000),
+  ROADMAP_INTERNAL_URL: z.string().optional(),
 });
 
 const parsed = envSchema.safeParse(process.env);

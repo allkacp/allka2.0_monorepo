@@ -1546,6 +1546,105 @@ class ApiClient {
   async getAgencyAlerts() {
     return this.get("/agencies/me/alerts");
   }
+
+  // ─── Ajuda e sugestões (integração Roadmap) ────────────────────────────────
+  async getProductFeedbackAccess() {
+    return this.get("/product-feedback/access");
+  }
+
+  async createProductFeedbackWorkItem(body: {
+    type: "PROBLEM" | "IDEA" | "IMPROVEMENT";
+    title: string;
+    description: string;
+    pathname: string;
+    pageTitle?: string;
+    steps?: string;
+    expectedResult?: string;
+    actualResult?: string;
+    impact?: string;
+  }) {
+    return this.post("/product-feedback/work-items", body);
+  }
+
+  async getProductFeedbackWorkItems() {
+    return this.get("/product-feedback/work-items");
+  }
+
+  async getProductFeedbackWorkItem(protocol: string) {
+    return this.get(`/product-feedback/work-items/${encodeURIComponent(protocol)}`);
+  }
+
+  // ─── Admin > Acesso aos chamados ────────────────────────────────────────────
+  async getProductFeedbackAdminConfig() {
+    return this.get("/admin/product-feedback/config");
+  }
+
+  async updateProductFeedbackAdminConfig(body: { enabled?: boolean; defaultPolicy?: string; reason?: string }) {
+    return this.patch("/admin/product-feedback/config", body);
+  }
+
+  async getProductFeedbackAdminSummary() {
+    return this.get("/admin/product-feedback/summary");
+  }
+
+  async getProductFeedbackAdminUsers(params?: Record<string, any>) {
+    return this.get("/admin/product-feedback/users", params);
+  }
+
+  async setProductFeedbackUserOverride(
+    userId: string,
+    body: { effect: "ALLOW" | "DENY" | "INHERIT"; expiresAt?: string | null; reason?: string },
+  ) {
+    return this.put(`/admin/product-feedback/users/${userId}/override`, body);
+  }
+
+  async batchSetProductFeedbackOverride(body: {
+    userIds: string[];
+    effect: "ALLOW" | "DENY" | "INHERIT";
+    expiresAt?: string | null;
+    reason?: string;
+  }) {
+    return this.post("/admin/product-feedback/users/batch-override", body);
+  }
+
+  async getProductFeedbackGroups() {
+    return this.get("/admin/product-feedback/groups");
+  }
+
+  async createProductFeedbackGroup(body: {
+    name: string;
+    effect: "ALLOW" | "DENY";
+    priority?: number;
+    active?: boolean;
+    expiresAt?: string | null;
+    reason?: string;
+  }) {
+    return this.post("/admin/product-feedback/groups", body);
+  }
+
+  async updateProductFeedbackGroup(id: string, body: Record<string, any>) {
+    return this.patch(`/admin/product-feedback/groups/${id}`, body);
+  }
+
+  async archiveProductFeedbackGroup(id: string) {
+    return this.del(`/admin/product-feedback/groups/${id}`);
+  }
+
+  async addProductFeedbackGroupMembers(id: string, userIds: string[]) {
+    return this.post(`/admin/product-feedback/groups/${id}/members`, { userIds });
+  }
+
+  async removeProductFeedbackGroupMember(id: string, userId: string) {
+    return this.del(`/admin/product-feedback/groups/${id}/members/${userId}`);
+  }
+
+  async getProductFeedbackAudit(params?: Record<string, any>) {
+    return this.get("/admin/product-feedback/audit", params);
+  }
+
+  async simulateProductFeedbackAccess(userId: string) {
+    return this.post("/admin/product-feedback/simulate", { userId });
+  }
 }
 
 // Em modo mock (Vite --mode mock OU VITE_USE_MOCKS=true), troca pelo mock client.

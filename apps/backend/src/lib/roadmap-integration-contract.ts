@@ -19,8 +19,13 @@ import { z } from "zod";
  * gets its own minimal one: roadmap-integration-contract.test.ts, run with
  * `npm run test:roadmap-contract --workspace apps/backend` via
  * `tsx --test` + node:assert/strict — no new test framework dependency.
+ *
+ * 1.1.0: added optional identity.displayName/userCode (still no email,
+ * password, or token — see the "never send" list); added the HMAC signed-
+ * request header shapes. Every 1.0.0 field/shape is unchanged, so a 1.0.0
+ * caller remains valid against this schema.
  */
-export const CONTRACT_VERSION = "1.0.0";
+export const CONTRACT_VERSION = "1.1.0";
 export const CONTRACT_API_PREFIX = "/api/v1/integrations";
 
 // ---------------------------------------------------------------------------
@@ -31,10 +36,18 @@ export const CONTRACT_API_PREFIX = "/api/v1/integrations";
 export const ProtocolSchema = z.string().regex(/^ALK-\d+$/);
 
 /** The identity the Allka platform vouches for. The Roadmap never sees an
- * Allka session, cookie, or JWT — only this stable external id. */
+ * Allka session, cookie, or JWT — only this stable external id, derived
+ * server-side by Allka from its own authenticated session. Allka must
+ * never forward an externalUserId supplied by the browser. */
 export const ExternalIdentitySchema = z
   .object({
     externalUserId: z.string().min(1).max(191),
+    /** Optional, for display in the Roadmap's internal panel only — never
+     * used for authorization or lookup. No email, no token. */
+    displayName: z.string().min(1).max(200).optional(),
+    /** Optional short public-facing code (e.g. an internal employee code),
+     * distinct from externalUserId. Display only. */
+    userCode: z.string().min(1).max(50).optional(),
     externalWorkspaceContext: z
       .object({
         companyId: z.string().max(191).optional(),
@@ -45,6 +58,19 @@ export const ExternalIdentitySchema = z
       .optional(),
   })
   .strict();
+
+// ---------------------------------------------------------------------------
+// HMAC request signing (v1.1.0) — see docs/roadmap-integration-contract-v1.md
+// for the full canonical-string spec. These schemas describe the three
+// header values as they arrive over the wire; they don't validate the
+// signature itself (that's lib/roadmap-hmac.ts's job).
+// ---------------------------------------------------------------------------
+
+export const HmacHeadersSchema = z.object({
+  "x-allka-key-id": z.string().min(1).max(100),
+  "x-allka-timestamp": z.string().regex(/^\d+$/),
+  "x-allka-signature": z.string().regex(/^v1=[0-9a-f]{64}$/i),
+});
 
 /** Where the user was, described safely: sanitized pathname only — never a
  * full URL, never a fragment, never a raw querystring. */

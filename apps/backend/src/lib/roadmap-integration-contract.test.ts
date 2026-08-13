@@ -3,7 +3,9 @@ import { describe, it } from "node:test";
 import {
   CONTRACT_API_PREFIX,
   CONTRACT_VERSION,
+  ExternalIdentitySchema,
   GithubLinkEventSchema,
+  HmacHeadersSchema,
   IntegrationErrorResponseSchema,
   IntegrationEventEnvelopeSchema,
   ProtocolSchema,
@@ -33,8 +35,8 @@ const validCreateRequest = {
 };
 
 describe("contract version and prefix", () => {
-  it("exposes CONTRACT_VERSION 1.0.0", () => {
-    assert.equal(CONTRACT_VERSION, "1.0.0");
+  it("exposes CONTRACT_VERSION 1.1.0", () => {
+    assert.equal(CONTRACT_VERSION, "1.1.0");
   });
 
   it("exposes the /api/v1/integrations prefix", () => {
@@ -197,6 +199,72 @@ describe("IntegrationErrorResponseSchema", () => {
   it("rejects an undocumented error code", () => {
     assert.throws(() =>
       IntegrationErrorResponseSchema.parse({ ok: false, code: "SERVER_ERROR", message: "x" }),
+    );
+  });
+});
+
+describe("ExternalIdentitySchema (v1.1.0 additions)", () => {
+  it("still accepts a 1.0.0-shaped identity with only externalUserId", () => {
+    assert.doesNotThrow(() => ExternalIdentitySchema.parse({ externalUserId: "user-1" }));
+  });
+
+  it("accepts the new optional displayName and userCode", () => {
+    assert.doesNotThrow(() =>
+      ExternalIdentitySchema.parse({
+        externalUserId: "user-1",
+        displayName: "Ana Requester",
+        userCode: "EMP-042",
+      }),
+    );
+  });
+
+  it("rejects an email field (identity must never carry one)", () => {
+    assert.throws(() =>
+      ExternalIdentitySchema.parse({
+        externalUserId: "user-1",
+        email: "ana@allka.test",
+      }),
+    );
+  });
+
+  it("rejects a password or token field", () => {
+    assert.throws(() =>
+      ExternalIdentitySchema.parse({ externalUserId: "user-1", password: "x" }),
+    );
+    assert.throws(() =>
+      ExternalIdentitySchema.parse({ externalUserId: "user-1", token: "x" }),
+    );
+  });
+});
+
+describe("HmacHeadersSchema", () => {
+  it("accepts a well-formed set of signed headers", () => {
+    assert.doesNotThrow(() =>
+      HmacHeadersSchema.parse({
+        "x-allka-key-id": "key-2026-08",
+        "x-allka-timestamp": "1700000000",
+        "x-allka-signature": `v1=${"a".repeat(64)}`,
+      }),
+    );
+  });
+
+  it("rejects a non-numeric timestamp", () => {
+    assert.throws(() =>
+      HmacHeadersSchema.parse({
+        "x-allka-key-id": "key-2026-08",
+        "x-allka-timestamp": "not-a-number",
+        "x-allka-signature": `v1=${"a".repeat(64)}`,
+      }),
+    );
+  });
+
+  it("rejects a malformed signature", () => {
+    assert.throws(() =>
+      HmacHeadersSchema.parse({
+        "x-allka-key-id": "key-2026-08",
+        "x-allka-timestamp": "1700000000",
+        "x-allka-signature": "not-the-right-shape",
+      }),
     );
   });
 });
