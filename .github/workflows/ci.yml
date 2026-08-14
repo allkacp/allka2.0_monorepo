@@ -116,6 +116,43 @@ jobs:
       - name: Scan production build for leaked dev credentials
         run: npm run test:no-leaked-credentials --workspace apps/frontend
 
+      # Regression test for a real incident: docker-compose.prod.yml's
+      # `caddy` service reads ROADMAP_QA_BASIC_AUTH_HASH via `${VAR}`
+      # interpolation (not env_file), and a bcrypt hash's literal "$"
+      # delimiters get mangled mid-value if not escaped as "$$" before being
+      # written to .env — confirmed live on the VPS: a 60-char hash arrived
+      # inside the container truncated to 38 chars with a "$" turned into
+      # ".". Checks the container's ACTUAL runtime env var (not `docker
+      # compose config`'s own display text, which re-escapes "$" for
+      # round-tripping and would pass even if the real bug were still
+      # there).
+      - name: Compose interpolation preserves a $-containing secret (regression)
+        run: |
+          set -euo pipefail
+          docker network inspect allka-proxy-shared >/dev/null 2>&1 || docker network create allka-proxy-shared
+          FAKE_HASH='$2a$14$abcdefghijklmnopqrstuvABCDEFGHIJKLMNOPQRSTUVWXYZ012345'
+          cat > .env <<EOF
+          BACKEND_IMAGE=alpine:latest
+          FRONTEND_IMAGE=alpine:latest
+          MYSQL_PASSWORD=ci-test-password
+          MYSQL_ROOT_PASSWORD=ci-test-root-password
+          ROADMAP_QA_BASIC_AUTH_USER=ci-test-user
+          ROADMAP_QA_BASIC_AUTH_HASH=${FAKE_HASH//\$/\$\$}
+          EOF
+          # backend/migrate declare env_file: ./.env.backend — compose
+          # validates every service's env_file exists before it will run
+          # even a single --no-deps service, so this needs to exist too.
+          : > .env.backend
+          RESOLVED="$(docker compose -f docker-compose.prod.yml run --rm --no-deps --entrypoint sh caddy -c 'printf %s "$ROADMAP_QA_BASIC_AUTH_HASH"' 2>/dev/null)"
+          docker compose -f docker-compose.prod.yml down --volumes >/dev/null 2>&1 || true
+          rm -f .env .env.backend
+          docker network rm allka-proxy-shared >/dev/null 2>&1 || true
+          if [ "$RESOLVED" != "$FAKE_HASH" ]; then
+            echo "::error::The container's ROADMAP_QA_BASIC_AUTH_HASH does not match the original. Got: $RESOLVED"
+            exit 1
+          fi
+          echo "Container env var matches the original bcrypt value."
+
       - name: git diff --check (whitespace errors)
         run: |
           BASE="$(git merge-base origin/main HEAD)"

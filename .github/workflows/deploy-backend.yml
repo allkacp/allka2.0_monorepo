@@ -164,7 +164,14 @@ jobs:
             # nunca pelo backend.
             printf 'ROADMAP_QA_DOMAIN=%s\n' "$ROADMAP_QA_DOMAIN"
             printf 'ROADMAP_QA_BASIC_AUTH_USER=%s\n' "$ROADMAP_QA_BASIC_AUTH_USER"
-            printf 'ROADMAP_QA_BASIC_AUTH_HASH=%s\n' "$ROADMAP_QA_BASIC_AUTH_HASH"
+            # $$ escapes a literal "$" for Compose's own ${VAR} interpolation
+            # in docker-compose.prod.yml's `caddy` service (this value is
+            # consumed via `${ROADMAP_QA_BASIC_AUTH_HASH:-}`, not env_file).
+            # bcrypt hashes always contain literal "$" delimiters; left
+            # unescaped, Compose's interpolation mangles them mid-value —
+            # empirically confirmed live: a 60-char hash arrived at the
+            # container truncated to 38 chars with a "$" turned into ".".
+            printf 'ROADMAP_QA_BASIC_AUTH_HASH=%s\n' "${ROADMAP_QA_BASIC_AUTH_HASH//\$/\$\$}"
           } > .deploy/.env
 
           {
