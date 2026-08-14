@@ -3,14 +3,15 @@ import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
 
-const { startRoadmapSso, getCurrentUser, mockAccountType } = vi.hoisted(() => ({
+const { startRoadmapSso, getRoadmapSsoBaseUrl, getCurrentUser, mockAccountType } = vi.hoisted(() => ({
   startRoadmapSso: vi.fn(),
+  getRoadmapSsoBaseUrl: vi.fn(),
   getCurrentUser: vi.fn(),
   mockAccountType: { value: "admin" as string },
 }));
 
 vi.mock("@/lib/api-client", () => ({
-  apiClient: { getCurrentUser, startRoadmapSso },
+  apiClient: { getCurrentUser, startRoadmapSso, getRoadmapSsoBaseUrl },
 }));
 
 vi.mock("@/contexts/account-type-context", () => ({
@@ -60,25 +61,39 @@ describe("AppMenuDrawer (mobile) — item Roadmap e chamados", () => {
     expect(screen.queryByText("Roadmap e chamados")).not.toBeInTheDocument();
   });
 
-  it("NÃO aparece pra usuário comum (não-admin), sem nem consultar permissão", async () => {
+  it("NÃO aparece pra usuário comum (agencias, sem perfil) — sem grandfather fora de admin", async () => {
     mockAccountType.value = "agencias";
+    getCurrentUser.mockResolvedValue({ admin_profile: null });
     renderDrawer();
     await waitFor(() => expect(screen.getByText("Dashboard")).toBeInTheDocument());
+    await waitFor(() => expect(getCurrentUser).toHaveBeenCalled());
     expect(screen.queryByText("Roadmap e chamados")).not.toBeInTheDocument();
-    expect(getCurrentUser).not.toHaveBeenCalled();
   });
 
-  it("clicar abre o SSO pela mesma função compartilhada (apiClient.startRoadmapSso)", async () => {
+  it("desenvolvedor não-admin (account_type agencias) COM central_chamados.view VÊ", async () => {
+    mockAccountType.value = "agencias";
+    getCurrentUser.mockResolvedValue({
+      admin_profile: { is_active: true, is_master: false, permissions: [{ module: "central_chamados", action: "view" }] },
+    });
+    renderDrawer();
+    await waitFor(() => expect(screen.getByText("Dashboard")).toBeInTheDocument());
+    expect(await screen.findByText("Roadmap e chamados")).toBeInTheDocument();
+  });
+
+  // Fluxo completo (postMessage/Basic Auth) já testado em
+  // hooks/use-open-roadmap-panel.test.ts — aqui só confirma que o clique no
+  // mobile aciona o mesmo hook compartilhado do desktop.
+  it("clicar aciona o hook de SSO compartilhado (mesmo do desktop)", async () => {
     getCurrentUser.mockResolvedValue({ admin_profile: null });
-    startRoadmapSso.mockResolvedValue({ redirectUrl: "http://localhost:8090/sso/consume?token=abc" });
+    getRoadmapSsoBaseUrl.mockResolvedValue({ roadmapInternalUrl: "http://localhost:8090" });
     const openSpy = vi.spyOn(window, "open").mockReturnValue({ location: { href: "" }, closed: false } as unknown as Window);
 
     renderDrawer();
     const item = await screen.findByText("Roadmap e chamados");
     await userEvent.click(item);
 
-    await waitFor(() => expect(startRoadmapSso).toHaveBeenCalledTimes(1));
     expect(openSpy).toHaveBeenCalledWith("about:blank", "_blank");
+    await waitFor(() => expect(getRoadmapSsoBaseUrl).toHaveBeenCalledTimes(1));
     openSpy.mockRestore();
   });
 });

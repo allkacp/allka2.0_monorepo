@@ -132,6 +132,11 @@ jobs:
           : "${ROADMAP_HMAC_SECRET:?Set the ROADMAP_HMAC_SECRET secret}"
           : "${ROADMAP_QA_BASIC_AUTH_USER:?Set the ROADMAP_QA_BASIC_AUTH_USER secret}"
           : "${ROADMAP_QA_BASIC_AUTH_HASH:?Set the ROADMAP_QA_BASIC_AUTH_HASH secret}"
+          # ROADMAP_SSO_HMAC_KEY_ID/SECRET are deliberately NOT required here:
+          # they're an opt-in purpose-separated secret for the SSO handoff
+          # (see routes/roadmap-sso.ts). Unset -> the backend falls back to
+          # the base ROADMAP_HMAC_* pair (today's behavior), so this
+          # workflow keeps working before/after the new secret is set.
 
       - name: Render deploy files
         shell: bash
@@ -144,6 +149,8 @@ jobs:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           ROADMAP_HMAC_KEY_ID: ${{ secrets.ROADMAP_HMAC_KEY_ID }}
           ROADMAP_HMAC_SECRET: ${{ secrets.ROADMAP_HMAC_SECRET }}
+          ROADMAP_SSO_HMAC_KEY_ID: ${{ secrets.ROADMAP_SSO_HMAC_KEY_ID }}
+          ROADMAP_SSO_HMAC_SECRET: ${{ secrets.ROADMAP_SSO_HMAC_SECRET }}
           ROADMAP_QA_BASIC_AUTH_USER: ${{ secrets.ROADMAP_QA_BASIC_AUTH_USER }}
           ROADMAP_QA_BASIC_AUTH_HASH: ${{ secrets.ROADMAP_QA_BASIC_AUTH_HASH }}
         run: |
@@ -195,6 +202,10 @@ jobs:
             printf 'ROADMAP_API_URL=http://allka-roadmap-qa-backend:3002\n'
             printf 'ROADMAP_HMAC_KEY_ID=%s\n' "$ROADMAP_HMAC_KEY_ID"
             printf 'ROADMAP_HMAC_SECRET=%s\n' "$ROADMAP_HMAC_SECRET"
+            # Purpose-separated from ROADMAP_HMAC_*: this pair only ever
+            # signs POST .../allka/sso/tickets, never ticket creation.
+            printf 'ROADMAP_SSO_HMAC_KEY_ID=%s\n' "$ROADMAP_SSO_HMAC_KEY_ID"
+            printf 'ROADMAP_SSO_HMAC_SECRET=%s\n' "$ROADMAP_SSO_HMAC_SECRET"
             printf 'ROADMAP_REQUEST_TIMEOUT_MS=5000\n'
             printf 'ROADMAP_INTERNAL_URL=https://%s\n' "$ROADMAP_QA_DOMAIN"
           } > .deploy/.env.backend

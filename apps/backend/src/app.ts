@@ -47,6 +47,8 @@ import aiKnowledgeBaseRouter from "./routes/ai-knowledge-base";
 import aiUsageRouter from "./routes/ai-usage";
 import productFeedbackRouter from "./routes/product-feedback";
 import productFeedbackAdminRouter from "./routes/product-feedback-admin";
+import roadmapSsoRouter from "./routes/roadmap-sso";
+import centralChamadosAdminRouter from "./routes/central-chamados-admin";
 import { prisma } from "./lib/prisma";
 import { errorHandler } from "./middleware/error";
 
@@ -192,7 +194,12 @@ app.use("/api/ai-usage", aiUsageRouter);
 // "Ajuda e sugestões" — integração com a Roadmap (chamados de produto).
 // Ver lib/product-feedback-access-decision.ts para a regra de autorização.
 app.use("/api/product-feedback", productFeedbackRouter);
+// Gated only by the real granular permission, never role/account_type — see
+// routes/roadmap-sso.ts's own header comment for why this can't live under
+// productFeedbackAdminRouter (which requires role==="admin" for everything).
+app.use("/api/product-feedback", roadmapSsoRouter);
 app.use("/api/admin/product-feedback", productFeedbackAdminRouter);
+app.use("/api/admin/central-chamados", centralChamadosAdminRouter);
 
 // ─── 404 Handler ──────────────────────────────────────────────────────────────
 

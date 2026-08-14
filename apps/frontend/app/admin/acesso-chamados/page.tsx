@@ -29,6 +29,7 @@ import { tipoDaContaLogada } from "@/lib/conta-logada";
 import { cn } from "@/lib/utils";
 import { hasAdminModulePermission } from "@/lib/admin-permissions";
 import { useOpenRoadmapPanel } from "@/hooks/use-open-roadmap-panel";
+import { CentralChamadosAccessPanel } from "@/components/central-chamados-access-panel";
 
 type Policy = "ALLOW_ALL_ACTIVE" | "DENY_ALL_EXCEPT_ALLOWED";
 
@@ -872,6 +873,8 @@ export default function AcessoAosChamadosPage() {
           </div>
         </div>
       </div>
+
+      <CentralChamadosAccessPanel />
 
       {/* ── Auditoria ────────────────────────────────────────────────────── */}
       <div className="rounded-xl border border-border/70 bg-background p-5 shadow-sm space-y-2">

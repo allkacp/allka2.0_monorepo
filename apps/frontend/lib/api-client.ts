@@ -1651,8 +1651,61 @@ class ApiClient {
     return this.post("/admin/product-feedback/simulate", { userId });
   }
 
+  // Gated by the real granular permission (sistema OR central_chamados),
+  // never role/account_type — deliberately NOT under /admin/product-feedback
+  // (that prefix's routes require role==="admin" for everything). See
+  // apps/backend/src/routes/roadmap-sso.ts.
+  // ── Gestão da permissão "central_chamados" (quem vê "Roadmap e chamados"
+  // e pode usar o SSO, sem precisar do módulo "sistema" inteiro) ──────────
+  async getCentralChamadosUsers(params: { page: number; limit: number; search?: string; filter?: string }) {
+    return this.get<{
+      items: Array<{
+        id: string;
+        name: string;
+        email: string;
+        userCode: string | null;
+        accountType: string;
+        role: string;
+        isActive: boolean;
+        status: string;
+        profileId: string | null;
+        profileName: string | null;
+        isDedicatedProfile: boolean;
+        hasExplicitCentralChamados: boolean;
+        canOpenRoadmap: boolean;
+      }>;
+      pagination: { page: number; limit: number; total: number };
+    }>("/admin/central-chamados/users", params);
+  }
+
+  async grantCentralChamados(userId: string, reason?: string) {
+    return this.post(`/admin/central-chamados/users/${userId}/grant`, { reason });
+  }
+
+  async revokeCentralChamados(userId: string, reason?: string) {
+    return this.post(`/admin/central-chamados/users/${userId}/revoke`, { reason });
+  }
+
+  async batchGrantCentralChamados(userIds: string[], reason?: string) {
+    return this.post<{ granted: number; skipped: Array<{ id: string; name: string; reason: string }> }>(
+      "/admin/central-chamados/users/batch-grant",
+      { userIds, reason },
+    );
+  }
+
+  async batchRevokeCentralChamados(userIds: string[], reason?: string) {
+    return this.post<{ revoked: number; skipped: Array<{ id: string; name: string; reason: string }> }>(
+      "/admin/central-chamados/users/batch-revoke",
+      { userIds, reason },
+    );
+  }
+
+  async getRoadmapSsoBaseUrl() {
+    return this.get<{ roadmapInternalUrl: string }>("/product-feedback/roadmap-sso/base-url");
+  }
+
   async startRoadmapSso() {
-    return this.post<{ redirectUrl: string }>("/admin/product-feedback/roadmap-sso/start", {});
+    return this.post<{ redirectUrl: string }>("/product-feedback/roadmap-sso/start", {});
   }
 }
 

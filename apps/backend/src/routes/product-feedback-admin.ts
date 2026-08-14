@@ -2,9 +2,9 @@ import { Router } from "express";
 import type { Request, Response, NextFunction } from "express";
 import { z } from "zod";
 import { prisma } from "../lib/prisma";
-import { verifyToken, requirePermission, requireAnyPermission } from "../middleware/auth";
+import { verifyToken, requirePermission } from "../middleware/auth";
 import { parsePagination } from "../middleware/validate";
-import { isRoadmapTechnicallyConfigured, startRoadmapSso, RoadmapClientError } from "../lib/roadmap-client";
+import { isRoadmapTechnicallyConfigured } from "../lib/roadmap-client";
 import { config } from "../config";
 import {
   decideProductFeedbackAccess,
@@ -120,51 +120,13 @@ router.patch("/config", writeGuard, async (req: Request, res: Response, next: Ne
   }
 });
 
-// ── POST /roadmap-sso/start ─────────────────────────────────────────────────
-// One-click login bridge: the caller is already an authenticated Allka
-// admin; this asks the Roadmap to mint a short-lived, single-use token tied
-// to this admin's own email, then hands back a URL that logs them into the
-// Roadmap without retyping credentials — but only if a matching, active,
-// staff-role Roadmap account already exists with that same email. Never
-// creates or promotes anything on either side.
-//
-// Gated by EITHER "sistema" (whoever can already configure the whole
-// product-feedback access system) OR "central_chamados" — a narrower,
-// dedicated module so a founder can hand internal devs/QA reviewers just
-// "can open the Roadmap panel" without also granting the broader "sistema"
-// module. Both modules are plain AdminPermission rows (module is a free
-// string, see routes/permissions.ts) — "central_chamados" is administered
-// the exact same way "sistema" already is, via POST/PUT /api/permissions.
-const roadmapSsoGuard = requireAnyPermission([
-  ["sistema", "view"],
-  ["central_chamados", "view"],
-]);
-
-router.post("/roadmap-sso/start", roadmapSsoGuard, async (req: Request, res: Response, next: NextFunction) => {
-  try {
-    if (!config.ROADMAP_INTERNAL_URL) {
-      res.status(409).json({ error: "URL do painel interno da Roadmap não configurada." });
-      return;
-    }
-    const { ssoToken } = await startRoadmapSso(req.user!.email);
-    await writeAccessAudit({
-      actorId: req.user!.id,
-      action: "roadmap_sso.started",
-      reason: "Login único iniciado para abrir o painel interno da Roadmap",
-    });
-    const base = config.ROADMAP_INTERNAL_URL.replace(/\/$/, "");
-    res.json({ redirectUrl: `${base}/sso/consume?token=${encodeURIComponent(ssoToken)}` });
-  } catch (err) {
-    if (err instanceof RoadmapClientError) {
-      res.status(err.status === 404 ? 404 : 502).json({
-        error:
-          "Não foi possível iniciar o acesso único à Roadmap. Confirme se existe lá uma conta com este mesmo e-mail.",
-      });
-      return;
-    }
-    next(err);
-  }
-});
+// NOTE: the SSO handoff (POST .../roadmap-sso/start, GET .../roadmap-sso/base-url)
+// used to live here, but this whole router is gated by requireAdminWithAudit
+// (role==="admin" for every route) — the SSO handoff must NOT require that,
+// since a founder can grant the narrower "central_chamados" permission to a
+// non-admin account (developer/QA reviewer). It now lives in its own file,
+// routes/roadmap-sso.ts, mounted directly in app.ts with only
+// verifyToken + requireAnyPermission(["sistema","view"], ["central_chamados","view"]).
 
 // ── GET /users — paginated, filtered listing with effective access ─────────
 

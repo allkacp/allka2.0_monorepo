@@ -27,6 +27,14 @@ const baseEnvSchema = z.object({
   ROADMAP_HMAC_SECRET: z.string().optional(),
   ROADMAP_REQUEST_TIMEOUT_MS: z.coerce.number().int().positive().default(5000),
   ROADMAP_INTERNAL_URL: z.string().optional(),
+  // Purpose-separated from ROADMAP_HMAC_* — only ever signs the SSO
+  // handoff (POST .../allka/sso/tickets on the Roadmap), never ticket
+  // creation/lookup. Deliberately optional: lib/roadmap-client.ts falls
+  // back to ROADMAP_HMAC_KEY_ID/SECRET whenever these are unset, so
+  // introducing or rotating this secret is a pure config change, not a
+  // coordinated "both sides at once" step.
+  ROADMAP_SSO_HMAC_KEY_ID: z.string().optional(),
+  ROADMAP_SSO_HMAC_SECRET: z.string().optional(),
 });
 
 // Cross-field: the individual fields above are all .optional() (so the
@@ -71,6 +79,29 @@ export const envSchema = baseEnvSchema.superRefine((data, ctx) => {
       path: ["ROADMAP_HMAC_SECRET"],
       message: "obrigatório e deve ter pelo menos 32 bytes quando PRODUCT_FEEDBACK_ENABLED=true",
     });
+  }
+
+  // Never required (falls back to ROADMAP_HMAC_* — see roadmap-client.ts),
+  // but if only one half of the pair was set, fail fast with a clear boot
+  // error instead of every SSO request quietly failing with a confusing
+  // SIGNATURE_MISMATCH later.
+  const ssoKeyIdSet = Boolean(data.ROADMAP_SSO_HMAC_KEY_ID?.trim());
+  const ssoSecretSet = Boolean(data.ROADMAP_SSO_HMAC_SECRET?.trim());
+  if (ssoKeyIdSet || ssoSecretSet) {
+    if (!ssoKeyIdSet) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["ROADMAP_SSO_HMAC_KEY_ID"],
+        message: "obrigatório quando ROADMAP_SSO_HMAC_SECRET está definido",
+      });
+    }
+    if (!ssoSecretSet || Buffer.byteLength(data.ROADMAP_SSO_HMAC_SECRET ?? "", "utf8") < 32) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["ROADMAP_SSO_HMAC_SECRET"],
+        message: "obrigatório e deve ter pelo menos 32 bytes quando ROADMAP_SSO_HMAC_KEY_ID está definido",
+      });
+    }
   }
 });
 
