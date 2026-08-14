@@ -11,7 +11,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { apiClient } from "@/lib/api-client"
-import { hasAdminModulePermission } from "@/lib/admin-permissions"
+import { canOpenRoadmapPanel } from "@/lib/admin-permissions"
 import { useOpenRoadmapPanel } from "@/hooks/use-open-roadmap-panel"
 import { toast } from "@/hooks/use-toast"
 import {
@@ -180,15 +180,19 @@ const navigationConfig = {
         { name: "Configurações", href: "/admin/configuracoes", icon: Settings },
       ],
     },
-    {
-      name: "Roadmap e chamados",
-      icon: LifeBuoy,
-      color: "from-rose-500 to-rose-600",
-      // Sem href — abre a Central de Roadmap/chamados via SSO numa aba
-      // nova, nunca navega o app mobile pra fora. Mesmo hook do desktop.
-      openInNewTab: true,
-    },
   ],
+}
+
+// "Roadmap e chamados" fica FORA de navigationConfig — sua visibilidade
+// depende só de canOpenRoadmapPanelState (permissão granular real,
+// independente de account_type), nunca de estar dentro do array "admin".
+// Sem href — abre a Central de Roadmap/chamados via SSO numa aba nova,
+// nunca navega o app mobile pra fora. Mesmo hook do desktop.
+const ROADMAP_SIDEBAR_ITEM = {
+  name: "Roadmap e chamados",
+  icon: LifeBuoy,
+  color: "from-rose-500 to-rose-600",
+  openInNewTab: true,
 }
 
 interface AppMenuDrawerProps {
@@ -208,21 +212,21 @@ export function AppMenuDrawer({ open, onClose }: AppMenuDrawerProps) {
   const [expandedItems, setExpandedItems] = useState<string[]>([])
 
   // Mesma regra do desktop (components/sidebar.tsx): sinal de UI só, o
-  // backend (POST .../roadmap-sso/start) é quem realmente decide.
-  const [canOpenRoadmapPanel, setCanOpenRoadmapPanel] = useState(false)
+  // backend (POST .../product-feedback/roadmap-sso/start) é quem realmente
+  // decide. Roda pra QUALQUER account_type — canOpenRoadmapPanel() aplica a
+  // regra certa internamente (sistema só grandfathera pra admin;
+  // central_chamados nunca grandfathera, pra ninguém).
+  const [canOpenRoadmapPanelState, setCanOpenRoadmapPanelState] = useState(false)
   useEffect(() => {
-    if (accountType !== "admin") return
     let cancelled = false
     ;(async () => {
       try {
         const me = await apiClient.getCurrentUser()
         const profile = me?.admin_profile
-        const pode =
-          hasAdminModulePermission(profile, "sistema", "view") ||
-          hasAdminModulePermission(profile, "central_chamados", "view")
-        if (!cancelled) setCanOpenRoadmapPanel(pode)
+        const pode = canOpenRoadmapPanel(accountType, profile)
+        if (!cancelled) setCanOpenRoadmapPanelState(pode)
       } catch {
-        if (!cancelled) setCanOpenRoadmapPanel(false)
+        if (!cancelled) setCanOpenRoadmapPanelState(false)
       }
     })()
     return () => {
@@ -238,11 +242,6 @@ export function AppMenuDrawer({ open, onClose }: AppMenuDrawerProps) {
   }, [roadmapPanel.error])
 
   const getNavigationItems = () => {
-    if (accountType === "admin") {
-      return canOpenRoadmapPanel
-        ? navigationConfig.admin
-        : navigationConfig.admin.filter((item) => item.name !== "Roadmap e chamados")
-    }
     if (accountType === "empresas") {
       return navigationConfig.empresas[accountSubType || "company"] ?? navigationConfig.empresas.company
     }
@@ -260,7 +259,8 @@ export function AppMenuDrawer({ open, onClose }: AppMenuDrawerProps) {
     return (navigationConfig as any)[accountType] || []
   }
 
-  const navigation = getNavigationItems()
+  const resolvedItems = getNavigationItems()
+  const navigation = canOpenRoadmapPanelState ? [...resolvedItems, ROADMAP_SIDEBAR_ITEM] : resolvedItems
 
   const toggleExpanded = (itemName: string) => {
     setExpandedItems((prev) =>

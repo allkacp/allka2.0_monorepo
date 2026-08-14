@@ -56,6 +56,10 @@ async function signedFetch(input: {
   pathname: string;
   query?: Record<string, string>;
   body?: unknown;
+  // Overrides the default (base) signing credentials — used only by
+  // startRoadmapSso() below, which signs with the purpose-separated SSO
+  // pair instead of the one used for ticket creation/lookup.
+  credentials?: { keyId: string; secret: string };
 }): Promise<{ status: number; json: any }> {
   if (!isRoadmapTechnicallyConfigured()) {
     throw new RoadmapClientError("NOT_CONFIGURED", "Integração com a Roadmap não configurada.");
@@ -70,8 +74,8 @@ async function signedFetch(input: {
     pathname: input.pathname,
     rawQuery,
     body: bodyString,
-    keyId: config.ROADMAP_HMAC_KEY_ID!,
-    secret: config.ROADMAP_HMAC_SECRET!,
+    keyId: input.credentials?.keyId ?? config.ROADMAP_HMAC_KEY_ID!,
+    secret: input.credentials?.secret ?? config.ROADMAP_HMAC_SECRET!,
   });
 
   const url = `${baseUrl}${input.pathname}${rawQuery ? `?${rawQuery}` : ""}`;
@@ -210,6 +214,13 @@ export async function startRoadmapSso(email: string): Promise<{ ssoToken: string
     method: "POST",
     pathname: `${CONTRACT_API_PREFIX}/allka/sso/tickets`,
     body: { email },
+    // Purpose-separated from ticket creation/lookup — falls back to the
+    // base ROADMAP_HMAC_* pair whenever the dedicated SSO secret isn't
+    // configured yet (see config.ts).
+    credentials: {
+      keyId: config.ROADMAP_SSO_HMAC_KEY_ID || config.ROADMAP_HMAC_KEY_ID!,
+      secret: config.ROADMAP_SSO_HMAC_SECRET || config.ROADMAP_HMAC_SECRET!,
+    },
   });
   if (status === 200 && json?.ok) {
     return { ssoToken: json.ssoToken };

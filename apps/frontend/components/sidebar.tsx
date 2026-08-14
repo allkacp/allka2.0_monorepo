@@ -23,7 +23,7 @@ import { useSidebar } from "@/contexts/sidebar-context";
 import { SidebarSettingsModal } from "@/components/modals/sidebar-settings-modal";
 import { apiClient } from "@/lib/api-client";
 import { useAgencia } from "@/contexts/agencia-context";
-import { hasAdminModulePermission } from "@/lib/admin-permissions";
+import { canOpenRoadmapPanel } from "@/lib/admin-permissions";
 import { useOpenRoadmapPanel } from "@/hooks/use-open-roadmap-panel";
 import { toast } from "@/hooks/use-toast";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -504,17 +504,23 @@ const navigationConfig = {
         },
       ],
     },
-    {
-      name: "Roadmap e chamados",
-      icon: LifeBuoy,
-      current: false,
-      // Sem href: nunca deve navegar a aba atual — abre a Central de
-      // Roadmap/chamados (allka-roadmap) autenticada por SSO numa aba nova.
-      // Ver hooks/use-open-roadmap-panel.ts (mesma função usada pelo botão
-      // "Abrir painel interno" em /admin/acesso-chamados).
-      openInNewTab: true,
-    },
   ],
+};
+
+// "Roadmap e chamados" is deliberately NOT inside navigationConfig.admin (or
+// any other account-type array) — its visibility is governed purely by the
+// "sistema"/"central_chamados" permission (see canOpenRoadmapPanel below),
+// never by account_type/role. Appended to whichever menu the current user
+// already sees, after that menu's own items are resolved. Sem href: nunca
+// deve navegar a aba atual — abre a Central de Roadmap/chamados
+// (allka-roadmap) autenticada por SSO numa aba nova. Ver
+// hooks/use-open-roadmap-panel.ts (mesma função usada pelo botão "Abrir
+// painel interno" em /admin/acesso-chamados).
+const ROADMAP_SIDEBAR_ITEM = {
+  name: "Roadmap e chamados",
+  icon: LifeBuoy,
+  current: false,
+  openInNewTab: true,
 };
 
 const LEVEL_CONFIG_SIDEBAR = {
@@ -649,25 +655,23 @@ export function Sidebar({ transparent = false }: { transparent?: boolean } = {})
 
   const agencia = useAgencia();
 
-  // "Roadmap e chamados" só aparece para quem tem a permissão granular real
-  // (módulo "sistema" ou "central_chamados", perfil AdminProfile) — o mesmo
-  // sinal que /admin/acesso-chamados já usa, nunca uma checagem por role
-  // string. É só um sinal de UI: o backend (POST .../roadmap-sso/start)
-  // reaplica a mesma regra e é a autoridade de verdade.
-  const [canOpenRoadmapPanel, setCanOpenRoadmapPanel] = useState(false);
+  // "Roadmap e chamados" aparece para QUALQUER account_type com a permissão
+  // granular real (módulo "sistema" só pra admin legado, ou "central_chamados"
+  // pra qualquer um — ver canOpenRoadmapPanel) — nunca uma checagem de
+  // role/account_type isolada. É só um sinal de UI: o backend (POST
+  // .../product-feedback/roadmap-sso/start) reaplica a regra idêntica e é a
+  // autoridade de verdade.
+  const [canOpenRoadmapPanelState, setCanOpenRoadmapPanelState] = useState(false);
   useEffect(() => {
-    if (accountType !== "admin") return;
     let cancelled = false;
     (async () => {
       try {
         const me = await apiClient.getCurrentUser();
         const profile = me?.admin_profile;
-        const pode =
-          hasAdminModulePermission(profile, "sistema", "view") ||
-          hasAdminModulePermission(profile, "central_chamados", "view");
-        if (!cancelled) setCanOpenRoadmapPanel(pode);
+        const pode = canOpenRoadmapPanel(accountType, profile);
+        if (!cancelled) setCanOpenRoadmapPanelState(pode);
       } catch {
-        if (!cancelled) setCanOpenRoadmapPanel(false);
+        if (!cancelled) setCanOpenRoadmapPanelState(false);
       }
     })();
     return () => {
@@ -835,10 +839,7 @@ export function Sidebar({ transparent = false }: { transparent?: boolean } = {})
   const getNavigationItems = () => {
     // Admin users see all menu items
     if (accountType === "admin") {
-      const adminItems = canOpenRoadmapPanel
-        ? navigationConfig.admin
-        : navigationConfig.admin.filter((item) => item.name !== "Roadmap e chamados");
-      return adminItems.map((item: any) => {
+      return navigationConfig.admin.map((item: any) => {
         if (item.name === "Projetos e Tarefas" && item.subitems) {
           return {
             ...item,
@@ -944,7 +945,12 @@ export function Sidebar({ transparent = false }: { transparent?: boolean } = {})
   };
 
   const navigation = (() => {
-    const baseItems = getNavigationItems();
+    const resolvedItems = getNavigationItems();
+    // Appended after whichever menu the current account_type already
+    // resolves to — never inside a single account_type's own array — so
+    // its visibility depends only on canOpenRoadmapPanelState, never on
+    // which branch of getNavigationItems() ran.
+    const baseItems = canOpenRoadmapPanelState ? [...resolvedItems, ROADMAP_SIDEBAR_ITEM] : resolvedItems;
 
     if (customOrder.length === 0) {
       return baseItems;

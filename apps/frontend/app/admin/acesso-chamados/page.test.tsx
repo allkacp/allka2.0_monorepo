@@ -1,6 +1,7 @@
 import { describe, expect, it, vi, beforeEach, afterEach } from "vitest";
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { SidebarProvider } from "@/contexts/sidebar-context";
 
 vi.mock("@/lib/api-client", () => ({
   apiClient: {
@@ -21,11 +22,27 @@ vi.mock("@/lib/api-client", () => ({
     batchSetProductFeedbackOverride: vi.fn(),
     simulateProductFeedbackAccess: vi.fn(),
     startRoadmapSso: vi.fn(),
+    getCentralChamadosUsers: vi.fn(),
+    grantCentralChamados: vi.fn(),
+    revokeCentralChamados: vi.fn(),
+    batchGrantCentralChamados: vi.fn(),
+    batchRevokeCentralChamados: vi.fn(),
   },
 }));
 
 import { apiClient } from "@/lib/api-client";
 import AcessoAosChamadosPage from "@/app/admin/acesso-chamados/page";
+
+// StandardModalDialog (used by the CentralChamadosAccessPanel's
+// ConfirmationDialog) reads useAppFrameMetrics/useSidebar unconditionally,
+// even while closed — every render of this page needs a SidebarProvider.
+function renderPage() {
+  return render(
+    <SidebarProvider>
+      <AcessoAosChamadosPage />
+    </SidebarProvider>,
+  );
+}
 
 function setStoredUser(user: Record<string, unknown> | null) {
   if (user) {
@@ -81,6 +98,10 @@ function mockHappyPathResponses() {
     items: [],
     pagination: { page: 1, limit: 20, total: 0 },
   });
+  (apiClient.getCentralChamadosUsers as any).mockResolvedValue({
+    items: [],
+    pagination: { page: 1, limit: 20, total: 0 },
+  });
 }
 
 beforeEach(() => {
@@ -95,21 +116,21 @@ afterEach(() => {
 describe("AcessoAosChamadosPage — role gate", () => {
   it("blocks a non-admin user without ever calling the admin API", async () => {
     setStoredUser({ role: "company_user", account_type: "empresas" });
-    render(<AcessoAosChamadosPage />);
+    renderPage();
     expect(await screen.findByText("Você não tem permissão para ver esta página.")).toBeInTheDocument();
     expect(apiClient.getProductFeedbackAdminConfig).not.toHaveBeenCalled();
   });
 
   it("blocks when there is no logged-in user at all", async () => {
     setStoredUser(null);
-    render(<AcessoAosChamadosPage />);
+    renderPage();
     expect(await screen.findByText("Você não tem permissão para ver esta página.")).toBeInTheDocument();
   });
 
   it("loads the full page for an admin user", async () => {
     setStoredUser({ role: "admin", account_type: "admin" });
     mockHappyPathResponses();
-    render(<AcessoAosChamadosPage />);
+    renderPage();
 
     await waitFor(() => expect(apiClient.getProductFeedbackAdminConfig).toHaveBeenCalled());
     expect(await screen.findByText("Fulano de Tal")).toBeInTheDocument();
@@ -120,7 +141,7 @@ describe("AcessoAosChamadosPage — role gate", () => {
   it("shows the summary counts returned by the backend", async () => {
     setStoredUser({ role: "admin", account_type: "admin" });
     mockHappyPathResponses();
-    render(<AcessoAosChamadosPage />);
+    renderPage();
 
     await screen.findByText("Fulano de Tal");
     expect(screen.getByText("10")).toBeInTheDocument(); // released
@@ -136,7 +157,7 @@ describe("AcessoAosChamadosPage — role gate", () => {
       account_type: "admin",
       admin_profile: { id: "profile-2", name: "Suporte", is_master: false, is_active: true, permissions: [] },
     });
-    render(<AcessoAosChamadosPage />);
+    renderPage();
 
     expect(await screen.findByText("Você não tem permissão para ver esta página.")).toBeInTheDocument();
     expect(apiClient.getProductFeedbackAdminConfig).not.toHaveBeenCalled();
@@ -157,7 +178,7 @@ describe("AcessoAosChamadosPage — role gate", () => {
         permissions: [{ module: "sistema", action: "view" }],
       },
     });
-    render(<AcessoAosChamadosPage />);
+    renderPage();
 
     await screen.findByText("Fulano de Tal");
     expect(screen.queryByLabelText("Selecionar Fulano de Tal")).not.toBeInTheDocument();
@@ -179,7 +200,7 @@ describe("AcessoAosChamadosPage — role gate", () => {
       pagination: { page: 1, limit: 20, total: 2 },
     });
     const consoleError = vi.spyOn(console, "error").mockImplementation(() => {});
-    render(<AcessoAosChamadosPage />);
+    renderPage();
 
     await screen.findByText("Fulano de Tal");
     await screen.findByText("Ciclana da Silva");
@@ -200,7 +221,7 @@ describe("AcessoAosChamadosPage — role gate", () => {
       technicallyConfigured: false,
       roadmapInternalUrl: null,
     });
-    render(<AcessoAosChamadosPage />);
+    renderPage();
     expect(
       await screen.findByText(/Integração técnica não configurada/),
     ).toBeInTheDocument();
@@ -213,7 +234,7 @@ describe("AcessoAosChamadosPage — batch actions on selected users", () => {
     mockHappyPathResponses();
     (apiClient.batchSetProductFeedbackOverride as any).mockResolvedValue({ updated: 1 });
     const user = userEvent.setup();
-    render(<AcessoAosChamadosPage />);
+    renderPage();
 
     await screen.findByText("Fulano de Tal");
     expect(screen.queryByText(/selecionado\(s\)/)).not.toBeInTheDocument();
@@ -254,7 +275,7 @@ describe("AcessoAosChamadosPage — group management", () => {
     mockWithOneGroup();
     (apiClient.updateProductFeedbackGroup as any).mockResolvedValue({ id: "group-1" });
     const user = userEvent.setup();
-    render(<AcessoAosChamadosPage />);
+    renderPage();
 
     await screen.findByText("Beta testers");
     await user.click(screen.getByRole("button", { name: /^editar$/i }));
@@ -273,7 +294,7 @@ describe("AcessoAosChamadosPage — group management", () => {
     });
     (apiClient.removeProductFeedbackGroupMember as any).mockResolvedValue({ ok: true });
     const user = userEvent.setup();
-    render(<AcessoAosChamadosPage />);
+    renderPage();
 
     await screen.findByText("Beta testers");
     await user.click(screen.getByText("Beta testers"));
@@ -290,7 +311,7 @@ describe("AcessoAosChamadosPage — group management", () => {
     mockWithOneGroup();
     (apiClient.addProductFeedbackGroupMembers as any).mockResolvedValue({ added: 1 });
     const user = userEvent.setup();
-    render(<AcessoAosChamadosPage />);
+    renderPage();
 
     await screen.findByText("Fulano de Tal");
     await user.click(screen.getByLabelText("Selecionar Fulano de Tal"));
@@ -320,7 +341,7 @@ describe("AcessoAosChamadosPage — simulate and audit pagination", () => {
       source: "override",
     });
     const user = userEvent.setup();
-    render(<AcessoAosChamadosPage />);
+    renderPage();
 
     await screen.findByText("Fulano de Tal");
     await user.click(screen.getByRole("button", { name: /simular/i }));
@@ -337,7 +358,7 @@ describe("AcessoAosChamadosPage — simulate and audit pagination", () => {
       pagination: { page: 1, limit: 20, total: 25 },
     });
     const user = userEvent.setup();
-    render(<AcessoAosChamadosPage />);
+    renderPage();
 
     await screen.findByText("Fulano de Tal");
     expect(await screen.findByText("Página 1 — 25 eventos")).toBeInTheDocument();

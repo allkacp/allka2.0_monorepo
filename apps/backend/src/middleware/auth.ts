@@ -129,6 +129,70 @@ export function evaluateAnyPermission(
 }
 
 /**
+ * Decision core specifically for "who can use the Allka -> Roadmap SSO
+ * handoff" (routes/roadmap-sso.ts, and the frontend's mirror in
+ * lib/admin-permissions.ts). Deliberately NOT the same rule as
+ * evaluateAnyPermission()'s generic "no profile = full access" grandfather:
+ *
+ * - That grandfather exists only because "sistema" is a module every
+ *   existing admin implicitly relied on before the granular permission
+ *   system existed — removing it would have locked out working admins.
+ *   It was never meant to apply to any account_type other than "admin".
+ * - "central_chamados" is a brand-new module with no legacy expectation at
+ *   all. It always requires an explicit, active grant — for every
+ *   account_type, including "admin". Grandfathering it too would silently
+ *   let every account that has never been assigned a profile through,
+ *   which for non-admin account_types (empresas/agencias/nomades/lider) is
+ *   effectively everyone — exactly the "usuário comum vê" bug this
+ *   function exists to prevent.
+ */
+export function evaluateRoadmapSsoAccess(
+  accountType: string,
+  perfil: AdminProfileLike,
+): boolean {
+  if (accountType === "admin") {
+    if (!perfil || !perfil.is_active || perfil.is_master) return true;
+    if (perfil.permissions.some((p) => p.module === "sistema" && p.action === "view")) return true;
+  }
+  if (!perfil || !perfil.is_active) return false;
+  if (perfil.is_master) return true;
+  return perfil.permissions.some((p) => p.module === "central_chamados" && p.action === "view");
+}
+
+export function requireRoadmapSsoAccess(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+): void {
+  if (!req.user) {
+    res.status(401).json({ error: "Não autenticado" });
+    return;
+  }
+
+  prisma.user
+    .findUnique({
+      where: { id: req.user.id },
+      select: {
+        admin_profile: {
+          select: {
+            is_master: true,
+            is_active: true,
+            permissions: { select: { module: true, action: true } },
+          },
+        },
+      },
+    })
+    .then((user) => {
+      if (!evaluateRoadmapSsoAccess(req.user!.account_type, user?.admin_profile)) {
+        res.status(403).json({ error: "Seu perfil de acesso não permite abrir a Central de roadmap e chamados." });
+        return;
+      }
+      next();
+    })
+    .catch(next);
+}
+
+/**
  * Same rule as requirePermission(), but passes if the profile has ANY one
  * of the given (module, action) pairs — for features a founder wants to
  * hand to a narrower group (e.g. "central_chamados") without also handing

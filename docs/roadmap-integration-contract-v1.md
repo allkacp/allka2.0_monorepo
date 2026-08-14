@@ -1,10 +1,12 @@
-# Contrato de integração Allka ↔ Roadmap — v1.2.0
+# Contrato de integração Allka ↔ Roadmap — v1.3.0
 
 Status: **criação/consulta de chamados (Lote 1) em produção/QA, testado ponta a ponta local e
-online.** O handoff de SSO para a equipe interna (seção 11) é novo nesta versão — implementado e
-testado localmente; o deploy em QA/produção segue o plano de rollout na seção 12/13 dos changelogs
-de deploy, não coberto por este documento (ver `entregas/` e os workflows de CI/CD dos dois
-repositórios).
+online.** O handoff de SSO para a equipe interna (seção 11) corrige nesta versão uma contradição
+de permissão (o item não depende mais de `role=admin`, seção 11.2), separa o segredo técnico do
+SSO do de criação de chamados (seção 11.6) e adiciona o salto `/sso/await` contra corrida com o
+Basic Auth (seção 11.7) — implementado e testado localmente com automação de navegador real; o
+deploy em QA/produção segue o plano de rollout na seção 12/13 dos changelogs de deploy, não
+coberto por este documento (ver `entregas/` e os workflows de CI/CD dos dois repositórios).
 
 Este documento é o espelho versionado, com os mesmos schemas, de
 `allka-roadmap/docs/integration-contract-v1.md`. Ao alterar um lado, altere o outro e suba
@@ -182,38 +184,51 @@ v1.1.0, idempotência, e do lado Allka o controle de acesso (grupos/overrides/au
 cliente HTTP assinado, os endpoints `/api/product-feedback/*` e `/api/admin/product-feedback/*`,
 o botão "Ajuda e sugestões", "Meus chamados" e a página `/admin/acesso-chamados`.
 
-## 11. SSO handoff (Allka → Roadmap, equipe interna) — v1.2.0
+## 11. SSO handoff (Allka → Roadmap, equipe interna) — v1.3.0
 
 Login único para quem já tem conta própria no Roadmap (`OWNER`/`ADMIN`/`DEVELOPER`/
-`QA_REVIEWER`) com o **mesmo e-mail** de uma conta admin da Allka: clicar em "Roadmap e
-chamados" (sidebar) ou "Abrir painel interno" (`/admin/acesso-chamados`) abre o Roadmap já
-autenticado, sem digitar senha de novo. Reaproveita a mesma infraestrutura HMAC do resto deste
-contrato — não é OAuth/JWT federado, é um token de handoff de uso único trocado por uma sessão
-normal do Roadmap.
+`QA_REVIEWER`) com o **mesmo e-mail** de uma conta Allka autorizada: clicar em "Roadmap e
+chamados" (sidebar, qualquer `account_type`) ou "Abrir painel interno" (`/admin/acesso-chamados`)
+abre o Roadmap já autenticado, sem digitar senha de novo. Reaproveita a infraestrutura HMAC do
+resto deste contrato, com um segredo próprio (seção 11.6) — não é OAuth/JWT federado, é um token
+de handoff de uso único trocado por uma sessão normal do Roadmap.
+
+**v1.3.0 corrige uma contradição real da v1.2.0**: o item da sidebar e o pedido de handoff eram
+gateados por `role=admin` além da permissão granular — o que contradizia a própria promessa de
+"central_chamados libera um não-admin". A partir desta versão, **nada aqui depende de
+`role`/`account_type`** — só da permissão granular (seção 11.2). v1.3.0 também acrescenta um
+passo intermediário (`/sso/await`) para o token nunca correr risco de expirar durante o primeiro
+Basic Auth (seção 11.7) e separa o segredo técnico do SSO do segredo de criação de chamados
+(seção 11.6).
 
 ```mermaid
 sequenceDiagram
-    participant U as Admin Allka (staff)
+    participant U as Usuário Allka autorizado (qualquer conta)
     participant AF as Allka (nova aba)
     participant AB as Allka backend
     participant RB as Roadmap backend
-    participant RF as Roadmap (SsoConsumePage)
+    participant RF as Roadmap (/sso/await → SsoConsumePage)
 
     U->>AF: Clica "Roadmap e chamados" (sidebar) ou "Abrir painel interno"
     AF->>AF: window.open("about:blank") — síncrono, dentro do clique
-    AF->>AB: POST /api/admin/product-feedback/roadmap-sso/start
-    AB->>AB: requireAnyPermission(sistema.view | central_chamados.view)
-    AB->>RB: POST /api/v1/integrations/allka/sso/tickets { email } (HMAC assinado)
+    AF->>AB: GET /api/product-feedback/roadmap-sso/base-url
+    AB-->>AF: { roadmapInternalUrl }
+    AF->>RF: popup.location.href = roadmapInternalUrl + "/sso/await?origin=..."
+    Note over RF: Basic Auth do Caddy resolve aqui, ANTES de qualquer token existir
+    RF->>AF: postMessage({type:"allka-roadmap-sso-ready"}) para window.opener
+    AF->>AB: POST /api/product-feedback/roadmap-sso/start
+    AB->>AB: evaluateRoadmapSsoAccess(accountType, perfil) — sem checar role
+    AB->>RB: POST /api/v1/integrations/allka/sso/tickets { email } (HMAC, segredo dedicado)
     RB->>RB: Busca User por email; exige active + role elegível
     alt não elegível
         RB-->>AB: 404 NOT_ELIGIBLE
-        AB-->>AF: 404/502 (mensagem genérica e amigável)
-        AF->>AF: fecha a aba em branco
+        AB-->>AF: 404/503 (mensagem genérica e amigável)
+        AF->>AF: fecha a aba
     else elegível
-        RB->>RB: cria SsoHandoffTicket (hash do token, expira em 60s)
+        RB->>RB: cria SsoHandoffTicket (hash do token, expira em 60s a partir de AGORA)
         RB-->>AB: { ok:true, ssoToken }
         AB-->>AF: { redirectUrl: ROADMAP_INTERNAL_URL + "/sso/consume?token=..." }
-        AF->>RF: popup.location.href = redirectUrl
+        AF->>RF: popup.location.href = redirectUrl (mesma aba, Basic Auth já resolvido)
         RF->>RF: window.opener = null; strip token da URL (history.replaceState)
         RF->>RB: POST /auth/sso/consume { token }
         RB->>RB: updateMany(consumedAt=null → agora) — só ganha quem chegar primeiro
@@ -227,23 +242,44 @@ sequenceDiagram
 
 | Endpoint | Lado | Autenticação | Descrição |
 |---|---|---|---|
-| `POST /api/admin/product-feedback/roadmap-sso/start` | Allka | sessão Allka (`role=admin` + `requireAnyPermission(["sistema","view"], ["central_chamados","view"])`) | Pede ao Roadmap um token de handoff para o e-mail do admin logado; devolve `redirectUrl` |
-| `POST /api/v1/integrations/allka/sso/tickets` | Roadmap | HMAC (mesmo esquema de `/allka/work-items`) | Emite o token de 60s se o e-mail bater com uma conta ativa e elegível |
+| `GET /api/product-feedback/roadmap-sso/base-url` | Allka | sessão Allka + `evaluateRoadmapSsoAccess` | URL pública do Roadmap, para navegar a aba ANTES de pedir o token (seção 11.7) |
+| `POST /api/product-feedback/roadmap-sso/start` | Allka | sessão Allka + `evaluateRoadmapSsoAccess` (nunca `role=admin`) | Pede ao Roadmap um token de handoff para o e-mail do usuário logado; devolve `redirectUrl` |
+| `POST /api/v1/integrations/allka/sso/tickets` | Roadmap | HMAC, **segredo dedicado** (seção 11.6), mesmo esquema de `/allka/work-items` | Emite o token de 60s se o e-mail bater com uma conta ativa e elegível |
 | `POST /auth/sso/consume` | Roadmap | nenhuma (o token É a prova) | Troca o token por uma sessão normal do Roadmap (mesmos cookies do `/auth/login`) |
+| `GET /sso/await` (Roadmap, página pública) | Roadmap | Basic Auth do Caddy (camada externa) | Página token-less que só confirma, via `postMessage`, que o Basic Auth já foi resolvido |
+
+Note que as duas rotas do lado Allka moveram de `/api/admin/product-feedback/...` (v1.2.0) para
+`/api/product-feedback/...` — deliberado: viviam sob o router `product-feedback-admin.ts`, que
+exige `role=admin` para TODA rota; agora vivem em `routes/roadmap-sso.ts`, um router próprio,
+gated só por `evaluateRoadmapSsoAccess`.
 
 ### 11.2 Quem pode pedir / quem pode entrar
 
-- **Pedir** (`roadmap-sso/start`): qualquer usuário Allka com `role=admin` **e** a permissão
-  granular `sistema.view` **ou** `central_chamados.view` (perfil `AdminProfile`/
-  `AdminPermission` — nunca uma checagem de string no nome do papel). `central_chamados` é um
-  módulo dedicado, administrado exatamente como `sistema` já é (linhas em `AdminPermission` via
-  `POST`/`PUT /api/permissions`) — existe para o founder liberar devs/QA só para isto, sem dar o
-  módulo `sistema` inteiro.
+- **Pedir** (`roadmap-sso/base-url` e `roadmap-sso/start`): qualquer usuário Allka autenticado,
+  **de qualquer `account_type`**, para quem `evaluateRoadmapSsoAccess(accountType, perfil)` seja
+  verdadeiro. Essa função (não a genérica `requireAnyPermission`) tem uma regra deliberadamente
+  assimétrica:
+  - módulo **`sistema`** só libera quando `accountType === "admin"` — é o grandfather legado
+    (perfil ausente/inativo/`is_master` → libera), que já vale para todo outro
+    `requirePermission("sistema", ...)` da plataforma. Nunca se aplica a `empresas`/`agencias`/
+    `nomades`/`lider`.
+  - módulo **`central_chamados`** **nunca** tem grandfather, para nenhum `account_type` —
+    sempre exige um `AdminProfile` ativo com a permissão explícita (ou `is_master=true`). É assim
+    que um `account_type` não-admin (um desenvolvedor ou revisor QA que loga como `empresas`,
+    `agencias` etc.) pode ganhar acesso sem que isso abra a porta pra qualquer conta comum sem
+    perfil (a esmagadora maioria da base).
+  - Nunca uma checagem de string no nome do papel/role.
 - **Entrar de fato** (`sso/consume`): só `User.role` do Roadmap em `OWNER`, `ADMIN`, `DEVELOPER`
   ou `QA_REVIEWER`, `active=true`, `email` idêntico ao da conta Allka que pediu. `REQUESTER` e
   `VIEWER` nunca são elegíveis. **Nunca cria nem promove conta** — se não existir uma conta
   Roadmap com aquele e-mail e papel elegível, o pedido falha com uma mensagem genérica
   (`NOT_ELIGIBLE`), sem revelar se o e-mail existe com outro papel ou não existe de jeito nenhum.
+- **Conceder `central_chamados`**: `/admin/acesso-chamados` tem um painel dedicado
+  (`central-chamados-admin.ts`, gated por `role=admin` + `sistema.edit` — só quem já tem o
+  módulo largo pode conceder o estreito) com busca, seleção em lote, confirmação e auditoria. Por
+  usuário e perfil ser 1:1 no schema (`User.admin_profile_id`), conceder atribui um perfil
+  dedicado único ("Acesso — Central de Roadmap", só com `central_chamados/view`) — se o usuário
+  já tiver outro perfil, o pedido é recusado com uma mensagem clara em vez de trocar silenciosamente.
 
 ### 11.3 Propriedades do token
 
@@ -269,7 +305,7 @@ sequenceDiagram
 | `400` | ambos | corpo inválido (e-mail malformado, token ausente/curto) |
 | `401` | `sso/consume` | token inexistente, expirado ou já consumido — mensagem: "Link de acesso expirado ou já utilizado. Faça login normalmente." |
 | `401` | `sso/consume` | conta ficou inativa/não-elegível entre a emissão e o consumo |
-| `403` | `roadmap-sso/start` | admin Allka sem `sistema.view` nem `central_chamados.view` |
+| `403` | `roadmap-sso/base-url`, `roadmap-sso/start` | `evaluateRoadmapSsoAccess` retornou falso para a conta logada (seção 11.2) |
 | `404` | `sso/tickets` | e-mail sem conta Roadmap elegível (`NOT_ELIGIBLE`, mensagem genérica) |
 | `409` | `sso/consume` | corrida perdida (outra requisição já consumiu o mesmo token no meio-tempo) — mesma resposta 401 genérica acima, não distingue de "expirado" |
 | `503`/502 | `roadmap-sso/start` | Roadmap fora do ar, `ROADMAP_INTERNAL_URL` não configurada, ou integração técnica desligada — mensagem amigável: "Não foi possível abrir a Central de roadmap e chamados. Tente novamente." |
@@ -282,24 +318,81 @@ sequenceDiagram
   `login.success`.
 - `roadmap_sso.started` (Allka, `ProductFeedbackAccessAudit`) — ao pedir o handoff, pelo mesmo
   `writeAccessAudit` já usado pelo resto de `/admin/acesso-chamados`.
+- `central_chamados.granted` / `central_chamados.revoked` (Allka, `ProductFeedbackAccessAudit`)
+  — ao conceder/revogar o módulo pelo painel de `/admin/acesso-chamados` (individual ou em lote);
+  grava quem concedeu, para quem, e o motivo opcional digitado na confirmação. Aparece na mesma
+  seção "Auditoria" da página, sem UI separada.
 - Nenhum log, em nenhum dos dois lados, grava o token completo ou a assinatura HMAC recebida.
 
 ### 11.6 Segredo técnico
 
-O handoff reaproveita o **mesmo** par `ROADMAP_HMAC_KEY_ID`/`ROADMAP_HMAC_SECRET` (Allka) e
-`ALLKA_HMAC_KEY_ID`/`ALLKA_HMAC_SECRET` (Roadmap) já usado para assinar `/allka/work-items` —
-decisão deliberada, não uma senha de usuário reaproveitada como segredo técnico. Não há
-separação criptográfica de finalidade entre "assinar criação de chamado" e "assinar pedido de
-SSO": ambos são chamadas servidor-a-servidor pela mesma parte confiável (o backend da Allka),
-sob a mesma política de rotação, então um segredo por finalidade só duplicaria a rotação sem
-reduzir o raio de explosão real (quem tem o segredo já pode fazer as duas coisas de qualquer
-forma, por ser o mesmo backend). Se um dia o SSO precisar de uma parte confiável diferente da
-que cria chamados, aí sim vale um segredo próprio.
+**v1.3.0 separa o segredo do SSO do segredo de criação de chamados** — na v1.2.0 os dois
+reaproveitavam o mesmo par `ROADMAP_HMAC_KEY_ID`/`ROADMAP_HMAC_SECRET` (Allka) /
+`ALLKA_HMAC_KEY_ID`/`ALLKA_HMAC_SECRET` (Roadmap). A decisão original partia da premissa de que
+"é o mesmo backend confiável dos dois lados, então não reduz o raio de explosão real separar" —
+mas login de sessão (SSO) e criação de registro (`work-items`) são operações de sensibilidade
+diferente o suficiente para não valer a pena continuar arriscando: um vazamento do par de
+`work-items` (usado em mais integrações, mais superfície) não deveria também permitir logar como
+qualquer desenvolvedor/QA do Roadmap.
 
-### 11.7 O que ainda falta
+- **Novo par dedicado**: `ROADMAP_SSO_HMAC_KEY_ID`/`ROADMAP_SSO_HMAC_SECRET` (Allka, ao assinar
+  `POST .../allka/sso/tickets`) e `ALLKA_SSO_HMAC_KEY_ID`/`ALLKA_SSO_HMAC_SECRET` (Roadmap, ao
+  verificar essa mesma rota). Só essa rota usa este par; `/allka/work-items` continua no par base.
+- **Fallback automático, sem downtime**: se o par dedicado não estiver setado num ambiente,
+  `config.ts` (dos dois lados) cai de volta pro par base (`ssoKeyId: env.ALLKA_SSO_HMAC_KEY_ID ||
+  env.ALLKA_HMAC_KEY_ID`). Isso significa que introduzir ou rotacionar o par dedicado é uma pura
+  mudança de configuração — a integração nunca fica fora do ar entre "só o par base existe" e "o
+  par dedicado passou a existir" nos dois ambientes.
+- **Nunca publicados**: os valores reais foram gerados com `openssl rand -hex 32`, setados via
+  `gh secret set` (GitHub Actions, write-only) e no `.env` local (gitignored) de cada repo;
+  verificados batendo entre os dois lados por hash SHA-256, nunca em texto puro em log, commit ou
+  neste documento.
+- **Roteamento**: a rota de SSO do lado Roadmap foi movida para um router próprio, montado num
+  prefixo mais específico (`.../allka/sso`, registrado antes de `.../allka`) — ver a lição de
+  roteamento abaixo.
 
-- O botão só aparece para quem já tem `role=admin` na Allka — um usuário não-admin que seja
-  desenvolvedor/QA e devesse enxergar o item ainda não tem um segundo ponto de entrada.
-- Não há UI dedicada para administrar o módulo `central_chamados` (hoje é via chamada direta a
-  `POST`/`PUT /api/permissions`, igual `sistema` já era) — só uma tela de perfis conectada de
-  verdade ao backend real resolveria isso para os dois módulos de uma vez.
+**Lição de roteamento (causa raiz de um bug real deste round)**: montar dois routers Express no
+MESMO prefixo (`.../allka`) faz o `router.use()` do primeiro interceptar toda requisição que bate
+no prefixo, mesmo que a rota específica só exista no segundo router — o `/sso/tickets` estava
+sendo verificado (e rejeitado) pelo middleware HMAC do router de `work-items`, com o par de
+segredo errado, antes de o router de SSO ser sequer alcançado. A correção definitiva foi montar o
+router de SSO num prefixo estritamente mais específico e não sobreposto (`.../allka/sso`), e não
+qualquer ajuste de segredo ou de ordem de import.
+
+### 11.7 Fluxo de dois saltos (`/sso/await`) — evita a corrida com o Basic Auth
+
+O ambiente do Roadmap fica atrás de Basic Auth (Caddy), uma camada de rede externa ao aplicativo.
+Antes da v1.3.0, o primeiro acesso de um usuário nunca autenticado no navegador contra aquele
+domínio corria o risco de consumir os 60 segundos de validade do token de SSO enquanto o usuário
+ainda estava digitando a credencial do Basic Auth (que É diferente da senha da conta Roadmap) —
+o token podia expirar antes mesmo de a página de consumo carregar.
+
+A solução não foi aumentar a validade do token (fixada deliberadamente curta, seção 11.3) nem
+remover o Basic Auth (camada de proteção externa e independente da aplicação). Em vez disso, o
+clique passou a abrir a aba num salto intermediário, ANTES de pedir qualquer token:
+
+1. A aba nova navega direto para `{ROADMAP_INTERNAL_URL}/sso/await?origin=...` — uma página
+   pública e sem token do Roadmap. O Basic Auth do Caddy resolve aqui (browser já teria essa
+   credencial em cache depois do primeiro uso; se não tiver, o usuário digita agora, sem pressão
+   de tempo nenhuma, porque não existe token ainda).
+2. Só depois de `/sso/await` carregar (o que garante que o Basic Auth já passou) é que ela avisa
+   a aba original via `postMessage` (`{type:"allka-roadmap-sso-ready"}`, validando `origin` e
+   `event.source` dos dois lados).
+3. Só então a Allka pede o token (`roadmap-sso/start`) e navega a MESMA aba (já autenticada pelo
+   Basic Auth) para `/sso/consume?token=...` — os 60 segundos do token só começam a correr depois
+   que a única parte fora do controle da aplicação (o Basic Auth) já foi resolvida.
+
+Isso também elimina popup-blockers: o `window.open("about:blank")` acontece de forma síncrona
+dentro do clique original (antes de qualquer `await`), e a mesma referência de aba é reaproveitada
+nos dois saltos via `tab.location.href`.
+
+### 11.8 O que ainda falta
+
+- `central_chamados` concede um perfil `AdminProfile` dedicado por ser 1:1 usuário↔perfil no
+  schema atual — um usuário que precise de `central_chamados` **e** de outro módulo ao mesmo
+  tempo não é atendido pelo painel de `/admin/acesso-chamados` hoje (precisaria editar o perfil
+  dele diretamente em `/admin/permissoes`). Só um modelo de permissões muitos-para-muitos
+  resolveria isso de vez.
+- `/sso/await` depende do `postMessage` chegar — se o usuário tiver bloqueado popups/scripts de
+  terceiros de forma agressiva o suficiente para quebrar `window.opener`, o fluxo cai no timeout
+  de 5 minutos com uma mensagem genérica, sem uma alternativa por polling ainda.
