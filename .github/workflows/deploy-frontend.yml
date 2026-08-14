@@ -147,7 +147,11 @@ jobs:
             # preserva BACKEND_IMAGE via sed depois, ver abaixo).
             printf 'ROADMAP_QA_DOMAIN=%s\n' "$ROADMAP_QA_DOMAIN"
             printf 'ROADMAP_QA_BASIC_AUTH_USER=%s\n' "$ROADMAP_QA_BASIC_AUTH_USER"
-            printf 'ROADMAP_QA_BASIC_AUTH_HASH=%s\n' "$ROADMAP_QA_BASIC_AUTH_HASH"
+            # $$ escapes a literal "$" for Compose's own ${VAR} interpolation
+            # — see the matching comment in deploy-backend.yml for why this
+            # is required (bcrypt hashes contain literal "$" delimiters that
+            # get mangled mid-value if left unescaped here).
+            printf 'ROADMAP_QA_BASIC_AUTH_HASH=%s\n' "${ROADMAP_QA_BASIC_AUTH_HASH//\$/\$\$}"
           } > .deploy/.env
 
       - name: Configure SSH
