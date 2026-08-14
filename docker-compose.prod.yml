@@ -55,6 +55,10 @@ services:
       - "3001"
     networks:
       - allka_internal
+      # Needs to reach allka-roadmap-qa-backend by name for the product-
+      # feedback integration (POST/GET work-items). Never joins qa-internal
+      # (the Roadmap's own MySQL network) — only this shared proxy network.
+      - allka-proxy-shared
 
   frontend:
     image: ${FRONTEND_IMAGE:?FRONTEND_IMAGE is required}
@@ -73,6 +77,9 @@ services:
     environment:
       FRONTEND_DOMAIN: ${FRONTEND_DOMAIN:-allka.store}
       API_DOMAIN: ${API_DOMAIN:-api.allka.store}
+      ROADMAP_QA_DOMAIN: ${ROADMAP_QA_DOMAIN:-roadmap-qa.allka.store}
+      ROADMAP_QA_BASIC_AUTH_USER: ${ROADMAP_QA_BASIC_AUTH_USER:-}
+      ROADMAP_QA_BASIC_AUTH_HASH: ${ROADMAP_QA_BASIC_AUTH_HASH:-}
     ports:
       - "80:80"
       - "443:443"
@@ -82,6 +89,10 @@ services:
       - caddy_config:/config
     networks:
       - allka_internal
+      # So Caddy can reverse-proxy to allka-roadmap-qa-backend/-frontend by
+      # their container aliases, exactly like it already does for this
+      # stack's own backend/frontend over allka_internal.
+      - allka-proxy-shared
 
 volumes:
   mysql_data:
@@ -91,3 +102,12 @@ volumes:
 networks:
   allka_internal:
     driver: bridge
+  # Shared between this repo and allka-roadmap's QA deploy — created
+  # idempotently by the deploy workflow before `docker compose up`
+  # (`docker network inspect ... || docker network create ...`), never
+  # managed by compose itself (external: true). The Roadmap's own MySQL
+  # never joins this network; only its backend/frontend do, so Caddy and
+  # this backend can resolve them by name without exposing any Roadmap
+  # port on the host.
+  allka-proxy-shared:
+    external: true

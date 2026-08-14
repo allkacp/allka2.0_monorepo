@@ -2,30 +2,35 @@ import {
   LoginPageTemplate,
   type LoginRoleConfig,
 } from "@/components/login-page-template";
+import { devLoginPrefill } from "@/lib/dev-login-credentials";
+
+const devAgency = devLoginPrefill("AGENCY");
+const devPartner = devLoginPrefill("AGENCY_PARTNER");
 
 const config: LoginRoleConfig = {
   gradient:
     "linear-gradient(135deg, #000000 0%, #1a2a6f 40%, #c81a7f 75%, #1a2a6f 100%)",
-  defaultEmail: "gabriel@lamego.com.vc",
-  defaultPassword: "123456",
+  defaultEmail: devAgency?.email,
+  defaultPassword: devAgency?.password,
   redirectPath: "/agency/dashboard",
   accessType: "AGENCY",
-  devUser: { email: "gabriel@lamego.com.vc" },
   // Partner não tem login próprio: é uma Agency com o convite aceito. O
   // seletor existe para dar para escolher, na tela, qual das duas visões
-  // testar — a conta do Valdério é a única Partner ativa hoje.
+  // testar — os e-mails só existem em desenvolvimento local (ver
+  // lib/dev-login-credentials.ts); em produção o campo fica vazio e a
+  // pessoa digita o próprio e-mail.
   perfis: [
     {
       id: "agency",
       label: "Agência",
-      email: "gabriel@lamego.com.vc",
+      email: devAgency?.email ?? "",
       redirectPath: "/agency/dashboard",
       descricao: "Painel padrão da agência",
     },
     {
       id: "partner",
       label: "Partner",
-      email: "valderio@lamego.com.vc",
+      email: devPartner?.email ?? "",
       redirectPath: "/partner/dashboard",
       descricao: "Agência com programa de parceria",
     },

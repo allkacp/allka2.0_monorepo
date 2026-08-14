@@ -2,14 +2,16 @@ import {
   LoginPageTemplate,
   type LoginRoleConfig,
 } from "@/components/login-page-template";
+import { devLoginPrefill } from "@/lib/dev-login-credentials";
+
+const dev = devLoginPrefill("COMPANY");
 
 const config: LoginRoleConfig = {
   gradient: "linear-gradient(135deg, #000000 0%, #1a2a6f 55%, #c81a7f 100%)",
-  defaultEmail: "rose@lamego.com.vc",
-  defaultPassword: "123456",
+  defaultEmail: dev?.email,
+  defaultPassword: dev?.password,
   redirectPath: "/company/dashboard",
   accessType: "COMPANY",
-  devUser: { email: "rose@lamego.com.vc" },
   translations: {
     pt: {
       tag: "Allka Company",

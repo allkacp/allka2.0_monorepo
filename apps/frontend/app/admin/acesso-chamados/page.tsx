@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { Fragment, useCallback, useEffect, useState } from "react";
 import {
   ExternalLink,
   RefreshCw,
@@ -777,8 +777,8 @@ export default function AcessoAosChamadosPage() {
             </thead>
             <tbody>
               {users.map((u) => (
-                <>
-                  <tr key={u.id} className="border-b border-border/40">
+                <Fragment key={u.id}>
+                  <tr className="border-b border-border/40">
                     <td className="py-2 pr-3">
                       {canEdit && (
                         <input
@@ -828,14 +828,14 @@ export default function AcessoAosChamadosPage() {
                     </td>
                   </tr>
                   {simulateResults[u.id] && (
-                    <tr key={`${u.id}-sim`} className="border-b border-border/40 bg-blue-50/50 dark:bg-blue-950/20">
+                    <tr className="border-b border-border/40 bg-blue-50/50 dark:bg-blue-950/20">
                       <td></td>
                       <td colSpan={6} className="py-1.5 pr-3 text-[10px] text-gray-600 dark:text-gray-300">
                         Simulação: {simulateResults[u.id]!.canUse ? "liberado" : "bloqueado"} — motivo interno: {simulateResults[u.id]!.reason} (origem: {simulateResults[u.id]!.source})
                       </td>
                     </tr>
                   )}
-                </>
+                </Fragment>
               ))}
             </tbody>
           </table>

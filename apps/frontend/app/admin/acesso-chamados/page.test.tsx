@@ -164,6 +164,32 @@ describe("AcessoAosChamadosPage — role gate", () => {
     expect(screen.queryByRole("button", { name: /criar grupo/i })).not.toBeInTheDocument();
   });
 
+  it("renders the users table without a React 'missing key' console error (regression)", async () => {
+    setStoredUser({ role: "admin", account_type: "admin" });
+    mockHappyPathResponses();
+    // The original bug only reproduces with 2+ rows: a lone unkeyed
+    // Fragment in a one-item array doesn't reliably trigger React's
+    // warning, but a second sibling does.
+    (apiClient.getProductFeedbackAdminUsers as any).mockResolvedValue({
+      items: [
+        { id: "user-1", name: "Fulano de Tal", email: "fulano@example.com", userCode: "00001", accountType: "empresas", isActive: true, status: "ativo", canUse: true, source: "default_policy", override: null, groupCount: 0 },
+        { id: "user-2", name: "Ciclana da Silva", email: "ciclana@example.com", userCode: "00002", accountType: "empresas", isActive: true, status: "ativo", canUse: true, source: "default_policy", override: null, groupCount: 0 },
+      ],
+      pagination: { page: 1, limit: 20, total: 2 },
+    });
+    const consoleError = vi.spyOn(console, "error").mockImplementation(() => {});
+    render(<AcessoAosChamadosPage />);
+
+    await screen.findByText("Fulano de Tal");
+    await screen.findByText("Ciclana da Silva");
+
+    const keyWarnings = consoleError.mock.calls.filter((call) =>
+      String(call[0]).includes("unique key prop"),
+    );
+    expect(keyWarnings).toHaveLength(0);
+    consoleError.mockRestore();
+  });
+
   it("warns when the technical integration isn't configured", async () => {
     setStoredUser({ role: "admin", account_type: "admin" });
     mockHappyPathResponses();

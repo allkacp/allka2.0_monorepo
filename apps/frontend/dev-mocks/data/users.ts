@@ -19,7 +19,7 @@ export const mockUsers: MockUser[] = [
   {
     id: "1",
     name: "Vinicius Guardia",
-    email: "cp@lamego.com.vc",
+    email: "vinicius.guardia@allka.test",
     role: "admin",
     account_type: "admin",
     is_active: true,

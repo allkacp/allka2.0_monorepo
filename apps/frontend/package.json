@@ -10,7 +10,8 @@
     "build:dev": "vite build --mode development",
     "preview": "vite preview",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "test:no-leaked-credentials": "node scripts/scan-build-for-credentials.mjs"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",
