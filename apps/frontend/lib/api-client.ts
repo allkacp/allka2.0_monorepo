@@ -1553,6 +1553,7 @@ class ApiClient {
   }
 
   async createProductFeedbackWorkItem(body: {
+    clientSubmissionId: string;
     type: "PROBLEM" | "IDEA" | "IMPROVEMENT";
     title: string;
     description: string;
@@ -1624,6 +1625,10 @@ class ApiClient {
 
   async updateProductFeedbackGroup(id: string, body: Record<string, any>) {
     return this.patch(`/admin/product-feedback/groups/${id}`, body);
+  }
+
+  async getProductFeedbackGroupMembers(id: string) {
+    return this.get(`/admin/product-feedback/groups/${id}/members`);
   }
 
   async archiveProductFeedbackGroup(id: string) {

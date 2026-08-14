@@ -9,12 +9,21 @@ import { CONTRACT_API_PREFIX } from "./roadmap-integration-contract";
  * authenticated Allka session first (see lib/product-feedback-access-decision.ts).
  */
 
+// Redundant with config.ts's own startup-time refinement (which already
+// refuses to boot with PRODUCT_FEEDBACK_ENABLED=true and an incomplete or
+// invalid config) — kept here too, on purpose, so this specific function
+// stays correct on its own even if config.ts's validation is ever
+// refactored or weakened without someone noticing the coupling.
 export function isRoadmapTechnicallyConfigured(): boolean {
   return Boolean(
     config.PRODUCT_FEEDBACK_ENABLED &&
+      config.PRODUCT_FEEDBACK_ENVIRONMENT &&
       config.ROADMAP_API_URL &&
+      /^https?:\/\/.+/.test(config.ROADMAP_API_URL) &&
       config.ROADMAP_HMAC_KEY_ID &&
-      config.ROADMAP_HMAC_SECRET,
+      config.ROADMAP_HMAC_KEY_ID.trim().length > 0 &&
+      config.ROADMAP_HMAC_SECRET &&
+      Buffer.byteLength(config.ROADMAP_HMAC_SECRET, "utf8") >= 32,
   );
 }
 
@@ -153,6 +162,8 @@ function identityToQuery(identity: RoadmapIdentity): Record<string, string> {
 
 export type RoadmapPublicWorkItem = {
   protocol: string;
+  type: "PROBLEM" | "IDEA" | "IMPROVEMENT";
+  title: string;
   status: "RECEIVED" | "IN_PROGRESS" | "IN_VALIDATION" | "RESOLVED" | "REOPENED" | "CANCELLED";
   updatedAt: string;
   solutionSummary: string | null;

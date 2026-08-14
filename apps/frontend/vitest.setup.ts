@@ -43,3 +43,70 @@ Object.defineProperty(globalThis, "localStorage", {
   writable: true,
   configurable: true,
 });
+
+// jsdom has no matchMedia — this is a minimal but real implementation
+// (parses "(min-width: Npx)"/"(max-width: Npx)" against the current
+// window.innerWidth, supports the addEventListener/removeEventListener
+// listener API), not just a stub returning matches:false, so tests that
+// actually depend on breakpoint behavior (e.g. sidebar-visibility-aware
+// hooks) can resize the jsdom window and see real change events.
+type MediaQueryListenerEntry = { mql: MediaQueryList; listener: () => void };
+const mediaQueryListeners: MediaQueryListenerEntry[] = [];
+
+function evaluateMediaQuery(query: string): boolean {
+  const minWidthMatch = query.match(/min-width:\s*(\d+)px/);
+  const maxWidthMatch = query.match(/max-width:\s*(\d+)px/);
+  let result = true;
+  if (minWidthMatch) result = result && window.innerWidth >= Number(minWidthMatch[1]);
+  if (maxWidthMatch) result = result && window.innerWidth <= Number(maxWidthMatch[1]);
+  return result;
+}
+
+function createMatchMedia(query: string): MediaQueryList {
+  const mql = {
+    media: query,
+    get matches() {
+      return evaluateMediaQuery(query);
+    },
+    onchange: null,
+    addEventListener: (_event: string, listener: () => void) => {
+      mediaQueryListeners.push({ mql: mql as unknown as MediaQueryList, listener });
+    },
+    removeEventListener: (_event: string, listener: () => void) => {
+      const index = mediaQueryListeners.findIndex((entry) => entry.listener === listener);
+      if (index >= 0) mediaQueryListeners.splice(index, 1);
+    },
+    addListener: () => {},
+    removeListener: () => {},
+    dispatchEvent: () => true,
+  } as unknown as MediaQueryList;
+  return mql;
+}
+
+window.matchMedia = ((query: string) => createMatchMedia(query)) as typeof window.matchMedia;
+
+// jsdom doesn't implement the Pointer Events capture API or scrollIntoView,
+// which Radix UI's Select (and other popover-based primitives) call when
+// opening/closing via pointer interaction — without these no-op stand-ins,
+// userEvent.click() on a Select trigger throws
+// "target.hasPointerCapture is not a function".
+if (!window.HTMLElement.prototype.hasPointerCapture) {
+  window.HTMLElement.prototype.hasPointerCapture = () => false;
+}
+if (!window.HTMLElement.prototype.setPointerCapture) {
+  window.HTMLElement.prototype.setPointerCapture = () => {};
+}
+if (!window.HTMLElement.prototype.releasePointerCapture) {
+  window.HTMLElement.prototype.releasePointerCapture = () => {};
+}
+if (!window.HTMLElement.prototype.scrollIntoView) {
+  window.HTMLElement.prototype.scrollIntoView = () => {};
+}
+
+/** Test helper: resize jsdom's window and fire matchMedia change listeners,
+ * mirroring what a real browser does when crossing a breakpoint. */
+export function setTestViewportWidth(width: number) {
+  Object.defineProperty(window, "innerWidth", { writable: true, configurable: true, value: width });
+  window.dispatchEvent(new Event("resize"));
+  mediaQueryListeners.forEach(({ listener }) => listener());
+}

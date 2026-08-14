@@ -90,6 +90,57 @@ describe("WorkItemContextualCreateRequestSchema", () => {
     const badType = { ...validCreateRequest, type: "BUG" };
     assert.throws(() => WorkItemContextualCreateRequestSchema.parse(badType));
   });
+
+  function withPathname(pathname: string) {
+    return { ...validCreateRequest, page: { ...validCreateRequest.page, pathname } };
+  }
+
+  it("accepts a clean relative pathname", () => {
+    assert.equal(
+      WorkItemContextualCreateRequestSchema.parse(withPathname("/admin/usuarios")).page.pathname,
+      "/admin/usuarios",
+    );
+  });
+
+  it("rejects a full URL instead of a sanitized pathname", () => {
+    assert.throws(() =>
+      WorkItemContextualCreateRequestSchema.parse(
+        withPathname("https://allka.store/empresas/123?token=secret#frag"),
+      ),
+    );
+  });
+
+  it("rejects a pathname carrying a querystring", () => {
+    assert.throws(() => WorkItemContextualCreateRequestSchema.parse(withPathname("/empresas/123?token=secret")));
+  });
+
+  it("rejects a pathname carrying a fragment", () => {
+    assert.throws(() => WorkItemContextualCreateRequestSchema.parse(withPathname("/empresas/123#section")));
+  });
+
+  it("rejects an empty pathname", () => {
+    assert.throws(() => WorkItemContextualCreateRequestSchema.parse(withPathname("")));
+  });
+
+  it("rejects a protocol-relative pathname (//host looks like a different origin to a browser)", () => {
+    assert.throws(() => WorkItemContextualCreateRequestSchema.parse(withPathname("//evil.example.com/path")));
+  });
+
+  it("rejects a pathname that doesn't start with a slash", () => {
+    assert.throws(() => WorkItemContextualCreateRequestSchema.parse(withPathname("empresas/123")));
+  });
+
+  it("rejects a pathname containing a backslash (smuggled host separator in some parsers)", () => {
+    assert.throws(() => WorkItemContextualCreateRequestSchema.parse(withPathname("/\\evil.example.com")));
+  });
+
+  it("rejects a page context with an extra unknown field", () => {
+    const withExtraField = {
+      ...validCreateRequest,
+      page: { ...validCreateRequest.page, extraField: "not allowed" },
+    };
+    assert.throws(() => WorkItemContextualCreateRequestSchema.parse(withExtraField));
+  });
 });
 
 describe("WorkItemContextualCreateResponseSchema", () => {
@@ -103,6 +154,8 @@ describe("WorkItemContextualCreateResponseSchema", () => {
 describe("WorkItemPublicStatusSchema and WorkItemListQuerySchema", () => {
   const validStatus = {
     protocol: "ALK-482",
+    type: "PROBLEM" as const,
+    title: "O botão de salvar não responde",
     status: "IN_PROGRESS" as const,
     updatedAt: "2026-08-13T10:00:00.000Z",
     solutionSummary: null,

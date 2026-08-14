@@ -2542,11 +2542,22 @@ model ProductFeedbackAccessAudit {
 // do que existe no Roadmap (identificado só pelo protocolo ALK-...), pra
 // "Meus chamados" não depender de o Roadmap estar sempre no ar pra listar
 // pelo menos os protocolos e o último status conhecido.
+// Doubles as this feature's local idempotency ledger, not just a display
+// cache. idempotency_key is the frontend-generated clientSubmissionId
+// (stable across retries of the same logical submit — see
+// product-feedback-widget.tsx), reused as-is as the idempotencyKey sent to
+// the Roadmap. A row is created BEFORE the Roadmap call, with protocol
+// still null — that's the "pending" state a retry finds and resumes from
+// if the previous attempt crashed/timed out between calling the Roadmap
+// and finishing the local write. payload_hash lets a retry be told apart
+// from a genuine reuse-with-different-content (409), without needing a
+// network round trip to the Roadmap just to find out.
 model ProductFeedbackWorkItemLink {
   id                String    @id @default(cuid())
   user_id           String
   user              User      @relation(fields: [user_id], references: [id], onDelete: Cascade)
-  protocol          String    @unique
+  protocol          String?   @unique
+  payload_hash      String
   correlation_id    String
   idempotency_key   String    @unique
   type              String

@@ -8,7 +8,7 @@
     "build": "tsc",
     "start": "node dist/index.js",
     "test:roadmap-contract": "tsx --test src/lib/roadmap-integration-contract.test.ts",
-    "test:unit": "tsx --test src/test-support/require-test-database.test.ts src/lib/product-feedback-access-decision.test.ts src/lib/hmac.test.ts",
+    "test:unit": "tsx --test src/test-support/require-test-database.test.ts src/lib/product-feedback-access-decision.test.ts src/lib/hmac.test.ts src/lib/product-feedback-config-validation.test.ts",
     "test:product-feedback": "tsx scripts/run-db-tests.ts src/routes/product-feedback.integration.test.ts",
     "db:migrate": "prisma migrate dev",
     "db:deploy": "prisma migrate deploy",

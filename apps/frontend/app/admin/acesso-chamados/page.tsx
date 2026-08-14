@@ -1,5 +1,17 @@
 import { useCallback, useEffect, useState } from "react";
-import { ExternalLink, RefreshCw, ShieldAlert, Users, Ban, CheckCircle2, PlusCircle } from "lucide-react";
+import {
+  ExternalLink,
+  RefreshCw,
+  ShieldAlert,
+  Users,
+  Ban,
+  CheckCircle2,
+  PlusCircle,
+  ChevronDown,
+  ChevronRight,
+  X,
+  FlaskConical,
+} from "lucide-react";
 import { PageHeader } from "@/components/page-header";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -52,6 +64,8 @@ type Group = {
   memberCount: number;
 };
 
+type GroupMember = { userId: string; name: string; email: string; userCode: string | null; addedAt: string };
+
 type AuditEntry = {
   id: string;
   actor_id: string | null;
@@ -63,13 +77,59 @@ type AuditEntry = {
   created_at: string;
 };
 
+type SimulateResult = { canUse: boolean; reason: string; source: string };
+
 const policyLabels: Record<Policy, string> = {
   ALLOW_ALL_ACTIVE: "Liberar para todo usuário ativo (padrão)",
   DENY_ALL_EXCEPT_ALLOWED: "Bloquear todos, exceto quem for liberado",
 };
 
+function toDateInputValue(iso: string | null): string {
+  if (!iso) return "";
+  return iso.slice(0, 10);
+}
+
+function dateInputToIso(value: string): string | null {
+  if (!value) return null;
+  return new Date(`${value}T23:59:59.999Z`).toISOString();
+}
+
 export default function AcessoAosChamadosPage() {
   const isAdmin = tipoDaContaLogada() === "admin";
+
+  // A role "admin" já é checada acima (client-side, sinal fraco). O acesso de
+  // verdade a esta tela é granular (perfil AdminProfile, módulo "sistema"):
+  // o backend já exige requirePermission("sistema","view"/"edit") em toda
+  // rota (ver product-feedback-admin.ts) — aqui só refletimos a mesma regra
+  // para a UI não aparecer aberta a um admin sem essa permissão específica.
+  // Perfil ausente/inativo ou is_master segue o mesmo comportamento legado
+  // do middleware: libera tudo.
+  const [permissionCheck, setPermissionCheck] = useState<"checking" | "granted" | "denied">("checking");
+  const [canEdit, setCanEdit] = useState(false);
+
+  useEffect(() => {
+    if (!isAdmin) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const me = await apiClient.getCurrentUser();
+        const profile = me?.admin_profile;
+        const semControleGranular = !profile || profile.is_active === false || profile.is_master === true;
+        const perms: { module: string; action: string }[] = profile?.permissions ?? [];
+        const podeVer = semControleGranular || perms.some((p) => p.module === "sistema" && p.action === "view");
+        const podeEditar = semControleGranular || perms.some((p) => p.module === "sistema" && p.action === "edit");
+        if (!cancelled) {
+          setPermissionCheck(podeVer ? "granted" : "denied");
+          setCanEdit(podeEditar);
+        }
+      } catch {
+        if (!cancelled) setPermissionCheck("denied");
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [isAdmin]);
 
   const [config, setConfig] = useState<ConfigResponse | null>(null);
   const [summary, setSummary] = useState<Summary | null>(null);
@@ -79,11 +139,26 @@ export default function AcessoAosChamadosPage() {
   const [filter, setFilter] = useState<"all" | "allowed" | "blocked" | "override" | "inactive">("all");
   const [groups, setGroups] = useState<Group[]>([]);
   const [audit, setAudit] = useState<AuditEntry[]>([]);
+  const [auditPagination, setAuditPagination] = useState({ page: 1, limit: 20, total: 0 });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [message, setMessage] = useState("");
   const [newGroupName, setNewGroupName] = useState("");
   const [newGroupEffect, setNewGroupEffect] = useState<"ALLOW" | "DENY">("ALLOW");
   const [newGroupPriority, setNewGroupPriority] = useState(0);
+  const [newGroupExpiresAt, setNewGroupExpiresAt] = useState("");
+  const [newGroupReason, setNewGroupReason] = useState("");
+
+  const [selectedUserIds, setSelectedUserIds] = useState<Set<string>>(new Set());
+  const [batchReason, setBatchReason] = useState("");
+  const [batchGroupId, setBatchGroupId] = useState("");
+
+  const [expandedGroupId, setExpandedGroupId] = useState<string | null>(null);
+  const [groupMembers, setGroupMembers] = useState<GroupMember[]>([]);
+  const [groupMembersLoading, setGroupMembersLoading] = useState(false);
+  const [groupEdits, setGroupEdits] = useState<Record<string, Partial<Group>>>({});
+
+  const [simulateResults, setSimulateResults] = useState<Record<string, SimulateResult>>({});
 
   const loadAll = useCallback(async () => {
     setLoading(true);
@@ -94,7 +169,7 @@ export default function AcessoAosChamadosPage() {
         apiClient.getProductFeedbackAdminSummary(),
         apiClient.getProductFeedbackAdminUsers({ page: pagination.page, limit: pagination.limit, search, filter }),
         apiClient.getProductFeedbackGroups(),
-        apiClient.getProductFeedbackAudit({ limit: 20 }),
+        apiClient.getProductFeedbackAudit({ page: auditPagination.page, limit: auditPagination.limit }),
       ]);
       setConfig(cfg);
       setSummary(sum);
@@ -102,17 +177,18 @@ export default function AcessoAosChamadosPage() {
       setPagination(usersRes.pagination);
       setGroups(groupsRes.items);
       setAudit(auditRes.items);
+      setAuditPagination(auditRes.pagination);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Não foi possível carregar os dados.");
     } finally {
       setLoading(false);
     }
-  }, [pagination.page, pagination.limit, search, filter]);
+  }, [pagination.page, pagination.limit, search, filter, auditPagination.page, auditPagination.limit]);
 
   useEffect(() => {
-    if (isAdmin) void loadAll();
+    if (isAdmin && permissionCheck === "granted") void loadAll();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isAdmin, pagination.page, filter]);
+  }, [isAdmin, permissionCheck, pagination.page, filter, auditPagination.page]);
 
   async function toggleEnabled(next: boolean) {
     if (!config) return;
@@ -155,9 +231,14 @@ export default function AcessoAosChamadosPage() {
         name: newGroupName.trim(),
         effect: newGroupEffect,
         priority: newGroupPriority,
+        expiresAt: dateInputToIso(newGroupExpiresAt),
+        reason: newGroupReason.trim() || undefined,
       });
       setNewGroupName("");
       setNewGroupPriority(0);
+      setNewGroupExpiresAt("");
+      setNewGroupReason("");
+      setMessage("Grupo criado.");
       await loadAll();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Não foi possível criar o grupo.");
@@ -168,17 +249,146 @@ export default function AcessoAosChamadosPage() {
     if (!window.confirm("Arquivar este grupo? Ele deixa de valer para todos os membros.")) return;
     try {
       await apiClient.archiveProductFeedbackGroup(id);
+      setMessage("Grupo arquivado.");
       await loadAll();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Não foi possível arquivar o grupo.");
     }
   }
 
-  if (!isAdmin) {
+  function startEditingGroup(group: Group) {
+    setGroupEdits((prev) => ({
+      ...prev,
+      [group.id]: {
+        effect: group.effect,
+        priority: group.priority,
+        active: group.active,
+        expiresAt: group.expiresAt,
+        reason: group.reason,
+      },
+    }));
+  }
+
+  async function saveGroupEdit(groupId: string) {
+    const edit = groupEdits[groupId];
+    if (!edit) return;
+    try {
+      await apiClient.updateProductFeedbackGroup(groupId, {
+        effect: edit.effect,
+        priority: edit.priority,
+        active: edit.active,
+        expiresAt: edit.expiresAt ?? null,
+        reason: edit.reason ?? undefined,
+      });
+      setGroupEdits((prev) => {
+        const next = { ...prev };
+        delete next[groupId];
+        return next;
+      });
+      setMessage("Grupo atualizado.");
+      await loadAll();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Não foi possível salvar o grupo.");
+    }
+  }
+
+  async function toggleGroupExpanded(groupId: string) {
+    if (expandedGroupId === groupId) {
+      setExpandedGroupId(null);
+      setGroupMembers([]);
+      return;
+    }
+    setExpandedGroupId(groupId);
+    setGroupMembersLoading(true);
+    try {
+      const res = await apiClient.getProductFeedbackGroupMembers(groupId);
+      setGroupMembers(res.items);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Não foi possível carregar os membros do grupo.");
+    } finally {
+      setGroupMembersLoading(false);
+    }
+  }
+
+  async function removeGroupMember(groupId: string, userId: string) {
+    try {
+      await apiClient.removeProductFeedbackGroupMember(groupId, userId);
+      setGroupMembers((prev) => prev.filter((m) => m.userId !== userId));
+      await loadAll();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Não foi possível remover o membro.");
+    }
+  }
+
+  function toggleUserSelected(userId: string) {
+    setSelectedUserIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(userId)) next.delete(userId);
+      else next.add(userId);
+      return next;
+    });
+  }
+
+  function toggleSelectAllOnPage() {
+    setSelectedUserIds((prev) => {
+      const allSelected = users.every((u) => prev.has(u.id));
+      if (allSelected) return new Set();
+      return new Set(users.map((u) => u.id));
+    });
+  }
+
+  async function applyBatchOverride(effect: "ALLOW" | "DENY" | "INHERIT") {
+    if (selectedUserIds.size === 0) return;
+    try {
+      await apiClient.batchSetProductFeedbackOverride({
+        userIds: Array.from(selectedUserIds),
+        effect,
+        reason: batchReason.trim() || undefined,
+      });
+      setMessage(`${selectedUserIds.size} usuário(s) atualizado(s).`);
+      setSelectedUserIds(new Set());
+      setBatchReason("");
+      await loadAll();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Não foi possível aplicar em lote.");
+    }
+  }
+
+  async function applyBatchAddToGroup() {
+    if (selectedUserIds.size === 0 || !batchGroupId) return;
+    try {
+      await apiClient.addProductFeedbackGroupMembers(batchGroupId, Array.from(selectedUserIds));
+      setMessage(`${selectedUserIds.size} usuário(s) adicionado(s) ao grupo.`);
+      setSelectedUserIds(new Set());
+      setBatchGroupId("");
+      await loadAll();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Não foi possível adicionar ao grupo.");
+    }
+  }
+
+  async function runSimulation(userId: string) {
+    try {
+      const res = await apiClient.simulateProductFeedbackAccess(userId);
+      setSimulateResults((prev) => ({ ...prev, [userId]: res }));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Não foi possível simular o acesso.");
+    }
+  }
+
+  if (!isAdmin || permissionCheck === "denied") {
     return (
       <div className="space-y-6">
         <PageHeader title="Acesso aos chamados" description="Acesso restrito ao Admin." />
         <p className="text-sm text-gray-500">Você não tem permissão para ver esta página.</p>
+      </div>
+    );
+  }
+
+  if (permissionCheck === "checking") {
+    return (
+      <div className="space-y-6">
+        <PageHeader title="Acesso aos chamados" description="Verificando permissão..." />
       </div>
     );
   }
@@ -207,8 +417,19 @@ export default function AcessoAosChamadosPage() {
       />
 
       {error && (
-        <div className="rounded-xl border border-red-200 bg-red-50 text-red-700 text-sm px-4 py-3 dark:bg-red-950/30 dark:border-red-800 dark:text-red-300">
+        <div className="rounded-xl border border-red-200 bg-red-50 text-red-700 text-sm px-4 py-3 dark:bg-red-950/30 dark:border-red-800 dark:text-red-300 flex items-center justify-between">
           {error}
+          <button onClick={() => setError("")} aria-label="Fechar">
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+      )}
+      {message && (
+        <div className="rounded-xl border border-emerald-200 bg-emerald-50 text-emerald-700 text-sm px-4 py-3 dark:bg-emerald-950/30 dark:border-emerald-800 dark:text-emerald-300 flex items-center justify-between">
+          {message}
+          <button onClick={() => setMessage("")} aria-label="Fechar">
+            <X className="h-4 w-4" />
+          </button>
         </div>
       )}
 
@@ -216,7 +437,7 @@ export default function AcessoAosChamadosPage() {
       <div className="rounded-xl border border-border/70 bg-background p-5 shadow-sm space-y-4">
         <div className="flex items-center justify-between flex-wrap gap-4">
           <div className="flex items-center gap-3">
-            <Switch checked={config?.enabled ?? false} onCheckedChange={toggleEnabled} disabled={!config} />
+            <Switch checked={config?.enabled ?? false} onCheckedChange={toggleEnabled} disabled={!config || !canEdit} />
             <div>
               <p className="text-sm font-medium">Produto ligado</p>
               <p className="text-xs text-gray-500">
@@ -226,7 +447,7 @@ export default function AcessoAosChamadosPage() {
                   </span>
                 ) : (
                   <span className="text-amber-600 dark:text-amber-400 inline-flex items-center gap-1">
-                    <ShieldAlert className="h-3.5 w-3.5" /> Integração técnica não configurada — ninguém consegue usar mesmo com o produto ligado
+                    <ShieldAlert className="h-3.5 w-3.5" /> Integração técnica não configurada — não é possível ligar o produto
                   </span>
                 )}
               </p>
@@ -234,7 +455,7 @@ export default function AcessoAosChamadosPage() {
           </div>
           <div className="w-full sm:w-72">
             <label className="text-xs font-medium text-gray-500 mb-1 block">Política padrão</label>
-            <Select value={config?.defaultPolicy ?? "ALLOW_ALL_ACTIVE"} onValueChange={(v) => changePolicy(v as Policy)}>
+            <Select value={config?.defaultPolicy ?? "ALLOW_ALL_ACTIVE"} onValueChange={(v) => changePolicy(v as Policy)} disabled={!canEdit}>
               <SelectTrigger className="w-full text-xs">
                 <SelectValue />
               </SelectTrigger>
@@ -273,6 +494,7 @@ export default function AcessoAosChamadosPage() {
       {/* ── Grupos ───────────────────────────────────────────────────────── */}
       <div className="rounded-xl border border-border/70 bg-background p-5 shadow-sm space-y-4">
         <h2 className="text-sm font-semibold">Grupos de acesso</h2>
+        {canEdit && (
         <div className="flex flex-wrap gap-2 items-end">
           <div>
             <label className="text-xs text-gray-500 block mb-1">Nome</label>
@@ -299,28 +521,165 @@ export default function AcessoAosChamadosPage() {
               className="w-24 text-xs"
             />
           </div>
+          <div>
+            <label className="text-xs text-gray-500 block mb-1">Expira em (opcional)</label>
+            <Input
+              type="date"
+              value={newGroupExpiresAt}
+              onChange={(e) => setNewGroupExpiresAt(e.target.value)}
+              className="w-36 text-xs"
+            />
+          </div>
+          <div className="flex-1 min-w-[160px]">
+            <label className="text-xs text-gray-500 block mb-1">Motivo (opcional)</label>
+            <Input value={newGroupReason} onChange={(e) => setNewGroupReason(e.target.value)} className="w-full text-xs" />
+          </div>
           <Button size="sm" className="btn-brand text-xs gap-1.5" onClick={() => void createGroup()}>
             <PlusCircle className="h-3.5 w-3.5" />
             Criar grupo
           </Button>
         </div>
+        )}
         <div className="space-y-2">
           {groups.length === 0 && <p className="text-xs text-gray-400">Nenhum grupo criado ainda.</p>}
-          {groups.map((g) => (
-            <div key={g.id} className="flex items-center justify-between gap-2 rounded-lg border border-border/60 px-3 py-2">
-              <div className="flex items-center gap-2 text-xs">
-                <Badge variant={g.effect === "ALLOW" ? "default" : "destructive"} className="text-[10px]">
-                  {g.effect}
-                </Badge>
-                <span className="font-medium">{g.name}</span>
-                <span className="text-gray-400">prioridade {g.priority}</span>
-                <span className="text-gray-400">{g.memberCount} membro{g.memberCount !== 1 ? "s" : ""}</span>
+          {groups.map((g) => {
+            const isExpanded = expandedGroupId === g.id;
+            const edit = groupEdits[g.id];
+            return (
+              <div key={g.id} className="rounded-lg border border-border/60">
+                <div className="flex items-center justify-between gap-2 px-3 py-2">
+                  <button
+                    type="button"
+                    className="flex items-center gap-2 text-xs flex-1 text-left"
+                    onClick={() => void toggleGroupExpanded(g.id)}
+                  >
+                    {isExpanded ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
+                    <Badge variant={g.effect === "ALLOW" ? "default" : "destructive"} className="text-[10px]">
+                      {g.effect}
+                    </Badge>
+                    <span className="font-medium">{g.name}</span>
+                    {!g.active && <span className="text-gray-400">(inativo)</span>}
+                    <span className="text-gray-400">prioridade {g.priority}</span>
+                    <span className="text-gray-400">{g.memberCount} membro{g.memberCount !== 1 ? "s" : ""}</span>
+                    {g.expiresAt && <span className="text-gray-400">expira {toDateInputValue(g.expiresAt)}</span>}
+                  </button>
+                  {canEdit && (
+                  <div className="flex gap-1 shrink-0">
+                    {!edit && (
+                      <Button variant="ghost" size="sm" className="text-xs" onClick={() => startEditingGroup(g)}>
+                        Editar
+                      </Button>
+                    )}
+                    <Button variant="ghost" size="sm" className="text-xs text-red-600" onClick={() => void archiveGroup(g.id)}>
+                      Arquivar
+                    </Button>
+                  </div>
+                  )}
+                </div>
+
+                {edit && (
+                  <div className="border-t border-border/40 px-3 py-3 flex flex-wrap gap-2 items-end bg-gray-50 dark:bg-gray-900/30">
+                    <div>
+                      <label className="text-[10px] text-gray-500 block mb-1">Efeito</label>
+                      <Select
+                        value={edit.effect}
+                        onValueChange={(v) => setGroupEdits((prev) => ({ ...prev, [g.id]: { ...prev[g.id], effect: v as "ALLOW" | "DENY" } }))}
+                      >
+                        <SelectTrigger className="w-24 text-xs">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="ALLOW">ALLOW</SelectItem>
+                          <SelectItem value="DENY">DENY</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div>
+                      <label className="text-[10px] text-gray-500 block mb-1">Prioridade</label>
+                      <Input
+                        type="number"
+                        value={edit.priority ?? 0}
+                        onChange={(e) => setGroupEdits((prev) => ({ ...prev, [g.id]: { ...prev[g.id], priority: Number(e.target.value) || 0 } }))}
+                        className="w-20 text-xs"
+                      />
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      <Switch
+                        checked={edit.active ?? true}
+                        onCheckedChange={(v) => setGroupEdits((prev) => ({ ...prev, [g.id]: { ...prev[g.id], active: v } }))}
+                      />
+                      <span className="text-[10px] text-gray-500">Ativo</span>
+                    </div>
+                    <div>
+                      <label className="text-[10px] text-gray-500 block mb-1">Expira em</label>
+                      <Input
+                        type="date"
+                        value={toDateInputValue(edit.expiresAt ?? null)}
+                        onChange={(e) =>
+                          setGroupEdits((prev) => ({ ...prev, [g.id]: { ...prev[g.id], expiresAt: dateInputToIso(e.target.value) } }))
+                        }
+                        className="w-36 text-xs"
+                      />
+                    </div>
+                    <div className="flex-1 min-w-[160px]">
+                      <label className="text-[10px] text-gray-500 block mb-1">Motivo</label>
+                      <Input
+                        value={edit.reason ?? ""}
+                        onChange={(e) => setGroupEdits((prev) => ({ ...prev, [g.id]: { ...prev[g.id], reason: e.target.value } }))}
+                        className="w-full text-xs"
+                      />
+                    </div>
+                    <Button size="sm" className="btn-brand text-xs" onClick={() => void saveGroupEdit(g.id)}>
+                      Salvar
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="text-xs"
+                      onClick={() =>
+                        setGroupEdits((prev) => {
+                          const next = { ...prev };
+                          delete next[g.id];
+                          return next;
+                        })
+                      }
+                    >
+                      Cancelar
+                    </Button>
+                  </div>
+                )}
+
+                {isExpanded && (
+                  <div className="border-t border-border/40 px-3 py-3">
+                    <p className="text-[10px] font-semibold text-gray-500 mb-2">Membros</p>
+                    {groupMembersLoading && <p className="text-xs text-gray-400">Carregando...</p>}
+                    {!groupMembersLoading && groupMembers.length === 0 && (
+                      <p className="text-xs text-gray-400">Nenhum membro. Selecione usuários na tabela abaixo e use “Adicionar ao grupo”.</p>
+                    )}
+                    <div className="space-y-1">
+                      {groupMembers.map((m) => (
+                        <div key={m.userId} className="flex items-center justify-between text-xs py-1">
+                          <span>
+                            {m.name} <span className="text-gray-400">({m.email})</span>
+                          </span>
+                          {canEdit && (
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              className="h-6 px-2 text-[10px] text-red-600"
+                              onClick={() => void removeGroupMember(g.id, m.userId)}
+                            >
+                              Remover
+                            </Button>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
-              <Button variant="ghost" size="sm" className="text-xs text-red-600" onClick={() => void archiveGroup(g.id)}>
-                Arquivar
-              </Button>
-            </div>
-          ))}
+            );
+          })}
         </div>
       </div>
 
@@ -354,10 +713,60 @@ export default function AcessoAosChamadosPage() {
           </div>
         </div>
 
+        {selectedUserIds.size > 0 && (
+          <div className="rounded-lg border border-blue-200 bg-blue-50 dark:bg-blue-950/30 dark:border-blue-800 px-3 py-2.5 flex flex-wrap items-center gap-2">
+            <span className="text-xs font-medium">{selectedUserIds.size} selecionado(s)</span>
+            <Input
+              placeholder="Motivo (opcional)"
+              value={batchReason}
+              onChange={(e) => setBatchReason(e.target.value)}
+              className="w-48 text-xs"
+            />
+            <Button size="sm" className="h-7 text-[10px] bg-emerald-600 hover:bg-emerald-700 text-white" onClick={() => void applyBatchOverride("ALLOW")}>
+              Liberar selecionados
+            </Button>
+            <Button size="sm" variant="destructive" className="h-7 text-[10px]" onClick={() => void applyBatchOverride("DENY")}>
+              Bloquear selecionados
+            </Button>
+            <Button size="sm" variant="outline" className="h-7 text-[10px]" onClick={() => void applyBatchOverride("INHERIT")}>
+              Herdar (remover exceção)
+            </Button>
+            <span className="text-gray-300">|</span>
+            <Select value={batchGroupId} onValueChange={setBatchGroupId}>
+              <SelectTrigger className="w-40 h-7 text-[10px]" aria-label="Escolher grupo para adicionar em lote">
+                <SelectValue placeholder="Escolher grupo" />
+              </SelectTrigger>
+              <SelectContent>
+                {groups.map((g) => (
+                  <SelectItem key={g.id} value={g.id}>
+                    {g.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Button size="sm" variant="outline" className="h-7 text-[10px]" disabled={!batchGroupId} onClick={() => void applyBatchAddToGroup()}>
+              Adicionar ao grupo
+            </Button>
+            <Button size="sm" variant="ghost" className="h-7 text-[10px] ml-auto" onClick={() => setSelectedUserIds(new Set())}>
+              Limpar seleção
+            </Button>
+          </div>
+        )}
+
         <div className="overflow-x-auto">
           <table className="w-full text-xs">
             <thead>
               <tr className="text-left text-gray-500 border-b border-border/60">
+                <th className="py-2 pr-3">
+                  {canEdit && (
+                    <input
+                      type="checkbox"
+                      checked={users.length > 0 && users.every((u) => selectedUserIds.has(u.id))}
+                      onChange={toggleSelectAllOnPage}
+                      aria-label="Selecionar todos nesta página"
+                    />
+                  )}
+                </th>
                 <th className="py-2 pr-3">Nome</th>
                 <th className="py-2 pr-3">E-mail</th>
                 <th className="py-2 pr-3">Acesso</th>
@@ -368,32 +777,65 @@ export default function AcessoAosChamadosPage() {
             </thead>
             <tbody>
               {users.map((u) => (
-                <tr key={u.id} className="border-b border-border/40">
-                  <td className="py-2 pr-3">{u.name}</td>
-                  <td className="py-2 pr-3 text-gray-500">{u.email}</td>
-                  <td className="py-2 pr-3">
-                    <Badge variant={u.canUse ? "default" : "destructive"} className="text-[10px]">
-                      {u.canUse ? "Liberado" : "Bloqueado"}
-                    </Badge>
-                  </td>
-                  <td className="py-2 pr-3 text-gray-400">{u.source}</td>
-                  <td className="py-2 pr-3 text-gray-400">{u.override ? u.override.effect : "—"}</td>
-                  <td className="py-2 pr-3">
-                    <div className="flex gap-1">
-                      <Button size="sm" variant="ghost" className="h-6 px-2 text-[10px] text-emerald-600" onClick={() => setOverride(u.id, "ALLOW")}>
-                        Liberar
-                      </Button>
-                      <Button size="sm" variant="ghost" className="h-6 px-2 text-[10px] text-red-600" onClick={() => setOverride(u.id, "DENY")}>
-                        Bloquear
-                      </Button>
-                      {u.override && (
-                        <Button size="sm" variant="ghost" className="h-6 px-2 text-[10px] text-gray-500" onClick={() => setOverride(u.id, "INHERIT")}>
-                          Herdar
-                        </Button>
+                <>
+                  <tr key={u.id} className="border-b border-border/40">
+                    <td className="py-2 pr-3">
+                      {canEdit && (
+                        <input
+                          type="checkbox"
+                          checked={selectedUserIds.has(u.id)}
+                          onChange={() => toggleUserSelected(u.id)}
+                          aria-label={`Selecionar ${u.name}`}
+                        />
                       )}
-                    </div>
-                  </td>
-                </tr>
+                    </td>
+                    <td className="py-2 pr-3">{u.name}</td>
+                    <td className="py-2 pr-3 text-gray-500">{u.email}</td>
+                    <td className="py-2 pr-3">
+                      <Badge variant={u.canUse ? "default" : "destructive"} className="text-[10px]">
+                        {u.canUse ? "Liberado" : "Bloqueado"}
+                      </Badge>
+                    </td>
+                    <td className="py-2 pr-3 text-gray-400">{u.source}</td>
+                    <td className="py-2 pr-3 text-gray-400">{u.override ? u.override.effect : "—"}</td>
+                    <td className="py-2 pr-3">
+                      <div className="flex gap-1">
+                        {canEdit && (
+                          <>
+                            <Button size="sm" variant="ghost" className="h-6 px-2 text-[10px] text-emerald-600" onClick={() => setOverride(u.id, "ALLOW")}>
+                              Liberar
+                            </Button>
+                            <Button size="sm" variant="ghost" className="h-6 px-2 text-[10px] text-red-600" onClick={() => setOverride(u.id, "DENY")}>
+                              Bloquear
+                            </Button>
+                            {u.override && (
+                              <Button size="sm" variant="ghost" className="h-6 px-2 text-[10px] text-gray-500" onClick={() => setOverride(u.id, "INHERIT")}>
+                                Herdar
+                              </Button>
+                            )}
+                          </>
+                        )}
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="h-6 px-2 text-[10px] text-blue-600 gap-1"
+                          onClick={() => void runSimulation(u.id)}
+                        >
+                          <FlaskConical className="h-3 w-3" />
+                          Simular
+                        </Button>
+                      </div>
+                    </td>
+                  </tr>
+                  {simulateResults[u.id] && (
+                    <tr key={`${u.id}-sim`} className="border-b border-border/40 bg-blue-50/50 dark:bg-blue-950/20">
+                      <td></td>
+                      <td colSpan={6} className="py-1.5 pr-3 text-[10px] text-gray-600 dark:text-gray-300">
+                        Simulação: {simulateResults[u.id]!.canUse ? "liberado" : "bloqueado"} — motivo interno: {simulateResults[u.id]!.reason} (origem: {simulateResults[u.id]!.source})
+                      </td>
+                    </tr>
+                  )}
+                </>
               ))}
             </tbody>
           </table>
@@ -428,14 +870,42 @@ export default function AcessoAosChamadosPage() {
 
       {/* ── Auditoria ────────────────────────────────────────────────────── */}
       <div className="rounded-xl border border-border/70 bg-background p-5 shadow-sm space-y-2">
-        <h2 className="text-sm font-semibold">Auditoria recente</h2>
+        <h2 className="text-sm font-semibold">Auditoria</h2>
         {audit.length === 0 && <p className="text-xs text-gray-400">Nenhum evento registrado ainda.</p>}
         {audit.map((entry) => (
-          <div key={entry.id} className="text-xs border-b border-border/40 py-1.5 flex items-center justify-between">
-            <span>{entry.action}</span>
-            <span className="text-gray-400">{new Date(entry.created_at).toLocaleString("pt-BR")}</span>
+          <div key={entry.id} className="text-xs border-b border-border/40 py-1.5 flex items-center justify-between gap-2">
+            <span className="truncate">
+              {entry.action}
+              {entry.reason && <span className="text-gray-400"> — {entry.reason}</span>}
+            </span>
+            <span className="text-gray-400 shrink-0">{new Date(entry.created_at).toLocaleString("pt-BR")}</span>
           </div>
         ))}
+        <div className="flex items-center justify-between text-xs text-gray-500 pt-2">
+          <span>
+            Página {auditPagination.page} — {auditPagination.total} evento{auditPagination.total !== 1 ? "s" : ""}
+          </span>
+          <div className="flex gap-2">
+            <Button
+              size="sm"
+              variant="outline"
+              className="text-xs"
+              disabled={auditPagination.page <= 1}
+              onClick={() => setAuditPagination((p) => ({ ...p, page: p.page - 1 }))}
+            >
+              Anterior
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              className="text-xs"
+              disabled={auditPagination.page * auditPagination.limit >= auditPagination.total}
+              onClick={() => setAuditPagination((p) => ({ ...p, page: p.page + 1 }))}
+            >
+              Próxima
+            </Button>
+          </div>
+        </div>
       </div>
     </div>
   );

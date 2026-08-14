@@ -11,10 +11,19 @@ import { useSidebar } from "@/contexts/sidebar-context";
  * ResizeObserver since the header's second row (level/points pills) can
  * mount/resize after this first runs.
  */
+// Matches the exact breakpoint the sidebar itself uses to go from hidden to
+// visible (App.tsx: "hidden lg:flex" wraps <Sidebar>). Below this width the
+// desktop sidebar occupies zero real screen space no matter what
+// sidebarWidth (72/expanded) says — it's off-canvas.
+const DESKTOP_SIDEBAR_QUERY = "(min-width: 1024px)";
+
 export function useAppFrameMetrics() {
-  const { sidebarWidth } = useSidebar();
+  const { sidebarWidth: contextSidebarWidth } = useSidebar();
   const [headerHeight, setHeaderHeight] = useState(64);
   const [footerHeight, setFooterHeight] = useState(40);
+  const [isDesktopSidebarVisible, setIsDesktopSidebarVisible] = useState(
+    () => typeof window !== "undefined" && window.matchMedia(DESKTOP_SIDEBAR_QUERY).matches,
+  );
 
   useEffect(() => {
     const headers = Array.from(document.querySelectorAll("header"));
@@ -35,6 +44,20 @@ export function useAppFrameMetrics() {
       ro.disconnect();
     };
   }, []);
+
+  useEffect(() => {
+    const mql = window.matchMedia(DESKTOP_SIDEBAR_QUERY);
+    const onChange = () => setIsDesktopSidebarVisible(mql.matches);
+    onChange();
+    mql.addEventListener("change", onChange);
+    return () => mql.removeEventListener("change", onChange);
+  }, []);
+
+  // Panels positioned by "left: sidebarWidth" (HeaderSlideScreen and
+  // friends) must never reserve room for a sidebar that's actually
+  // off-canvas — that's what was squeezing every slide panel down to a
+  // sliver on mobile, regardless of which one opened it.
+  const sidebarWidth = isDesktopSidebarVisible ? contextSidebarWidth : 0;
 
   return { sidebarWidth, headerHeight, footerHeight };
 }

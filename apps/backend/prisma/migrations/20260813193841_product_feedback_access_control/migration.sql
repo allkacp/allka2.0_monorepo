@@ -107,4 +107,3 @@ ALTER TABLE `product_feedback_user_overrides` ADD CONSTRAINT `product_feedback_u
 
 -- AddForeignKey
 ALTER TABLE `product_feedback_work_item_links` ADD CONSTRAINT `product_feedback_work_item_links_user_id_fkey` FOREIGN KEY (`user_id`) REFERENCES `users`(`id`) ON DELETE CASCADE ON UPDATE CASCADE;
-

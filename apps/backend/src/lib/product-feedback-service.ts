@@ -30,9 +30,16 @@ export async function getOrCreateAccessConfig() {
  * re-run the check even if the frontend already showed the button"
  * requirement from silently drifting out of sync across routes.
  */
+export type ProductFeedbackAccessResult = ProductFeedbackDecisionResult & {
+  /** The raw global on/off toggle, regardless of which rule decided canUse
+   * — GET /access exposes this alongside canUse so the frontend can show
+   * the button state without a second, separately-racing config query. */
+  configEnabled: boolean;
+};
+
 export async function resolveProductFeedbackAccess(
   userId: string | null,
-): Promise<ProductFeedbackDecisionResult> {
+): Promise<ProductFeedbackAccessResult> {
   const now = new Date();
   const accessConfig = await getOrCreateAccessConfig();
   const baseConfig = {
@@ -42,13 +49,16 @@ export async function resolveProductFeedbackAccess(
   };
 
   if (!userId) {
-    return decideProductFeedbackAccess({
-      authenticated: false,
-      user: null,
-      config: baseConfig,
-      memberGroups: [],
-      now,
-    });
+    return {
+      ...decideProductFeedbackAccess({
+        authenticated: false,
+        user: null,
+        config: baseConfig,
+        memberGroups: [],
+        now,
+      }),
+      configEnabled: baseConfig.enabled,
+    };
   }
 
   const [user, override, memberships] = await Promise.all([
@@ -63,26 +73,29 @@ export async function resolveProductFeedbackAccess(
     }),
   ]);
 
-  return decideProductFeedbackAccess({
-    authenticated: true,
-    user: user ? { id: user.id, isActive: user.is_active, status: user.status } : null,
-    config: baseConfig,
-    memberGroups: memberships.map((m) => ({
-      id: m.group.id,
-      effect: m.group.effect as "ALLOW" | "DENY",
-      priority: m.group.priority,
-      active: m.group.active,
-      expiresAt: m.group.expires_at,
-    })),
-    override: override
-      ? {
-          effect: override.effect as "INHERIT" | "ALLOW" | "DENY",
-          active: override.active,
-          expiresAt: override.expires_at,
-        }
-      : undefined,
-    now,
-  });
+  return {
+    ...decideProductFeedbackAccess({
+      authenticated: true,
+      user: user ? { id: user.id, isActive: user.is_active, status: user.status } : null,
+      config: baseConfig,
+      memberGroups: memberships.map((m) => ({
+        id: m.group.id,
+        effect: m.group.effect as "ALLOW" | "DENY",
+        priority: m.group.priority,
+        active: m.group.active,
+        expiresAt: m.group.expires_at,
+      })),
+      override: override
+        ? {
+            effect: override.effect as "INHERIT" | "ALLOW" | "DENY",
+            active: override.active,
+            expiresAt: override.expires_at,
+          }
+        : undefined,
+      now,
+    }),
+    configEnabled: baseConfig.enabled,
+  };
 }
 
 export async function writeAccessAudit(input: {

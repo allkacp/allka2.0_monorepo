@@ -72,11 +72,27 @@ export const HmacHeadersSchema = z.object({
   "x-allka-signature": z.string().regex(/^v1=[0-9a-f]{64}$/i),
 });
 
+/** A sanitized, relative pathname only: starts with a single "/", never a
+ * protocol-relative "//host" (browsers treat that as a different origin),
+ * never a full URL, never a querystring, never a fragment, never control
+ * characters or a backslash (some parsers normalize "\" to "/", which has
+ * been used historically to smuggle a host past a "starts with /" check
+ * alone). Mirrors the Roadmap's PathnameSchema exactly — see
+ * allka-roadmap/apps/backend/src/contracts/allka-integration.ts. */
+export const PathnameSchema = z
+  .string()
+  .min(1)
+  .max(500)
+  .regex(
+    /^\/(?!\/)[^\x00-\x1F\x7F?#\\]*$/,
+    "pathname deve ser um caminho relativo iniciado por \"/\" (não \"//\"), sem protocolo, host, querystring, fragmento, barra invertida ou caracteres de controle",
+  );
+
 /** Where the user was, described safely: sanitized pathname only — never a
  * full URL, never a fragment, never a raw querystring. */
 export const PageContextSchema = z
   .object({
-    pathname: z.string().min(1).max(500),
+    pathname: PathnameSchema,
     pageTitle: z.string().max(200).optional(),
     environment: z.enum(["production", "qa", "local"]),
     frontendVersion: z.string().max(100).optional(),
@@ -153,6 +169,11 @@ export const PublicCommentSchema = z
 export const WorkItemPublicStatusSchema = z
   .object({
     protocol: ProtocolSchema,
+    // Same public vocabulary as the creation request's `type` — a "Meus
+    // chamados" list needs to identify what kind of ticket each row is,
+    // not just its protocol and status.
+    type: z.enum(["PROBLEM", "IDEA", "IMPROVEMENT"]),
+    title: z.string().min(1).max(200),
     status: PublicStatusSchema,
     updatedAt: z.string().datetime(),
     solutionSummary: z.string().max(2000).nullable(),

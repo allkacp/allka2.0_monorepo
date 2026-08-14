@@ -9,7 +9,7 @@
  * login/primeiro-acesso/share ficam fora do <AppLayout>, então montar este
  * componente dentro do AppLayout já garante que ele nunca aparece nelas.
  */
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { MessageCircleQuestion, Send, RefreshCw, Inbox } from "lucide-react";
 import { HeaderSlideScreen } from "@/components/header-slide-screen";
 import { useGlobalHeaderPanel } from "@/contexts/global-header-panel-context";
@@ -44,6 +44,8 @@ export const publicStatusLabels: Record<string, string> = {
 
 export type PublicWorkItem = {
   protocol: string;
+  type: FeedbackType;
+  title: string;
   status: keyof typeof publicStatusLabels;
   updatedAt: string;
   solutionSummary: string | null;
@@ -57,26 +59,40 @@ function sanitizedPathname() {
   return window.location.pathname || "/";
 }
 
+// Revalidação periódica: nada aqui depende de um novo login para refletir
+// uma mudança de acesso feita pelo Admin (bloqueio, expiração de grupo,
+// desligar o produto inteiro) — cobre os 4 gatilhos exigidos: montagem
+// inicial, abertura do painel, foco da aba, e um intervalo para abas que
+// ficam paradas em primeiro plano. Um 403 em criar/listar (verificado de
+// novo no servidor a cada chamada) também aciona isto via refresh().
+export const ACCESS_REVALIDATE_INTERVAL_MS = 5 * 60_000;
+
 function useProductFeedbackAccess() {
   // null = ainda carregando (ou falhou) — nunca mostra o botão nesse estado.
   const [canUse, setCanUse] = useState<boolean | null>(null);
 
-  useEffect(() => {
-    let cancelled = false;
+  const refresh = useCallback(() => {
     apiClient
       .getProductFeedbackAccess()
-      .then((res: { canUse: boolean }) => {
-        if (!cancelled) setCanUse(Boolean(res?.canUse));
-      })
-      .catch(() => {
-        if (!cancelled) setCanUse(null);
-      });
-    return () => {
-      cancelled = true;
-    };
+      .then((res: { enabled: boolean; canUse: boolean }) => setCanUse(Boolean(res?.canUse)))
+      .catch(() => setCanUse(null));
   }, []);
 
-  return canUse;
+  useEffect(() => {
+    refresh();
+  }, [refresh]);
+
+  useEffect(() => {
+    window.addEventListener("focus", refresh);
+    return () => window.removeEventListener("focus", refresh);
+  }, [refresh]);
+
+  useEffect(() => {
+    const id = setInterval(refresh, ACCESS_REVALIDATE_INTERVAL_MS);
+    return () => clearInterval(id);
+  }, [refresh]);
+
+  return { canUse, refresh };
 }
 
 export function ProductFeedbackWidget() {
@@ -84,7 +100,7 @@ export function ProductFeedbackWidget() {
   const open = isActive("product-feedback");
   const setOpen = (v: boolean) => (v ? openPanel("product-feedback") : closePanel("product-feedback"));
 
-  const canUse = useProductFeedbackAccess();
+  const { canUse, refresh: refreshAccess } = useProductFeedbackAccess();
 
   const [view, setView] = useState<"form" | "list">("form");
   const [type, setType] = useState<FeedbackType>("PROBLEM");
@@ -98,6 +114,22 @@ export function ProductFeedbackWidget() {
   const [error, setError] = useState("");
   const [protocol, setProtocol] = useState("");
 
+  // Generated once per logical "new ticket" attempt and reused across
+  // every retry of that same submit (network timeout, clicking "Enviar"
+  // again after a transient error) — never regenerated per HTTP call.
+  // resetForm() is what starts a genuinely new attempt, so that's the only
+  // place this gets cleared; a plain retry of a failed submit does NOT
+  // call resetForm(), so it reuses the same id and the backend's
+  // idempotency ledger recognizes it as the same submission rather than
+  // creating a second ticket.
+  const clientSubmissionIdRef = useRef<string | null>(null);
+  function getClientSubmissionId(): string {
+    if (!clientSubmissionIdRef.current) {
+      clientSubmissionIdRef.current = crypto.randomUUID();
+    }
+    return clientSubmissionIdRef.current;
+  }
+
   const [items, setItems] = useState<PublicWorkItem[]>([]);
   const [loadingList, setLoadingList] = useState(false);
   const [listError, setListError] = useState("");
@@ -109,11 +141,16 @@ export function ProductFeedbackWidget() {
       const res = await apiClient.getProductFeedbackWorkItems();
       setItems(res?.items ?? []);
     } catch (err) {
+      // Um 403 aqui significa que o acesso mudou depois que o botão já
+      // tinha aparecido (bloqueio, grupo expirado, produto desligado) — o
+      // servidor já recusou de verdade; isto só sincroniza a UI sem exigir
+      // um novo login (ver useProductFeedbackAccess acima).
+      if (err instanceof ApiError && err.status === 403) refreshAccess();
       setListError(err instanceof Error ? err.message : "Não foi possível carregar seus chamados.");
     } finally {
       setLoadingList(false);
     }
-  }, []);
+  }, [refreshAccess]);
 
   useEffect(() => {
     if (open && view === "list") void loadList();
@@ -136,6 +173,9 @@ export function ProductFeedbackWidget() {
     setImpact("");
     setError("");
     setProtocol("");
+    // A genuinely new attempt starts here — the next submit mints a fresh
+    // clientSubmissionId instead of reusing whatever attempt came before.
+    clientSubmissionIdRef.current = null;
   }
 
   async function handleSubmit(event: React.FormEvent) {
@@ -145,6 +185,7 @@ export function ProductFeedbackWidget() {
     setError("");
     try {
       const res = await apiClient.createProductFeedbackWorkItem({
+        clientSubmissionId: getClientSubmissionId(),
         type,
         title: title.trim(),
         description: description.trim(),
@@ -157,6 +198,7 @@ export function ProductFeedbackWidget() {
       });
       setProtocol(res.protocol);
     } catch (err) {
+      if (err instanceof ApiError && err.status === 403) refreshAccess();
       setError(err instanceof ApiError ? err.message : "Não foi possível enviar. Tente novamente em instantes.");
     } finally {
       setSubmitting(false);
@@ -165,16 +207,25 @@ export function ProductFeedbackWidget() {
 
   if (canUse !== true) return null;
 
+  function openForm() {
+    refreshAccess();
+    resetForm();
+    setView("form");
+    setOpen(true);
+  }
+
   return (
     <>
-      <div className="hidden xl:block fixed top-[285px] right-[8px] z-50 group">
+      {/* Desktop/laptop trigger — same family as the other header-adjacent
+          floating icons (alerts, chat, tray). "lg:block" (not "xl:block")
+          on purpose: the mobile bottom nav below is "lg:hidden", so the
+          breakpoints must meet exactly here or there's a dead zone between
+          lg and xl (~1024–1280px, common laptop/tablet-landscape widths)
+          where neither trigger would render. */}
+      <div className="hidden lg:block fixed top-[285px] right-[8px] z-50 group">
         <button
           type="button"
-          onClick={() => {
-            resetForm();
-            setView("form");
-            setOpen(true);
-          }}
+          onClick={openForm}
           aria-label="Ajuda e sugestões"
           className="relative flex items-center justify-center h-10 w-10 rounded-xl text-white/70 hover:text-white hover:bg-white/10 transition-colors"
         >
@@ -184,6 +235,24 @@ export function ProductFeedbackWidget() {
           Ajuda e sugestões
         </span>
       </div>
+
+      {/* Mobile/tablet trigger — floats above the bottom tab nav (which is
+          itself "lg:hidden fixed bottom-0"), never underneath it or inside
+          its safe-area padding. A solid brand-colored circular button
+          (unlike the desktop icon-only style) because this sits over the
+          light page background here, not the dark header/sidebar bar. */}
+      <button
+        type="button"
+        onClick={openForm}
+        aria-label="Ajuda e sugestões"
+        className="lg:hidden fixed right-4 z-45 flex items-center justify-center h-14 w-14 rounded-full text-white shadow-[0_8px_24px_-4px_rgba(0,0,0,0.35)] active:scale-95 transition-transform"
+        style={{
+          bottom: "calc(72px + env(safe-area-inset-bottom, 0px) + 12px)",
+          background: "var(--app-brand-gradient, var(--brand-gradient, linear-gradient(135deg, #0a1628, #1e3a8a, #0a1628)))",
+        }}
+      >
+        <MessageCircleQuestion className="h-6 w-6 shrink-0" />
+      </button>
 
       <HeaderSlideScreen
         open={open}
@@ -350,8 +419,10 @@ export function ProductFeedbackWidget() {
                       {publicStatusLabels[item.status] ?? item.status}
                     </span>
                   </div>
-                  <p className="text-[11px] text-gray-400 mt-1">
-                    Atualizado em {new Date(item.updatedAt).toLocaleDateString("pt-BR", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" })}
+                  <p className="text-sm font-medium mt-1">{item.title}</p>
+                  <p className="text-[11px] text-gray-400 mt-0.5">
+                    {typeLabels[item.type]} · Atualizado em{" "}
+                    {new Date(item.updatedAt).toLocaleDateString("pt-BR", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" })}
                   </p>
                   {item.solutionSummary && (
                     <p className="text-xs mt-2">

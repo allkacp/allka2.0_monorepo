@@ -2,7 +2,7 @@ import { Router } from "express";
 import type { Request, Response, NextFunction } from "express";
 import { z } from "zod";
 import { prisma } from "../lib/prisma";
-import { verifyToken, requireRole, requirePermission } from "../middleware/auth";
+import { verifyToken, requirePermission } from "../middleware/auth";
 import { parsePagination } from "../middleware/validate";
 import { isRoadmapTechnicallyConfigured } from "../lib/roadmap-client";
 import { config } from "../config";
@@ -21,7 +21,30 @@ import {
 // never trusting that the frontend already hid the page — the frontend
 // route guard is a convenience, this is the actual boundary.
 const router = Router();
-router.use(verifyToken, requireRole("admin"));
+
+// Same role check as requireRole("admin"), but also writes an audit entry
+// for the denied attempt — a plain requireRole() has no hook for "and log
+// it when this fails", so this wraps it instead of duplicating the role
+// check ad hoc.
+async function requireAdminWithAudit(req: Request, res: Response, next: NextFunction) {
+  if (!req.user) {
+    res.status(401).json({ error: "Não autenticado" });
+    return;
+  }
+  if (req.user.role !== "admin") {
+    await writeAccessAudit({
+      actorId: req.user.id,
+      action: "admin.access_denied",
+      after: { path: req.path, method: req.method },
+      reason: `role "${req.user.role}" tentou acessar uma rota administrativa de acesso a chamados`,
+    }).catch(() => undefined);
+    res.status(403).json({ error: "Permissão insuficiente" });
+    return;
+  }
+  next();
+}
+
+router.use(verifyToken, requireAdminWithAudit);
 
 const readGuard = requirePermission("sistema", "view");
 const writeGuard = requirePermission("sistema", "edit");
@@ -61,6 +84,20 @@ router.patch("/config", writeGuard, async (req: Request, res: Response, next: Ne
       res.status(400).json({ error: "Dados inválidos", details: parsed.error.flatten() });
       return;
     }
+
+    if (parsed.data.enabled === true && !isRoadmapTechnicallyConfigured()) {
+      await writeAccessAudit({
+        actorId: req.user!.id,
+        action: "config.enable_denied",
+        after: { attemptedEnabled: true },
+        reason: "tentativa de ligar o produto com a integração técnica inválida ou incompleta",
+      });
+      res.status(409).json({
+        error: "Não é possível ligar o produto: a integração técnica com a Roadmap não está configurada corretamente.",
+      });
+      return;
+    }
+
     const before = await getOrCreateAccessConfig();
     const updated = await prisma.productFeedbackAccessConfig.update({
       where: { id: before.id },
@@ -124,7 +161,6 @@ router.get("/users", readGuard, async (req: Request, res: Response, next: NextFu
       return;
     }
     const { page, limit, search, filter } = parsedQuery.data;
-    const { skip } = parsePagination({ page, limit });
 
     const where = search
       ? {
@@ -136,22 +172,31 @@ router.get("/users", readGuard, async (req: Request, res: Response, next: NextFu
         }
       : {};
 
-    const [total, users, cfg] = await Promise.all([
-      prisma.user.count({ where }),
+    // The effective-access filters (allowed/blocked/override/inactive)
+    // depend on decideProductFeedbackAccess, which isn't expressible as a
+    // SQL WHERE clause — it combines per-user group membership, override,
+    // and the global config. Paginating the raw `users` query BEFORE
+    // applying that filter (the previous approach) silently drops matches
+    // that happen to fall outside the current page's raw slice, and
+    // reports a `total` that doesn't match what's actually being shown.
+    // Fetching every search-matching user's minimal fields and filtering
+    // in memory — the same approach already used by GET /summary — is the
+    // only way to get a correct total and a correct page for every filter
+    // value; the affected sets are always this platform's own user count
+    // (hundreds, not millions), so this stays cheap.
+    const [allUsers, cfg] = await Promise.all([
       prisma.user.findMany({
         where,
         select: { id: true, name: true, email: true, user_code: true, is_active: true, status: true, account_type: true },
         orderBy: { name: "asc" },
-        skip,
-        take: limit,
       }),
       getOrCreateAccessConfig(),
     ]);
 
-    const { overrideByUser, groupsByUser } = await loadGroupsAndOverridesFor(users.map((u) => u.id));
+    const { overrideByUser, groupsByUser } = await loadGroupsAndOverridesFor(allUsers.map((u) => u.id));
     const technicallyConfigured = isRoadmapTechnicallyConfigured();
 
-    const rows = users.map((u) => {
+    const rows = allUsers.map((u) => {
       const override = overrideByUser.get(u.id);
       const decision = decideProductFeedbackAccess({
         authenticated: true,
@@ -187,7 +232,11 @@ router.get("/users", readGuard, async (req: Request, res: Response, next: NextFu
       return true;
     });
 
-    res.json({ items: filtered, pagination: { page, limit, total } });
+    const total = filtered.length;
+    const { skip } = parsePagination({ page, limit });
+    const pageItems = filtered.slice(skip, skip + limit);
+
+    res.json({ items: pageItems, pagination: { page, limit, total } });
   } catch (err) {
     next(err);
   }
@@ -468,6 +517,32 @@ router.delete("/groups/:id", writeGuard, async (req: Request, res: Response, nex
     });
     await writeAccessAudit({ actorId: req.user!.id, action: "group.archived", before: { id: before.id, name: before.name } });
     res.json({ ok: true });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.get("/groups/:id/members", readGuard, async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const group = await prisma.productFeedbackAccessGroup.findUnique({ where: { id: req.params.id as string } });
+    if (!group) {
+      res.status(404).json({ error: "Grupo não encontrado" });
+      return;
+    }
+    const members = await prisma.productFeedbackAccessGroupMember.findMany({
+      where: { group_id: group.id },
+      include: { user: { select: { id: true, name: true, email: true, user_code: true } } },
+      orderBy: { created_at: "desc" },
+    });
+    res.json({
+      items: members.map((m) => ({
+        userId: m.user.id,
+        name: m.user.name,
+        email: m.user.email,
+        userCode: m.user.user_code,
+        addedAt: m.created_at,
+      })),
+    });
   } catch (err) {
     next(err);
   }
