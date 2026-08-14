@@ -200,6 +200,27 @@ export async function listRoadmapWorkItems(
   });
 }
 
+// One-click SSO handoff for Allka staff who already have a matching Roadmap
+// account (OWNER/ADMIN/DEVELOPER/QA_REVIEWER). Never creates or promotes a
+// Roadmap account — the Roadmap side looks the email up and refuses if it
+// doesn't already exist with an eligible role. See
+// docs/integration-contract-v1.md "SSO handoff" section.
+export async function startRoadmapSso(email: string): Promise<{ ssoToken: string }> {
+  const { status, json } = await signedFetch({
+    method: "POST",
+    pathname: `${CONTRACT_API_PREFIX}/allka/sso/tickets`,
+    body: { email },
+  });
+  if (status === 200 && json?.ok) {
+    return { ssoToken: json.ssoToken };
+  }
+  throw new RoadmapClientError(
+    "UPSTREAM_ERROR",
+    json?.message ?? "Não foi possível iniciar o acesso único à Roadmap.",
+    { status, upstreamCode: json?.code },
+  );
+}
+
 export async function getRoadmapWorkItem(
   protocol: string,
   identity: RoadmapIdentity,

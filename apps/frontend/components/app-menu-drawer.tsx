@@ -10,6 +10,10 @@ import { useFontScale } from "@/hooks/useFontScale"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
+import { apiClient } from "@/lib/api-client"
+import { hasAdminModulePermission } from "@/lib/admin-permissions"
+import { useOpenRoadmapPanel } from "@/hooks/use-open-roadmap-panel"
+import { toast } from "@/hooks/use-toast"
 import {
   LayoutDashboard,
   Users,
@@ -43,6 +47,7 @@ import {
   Sun,
   Moon,
   AlertTriangle,
+  LifeBuoy,
 } from "lucide-react"
 
 const navigationConfig = {
@@ -175,6 +180,14 @@ const navigationConfig = {
         { name: "Configurações", href: "/admin/configuracoes", icon: Settings },
       ],
     },
+    {
+      name: "Roadmap e chamados",
+      icon: LifeBuoy,
+      color: "from-rose-500 to-rose-600",
+      // Sem href — abre a Central de Roadmap/chamados via SSO numa aba
+      // nova, nunca navega o app mobile pra fora. Mesmo hook do desktop.
+      openInNewTab: true,
+    },
   ],
 }
 
@@ -194,8 +207,42 @@ export function AppMenuDrawer({ open, onClose }: AppMenuDrawerProps) {
   const { increase, decrease } = useFontScale()
   const [expandedItems, setExpandedItems] = useState<string[]>([])
 
+  // Mesma regra do desktop (components/sidebar.tsx): sinal de UI só, o
+  // backend (POST .../roadmap-sso/start) é quem realmente decide.
+  const [canOpenRoadmapPanel, setCanOpenRoadmapPanel] = useState(false)
+  useEffect(() => {
+    if (accountType !== "admin") return
+    let cancelled = false
+    ;(async () => {
+      try {
+        const me = await apiClient.getCurrentUser()
+        const profile = me?.admin_profile
+        const pode =
+          hasAdminModulePermission(profile, "sistema", "view") ||
+          hasAdminModulePermission(profile, "central_chamados", "view")
+        if (!cancelled) setCanOpenRoadmapPanel(pode)
+      } catch {
+        if (!cancelled) setCanOpenRoadmapPanel(false)
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [accountType])
+
+  const roadmapPanel = useOpenRoadmapPanel()
+  useEffect(() => {
+    if (roadmapPanel.error) {
+      toast({ title: "Roadmap e chamados", description: roadmapPanel.error, variant: "destructive" })
+    }
+  }, [roadmapPanel.error])
+
   const getNavigationItems = () => {
-    if (accountType === "admin") return navigationConfig.admin
+    if (accountType === "admin") {
+      return canOpenRoadmapPanel
+        ? navigationConfig.admin
+        : navigationConfig.admin.filter((item) => item.name !== "Roadmap e chamados")
+    }
     if (accountType === "empresas") {
       return navigationConfig.empresas[accountSubType || "company"] ?? navigationConfig.empresas.company
     }
@@ -350,6 +397,26 @@ export function AppMenuDrawer({ open, onClose }: AppMenuDrawerProps) {
 
                 const isActive = pathname === item.href
                 const Icon = item.icon
+
+                if (item.openInNewTab) {
+                  return (
+                    <button
+                      key={item.name}
+                      type="button"
+                      onClick={() => void roadmapPanel.open()}
+                      disabled={roadmapPanel.loading}
+                      className={cn(
+                        "relative flex flex-col items-center justify-center p-4 rounded-2xl transition-all duration-300 active:scale-95 disabled:opacity-60",
+                        "bg-white/5 hover:bg-white/10",
+                      )}
+                    >
+                      <Icon className="h-6 w-6 text-white mb-2" />
+                      <span className="text-white text-xs font-medium text-center leading-tight">
+                        {roadmapPanel.loading ? "Abrindo..." : item.name}
+                      </span>
+                    </button>
+                  )
+                }
 
                 return (
                   <Link

@@ -1650,6 +1650,10 @@ class ApiClient {
   async simulateProductFeedbackAccess(userId: string) {
     return this.post("/admin/product-feedback/simulate", { userId });
   }
+
+  async startRoadmapSso() {
+    return this.post<{ redirectUrl: string }>("/admin/product-feedback/roadmap-sso/start", {});
+  }
 }
 
 // Em modo mock (Vite --mode mock OU VITE_USE_MOCKS=true), troca pelo mock client.

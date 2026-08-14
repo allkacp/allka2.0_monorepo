@@ -35,8 +35,8 @@ const validCreateRequest = {
 };
 
 describe("contract version and prefix", () => {
-  it("exposes CONTRACT_VERSION 1.1.0", () => {
-    assert.equal(CONTRACT_VERSION, "1.1.0");
+  it("exposes CONTRACT_VERSION 1.2.0", () => {
+    assert.equal(CONTRACT_VERSION, "1.2.0");
   });
 
   it("exposes the /api/v1/integrations prefix", () => {
