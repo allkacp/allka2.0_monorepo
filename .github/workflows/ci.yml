@@ -86,7 +86,13 @@ jobs:
 
       - name: Backend DB-backed integration tests
         env:
-          TEST_DATABASE_URL: mysql://allka:allka_ci@127.0.0.1:3306/allka_test
+          # root for both: the official mysql image only grants MYSQL_USER
+          # privileges on MYSQL_DATABASE itself, not on the disposable
+          # allka_test_<timestamp> database scripts/run-db-tests.ts creates
+          # per run — the non-admin user gets denied the moment `db push`
+          # tries to write to it, even though CREATE DATABASE (using the
+          # admin URL) already succeeded.
+          TEST_DATABASE_URL: mysql://root:allka_ci_root@127.0.0.1:3306/allka_test
           TEST_DATABASE_ADMIN_URL: mysql://root:allka_ci_root@127.0.0.1:3306/allka_test
         run: npm run test:product-feedback --workspace apps/backend
 
