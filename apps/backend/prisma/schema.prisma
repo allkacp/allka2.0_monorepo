@@ -11,19 +11,19 @@ datasource db {
 // ─── Auth & Users ────────────────────────────────────────────────────────────
 
 model User {
-  id                             String    @id @default(cuid())
+  id                             String        @id @default(cuid())
   // Código público/exibido (ex.: "00001") — só pra UI (tela Admin > Usuários).
   // Nunca usar no lugar de `id` em FK ou lookup técnico.
-  user_code                      String?   @unique
-  email                          String    @unique
-  username                       String?   @unique
+  user_code                      String?       @unique
+  email                          String        @unique
+  username                       String?       @unique
   password_hash                  String
   name                           String
-  role                           String    @default("company_user")
+  role                           String        @default("company_user")
   // company_user | company_admin | company_financial | agency_user | agency_admin | nomad | admin
   // ("partner"/"partner_admin" não existem mais como role própria — Partner
   // é um upgrade da própria Agency, ver PartnerProfile.)
-  account_type                   String    @default("empresas")
+  account_type                   String        @default("empresas")
   // empresas | agencias | nomades | admin
   // ("parceiro" não existe mais — Partner não é um account_type próprio,
   // é um status na Agency do usuário; ver PartnerProfile.agency_id.)
@@ -31,9 +31,9 @@ model User {
   // `is_active` e mantido em sincronia (ativo => true) porque indices e
   // consultas de toda a plataforma dependem dele. Ver a migration
   // 20260807120000_status_do_usuario e a regra de login em routes/auth.ts.
-  status                         String    @default("ativo")
-  is_active                      Boolean   @default(true)
-  avatar                         String?   @db.LongText
+  status                         String        @default("ativo")
+  is_active                      Boolean       @default(true)
+  avatar                         String?       @db.LongText
   phone                          String?
   position                       String?
   // Perfil de acesso (opcional). Sem perfil, o usuario vale so pela role —
@@ -42,12 +42,12 @@ model User {
   admin_profile_id               String?
   admin_profile                  AdminProfile? @relation(fields: [admin_profile_id], references: [id], onDelete: SetNull)
   company_id                     String?
-  company                        Company?  @relation("CompanyMembers", fields: [company_id], references: [id])
+  company                        Company?      @relation("CompanyMembers", fields: [company_id], references: [id])
   // ── Vínculo de subusuário (membro) com Agency — nullable: Admin, Nomad,
   // Leader e usuários órfãos legados não têm isso preenchido. Espelha o
   // padrão já usado por company_id acima.
   agency_id                      String?
-  agency_link                    Agency?   @relation("AgencyMembers", fields: [agency_id], references: [id])
+  agency_link                    Agency?       @relation("AgencyMembers", fields: [agency_id], references: [id])
   last_login                     DateTime?
   // Pausa por inatividade (>=90 dias sem login) é um status derivado do
   // last_login, calculado no momento do login seguinte (ver POST
@@ -55,37 +55,47 @@ model User {
   // "grudento": uma vez marcado, só um Admin limpa manualmente; o próprio
   // login do usuário pausado NUNCA reativa a conta sozinho.
   inactivity_paused_accessed_at  DateTime?
-  inactivity_paused_access_count Int       @default(0)
-  reactivation_review_required   Boolean   @default(false)
+  inactivity_paused_access_count Int           @default(0)
+  reactivation_review_required   Boolean       @default(false)
   // ── Primeiro acesso ───────────────────────────────────────────────────
   // Usuário importado da plataforma antiga não herda senha utilizável: ele
   // define a própria no primeiro acesso. Enquanto must_set_password for true,
   // o login é recusado com FIRST_ACCESS_REQUIRED.
-  must_set_password              Boolean   @default(false)
+  must_set_password              Boolean       @default(false)
   // Hash sha256 do token do link de primeiro acesso — nunca o token em si,
   // pra quem lê o banco não conseguir se passar pelo usuário.
-  password_setup_token           String?   @unique @db.VarChar(64)
+  password_setup_token           String?       @unique @db.VarChar(64)
   password_setup_expires_at      DateTime?
-  created_at                     DateTime  @default(now())
-  updated_at                     DateTime  @updatedAt
+  created_at                     DateTime      @default(now())
+  updated_at                     DateTime      @updatedAt
 
-  nomade                   Nomade?
+  nomade                             Nomade?
   // Lado reverso de "eu sou o principal desta organização" — no máximo 1 de
   // cada, aplicado em código (mesmo padrão do comentário em Project sobre
   // agency_id/company_id: "no máximo um dos dois preenchido").
-  owned_agency             Agency?            @relation("AgencyOwner")
-  owned_company            Company?           @relation("CompanyOwner")
-  term_acceptances         TermAcceptance[]
-  chat_participations      ChatParticipant[]
-  sent_messages            ChatMessage[]      @relation("SentMessages")
-  course_enrollments       CourseEnrollment[]
-  lider_areas              LiderArea[]
-  tasks_como_lider         ProjectTask[]      @relation("TaskLiderResponsavel")
-  linked_coupons           Coupon[]
-  created_clients          Client[]           @relation("ClientCreatedBy")
-  created_projects         Project[]          @relation("ProjectCreatedBy")
-  profile                  UserProfile?
-  deleted_company_archives CompanyArchive[]   @relation("CompanyArchiveDeletedBy")
+  owned_agency                       Agency?                            @relation("AgencyOwner")
+  owned_company                      Company?                           @relation("CompanyOwner")
+  term_acceptances                   TermAcceptance[]
+  chat_participations                ChatParticipant[]
+  sent_messages                      ChatMessage[]                      @relation("SentMessages")
+  course_enrollments                 CourseEnrollment[]
+  lider_areas                        LiderArea[]
+  tasks_como_lider                   ProjectTask[]                      @relation("TaskLiderResponsavel")
+  linked_coupons                     Coupon[]
+  created_clients                    Client[]                           @relation("ClientCreatedBy")
+  created_projects                   Project[]                          @relation("ProjectCreatedBy")
+  profile                            UserProfile?
+  deleted_company_archives           CompanyArchive[]                   @relation("CompanyArchiveDeletedBy")
+  product_feedback_override          ProductFeedbackUserOverride?
+  product_feedback_group_memberships ProductFeedbackAccessGroupMember[]
+  product_feedback_work_item_links   ProductFeedbackWorkItemLink[]
+
+  // ── Rastreio da plataforma antiga ─────────────────────────────────────
+  // id numérico do registro equivalente no dump legado (Dump20260423.sql).
+  // Só preenchido em registros importados por scripts/import-legacy-*;
+  // serve pra consultar a origem e pra tornar a importação idempotente.
+  // Nunca usar em FK ou lookup técnico — o id real continua sendo o `id`.
+  legacy_id Int? @unique
 
   @@index([role])
   @@index([account_type])
@@ -95,14 +105,6 @@ model User {
   @@index([status])
   @@index([is_active])
   @@index([account_type, is_active])
-
-  // ── Rastreio da plataforma antiga ─────────────────────────────────────
-  // id numérico do registro equivalente no dump legado (Dump20260423.sql).
-  // Só preenchido em registros importados por scripts/import-legacy-*;
-  // serve pra consultar a origem e pra tornar a importação idempotente.
-  // Nunca usar em FK ou lookup técnico — o id real continua sendo o `id`.
-  legacy_id Int? @unique
-
   @@map("users")
 }
 
@@ -245,7 +247,6 @@ model Company {
   coupon_usages   CouponUsage[]
   client_links    ClientLink[]
 
-
   // ── Rastreio da plataforma antiga ─────────────────────────────────────
   // id numérico do registro equivalente no dump legado (Dump20260423.sql).
   // Só preenchido em registros importados por scripts/import-legacy-*;
@@ -347,11 +348,6 @@ model Client {
 
   links ClientLink[]
 
-  @@index([name])
-  @@index([email])
-  @@index([status])
-  @@index([created_by_user_id])
-
   // ── Rastreio da plataforma antiga ─────────────────────────────────────
   // id numérico do registro equivalente no dump legado (Dump20260423.sql).
   // Só preenchido em registros importados por scripts/import-legacy-*;
@@ -359,6 +355,10 @@ model Client {
   // Nunca usar em FK ou lookup técnico — o id real continua sendo o `id`.
   legacy_id Int? @unique
 
+  @@index([name])
+  @@index([email])
+  @@index([status])
+  @@index([created_by_user_id])
   @@map("clients")
 }
 
@@ -401,45 +401,45 @@ model ClientLink {
 // ─── Agencies ────────────────────────────────────────────────────────────────
 
 model Agency {
-  id             String   @id @default(cuid())
+  id              String   @id @default(cuid())
   // Coluna física continua "user_id" (@map) — só o campo Prisma vira
   // owner_user_id, pra refletir que é o usuário PRINCIPAL, não o único.
   // @unique mantido de propósito: 1 pessoa não pode ser dona de 2 agências
   // ao mesmo tempo. Quem deixa de ser 1:1 é o vínculo de membro (ver
   // User.agency_id / Agency.members abaixo), não a posse.
-  owner_user_id  String   @unique @map("user_id")
-  owner          User     @relation("AgencyOwner", fields: [owner_user_id], references: [id])
-  members        User[]   @relation("AgencyMembers")
+  owner_user_id   String   @unique @map("user_id")
+  owner           User     @relation("AgencyOwner", fields: [owner_user_id], references: [id])
+  members         User[]   @relation("AgencyMembers")
   // Numeração emp_N exibida no admin/empresas — nullable porque, ao
   // contrário de Company, não é atribuída automaticamente a toda Agency
   // nova; hoje é setada manualmente caso a caso (ver seed/scripts admin).
-  sequence_number Int?    @unique
-  name           String
-  cnpj           String?  @unique
-  email          String?
-  phone          String?
-  partner_level  String   @default("bronze")
+  sequence_number Int?     @unique
+  name            String
+  cnpj            String?  @unique
+  email           String?
+  phone           String?
+  partner_level   String   @default("bronze")
   // bronze | silver | gold | platinum | diamond
-  wallet_balance Float    @default(0)
-  status         String   @default("ativo")
-  address        String?
-  number         String?
-  neighborhood   String?
-  city           String?
-  state          String?
-  zip_code       String?
-  pix_key        String?
-  pix_key_type   String? // cpf | cnpj | email | phone | random
+  wallet_balance  Float    @default(0)
+  status          String   @default("ativo")
+  address         String?
+  number          String?
+  neighborhood    String?
+  city            String?
+  state           String?
+  zip_code        String?
+  pix_key         String?
+  pix_key_type    String? // cpf | cnpj | email | phone | random
   // Paridade com Company (que já tinha esses 5 campos) — adicionados
   // 2026-07-20 junto com a correção do form de edição, que já coletava
   // segment/description mas o backend nunca teve onde guardar.
-  segment        String?
-  description    String?  @db.LongText
-  logo           String?  @db.LongText
-  website        String?
-  observations   String?  @db.LongText
-  created_at     DateTime @default(now())
-  updated_at     DateTime @updatedAt
+  segment         String?
+  description     String?  @db.LongText
+  logo            String?  @db.LongText
+  website         String?
+  observations    String?  @db.LongText
+  created_at      DateTime @default(now())
+  updated_at      DateTime @updatedAt
 
   match_queue_entry MatchQueueEntry?
   leaderships       AgencyLeadership[]
@@ -449,7 +449,6 @@ model Agency {
   // Presente só quando esta Agency foi convidada/virou Partner (ver
   // PartnerProfile acima) — nullable, a maioria das agências nunca tem um.
   partner_profile   PartnerProfile?
-
 
   // ── Rastreio da plataforma antiga ─────────────────────────────────────
   // id numérico do registro equivalente no dump legado (Dump20260423.sql).
@@ -511,7 +510,6 @@ model Nomade {
   task_executions     TaskExecution[]
   withdrawal_requests WithdrawalRequest[]
   habilidades         NomadeHabilidade[]
-
 
   // ── Rastreio da plataforma antiga ─────────────────────────────────────
   // id numérico do registro equivalente no dump legado (Dump20260423.sql).
@@ -719,13 +717,12 @@ model Project {
   credentials     ProjectCredential[]
   attachments     ProjectAttachment[]
 
-
   // ── Rastreio da plataforma antiga ─────────────────────────────────────
   // id numérico do registro equivalente no dump legado (Dump20260423.sql).
   // Só preenchido em registros importados por scripts/import-legacy-*;
   // serve pra consultar a origem e pra tornar a importação idempotente.
   // Nunca usar em FK ou lookup técnico — o id real continua sendo o `id`.
-  legacy_id Int? @unique
+  legacy_id        Int? @unique
   // clientId da plataforma antiga — Project não tem FK pra Client no modelo
   // novo, então o vínculo do projeto importado com seu cliente fica aqui.
   legacy_client_id Int?
@@ -821,14 +818,14 @@ model TaskExecution {
 // ─── Products ─────────────────────────────────────────────────────────────────
 
 model Product {
-  id                String   @id @default(cuid())
+  id                      String   @id @default(cuid())
   // Código público sequencial exibido na UI e usado na URL (formato
   // "prod_1", "prod_2"...), mesmo padrão do "user_N"/"emp_N" — ver
   // src/lib/product-code.ts. Nunca usar no lugar de `id` (FK/lookup
   // técnico) — é só para exibição/URL amigável.
-  product_code      String?  @unique
-  name              String
-  description       String?  @db.LongText
+  product_code            String?  @unique
+  name                    String
+  description             String?  @db.LongText
   // Sem @db.VarChar explícito, o Prisma aplicava o padrão de 191 chars pro
   // MySQL — curto demais pro conteúdo real (ex.: PA0003 tem 251 chars, texto
   // legítimo, não lixo de dado). Ampliado com folga; continua VarChar (não
@@ -838,22 +835,22 @@ model Product {
   // 500 chars (ex.: 549 chars, texto legítimo) — VarChar(500) ainda
   // estourava. Trocado pra LongText (sem teto) — ver migration
   // widen_short_description_longtext.
-  short_description String?  @db.LongText
-  category          String
-  tags              String?  @db.LongText
+  short_description       String?  @db.LongText
+  category                String
+  tags                    String?  @db.LongText
   // JSON: string[]
-  base_price        Float    @default(0)
-  complexity        String   @default("basic")
+  base_price              Float    @default(0)
+  complexity              String   @default("basic")
   // basic | intermediate | advanced | premium
-  visibility        String   @default("{\"company\":true,\"agency\":true,\"partner\":false,\"inHouse\":false}")
+  visibility              String   @default("{\"company\":true,\"agency\":true,\"partner\":false,\"inHouse\":false}")
   // JSON: ProductVisibility
-  image             String?  @db.LongText
-  demonstrations    String?  @db.LongText
+  image                   String?  @db.LongText
+  demonstrations          String?  @db.LongText
   // JSON: string[]
-  contract_count    Int      @default(0)
-  average_rating    Float    @default(0)
-  completion_time   String?
-  is_active         Boolean  @default(true)
+  contract_count          Int      @default(0)
+  average_rating          Float    @default(0)
+  completion_time         String?
+  is_active               Boolean  @default(true)
   // Se as tarefas geradas por este produto precisam do aceite do cliente
   // depois do aceite da agência. Regra do produto, não do projeto: é o tipo
   // de entrega que determina se o cliente confere (identidade visual, sim;
@@ -862,11 +859,11 @@ model Product {
   // Copiado para `ProjectTask.exige_aprovacao_cliente` na geração — a tarefa
   // guarda o valor vigente na contratação, para que mudar o produto depois
   // não altere o que já foi vendido. Ver src/lib/generate-tasks.ts.
-  exige_aprovacao_cliente Boolean @default(true)
-  metadata          String?  @db.LongText
+  exige_aprovacao_cliente Boolean  @default(true)
+  metadata                String?  @db.LongText
   // JSON: extras do frontend (tasks, recurrence, summaryDescription, pricing calc, etc.)
-  created_at        DateTime @default(now())
-  updated_at        DateTime @updatedAt
+  created_at              DateTime @default(now())
+  updated_at              DateTime @updatedAt
 
   variations       ProductVariation[]
   addons           ProductAddon[]
@@ -875,7 +872,6 @@ model Product {
   project_tasks    ProjectTask[]
   payment_items    PaymentItem[]
   versions         ProductVersion[]
-
 
   // ── Rastreio da plataforma antiga ─────────────────────────────────────
   // id numérico do registro equivalente no dump legado (Dump20260423.sql).
@@ -927,7 +923,7 @@ model ProductVariation {
   updated_at        DateTime? @updatedAt
   // nullable: SQLite ALTER TABLE ADD COLUMN não suporta NOT NULL sem DEFAULT literal
 
-  project_products ProjectProduct[]
+  project_products   ProjectProduct[]
   catalog_task_links ProductCatalogTask[]
 
   @@map("product_variations")
@@ -997,7 +993,6 @@ model CatalogTask {
 
   created_at DateTime @default(now())
   updated_at DateTime @updatedAt
-
 
   // id do task_template equivalente na plataforma antiga (só em modelos
   // importados). Ver scripts/import-legacy-task-catalog.ts.
@@ -1078,8 +1073,6 @@ model ProjectProduct {
   credentials   ProjectCredential[]
   payment_items PaymentItem[]
 
-  @@unique([project_id, product_id])
-
   // ── Rastreio da plataforma antiga ─────────────────────────────────────
   // id numérico do registro equivalente no dump legado (Dump20260423.sql).
   // Só preenchido em registros importados por scripts/import-legacy-*;
@@ -1087,6 +1080,7 @@ model ProjectProduct {
   // Nunca usar em FK ou lookup técnico — o id real continua sendo o `id`.
   legacy_id Int? @unique
 
+  @@unique([project_id, product_id])
   @@map("project_products")
 }
 
@@ -1190,24 +1184,23 @@ model ProjectTask {
   credentials        ProjectCredential[]
   lider_responsavel  User?                   @relation("TaskLiderResponsavel", fields: [lider_responsavel_id], references: [id])
 
+  // ── Rastreio da plataforma antiga ─────────────────────────────────────
+  // id numérico do registro equivalente no dump legado (Dump20260423.sql).
+  // Só preenchido em registros importados por scripts/import-legacy-*;
+  // serve pra consultar a origem e pra tornar a importação idempotente.
+  // Nunca usar em FK ou lookup técnico — o id real continua sendo o `id`.
+  legacy_id    Int?    @unique
+  // true = tarefa que veio da plataforma antiga e continua no modelo antigo
+  // (não foi possível adaptá-la ao produto/CatalogTask novo). A UI deve
+  // sinalizar isso; o motor novo não deve assumir etapas/briefing dela.
+  legacy_model Boolean @default(false)
+
   @@index([origin_payment_id])
   @@index([project_id])
   @@index([status])
   @@index([assignee_id])
   @@index([nomade_responsavel_id])
   @@index([responsavel_agencia_id])
-
-  // ── Rastreio da plataforma antiga ─────────────────────────────────────
-  // id numérico do registro equivalente no dump legado (Dump20260423.sql).
-  // Só preenchido em registros importados por scripts/import-legacy-*;
-  // serve pra consultar a origem e pra tornar a importação idempotente.
-  // Nunca usar em FK ou lookup técnico — o id real continua sendo o `id`.
-  legacy_id Int? @unique
-  // true = tarefa que veio da plataforma antiga e continua no modelo antigo
-  // (não foi possível adaptá-la ao produto/CatalogTask novo). A UI deve
-  // sinalizar isso; o motor novo não deve assumir etapas/briefing dela.
-  legacy_model Boolean @default(false)
-
   @@index([lider_responsavel_id])
   @@map("project_tasks")
 }
@@ -1260,7 +1253,7 @@ model ProjectTaskStage {
   iniciada_em         DateTime?
   concluida_em        DateTime?
   concluida_por       String?
-  checklist_snapshot        String? @db.LongText
+  checklist_snapshot  String?   @db.LongText
   // JSON: ChecklistItem[]
 
   created_at DateTime @default(now())
@@ -1421,25 +1414,25 @@ model AIServiceConfig {
 }
 
 model AIModelPricing {
-  id                        String          @id @default(cuid())
-  service_id                String
-  service                   AIServiceConfig @relation(fields: [service_id], references: [id], onDelete: Cascade)
+  id         String          @id @default(cuid())
+  service_id String
+  service    AIServiceConfig @relation(fields: [service_id], references: [id], onDelete: Cascade)
 
-  model                     String
+  model                    String
   // Como este modelo é cobrado — nem toda IA cobra por token: geração de
   // imagem/vídeo costuma ser por unidade. "tokens" usa os dois campos por
   // milhão abaixo; qualquer outro valor usa `unit_price` (preço de UMA
   // unidade — 1 imagem, 1 segundo de vídeo, 1 chamada, o que fizer sentido
   // pro provedor).
-  pricing_unit              String          @default("tokens")
+  pricing_unit             String @default("tokens")
   // "tokens" | "image" | "video_second" | "request" | "minute"
-  input_price_per_million   Float?
+  input_price_per_million  Float?
   // preço em `currency` por 1.000.000 de tokens de entrada (só pricing_unit = "tokens")
-  output_price_per_million  Float?
+  output_price_per_million Float?
   // preço em `currency` por 1.000.000 de tokens de saída, inclui "thinking" (só pricing_unit = "tokens")
-  unit_price                Float?
+  unit_price               Float?
   // preço em `currency` por 1 unidade (pricing_unit != "tokens")
-  currency                  String          @default("USD")
+  currency                 String @default("USD")
 
   created_at DateTime @default(now())
   updated_at DateTime @updatedAt
@@ -1449,21 +1442,21 @@ model AIModelPricing {
 }
 
 model AIUsageLog {
-  id                 String          @id @default(cuid())
-  service_id         String
-  service            AIServiceConfig @relation(fields: [service_id], references: [id], onDelete: Cascade)
+  id         String          @id @default(cuid())
+  service_id String
+  service    AIServiceConfig @relation(fields: [service_id], references: [id], onDelete: Cascade)
 
   model              String
   feature            String
   // qual fluxo chamou: "fill-briefing" | "improve-answer" |
   // "improve-product-field" | "research-product-pricing" | ...
-  prompt_tokens      Int             @default(0)
-  completion_tokens  Int             @default(0)
-  total_tokens       Int             @default(0)
-  units              Int             @default(0)
+  prompt_tokens      Int     @default(0)
+  completion_tokens  Int     @default(0)
+  total_tokens       Int     @default(0)
+  units              Int     @default(0)
   // usado quando o modelo é cobrado por unidade (pricing_unit != "tokens") —
   // ex: 1 imagem gerada, 30 (segundos) de vídeo.
-  estimated_cost_usd Float           @default(0)
+  estimated_cost_usd Float   @default(0)
   user_id            String?
 
   created_at DateTime @default(now())
@@ -1556,16 +1549,16 @@ model NotificationMessage {
 }
 
 model NotificationRule {
-  id         String              @id @default(cuid())
-  message_id String
-  message    NotificationMessage @relation(fields: [message_id], references: [id], onDelete: Cascade)
-  name       String
-  is_active  Boolean             @default(true)
+  id                   String              @id @default(cuid())
+  message_id           String
+  message              NotificationMessage @relation(fields: [message_id], references: [id], onDelete: Cascade)
+  name                 String
+  is_active            Boolean             @default(true)
   // Publico-alvo: listas de account_type e de role. Vazias = todos.
   target_account_types Json?
   target_roles         Json?
-  created_at DateTime @default(now())
-  updated_at DateTime @updatedAt
+  created_at           DateTime            @default(now())
+  updated_at           DateTime            @updatedAt
 
   @@index([message_id])
   @@map("notification_rules")
@@ -2442,4 +2435,138 @@ model LegacyRecord {
   @@index([nomade_legacy_id])
   @@index([data])
   @@map("legacy_records")
+}
+
+// ── Acesso ao produto "Ajuda e sugestões" (integração Allka <-> Roadmap) ──
+// Decisão de autorização é sempre desta plataforma (Allka), nunca do
+// Roadmap — ver lib/product-feedback-access-decision.ts, a única função
+// canônica que lê estes 4 primeiros modelos para decidir canUse. Os campos
+// enabled/default_policy/effect/priority usam String (não enum do Prisma)
+// só porque o restante do schema já segue esse padrão em todo o arquivo.
+
+// Singleton: sempre uma única linha, id fixo "singleton" — ver
+// resolveProductFeedbackConfig() no backend. Não modelar como settings
+// genérico porque este produto tem regras de leitura próprias (ver
+// decideProductFeedbackAccess) e não precisa de um KV genérico.
+model ProductFeedbackAccessConfig {
+  id             String   @id @default(cuid())
+  enabled        Boolean  @default(true)
+  default_policy String   @default("ALLOW_ALL_ACTIVE")
+  // ALLOW_ALL_ACTIVE | DENY_ALL_EXCEPT_ALLOWED
+  updated_by_id  String?
+  // Sem relation formal pra User de propósito — é só rastro de auditoria
+  // (quem mexeu por último), resolvido por consulta no endpoint de admin,
+  // igual ao StatusHistory.createdBy do lado Roadmap.
+  created_at     DateTime @default(now())
+  updated_at     DateTime @updatedAt
+
+  @@map("product_feedback_access_configs")
+}
+
+model ProductFeedbackAccessGroup {
+  id            String    @id @default(cuid())
+  name          String
+  effect        String
+  // ALLOW | DENY
+  priority      Int       @default(0)
+  active        Boolean   @default(true)
+  expires_at    DateTime?
+  reason        String?   @db.Text
+  archived_at   DateTime?
+  created_by_id String?
+  created_at    DateTime  @default(now())
+  updated_at    DateTime  @updatedAt
+
+  members ProductFeedbackAccessGroupMember[]
+
+  @@index([active])
+  @@index([effect, priority])
+  @@index([archived_at])
+  @@map("product_feedback_access_groups")
+}
+
+model ProductFeedbackAccessGroupMember {
+  id          String                     @id @default(cuid())
+  group_id    String
+  group       ProductFeedbackAccessGroup @relation(fields: [group_id], references: [id], onDelete: Cascade)
+  user_id     String
+  user        User                       @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  added_by_id String?
+  created_at  DateTime                   @default(now())
+
+  @@unique([group_id, user_id])
+  @@index([user_id])
+  @@map("product_feedback_access_group_members")
+}
+
+// Uma linha por usuário no máximo (@unique em user_id) — "sem override"
+// simplesmente não tem linha aqui, não uma linha com effect=INHERIT (embora
+// INHERIT também seja um valor válido, pra permitir "eu já tive uma decisão
+// aqui e agora quero voltar explicitamente a herdar dos grupos/política").
+model ProductFeedbackUserOverride {
+  id            String    @id @default(cuid())
+  user_id       String    @unique
+  user          User      @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  effect        String
+  // ALLOW | DENY | INHERIT
+  active        Boolean   @default(true)
+  expires_at    DateTime?
+  reason        String?   @db.Text
+  updated_by_id String?
+  created_at    DateTime  @default(now())
+  updated_at    DateTime  @updatedAt
+
+  @@map("product_feedback_user_overrides")
+}
+
+model ProductFeedbackAccessAudit {
+  id             String   @id @default(cuid())
+  actor_id       String?
+  target_user_id String?
+  action         String
+  // ex.: "config.updated" | "override.set" | "group.created" |
+  // "group.archived" | "group.member_added" | "group.member_removed"
+  before_json    String?  @db.Text
+  after_json     String?  @db.Text
+  reason         String?  @db.Text
+  created_at     DateTime @default(now())
+
+  @@index([target_user_id])
+  @@index([actor_id])
+  @@index([action])
+  @@index([created_at])
+  @@map("product_feedback_access_audits")
+}
+
+// Um chamado aberto por um usuário Allka via a integração — o espelho local
+// do que existe no Roadmap (identificado só pelo protocolo ALK-...), pra
+// "Meus chamados" não depender de o Roadmap estar sempre no ar pra listar
+// pelo menos os protocolos e o último status conhecido.
+// Doubles as this feature's local idempotency ledger, not just a display
+// cache. idempotency_key is the frontend-generated clientSubmissionId
+// (stable across retries of the same logical submit — see
+// product-feedback-widget.tsx), reused as-is as the idempotencyKey sent to
+// the Roadmap. A row is created BEFORE the Roadmap call, with protocol
+// still null — that's the "pending" state a retry finds and resumes from
+// if the previous attempt crashed/timed out between calling the Roadmap
+// and finishing the local write. payload_hash lets a retry be told apart
+// from a genuine reuse-with-different-content (409), without needing a
+// network round trip to the Roadmap just to find out.
+model ProductFeedbackWorkItemLink {
+  id                String    @id @default(cuid())
+  user_id           String
+  user              User      @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  protocol          String?   @unique
+  payload_hash      String
+  correlation_id    String
+  idempotency_key   String    @unique
+  type              String
+  // PROBLEM | IDEA | IMPROVEMENT
+  title             String
+  cached_status     String?
+  cached_updated_at DateTime?
+  created_at        DateTime  @default(now())
+
+  @@index([user_id])
+  @@map("product_feedback_work_item_links")
 }

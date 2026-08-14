@@ -17,12 +17,15 @@ export interface LocaleContent {
 
 export interface LoginRoleConfig {
   gradient: string;
-  defaultEmail: string;
+  /**
+   * Preenchido só em desenvolvimento local (ver lib/dev-login-credentials.ts)
+   * — nunca um valor fixo aqui. Ausente/undefined = campo começa vazio,
+   * comportamento normal em produção.
+   */
+  defaultEmail?: string;
   defaultPassword?: string;
   redirectPath: string;
   translations: Record<Locale, LocaleContent>;
-  /** Email do usuário de desenvolvimento — auto-login em modo mock */
-  devUser?: { email: string };
   /** Tamanho customizado para linhas outlined (ex: "clamp(4rem, 7vw, 8rem)") */
   outlinedFontSize?: string;
   /** Tipo de acesso que esta página de login representa */
@@ -219,7 +222,7 @@ export function LoginPageTemplate({ config }: Props) {
   const [perfilId, setPerfilId] = useState(config.perfis?.[0]?.id ?? "");
   const perfil = config.perfis?.find((p) => p.id === perfilId);
   const [email, setEmail] = useState(
-    config.perfis?.[0]?.email ?? config.defaultEmail,
+    config.perfis?.[0]?.email ?? config.defaultEmail ?? "",
   );
   const destino = perfil?.redirectPath ?? config.redirectPath;
   const [password, setPassword] = useState(config.defaultPassword ?? "");

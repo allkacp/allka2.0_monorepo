@@ -36,6 +36,7 @@ import { OpenScreensTray } from "@/components/open-screens-tray";
 import { AlertsHeaderIcon } from "@/components/alerts-header-icon";
 import { HeaderFloatingTools } from "@/components/header-floating-tools";
 import { PinActivationListener } from "@/components/pin-activation-listener";
+import { ProductFeedbackWidget } from "@/components/product-feedback-widget";
 import { isStandardShellRoute } from "@/components/standard-page-shell";
 
 import { PartnerProvider } from "@/contexts/partner-context";
@@ -131,6 +132,7 @@ const AdminConfiguracoesPage = React.lazy(
 );
 const AdminSistemaPage = React.lazy(() => import("@/app/admin/sistema/page"));
 const AdminAlertasPage = React.lazy(() => import("@/app/admin/alertas/page"));
+const AdminAcessoChamadosPage = React.lazy(() => import("@/app/admin/acesso-chamados/page"));
 
 // ─── Nômades Pages ────────────────────────────────────────────────────────────
 const NomadDashboardPage = React.lazy(
@@ -569,6 +571,7 @@ function AppLayout({ children }: { children: React.ReactNode }) {
                             {/* Alertas, modo escuro e tamanho de fonte — logo abaixo da bandeja */}
                             <AlertsHeaderIcon />
                             <HeaderFloatingTools />
+                            <ProductFeedbackWidget />
                             <PinActivationListener />
                           </NotificationsPanelProvider>
                           </ProjectBasketProvider>
@@ -860,6 +863,7 @@ export default function App() {
                   />
                   <Route path="/admin/sistema" element={<AdminSistemaPage />} />
                   <Route path="/admin/alertas" element={<AdminAlertasPage />} />
+                  <Route path="/admin/acesso-chamados" element={<AdminAcessoChamadosPage />} />
                   {/* ─── Nômade dashboard (replica do admin) ────────────── */}
                   <Route
                     path="/nomad/dashboard"

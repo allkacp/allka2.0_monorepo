@@ -35,11 +35,17 @@ env:
   REGISTRY: ghcr.io
   FRONTEND_DOMAIN: allka.store
   API_DOMAIN: api.allka.store
+  ROADMAP_QA_DOMAIN: ${{ secrets.ROADMAP_QA_DOMAIN || 'roadmap-qa.allka.store' }}
   VITE_API_URL: ${{ secrets.VITE_API_URL || 'https://api.allka.store/api' }}
   VPS_DEPLOY_PATH: ${{ secrets.VPS_DEPLOY_PATH || '/opt/allka-2026' }}
   MYSQL_DATABASE: ${{ secrets.MYSQL_DATABASE || 'allka' }}
   MYSQL_USER: ${{ secrets.MYSQL_USER || 'allka' }}
   RUN_RESET_USERS_PASSWORD: ${{ vars.RUN_RESET_USERS_PASSWORD || 'false' }}
+  # Etapa D (staged rollout): stays 'false' until the Roadmap QA stack is
+  # confirmed healthy on its own — flipping this alone (a repo Variable,
+  # not a secret, re-dispatch to take effect) is the ONLY change needed to
+  # turn the integration on, no code change required.
+  PRODUCT_FEEDBACK_ENABLED: ${{ vars.PRODUCT_FEEDBACK_ENABLED || 'false' }}
 
 jobs:
   deploy:
@@ -109,6 +115,10 @@ jobs:
           MYSQL_PASSWORD: ${{ secrets.MYSQL_PASSWORD }}
           MYSQL_ROOT_PASSWORD: ${{ secrets.MYSQL_ROOT_PASSWORD }}
           JWT_SECRET: ${{ secrets.JWT_SECRET }}
+          ROADMAP_HMAC_KEY_ID: ${{ secrets.ROADMAP_HMAC_KEY_ID }}
+          ROADMAP_HMAC_SECRET: ${{ secrets.ROADMAP_HMAC_SECRET }}
+          ROADMAP_QA_BASIC_AUTH_USER: ${{ secrets.ROADMAP_QA_BASIC_AUTH_USER }}
+          ROADMAP_QA_BASIC_AUTH_HASH: ${{ secrets.ROADMAP_QA_BASIC_AUTH_HASH }}
         run: |
           : "${VPS_HOST:?Set the VPS_HOST secret}"
           : "${VPS_USER:?Set the VPS_USER secret}"
@@ -118,6 +128,10 @@ jobs:
           : "${MYSQL_PASSWORD:?Set the MYSQL_PASSWORD secret}"
           : "${MYSQL_ROOT_PASSWORD:?Set the MYSQL_ROOT_PASSWORD secret}"
           : "${JWT_SECRET:?Set the JWT_SECRET secret}"
+          : "${ROADMAP_HMAC_KEY_ID:?Set the ROADMAP_HMAC_KEY_ID secret}"
+          : "${ROADMAP_HMAC_SECRET:?Set the ROADMAP_HMAC_SECRET secret}"
+          : "${ROADMAP_QA_BASIC_AUTH_USER:?Set the ROADMAP_QA_BASIC_AUTH_USER secret}"
+          : "${ROADMAP_QA_BASIC_AUTH_HASH:?Set the ROADMAP_QA_BASIC_AUTH_HASH secret}"
 
       - name: Render deploy files
         shell: bash
@@ -128,6 +142,10 @@ jobs:
           MYSQL_ROOT_PASSWORD: ${{ secrets.MYSQL_ROOT_PASSWORD }}
           JWT_SECRET: ${{ secrets.JWT_SECRET }}
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          ROADMAP_HMAC_KEY_ID: ${{ secrets.ROADMAP_HMAC_KEY_ID }}
+          ROADMAP_HMAC_SECRET: ${{ secrets.ROADMAP_HMAC_SECRET }}
+          ROADMAP_QA_BASIC_AUTH_USER: ${{ secrets.ROADMAP_QA_BASIC_AUTH_USER }}
+          ROADMAP_QA_BASIC_AUTH_HASH: ${{ secrets.ROADMAP_QA_BASIC_AUTH_HASH }}
         run: |
           mkdir -p .deploy/infra/caddy
           cp docker-compose.prod.yml .deploy/docker-compose.yml
@@ -142,6 +160,11 @@ jobs:
             printf 'MYSQL_USER=%s\n' "$MYSQL_USER"
             printf 'MYSQL_PASSWORD=%s\n' "$MYSQL_PASSWORD"
             printf 'MYSQL_ROOT_PASSWORD=%s\n' "$MYSQL_ROOT_PASSWORD"
+            # Consumidas pelo serviço caddy (reverse proxy da Central QA) —
+            # nunca pelo backend.
+            printf 'ROADMAP_QA_DOMAIN=%s\n' "$ROADMAP_QA_DOMAIN"
+            printf 'ROADMAP_QA_BASIC_AUTH_USER=%s\n' "$ROADMAP_QA_BASIC_AUTH_USER"
+            printf 'ROADMAP_QA_BASIC_AUTH_HASH=%s\n' "$ROADMAP_QA_BASIC_AUTH_HASH"
           } > .deploy/.env
 
           {
@@ -155,6 +178,18 @@ jobs:
             # pesquisa de mercado, geração de imagem) respondem erro em
             # produção. Vem do secret GEMINI_API_KEY do repositório.
             printf 'GEMINI_API_KEY=%s\n' "$GEMINI_API_KEY"
+            # Integração com a Central de chamados (Roadmap QA). O booleano
+            # abaixo é uma Variable do repositório (não segredo) — trocá-lo
+            # e rodar este workflow de novo é o único passo para ligar/
+            # desligar a integração (Etapa D), sem mexer em código nem em
+            # nenhum dos segredos HMAC.
+            printf 'PRODUCT_FEEDBACK_ENABLED=%s\n' "$PRODUCT_FEEDBACK_ENABLED"
+            printf 'PRODUCT_FEEDBACK_ENVIRONMENT=qa\n'
+            printf 'ROADMAP_API_URL=http://allka-roadmap-qa-backend:3002\n'
+            printf 'ROADMAP_HMAC_KEY_ID=%s\n' "$ROADMAP_HMAC_KEY_ID"
+            printf 'ROADMAP_HMAC_SECRET=%s\n' "$ROADMAP_HMAC_SECRET"
+            printf 'ROADMAP_REQUEST_TIMEOUT_MS=5000\n'
+            printf 'ROADMAP_INTERNAL_URL=https://%s\n' "$ROADMAP_QA_DOMAIN"
           } > .deploy/.env.backend
 
       - name: Configure SSH
@@ -261,12 +296,19 @@ jobs:
           )
           printf '%s' "$GHCR_PAT" | ssh "${SSH_OPTS[@]}" "$remote" \
             "docker login ghcr.io -u '$GHCR_USERNAME' --password-stdin"
+          # Idempotent: the network may already exist (created by this same
+          # step on a previous run, or by the Roadmap QA deploy running
+          # first) — `inspect` short-circuits the `create` in that case, so
+          # this never errors on a re-run either way.
+          ssh "${SSH_OPTS[@]}" "$remote" \
+            "docker network inspect allka-proxy-shared >/dev/null 2>&1 || docker network create allka-proxy-shared"
           ssh "${SSH_OPTS[@]}" "$remote" \
             "cd '${VPS_DEPLOY_PATH}' && \
              docker compose --env-file .env -f docker-compose.yml pull backend && \
              docker compose --env-file .env -f docker-compose.yml up -d mysql && \
              docker compose --env-file .env -f docker-compose.yml run --rm migrate && \
              docker compose --env-file .env -f docker-compose.yml up -d --no-deps backend && \
+             docker compose --env-file .env -f docker-compose.yml up -d caddy && \
              docker image prune -f"
 
       # ── Nenhum seed roda automaticamente no deploy ──────────────────────────────

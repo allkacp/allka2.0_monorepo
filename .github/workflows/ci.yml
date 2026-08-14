@@ -1,0 +1,122 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    services:
+      mysql:
+        image: mysql:8.4
+        env:
+          MYSQL_DATABASE: allka
+          MYSQL_USER: allka
+          MYSQL_PASSWORD: allka_ci
+          MYSQL_ROOT_PASSWORD: allka_ci_root
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -uroot -pallka_ci_root --silent"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=10
+
+    env:
+      DATABASE_URL: mysql://allka:allka_ci@127.0.0.1:3306/allka
+      NODE_ENV: test
+      JWT_SECRET: ci-jwt-secret-not-a-real-secret
+      # PRODUCT_FEEDBACK_ENABLED stays off — this job never needs a real
+      # Roadmap to talk to, only the schema/config validation that runs
+      # regardless of the flag.
+      PRODUCT_FEEDBACK_ENABLED: "false"
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Prisma generate
+        run: npm run prisma:generate
+
+      # `migrate deploy` (not used here on purpose): this repo's very first
+      # migration (0_baseline) carries a UTF-8 BOM byte, which MySQL
+      # rejects as a syntax error when applied from scratch — it was
+      # originally introduced via `migrate resolve --applied` against an
+      # already-existing database, so a truly fresh `migrate deploy` had
+      # never been exercised before this workflow existed. Fixing the BOM
+      # would change that migration's checksum, which is already recorded
+      # in the real production database — out of scope for a CI gate to
+      # silently do. `db push` proves the same thing this step actually
+      # cares about (schema.prisma is internally consistent and stands up
+      # a fresh database) without touching migration history at all —
+      # same tradeoff already made in apps/backend/scripts/run-db-tests.ts
+      # for the disposable-database integration tests below.
+      - name: Apply schema to a fresh database (db push)
+        run: npx prisma db push --skip-generate --accept-data-loss --schema=apps/backend/prisma/schema.prisma
+
+      - name: Backend unit tests
+        run: npm run test:unit --workspace apps/backend
+
+      - name: Backend contract tests
+        run: npm run test:roadmap-contract --workspace apps/backend
+
+      - name: Backend build (typecheck)
+        run: npm run build:backend
+
+      - name: Backend DB-backed integration tests
+        env:
+          # root for both: the official mysql image only grants MYSQL_USER
+          # privileges on MYSQL_DATABASE itself, not on the disposable
+          # allka_test_<timestamp> database scripts/run-db-tests.ts creates
+          # per run — the non-admin user gets denied the moment `db push`
+          # tries to write to it, even though CREATE DATABASE (using the
+          # admin URL) already succeeded.
+          TEST_DATABASE_URL: mysql://root:allka_ci_root@127.0.0.1:3306/allka_test
+          TEST_DATABASE_ADMIN_URL: mysql://root:allka_ci_root@127.0.0.1:3306/allka_test
+          # This suite's own before() hook asserts PRODUCT_FEEDBACK_ENABLED
+          # is literally true (config.ts then requires the rest of this
+          # block to be well-formed too) — installRoadmapStub() inside the
+          # test file replaces the actual outbound HTTP call, so
+          # ROADMAP_API_URL is never really contacted, but it still has to
+          # parse as a valid http(s) URL for config.ts's own boot check.
+          PRODUCT_FEEDBACK_ENABLED: "true"
+          PRODUCT_FEEDBACK_ENVIRONMENT: local
+          ROADMAP_API_URL: http://127.0.0.1:39999
+          ROADMAP_HMAC_KEY_ID: ci-test-key-id
+          ROADMAP_HMAC_SECRET: ci0123456789abcdef0123456789abcdef01234567
+        run: npm run test:product-feedback --workspace apps/backend
+
+      - name: Frontend tests
+        run: npm run test --workspace apps/frontend
+
+      - name: Frontend build
+        run: npm run build:frontend
+
+      - name: Scan production build for leaked dev credentials
+        run: npm run test:no-leaked-credentials --workspace apps/frontend
+
+      - name: git diff --check (whitespace errors)
+        run: |
+          BASE="$(git merge-base origin/main HEAD)"
+          git diff --check "$BASE"...HEAD

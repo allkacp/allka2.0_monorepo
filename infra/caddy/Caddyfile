@@ -1,13 +1,36 @@
 {$FRONTEND_DOMAIN:allka.store} {
-  encode zstd gzip
-  reverse_proxy frontend:80
+	encode zstd gzip
+	reverse_proxy frontend:80
 }
 
 www.{$FRONTEND_DOMAIN:allka.store} {
-  redir https://{$FRONTEND_DOMAIN:allka.store}{uri} permanent
+	redir https://{$FRONTEND_DOMAIN:allka.store}{uri} permanent
 }
 
 {$API_DOMAIN:api.allka.store} {
-  encode zstd gzip
-  reverse_proxy backend:3001
+	encode zstd gzip
+	reverse_proxy backend:3001
+}
+
+# Central de chamados e roadmap (QA) — inteiro atrás de Basic Auth, nunca
+# exposta sem ela. O hash vem de ROADMAP_QA_BASIC_AUTH_HASH (gerado com
+# `caddy hash-password`, nunca a senha em texto puro); sem essa variável
+# configurada este bloco falha ao carregar em vez de abrir sem proteção —
+# Caddy recusa iniciar o site com um bloco `basic_auth` sem hash válido.
+{$ROADMAP_QA_DOMAIN:roadmap-qa.allka.store} {
+	encode zstd gzip
+
+	basic_auth {
+		{$ROADMAP_QA_BASIC_AUTH_USER} {$ROADMAP_QA_BASIC_AUTH_HASH}
+	}
+
+	handle /api/* {
+		reverse_proxy allka-roadmap-qa-backend:3002
+	}
+	handle /health {
+		reverse_proxy allka-roadmap-qa-backend:3002
+	}
+	handle {
+		reverse_proxy allka-roadmap-qa-frontend:8080
+	}
 }

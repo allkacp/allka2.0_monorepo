@@ -28,6 +28,7 @@ out/
 !.env.example
 !apps/*/.env.example
 !apps/*/.env.production.example
+!apps/*/.env.local.example
 
 # Runtime logs
 logs/

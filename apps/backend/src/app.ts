@@ -45,6 +45,8 @@ import squadRouter from "./routes/squad";
 import aiConsultorRouter from "./routes/ai-consultor";
 import aiKnowledgeBaseRouter from "./routes/ai-knowledge-base";
 import aiUsageRouter from "./routes/ai-usage";
+import productFeedbackRouter from "./routes/product-feedback";
+import productFeedbackAdminRouter from "./routes/product-feedback-admin";
 import { prisma } from "./lib/prisma";
 import { errorHandler } from "./middleware/error";
 
@@ -187,6 +189,10 @@ app.use("/api/ai-consultor", aiConsultorRouter);
 app.use("/api/ai-knowledge-base", aiKnowledgeBaseRouter);
 // Controle de custo de IA (admin > Configurações) — ver lib/ai-usage-tracker.ts
 app.use("/api/ai-usage", aiUsageRouter);
+// "Ajuda e sugestões" — integração com a Roadmap (chamados de produto).
+// Ver lib/product-feedback-access-decision.ts para a regra de autorização.
+app.use("/api/product-feedback", productFeedbackRouter);
+app.use("/api/admin/product-feedback", productFeedbackAdminRouter);
 
 // ─── 404 Handler ──────────────────────────────────────────────────────────────
 

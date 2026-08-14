@@ -3,7 +3,9 @@ import { describe, it } from "node:test";
 import {
   CONTRACT_API_PREFIX,
   CONTRACT_VERSION,
+  ExternalIdentitySchema,
   GithubLinkEventSchema,
+  HmacHeadersSchema,
   IntegrationErrorResponseSchema,
   IntegrationEventEnvelopeSchema,
   ProtocolSchema,
@@ -33,8 +35,8 @@ const validCreateRequest = {
 };
 
 describe("contract version and prefix", () => {
-  it("exposes CONTRACT_VERSION 1.0.0", () => {
-    assert.equal(CONTRACT_VERSION, "1.0.0");
+  it("exposes CONTRACT_VERSION 1.1.0", () => {
+    assert.equal(CONTRACT_VERSION, "1.1.0");
   });
 
   it("exposes the /api/v1/integrations prefix", () => {
@@ -88,6 +90,57 @@ describe("WorkItemContextualCreateRequestSchema", () => {
     const badType = { ...validCreateRequest, type: "BUG" };
     assert.throws(() => WorkItemContextualCreateRequestSchema.parse(badType));
   });
+
+  function withPathname(pathname: string) {
+    return { ...validCreateRequest, page: { ...validCreateRequest.page, pathname } };
+  }
+
+  it("accepts a clean relative pathname", () => {
+    assert.equal(
+      WorkItemContextualCreateRequestSchema.parse(withPathname("/admin/usuarios")).page.pathname,
+      "/admin/usuarios",
+    );
+  });
+
+  it("rejects a full URL instead of a sanitized pathname", () => {
+    assert.throws(() =>
+      WorkItemContextualCreateRequestSchema.parse(
+        withPathname("https://allka.store/empresas/123?token=secret#frag"),
+      ),
+    );
+  });
+
+  it("rejects a pathname carrying a querystring", () => {
+    assert.throws(() => WorkItemContextualCreateRequestSchema.parse(withPathname("/empresas/123?token=secret")));
+  });
+
+  it("rejects a pathname carrying a fragment", () => {
+    assert.throws(() => WorkItemContextualCreateRequestSchema.parse(withPathname("/empresas/123#section")));
+  });
+
+  it("rejects an empty pathname", () => {
+    assert.throws(() => WorkItemContextualCreateRequestSchema.parse(withPathname("")));
+  });
+
+  it("rejects a protocol-relative pathname (//host looks like a different origin to a browser)", () => {
+    assert.throws(() => WorkItemContextualCreateRequestSchema.parse(withPathname("//evil.example.com/path")));
+  });
+
+  it("rejects a pathname that doesn't start with a slash", () => {
+    assert.throws(() => WorkItemContextualCreateRequestSchema.parse(withPathname("empresas/123")));
+  });
+
+  it("rejects a pathname containing a backslash (smuggled host separator in some parsers)", () => {
+    assert.throws(() => WorkItemContextualCreateRequestSchema.parse(withPathname("/\\evil.example.com")));
+  });
+
+  it("rejects a page context with an extra unknown field", () => {
+    const withExtraField = {
+      ...validCreateRequest,
+      page: { ...validCreateRequest.page, extraField: "not allowed" },
+    };
+    assert.throws(() => WorkItemContextualCreateRequestSchema.parse(withExtraField));
+  });
 });
 
 describe("WorkItemContextualCreateResponseSchema", () => {
@@ -101,6 +154,8 @@ describe("WorkItemContextualCreateResponseSchema", () => {
 describe("WorkItemPublicStatusSchema and WorkItemListQuerySchema", () => {
   const validStatus = {
     protocol: "ALK-482",
+    type: "PROBLEM" as const,
+    title: "O botão de salvar não responde",
     status: "IN_PROGRESS" as const,
     updatedAt: "2026-08-13T10:00:00.000Z",
     solutionSummary: null,
@@ -197,6 +252,72 @@ describe("IntegrationErrorResponseSchema", () => {
   it("rejects an undocumented error code", () => {
     assert.throws(() =>
       IntegrationErrorResponseSchema.parse({ ok: false, code: "SERVER_ERROR", message: "x" }),
+    );
+  });
+});
+
+describe("ExternalIdentitySchema (v1.1.0 additions)", () => {
+  it("still accepts a 1.0.0-shaped identity with only externalUserId", () => {
+    assert.doesNotThrow(() => ExternalIdentitySchema.parse({ externalUserId: "user-1" }));
+  });
+
+  it("accepts the new optional displayName and userCode", () => {
+    assert.doesNotThrow(() =>
+      ExternalIdentitySchema.parse({
+        externalUserId: "user-1",
+        displayName: "Ana Requester",
+        userCode: "EMP-042",
+      }),
+    );
+  });
+
+  it("rejects an email field (identity must never carry one)", () => {
+    assert.throws(() =>
+      ExternalIdentitySchema.parse({
+        externalUserId: "user-1",
+        email: "ana@allka.test",
+      }),
+    );
+  });
+
+  it("rejects a password or token field", () => {
+    assert.throws(() =>
+      ExternalIdentitySchema.parse({ externalUserId: "user-1", password: "x" }),
+    );
+    assert.throws(() =>
+      ExternalIdentitySchema.parse({ externalUserId: "user-1", token: "x" }),
+    );
+  });
+});
+
+describe("HmacHeadersSchema", () => {
+  it("accepts a well-formed set of signed headers", () => {
+    assert.doesNotThrow(() =>
+      HmacHeadersSchema.parse({
+        "x-allka-key-id": "key-2026-08",
+        "x-allka-timestamp": "1700000000",
+        "x-allka-signature": `v1=${"a".repeat(64)}`,
+      }),
+    );
+  });
+
+  it("rejects a non-numeric timestamp", () => {
+    assert.throws(() =>
+      HmacHeadersSchema.parse({
+        "x-allka-key-id": "key-2026-08",
+        "x-allka-timestamp": "not-a-number",
+        "x-allka-signature": `v1=${"a".repeat(64)}`,
+      }),
+    );
+  });
+
+  it("rejects a malformed signature", () => {
+    assert.throws(() =>
+      HmacHeadersSchema.parse({
+        "x-allka-key-id": "key-2026-08",
+        "x-allka-timestamp": "1700000000",
+        "x-allka-signature": "not-the-right-shape",
+      }),
     );
   });
 });

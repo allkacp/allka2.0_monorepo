@@ -1,10 +1,11 @@
-# Contrato de integração Allka ↔ Roadmap — v1.0.0
+# Contrato de integração Allka ↔ Roadmap — v1.1.0
 
-Status: **contrato apenas — nenhuma chamada real existe ainda.** Este documento e os schemas em
-`apps/backend/src/lib/roadmap-integration-contract.ts` (Allka, este repo) e
-`apps/backend/src/contracts/allka-integration.ts` (allka-roadmap) descrevem o formato que a
-integração vai usar quando for construída. Nenhuma rota HTTP externa lê ou grava esses formatos
-hoje — eles existem só para os dois lados combinarem o formato com antecedência.
+Status: **implementado e testado localmente (Lote 1).** As três rotas de criação/consulta
+existem de verdade nos dois lados, assinadas por HMAC, e uma prova local ponta a ponta
+(autenticar um usuário Allka descartável, abrir chamado, ver o protocolo, mudar status e
+comentário no lado Roadmap, refletir em "Meus chamados", bloquear/desbloquear acesso pelo Admin)
+passou com os dois backends rodando localmente. Nenhuma rota de produção/QA foi tocada — este
+lote não fez deploy.
 
 Este documento é o espelho versionado, com os mesmos schemas, de
 `allka-roadmap/docs/integration-contract-v1.md`. Ao alterar um lado, altere o outro e suba
@@ -64,7 +65,8 @@ sequenceDiagram
 
 ## 4. Criação contextual (Allka → Roadmap)
 
-`POST /api/v1/integrations/allka/work-items` (endpoint futuro, ainda não implementado)
+`POST /api/v1/integrations/allka/work-items` (implementado — ver
+`allka-roadmap/apps/backend/src/routes/integrations/allka-work-items.ts`)
 
 Schema: `WorkItemContextualCreateRequestSchema`.
 
@@ -169,8 +171,14 @@ mensagem de commit.
 
 ## 10. O que este contrato NÃO cobre ainda
 
-- Rota HTTP real implementada em qualquer um dos dois lados.
-- Qualquer chamada de rede entre os serviços.
+- Outbox e eventos duráveis — "Meus chamados" hoje atualiza por consulta manual e polling de
+  ~30s enquanto a tela está aberta, não por webhook.
+- Vínculo com GitHub/deploy.
 - SSO/JIT real para a equipe interna.
-- Página `/admin/acesso-chamados` e o botão "Ajuda e sugestões" na Allka (planejados em
-  `entregas/ADENDO-COPILOT-CONTROLE-DE-ACESSO-AO-BOTAO-DE-CHAMADOS.md`, fora do escopo deste lote).
+- Anexo/screenshot no formulário da Allka.
+- Qualquer coisa em produção ou QA — este lote rodou só localmente, sem deploy.
+
+O que já existe e funciona (Lote 1): as três rotas de integração no Roadmap, assinatura HMAC
+v1.1.0, idempotência, e do lado Allka o controle de acesso (grupos/overrides/auditoria), o
+cliente HTTP assinado, os endpoints `/api/product-feedback/*` e `/api/admin/product-feedback/*`,
+o botão "Ajuda e sugestões", "Meus chamados" e a página `/admin/acesso-chamados`.

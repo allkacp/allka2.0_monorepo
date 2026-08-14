@@ -54,7 +54,13 @@ export interface User {
    * so pela role, que e o comportamento de quem nunca teve perfil.
    */
   admin_profile_id?: string | null;
-  admin_profile?: { id: string; name: string; is_master: boolean } | null;
+  admin_profile?: {
+    id: string;
+    name: string;
+    is_master: boolean;
+    is_active?: boolean;
+    permissions?: { module: string; action: string }[];
+  } | null;
   status?: UserStatus;
   account_type: AccountType;
   account_sub_type: AccountSubType | null;

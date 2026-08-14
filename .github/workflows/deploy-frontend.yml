@@ -33,6 +33,7 @@ env:
   REGISTRY: ghcr.io
   FRONTEND_DOMAIN: allka.store
   API_DOMAIN: api.allka.store
+  ROADMAP_QA_DOMAIN: ${{ secrets.ROADMAP_QA_DOMAIN || 'roadmap-qa.allka.store' }}
   VITE_API_URL: ${{ secrets.VITE_API_URL || 'https://api.allka.store/api' }}
   VPS_DEPLOY_PATH: ${{ secrets.VPS_DEPLOY_PATH || '/opt/allka-2026' }}
   MYSQL_DATABASE: ${{ secrets.MYSQL_DATABASE || 'allka' }}
@@ -106,12 +107,16 @@ jobs:
           VPS_SSH_PORT: ${{ secrets.VPS_SSH_PORT }}
           VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
           GHCR_PAT: ${{ secrets.GHCR_PAT }}
+          ROADMAP_QA_BASIC_AUTH_USER: ${{ secrets.ROADMAP_QA_BASIC_AUTH_USER }}
+          ROADMAP_QA_BASIC_AUTH_HASH: ${{ secrets.ROADMAP_QA_BASIC_AUTH_HASH }}
         run: |
           : "${VPS_HOST:?Set the VPS_HOST secret}"
           : "${VPS_USER:?Set the VPS_USER secret}"
           : "${VPS_SSH_PORT:?Set the VPS_SSH_PORT secret}"
           : "${VPS_SSH_KEY:?Set the VPS_SSH_KEY secret}"
           : "${GHCR_PAT:?Set the GHCR_PAT secret}"
+          : "${ROADMAP_QA_BASIC_AUTH_USER:?Set the ROADMAP_QA_BASIC_AUTH_USER secret}"
+          : "${ROADMAP_QA_BASIC_AUTH_HASH:?Set the ROADMAP_QA_BASIC_AUTH_HASH secret}"
 
       - name: Render deploy files
         shell: bash
@@ -121,6 +126,8 @@ jobs:
           MYSQL_PASSWORD: ${{ secrets.MYSQL_PASSWORD }}
           MYSQL_ROOT_PASSWORD: ${{ secrets.MYSQL_ROOT_PASSWORD }}
           JWT_SECRET: ${{ secrets.JWT_SECRET }}
+          ROADMAP_QA_BASIC_AUTH_USER: ${{ secrets.ROADMAP_QA_BASIC_AUTH_USER }}
+          ROADMAP_QA_BASIC_AUTH_HASH: ${{ secrets.ROADMAP_QA_BASIC_AUTH_HASH }}
         run: |
           mkdir -p .deploy/infra/caddy
           cp docker-compose.prod.yml .deploy/docker-compose.yml
@@ -135,6 +142,12 @@ jobs:
             printf 'MYSQL_USER=%s\n' "$MYSQL_USER"
             printf 'MYSQL_PASSWORD=%s\n' "$MYSQL_PASSWORD"
             printf 'MYSQL_ROOT_PASSWORD=%s\n' "$MYSQL_ROOT_PASSWORD"
+            # Mesmos valores que deploy-backend.yml grava — mantidos aqui
+            # também porque este workflow reescreve o .env inteiro (só
+            # preserva BACKEND_IMAGE via sed depois, ver abaixo).
+            printf 'ROADMAP_QA_DOMAIN=%s\n' "$ROADMAP_QA_DOMAIN"
+            printf 'ROADMAP_QA_BASIC_AUTH_USER=%s\n' "$ROADMAP_QA_BASIC_AUTH_USER"
+            printf 'ROADMAP_QA_BASIC_AUTH_HASH=%s\n' "$ROADMAP_QA_BASIC_AUTH_HASH"
           } > .deploy/.env
 
       - name: Configure SSH
@@ -240,6 +253,10 @@ jobs:
           )
           printf '%s' "$GHCR_PAT" | ssh "${SSH_OPTS[@]}" "$remote" \
             "docker login ghcr.io -u '$GHCR_USERNAME' --password-stdin"
+          # Idempotent — see the matching step in deploy-backend.yml for why
+          # this can't just be `docker network create` unconditionally.
+          ssh "${SSH_OPTS[@]}" "$remote" \
+            "docker network inspect allka-proxy-shared >/dev/null 2>&1 || docker network create allka-proxy-shared"
           ssh "${SSH_OPTS[@]}" "$remote" \
             "cd '${VPS_DEPLOY_PATH}' && \
              docker compose --env-file .env -f docker-compose.yml pull frontend && \
