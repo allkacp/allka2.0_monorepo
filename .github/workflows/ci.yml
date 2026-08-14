@@ -94,6 +94,17 @@ jobs:
           # admin URL) already succeeded.
           TEST_DATABASE_URL: mysql://root:allka_ci_root@127.0.0.1:3306/allka_test
           TEST_DATABASE_ADMIN_URL: mysql://root:allka_ci_root@127.0.0.1:3306/allka_test
+          # This suite's own before() hook asserts PRODUCT_FEEDBACK_ENABLED
+          # is literally true (config.ts then requires the rest of this
+          # block to be well-formed too) — installRoadmapStub() inside the
+          # test file replaces the actual outbound HTTP call, so
+          # ROADMAP_API_URL is never really contacted, but it still has to
+          # parse as a valid http(s) URL for config.ts's own boot check.
+          PRODUCT_FEEDBACK_ENABLED: "true"
+          PRODUCT_FEEDBACK_ENVIRONMENT: local
+          ROADMAP_API_URL: http://127.0.0.1:39999
+          ROADMAP_HMAC_KEY_ID: ci-test-key-id
+          ROADMAP_HMAC_SECRET: ci0123456789abcdef0123456789abcdef01234567
         run: npm run test:product-feedback --workspace apps/backend
 
       - name: Frontend tests
