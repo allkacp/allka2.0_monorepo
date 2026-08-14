@@ -59,8 +59,21 @@ jobs:
       - name: Prisma generate
         run: npm run prisma:generate
 
-      - name: Migrations
-        run: npx prisma migrate deploy --schema=apps/backend/prisma/schema.prisma
+      # `migrate deploy` (not used here on purpose): this repo's very first
+      # migration (0_baseline) carries a UTF-8 BOM byte, which MySQL
+      # rejects as a syntax error when applied from scratch — it was
+      # originally introduced via `migrate resolve --applied` against an
+      # already-existing database, so a truly fresh `migrate deploy` had
+      # never been exercised before this workflow existed. Fixing the BOM
+      # would change that migration's checksum, which is already recorded
+      # in the real production database — out of scope for a CI gate to
+      # silently do. `db push` proves the same thing this step actually
+      # cares about (schema.prisma is internally consistent and stands up
+      # a fresh database) without touching migration history at all —
+      # same tradeoff already made in apps/backend/scripts/run-db-tests.ts
+      # for the disposable-database integration tests below.
+      - name: Apply schema to a fresh database (db push)
+        run: npx prisma db push --skip-generate --accept-data-loss --schema=apps/backend/prisma/schema.prisma
 
       - name: Backend unit tests
         run: npm run test:unit --workspace apps/backend
