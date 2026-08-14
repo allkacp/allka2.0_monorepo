@@ -24,8 +24,14 @@ import { z } from "zod";
  * password, or token — see the "never send" list); added the HMAC signed-
  * request header shapes. Every 1.0.0 field/shape is unchanged, so a 1.0.0
  * caller remains valid against this schema.
+ *
+ * 1.2.0: added the SSO handoff (POST .../allka/sso/tickets on Roadmap,
+ * POST /admin/product-feedback/roadmap-sso/start on Allka, POST
+ * /auth/sso/consume on Roadmap) — a separate, additive endpoint set, no
+ * existing work-item schema/field changed. See docs/roadmap-integration-
+ * contract-v1.md section 11.
  */
-export const CONTRACT_VERSION = "1.1.0";
+export const CONTRACT_VERSION = "1.2.0";
 export const CONTRACT_API_PREFIX = "/api/v1/integrations";
 
 // ---------------------------------------------------------------------------

@@ -20,6 +20,7 @@ vi.mock("@/lib/api-client", () => ({
     removeProductFeedbackGroupMember: vi.fn(),
     batchSetProductFeedbackOverride: vi.fn(),
     simulateProductFeedbackAccess: vi.fn(),
+    startRoadmapSso: vi.fn(),
   },
 }));
 

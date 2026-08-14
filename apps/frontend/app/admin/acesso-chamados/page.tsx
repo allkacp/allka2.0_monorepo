@@ -27,6 +27,8 @@ import {
 import { apiClient } from "@/lib/api-client";
 import { tipoDaContaLogada } from "@/lib/conta-logada";
 import { cn } from "@/lib/utils";
+import { hasAdminModulePermission } from "@/lib/admin-permissions";
+import { useOpenRoadmapPanel } from "@/hooks/use-open-roadmap-panel";
 
 type Policy = "ALLOW_ALL_ACTIVE" | "DENY_ALL_EXCEPT_ALLOWED";
 
@@ -106,6 +108,7 @@ export default function AcessoAosChamadosPage() {
   // do middleware: libera tudo.
   const [permissionCheck, setPermissionCheck] = useState<"checking" | "granted" | "denied">("checking");
   const [canEdit, setCanEdit] = useState(false);
+  const roadmapPanel = useOpenRoadmapPanel();
 
   useEffect(() => {
     if (!isAdmin) return;
@@ -114,10 +117,8 @@ export default function AcessoAosChamadosPage() {
       try {
         const me = await apiClient.getCurrentUser();
         const profile = me?.admin_profile;
-        const semControleGranular = !profile || profile.is_active === false || profile.is_master === true;
-        const perms: { module: string; action: string }[] = profile?.permissions ?? [];
-        const podeVer = semControleGranular || perms.some((p) => p.module === "sistema" && p.action === "view");
-        const podeEditar = semControleGranular || perms.some((p) => p.module === "sistema" && p.action === "edit");
+        const podeVer = hasAdminModulePermission(profile, "sistema", "view");
+        const podeEditar = hasAdminModulePermission(profile, "sistema", "edit");
         if (!cancelled) {
           setPermissionCheck(podeVer ? "granted" : "denied");
           setCanEdit(podeEditar);
@@ -401,12 +402,16 @@ export default function AcessoAosChamadosPage() {
         actions={
           <div className="flex items-center gap-2">
             {config?.roadmapInternalUrl && (
-              <a href={config.roadmapInternalUrl} target="_blank" rel="noreferrer">
-                <Button variant="outline" size="sm" className="text-xs gap-1.5">
-                  <ExternalLink className="h-3.5 w-3.5" />
-                  Abrir painel interno
-                </Button>
-              </a>
+              <Button
+                variant="outline"
+                size="sm"
+                className="text-xs gap-1.5"
+                onClick={() => void roadmapPanel.open()}
+                disabled={roadmapPanel.loading}
+              >
+                <ExternalLink className="h-3.5 w-3.5" />
+                {roadmapPanel.loading ? "Abrindo..." : "Abrir painel interno"}
+              </Button>
             )}
             <Button variant="ghost" size="sm" className="text-xs gap-1.5" onClick={() => void loadAll()} disabled={loading}>
               <RefreshCw className={cn("h-3.5 w-3.5", loading && "animate-spin")} />
@@ -416,9 +421,9 @@ export default function AcessoAosChamadosPage() {
         }
       />
 
-      {error && (
+      {(error || roadmapPanel.error) && (
         <div className="rounded-xl border border-red-200 bg-red-50 text-red-700 text-sm px-4 py-3 dark:bg-red-950/30 dark:border-red-800 dark:text-red-300 flex items-center justify-between">
-          {error}
+          {error || roadmapPanel.error}
           <button onClick={() => setError("")} aria-label="Fechar">
             <X className="h-4 w-4" />
           </button>

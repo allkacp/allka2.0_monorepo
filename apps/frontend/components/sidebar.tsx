@@ -23,6 +23,9 @@ import { useSidebar } from "@/contexts/sidebar-context";
 import { SidebarSettingsModal } from "@/components/modals/sidebar-settings-modal";
 import { apiClient } from "@/lib/api-client";
 import { useAgencia } from "@/contexts/agencia-context";
+import { hasAdminModulePermission } from "@/lib/admin-permissions";
+import { useOpenRoadmapPanel } from "@/hooks/use-open-roadmap-panel";
+import { toast } from "@/hooks/use-toast";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import {
   LayoutDashboard,
@@ -64,6 +67,7 @@ import {
   Lock,
   CheckCircle,
   ArrowRight,
+  LifeBuoy,
 } from "lucide-react";
 
 const navigationConfig = {
@@ -500,6 +504,16 @@ const navigationConfig = {
         },
       ],
     },
+    {
+      name: "Roadmap e chamados",
+      icon: LifeBuoy,
+      current: false,
+      // Sem href: nunca deve navegar a aba atual — abre a Central de
+      // Roadmap/chamados (allka-roadmap) autenticada por SSO numa aba nova.
+      // Ver hooks/use-open-roadmap-panel.ts (mesma função usada pelo botão
+      // "Abrir painel interno" em /admin/acesso-chamados).
+      openInNewTab: true,
+    },
   ],
 };
 
@@ -634,6 +648,39 @@ export function Sidebar({ transparent = false }: { transparent?: boolean } = {})
   } = useSidebar();
 
   const agencia = useAgencia();
+
+  // "Roadmap e chamados" só aparece para quem tem a permissão granular real
+  // (módulo "sistema" ou "central_chamados", perfil AdminProfile) — o mesmo
+  // sinal que /admin/acesso-chamados já usa, nunca uma checagem por role
+  // string. É só um sinal de UI: o backend (POST .../roadmap-sso/start)
+  // reaplica a mesma regra e é a autoridade de verdade.
+  const [canOpenRoadmapPanel, setCanOpenRoadmapPanel] = useState(false);
+  useEffect(() => {
+    if (accountType !== "admin") return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const me = await apiClient.getCurrentUser();
+        const profile = me?.admin_profile;
+        const pode =
+          hasAdminModulePermission(profile, "sistema", "view") ||
+          hasAdminModulePermission(profile, "central_chamados", "view");
+        if (!cancelled) setCanOpenRoadmapPanel(pode);
+      } catch {
+        if (!cancelled) setCanOpenRoadmapPanel(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [accountType]);
+
+  const roadmapPanel = useOpenRoadmapPanel();
+  useEffect(() => {
+    if (roadmapPanel.error) {
+      toast({ title: "Roadmap e chamados", description: roadmapPanel.error, variant: "destructive" });
+    }
+  }, [roadmapPanel.error]);
   const agenciaLevel = (agencia.profile?.partnerLevel ?? "bronze") as keyof typeof LEVEL_CONFIG_SIDEBAR;
   const agenciaTotalProjects = agencia.profile?.totalProjects ?? 0;
   const agenciaMrr = agencia.profile?.currentMrr ?? 0;
@@ -788,7 +835,10 @@ export function Sidebar({ transparent = false }: { transparent?: boolean } = {})
   const getNavigationItems = () => {
     // Admin users see all menu items
     if (accountType === "admin") {
-      return navigationConfig.admin.map((item: any) => {
+      const adminItems = canOpenRoadmapPanel
+        ? navigationConfig.admin
+        : navigationConfig.admin.filter((item) => item.name !== "Roadmap e chamados");
+      return adminItems.map((item: any) => {
         if (item.name === "Projetos e Tarefas" && item.subitems) {
           return {
             ...item,
@@ -1678,6 +1728,58 @@ export function Sidebar({ transparent = false }: { transparent?: boolean } = {})
                         })}
                       </div>
                     )}
+                  </div>
+                );
+              }
+
+              if (item.openInNewTab) {
+                return (
+                  <div
+                    key={item.name}
+                    draggable={!collapsed}
+                    onDragStart={(e) => handleDragStart(e, index)}
+                    onDragOver={(e) => handleDragOver(e, index)}
+                    onDragEnd={handleDragEnd}
+                    onDragLeave={handleDragLeave}
+                    className={cn(
+                      "transition-all duration-200",
+                      dragOverItem === index && "border-t-2 border-white/50",
+                      draggedItem === index && "opacity-50",
+                    )}
+                  >
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <button
+                          type="button"
+                          onClick={() => void roadmapPanel.open()}
+                          disabled={roadmapPanel.loading}
+                          className={cn(
+                            "w-full flex items-center px-3 py-2.5 rounded-lg text-xs font-medium transition-all duration-200 group text-white/80 hover:bg-white/10 hover:text-white backdrop-blur-sm disabled:opacity-60",
+                            collapsed && "justify-center",
+                          )}
+                        >
+                          {!collapsed && (
+                            <GripVertical className="h-4 w-4 mr-1 opacity-0 group-hover:opacity-50 transition-opacity cursor-grab" />
+                          )}
+                          {roadmapPanel.loading ? (
+                            <span
+                              className={cn(
+                                "h-5 w-5 rounded-full border-2 border-white/30 border-t-white animate-spin shrink-0",
+                                !collapsed && "mr-3",
+                              )}
+                            />
+                          ) : (
+                            <item.icon className={cn("h-5 w-5 shrink-0", !collapsed && "mr-3")} />
+                          )}
+                          {!collapsed && (
+                            <span className="flex-1 truncate text-left">
+                              {roadmapPanel.loading ? "Abrindo..." : item.name}
+                            </span>
+                          )}
+                        </button>
+                      </TooltipTrigger>
+                      {collapsed && <TooltipContent side="right">{item.name}</TooltipContent>}
+                    </Tooltip>
                   </div>
                 );
               }

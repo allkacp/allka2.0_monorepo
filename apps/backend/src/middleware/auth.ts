@@ -105,6 +105,71 @@ export function requirePermission(module: string, action: PermissionAction) {
   };
 }
 
+export type AdminProfileLike = {
+  is_master: boolean;
+  is_active: boolean;
+  permissions: { module: string; action: string }[];
+} | null | undefined;
+
+/**
+ * Pure decision core of requireAnyPermission() — same rule as
+ * requirePermission(), but passes if the profile has ANY one of the given
+ * (module, action) pairs. Kept separate from the Express wrapper (which
+ * fetches `perfil` from Prisma) so it's testable without mocking the
+ * database, mirroring lib/product-feedback-access-decision.ts's pattern.
+ */
+export function evaluateAnyPermission(
+  perfil: AdminProfileLike,
+  checks: Array<[string, PermissionAction]>,
+): boolean {
+  if (!perfil || !perfil.is_active || perfil.is_master) return true;
+  return checks.some(([module, action]) =>
+    perfil.permissions.some((p) => p.module === module && p.action === action),
+  );
+}
+
+/**
+ * Same rule as requirePermission(), but passes if the profile has ANY one
+ * of the given (module, action) pairs — for features a founder wants to
+ * hand to a narrower group (e.g. "central_chamados") without also handing
+ * out the broader module that already covers it (e.g. "sistema").
+ */
+export function requireAnyPermission(checks: Array<[string, PermissionAction]>) {
+  return async (
+    req: Request,
+    res: Response,
+    next: NextFunction,
+  ): Promise<void> => {
+    if (!req.user) {
+      res.status(401).json({ error: "Não autenticado" });
+      return;
+    }
+
+    try {
+      const user = await prisma.user.findUnique({
+        where: { id: req.user.id },
+        select: {
+          admin_profile: {
+            select: {
+              is_master: true,
+              is_active: true,
+              permissions: { select: { module: true, action: true } },
+            },
+          },
+        },
+      });
+
+      if (!evaluateAnyPermission(user?.admin_profile, checks)) {
+        res.status(403).json({ error: "Seu perfil de acesso não permite esta ação." });
+        return;
+      }
+      next();
+    } catch (err) {
+      next(err);
+    }
+  };
+}
+
 export function requireRole(...roles: string[]) {
   return (req: Request, res: Response, next: NextFunction): void => {
     if (!req.user) {
