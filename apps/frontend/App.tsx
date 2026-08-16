@@ -78,6 +78,8 @@ const AdminCatalogoProdutosPage = React.lazy(
 const AdminPrecificacaoPage = React.lazy(
   () => import("@/app/admin/precificacao/page"),
 );
+const AdminCombosPage = React.lazy(() => import("@/app/admin/combos/page"));
+const AgencyCombosPage = React.lazy(() => import("@/app/agency/combos/page"));
 const AdminTarefasPage = React.lazy(() => import("@/app/admin/tarefas/page"));
 const AdminModelosTarefasPage = React.lazy(
   () => import("@/app/admin/modelos-tarefas/page"),
@@ -778,6 +780,7 @@ export default function App() {
                     path="/admin/precificacao"
                     element={<AdminPrecificacaoPage />}
                   />
+                  <Route path="/admin/combos" element={<AdminCombosPage />} />
                   <Route path="/admin/tarefas" element={<AdminTarefasPage />} />
                   <Route
                     path="/admin/tarefas/:tarefaId"
@@ -1035,6 +1038,10 @@ export default function App() {
                   <Route
                     path="/agency/catalogo"
                     element={<AgencyCatalogoPage />}
+                  />
+                  <Route
+                    path="/agency/combos"
+                    element={<AgencyCombosPage />}
                   />
                   <Route
                     path="/agency/financeiro"

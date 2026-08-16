@@ -72,6 +72,7 @@ import {
   Activity,
   Briefcase,
   Package,
+  Boxes,
   Plus,
   Loader2,
   Trash2,
@@ -740,6 +741,8 @@ function ProductLinkModal({
   onLinked: () => void;
   onClose: () => void;
 }) {
+  const [linkTab, setLinkTab] = useState<"produto" | "combo">("produto");
+
   const [products, setProducts] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
@@ -749,6 +752,16 @@ function ProductLinkModal({
   const [linking, setLinking] = useState(false);
   const [linkError, setLinkError] = useState<string | null>(null);
 
+  // Combos — reaproveita a mesma rota /:id/contract que cria uma
+  // ProjectProduct por produto do combo numa transação só, ver
+  // routes/product-bundles.ts.
+  const [bundles, setBundles] = useState<any[]>([]);
+  const [loadingBundles, setLoadingBundles] = useState(true);
+  const [bundleSearch, setBundleSearch] = useState("");
+  const [selectedBundle, setSelectedBundle] = useState<any>(null);
+  const [contracting, setContracting] = useState(false);
+  const [contractError, setContractError] = useState<string | null>(null);
+
   useEffect(() => {
     setLoading(true);
     apiClient
@@ -756,7 +769,43 @@ function ProductLinkModal({
       .then((r: any) => setProducts(r?.data ?? r ?? []))
       .catch(() => setProducts([]))
       .finally(() => setLoading(false));
+
+    setLoadingBundles(true);
+    apiClient
+      .getProductBundles()
+      .then((r: any) => setBundles((r?.data ?? []).filter((b: any) => b.is_active)))
+      .catch(() => setBundles([]))
+      .finally(() => setLoadingBundles(false));
   }, []);
+
+  function bundleTotal(b: any): number {
+    return (b.items || []).reduce((sum: number, it: any) => {
+      const price = it.variation_id && it.variation ? it.variation.price || it.product?.base_price || 0 : it.product?.base_price || 0;
+      return sum + price;
+    }, 0);
+  }
+
+  const filteredBundles = bundles.filter((b) => {
+    if (!bundleSearch) return true;
+    return (
+      b.name?.toLowerCase().includes(bundleSearch.toLowerCase()) ||
+      b.category?.toLowerCase().includes(bundleSearch.toLowerCase())
+    );
+  });
+
+  async function handleContractBundle() {
+    if (!selectedBundle) return;
+    setContracting(true);
+    setContractError(null);
+    try {
+      await apiClient.contractProductBundle(selectedBundle.id, { project_id: String(projectId) });
+      onLinked();
+    } catch (e: any) {
+      setContractError(e?.message || "Erro ao contratar combo. Tente novamente.");
+    } finally {
+      setContracting(false);
+    }
+  }
 
   const filtered = products.filter((p) => {
     if (!search) return true;
@@ -796,10 +845,21 @@ function ProductLinkModal({
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Package className="h-5 w-5 text-blue-600" />
-            Vincular Produto ao Projeto
+            Adicionar ao Projeto
           </DialogTitle>
         </DialogHeader>
 
+        <Tabs value={linkTab} onValueChange={(v) => setLinkTab(v as "produto" | "combo")}>
+          <TabsList className="grid w-full grid-cols-2">
+            <TabsTrigger value="produto" className="gap-1.5">
+              <Package className="h-3.5 w-3.5" /> Produto avulso
+            </TabsTrigger>
+            <TabsTrigger value="combo" className="gap-1.5">
+              <Boxes className="h-3.5 w-3.5" /> Combo
+            </TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="produto" className="mt-3">
         {!selected ? (
           <div className="space-y-3">
             <div className="relative">
@@ -942,12 +1002,112 @@ function ProductLinkModal({
             )}
           </div>
         )}
+          </TabsContent>
+
+          <TabsContent value="combo" className="mt-3">
+            {!selectedBundle ? (
+              <div className="space-y-3">
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400 pointer-events-none" />
+                  <Input
+                    placeholder="Buscar combo..."
+                    value={bundleSearch}
+                    onChange={(e) => setBundleSearch(e.target.value)}
+                    className="pl-9"
+                  />
+                </div>
+
+                {loadingBundles ? (
+                  <div className="flex items-center justify-center py-10 gap-2 text-slate-400">
+                    <Loader2 className="h-5 w-5 animate-spin" />
+                    <span className="text-sm">Carregando combos...</span>
+                  </div>
+                ) : filteredBundles.length === 0 ? (
+                  <div className="text-center py-10 text-slate-400">
+                    <Boxes className="h-8 w-8 mx-auto mb-2 opacity-40" />
+                    <p className="text-sm">
+                      {bundleSearch ? "Nenhum combo encontrado" : "Nenhum combo cadastrado ainda"}
+                    </p>
+                  </div>
+                ) : (
+                  <div className="max-h-72 overflow-y-auto space-y-1.5 pr-1">
+                    {filteredBundles.map((b) => (
+                      <button
+                        key={b.id}
+                        onClick={() => setSelectedBundle(b)}
+                        className="w-full flex items-start gap-3 px-3 py-2.5 rounded-lg border border-slate-200 hover:border-violet-300 hover:bg-violet-50/50 transition-colors text-left"
+                      >
+                        <div className="h-8 w-8 rounded-lg bg-violet-100 flex items-center justify-center shrink-0 mt-0.5">
+                          <Boxes className="h-4 w-4 text-violet-600" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-semibold text-slate-800 truncate">{b.name}</p>
+                          <p className="text-xs text-slate-400">
+                            {(b.items || []).length} produto{(b.items || []).length !== 1 ? "s" : ""}
+                          </p>
+                        </div>
+                        <div className="text-right shrink-0">
+                          <p className="text-xs font-semibold text-slate-700">
+                            {bundleTotal(b).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}
+                          </p>
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div className="space-y-4">
+                <div className="flex items-start gap-3 p-3 rounded-lg border border-violet-200 bg-violet-50">
+                  <div className="h-8 w-8 rounded-lg bg-violet-200 flex items-center justify-center shrink-0">
+                    <Boxes className="h-4 w-4 text-violet-700" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-bold text-slate-800">{selectedBundle.name}</p>
+                    <p className="text-xs text-slate-500">
+                      {(selectedBundle.items || []).length} produto{(selectedBundle.items || []).length !== 1 ? "s" : ""} · {bundleTotal(selectedBundle).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => { setSelectedBundle(null); setContractError(null); }}
+                    className="text-slate-400 hover:text-slate-600 shrink-0"
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
+                </div>
+
+                <div className="max-h-48 overflow-y-auto space-y-1.5">
+                  {(selectedBundle.items || []).map((it: any) => (
+                    <div key={it.product_id} className="flex items-center justify-between px-3 py-2 rounded-lg bg-slate-50 border border-slate-100 text-xs">
+                      <span className="text-slate-700 truncate">{it.product?.name || it.product_id}</span>
+                      <span className="text-slate-500 shrink-0 ml-2">
+                        {(it.variation_id && it.variation ? it.variation.price || it.product?.base_price || 0 : it.product?.base_price || 0)
+                          .toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+
+                <div className="bg-violet-50 border border-violet-200 rounded-lg px-3 py-2.5 text-xs text-violet-700">
+                  Ao contratar, cada produto do combo vira um vínculo próprio no projeto — exatamente como se tivessem sido adicionados um a um.
+                </div>
+
+                {contractError && (
+                  <div className="flex items-center gap-2 text-red-600 text-xs bg-red-50 border border-red-200 rounded-lg p-2.5">
+                    <AlertCircle className="h-3.5 w-3.5 shrink-0" />
+                    {contractError}
+                  </div>
+                )}
+              </div>
+            )}
+          </TabsContent>
+        </Tabs>
 
         <DialogFooter>
-          <Button variant="outline" onClick={onClose} disabled={linking}>
+          <Button variant="outline" onClick={onClose} disabled={linking || contracting}>
             Cancelar
           </Button>
-          {selected && (
+          {linkTab === "produto" && selected && (
             <Button
               onClick={handleLink}
               disabled={linking}
@@ -955,6 +1115,16 @@ function ProductLinkModal({
             >
               {linking && <Loader2 className="h-4 w-4 animate-spin" />}
               Vincular Produto
+            </Button>
+          )}
+          {linkTab === "combo" && selectedBundle && (
+            <Button
+              onClick={handleContractBundle}
+              disabled={contracting}
+              className="gap-2 bg-violet-600 hover:bg-violet-700 text-white"
+            >
+              {contracting && <Loader2 className="h-4 w-4 animate-spin" />}
+              Contratar Combo
             </Button>
           )}
         </DialogFooter>

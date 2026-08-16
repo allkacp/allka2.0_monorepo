@@ -449,6 +449,7 @@ model Agency {
   reports           AgencyReport[]
   client_links      ClientLink[]
   projects_owned    Project[]
+  product_bundles   ProductBundle[]
   // Presente só quando esta Agency foi convidada/virou Partner (ver
   // PartnerProfile acima) — nullable, a maioria das agências nunca tem um.
   partner_profile   PartnerProfile?
@@ -876,6 +877,7 @@ model Product {
   project_tasks    ProjectTask[]
   payment_items    PaymentItem[]
   versions         ProductVersion[]
+  bundle_items     ProductBundleItem[]
 
   // ── Rastreio da plataforma antiga ─────────────────────────────────────
   // id numérico do registro equivalente no dump legado (Dump20260423.sql).
@@ -929,8 +931,50 @@ model ProductVariation {
 
   project_products   ProjectProduct[]
   catalog_task_links ProductCatalogTask[]
+  bundle_items       ProductBundleItem[]
 
   @@map("product_variations")
+}
+
+// ─── ProductBundle — "combo": lista nomeada de produtos já existentes ────────
+// Ao contratar, NUNCA vira uma linha própria de ProjectProduct — gera uma
+// linha por produto componente (ver POST /api/product-bundles/:id/contract),
+// exatamente como se cada um tivesse sido comprado avulso. Ver
+// project_id_alteracoes_e_combos no plano desta sessão.
+
+model ProductBundle {
+  id          String   @id @default(cuid())
+  name        String
+  description String?  @db.LongText
+  category    String?
+  // null = combo global (só admin cria/edita); preenchido = combo próprio
+  // dessa agência (só ela + admin veem/editam). Primeiro uso desse padrão
+  // "null=global, preenchido=da agência" fora de Project.
+  agency_id          String?
+  agency              Agency?  @relation(fields: [agency_id], references: [id], onDelete: Cascade)
+  created_by_user_id String?
+  is_active          Boolean  @default(true)
+  created_at         DateTime @default(now())
+  updated_at         DateTime @updatedAt
+
+  items ProductBundleItem[]
+
+  @@index([agency_id])
+  @@map("product_bundles")
+}
+
+model ProductBundleItem {
+  id           String            @id @default(cuid())
+  bundle_id    String
+  bundle       ProductBundle     @relation(fields: [bundle_id], references: [id], onDelete: Cascade)
+  product_id   String
+  product      Product           @relation(fields: [product_id], references: [id])
+  variation_id String?
+  variation    ProductVariation? @relation(fields: [variation_id], references: [id])
+  sort_order   Int               @default(0)
+
+  @@index([bundle_id])
+  @@map("product_bundle_items")
 }
 
 model ProductAddon {
@@ -1082,9 +1126,17 @@ model ProjectProduct {
   expected_end_date DateTime?
 
   origin String @default("VENDA")
-  // VENDA | TRANSFERENCIA — TRANSFERENCIA marca um vínculo criado pela
-  // transferência de uma tarefa não usada de outro projeto (já paga lá,
-  // nunca cobrar de novo aqui).
+  // VENDA | TRANSFERENCIA | COMBO — TRANSFERENCIA marca um vínculo criado
+  // pela transferência de uma tarefa não usada de outro projeto (já paga
+  // lá, nunca cobrar de novo aqui). COMBO marca um vínculo nascido da
+  // contratação de um ProductBundle (ver POST /api/product-bundles/:id/contract).
+
+  // Agrupa as N linhas nascidas do MESMO evento de contratação de combo —
+  // não aponta pro ProductBundle (que pode ser editado/apagado depois), é
+  // só um id gerado na hora da compra, snapshot-safe como o resto desta
+  // tabela. Nulo pra origin != "COMBO".
+  origin_bundle_purchase_id   String?
+  origin_bundle_name_snapshot String?
 
   created_at DateTime @default(now())
   updated_at DateTime @updatedAt

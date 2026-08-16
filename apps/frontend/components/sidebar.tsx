@@ -59,6 +59,7 @@ import {
   Rocket,
   GripVertical,
   Package,
+  Boxes,
   ClipboardList,
   Play,
   RotateCcw,
@@ -147,6 +148,12 @@ const navigationConfig = {
       name: "Catálogo",
       href: "/agency/catalogo",
       icon: Package,
+      current: false,
+    },
+    {
+      name: "Combos",
+      href: "/agency/combos",
+      icon: Boxes,
       current: false,
     },
     {
@@ -414,6 +421,12 @@ const navigationConfig = {
           name: "Modelos de Tarefas",
           href: "/admin/modelos-tarefas",
           icon: ClipboardList,
+          current: false,
+        },
+        {
+          name: "Combos",
+          href: "/admin/combos",
+          icon: Boxes,
           current: false,
         },
       ],

@@ -13,6 +13,7 @@ import nomadesRouter from "./routes/nomades";
 import nomadeLevelsRouter from "./routes/nomade-levels";
 import agenciesRouter from "./routes/agencies";
 import productsRouter from "./routes/products";
+import productBundlesRouter from "./routes/product-bundles";
 import specialtiesRouter from "./routes/specialties";
 import financialRouter from "./routes/financial";
 import billingRouter from "./routes/billing";
@@ -168,6 +169,8 @@ app.use("/api/levels", levelsRouter);
 app.use("/api/task-templates", taskTemplatesRouter);
 // project-products também serve /api/project-products/tasks (sub-rota do mesmo router)
 app.use("/api/project-products", projectProductsRouter);
+// Combos: lista de produtos existentes que, contratada, gera N ProjectProduct
+app.use("/api/product-bundles", productBundlesRouter);
 // Canonical CRUD for operational execution tasks
 app.use("/api/project-tasks", projectTasksRouter);
 app.use("/api/project-connections", projectConnectionsRouter);

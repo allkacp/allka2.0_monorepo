@@ -868,6 +868,31 @@ class ApiClient {
     return this.post(`/products/${id}/versions/${versionId}/restore`, {});
   }
 
+  // ─── Product Bundles (combos) ───────────────────────────────────────────────
+  async getProductBundles(filters?: Record<string, any>) {
+    return this.get("/product-bundles", filters);
+  }
+
+  async getProductBundle(id: string) {
+    return this.get(`/product-bundles/${id}`);
+  }
+
+  async createProductBundle(data: Record<string, any>) {
+    return this.post("/product-bundles", data);
+  }
+
+  async updateProductBundle(id: string, data: Record<string, any>) {
+    return this.put(`/product-bundles/${id}`, data);
+  }
+
+  async deleteProductBundle(id: string) {
+    return this.del(`/product-bundles/${id}`);
+  }
+
+  async contractProductBundle(id: string, data: Record<string, any>) {
+    return this.post(`/product-bundles/${id}/contract`, data);
+  }
+
   // ─── Campaigns ────────────────────────────────────────────────────────────
   async getCampaigns(filters?: Record<string, any>) {
     return this.get("/campaigns", filters);
