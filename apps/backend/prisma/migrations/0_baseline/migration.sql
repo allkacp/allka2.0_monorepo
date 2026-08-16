@@ -1,1 +1,1 @@
-﻿-- Baseline: schema existente antes de add_project_credentials
+-- Baseline: schema existente antes de add_project_credentials

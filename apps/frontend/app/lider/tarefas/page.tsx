@@ -23,6 +23,7 @@ import { Input } from "@/components/ui/input";
 import { Card } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 import { TarefaDetailDrawer } from "@/components/tarefa-detail-drawer";
+import { apiClient } from "@/lib/api-client";
 import { useItemsPerPage } from "@/lib/use-items-per-page";
 import { ItemsPerPageSelect } from "@/components/items-per-page-select";
 import {
@@ -185,7 +186,8 @@ function buildDrawerTask(task: any) {
 // ── Main Page ──────────────────────────────────────────────────────────────────
 
 export default function LiderTarefasPage() {
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const urlTarefaId = searchParams.get("tarefaId");
   const filterKey = searchParams.get("filter") ?? "";
   const filterCfg = FILTER_CONFIG[filterKey];
   const activeStatus = filterCfg?.status ?? "EM_EXECUCAO";
@@ -242,6 +244,20 @@ export default function LiderTarefasPage() {
     setDrawerOpen(true);
   };
 
+  // Deep-link: ?tarefaId=<id> na URL (ex.: vindo de um alerta) abre o
+  // drawer direto na tarefa específica — busca por id em vez de confiar
+  // que ela esteja na página/filtro de status atualmente carregado (mesmo
+  // espírito do deep-link de admin/agência, ver app/admin/tarefas/page.tsx).
+  useEffect(() => {
+    if (!urlTarefaId) return;
+    if (drawerOpen && drawerTask?.id === urlTarefaId) return;
+    apiClient
+      .getOperationalTask(urlTarefaId)
+      .then((task: any) => openDrawer(task))
+      .catch(() => {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [urlTarefaId]);
+
   const getPageNumbers = () => {
     if (totalPages <= 5) return Array.from({ length: totalPages }, (_, i) => i + 1);
     if (page <= 3) return [1, 2, 3, 4, "...", totalPages];
@@ -257,7 +273,14 @@ export default function LiderTarefasPage() {
       <TarefaDetailDrawer
         tarefa={drawerTask}
         open={drawerOpen}
-        onClose={() => setDrawerOpen(false)}
+        onClose={() => {
+          setDrawerOpen(false);
+          if (urlTarefaId) {
+            const next = new URLSearchParams(searchParams);
+            next.delete("tarefaId");
+            setSearchParams(next, { replace: true });
+          }
+        }}
         onStatusChange={() => load()}
         updatingId={null}
       />

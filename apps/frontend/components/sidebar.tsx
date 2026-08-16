@@ -511,12 +511,21 @@ const navigationConfig = {
 // any other account-type array) — its visibility is governed purely by the
 // "sistema"/"central_chamados" permission (see canOpenRoadmapPanel below),
 // never by account_type/role. Appended to whichever menu the current user
-// already sees, after that menu's own items are resolved. Sem href: nunca
-// deve navegar a aba atual — abre a Central de Roadmap/chamados
-// (allka-roadmap) autenticada por SSO numa aba nova. Ver
-// hooks/use-open-roadmap-panel.ts (mesma função usada pelo botão "Abrir
-// painel interno" em /admin/acesso-chamados).
-const ROADMAP_SIDEBAR_ITEM = {
+// already sees, after that menu's own items are resolved.
+//
+// Its CLICK behavior does differ by account_type, though — deliberately:
+// - admin: navigates (same tab, normal in-app nav) to /admin/acesso-chamados,
+//   the management screen (grant/revoke central_chamados, audit). The actual
+//   SSO handoff only fires from that page's own "Abrir painel interno"
+//   button — clicking the sidebar item is not itself an SSO trigger for
+//   admins, since they have somewhere more useful to land on first.
+// - everyone else (a non-admin developer/QA with central_chamados): that
+//   management screen is admin-gated (isAdmin check in page.tsx — granting
+//   permissions to OTHER users is rightly an admin-only operation), so there
+//   is nowhere else for them to land. Clicking goes straight to the SSO
+//   handoff in a new tab, via useOpenRoadmapPanel — same hook the admin
+//   page's "Abrir painel interno" button also uses.
+const ROADMAP_SIDEBAR_ITEM_DIRECT_SSO = {
   name: "Roadmap e chamados",
   icon: LifeBuoy,
   current: false,
@@ -949,8 +958,18 @@ export function Sidebar({ transparent = false }: { transparent?: boolean } = {})
     // Appended after whichever menu the current account_type already
     // resolves to — never inside a single account_type's own array — so
     // its visibility depends only on canOpenRoadmapPanelState, never on
-    // which branch of getNavigationItems() ran.
-    const baseItems = canOpenRoadmapPanelState ? [...resolvedItems, ROADMAP_SIDEBAR_ITEM] : resolvedItems;
+    // which branch of getNavigationItems() ran. Its click TARGET does still
+    // depend on account_type — see ROADMAP_SIDEBAR_ITEM_DIRECT_SSO above.
+    const roadmapSidebarItem =
+      accountType === "admin"
+        ? {
+            name: "Roadmap e chamados",
+            icon: LifeBuoy,
+            current: pathname === "/admin/acesso-chamados",
+            href: "/admin/acesso-chamados",
+          }
+        : ROADMAP_SIDEBAR_ITEM_DIRECT_SSO;
+    const baseItems = canOpenRoadmapPanelState ? [...resolvedItems, roadmapSidebarItem] : resolvedItems;
 
     if (customOrder.length === 0) {
       return baseItems;

@@ -35,6 +35,21 @@ const baseEnvSchema = z.object({
   // coordinated "both sides at once" step.
   ROADMAP_SSO_HMAC_KEY_ID: z.string().optional(),
   ROADMAP_SSO_HMAC_SECRET: z.string().optional(),
+
+  // ── Conexões do projeto — Meta Ads (fase 1 de 6 canais) ──────────────────
+  // Todos opcionais de propósito: sem gate cruzado (superRefine) — o único
+  // portão é isMetaIntegrationConfigured() em lib/meta-ads-client.ts,
+  // checado por cada rota, não no boot. A plataforma inteira continua
+  // funcionando com estes 5 em branco; a aba "Conexões" só mostra os cards
+  // "Em breve" nesse caso.
+  META_APP_ID: z.string().optional(),
+  META_APP_SECRET: z.string().optional(),
+  META_REDIRECT_URI: z.string().optional(),
+  // openssl rand -hex 32 — cifra ProjectConnection.access_token_encrypted.
+  META_TOKEN_ENCRYPTION_KEY: z.string().optional(),
+  // openssl rand -hex 32 — assina o `state` do fluxo OAuth (CSRF). Par
+  // dedicado, nunca reaproveita JWT_SECRET nem a chave acima.
+  META_OAUTH_STATE_SECRET: z.string().optional(),
 });
 
 // Cross-field: the individual fields above are all .optional() (so the

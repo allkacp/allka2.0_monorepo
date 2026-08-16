@@ -186,9 +186,13 @@ const navigationConfig = {
 // "Roadmap e chamados" fica FORA de navigationConfig — sua visibilidade
 // depende só de canOpenRoadmapPanelState (permissão granular real,
 // independente de account_type), nunca de estar dentro do array "admin".
-// Sem href — abre a Central de Roadmap/chamados via SSO numa aba nova,
-// nunca navega o app mobile pra fora. Mesmo hook do desktop.
-const ROADMAP_SIDEBAR_ITEM = {
+//
+// O alvo do clique difere por account_type (mesma regra do desktop, ver
+// components/sidebar.tsx): admin navega para /admin/acesso-chamados (tela de
+// gestão — o SSO só dispara de lá, pelo botão "Abrir painel interno"); quem
+// não é admin não tem acesso a essa tela (gated a isAdmin em page.tsx), então
+// vai direto pro SSO via useOpenRoadmapPanel, mesmo hook do desktop.
+const ROADMAP_SIDEBAR_ITEM_DIRECT_SSO = {
   name: "Roadmap e chamados",
   icon: LifeBuoy,
   color: "from-rose-500 to-rose-600",
@@ -260,7 +264,16 @@ export function AppMenuDrawer({ open, onClose }: AppMenuDrawerProps) {
   }
 
   const resolvedItems = getNavigationItems()
-  const navigation = canOpenRoadmapPanelState ? [...resolvedItems, ROADMAP_SIDEBAR_ITEM] : resolvedItems
+  const roadmapSidebarItem =
+    accountType === "admin"
+      ? {
+          name: "Roadmap e chamados",
+          icon: LifeBuoy,
+          color: "from-rose-500 to-rose-600",
+          href: "/admin/acesso-chamados",
+        }
+      : ROADMAP_SIDEBAR_ITEM_DIRECT_SSO
+  const navigation = canOpenRoadmapPanelState ? [...resolvedItems, roadmapSidebarItem] : resolvedItems
 
   const toggleExpanded = (itemName: string) => {
     setExpandedItems((prev) =>

@@ -80,11 +80,34 @@ describe("AppMenuDrawer (mobile) — item Roadmap e chamados", () => {
     expect(await screen.findByText("Roadmap e chamados")).toBeInTheDocument();
   });
 
-  // Fluxo completo (postMessage/Basic Auth) já testado em
-  // hooks/use-open-roadmap-panel.test.ts — aqui só confirma que o clique no
-  // mobile aciona o mesmo hook compartilhado do desktop.
-  it("clicar aciona o hook de SSO compartilhado (mesmo do desktop)", async () => {
+  // Admin: o clique navega (mesma tela) pra gestão — o SSO só dispara de
+  // lá, pelo botão "Abrir painel interno" (mesma regra do desktop).
+  it("admin: clicar navega para /admin/acesso-chamados, sem abrir aba nem chamar o hook de SSO", async () => {
+    mockAccountType.value = "admin";
     getCurrentUser.mockResolvedValue({ admin_profile: null });
+    const openSpy = vi.spyOn(window, "open");
+
+    renderDrawer();
+    const item = await screen.findByText("Roadmap e chamados");
+    expect(item.closest("a")).toHaveAttribute("href", "/admin/acesso-chamados");
+
+    await userEvent.click(item);
+
+    expect(openSpy).not.toHaveBeenCalled();
+    expect(getRoadmapSsoBaseUrl).not.toHaveBeenCalled();
+    openSpy.mockRestore();
+  });
+
+  // Não-admin (dev/QA com central_chamados): sem tela de gestão pra ver
+  // (admin-gated), vai direto pro SSO. Fluxo completo (postMessage/Basic
+  // Auth) já testado em hooks/use-open-roadmap-panel.test.ts — aqui só
+  // confirma que o clique no mobile aciona o mesmo hook compartilhado do
+  // desktop.
+  it("não-admin com central_chamados: clicar aciona o hook de SSO compartilhado (mesmo do desktop)", async () => {
+    mockAccountType.value = "agencias";
+    getCurrentUser.mockResolvedValue({
+      admin_profile: { is_active: true, is_master: false, permissions: [{ module: "central_chamados", action: "view" }] },
+    });
     getRoadmapSsoBaseUrl.mockResolvedValue({ roadmapInternalUrl: "http://localhost:8090" });
     const openSpy = vi.spyOn(window, "open").mockReturnValue({ location: { href: "" }, closed: false } as unknown as Window);
 

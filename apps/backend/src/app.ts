@@ -33,8 +33,12 @@ import levelsRouter from "./routes/levels";
 import taskTemplatesRouter from "./routes/task-templates";
 import projectProductsRouter from "./routes/project-products";
 import projectTasksRouter from "./routes/project-tasks";
+import projectConnectionsRouter from "./routes/project-connections";
+import metaIntegrationRouter from "./routes/meta-integration";
 import systemAlertsRouter from "./routes/system-alerts";
 import notificationsRouter from "./routes/notifications";
+import notificationPreferencesRouter from "./routes/notification-preferences";
+import notificationGroupsRouter from "./routes/notification-groups";
 import paymentsRouter from "./routes/payments";
 import liderRouter from "./routes/lider";
 import habilidadesRouter from "./routes/habilidades";
@@ -166,9 +170,13 @@ app.use("/api/task-templates", taskTemplatesRouter);
 app.use("/api/project-products", projectProductsRouter);
 // Canonical CRUD for operational execution tasks
 app.use("/api/project-tasks", projectTasksRouter);
+app.use("/api/project-connections", projectConnectionsRouter);
+app.use("/api/integrations/meta", metaIntegrationRouter);
 // Admin system alerts (nomad not found, etc.)
 app.use("/api/system-alerts", systemAlertsRouter);
 app.use("/api/notifications", notificationsRouter);
+app.use("/api/notification-preferences", notificationPreferencesRouter);
+app.use("/api/notification-groups", notificationGroupsRouter);
 // Payments — sandbox/fake checkout + real gateway future
 app.use("/api/payments", paymentsRouter);
 // Lider — task qualification and approval flow
