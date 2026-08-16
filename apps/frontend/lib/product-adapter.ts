@@ -169,7 +169,10 @@ export function backendToFrontendProduct(b: BackendProduct): Product {
     priceModifier: v.price_modifier,
     deadlineDays: v.deadline_days ?? undefined,
     scopeDescription: v.scope_description ?? undefined,
-    features: v.features ? JSON.parse(v.features) : undefined,
+    // safeParseJSON (não JSON.parse cru): um produto legado com `features`
+    // fora do formato esperado quebrava o .map() inteiro — a lista de
+    // produtos toda parava de carregar por causa de UMA variação.
+    features: v.features ? safeParseJSON<string[]>(v.features, []) : undefined,
     sortOrder: v.sort_order,
     isActive: v.is_active,
   }));

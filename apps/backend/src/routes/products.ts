@@ -11,8 +11,18 @@ const router = Router();
 const variationSchema = z.object({
   name: z.string().min(1),
   description: z.string().optional(),
+  // Preço absoluto da variação — faltava aqui, então toda variação nova
+  // (produto criado com variações OU adicionada depois via POST .../variations)
+  // gravava price=0 mesmo com o admin preenchendo um valor: o zod descarta
+  // silenciosamente qualquer chave não declarada no schema (ver
+  // middleware/validate.ts), então o campo nunca chegava no Prisma.
+  price: z.number().min(0).default(0),
   price_modifier: z.number().default(0),
+  deadline_days: z.number().int().optional(),
+  scope_description: z.string().optional(),
   features: z.string().optional(),
+  sort_order: z.number().int().default(0),
+  is_active: z.boolean().default(true),
 });
 
 const addonSchema = z.object({
@@ -153,8 +163,13 @@ router.post(
         variations?: {
           name: string;
           description?: string;
+          price: number;
           price_modifier: number;
+          deadline_days?: number;
+          scope_description?: string;
           features?: string;
+          sort_order: number;
+          is_active: boolean;
         }[];
         addons?: {
           name: string;
