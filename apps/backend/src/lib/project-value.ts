@@ -3,7 +3,10 @@ import type { DbClient } from "./project-scope";
 
 /**
  * Recalcula Project.value/budget a partir dos ProjectProducts vinculados e
- * ainda válidos (status != CANCELADO), usando o preço final já negociado
+ * ainda válidos (status não é CANCELADO nem TRANSFERIDO — este último saiu
+ * inteiro pra outro projeto e é contado no valor DELE, nunca nos dois ao
+ * mesmo tempo, ver POST /api/project-tasks/:id/transfer), usando o preço
+ * final já negociado
  * (preco_final_cliente_snapshot — já reflete desconto/recorrência definidos
  * no momento do vínculo). Nunca reescreve os snapshots em si (histórico
  * comercial preservado mesmo depois de pagamento confirmado); só recalcula
@@ -19,7 +22,7 @@ import type { DbClient } from "./project-scope";
  */
 export async function recalculateProjectValue(db: DbClient, projectId: string): Promise<number> {
   const products = await db.projectProduct.findMany({
-    where: { project_id: projectId, status: { not: "CANCELADO" } },
+    where: { project_id: projectId, status: { notIn: ["CANCELADO", "TRANSFERIDO"] } },
     select: { preco_final_cliente_snapshot: true },
   });
 

@@ -34,12 +34,16 @@ function escopoDoUsuario(req: Request): Record<string, unknown> {
 const listSchema = z.object({
   type: z.string().optional(),
   severity: z.enum(["info", "warning", "error"]).optional(),
+  category: z.enum(["notificacao", "alerta"]).optional(),
   is_read: z
     .string()
     .optional()
     .transform((v) =>
       v === "true" ? true : v === "false" ? false : undefined,
     ),
+  // Ausente = só ativos (comportamento padrão, "o que precisa resolver").
+  // "true"/"false" filtram explicitamente; "all" traz os dois.
+  is_archived: z.enum(["true", "false", "all"]).optional(),
   entity_type: z.string().optional(),
   entity_id: z.string().optional(),
   limit: z.coerce.number().int().min(1).max(200).default(50),
@@ -62,15 +66,19 @@ router.get(
         return;
       }
 
-      const { type, severity, is_read, entity_type, entity_id, limit, offset } =
+      const { type, severity, category, is_read, is_archived, entity_type, entity_id, limit, offset } =
         query.data;
 
       const filtros: Record<string, unknown> = {};
       if (type) filtros.type = type;
       if (severity) filtros.severity = severity;
+      if (category) filtros.category = category;
       if (is_read !== undefined) filtros.is_read = is_read;
       if (entity_type) filtros.entity_type = entity_type;
       if (entity_id) filtros.entity_id = entity_id;
+      if (is_archived === "true") filtros.is_archived = true;
+      else if (is_archived === "false" || is_archived === undefined) filtros.is_archived = false;
+      // is_archived === "all" → sem filtro, traz os dois.
 
       // AND explícito: o escopo usa OR internamente (admin vê geral + os seus),
       // e espalhar as duas coisas no mesmo objeto faria um sobrescrever o outro.
@@ -98,13 +106,25 @@ router.get(
 
 // ── GET /api/system-alerts/unread-count ──────────────────────────────────────
 
+const unreadCountSchema = z.object({
+  category: z.enum(["notificacao", "alerta"]).optional(),
+});
+
 router.get(
   "/unread-count",
   verifyToken,
   async (req: Request, res: Response, next: NextFunction) => {
     try {
+      const query = unreadCountSchema.safeParse(req.query);
+      if (!query.success) {
+        res.status(400).json({ error: "Parâmetros inválidos", details: query.error.flatten() });
+        return;
+      }
+      const filtros: Record<string, unknown> = {};
+      if (query.data.category) filtros.category = query.data.category;
+
       const count = await prisma.systemAlert.count({
-        where: { AND: [{ is_read: false }, escopoDoUsuario(req)] },
+        where: { AND: [filtros, { is_read: false }, { is_archived: false }, escopoDoUsuario(req)] },
       });
       res.json({ count });
     } catch (err) {
@@ -140,6 +160,58 @@ router.patch(
   },
 );
 
+// ── PATCH /api/system-alerts/:id/archive ─────────────────────────────────────
+// Soft — some da visão padrão ("o que precisa resolver"), mas o dado
+// continua existindo e consultável com is_archived=true/all.
+
+router.patch(
+  "/:id/archive",
+  verifyToken,
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const alert = await prisma.systemAlert.findFirst({
+        where: { AND: [{ id: req.params.id as string }, escopoDoUsuario(req)] },
+      });
+      if (!alert) {
+        res.status(404).json({ error: "Alerta não encontrado" });
+        return;
+      }
+      const updated = await prisma.systemAlert.update({
+        where: { id: alert.id },
+        data: { is_archived: true, archived_at: new Date() },
+      });
+      res.json(updated);
+    } catch (err) {
+      next(err);
+    }
+  },
+);
+
+// ── PATCH /api/system-alerts/:id/unarchive ───────────────────────────────────
+
+router.patch(
+  "/:id/unarchive",
+  verifyToken,
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const alert = await prisma.systemAlert.findFirst({
+        where: { AND: [{ id: req.params.id as string }, escopoDoUsuario(req)] },
+      });
+      if (!alert) {
+        res.status(404).json({ error: "Alerta não encontrado" });
+        return;
+      }
+      const updated = await prisma.systemAlert.update({
+        where: { id: alert.id },
+        data: { is_archived: false, archived_at: null },
+      });
+      res.json(updated);
+    } catch (err) {
+      next(err);
+    }
+  },
+);
+
 // ── PATCH /api/system-alerts/read-all ────────────────────────────────────────
 
 router.patch(
@@ -147,8 +219,16 @@ router.patch(
   verifyToken,
   async (req: Request, res: Response, next: NextFunction) => {
     try {
+      const query = unreadCountSchema.safeParse(req.query);
+      if (!query.success) {
+        res.status(400).json({ error: "Parâmetros inválidos", details: query.error.flatten() });
+        return;
+      }
+      const filtros: Record<string, unknown> = {};
+      if (query.data.category) filtros.category = query.data.category;
+
       const result = await prisma.systemAlert.updateMany({
-        where: { AND: [{ is_read: false }, escopoDoUsuario(req)] },
+        where: { AND: [filtros, { is_read: false }, escopoDoUsuario(req)] },
         data: { is_read: true, read_at: new Date() },
       });
       res.json({ updated: result.count });

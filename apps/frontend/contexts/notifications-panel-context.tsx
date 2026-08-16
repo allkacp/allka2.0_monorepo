@@ -10,8 +10,8 @@ import { useGlobalHeaderPanel } from "@/contexts/global-header-panel-context";
 interface NotificationsPanelContextValue {
   open: boolean;
   setOpen: (v: boolean) => void;
-  tab: "inbox" | "notifications";
-  setTab: (t: "inbox" | "notifications") => void;
+  tab: "inbox" | "alertas" | "prefs" | "rules" | "groups";
+  setTab: (t: "inbox" | "alertas" | "prefs" | "rules" | "groups") => void;
 }
 
 const NotificationsPanelContext =
@@ -22,7 +22,7 @@ export function NotificationsPanelProvider({ children }: { children: ReactNode }
   const open = isActive("notifications");
   const setOpen = (v: boolean) =>
     v ? openPanel("notifications") : closePanel("notifications");
-  const [tab, setTab] = useState<"inbox" | "notifications">("inbox");
+  const [tab, setTab] = useState<"inbox" | "alertas" | "prefs" | "rules" | "groups">("inbox");
   return (
     <NotificationsPanelContext.Provider value={{ open, setOpen, tab, setTab }}>
       {children}

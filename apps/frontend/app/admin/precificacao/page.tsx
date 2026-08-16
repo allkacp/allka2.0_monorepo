@@ -217,7 +217,10 @@ const PrecificacaoPage = () => {
       return;
     }
 
-    if (formData.appliesTo.length === 0) {
+    // Nível só faz sentido pra comissão (varia por nível de nômade/parceiro).
+    // Taxa, imposto e margem incidem sobre o valor total do projeto, não por
+    // nível de especialista — exigir isso travava o cadastro sem sentido.
+    if (selectedType === "commission" && formData.appliesTo.length === 0) {
       toast({
         title: "Nível obrigatório",
         description: "Selecione pelo menos um nível",
@@ -1069,7 +1072,10 @@ const PrecificacaoPage = () => {
                   </div>
                 )}
 
-                {/* Card de Níveis */}
+                {/* Card de Níveis — só faz sentido pra comissão (varia por
+                    nível de nômade/parceiro); taxa/imposto/margem incidem
+                    sobre o valor total do projeto, não por nível. */}
+                {selectedType === "commission" && (
                 <div className="bg-white dark:bg-gray-800 rounded-xl p-4 shadow-md">
                   <h3 className="text-base font-semibold text-gray-900 dark:text-white mb-3 flex items-center gap-2">
                     <div className="w-7 h-7 rounded-lg bg-purple-100 dark:bg-purple-900 flex items-center justify-center">
@@ -1128,6 +1134,7 @@ const PrecificacaoPage = () => {
                     </p>
                   )}
                 </div>
+                )}
 
                 {/* Card de Status */}
                 <div className="bg-white dark:bg-gray-800 rounded-xl p-4 shadow-md">

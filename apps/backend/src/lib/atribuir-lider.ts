@@ -203,6 +203,7 @@ export async function atribuirLiderParaTarefa(
         title: "Líder não encontrado para tarefa",
         message: `A tarefa "${task.title}" (${taskId}) entrou para qualificação mas nenhum líder ativo está configurado para a área/categoria. Busca: ${searchTerms.join(", ") || "(sem contexto)"}`,
         severity: "warning",
+        category: "alerta",
         entity_type: "project_task",
         entity_id: taskId,
       },

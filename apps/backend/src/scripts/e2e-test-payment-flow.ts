@@ -186,8 +186,8 @@ async function main() {
       pass(`Produto ${pid} vinculado: pp_id=${linkRes.body.id}`);
     } else if (linkRes.status === 409) {
       // Already linked — get the existing link id from DB
-      const existing = await prisma.projectProduct.findUnique({
-        where: { project_id_product_id: { project_id: projectId, product_id: pid } },
+      const existing = await prisma.projectProduct.findFirst({
+        where: { project_id: projectId, product_id: pid },
       });
       if (existing) {
         linkedProductIds.push(existing.id);

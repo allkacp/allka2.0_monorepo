@@ -6,6 +6,7 @@ import { verifyToken } from "../middleware/auth";
 import { validate } from "../middleware/validate";
 import { assertProductContractable } from "../lib/product-contractability";
 import { recalculateProjectValue } from "../lib/project-value";
+import { parseProductMetadata } from "../lib/product-metadata";
 
 const router = Router();
 
@@ -184,20 +185,16 @@ router.post(
         priceSnapshot = product.variations[0].price || product.base_price;
       }
 
-      // 4. Create or retrieve ProjectProduct (idempotent)
-      let projectProduct = await prisma.projectProduct.findUnique({
-        where: { project_id_product_id: { project_id, product_id } },
-      });
+      // 3b. Limite de alterações grátis + taxa emergencial — congelados no
+      // momento da compra, mesma lógica dos demais snapshots comerciais.
+      const meta = parseProductMetadata(product.metadata);
 
-      if (projectProduct) {
-        res.status(409).json({
-          error: "Produto já está vinculado a este projeto",
-          project_product: projectProduct,
-        });
-        return;
-      }
-
-      projectProduct = await prisma.projectProduct.create({
+      // 4. Sempre cria um vínculo novo — o mesmo produto pode ser comprado
+      // mais de uma vez no mesmo projeto (ex.: duas instâncias do mesmo
+      // produto mensal = mais volume). O histórico completo de compras fica
+      // na aba "Produtos"; nunca bloqueamos uma nova compra por causa de um
+      // vínculo anterior, ativo ou cancelado.
+      let projectProduct = await prisma.projectProduct.create({
         data: {
           project_id,
           product_id,
@@ -211,6 +208,10 @@ router.post(
           comissao_snapshot: comissao_snapshot ?? 0,
           pagador_snapshot: pagador_snapshot ?? "AGENCIA",
           recurrence_snapshot: recurrence_snapshot || null,
+          alteracoes_incluidas_snapshot: meta.alteracoesIncluidas ?? 3,
+          valor_alteracao_extra_snapshot: meta.valorAlteracaoExtra ?? 0,
+          taxa_emergencial_reducao_percentual_snapshot:
+            meta.taxaEmergencialReducaoPercentual ?? 50,
           status: "PENDENTE",
           start_date: start_date ? new Date(start_date) : null,
           expected_end_date: expected_end_date

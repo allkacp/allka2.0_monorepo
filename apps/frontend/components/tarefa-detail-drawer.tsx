@@ -35,8 +35,9 @@ import {
   GraduationCap,
   Pencil,
   Save,
+  Zap,
 } from "lucide-react";
-import { apiClient } from "@/lib/api-client";
+import { apiClient, ApiError } from "@/lib/api-client";
 import { Button } from "@/components/ui/button";
 import { EmbeddedSlideScreen } from "@/components/embedded-slide-screen";
 import { CopyLinkButton } from "@/components/copy-link-button";
@@ -544,9 +545,42 @@ export function TarefaDetailDrawer({
       // (`onSaved` não existe neste componente; o callback real é este.)
       onStatusChange?.(tarefa, acao === "aprovar" ? "APROVADA" : "EM_EXECUCAO");
     } catch (e: any) {
-      setAprovacaoAviso(e?.message ?? "Não foi possível registrar. Tente novamente.");
+      if (e instanceof ApiError && e.status === 402 && e.data?.invoice) {
+        const valor = Number(e.data.invoice.amount).toLocaleString("pt-BR", {
+          style: "currency",
+          currency: "BRL",
+        });
+        setAprovacaoAviso(
+          `Limite de alterações grátis atingido. Foi gerada a fatura de ${valor} — assim que for paga (ver Faturas), envie a devolução de novo.`,
+        );
+      } else {
+        setAprovacaoAviso(e?.message ?? "Não foi possível registrar. Tente novamente.");
+      }
     } finally {
       setAprovacaoSalvando(false);
+    }
+  };
+
+  // ── Entrega emergencial ───────────────────────────────────────────────────
+  // `tarefa` é uma prop somente-leitura (o pai não tem um refetch dedicado
+  // pra "mesmo status, outros campos mudaram") — mantém localmente que o
+  // pedido foi feito pra refletir na hora, sem esperar reabrir o drawer.
+  const [emergencialConfirmOpen, setEmergencialConfirmOpen] = useState(false);
+  const [emergencialSalvando, setEmergencialSalvando] = useState(false);
+  const [emergencialAviso, setEmergencialAviso] = useState<string | null>(null);
+  const [emergencialSolicitadaLocal, setEmergencialSolicitadaLocal] = useState(false);
+
+  const solicitarEmergencial = async () => {
+    setEmergencialSalvando(true);
+    setEmergencialAviso(null);
+    try {
+      await apiClient.solicitarEntregaEmergencial(tarefa.id);
+      setEmergencialConfirmOpen(false);
+      setEmergencialSolicitadaLocal(true);
+    } catch (e: any) {
+      setEmergencialAviso(e?.message ?? "Não foi possível solicitar. Tente novamente.");
+    } finally {
+      setEmergencialSalvando(false);
     }
   };
 
@@ -559,6 +593,8 @@ export function TarefaDetailDrawer({
       setAttachments([]);
       setIsEditMode(startInEditMode);
       setEditStatus(tarefa.status);
+      setEmergencialSolicitadaLocal(false);
+      setEmergencialAviso(null);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, tarefa?.id]);
@@ -715,7 +751,7 @@ export function TarefaDetailDrawer({
                 {/* Chips row */}
                 <div className="flex flex-wrap items-center gap-1.5 mb-1.5">
                   {tarefa.code_snapshot && (
-                    <span className="text-[10px] font-mono bg-white/20 text-white px-2 py-0.5 rounded-md font-bold tracking-wider">
+                    <span className="text-[10px] font-mono bg-white/15 text-white/90 px-2 py-0.5 rounded-md">
                       {tarefa.code_snapshot}
                     </span>
                   )}
@@ -1757,7 +1793,45 @@ export function TarefaDetailDrawer({
                             )}
                           </div>
                         )}
+
+                        {t.project_product?.alteracoes_incluidas_snapshot != null && (
+                          <p className="mt-3 text-xs text-slate-500 dark:text-slate-400">
+                            {Math.min(t.reprovacoes, t.project_product.alteracoes_incluidas_snapshot)} de{" "}
+                            {t.project_product.alteracoes_incluidas_snapshot} alterações grátis usadas
+                            {t.pending_fee_invoice_id ? " — próxima alteração exige pagamento de taxa" : ""}
+                          </p>
+                        )}
                       </div>
+
+                      {!["CONCLUIDA", "CANCELADA"].includes(tarefa.status) && (
+                        <div className="rounded-xl border border-slate-200 dark:border-slate-700 p-4">
+                          <SectionTitle>Entrega emergencial</SectionTitle>
+                          {t.emergencial_solicitada_em || emergencialSolicitadaLocal ? (
+                            <p className="mt-2 text-sm text-slate-600 dark:text-slate-300">
+                              Entrega emergencial solicitada
+                              {t.emergencial_solicitada_em
+                                ? ` em ${new Date(t.emergencial_solicitada_em).toLocaleDateString("pt-BR")}`
+                                : ""}
+                              {t.emergencial_reducao_percentual != null
+                                ? ` — prazo comprimido em ${t.emergencial_reducao_percentual}%.`
+                                : "."}
+                            </p>
+                          ) : (
+                            <>
+                              <p className="mt-2 text-sm text-slate-600 dark:text-slate-300">
+                                Reduz o prazo desta entrega e cobra +50% do valor do produto.
+                              </p>
+                              <button
+                                onClick={() => setEmergencialConfirmOpen(true)}
+                                className="mt-3 inline-flex items-center gap-2 rounded-lg border border-amber-300 px-3 py-2 text-sm font-semibold text-amber-700 hover:bg-amber-50 dark:border-amber-800 dark:text-amber-400 dark:hover:bg-amber-900/20"
+                              >
+                                <Zap className="h-4 w-4" />
+                                Solicitar entrega emergencial
+                              </button>
+                            </>
+                          )}
+                        </div>
+                      )}
 
                       {aguardando ? (
                         <div className="rounded-xl border border-slate-200 dark:border-slate-700 p-4">
@@ -2125,6 +2199,42 @@ export function TarefaDetailDrawer({
         onConfirm={handlePauseConfirm}
         saving={pauseSaving}
       />
+
+      {/* Confirmação de entrega emergencial */}
+      <Dialog open={emergencialConfirmOpen} onOpenChange={(v) => !v && setEmergencialConfirmOpen(false)}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Zap className="h-4 w-4 text-amber-500" />
+              Solicitar entrega emergencial
+            </DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-slate-600 dark:text-slate-300">
+            O prazo será reduzido em{" "}
+            <strong>{tarefa?.project_product?.taxa_emergencial_reducao_percentual_snapshot ?? 50}%</strong> e
+            será cobrado <strong>+50%</strong> do valor deste produto (
+            {(0.5 * (tarefa?.project_product?.preco_final_cliente_snapshot ?? 0)).toLocaleString("pt-BR", {
+              style: "currency",
+              currency: "BRL",
+            })}
+            ). Confirma?
+          </p>
+          {emergencialAviso && (
+            <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 dark:border-red-800 dark:bg-red-900/20">
+              <p className="text-xs font-medium text-red-700 dark:text-red-400">{emergencialAviso}</p>
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setEmergencialConfirmOpen(false)} disabled={emergencialSalvando}>
+              Cancelar
+            </Button>
+            <Button onClick={solicitarEmergencial} disabled={emergencialSalvando} className="gap-2">
+              {emergencialSalvando ? <Loader2 className="h-4 w-4 animate-spin" /> : <Zap className="h-4 w-4" />}
+              Confirmar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </>
   );
 }

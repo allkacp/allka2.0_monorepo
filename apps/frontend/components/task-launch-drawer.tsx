@@ -1205,7 +1205,7 @@ export function TaskLaunchDrawer({
               {/* Task code + title */}
               <div className="flex flex-wrap items-center gap-2 mb-1">
                 {currentTask.task_code && (
-                  <span className="text-[10px] font-mono bg-white/20 text-white px-2 py-0.5 rounded-md font-bold tracking-wider">
+                  <span className="text-[10px] font-mono bg-white/15 text-white/90 px-2 py-0.5 rounded-md">
                     {currentTask.task_code}
                   </span>
                 )}

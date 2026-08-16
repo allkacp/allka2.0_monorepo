@@ -501,8 +501,8 @@ async function seedLider() {
     }),
   );
 
-  const ppExists = await prisma.projectProduct.findUnique({
-    where: { project_id_product_id: { project_id: "seed-project-lider-01", product_id: "seed-product-perf-01" } },
+  const ppExists = await prisma.projectProduct.findFirst({
+    where: { project_id: "seed-project-lider-01", product_id: "seed-product-perf-01" },
   });
   if (!ppExists) {
     await prisma.projectProduct.create({

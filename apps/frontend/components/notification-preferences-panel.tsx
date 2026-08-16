@@ -1,58 +1,31 @@
-import { useState } from "react"
-import { useLocation } from "react-router-dom"
+import { useCallback, useEffect, useState } from "react"
+import { useLocation, useNavigate } from "react-router-dom"
 import {
-  Bell, Mail, MessageSquare, Smartphone, CheckCircle2, AlertCircle,
-  UserPlus, Settings, FolderOpen, CheckCheck, Zap, Info, Plus,
-  Users, Play, Pause, Trash2, Edit,
+  Bell, Mail, MessageSquare, Smartphone, CheckCircle2,
+  Settings, CheckCheck, Zap, Info, Plus, AlertTriangle, ArrowRight,
+  Users, Edit, Trash2, Archive, ArchiveRestore, X,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
+import { Badge } from "@/components/ui/badge"
 import { HeaderSlideScreen } from "@/components/header-slide-screen"
 import { Switch } from "@/components/ui/switch"
-import { Badge } from "@/components/ui/badge"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { ConfirmationDialog } from "@/components/confirmation-dialog"
+import { NotificationRuleFormModal, type PrefEventOption } from "@/components/modals/notification-rule-form-modal"
+import {
+  NotificationGroupFormModal,
+  type NotificationGroupDraft,
+} from "@/components/modals/notification-group-form-modal"
+import { apiClient } from "@/lib/api-client"
+import {
+  alertIcon, systemAlertLink, severityColor, severityBadgeColor, severityLabel,
+  TASKS_ROUTE_BY_ACCOUNT_TYPE, type DisplayAlert,
+} from "@/components/alerts-header-icon"
+import { useAccountType } from "@/contexts/account-type-context"
 import { cn } from "@/lib/utils"
 
-/* ─── Types ─────────────────────────────────────────────────────────────── */
-interface NotifItem {
-  id: string
-  type: "task" | "system" | "user" | "project" | "approval"
-  title: string
-  body: string
-  date: string
-  read: boolean
-}
-
-const MOCK_NOTIFICATIONS: NotifItem[] = [
-  { id: "ni-1", type: "task",     title: "Tarefa aprovada",          body: "A tarefa 'Campanha Meta – Junho' foi aprovada com sucesso.",                         date: new Date(Date.now() - 25 * 60 * 1000).toISOString(),          read: false },
-  { id: "ni-2", type: "task",     title: "Nova tarefa para qualificar", body: "Você tem uma tarefa aguardando qualificação: 'SEO On-page – Cliente X'.",         date: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(),      read: false },
-  { id: "ni-3", type: "system",   title: "Atualização da plataforma", body: "A plataforma foi atualizada para a versão 2.1.0 com melhorias de performance.",    date: new Date(Date.now() - 6 * 60 * 60 * 1000).toISOString(),      read: true  },
-  { id: "ni-4", type: "task",     title: "Tarefa devolvida",          body: "'Google Ads – E-commerce' foi devolvida com observações do líder.",                  date: new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString(),     read: true  },
-  { id: "ni-5", type: "task",     title: "Entrega recebida",          body: "Carla Souza enviou a entrega da tarefa 'Relatório Performance – Maio'.",             date: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(), read: true  },
-  { id: "ni-6", type: "user",     title: "Novo nômade cadastrado",    body: "João Silva se cadastrou como nômade na área de Performance.",                       date: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString(), read: true  },
-  { id: "ni-7", type: "project",  title: "Novo projeto criado",       body: "O projeto 'Marketing Digital Q3 – Allka' foi associado à sua área.",                date: new Date(Date.now() - 4 * 24 * 60 * 60 * 1000).toISOString(), read: true  },
-  { id: "ni-8", type: "approval", title: "Aprovação pendente",        body: "'Campanha Instagram – Verão' aguarda sua aprovação há 2 dias.",                     date: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000).toISOString(), read: true  },
-]
-
-const NOTIF_ICON_CFG = {
-  task:     { Icon: CheckCircle2, bg: "bg-emerald-100 dark:bg-emerald-900/30", text: "text-emerald-600" },
-  system:   { Icon: AlertCircle,  bg: "bg-blue-100 dark:bg-blue-900/30",       text: "text-blue-600" },
-  user:     { Icon: UserPlus,     bg: "bg-purple-100 dark:bg-purple-900/30",   text: "text-purple-600" },
-  project:  { Icon: FolderOpen,   bg: "bg-amber-100 dark:bg-amber-900/30",     text: "text-amber-600" },
-  approval: { Icon: CheckCircle2, bg: "bg-orange-100 dark:bg-orange-900/30",   text: "text-orange-600" },
-}
-
-function timeAgo(dateStr: string): string {
-  const diff = Date.now() - new Date(dateStr).getTime()
-  const min = Math.floor(diff / 60000)
-  if (min < 60) return `${min > 0 ? min : 1}min atrás`
-  const h = Math.floor(min / 60)
-  if (h < 24) return `${h}h atrás`
-  const d = Math.floor(h / 24)
-  if (d === 1) return "ontem"
-  if (d < 7) return `${d} dias atrás`
-  return new Date(dateStr).toLocaleDateString("pt-BR")
-}
-
+/* ─── Catálogo de tipos de evento (fixo, usado por Preferências e Regras —
+   mesma tabela real por trás das duas, NotificationPreference) ──────────── */
 const PREF_GROUPS = [
   { key: "tarefas",   label: "Tarefas",    color: "bg-emerald-50 text-emerald-700", dot: "bg-emerald-500",
     items: [
@@ -78,17 +51,49 @@ const PREF_GROUPS = [
     ]},
 ]
 
-const MOCK_RULES = [
-  { id: "r1", name: "Tarefa atrasada → WhatsApp", desc: "Quando uma tarefa passa do prazo, avisa via WhatsApp", enabled: true,  trigger: "Prazo expirado",    channels: ["WhatsApp"] },
-  { id: "r2", name: "Novo projeto → E-mail",      desc: "Quando um novo projeto é aberto, envia e-mail",       enabled: true,  trigger: "Projeto criado",    channels: ["E-mail"] },
-  { id: "r3", name: "Aprovação pendente → Push",  desc: "Lembrete diário de aprovações pendentes",             enabled: false, trigger: "Diário (9h)",      channels: ["Push"] },
+const EVENT_OPTIONS: PrefEventOption[] = PREF_GROUPS.flatMap((g) =>
+  g.items.map((i) => ({ id: i.id, label: i.label, groupLabel: g.label })),
+)
+
+type PrefChannel = "email" | "whatsapp" | "push"
+const PREF_CHANNELS: { key: PrefChannel; label: string; Icon: typeof Mail; color: string }[] = [
+  { key: "email", label: "E-mail", Icon: Mail, color: "#3b82f6" },
+  { key: "whatsapp", label: "WhatsApp", Icon: MessageSquare, color: "#22c55e" },
+  { key: "push", label: "Push", Icon: Smartphone, color: "#8b5cf6" },
 ]
 
-const MOCK_GROUPS = [
-  { id: "g1", name: "Líderes de Projeto",  desc: "Responsáveis por aprovar entregas e gerir projetos", members: 3, color: "bg-violet-100 text-violet-700" },
-  { id: "g2", name: "Equipe Financeira",   desc: "Responsáveis por faturas e cobranças",                members: 2, color: "bg-blue-100 text-blue-700" },
-  { id: "g3", name: "Toda a Agência",      desc: "Todos os membros ativos da agência",                  members: 8, color: "bg-emerald-100 text-emerald-700" },
-]
+function prefsKey(eventType: string, channel: string) {
+  return `${eventType}:${channel}`
+}
+
+interface SystemAlertItem {
+  id: string
+  type: string
+  title: string
+  message: string
+  created_at: string
+  is_read: boolean
+}
+
+interface GroupSummary {
+  id: string
+  name: string
+  description: string | null
+  member_count: number
+  created_at: string
+}
+
+function timeAgo(dateStr: string): string {
+  const diff = Date.now() - new Date(dateStr).getTime()
+  const min = Math.floor(diff / 60000)
+  if (min < 60) return `${min > 0 ? min : 1}min atrás`
+  const h = Math.floor(min / 60)
+  if (h < 24) return `${h}h atrás`
+  const d = Math.floor(h / 24)
+  if (d === 1) return "ontem"
+  if (d < 7) return `${d} dias atrás`
+  return new Date(dateStr).toLocaleDateString("pt-BR")
+}
 
 /* ─── Component ──────────────────────────────────────────────────────────── */
 interface NotificationPreferencesPanelProps {
@@ -102,70 +107,306 @@ export function NotificationPreferencesPanel({
   open = false, onClose, embedded = false, initialTab = "inbox",
 }: NotificationPreferencesPanelProps) {
   const location = useLocation()
-  const [saving, setSaving] = useState(false)
-  const [showSuccess, setShowSuccess] = useState(false)
-  const [readSet, setReadSet] = useState<Set<string>>(
-    new Set(MOCK_NOTIFICATIONS.filter(n => n.read).map(n => n.id))
-  )
-  const unreadCount = MOCK_NOTIFICATIONS.filter(n => !readSet.has(n.id)).length
 
-  const [channels, setChannels] = useState({ email: true, push: true, inApp: true, whatsapp: true })
-  const [prefs, setPrefs] = useState<Record<string, boolean>>(
-    Object.fromEntries(PREF_GROUPS.flatMap(g => g.items.map(i => [i.id, true])))
-  )
-  const [rules, setRules] = useState(MOCK_RULES)
+  /* ── Inbox — mesma fonte real (SystemAlert) que o triângulo de alertas,
+     nunca um segundo inbox paralelo. ────────────────────────────────────── */
+  const [alerts, setAlerts] = useState<SystemAlertItem[]>([])
+  const [alertsLoading, setAlertsLoading] = useState(false)
+  const [showArchived, setShowArchived] = useState(false)
+  const unreadCount = alerts.filter((a) => !a.is_read).length
 
-  const totalActive = Object.values(prefs).filter(Boolean).length
-  const totalPrefs  = Object.values(prefs).length
+  const fetchAlerts = useCallback(async () => {
+    setAlertsLoading(true)
+    try {
+      const res = await apiClient.getSystemAlerts({
+        category: "notificacao",
+        is_archived: showArchived ? "true" : "false",
+        limit: 50,
+      })
+      setAlerts(res?.data ?? [])
+    } catch {
+      setAlerts([])
+    } finally {
+      setAlertsLoading(false)
+    }
+  }, [showArchived])
 
-  const handleSave = async () => {
-    setSaving(true)
-    await new Promise(r => setTimeout(r, 800))
-    setSaving(false)
-    setShowSuccess(true)
-    setTimeout(() => { setShowSuccess(false); if (!embedded) onClose?.() }, 1500)
+  useEffect(() => {
+    if (open) void fetchAlerts()
+  }, [open, fetchAlerts])
+
+  async function markRead(id: string) {
+    setAlerts((prev) => prev.map((a) => (a.id === id ? { ...a, is_read: true } : a)))
+    try {
+      await apiClient.markSystemAlertRead(id)
+    } catch {}
   }
+
+  async function markAllRead() {
+    setAlerts((prev) => prev.map((a) => ({ ...a, is_read: true })))
+    try {
+      await apiClient.markAllSystemAlertsRead()
+    } catch {}
+  }
+
+  async function toggleArchive(id: string) {
+    setAlerts((prev) => prev.filter((a) => a.id !== id))
+    try {
+      if (showArchived) await apiClient.unarchiveSystemAlert(id)
+      else await apiClient.archiveSystemAlert(id)
+    } catch {
+      void fetchAlerts()
+    }
+  }
+
+  /* ── Alertas — mesma fonte real (SystemAlert), filtrada por
+     category="alerta" (ou o feed sintético de agência, que já era separado
+     do inbox antes disso). Era um painel flutuante à parte
+     (AlertsHeaderIcon); virou aba deste mesmo painel pra não duplicar o
+     mesmo sino em dois ícones do header. ─────────────────────────────────── */
+  const { accountType } = useAccountType()
+  const navigate = useNavigate()
+  const isAgency = accountType === "agencias"
+
+  const [alertaAlerts, setAlertaAlerts] = useState<DisplayAlert[]>([])
+  const [alertaLoading, setAlertaLoading] = useState(false)
+  const [alertaShowArchived, setAlertaShowArchived] = useState(false)
+  const [alertaDismissed, setAlertaDismissed] = useState<string[]>([])
+  // Badge da aba: sempre o total real de pendências (não-lido, não-arquivado),
+  // independente de qual visão (Ativos/Arquivados) está aberta — nunca deve
+  // variar só porque o usuário estava olhando os arquivados.
+  const [alertaBadgeCount, setAlertaBadgeCount] = useState(0)
+
+  const fetchAlertaAlerts = useCallback(async () => {
+    setAlertaLoading(true)
+    try {
+      if (isAgency) {
+        const res = await apiClient.getAgencyAlerts()
+        const raw: any[] = res?.data ?? []
+        setAlertaAlerts(raw.map((a) => ({
+          id: a.id, type: a.type, severity: a.severity, title: a.title,
+          message: a.description, link: a.link, count: a.count, isSystemAlert: false,
+        })))
+      } else {
+        const res = await apiClient.getSystemAlerts({
+          category: "alerta",
+          is_read: alertaShowArchived ? undefined : false,
+          is_archived: alertaShowArchived ? "true" : "false",
+          limit: 50,
+        })
+        const raw: any[] = res?.data ?? []
+        setAlertaAlerts(raw.map((a) => ({
+          id: a.id, type: a.type, severity: a.severity, title: a.title,
+          message: a.message, link: systemAlertLink(a.entity_type, a.entity_id, accountType),
+          created_at: a.created_at, isSystemAlert: true,
+        })))
+      }
+    } catch {
+      setAlertaAlerts([])
+    } finally {
+      setAlertaLoading(false)
+    }
+  }, [isAgency, accountType, alertaShowArchived])
+
+  useEffect(() => {
+    if (open) void fetchAlertaAlerts()
+  }, [open, fetchAlertaAlerts])
+
+  useEffect(() => {
+    setAlertaDismissed([])
+  }, [alertaShowArchived])
+
+  useEffect(() => {
+    if (!open || isAgency) return
+    apiClient.getUnreadSystemAlertsCount({ category: "alerta" }).then((r) => setAlertaBadgeCount(r?.count ?? 0)).catch(() => {})
+  }, [open, isAgency])
+
+  const alertaActiveAlerts = alertaAlerts.filter((a) => !alertaDismissed.includes(a.id))
+  const alertaTabBadge = isAgency ? alertaActiveAlerts.length : alertaBadgeCount
+
+  async function alertaDismiss(alert: DisplayAlert) {
+    setAlertaDismissed((prev) => [...prev, alert.id])
+    if (alert.isSystemAlert) {
+      try { await apiClient.markSystemAlertRead(alert.id) } catch {}
+      if (!alertaShowArchived) setAlertaBadgeCount((c) => Math.max(0, c - 1))
+    }
+  }
+
+  async function alertaToggleArchive(alert: DisplayAlert) {
+    setAlertaDismissed((prev) => [...prev, alert.id])
+    try {
+      if (alertaShowArchived) await apiClient.unarchiveSystemAlert(alert.id)
+      else await apiClient.archiveSystemAlert(alert.id)
+    } catch {}
+    if (!alertaShowArchived) setAlertaBadgeCount((c) => Math.max(0, c - 1))
+  }
+
+  async function alertaDismissAll() {
+    setAlertaDismissed(alertaAlerts.map((a) => a.id))
+    if (!isAgency) {
+      try { await apiClient.markAllSystemAlertsRead({ category: "alerta" }) } catch {}
+      setAlertaBadgeCount(0)
+    }
+  }
+
+  /* ── Preferências / Regras — mesma tabela real (NotificationPreference),
+     duas telas sobre o mesmo dado. ───────────────────────────────────────── */
+  const [prefsMap, setPrefsMap] = useState<Map<string, boolean>>(new Map())
+
+  const fetchPreferences = useCallback(async () => {
+    try {
+      const res = await apiClient.getNotificationPreferences()
+      const map = new Map<string, boolean>()
+      for (const row of res?.data ?? []) map.set(prefsKey(row.event_type, row.channel), row.enabled)
+      setPrefsMap(map)
+    } catch {}
+  }, [])
+
+  useEffect(() => {
+    if (open) void fetchPreferences()
+  }, [open, fetchPreferences])
+
+  // "in_app" nunca aparece na tabela como desligável — sempre true. Os
+  // demais, sem linha salva ainda = nunca foram ligados (nunca inferir "on"
+  // por padrão pra um canal que nunca disparou de verdade).
+  function isChannelEnabled(eventType: string, channel: PrefChannel): boolean {
+    return prefsMap.get(prefsKey(eventType, channel)) ?? false
+  }
+
+  async function setChannel(eventType: string, channel: PrefChannel, enabled: boolean) {
+    setPrefsMap((prev) => new Map(prev).set(prefsKey(eventType, channel), enabled))
+    try {
+      await apiClient.updateNotificationPreference(eventType, { [channel]: enabled })
+    } catch {
+      setPrefsMap((prev) => new Map(prev).set(prefsKey(eventType, channel), !enabled))
+    }
+  }
+
+  async function saveRule(eventType: string, channels: { email: boolean; whatsapp: boolean; push: boolean }) {
+    await apiClient.updateNotificationPreference(eventType, channels)
+    await fetchPreferences()
+  }
+
+  /* ── Grupos ──────────────────────────────────────────────────────────── */
+  const [groups, setGroups] = useState<GroupSummary[]>([])
+  const [groupsLoading, setGroupsLoading] = useState(false)
+  const [groupModalOpen, setGroupModalOpen] = useState(false)
+  const [editingGroup, setEditingGroup] = useState<NotificationGroupDraft | null>(null)
+  const [deletingGroup, setDeletingGroup] = useState<GroupSummary | null>(null)
+
+  const fetchGroups = useCallback(async () => {
+    setGroupsLoading(true)
+    try {
+      const res = await apiClient.getNotificationGroups()
+      setGroups(res?.data ?? [])
+    } catch {
+      setGroups([])
+    } finally {
+      setGroupsLoading(false)
+    }
+  }, [])
+
+  useEffect(() => {
+    if (open) void fetchGroups()
+  }, [open, fetchGroups])
+
+  async function saveGroup(draft: NotificationGroupDraft) {
+    if (draft.id) {
+      await apiClient.updateNotificationGroup(draft.id, {
+        name: draft.name,
+        description: draft.description,
+        member_user_ids: draft.member_user_ids,
+      })
+    } else {
+      await apiClient.createNotificationGroup({
+        name: draft.name,
+        description: draft.description,
+        member_user_ids: draft.member_user_ids,
+      })
+    }
+    await fetchGroups()
+  }
+
+  async function confirmDeleteGroup() {
+    if (!deletingGroup) return
+    try {
+      await apiClient.deleteNotificationGroup(deletingGroup.id)
+    } finally {
+      setDeletingGroup(null)
+      await fetchGroups()
+    }
+  }
+
+  const [ruleModalOpen, setRuleModalOpen] = useState(false)
 
   /* ── Tab bodies ──────────────────────────────────────────────────────── */
 
   return embedded ? (
-    /* ── Embedded mode (inside a page) ─────────────────────────────────── */
+    /* ── Embedded mode (inside a page) — sem callers hoje; mantido coerente
+       com o modo Tela Slide abaixo. ─────────────────────────────────────── */
     <div className="space-y-4">
-      {showSuccess && (
-        <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-xl flex items-center gap-3">
-          <CheckCircle2 className="h-4 w-4 text-emerald-600 shrink-0" />
-          <span className="text-sm font-medium text-emerald-900">Preferências salvas!</span>
-        </div>
-      )}
-      <Tabs defaultValue="notifications">
+      <Tabs defaultValue="inbox">
         <TabsList>
-          <TabsTrigger value="notifications"><Bell className="h-3.5 w-3.5 mr-1.5" />Notificações</TabsTrigger>
-          <TabsTrigger value="notifications"><Settings className="h-3.5 w-3.5 mr-1.5" />Preferências</TabsTrigger>
+          <TabsTrigger value="inbox"><Bell className="h-3.5 w-3.5 mr-1.5" />Notificações</TabsTrigger>
+          <TabsTrigger value="alertas"><AlertTriangle className="h-3.5 w-3.5 mr-1.5" />Alertas</TabsTrigger>
+          <TabsTrigger value="prefs"><Settings className="h-3.5 w-3.5 mr-1.5" />Preferências</TabsTrigger>
           <TabsTrigger value="rules"><Zap className="h-3.5 w-3.5 mr-1.5" />Regras</TabsTrigger>
           <TabsTrigger value="groups"><Users className="h-3.5 w-3.5 mr-1.5" />Grupos</TabsTrigger>
         </TabsList>
-        <TabsContent value="notifications" className="pt-2">
-          <InboxTab notifications={MOCK_NOTIFICATIONS} readSet={readSet} setReadSet={setReadSet} />
+        <TabsContent value="inbox" className="pt-2">
+          <InboxTab
+            alerts={alerts}
+            loading={alertsLoading}
+            showArchived={showArchived}
+            setShowArchived={setShowArchived}
+            markRead={markRead}
+            markAllRead={markAllRead}
+            toggleArchive={toggleArchive}
+          />
         </TabsContent>
-        <TabsContent value="notifications" className="pt-2">
-          <PrefsTab channels={channels} toggleChannel={k => setChannels(c => ({...c, [k]: !c[k]}))} prefs={prefs} togglePref={id => setPrefs(p => ({...p, [id]: !p[id]}))} />
+        <TabsContent value="alertas" className="pt-2">
+          <AlertasTab
+            alerts={alertaActiveAlerts}
+            loading={alertaLoading}
+            isAgency={isAgency}
+            showArchived={alertaShowArchived}
+            setShowArchived={setAlertaShowArchived}
+            onView={(link) => navigate(link)}
+            onDismiss={alertaDismiss}
+            onToggleArchive={alertaToggleArchive}
+            onDismissAll={alertaDismissAll}
+          />
+        </TabsContent>
+        <TabsContent value="prefs" className="pt-2">
+          <PrefsTab isChannelEnabled={isChannelEnabled} setChannel={setChannel} />
         </TabsContent>
         <TabsContent value="rules" className="pt-2">
-          <RulesTab rules={rules} setRules={setRules} />
+          <RulesTab isChannelEnabled={isChannelEnabled} setChannel={setChannel} onNewRule={() => setRuleModalOpen(true)} />
         </TabsContent>
         <TabsContent value="groups" className="pt-2">
-          <GroupsTab />
+          <GroupsTab
+            groups={groups}
+            loading={groupsLoading}
+            onNew={() => { setEditingGroup(null); setGroupModalOpen(true) }}
+            onEdit={(g) => {
+              apiClient.getNotificationGroup(g.id).then((full: any) => {
+                setEditingGroup({ id: g.id, name: g.name, description: g.description ?? "", member_user_ids: (full?.members ?? []).map((m: any) => m.id) })
+                setGroupModalOpen(true)
+              })
+            }}
+            onDelete={setDeletingGroup}
+          />
         </TabsContent>
       </Tabs>
-      <div className="flex items-center justify-between pt-3 border-t">
-        <p className="text-xs text-slate-400">{totalActive} de {totalPrefs} notificações ativas</p>
-        <Button onClick={handleSave} disabled={saving} className="h-8 text-xs btn-brand border-0">
-          {saving ? "Salvando..." : "Salvar"}
-        </Button>
-      </div>
+      <RuleAndGroupModals
+        ruleModalOpen={ruleModalOpen} setRuleModalOpen={setRuleModalOpen} saveRule={saveRule}
+        groupModalOpen={groupModalOpen} setGroupModalOpen={setGroupModalOpen} editingGroup={editingGroup} saveGroup={saveGroup}
+        deletingGroup={deletingGroup} setDeletingGroup={setDeletingGroup} confirmDeleteGroup={confirmDeleteGroup}
+      />
     </div>
   ) : (
     /* ── Tela Slide ─────────────────────────────────────────────────────── */
+    <>
     <HeaderSlideScreen
       open={open}
       onClose={onClose}
@@ -178,24 +419,8 @@ export function NotificationPreferencesPanel({
         path: location.pathname,
         activateKey: "open-notificacoes",
       }}
-      footer={
-        <div className="flex items-center gap-3">
-          <Button variant="outline" onClick={onClose} disabled={saving} className="h-9 text-sm">Cancelar</Button>
-          <Button onClick={handleSave} disabled={saving} className="h-9 text-sm btn-brand border-0">
-            {saving ? "Salvando..." : "Salvar Preferências"}
-          </Button>
-          <p className="text-xs text-slate-400 ml-auto">{totalActive} de {totalPrefs} notificações ativas</p>
-        </div>
-      }
     >
       <div className="flex flex-col flex-1 min-h-0 w-full">
-        {showSuccess && (
-          <div className="mx-5 mt-3 mb-1 p-3 bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800 rounded-xl flex items-center gap-3 shrink-0">
-            <CheckCircle2 className="h-4 w-4 text-emerald-600 shrink-0" />
-            <span className="text-sm font-medium text-emerald-900 dark:text-emerald-300">Preferências salvas!</span>
-          </div>
-        )}
-
         {/* Tabs — flex-1 min-h-0 so it shrinks properly */}
         <Tabs defaultValue={initialTab} className="flex-1 min-h-0 flex flex-col">
           <div className="px-5 pt-4 pb-1 shrink-0">
@@ -210,7 +435,17 @@ export function NotificationPreferencesPanel({
                   </span>
                 )}
               </TabsTrigger>
-              <TabsTrigger value="notifications"
+              <TabsTrigger value="alertas"
+                className="flex-1 gap-1.5 text-xs rounded-lg data-[state=active]:bg-white dark:data-[state=active]:bg-slate-700 data-[state=active]:shadow-sm py-2">
+                <AlertTriangle className="h-3.5 w-3.5" />
+                Alertas
+                {alertaTabBadge > 0 && (
+                  <span className="inline-flex items-center justify-center h-4 min-w-4 px-1 rounded-full bg-red-500 text-white text-[9px] font-bold">
+                    {alertaTabBadge}
+                  </span>
+                )}
+              </TabsTrigger>
+              <TabsTrigger value="prefs"
                 className="flex-1 gap-1.5 text-xs rounded-lg data-[state=active]:bg-white dark:data-[state=active]:bg-slate-700 data-[state=active]:shadow-sm py-2">
                 <Settings className="h-3.5 w-3.5" />Preferências
               </TabsTrigger>
@@ -227,73 +462,190 @@ export function NotificationPreferencesPanel({
 
           {/* Each TabsContent scrolls independently */}
           <TabsContent value="inbox" className="flex-1 min-h-0 overflow-y-auto mt-0">
-            <InboxTab notifications={MOCK_NOTIFICATIONS} readSet={readSet} setReadSet={setReadSet} />
-          </TabsContent>
-
-          <TabsContent value="notifications" className="flex-1 min-h-0 overflow-y-auto mt-0">
-            <PrefsTab
-              channels={channels}
-              toggleChannel={k => setChannels(c => ({...c, [k]: !c[k]}))}
-              prefs={prefs}
-              togglePref={id => setPrefs(p => ({...p, [id]: !p[id]}))}
+            <InboxTab
+              alerts={alerts}
+              loading={alertsLoading}
+              showArchived={showArchived}
+              setShowArchived={setShowArchived}
+              markRead={markRead}
+              markAllRead={markAllRead}
+              toggleArchive={toggleArchive}
             />
           </TabsContent>
 
+          <TabsContent value="alertas" className="flex-1 min-h-0 overflow-y-auto mt-0">
+            <AlertasTab
+              alerts={alertaActiveAlerts}
+              loading={alertaLoading}
+              isAgency={isAgency}
+              showArchived={alertaShowArchived}
+              setShowArchived={setAlertaShowArchived}
+              onView={(link) => { onClose?.(); navigate(link) }}
+              onDismiss={alertaDismiss}
+              onToggleArchive={alertaToggleArchive}
+              onDismissAll={alertaDismissAll}
+            />
+          </TabsContent>
+
+          <TabsContent value="prefs" className="flex-1 min-h-0 overflow-y-auto mt-0">
+            <PrefsTab isChannelEnabled={isChannelEnabled} setChannel={setChannel} />
+          </TabsContent>
+
           <TabsContent value="rules" className="flex-1 min-h-0 overflow-y-auto mt-0">
-            <RulesTab rules={rules} setRules={setRules} />
+            <RulesTab isChannelEnabled={isChannelEnabled} setChannel={setChannel} onNewRule={() => setRuleModalOpen(true)} />
           </TabsContent>
 
           <TabsContent value="groups" className="flex-1 min-h-0 overflow-y-auto mt-0">
-            <GroupsTab />
+            <GroupsTab
+              groups={groups}
+              loading={groupsLoading}
+              onNew={() => { setEditingGroup(null); setGroupModalOpen(true) }}
+              onEdit={(g) => {
+                apiClient.getNotificationGroup(g.id).then((full: any) => {
+                  setEditingGroup({ id: g.id, name: g.name, description: g.description ?? "", member_user_ids: (full?.members ?? []).map((m: any) => m.id) })
+                  setGroupModalOpen(true)
+                })
+              }}
+              onDelete={setDeletingGroup}
+            />
           </TabsContent>
         </Tabs>
       </div>
     </HeaderSlideScreen>
+    <RuleAndGroupModals
+      ruleModalOpen={ruleModalOpen} setRuleModalOpen={setRuleModalOpen} saveRule={saveRule}
+      groupModalOpen={groupModalOpen} setGroupModalOpen={setGroupModalOpen} editingGroup={editingGroup} saveGroup={saveGroup}
+      deletingGroup={deletingGroup} setDeletingGroup={setDeletingGroup} confirmDeleteGroup={confirmDeleteGroup}
+    />
+    </>
+  )
+}
+
+/* ─── Modais compartilhados pelos dois modos de render ───────────────────── */
+function RuleAndGroupModals({
+  ruleModalOpen, setRuleModalOpen, saveRule,
+  groupModalOpen, setGroupModalOpen, editingGroup, saveGroup,
+  deletingGroup, setDeletingGroup, confirmDeleteGroup,
+}: {
+  ruleModalOpen: boolean
+  setRuleModalOpen: (v: boolean) => void
+  saveRule: (eventType: string, channels: { email: boolean; whatsapp: boolean; push: boolean }) => Promise<void>
+  groupModalOpen: boolean
+  setGroupModalOpen: (v: boolean) => void
+  editingGroup: NotificationGroupDraft | null
+  saveGroup: (draft: NotificationGroupDraft) => Promise<void>
+  deletingGroup: GroupSummary | null
+  setDeletingGroup: (g: GroupSummary | null) => void
+  confirmDeleteGroup: () => Promise<void>
+}) {
+  return (
+    <>
+      <NotificationRuleFormModal
+        open={ruleModalOpen}
+        onClose={() => setRuleModalOpen(false)}
+        eventOptions={EVENT_OPTIONS}
+        onSave={saveRule}
+      />
+      <NotificationGroupFormModal
+        open={groupModalOpen}
+        onClose={() => setGroupModalOpen(false)}
+        initial={editingGroup}
+        onSave={saveGroup}
+      />
+      <ConfirmationDialog
+        open={deletingGroup !== null}
+        onClose={() => setDeletingGroup(null)}
+        onConfirm={() => void confirmDeleteGroup()}
+        title={`Excluir grupo "${deletingGroup?.name ?? ""}"`}
+        message="Isso remove o grupo e sua lista de membros. Não afeta nenhuma notificação já enviada."
+        confirmText="Excluir"
+        destructive
+      />
+    </>
   )
 }
 
 /* ─── Sub-components ─────────────────────────────────────────────────────── */
 
-function InboxTab({ notifications, readSet, setReadSet }) {
-  const unreadCount = notifications.filter(n => !readSet.has(n.id)).length
+function InboxTab({
+  alerts, loading, showArchived, setShowArchived, markRead, markAllRead, toggleArchive,
+}: {
+  alerts: SystemAlertItem[]
+  loading: boolean
+  showArchived: boolean
+  setShowArchived: (v: boolean) => void
+  markRead: (id: string) => void
+  markAllRead: () => void
+  toggleArchive: (id: string) => void
+}) {
+  const unreadCount = alerts.filter((n) => !n.is_read).length
   return (
     <div>
+      <div className="flex items-center gap-1.5 px-5 pt-3">
+        <Button size="sm" variant={showArchived ? "ghost" : "secondary"} className="h-7 text-xs px-2.5" onClick={() => setShowArchived(false)}>
+          Ativos
+        </Button>
+        <Button size="sm" variant={showArchived ? "secondary" : "ghost"} className="h-7 text-xs px-2.5 gap-1" onClick={() => setShowArchived(true)}>
+          <Archive className="h-3 w-3" />
+          Arquivados
+        </Button>
+      </div>
       <div className="flex items-center justify-between px-5 py-3 border-b border-slate-100 dark:border-slate-800 sticky top-0 bg-white dark:bg-slate-900 z-10">
         <span className="text-sm font-semibold text-slate-800 dark:text-white">
-          {unreadCount > 0 ? `${unreadCount} não ${unreadCount === 1 ? "lida" : "lidas"}` : "Tudo lido"}
+          {showArchived
+            ? `${alerts.length} arquivado${alerts.length !== 1 ? "s" : ""}`
+            : unreadCount > 0 ? `${unreadCount} não ${unreadCount === 1 ? "lida" : "lidas"}` : "Tudo lido"}
         </span>
-        {unreadCount > 0 && (
-          <button onClick={() => setReadSet(new Set(notifications.map(n => n.id)))}
+        {!showArchived && unreadCount > 0 && (
+          <button onClick={markAllRead}
             className="flex items-center gap-1.5 text-xs text-blue-600 hover:text-blue-700 font-medium">
             <CheckCheck className="h-3.5 w-3.5" />Marcar todas como lidas
           </button>
         )}
       </div>
+      {loading && alerts.length === 0 && (
+        <p className="text-sm text-slate-400 text-center py-10">Carregando...</p>
+      )}
+      {!loading && alerts.length === 0 && (
+        <p className="text-sm text-slate-400 text-center py-10">
+          {showArchived ? "Nenhum alerta arquivado." : "Nenhuma notificação por aqui."}
+        </p>
+      )}
       <div className="divide-y divide-slate-100 dark:divide-slate-800">
-        {notifications.map(n => {
-          const isRead = readSet.has(n.id)
-          const cfg = NOTIF_ICON_CFG[n.type]
+        {alerts.map((n) => {
+          const isRead = n.is_read
+          const Icon = alertIcon(n.type)
           return (
-            <button key={n.id}
-              onClick={() => setReadSet(prev => new Set([...prev, n.id]))}
+            <div key={n.id}
               className={cn(
-                "w-full flex items-start gap-3 px-5 py-4 text-left hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors",
+                "w-full flex items-start gap-3 px-5 py-4 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors",
                 !isRead && "bg-blue-50/60 dark:bg-blue-950/15"
               )}>
-              <div className="mt-2 shrink-0">
-                <div className={cn("h-2 w-2 rounded-full", !isRead ? "bg-blue-500" : "bg-transparent")} />
-              </div>
-              <div className={cn("h-9 w-9 rounded-xl flex items-center justify-center shrink-0", cfg.bg)}>
-                <cfg.Icon className={cn("h-4 w-4", cfg.text)} />
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className={cn("text-sm leading-snug", !isRead ? "font-semibold text-slate-900 dark:text-white" : "font-medium text-slate-600 dark:text-slate-300")}>
-                  {n.title}
-                </p>
-                <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5 leading-relaxed line-clamp-2">{n.body}</p>
-                <p className="text-[10px] text-slate-400 mt-1">{timeAgo(n.date)}</p>
-              </div>
-            </button>
+              <button onClick={() => !isRead && markRead(n.id)} className="flex items-start gap-3 flex-1 min-w-0 text-left">
+                <div className="mt-2 shrink-0">
+                  <div className={cn("h-2 w-2 rounded-full", !isRead ? "bg-blue-500" : "bg-transparent")} />
+                </div>
+                <div className="h-9 w-9 rounded-xl flex items-center justify-center shrink-0 bg-slate-100 dark:bg-slate-800">
+                  <Icon className="h-4 w-4 text-slate-500" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className={cn("text-sm leading-snug", !isRead ? "font-semibold text-slate-900 dark:text-white" : "font-medium text-slate-600 dark:text-slate-300")}>
+                    {n.title}
+                  </p>
+                  <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5 leading-relaxed line-clamp-2">{n.message}</p>
+                  <p className="text-[10px] text-slate-400 mt-1">{timeAgo(n.created_at)}</p>
+                </div>
+              </button>
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={() => toggleArchive(n.id)}
+                className="h-7 w-7 p-0 shrink-0 opacity-60 hover:opacity-100"
+                title={showArchived ? "Desarquivar" : "Arquivar"}
+              >
+                {showArchived ? <ArchiveRestore className="h-3.5 w-3.5" /> : <Archive className="h-3.5 w-3.5" />}
+              </Button>
+            </div>
           )
         })}
       </div>
@@ -301,53 +653,142 @@ function InboxTab({ notifications, readSet, setReadSet }) {
   )
 }
 
-function PrefsTab({ channels, toggleChannel, prefs, togglePref }) {
+/* ─── Aba Alertas — portada de alerts-header-icon.tsx (era um painel
+   flutuante à parte); cartão colorido por severidade, "Ver" navega pro item,
+   arquivar/dispensar. ────────────────────────────────────────────────────── */
+function AlertasTab({
+  alerts, loading, isAgency, showArchived, setShowArchived,
+  onView, onDismiss, onToggleArchive, onDismissAll,
+}: {
+  alerts: DisplayAlert[]
+  loading: boolean
+  isAgency: boolean
+  showArchived: boolean
+  setShowArchived: (v: boolean) => void
+  onView: (link: string) => void
+  onDismiss: (alert: DisplayAlert) => void
+  onToggleArchive: (alert: DisplayAlert) => void
+  onDismissAll: () => void
+}) {
+  return (
+    <div>
+      <div className="flex items-center justify-between px-5 pt-3 gap-2">
+        {!isAgency ? (
+          <div className="flex items-center gap-1.5">
+            <Button size="sm" variant={showArchived ? "ghost" : "secondary"} className="h-7 text-xs px-2.5" onClick={() => setShowArchived(false)}>
+              Ativos
+            </Button>
+            <Button size="sm" variant={showArchived ? "secondary" : "ghost"} className="h-7 text-xs px-2.5 gap-1" onClick={() => setShowArchived(true)}>
+              <Archive className="h-3 w-3" />
+              Arquivados
+            </Button>
+          </div>
+        ) : <div />}
+        {alerts.length > 0 && (
+          <button onClick={onDismissAll} className="text-xs text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 font-medium whitespace-nowrap">
+            Dispensar todos
+          </button>
+        )}
+      </div>
+      {loading && alerts.length === 0 && (
+        <p className="text-sm text-slate-400 text-center py-10">Carregando...</p>
+      )}
+      {!loading && alerts.length === 0 && (
+        <p className="text-sm text-slate-400 text-center py-10">
+          {showArchived ? "Nenhum alerta arquivado." : "Nenhum alerta ativo no momento."}
+        </p>
+      )}
+      <div className="px-5 pt-3 pb-4 space-y-3">
+        {alerts.map((alert) => {
+          const Icon = alertIcon(alert.type)
+          return (
+            <div key={alert.id}
+              className={cn("flex items-start gap-3 p-3 rounded-xl border-2 transition-all shadow-sm hover:shadow-md", severityColor[alert.severity])}>
+              <Icon className="h-4 w-4 mt-0.5 shrink-0" />
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <p className="text-sm font-medium">{alert.title}</p>
+                  {alert.count !== undefined && alert.count > 1 && (
+                    <Badge variant="outline" className="text-[10px] h-4 px-1.5">{alert.count}</Badge>
+                  )}
+                  <Badge className={cn("text-xs ml-auto", severityBadgeColor[alert.severity])}>
+                    {severityLabel[alert.severity]}
+                  </Badge>
+                </div>
+                <p className="text-xs mt-1 opacity-80">{alert.message}</p>
+                {alert.created_at && (
+                  <p className="text-[10px] mt-0.5 opacity-50">
+                    {new Date(alert.created_at).toLocaleDateString("pt-BR", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" })}
+                  </p>
+                )}
+              </div>
+              <div className="flex items-center gap-1 shrink-0">
+                <Button size="sm" variant="ghost" className="gap-1 text-xs h-7 px-2" onClick={() => onView(alert.link)}>
+                  Ver
+                  <ArrowRight className="h-3 w-3" />
+                </Button>
+                {alert.isSystemAlert && (
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => onToggleArchive(alert)}
+                    className="h-7 w-7 p-0 opacity-60 hover:opacity-100"
+                    title={showArchived ? "Desarquivar" : "Arquivar"}
+                  >
+                    {showArchived ? <ArchiveRestore className="h-3 w-3" /> : <Archive className="h-3 w-3" />}
+                  </Button>
+                )}
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => onDismiss(alert)}
+                  className="h-7 w-7 p-0 opacity-60 hover:opacity-100"
+                  title={alert.isSystemAlert ? "Marcar como lido" : "Dispensar"}
+                >
+                  <X className="h-3 w-3" />
+                </Button>
+              </div>
+            </div>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
+function PrefsTab({
+  isChannelEnabled, setChannel,
+}: {
+  isChannelEnabled: (eventType: string, channel: PrefChannel) => boolean
+  setChannel: (eventType: string, channel: PrefChannel, enabled: boolean) => void
+}) {
   return (
     <div className="p-5 space-y-6">
-      {/* Channels */}
       <div>
-        <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-3">Canais de recebimento</p>
-        <div className="grid grid-cols-2 gap-2">
-          {[
-            { key: "email",    label: "E-mail",   Icon: Mail,          color: "#3b82f6" },
-            { key: "whatsapp", label: "WhatsApp", Icon: MessageSquare, color: "#22c55e" },
-            { key: "push",     label: "Push",     Icon: Bell,          color: "#8b5cf6" },
-            { key: "inApp",    label: "In-App",   Icon: Smartphone,    color: "#f59e0b" },
-          ].map(({ key, label, Icon, color }) => (
-            <button key={key} onClick={() => toggleChannel(key)}
-              className={cn(
-                "flex items-center gap-3 p-3 rounded-xl border text-left transition-all",
-                channels[key]
-                  ? "border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 shadow-sm"
-                  : "border-dashed border-slate-200 dark:border-slate-700 opacity-50"
-              )}>
-              <div className="p-1.5 rounded-lg shrink-0" style={{ background: color + "20" }}>
-                <Icon className="h-3.5 w-3.5" style={{ color }} />
-              </div>
-              <span className="text-xs font-semibold text-slate-700 dark:text-slate-200 flex-1">{label}</span>
-              <div className={cn("w-4 h-4 rounded-full border-2 flex items-center justify-center transition-all shrink-0",
-                channels[key] ? "border-emerald-500 bg-emerald-500" : "border-slate-300 dark:border-slate-600"
-              )}>
-                {channels[key] && <div className="w-1.5 h-1.5 rounded-full bg-white" />}
-              </div>
-            </button>
+        <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Canais</p>
+        <div className="flex items-center gap-2 flex-wrap">
+          <span className="inline-flex items-center gap-1.5 text-[10px] font-semibold text-emerald-700 bg-emerald-50 dark:bg-emerald-950/30 dark:text-emerald-300 px-2.5 py-1 rounded-full">
+            <Bell className="h-3 w-3" />Dentro da plataforma — sempre ativo
+          </span>
+          {PREF_CHANNELS.map(({ key, label, Icon }) => (
+            <span key={key} className="inline-flex items-center gap-1.5 text-[10px] font-medium text-slate-500 border border-slate-200 dark:border-slate-700 px-2.5 py-1 rounded-full">
+              <Icon className="h-3 w-3" />{label} — não enviado ainda
+            </span>
           ))}
         </div>
       </div>
 
-      {/* Notification type groups */}
       <div className="space-y-5">
         <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Tipos de notificação</p>
         {PREF_GROUPS.map(group => (
           <div key={group.key}>
             <div className="flex items-center gap-2 mb-2">
               <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${group.color}`}>{group.label}</span>
-              <span className="text-[10px] text-slate-400">{group.items.filter(i => prefs[i.id]).length}/{group.items.length} ativas</span>
             </div>
             <div className="space-y-1.5">
               {group.items.map(item => (
                 <div key={item.id}
-                  className="flex items-center justify-between gap-3 px-3 py-2.5 rounded-xl border border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-800/50 hover:border-slate-200 transition-colors">
+                  className="flex items-center justify-between gap-3 px-3 py-2.5 rounded-xl border border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-800/50 hover:border-slate-200 transition-colors flex-wrap">
                   <div className="flex items-center gap-2.5 min-w-0">
                     <span className={cn("w-1.5 h-1.5 rounded-full shrink-0", group.dot)} />
                     <div className="min-w-0">
@@ -355,7 +796,18 @@ function PrefsTab({ channels, toggleChannel, prefs, togglePref }) {
                       <p className="text-[10px] text-slate-400 mt-0.5">{item.desc}</p>
                     </div>
                   </div>
-                  <Switch checked={prefs[item.id]} onCheckedChange={() => togglePref(item.id)} />
+                  <div className="flex items-center gap-3 shrink-0">
+                    {PREF_CHANNELS.map(({ key, Icon }) => (
+                      <label key={key} className="flex items-center gap-1 cursor-pointer" title={`${key} (não enviado ainda)`}>
+                        <Icon className="h-3 w-3 text-slate-400" />
+                        <Switch
+                          checked={isChannelEnabled(item.id, key)}
+                          onCheckedChange={(v) => setChannel(item.id, key, v)}
+                          className="scale-75"
+                        />
+                      </label>
+                    ))}
+                  </div>
                 </div>
               ))}
             </div>
@@ -366,111 +818,138 @@ function PrefsTab({ channels, toggleChannel, prefs, togglePref }) {
       <div className="flex items-start gap-2 px-3 py-2.5 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-100 dark:border-slate-700">
         <Info className="h-3.5 w-3.5 text-slate-400 shrink-0 mt-0.5" />
         <p className="text-[10px] text-slate-400 leading-relaxed">
-          Alguns eventos essenciais (faturas, segurança) são enviados pelo sistema e não podem ser desativados.
+          Cada troca salva na hora. Só o aviso "dentro da plataforma" já envia de verdade hoje — os
+          outros canais ficam guardados pra quando existir envio real por e-mail/WhatsApp/push.
         </p>
       </div>
     </div>
   )
 }
 
-function RulesTab({ rules, setRules }) {
+function RulesTab({
+  isChannelEnabled, setChannel, onNewRule,
+}: {
+  isChannelEnabled: (eventType: string, channel: PrefChannel) => boolean
+  setChannel: (eventType: string, channel: PrefChannel, enabled: boolean) => void
+  onNewRule: () => void
+}) {
+  // Uma "regra" é só um PREF_GROUPS.item com algum canal (além de in_app) ligado.
+  const allItems = PREF_GROUPS.flatMap((g) => g.items.map((i) => ({ ...i, groupLabel: g.label })))
+  const activeRules = allItems.filter((item) => PREF_CHANNELS.some((c) => isChannelEnabled(item.id, c.key)))
+
+  function toggleRule(eventType: string, enable: boolean) {
+    for (const { key } of PREF_CHANNELS) setChannel(eventType, key, enable)
+  }
+
   return (
     <div className="p-5 space-y-4">
       <div className="flex items-start gap-3 px-4 py-3 rounded-xl bg-blue-50 dark:bg-blue-950/20 border border-blue-100 dark:border-blue-800/40">
         <Info className="h-3.5 w-3.5 text-blue-500 shrink-0 mt-0.5" />
         <p className="text-xs text-blue-700 dark:text-blue-300 leading-relaxed">
-          <strong>Regras</strong> são automações pessoais: você define o gatilho (ex: "tarefa atrasada") e o canal de aviso (WhatsApp, e-mail). Cada regra roda automaticamente para sua agência.
+          <strong>Regras</strong> são a mesma preferência da aba "Preferências", só que listadas
+          uma a uma — ligar um canal aqui é a mesma coisa que ligar lá.
         </p>
       </div>
 
       <div className="flex items-center justify-between">
-        <p className="text-xs font-semibold text-slate-700 dark:text-slate-200">{rules.length} regras criadas</p>
-        <Button size="sm" className="h-7 text-xs gap-1.5 btn-brand border-0"><Plus className="h-3.5 w-3.5" />Nova Regra</Button>
+        <p className="text-xs font-semibold text-slate-700 dark:text-slate-200">{activeRules.length} regra{activeRules.length !== 1 ? "s" : ""} ativa{activeRules.length !== 1 ? "s" : ""}</p>
+        <Button size="sm" className="h-7 text-xs gap-1.5 btn-brand border-0" onClick={onNewRule}>
+          <Plus className="h-3.5 w-3.5" />Nova Regra
+        </Button>
       </div>
 
-      <div className="space-y-2">
-        {rules.map(rule => (
-          <div key={rule.id}
-            className={cn(
-              "flex items-start gap-3 p-4 rounded-xl border transition-colors",
-              rule.enabled
-                ? "border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800"
-                : "border-dashed border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/40 opacity-70"
-            )}>
-            <div className={cn("p-1.5 rounded-lg shrink-0 mt-0.5", rule.enabled ? "bg-violet-100" : "bg-slate-100")}>
-              <Zap className={cn("h-3.5 w-3.5", rule.enabled ? "text-violet-600" : "text-slate-400")} />
-            </div>
-            <div className="flex-1 min-w-0">
-              <p className="text-sm font-semibold text-slate-800 dark:text-white">{rule.name}</p>
-              <p className="text-xs text-slate-400 mt-0.5">{rule.desc}</p>
-              <div className="flex items-center gap-2 mt-2 flex-wrap">
-                <span className="text-[10px] bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-300 px-2 py-0.5 rounded-full font-medium">
-                  Gatilho: {rule.trigger}
-                </span>
-                {rule.channels.map(ch => (
-                  <span key={ch} className="text-[10px] bg-indigo-50 dark:bg-indigo-950/30 text-indigo-600 px-2 py-0.5 rounded-full font-medium">{ch}</span>
-                ))}
+      {activeRules.length > 0 && (
+        <div className="space-y-2">
+          {activeRules.map((item) => {
+            const activeChannels = PREF_CHANNELS.filter((c) => isChannelEnabled(item.id, c.key))
+            return (
+              <div key={item.id} className="flex items-start gap-3 p-4 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800">
+                <div className="p-1.5 rounded-lg shrink-0 mt-0.5 bg-violet-100">
+                  <Zap className="h-3.5 w-3.5 text-violet-600" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-semibold text-slate-800 dark:text-white">{item.label}</p>
+                  <p className="text-xs text-slate-400 mt-0.5">{item.groupLabel} — {item.desc}</p>
+                  <div className="flex items-center gap-2 mt-2 flex-wrap">
+                    {activeChannels.map((c) => (
+                      <span key={c.key} className="text-[10px] bg-indigo-50 dark:bg-indigo-950/30 text-indigo-600 px-2 py-0.5 rounded-full font-medium">{c.label}</span>
+                    ))}
+                  </div>
+                </div>
+                <div className="flex items-center gap-1 shrink-0">
+                  <Switch checked={true} onCheckedChange={(v) => toggleRule(item.id, v)} />
+                </div>
               </div>
-            </div>
-            <div className="flex items-center gap-1 shrink-0">
-              <Switch checked={rule.enabled} onCheckedChange={() => setRules(prev => prev.map(r => r.id === rule.id ? {...r, enabled: !r.enabled} : r))} />
-            </div>
-          </div>
-        ))}
-      </div>
+            )
+          })}
+        </div>
+      )}
 
-      {rules.length === 0 && (
+      {activeRules.length === 0 && (
         <div className="border border-dashed border-slate-200 rounded-xl py-10 flex flex-col items-center gap-3 text-slate-400">
           <Zap className="h-8 w-8" />
           <p className="text-sm">Nenhuma regra criada</p>
-          <Button size="sm" variant="outline" className="text-xs">Criar primeira regra</Button>
+          <Button size="sm" variant="outline" className="text-xs" onClick={onNewRule}>Criar primeira regra</Button>
         </div>
       )}
     </div>
   )
 }
 
-function GroupsTab() {
-  const [groups, setGroups] = useState(MOCK_GROUPS)
+function GroupsTab({
+  groups, loading, onNew, onEdit, onDelete,
+}: {
+  groups: GroupSummary[]
+  loading: boolean
+  onNew: () => void
+  onEdit: (g: GroupSummary) => void
+  onDelete: (g: GroupSummary) => void
+}) {
   return (
     <div className="p-5 space-y-4">
       <div className="flex items-start gap-3 px-4 py-3 rounded-xl bg-violet-50 dark:bg-violet-950/20 border border-violet-100 dark:border-violet-800/40">
         <Info className="h-3.5 w-3.5 text-violet-500 shrink-0 mt-0.5" />
         <p className="text-xs text-violet-700 dark:text-violet-300 leading-relaxed">
-          <strong>Grupos</strong> organizam os membros da sua agência. Ao criar uma regra, você pode escolher notificar um grupo inteiro em vez de pessoas uma a uma.
+          <strong>Grupos</strong> organizam pessoas do seu time. Usar um grupo inteiro como alvo
+          de uma regra é a próxima etapa — por enquanto, só o cadastro do grupo.
         </p>
       </div>
 
       <div className="flex items-center justify-between">
-        <p className="text-xs font-semibold text-slate-700 dark:text-slate-200">{groups.length} grupos criados</p>
-        <Button size="sm" className="h-7 text-xs gap-1.5 btn-brand border-0"><Plus className="h-3.5 w-3.5" />Novo Grupo</Button>
+        <p className="text-xs font-semibold text-slate-700 dark:text-slate-200">{groups.length} grupo{groups.length !== 1 ? "s" : ""} criado{groups.length !== 1 ? "s" : ""}</p>
+        <Button size="sm" className="h-7 text-xs gap-1.5 btn-brand border-0" onClick={onNew}><Plus className="h-3.5 w-3.5" />Novo Grupo</Button>
       </div>
+
+      {loading && groups.length === 0 && <p className="text-xs text-slate-400 text-center py-10">Carregando...</p>}
 
       <div className="space-y-2">
         {groups.map(group => (
           <div key={group.id}
             className="flex items-center gap-4 p-4 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 hover:border-slate-300 transition-colors">
-            <div className={cn("h-10 w-10 rounded-xl flex items-center justify-center shrink-0", group.color)}>
+            <div className="h-10 w-10 rounded-xl flex items-center justify-center shrink-0 bg-violet-100 text-violet-700">
               <Users className="h-4 w-4" />
             </div>
             <div className="flex-1 min-w-0">
               <p className="text-sm font-semibold text-slate-800 dark:text-white">{group.name}</p>
-              <p className="text-xs text-slate-400 mt-0.5">{group.desc}</p>
+              {group.description && <p className="text-xs text-slate-400 mt-0.5">{group.description}</p>}
             </div>
             <div className="flex items-center gap-2 shrink-0">
-              <span className="text-xs font-bold text-slate-700 dark:text-slate-200">{group.members}</span>
-              <span className="text-[10px] text-slate-400">membros</span>
-              <Button variant="ghost" size="sm" className="h-7 w-7 p-0 rounded-lg"><Edit className="h-3.5 w-3.5" /></Button>
+              <span className="text-xs font-bold text-slate-700 dark:text-slate-200">{group.member_count}</span>
+              <span className="text-[10px] text-slate-400">membro{group.member_count !== 1 ? "s" : ""}</span>
+              <Button variant="ghost" size="sm" className="h-7 w-7 p-0 rounded-lg" onClick={() => onEdit(group)}><Edit className="h-3.5 w-3.5" /></Button>
+              <Button variant="ghost" size="sm" className="h-7 w-7 p-0 rounded-lg text-red-500 hover:text-red-600" onClick={() => onDelete(group)}><Trash2 className="h-3.5 w-3.5" /></Button>
             </div>
           </div>
         ))}
       </div>
 
-      <div className="border border-dashed border-slate-200 dark:border-slate-700 rounded-xl py-8 flex flex-col items-center gap-2 text-center">
-        <Users className="h-7 w-7 text-slate-300" />
-        <p className="text-xs font-medium text-slate-500">Crie grupos para facilitar o envio de notificações à sua equipe</p>
-        <Button size="sm" variant="outline" className="text-xs mt-1"><Plus className="h-3.5 w-3.5 mr-1.5" />Criar Grupo</Button>
-      </div>
+      {!loading && groups.length === 0 && (
+        <div className="border border-dashed border-slate-200 dark:border-slate-700 rounded-xl py-8 flex flex-col items-center gap-2 text-center">
+          <Users className="h-7 w-7 text-slate-300" />
+          <p className="text-xs font-medium text-slate-500">Crie grupos para organizar sua equipe</p>
+          <Button size="sm" variant="outline" className="text-xs mt-1" onClick={onNew}><Plus className="h-3.5 w-3.5 mr-1.5" />Criar Grupo</Button>
+        </div>
+      )}
     </div>
   )
 }

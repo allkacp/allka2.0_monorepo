@@ -124,6 +124,29 @@ export function Header({ transparent = false }: { transparent?: boolean } = {}) 
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
   const { open: notifOpen, setOpen: setNotifOpen, tab: notifTab, setTab: setNotifTab } = useNotificationsPanel();
+  // Contagem real de pendências (SystemAlert não-lido e não-arquivado) —
+  // era um "2" fixo antes, sem relação nenhuma com dado de verdade.
+  const [bellUnreadCount, setBellUnreadCount] = useState(0);
+  useEffect(() => {
+    const fetchUnread = () => {
+      apiClient.getUnreadSystemAlertsCount().then((r) => setBellUnreadCount(r?.count ?? 0)).catch(() => {});
+    };
+    fetchUnread();
+    const id = setInterval(fetchUnread, 60_000);
+    return () => clearInterval(id);
+  }, []);
+  // Sinal de urgência do sino: só pulsa quando há algo na categoria "alerta"
+  // (precisa de decisão), não pra qualquer não-lido genérico — o sino
+  // absorveu o ícone flutuante de Alertas, que já usava esse mesmo pulso.
+  const [bellHasUrgentAlert, setBellHasUrgentAlert] = useState(false);
+  useEffect(() => {
+    const fetchUrgent = () => {
+      apiClient.getUnreadSystemAlertsCount({ category: "alerta" }).then((r) => setBellHasUrgentAlert((r?.count ?? 0) > 0)).catch(() => {});
+    };
+    fetchUrgent();
+    const id = setInterval(fetchUrgent, 60_000);
+    return () => clearInterval(id);
+  }, []);
   const [profileOpen, setProfileOpen] = useState(false);
   const [selfUser, setSelfUser] = useState<any>(null);
   const [searchQuery, setSearchQuery] = useState("");
@@ -936,10 +959,12 @@ export function Header({ transparent = false }: { transparent?: boolean } = {}) 
                 onClick={() => { setNotifTab("inbox"); setNotifOpen(true); }}
                 className="p-0 h-9 w-9 relative text-white/80 hover:bg-white/20 hover:text-white rounded-xl bg-white/10 border border-white/15"
               >
-                <Bell className="h-4 w-4" />
-                <span className="absolute top-1 right-1 h-4 w-4 flex items-center justify-center rounded-full bg-red-500 text-white text-[9px] font-bold leading-none pointer-events-none">
-                  2
-                </span>
+                <Bell className={cn("h-4 w-4", bellHasUrgentAlert && "animate-pulse")} />
+                {bellUnreadCount > 0 && (
+                  <span className="absolute top-1 right-1 h-4 w-4 flex items-center justify-center rounded-full bg-red-500 text-white text-[9px] font-bold leading-none pointer-events-none">
+                    {bellUnreadCount > 99 ? "99+" : bellUnreadCount}
+                  </span>
+                )}
               </Button>
             </div>
 
@@ -1086,7 +1111,7 @@ export function Header({ transparent = false }: { transparent?: boolean } = {}) 
                   Meu Perfil
                 </DropdownMenuItem>
                 <DropdownMenuItem
-                  onClick={() => { setNotifTab("notifications"); setNotifOpen(true); }}
+                  onClick={() => { setNotifTab("prefs"); setNotifOpen(true); }}
                   className="flex items-center gap-2.5 px-3 py-2 rounded-xl cursor-pointer text-sm text-gray-700 dark:text-gray-300"
                 >
                   <Settings className="h-4 w-4 text-gray-400 shrink-0" />

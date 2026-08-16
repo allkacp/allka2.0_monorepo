@@ -6,7 +6,7 @@
  */
 import { createContext, useContext, useState, type ReactNode } from "react";
 
-export type GlobalHeaderPanelKey = "cesta" | "notifications" | "alerts" | "product-feedback";
+export type GlobalHeaderPanelKey = "cesta" | "notifications" | "product-feedback";
 
 interface GlobalHeaderPanelContextValue {
   isActive: (key: GlobalHeaderPanelKey) => boolean;

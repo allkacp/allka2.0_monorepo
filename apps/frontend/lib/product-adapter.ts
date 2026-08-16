@@ -127,6 +127,12 @@ interface ProductMetadata {
   previousContracts?: string;
   associatedTaskModels?: string[];
   additionalImages?: any[];
+  // Limite de alterações grátis por tarefa + taxa emergencial (congelados
+  // no ProjectProduct no momento da compra — ver PATCH .../reprovar e
+  // POST .../solicitar-emergencial no backend).
+  alteracoesIncluidas?: number;
+  valorAlteracaoExtra?: number;
+  taxaEmergencialReducaoPercentual?: number;
 }
 
 function safeParseJSON<T>(raw: string | null | undefined, fallback: T): T {
@@ -239,6 +245,9 @@ export function backendToFrontendProduct(b: BackendProduct): Product {
     previousContracts: meta.previousContracts ?? "",
     associatedTaskModels: meta.associatedTaskModels ?? [],
     additionalImages: meta.additionalImages ?? [],
+    alteracoesIncluidas: meta.alteracoesIncluidas ?? 3,
+    valorAlteracaoExtra: meta.valorAlteracaoExtra ?? 0,
+    taxaEmergencialReducaoPercentual: meta.taxaEmergencialReducaoPercentual ?? 50,
     contractable: hasContractableTasks,
     activeTaskTemplates,
     productType,
@@ -288,6 +297,9 @@ export function frontendToBackendProduct(p: Product): Record<string, any> {
     previousContracts: (p as any).previousContracts,
     associatedTaskModels: (p as any).associatedTaskModels,
     additionalImages: (p as any).additionalImages,
+    alteracoesIncluidas: (p as any).alteracoesIncluidas,
+    valorAlteracaoExtra: (p as any).valorAlteracaoExtra,
+    taxaEmergencialReducaoPercentual: (p as any).taxaEmergencialReducaoPercentual,
   };
 
   const tagsArr = (p as any).tags ?? [];

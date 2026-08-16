@@ -89,6 +89,9 @@ model User {
   product_feedback_override          ProductFeedbackUserOverride?
   product_feedback_group_memberships ProductFeedbackAccessGroupMember[]
   product_feedback_work_item_links   ProductFeedbackWorkItemLink[]
+  notification_preferences           NotificationPreference[]
+  notification_groups_owned          NotificationGroup[]                @relation("NotificationGroupOwner")
+  notification_group_memberships     NotificationGroupMember[]          @relation("NotificationGroupMemberUser")
 
   // ── Rastreio da plataforma antiga ─────────────────────────────────────
   // id numérico do registro equivalente no dump legado (Dump20260423.sql).
@@ -716,6 +719,7 @@ model Project {
   payments        Payment[]
   credentials     ProjectCredential[]
   attachments     ProjectAttachment[]
+  connections     ProjectConnection[]
 
   // ── Rastreio da plataforma antiga ─────────────────────────────────────
   // id numérico do registro equivalente no dump legado (Dump20260423.sql).
@@ -1060,11 +1064,27 @@ model ProjectProduct {
   pagador_snapshot             String @default("AGENCIA")
   // AGENCIA | CLIENTE
 
+  // Limite de alterações grátis + taxa emergencial — congelados no momento
+  // da compra a partir de Product.metadata (alteracoesIncluidas,
+  // valorAlteracaoExtra, taxaEmergencialReducaoPercentual). Ver
+  // PATCH /api/project-tasks/:id/reprovar e /solicitar-emergencial.
+  alteracoes_incluidas_snapshot                Int   @default(3)
+  valor_alteracao_extra_snapshot               Float @default(0)
+  taxa_emergencial_reducao_percentual_snapshot Int   @default(50)
+
   // Status
   status            String    @default("PENDENTE")
-  // PENDENTE | EM_EXECUCAO | CONCLUIDO | CANCELADO
+  // PENDENTE | EM_EXECUCAO | CONCLUIDO | CANCELADO | TRANSFERIDO
+  // TRANSFERIDO: a tarefa não usada saiu inteira pra outro projeto (ver
+  // POST /api/project-tasks/:id/transfer) — nunca conta em
+  // recalculateProjectValue, igual CANCELADO.
   start_date        DateTime?
   expected_end_date DateTime?
+
+  origin String @default("VENDA")
+  // VENDA | TRANSFERENCIA — TRANSFERENCIA marca um vínculo criado pela
+  // transferência de uma tarefa não usada de outro projeto (já paga lá,
+  // nunca cobrar de novo aqui).
 
   created_at DateTime @default(now())
   updated_at DateTime @updatedAt
@@ -1080,7 +1100,7 @@ model ProjectProduct {
   // Nunca usar em FK ou lookup técnico — o id real continua sendo o `id`.
   legacy_id Int? @unique
 
-  @@unique([project_id, product_id])
+  @@index([project_id])
   @@map("project_products")
 }
 
@@ -1123,6 +1143,16 @@ model ProjectTask {
   // nesta fase — não há hoje quantidade contratada por ProjectProduct.
   occurrence_index  Int      @default(0)
 
+  // ── Transferência entre projetos ──────────────────────────────────────
+  // Preenchidos só quando a tarefa chegou neste projeto via transferência
+  // (POST /api/project-tasks/:id/transfer) em vez de ter nascido aqui.
+  // origin_payment_id/generation_key acima continuam intactos e apontando
+  // pro pagamento ORIGINAL — a transferência nunca reescreve histórico
+  // financeiro, só reaponta onde a tarefa é executada.
+  transferred_from_project_id String?
+  transferred_at              DateTime?
+  transferred_by_user_id      String?
+
   // Task fields
   title                  String
   description            String? @db.LongText
@@ -1162,6 +1192,26 @@ model ProjectTask {
   reprovacoes             Int       @default(0)
   // Quando falso, o aceite da agência encerra a tarefa (sem etapa de cliente).
   exige_aprovacao_cliente Boolean   @default(true)
+
+  // ── Limite de alterações grátis ─────────────────────────────────────────
+  // Quantas reprovações além do limite grátis (ProjectProduct.
+  // alteracoes_incluidas_snapshot) já foram pagas. Ver PATCH .../reprovar
+  // (bloqueia) e PUT /api/billing/invoices/:id (destrava ao pagar).
+  alteracoes_extras_pagas Int      @default(0)
+  // Fatura pendente bloqueando a PRÓXIMA reprovação além do limite grátis —
+  // nulo quando não há bloqueio ativo.
+  pending_fee_invoice_id  String?
+  pending_fee_invoice     Invoice? @relation("TaskPendingFeeInvoice", fields: [pending_fee_invoice_id], references: [id], onDelete: SetNull)
+
+  // ── Entrega emergencial ─────────────────────────────────────────────────
+  // Ver POST /api/project-tasks/:id/solicitar-emergencial. Só permitido uma
+  // vez por tarefa (não bloqueia nada, mas evita comprimir o prazo/cobrar
+  // 50% repetidas vezes na mesma tarefa).
+  emergencial_solicitada_em      DateTime?
+  emergencial_solicitada_por     String?
+  emergencial_reducao_percentual Int?
+  emergencial_invoice_id         String?
+  emergencial_invoice            Invoice? @relation("TaskEmergencialInvoice", fields: [emergencial_invoice_id], references: [id], onDelete: SetNull)
 
   sort_order Int     @default(0)
   fase       String?
@@ -1499,6 +1549,10 @@ model SystemAlert {
   message     String    @db.LongText
   severity    String    @default("warning")
   // "info" | "warning" | "error"
+  category    String    @default("notificacao")
+  // "notificacao" (informativo, sem ação exigida) | "alerta" (precisa de
+  // decisão/prioridade) — separa a aba Notificações da aba Alertas no sino
+  // do header, que hoje mostravam exatamente o mesmo feed sem distinção.
   entity_type String?
   // "project_task" | "project" | etc.
   entity_id   String?
@@ -1510,6 +1564,11 @@ model SystemAlert {
   action_url  String?
   is_read     Boolean   @default(false)
   read_at     DateTime?
+  // Arquivado = usuário já tratou/não precisa mais ver por padrão, mas o
+  // dado continua existindo (nunca é hard-delete) — diferente de is_read,
+  // que só marca "já vi": dá pra ler e continuar precisando resolver.
+  is_archived Boolean   @default(false)
+  archived_at DateTime?
   created_at  DateTime  @default(now())
 
   // De qual mensagem de notificacao este alerta nasceu, quando veio de um
@@ -1520,6 +1579,8 @@ model SystemAlert {
   notification_message    NotificationMessage? @relation(fields: [notification_message_id], references: [id], onDelete: SetNull)
 
   @@index([user_id, is_read])
+  @@index([user_id, is_archived])
+  @@index([user_id, category, is_read])
   @@index([notification_message_id])
   @@map("system_alerts")
 }
@@ -1564,6 +1625,64 @@ model NotificationRule {
   @@map("notification_rules")
 }
 
+// Preferência PESSOAL de um usuário: para um tipo de evento (catálogo fixo
+// no frontend, components/notification-preferences-panel.tsx PREF_GROUPS —
+// event_type é livre aqui, mesma liberdade que SystemAlert.type já tem),
+// por qual canal ele quer ser avisado. Uma linha por (usuário, evento,
+// canal). Unifica o que antes eram duas telas mockadas separadas
+// ("Preferências" e "Regras") — mesma tabela, duas visualizações.
+//
+// Só o canal "in_app" entrega de verdade hoje (vira SystemAlert). email/
+// whatsapp/push ficam salvos aqui pra quando existir envio real — nunca
+// prometer no frontend que eles já disparam.
+model NotificationPreference {
+  id         String   @id @default(cuid())
+  user_id    String
+  user       User     @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  event_type String
+  channel    String
+  // "in_app" | "email" | "whatsapp" | "push"
+  enabled    Boolean  @default(true)
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  @@unique([user_id, event_type, channel])
+  @@index([user_id])
+  @@map("notification_preferences")
+}
+
+// Grupo pessoal de pessoas do próprio time do usuário (ex.: "Líderes de
+// Projeto", "Equipe Financeira") — só o cadastro/gestão do grupo em si.
+// Usar um grupo como alvo de uma regra/notificação de verdade é uma etapa
+// futura, ainda não conectada aqui.
+model NotificationGroup {
+  id            String   @id @default(cuid())
+  owner_user_id String
+  owner         User     @relation("NotificationGroupOwner", fields: [owner_user_id], references: [id], onDelete: Cascade)
+  name          String
+  description   String?
+  created_at    DateTime @default(now())
+  updated_at    DateTime @updatedAt
+
+  members NotificationGroupMember[]
+
+  @@index([owner_user_id])
+  @@map("notification_groups")
+}
+
+model NotificationGroupMember {
+  id         String            @id @default(cuid())
+  group_id   String
+  group      NotificationGroup @relation(fields: [group_id], references: [id], onDelete: Cascade)
+  user_id    String
+  user       User              @relation("NotificationGroupMemberUser", fields: [user_id], references: [id], onDelete: Cascade)
+  created_at DateTime          @default(now())
+
+  @@unique([group_id, user_id])
+  @@index([user_id])
+  @@map("notification_group_members")
+}
+
 // ─── Financial ────────────────────────────────────────────────────────────────
 
 model Invoice {
@@ -1581,6 +1700,12 @@ model Invoice {
   invoice_number String?
   created_at     DateTime  @default(now())
   updated_at     DateTime  @updatedAt
+
+  // Inverso de ProjectTask.pending_fee_invoice/emergencial_invoice — não
+  // navegado hoje (o lookup é sempre feito por pending_fee_invoice_id no
+  // findFirst do lado da tarefa), mas Prisma exige o campo espelhado.
+  blocking_tasks    ProjectTask[] @relation("TaskPendingFeeInvoice")
+  emergencial_tasks ProjectTask[] @relation("TaskEmergencialInvoice")
 
   @@map("invoices")
 }
@@ -2391,6 +2516,100 @@ model ProjectCredentialAccessLog {
   @@index([actor_user_id])
   @@index([actor_nomad_id])
   @@map("project_credential_access_logs")
+}
+
+// ─── ProjectConnection — vínculo OAuth com uma plataforma externa ───────────
+// Distinto de propósito de ProjectCredential acima: aquele é o "Cofre do
+// Projeto" — senha de demonstração digitada por um humano. Este é um token
+// OAuth conquistado pela máquina através do fluxo de consentimento da
+// própria plataforma (Meta, Google, TikTok). Nunca misturar os dois.
+
+model ProjectConnection {
+  id String @id @default(cuid())
+
+  project_id String
+  project    Project @relation(fields: [project_id], references: [id], onDelete: Cascade)
+
+  provider String
+  // meta_ads | google_ads | google_analytics | google_business | tiktok_ads
+  // Só "meta_ads" tem OAuth/sincronização de verdade por enquanto — os
+  // outros 5 entram depois sem precisar de um modelo novo.
+
+  status String @default("connected")
+  // connected | expired | disconnected | error
+
+  external_account_id   String
+  // Meta: id da conta de anúncio, ex. "act_123456789".
+  external_account_name String?
+
+  scopes String? @db.LongText
+  // Escopos realmente concedidos, devolvidos pela plataforma — só auditoria,
+  // nunca usado para decidir comportamento.
+
+  access_token_encrypted String @db.LongText
+  // AES-256-GCM, ver lib/token-encryption.ts — NUNCA texto puro. Sem campo
+  // de refresh_token: o modelo de token de longa duração da Meta não tem
+  // refresh clássico — ver token_expires_at abaixo.
+
+  token_expires_at DateTime?
+  // ~60 dias pra Meta. Fica nullable pensando em futuros provedores cujo
+  // token não expira de forma rotativa.
+
+  last_synced_at DateTime?
+  last_error     String? @db.LongText
+
+  // Id solto, sem FK — mesmo padrão de ProjectCredential.created_by acima
+  // (auditoria, não vínculo de integridade referencial).
+  connected_by_user_id String
+
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  metrics_daily ProjectConnectionMetricDaily[]
+
+  @@unique([project_id, provider])
+  @@index([project_id])
+  @@index([provider])
+  @@index([status])
+  @@index([connected_by_user_id])
+  @@map("project_connections")
+}
+
+// ─── ProjectConnectionMetricDaily — uma linha por conexão por dia ───────────
+// Colunas tipadas pras métricas comuns a todo provedor de anúncios (soma
+// barata pro widget) + uma coluna `raw` de reserva — mesmo espírito de
+// LegacyRecord logo abaixo (colunas comuns tipadas + JSON pra o resto) e de
+// NotificationRule.target_account_types já usando Json pra campo aberto.
+// `raw` é o que permite Google Ads/TikTok (métricas diferentes) usarem esta
+// mesma tabela depois sem uma migration por provedor.
+
+model ProjectConnectionMetricDaily {
+  id String @id @default(cuid())
+
+  connection_id String
+  connection    ProjectConnection @relation(fields: [connection_id], references: [id], onDelete: Cascade)
+
+  date DateTime @db.Date
+  // Dia de calendário representado por esta linha (bucket time_increment=1
+  // do Insights da Meta).
+
+  impressions Int?
+  clicks      Int?
+  spend       Float?
+  reach       Int?
+  ctr         Float?
+  cpc         Float?
+
+  raw Json?
+  // Linha bruta do Insights daquele dia, na íntegra.
+
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  @@unique([connection_id, date])
+  @@index([connection_id])
+  @@index([date])
+  @@map("project_connection_metrics_daily")
 }
 
 // ─── Arquivo histórico da plataforma antiga ──────────────────────────────────

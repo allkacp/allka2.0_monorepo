@@ -126,8 +126,8 @@ class ApiClient {
   private put<T = any>(path: string, body?: unknown) {
     return this.request<T>("PUT", path, body);
   }
-  private patch<T = any>(path: string, body?: unknown) {
-    return this.request<T>("PATCH", path, body);
+  private patch<T = any>(path: string, body?: unknown, params?: Record<string, any>) {
+    return this.request<T>("PATCH", path, body, params);
   }
   private del<T = any>(path: string, body?: unknown) {
     return this.request<T>("DELETE", path, body);
@@ -301,6 +301,11 @@ class ApiClient {
   /** Devolve para execução com o motivo e reabre a última etapa concluída. */
   async reprovarTarefa(taskId: string, motivo: string, nivel?: "agencia" | "cliente") {
     return this.patch(`/project-tasks/${taskId}/reprovar`, { motivo, ...(nivel ? { nivel } : {}) });
+  }
+
+  /** Comprime o prazo e cobra +50% do valor do produto — imediato, não bloqueia. */
+  async solicitarEntregaEmergencial(taskId: string) {
+    return this.post(`/project-tasks/${taskId}/solicitar-emergencial`, {});
   }
 
   // ─── Primeiro acesso ──────────────────────────────────────────────────────
@@ -553,6 +558,46 @@ class ApiClient {
 
   async deleteProject(id: string | number) {
     return this.del(`/projects/${id}`);
+  }
+
+  // ─── Conexões do projeto (Meta Ads e, no futuro, Google/TikTok) ────────────
+  async getProjectConnections(projectId: string | number) {
+    return this.get<{
+      data: Array<{
+        id: string;
+        project_id: string;
+        provider: string;
+        status: "connected" | "expired" | "disconnected" | "error";
+        external_account_id: string;
+        external_account_name: string | null;
+        token_expires_at: string | null;
+        last_synced_at: string | null;
+        last_error: string | null;
+        created_at: string;
+      }>;
+    }>("/project-connections", { project_id: projectId });
+  }
+  async getProjectConnectionMetrics(connectionId: string, days = 30) {
+    return this.get<{
+      data: Array<{
+        date: string;
+        impressions: number | null;
+        clicks: number | null;
+        spend: number | null;
+        reach: number | null;
+        ctr: number | null;
+        cpc: number | null;
+      }>;
+    }>(`/project-connections/${connectionId}/metrics`, { days });
+  }
+  async disconnectProjectConnection(connectionId: string) {
+    return this.del(`/project-connections/${connectionId}`);
+  }
+  async syncProjectConnectionNow(connectionId: string) {
+    return this.post<{ synced: number }>(`/project-connections/${connectionId}/sync`);
+  }
+  async getMetaAuthorizeUrl(projectId: string | number) {
+    return this.get<{ url: string }>("/integrations/meta/authorize-url", { project_id: projectId });
   }
 
   /** @deprecated Use getProjectTasks(filters) via /project-products/tasks instead */
@@ -1328,6 +1373,11 @@ class ApiClient {
   async releaseProjectTask(id: string) {
     return this.patch(`/project-tasks/${id}/release`, {});
   }
+  // Transfere uma tarefa paga e não usada pra outro projeto — só admin, nunca
+  // gera cobrança nova (ver POST /api/project-tasks/:id/transfer).
+  async transferProjectTask(id: string, target_project_id: string) {
+    return this.post(`/project-tasks/${id}/transfer`, { target_project_id });
+  }
   async getProjectTaskStages(id: string) {
     return this.get(`/project-tasks/${id}/stages`);
   }
@@ -1419,6 +1469,22 @@ class ApiClient {
     };
   }) {
     return this.post("/ai-consultor/improve-product-field", body);
+  }
+  async aiImproveFeedbackTicket(body: {
+    type: string;
+    title?: string;
+    description?: string;
+    steps?: string;
+    expected_result?: string;
+    actual_result?: string;
+  }) {
+    return this.post<{
+      title: string;
+      description: string;
+      steps: string;
+      expected_result: string;
+      actual_result: string;
+    }>("/ai-consultor/improve-feedback-ticket", body);
   }
   async aiResearchProductPricing(body: {
     product_name?: string;
@@ -1539,12 +1605,70 @@ class ApiClient {
     return this.patch(`/system-alerts/${id}/read`, {});
   }
 
-  async markAllSystemAlertsRead() {
-    return this.patch("/system-alerts/read-all", {});
+  async markAllSystemAlertsRead(filters?: Record<string, any>) {
+    return this.patch("/system-alerts/read-all", {}, filters);
   }
 
   async getAgencyAlerts() {
     return this.get("/agencies/me/alerts");
+  }
+
+  async getUnreadSystemAlertsCount(filters?: Record<string, any>) {
+    return this.get<{ count: number }>("/system-alerts/unread-count", filters);
+  }
+
+  async archiveSystemAlert(id: string) {
+    return this.patch(`/system-alerts/${id}/archive`, {});
+  }
+
+  async unarchiveSystemAlert(id: string) {
+    return this.patch(`/system-alerts/${id}/unarchive`, {});
+  }
+
+  // ─── Preferências pessoais de notificação (evento × canal) ────────────────
+  async getNotificationPreferences() {
+    return this.get<{
+      data: Array<{ event_type: string; channel: string; enabled: boolean }>;
+    }>("/notification-preferences");
+  }
+
+  async updateNotificationPreference(
+    event_type: string,
+    channels: Partial<Record<"in_app" | "email" | "whatsapp" | "push", boolean>>,
+  ) {
+    return this.put("/notification-preferences", { event_type, channels });
+  }
+
+  // ─── Grupos pessoais de notificação ────────────────────────────────────────
+  async getNotificationGroups() {
+    return this.get<{
+      data: Array<{ id: string; name: string; description: string | null; member_count: number; created_at: string }>;
+    }>("/notification-groups");
+  }
+
+  async getNotificationGroupEligibleMembers() {
+    return this.get<{ data: Array<{ id: string; name: string; email: string }> }>(
+      "/notification-groups/eligible-members",
+    );
+  }
+
+  async getNotificationGroup(id: string) {
+    return this.get(`/notification-groups/${id}`);
+  }
+
+  async createNotificationGroup(data: { name: string; description?: string; member_user_ids: string[] }) {
+    return this.post("/notification-groups", data);
+  }
+
+  async updateNotificationGroup(
+    id: string,
+    data: { name?: string; description?: string; member_user_ids?: string[] },
+  ) {
+    return this.put(`/notification-groups/${id}`, data);
+  }
+
+  async deleteNotificationGroup(id: string) {
+    return this.del(`/notification-groups/${id}`);
   }
 
   // ─── Ajuda e sugestões (integração Roadmap) ────────────────────────────────

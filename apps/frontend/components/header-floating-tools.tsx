@@ -32,7 +32,7 @@ export function HeaderFloatingTools() {
   return (
     <>
       {/* Modo escuro/claro */}
-      <div className="hidden xl:block fixed top-[205px] right-[8px] z-65 group">
+      <div className="hidden xl:block fixed top-[165px] right-[8px] z-65 group">
         <button
           type="button"
           onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
@@ -51,7 +51,7 @@ export function HeaderFloatingTools() {
       </div>
 
       {/* Tamanho da fonte — clique abre popover com diminuir/padrão/aumentar */}
-      <div className="hidden xl:block fixed top-[245px] right-[8px] z-65">
+      <div className="hidden xl:block fixed top-[205px] right-[8px] z-65">
         <Popover open={fontOpen} onOpenChange={setFontOpen}>
           <PopoverTrigger asChild>
             <button

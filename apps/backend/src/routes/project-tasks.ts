@@ -2,12 +2,13 @@ import { Router } from "express";
 import type { Request, Response, NextFunction } from "express";
 import { z } from "zod";
 import { prisma } from "../lib/prisma";
-import { verifyToken } from "../middleware/auth";
+import { verifyToken, requireRole } from "../middleware/auth";
 import { validate } from "../middleware/validate";
 import { selecionarNomadeParaTarefa } from "../lib/selecionar-nomade";
 import { atribuirLiderParaTarefa } from "../lib/atribuir-lider";
 import { withZeroDateRecovery } from "../lib/clean-zero-datetimes";
 import { combinedProjectWhere } from "../lib/project-scope";
+import { recalculateProjectValue } from "../lib/project-value";
 import {
   iniciarEtapasDaTarefa,
   concluirEtapa,
@@ -300,6 +301,10 @@ router.get(
                 product_code_snapshot: true,
                 product_category_snapshot: true,
                 status: true,
+                alteracoes_incluidas_snapshot: true,
+                valor_alteracao_extra_snapshot: true,
+                taxa_emergencial_reducao_percentual_snapshot: true,
+                preco_final_cliente_snapshot: true,
               },
             },
             catalog_task: {
@@ -803,6 +808,170 @@ router.patch(
       }
 
       res.json(updated);
+    } catch (err) {
+      next(err);
+    }
+  },
+);
+
+// ── POST /api/project-tasks/:id/transfer ─────────────────────────────────────
+// Transfere uma tarefa PAGA e NÃO USADA pra outro projeto — o pagamento
+// original nunca é reescrito (Payment/PaymentItem continuam apontando pro
+// projeto de origem, é literalmente o comprovante de que aquele valor já
+// foi cobrado ali). Só admin — move valor já reconhecido entre os livros de
+// dois projetos, possivelmente de agências/clientes diferentes.
+//
+// Sempre por PRODUTO INTEIRO, nunca por tarefa isolada: um ProjectProduct
+// pode ter várias tarefas-irmãs e não existe hoje "quantidade"/preço por
+// tarefa — se alguma irmã já foi tocada, a transferência inteira é
+// recusada, senão o valor ficaria contado nos dois projetos ao mesmo tempo.
+const transferTaskSchema = z.object({
+  target_project_id: z.string().min(1),
+});
+
+// Toda tarefa gerada já nasce com suas ProjectTaskStage (PENDENTE/BLOQUEADA)
+// criadas junto — existência de etapa não é sinal de atividade, só o status
+// dela é. "Iniciada" = qualquer etapa fora de PENDENTE/BLOQUEADA.
+function tarefaEstaIntocada(t: {
+  status: string;
+  nomade_responsavel_id: string | null;
+  stages: { status: string }[];
+  _count: { attachments: number; briefing_answers: number };
+}): boolean {
+  return (
+    t.status === "PARA_LANCAMENTO" &&
+    !t.nomade_responsavel_id &&
+    t.stages.every((s) => s.status === "PENDENTE" || s.status === "BLOQUEADA") &&
+    t._count.attachments === 0 &&
+    t._count.briefing_answers === 0
+  );
+}
+
+router.post(
+  "/:id/transfer",
+  verifyToken,
+  requireRole("admin"),
+  validate(transferTaskSchema),
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const { target_project_id } = req.body as z.infer<typeof transferTaskSchema>;
+
+      const task = await prisma.projectTask.findUnique({
+        where: { id: req.params.id as string },
+        include: { project_product: true },
+      });
+      if (!task) {
+        res.status(404).json({ error: "Tarefa não encontrada" });
+        return;
+      }
+      if (task.project_id === target_project_id) {
+        res.status(400).json({ error: "A tarefa já está neste projeto." });
+        return;
+      }
+
+      const targetProject = await prisma.project.findUnique({
+        where: { id: target_project_id },
+        select: { id: true },
+      });
+      if (!targetProject) {
+        res.status(404).json({ error: "Projeto de destino não encontrado" });
+        return;
+      }
+
+      // Tarefa em si + toda tarefa-irmã do mesmo ProjectProduct precisam
+      // estar intocadas — só uma checagem de "atividade" (mesmo trio que
+      // PATCH /:id já consulta em conjunto: etapas/anexos/briefing).
+      const siblings = await prisma.projectTask.findMany({
+        where: { project_product_id: task.project_product_id },
+        include: {
+          stages: { select: { status: true } },
+          _count: {
+            select: { attachments: true, briefing_answers: true },
+          },
+        },
+      });
+
+      const naoIntocadas = siblings.filter((t) => !tarefaEstaIntocada(t));
+      if (naoIntocadas.length > 0) {
+        const alvoTocado = naoIntocadas.some((t) => t.id === task.id);
+        res.status(409).json({
+          error: alvoTocado
+            ? "Esta tarefa já foi iniciada (nômade atribuído, etapa iniciada, anexo ou briefing respondido) e não pode ser transferida."
+            : "Esta tarefa compartilha uma compra com outra(s) tarefa(s) já iniciada(s); só é possível transferir quando nenhuma tarefa do mesmo produto foi tocada.",
+        });
+        return;
+      }
+
+      const sourceProjectProduct = task.project_product;
+
+      const result = await prisma.$transaction(async (tx) => {
+        // Acha um vínculo já ativo do mesmo produto no destino, ou cria um
+        // novo copiando os snapshots comerciais originais — nunca gera
+        // cobrança nova (origin: "TRANSFERENCIA").
+        let targetProjectProduct = await tx.projectProduct.findFirst({
+          where: {
+            project_id: target_project_id,
+            product_id: sourceProjectProduct.product_id,
+            status: { not: "CANCELADO" },
+          },
+        });
+
+        if (!targetProjectProduct) {
+          targetProjectProduct = await tx.projectProduct.create({
+            data: {
+              project_id: target_project_id,
+              product_id: sourceProjectProduct.product_id,
+              variation_id: sourceProjectProduct.variation_id,
+              product_name_snapshot: sourceProjectProduct.product_name_snapshot,
+              product_code_snapshot: sourceProjectProduct.product_code_snapshot,
+              product_category_snapshot: sourceProjectProduct.product_category_snapshot,
+              product_price_snapshot: sourceProjectProduct.product_price_snapshot,
+              recurrence_snapshot: sourceProjectProduct.recurrence_snapshot,
+              preco_final_cliente_snapshot: sourceProjectProduct.preco_final_cliente_snapshot,
+              comissao_snapshot: sourceProjectProduct.comissao_snapshot,
+              pagador_snapshot: sourceProjectProduct.pagador_snapshot,
+              alteracoes_incluidas_snapshot: sourceProjectProduct.alteracoes_incluidas_snapshot,
+              valor_alteracao_extra_snapshot: sourceProjectProduct.valor_alteracao_extra_snapshot,
+              taxa_emergencial_reducao_percentual_snapshot:
+                sourceProjectProduct.taxa_emergencial_reducao_percentual_snapshot,
+              status: "EM_EXECUCAO",
+              origin: "TRANSFERENCIA",
+            },
+          });
+        }
+
+        await tx.projectProduct.update({
+          where: { id: sourceProjectProduct.id },
+          data: { status: "TRANSFERIDO" },
+        });
+
+        const now = new Date();
+        await tx.projectTask.updateMany({
+          where: { id: { in: siblings.map((t) => t.id) } },
+          data: {
+            project_id: target_project_id,
+            project_product_id: targetProjectProduct.id,
+            transferred_from_project_id: task.project_id,
+            transferred_at: now,
+            transferred_by_user_id: req.user!.id,
+          },
+        });
+
+        return { targetProjectProductId: targetProjectProduct.id };
+      });
+
+      await recalculateProjectValue(prisma, task.project_id);
+      await recalculateProjectValue(prisma, target_project_id);
+
+      const transferredTasks = await prisma.projectTask.findMany({
+        where: { id: { in: siblings.map((t) => t.id) } },
+      });
+
+      res.json({
+        transferred_tasks: transferredTasks,
+        source_project_product_id: sourceProjectProduct.id,
+        target_project_product_id: result.targetProjectProductId,
+      });
     } catch (err) {
       next(err);
     }
@@ -1457,6 +1626,12 @@ router.patch(
       }
       const task = await prisma.projectTask.findFirst({
         where: applyScope({ id: req.params.id as string }, scopeWhere),
+        include: {
+          project_product: {
+            select: { alteracoes_incluidas_snapshot: true, valor_alteracao_extra_snapshot: true },
+          },
+          project: { select: { client_id: true, company_id: true } },
+        },
       });
       if (!task) {
         res.status(404).json({ error: "Tarefa não encontrada" });
@@ -1490,6 +1665,44 @@ router.patch(
         return;
       }
 
+      // ── Limite de alterações grátis ───────────────────────────────────────
+      // A reprovação além do limite (ProjectProduct.alteracoes_incluidas_
+      // snapshot) fica bloqueada até a taxa correspondente ser paga — cria
+      // (ou reaproveita) a fatura pendente e recusa, sem incrementar
+      // `reprovacoes` nem chamar reprovarTarefa. NUNCA usar Math.max(0, ...)
+      // aqui: excedente precisa poder ficar negativo pras reprovações dentro
+      // do limite grátis (reprovacoes < limite), senão a checagem abaixo
+      // (excedente >= alteracoes_extras_pagas, ambos podendo ser 0) bloqueia
+      // a 1ª reprovação de qualquer tarefa (bug real, pego no smoke test).
+      const limite = task.project_product.alteracoes_incluidas_snapshot;
+      const excedente = task.reprovacoes - limite;
+      if (excedente >= task.alteracoes_extras_pagas) {
+        let invoice = task.pending_fee_invoice_id
+          ? await prisma.invoice.findUnique({ where: { id: task.pending_fee_invoice_id } })
+          : null;
+        if (!invoice || invoice.status !== "pending") {
+          const companyId = task.project.company_id ?? task.project.client_id ?? null;
+          invoice = await prisma.invoice.create({
+            data: {
+              project_id: task.project_id,
+              company_id: companyId,
+              amount: task.project_product.valor_alteracao_extra_snapshot,
+              status: "pending",
+              description: `Alteração adicional além das ${limite} grátis — tarefa ${task.task_code ?? task.title}`,
+            },
+          });
+          await prisma.projectTask.update({
+            where: { id: task.id },
+            data: { pending_fee_invoice_id: invoice.id },
+          });
+        }
+        res.status(402).json({
+          error: `Limite de ${limite} alterações grátis atingido. Pague a taxa de alteração adicional para continuar.`,
+          invoice: { id: invoice.id, amount: invoice.amount, status: invoice.status },
+        });
+        return;
+      }
+
       const resultado = await prisma.$transaction((tx) =>
         reprovarTarefa(tx, req.params.id as string, {
           userId: req.user!.id,
@@ -1498,6 +1711,165 @@ router.patch(
         }),
       );
       res.json(resultado);
+    } catch (err) {
+      next(err);
+    }
+  },
+);
+
+// ── POST /api/project-tasks/:id/solicitar-emergencial ────────────────────────
+// Agência ou cliente pedem entrega acelerada: comprime o prazo restante (da
+// tarefa e de cada etapa aberta) e cobra +50% do valor do produto na hora —
+// diferente do limite de alterações, NÃO bloqueia nada, é imediato. Só uma
+// vez por tarefa (evita comprimir/cobrar repetidas vezes).
+
+router.post(
+  "/:id/solicitar-emergencial",
+  verifyToken,
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const scopeWhere = await getTaskScopeWhere(
+        req.user!.id,
+        req.user!.account_type,
+        req.user!.role,
+      );
+      if (scopeWhere === null) {
+        res.status(404).json({ error: "Tarefa não encontrada" });
+        return;
+      }
+      const task = await prisma.projectTask.findFirst({
+        where: applyScope({ id: req.params.id as string }, scopeWhere),
+        include: {
+          project_product: {
+            select: {
+              preco_final_cliente_snapshot: true,
+              taxa_emergencial_reducao_percentual_snapshot: true,
+            },
+          },
+          project: {
+            select: { client_id: true, company_id: true, agency_id: true, agency: true, title: true },
+          },
+          stages: {
+            where: { status: { in: ["PENDENTE", "AGUARDANDO_EXECUTOR", "EM_ANDAMENTO"] } },
+          },
+        },
+      });
+      if (!task) {
+        res.status(404).json({ error: "Tarefa não encontrada" });
+        return;
+      }
+      if (["CONCLUIDA", "CANCELADA"].includes(task.status)) {
+        res.status(422).json({
+          error: `Tarefa com status "${task.status}" não pode receber entrega emergencial.`,
+        });
+        return;
+      }
+      if (task.emergencial_solicitada_em) {
+        res.status(409).json({ error: "Entrega emergencial já foi solicitada para esta tarefa." });
+        return;
+      }
+
+      const reducao = task.project_product.taxa_emergencial_reducao_percentual_snapshot;
+      const valor = 0.5 * task.project_product.preco_final_cliente_snapshot;
+      const agora = new Date();
+      const comprimir = (data: Date) =>
+        new Date(agora.getTime() + (data.getTime() - agora.getTime()) * (1 - reducao / 100));
+
+      const resultado = await prisma.$transaction(async (tx) => {
+        const novoDueDate =
+          task.due_date && task.due_date > agora ? comprimir(task.due_date) : task.due_date;
+
+        const stagesAjustadas: { id: string; prazo_execucao: Date }[] = [];
+        for (const stage of task.stages) {
+          if (stage.prazo_execucao && stage.prazo_execucao > agora) {
+            const novoPrazo = comprimir(stage.prazo_execucao);
+            await tx.projectTaskStage.update({
+              where: { id: stage.id },
+              data: { prazo_execucao: novoPrazo },
+            });
+            stagesAjustadas.push({ id: stage.id, prazo_execucao: novoPrazo });
+          }
+        }
+
+        const companyId = task.project.company_id ?? task.project.client_id ?? null;
+        const invoice = await tx.invoice.create({
+          data: {
+            project_id: task.project_id,
+            company_id: companyId,
+            amount: valor,
+            status: "pending",
+            description: `Taxa de entrega emergencial — tarefa ${task.task_code ?? task.title}`,
+          },
+        });
+
+        const updatedTask = await tx.projectTask.update({
+          where: { id: task.id },
+          data: {
+            due_date: novoDueDate,
+            emergencial_solicitada_em: agora,
+            emergencial_solicitada_por: req.user!.id,
+            emergencial_reducao_percentual: reducao,
+            emergencial_invoice_id: invoice.id,
+          },
+        });
+
+        return { task: updatedTask, invoice, stagesAjustadas };
+      });
+
+      // Avisa a outra ponta do projeto (best-effort — nunca falha a resposta
+      // principal por causa disso), mesmo padrão de avisarAprovadores.
+      try {
+        const solicitanteEhAgencia = req.user!.account_type === "agencias";
+        let destinatarios: string[] = [];
+        if (solicitanteEhAgencia) {
+          const companyId = task.project.company_id ?? task.project.client_id;
+          if (companyId) {
+            const users = await prisma.user.findMany({
+              where: { company_id: companyId },
+              select: { id: true },
+            });
+            destinatarios = users.map((u) => u.id);
+          }
+        } else {
+          let agencyId = task.project.agency_id ?? null;
+          if (!agencyId && task.project.agency) {
+            const porNome = await prisma.agency.findFirst({
+              where: { name: task.project.agency },
+              select: { id: true },
+            });
+            agencyId = porNome?.id ?? null;
+          }
+          if (agencyId) {
+            const users = await prisma.user.findMany({
+              where: { agency_id: agencyId },
+              select: { id: true },
+            });
+            destinatarios = users.map((u) => u.id);
+          }
+        }
+        if (destinatarios.length > 0) {
+          await prisma.systemAlert.createMany({
+            data: destinatarios.map((userId) => ({
+              type: "entrega_emergencial_solicitada",
+              title: `Entrega emergencial solicitada: ${task.title}`,
+              message: `${solicitanteEhAgencia ? "A agência" : "O cliente"} solicitou entrega emergencial para a tarefa "${task.title}" — prazo reduzido em ${reducao}%, taxa de ${valor.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })} gerada.`,
+              severity: "info",
+              category: "alerta",
+              entity_type: "project_task",
+              entity_id: task.id,
+              user_id: userId,
+            })),
+          });
+        }
+      } catch (err) {
+        console.error("[project-tasks] avisar entrega emergencial:", err);
+      }
+
+      res.json({
+        novo_due_date: resultado.task.due_date,
+        stages_ajustadas: resultado.stagesAjustadas,
+        invoice: resultado.invoice,
+      });
     } catch (err) {
       next(err);
     }

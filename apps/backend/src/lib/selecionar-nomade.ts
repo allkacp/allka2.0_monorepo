@@ -239,6 +239,7 @@ export async function selecionarNomadeParaTarefa(
         title: "Tarefa aguardando nômade",
         message: `Nenhum nômade habilitado encontrado para "${task.title}"${category ? ` (categoria: ${category})` : ""}. A tarefa foi movida para AGUARDANDO_NOMADE.`,
         severity: "warning",
+        category: "alerta",
         entity_type: "project_task",
         entity_id: taskId,
       },
