@@ -12,17 +12,16 @@ www.{$FRONTEND_DOMAIN:allka.store} {
 	reverse_proxy backend:3001
 }
 
-# Central de chamados e roadmap (QA) — inteiro atrás de Basic Auth, nunca
-# exposta sem ela. O hash vem de ROADMAP_QA_BASIC_AUTH_HASH (gerado com
-# `caddy hash-password`, nunca a senha em texto puro); sem essa variável
-# configurada este bloco falha ao carregar em vez de abrir sem proteção —
-# Caddy recusa iniciar o site com um bloco `basic_auth` sem hash válido.
+# Central de chamados e roadmap (QA) — Basic Auth removido de propósito
+# (decisão do usuário, 2026-08-16): fase de teste interno, sem necessidade
+# de senha extra pros funcionários testando. Reinstalar antes de abrir pra
+# usuário final — o bloco original fica comentado logo abaixo pra isso.
+#
+# basic_auth {
+# 	{$ROADMAP_QA_BASIC_AUTH_USER} {$ROADMAP_QA_BASIC_AUTH_HASH}
+# }
 {$ROADMAP_QA_DOMAIN:roadmap-qa.allka.store} {
 	encode zstd gzip
-
-	basic_auth {
-		{$ROADMAP_QA_BASIC_AUTH_USER} {$ROADMAP_QA_BASIC_AUTH_HASH}
-	}
 
 	handle /api/* {
 		reverse_proxy allka-roadmap-qa-backend:3002
