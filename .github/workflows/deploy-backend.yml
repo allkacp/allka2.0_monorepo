@@ -327,6 +327,7 @@ jobs:
              docker compose --env-file .env -f docker-compose.yml run --rm migrate && \
              docker compose --env-file .env -f docker-compose.yml up -d --no-deps backend && \
              docker compose --env-file .env -f docker-compose.yml up -d caddy && \
+             (docker compose --env-file .env -f docker-compose.yml exec -T caddy caddy reload --config /etc/caddy/Caddyfile || echo '[warn] caddy reload failed — se o container acabou de subir pelo up -d acima, ele já carregou o Caddyfile atual no boot, então isso é inofensivo; se já estava rodando de antes, rode manualmente.') && \
              docker image prune -f"
 
       # ── Nenhum seed roda automaticamente no deploy ──────────────────────────────
