@@ -52,8 +52,14 @@ try {
 // ── o que está rodando ──────────────────────────────────────────────────────
 let rodando;
 try {
+  // Prefixo "allka-2026-" é obrigatório: o VPS também roda o QA do
+  // allka-roadmap lado a lado (allka-roadmap-qa-backend-1/-frontend-1) —
+  // sem o prefixo, esses containers batem no mesmo grep solto de
+  // "backend|frontend" e, por virem depois na saída do `docker ps`,
+  // sobrescrevem silenciosamente a tag certa (bug real, achado ao rodar
+  // este script logo após um deploy que na verdade tinha dado certo).
   rodando = ssh(
-    "docker ps --format '{{.Names}} {{.Image}}' | grep -E 'backend|frontend'",
+    "docker ps --format '{{.Names}} {{.Image}}' | grep -E '^allka-2026-(backend|frontend)-'",
   );
 } catch {
   console.error("Não consegui falar com o VPS por SSH.");
