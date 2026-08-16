@@ -41,6 +41,7 @@ export const STANDARD_SHELL_ROUTES = [
   "/admin/relatorios",
   "/admin/allkademy",
   "/admin/sistema",
+  "/admin/alertas",
   "/admin/disponibilidade",
   "/admin/especialidades",
   "/admin/onboarding",

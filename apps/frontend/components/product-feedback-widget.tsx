@@ -10,7 +10,7 @@
  * componente dentro do AppLayout já garante que ele nunca aparece nelas.
  */
 import { useCallback, useEffect, useRef, useState } from "react";
-import { MessageCircleQuestion, Send, RefreshCw, Inbox } from "lucide-react";
+import { MessageCircleQuestion, Send, RefreshCw, Inbox, Sparkles, Loader2 } from "lucide-react";
 import { HeaderSlideScreen } from "@/components/header-slide-screen";
 import { useGlobalHeaderPanel } from "@/contexts/global-header-panel-context";
 import { Button } from "@/components/ui/button";
@@ -113,6 +113,8 @@ export function ProductFeedbackWidget() {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
   const [protocol, setProtocol] = useState("");
+  const [improving, setImproving] = useState(false);
+  const [improveError, setImproveError] = useState("");
 
   // Generated once per logical "new ticket" attempt and reused across
   // every retry of that same submit (network timeout, clicking "Enviar"
@@ -173,9 +175,42 @@ export function ProductFeedbackWidget() {
     setImpact("");
     setError("");
     setProtocol("");
+    setImproveError("");
     // A genuinely new attempt starts here — the next submit mints a fresh
     // clientSubmissionId instead of reusing whatever attempt came before.
     clientSubmissionIdRef.current = null;
+  }
+
+  // "Melhorar com IA": reescreve título/descrição/passos/resultados juntos
+  // (fazem sentido em conjunto, não campo a campo) em linguagem clara para o
+  // desenvolvedor/QA que vai tratar o chamado — nunca inventa conteúdo para
+  // um campo que o usuário deixou vazio (ver improveFeedbackTicket no
+  // backend). O usuário ainda revisa/ajusta antes de enviar, como em todo
+  // outro "Melhorar com IA" da plataforma.
+  async function handleImproveWithAI() {
+    if (improving) return;
+    if (!title.trim() && !description.trim()) return;
+    setImproving(true);
+    setImproveError("");
+    try {
+      const res = await apiClient.aiImproveFeedbackTicket({
+        type,
+        title: title.trim(),
+        description: description.trim(),
+        steps: steps.trim(),
+        expected_result: expectedResult.trim(),
+        actual_result: actualResult.trim(),
+      });
+      setTitle(res.title);
+      setDescription(res.description);
+      if (steps.trim()) setSteps(res.steps);
+      if (expectedResult.trim()) setExpectedResult(res.expected_result);
+      if (actualResult.trim()) setActualResult(res.actual_result);
+    } catch (err) {
+      setImproveError(err instanceof ApiError ? err.message : "Não foi possível melhorar o texto agora. Tente novamente.");
+    } finally {
+      setImproving(false);
+    }
   }
 
   async function handleSubmit(event: React.FormEvent) {
@@ -222,7 +257,7 @@ export function ProductFeedbackWidget() {
           breakpoints must meet exactly here or there's a dead zone between
           lg and xl (~1024–1280px, common laptop/tablet-landscape widths)
           where neither trigger would render. */}
-      <div className="hidden lg:block fixed top-[285px] right-[8px] z-50 group">
+      <div className="hidden lg:block fixed top-[245px] right-[8px] z-50 group">
         <button
           type="button"
           onClick={openForm}
@@ -375,6 +410,19 @@ export function ProductFeedbackWidget() {
                   <label className="text-xs font-medium text-gray-600 dark:text-gray-400 mb-1.5 block">Impacto (opcional)</label>
                   <Textarea value={impact} onChange={(e) => setImpact(e.target.value)} rows={2} />
                 </div>
+
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="gap-1.5 text-xs self-start"
+                  disabled={improving || (!title.trim() && !description.trim())}
+                  onClick={() => void handleImproveWithAI()}
+                >
+                  {improving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5" />}
+                  {improving ? "Melhorando..." : "Melhorar textos com IA"}
+                </Button>
+                {improveError && <p className="text-xs text-red-600 dark:text-red-400">{improveError}</p>}
 
                 <div className="text-[11px] text-gray-400 dark:text-gray-500">
                   Página atual enviada junto: <code className="font-mono">{sanitizedPathname()}</code>

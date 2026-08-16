@@ -111,6 +111,7 @@ import {
   ChevronDown,
   Tag,
   RefreshCw,
+  Zap,
   Calendar,
   Target,
   Play,
@@ -942,6 +943,9 @@ export default function AdminProdutosPage() {
     questionnaire: { title: string; description: string };
     tasks: Task[];
     excludedItems: string[];
+    alteracoesIncluidas: number;
+    valorAlteracaoExtra: number;
+    taxaEmergencialReducaoPercentual: number;
   }>({
     productId: "",
     name: "",
@@ -977,6 +981,9 @@ export default function AdminProdutosPage() {
     questionnaire: { title: "", description: "" },
     tasks: [],
     excludedItems: [],
+    alteracoesIncluidas: 3,
+    valorAlteracaoExtra: 0,
+    taxaEmergencialReducaoPercentual: 50,
   });
 
   // Aba ativa do formulário de cadastro/edição de produto (controlada pra
@@ -1563,6 +1570,9 @@ export default function AdminProdutosPage() {
       includedItems: (product as any).includedItems || [],
       notIncludedItems: (product as any).notIncludedItems || [],
       excludedItems: (product as any).excludedItems || [],
+      alteracoesIncluidas: (product as any).alteracoesIncluidas ?? 3,
+      valorAlteracaoExtra: (product as any).valorAlteracaoExtra ?? 0,
+      taxaEmergencialReducaoPercentual: (product as any).taxaEmergencialReducaoPercentual ?? 50,
     });
     {
       const pres = (product as any).presentation;
@@ -2115,6 +2125,9 @@ export default function AdminProdutosPage() {
       recurrence: productFormData.recurrence,
       subcategories: productFormData.subcategories,
       tags: productFormData.tags,
+      alteracoesIncluidas: productFormData.alteracoesIncluidas,
+      valorAlteracaoExtra: productFormData.valorAlteracaoExtra,
+      taxaEmergencialReducaoPercentual: productFormData.taxaEmergencialReducaoPercentual,
       questions: productQuestions,
       additionalImages: additionalImages,
       portfolioImages: portfolioImages,
@@ -2173,6 +2186,9 @@ export default function AdminProdutosPage() {
       questionnaire: { title: "", description: "" },
       tasks: [],
       excludedItems: [],
+      alteracoesIncluidas: 3,
+      valorAlteracaoExtra: 0,
+      taxaEmergencialReducaoPercentual: 50,
     });
     setAdditionalImages([]);
     setPortfolioImages([]);
@@ -2474,6 +2490,9 @@ export default function AdminProdutosPage() {
       questionnaire: { title: "", description: "" },
       tasks: [],
       excludedItems: [],
+      alteracoesIncluidas: 3,
+      valorAlteracaoExtra: 0,
+      taxaEmergencialReducaoPercentual: 50,
     });
     setAdditionalImages([]);
     setPortfolioImages([]);
@@ -2550,6 +2569,9 @@ export default function AdminProdutosPage() {
       recurrence: productFormData.recurrence,
       subcategories: productFormData.subcategories,
       tags: productFormData.tags,
+      alteracoesIncluidas: productFormData.alteracoesIncluidas,
+      valorAlteracaoExtra: productFormData.valorAlteracaoExtra,
+      taxaEmergencialReducaoPercentual: productFormData.taxaEmergencialReducaoPercentual,
       questions: productQuestions,
       additionalImages: additionalImages,
       portfolioImages: portfolioImages,
@@ -11053,6 +11075,84 @@ export default function AdminProdutosPage() {
                         ))}
                       </div>
                     )}
+                  </div>
+
+                  {/* Alterações e Urgência */}
+                  <div className="rounded-xl border border-slate-200 dark:border-slate-700 overflow-hidden">
+                    <div className="flex items-center gap-2 px-4 py-2.5 bg-slate-50/60 dark:bg-slate-800/40 border-b border-slate-100 dark:border-slate-700">
+                      <RefreshCw className="h-3.5 w-3.5 text-amber-500 shrink-0" />
+                      <span className="text-sm font-semibold text-slate-700 dark:text-slate-300">
+                        Alterações e Urgência
+                      </span>
+                      <span className="text-[11px] text-slate-400 hidden sm:block ml-1">
+                        · limite de ajustes grátis e entrega emergencial
+                      </span>
+                    </div>
+                    <div className="p-4 grid grid-cols-1 md:grid-cols-3 gap-4 bg-card">
+                      <div className="space-y-2">
+                        <Label className="text-sm font-medium text-muted-foreground">
+                          Alterações grátis incluídas
+                        </Label>
+                        <Input
+                          type="number"
+                          min={0}
+                          value={productFormData.alteracoesIncluidas}
+                          onChange={(e) =>
+                            setProductFormData({
+                              ...productFormData,
+                              alteracoesIncluidas: Math.max(0, Number.parseInt(e.target.value, 10) || 0),
+                            })
+                          }
+                        />
+                        <p className="text-[11px] text-slate-400">
+                          Pedidos de ajuste grátis por tarefa antes de cobrar taxa
+                        </p>
+                      </div>
+                      <div className="space-y-2">
+                        <Label className="text-sm font-medium text-muted-foreground">
+                          Valor da alteração extra (R$)
+                        </Label>
+                        <Input
+                          type="number"
+                          min={0}
+                          step="0.01"
+                          value={productFormData.valorAlteracaoExtra}
+                          onChange={(e) =>
+                            setProductFormData({
+                              ...productFormData,
+                              valorAlteracaoExtra: Math.max(0, Number.parseFloat(e.target.value) || 0),
+                            })
+                          }
+                        />
+                        <p className="text-[11px] text-slate-400">
+                          Cobrado a partir da alteração excedente
+                        </p>
+                      </div>
+                      <div className="space-y-2">
+                        <Label className="text-sm font-medium text-muted-foreground flex items-center gap-1.5">
+                          <Zap className="h-3 w-3 text-amber-500" />
+                          Redução de prazo emergencial (%)
+                        </Label>
+                        <Input
+                          type="number"
+                          min={0}
+                          max={100}
+                          value={productFormData.taxaEmergencialReducaoPercentual}
+                          onChange={(e) =>
+                            setProductFormData({
+                              ...productFormData,
+                              taxaEmergencialReducaoPercentual: Math.min(
+                                100,
+                                Math.max(0, Number.parseInt(e.target.value, 10) || 0),
+                              ),
+                            })
+                          }
+                        />
+                        <p className="text-[11px] text-slate-400">
+                          + 50% do valor do produto (regra da plataforma, não editável)
+                        </p>
+                      </div>
+                    </div>
                   </div>
                 </TabsContent>
                 <TabsContent value="questionario" className="space-y-3 mt-3">

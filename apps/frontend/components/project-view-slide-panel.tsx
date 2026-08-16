@@ -45,6 +45,8 @@ import {
 } from "@/components/ui/alert-dialog";
 import { apiClient } from "@/lib/api-client";
 import { TaskLaunchDrawer } from "@/components/task-launch-drawer";
+import { ProjectConnectionsTab } from "@/components/project-connections-tab";
+import { ProjectMetaAdsWidget } from "@/components/project-meta-ads-widget";
 import { cn } from "@/lib/utils";
 import {
   X,
@@ -120,6 +122,10 @@ const PRODUCT_STATUS_CFG: Record<string, { label: string; cls: string }> = {
   CANCELADO: {
     label: "Cancelado",
     cls: "bg-red-100 text-red-700 border-red-200",
+  },
+  TRANSFERIDO: {
+    label: "Transferido",
+    cls: "bg-slate-100 text-slate-600 border-slate-200",
   },
 };
 
@@ -720,12 +726,17 @@ function TaskDetailDrawer({
 
 function ProductLinkModal({
   projectId,
-  linkedProductIds,
+  activeLinkedProductIds,
   onLinked,
   onClose,
 }: {
   projectId: string;
-  linkedProductIds: string[];
+  // Produtos com vínculo ATIVO (status !== CANCELADO) hoje — só pra exibir
+  // um selo informativo "já contratado" no seletor. Nunca usado pra
+  // esconder/bloquear: o mesmo produto pode ser comprado de novo (ex.: mais
+  // uma instância de um produto mensal), inclusive se o vínculo anterior
+  // estiver cancelado.
+  activeLinkedProductIds: string[];
   onLinked: () => void;
   onClose: () => void;
 }) {
@@ -748,7 +759,6 @@ function ProductLinkModal({
   }, []);
 
   const filtered = products.filter((p) => {
-    if (linkedProductIds.includes(p.id)) return false;
     if (!search) return true;
     return (
       p.name?.toLowerCase().includes(search.toLowerCase()) ||
@@ -823,14 +833,6 @@ function ProductLinkModal({
                     ? "Nenhum produto encontrado"
                     : "Nenhum produto disponível para vincular"}
                 </p>
-                {search && (
-                  <p className="text-xs mt-1">
-                    {products.filter((p) => linkedProductIds.includes(p.id))
-                      .length > 0
-                      ? `${products.filter((p) => linkedProductIds.includes(p.id)).length} produto(s) já vinculado(s)`
-                      : ""}
-                  </p>
-                )}
               </div>
             ) : (
               <div className="max-h-72 overflow-y-auto space-y-1.5 pr-1">
@@ -848,6 +850,9 @@ function ProductLinkModal({
                         {p.name}
                       </p>
                       <p className="text-xs text-slate-400">{p.category}</p>
+                      {activeLinkedProductIds.includes(p.id) && (
+                        <p className="text-[10px] text-slate-400 mt-0.5">já contratado</p>
+                      )}
                     </div>
                     <div className="text-right shrink-0">
                       <p className="text-xs font-semibold text-slate-700">
@@ -1203,7 +1208,11 @@ export function ProjectViewSlidePanel({
   });
 
   // ── Derived counts ────────────────────────────────────────────────────────
-  const linkedProductIds = projectProducts.map((pp: any) => pp.product_id);
+  // Só produtos com vínculo ATIVO — nunca usado pra bloquear recompra, só
+  // pra mostrar um selo informativo "já contratado" no seletor.
+  const activeLinkedProductIds = projectProducts
+    .filter((pp: any) => pp.status !== "CANCELADO")
+    .map((pp: any) => pp.product_id);
 
   const taskStats = {
     total: projectTasks.length,
@@ -1306,7 +1315,7 @@ export function ProjectViewSlidePanel({
               >
                 {/* Tab bar */}
                 <div className="flex-shrink-0 bg-white dark:bg-background px-[50px] pt-0 pb-[10px] overflow-x-auto">
-                  <TabsList className="grid w-max grid-cols-7 gap-1 bg-transparent p-0 h-auto">
+                  <TabsList className="grid w-max grid-cols-8 gap-1 bg-transparent p-0 h-auto">
                     {[
                       { value: "visao-geral", label: "Visão Geral" },
                       {
@@ -1320,6 +1329,7 @@ export function ProjectViewSlidePanel({
                       { value: "financeiro", label: "Financeiro" },
                       { value: "equipe", label: "Equipe" },
                       { value: "nomades", label: "Nômades" },
+                      { value: "conexoes", label: "Conexões" },
                       { value: "logs", label: "Logs" },
                     ].map(({ value, label }) => (
                       <TabsTrigger
@@ -1395,6 +1405,12 @@ export function ProjectViewSlidePanel({
                         </div>
                       </div>
                     </div>
+
+                    {/* Widget de Conexões (Meta Ads) — só aparece se houver
+                        conexão ativa; a própria "moldura" fica invisível
+                        (retorna null) quando não há nada a mostrar, então
+                        não deixa espaço vazio na Visão Geral. */}
+                    <ProjectMetaAdsWidget projectId={project.id} />
 
                     {/* Mini task breakdown (only if tasks loaded) */}
                     {!loadingTasks && taskStats.total > 0 && (
@@ -2780,6 +2796,18 @@ export function ProjectViewSlidePanel({
                 </TabsContent>
 
                 {/* ══════════════════════════════════════════════════════════
+                    TAB: CONEXÕES
+                ══════════════════════════════════════════════════════════ */}
+                <TabsContent
+                  value="conexoes"
+                  className="flex-1 overflow-y-auto bg-slate-200 mt-0"
+                >
+                  <div className="px-[50px] py-[30px] pb-[80px] space-y-4">
+                    <ProjectConnectionsTab projectId={project.id} />
+                  </div>
+                </TabsContent>
+
+                {/* ══════════════════════════════════════════════════════════
                     TAB: LOGS
                 ══════════════════════════════════════════════════════════ */}
                 <TabsContent
@@ -2839,7 +2867,7 @@ export function ProjectViewSlidePanel({
       {addProductOpen && (
         <ProductLinkModal
           projectId={String(project.id)}
-          linkedProductIds={linkedProductIds}
+          activeLinkedProductIds={activeLinkedProductIds}
           onLinked={() => {
             setAddProductOpen(false);
             fetchProducts();

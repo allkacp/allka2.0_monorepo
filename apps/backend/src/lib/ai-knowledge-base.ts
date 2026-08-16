@@ -44,6 +44,12 @@ export const DEFAULT_CATEGORIES: { key: string; name: string; description: strin
     description:
       "Reservado para um futuro assistente de IA que responda dúvidas de nômades e agências — ainda sem fluxo de IA consumindo esta categoria.",
   },
+  {
+    key: "desenvolvedores",
+    name: "Glossário para Desenvolvedores",
+    description:
+      "Vocabulário técnico, nomes de telas/funcionalidades e convenções de como o time prefere que bugs/ideias sejam descritos — usado pela IA que melhora os textos do formulário \"Ajuda e sugestões\" antes de virar chamado.",
+  },
 ];
 
 async function extractFileText(filePath: string): Promise<string> {

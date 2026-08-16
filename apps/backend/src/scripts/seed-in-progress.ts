@@ -89,8 +89,8 @@ async function main() {
         continue;
       }
 
-      const existing = await prisma.projectProduct.findUnique({
-        where: { project_id_product_id: { project_id: project.id, product_id: product.id } },
+      const existing = await prisma.projectProduct.findFirst({
+        where: { project_id: project.id, product_id: product.id },
       });
       if (existing) {
         totalPPSkipped++;

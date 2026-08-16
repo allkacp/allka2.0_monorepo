@@ -103,14 +103,39 @@ describe("Sidebar — item Roadmap e chamados", () => {
     expect(screen.queryByText("Roadmap e chamados")).not.toBeInTheDocument();
   });
 
-  // O fluxo completo (aba -> /sso/await -> aguarda postMessage -> só então
+  // Admin: o clique navega (mesma aba) para a tela de gestão — o SSO só
+  // dispara de lá, pelo botão "Abrir painel interno" dessa página. O item
+  // vira um link normal (href), não mais um disparador direto do hook.
+  it("admin: clicar navega para /admin/acesso-chamados, sem abrir aba nem chamar o hook de SSO", async () => {
+    mockAccountType.value = "admin";
+    getCurrentUser.mockResolvedValue({ admin_profile: null });
+    const openSpy = vi.spyOn(window, "open");
+
+    renderSidebar();
+    const item = await screen.findByText("Roadmap e chamados");
+    expect(item.closest("a")).toHaveAttribute("href", "/admin/acesso-chamados");
+
+    await userEvent.click(item);
+
+    expect(openSpy).not.toHaveBeenCalled();
+    expect(getRoadmapSsoBaseUrl).not.toHaveBeenCalled();
+    expect(startRoadmapSso).not.toHaveBeenCalled();
+    openSpy.mockRestore();
+  });
+
+  // Não-admin (dev/QA com central_chamados): não existe tela de gestão pra
+  // essa conta ver (é admin-gated), então o clique vai direto pro SSO. O
+  // fluxo completo (aba -> /sso/await -> aguarda postMessage -> só então
   // pede o token) já é testado exaustivamente em
   // hooks/use-open-roadmap-panel.test.ts. Aqui só confirmamos que o clique
   // do item realmente aciona esse hook compartilhado — abre a aba
   // sincronamente e chama o primeiro passo dele — sem duplicar toda a
   // simulação de postMessage/Basic Auth de novo neste arquivo.
-  it("clicar abre uma aba em branco de forma síncrona e aciona o hook de SSO compartilhado", async () => {
-    getCurrentUser.mockResolvedValue({ admin_profile: null });
+  it("não-admin com central_chamados: clicar abre uma aba em branco de forma síncrona e aciona o hook de SSO compartilhado", async () => {
+    mockAccountType.value = "empresas";
+    getCurrentUser.mockResolvedValue({
+      admin_profile: { is_active: true, is_master: false, permissions: [{ module: "central_chamados", action: "view" }] },
+    });
     getRoadmapSsoBaseUrl.mockResolvedValue({ roadmapInternalUrl: "http://localhost:8090" });
     const openSpy = vi.spyOn(window, "open").mockReturnValue({ location: { href: "" }, closed: false } as unknown as Window);
 
@@ -125,8 +150,11 @@ describe("Sidebar — item Roadmap e chamados", () => {
     openSpy.mockRestore();
   });
 
-  it("duplo clique não dispara duas requisições nem abre duas abas", async () => {
-    getCurrentUser.mockResolvedValue({ admin_profile: null });
+  it("não-admin com central_chamados: duplo clique não dispara duas requisições nem abre duas abas", async () => {
+    mockAccountType.value = "empresas";
+    getCurrentUser.mockResolvedValue({
+      admin_profile: { is_active: true, is_master: false, permissions: [{ module: "central_chamados", action: "view" }] },
+    });
     let resolveBaseUrl: (v: { roadmapInternalUrl: string }) => void = () => {};
     getRoadmapSsoBaseUrl.mockReturnValue(new Promise((resolve) => { resolveBaseUrl = resolve; }));
     const openSpy = vi.spyOn(window, "open").mockReturnValue({ location: { href: "" }, closed: false } as unknown as Window);

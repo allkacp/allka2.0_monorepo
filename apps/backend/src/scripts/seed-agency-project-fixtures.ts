@@ -415,8 +415,8 @@ async function syncProjectProducts(projectId: string, spec: SeedProject) {
 
     totalValue += finalPrice;
 
-    const current = await prisma.projectProduct.findUnique({
-      where: { project_id_product_id: { project_id: projectId, product_id: product.id } },
+    const current = await prisma.projectProduct.findFirst({
+      where: { project_id: projectId, product_id: product.id },
     });
 
     const commonData = {

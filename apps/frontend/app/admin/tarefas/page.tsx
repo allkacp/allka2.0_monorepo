@@ -888,6 +888,141 @@ function AssignNomadeDialog({
   );
 }
 
+// ─── Transfer Task Dialog ───────────────────────────────────────────────────
+// Move uma tarefa paga e não usada pra outro projeto — nunca gera cobrança
+// nova (o pagamento original continua no projeto de origem). O backend
+// (POST /api/project-tasks/:id/transfer) revalida tudo de novo — o
+// desabilitar aqui é só UX, não a autoridade real.
+
+function TransferTaskDialog({
+  open,
+  task,
+  onClose,
+  onTransferred,
+}: {
+  open: boolean;
+  task: TarefaOperacional | null;
+  onClose: () => void;
+  onTransferred: () => void;
+}) {
+  const [projects, setProjects] = useState<any[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [search, setSearch] = useState("");
+  const [selected, setSelected] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    if (!open) {
+      setSelected(null);
+      setSearch("");
+      setError("");
+      return;
+    }
+    setLoading(true);
+    apiClient
+      .getProjects({ search, limit: 50 })
+      .then((r: any) => setProjects(r?.data ?? []))
+      .catch(() => setProjects([]))
+      .finally(() => setLoading(false));
+  }, [open, search]);
+
+  const filtered = useMemo(
+    () => projects.filter((p: any) => p.id !== task?.project_id),
+    [projects, task],
+  );
+
+  const handleConfirm = async () => {
+    if (!task || !selected) return;
+    setSaving(true);
+    setError("");
+    try {
+      await apiClient.transferProjectTask(task.id, selected);
+      onTransferred();
+      onClose();
+    } catch (err: any) {
+      setError(err?.message || "Não foi possível transferir a tarefa.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  if (!task) return null;
+  return (
+    <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle className="text-base flex items-center gap-2">
+            <RotateCcw className="h-4 w-4 text-slate-600" />
+            Transferir para outro projeto
+          </DialogTitle>
+          <p className="text-xs text-slate-500 mt-1 line-clamp-2">{task.title}</p>
+        </DialogHeader>
+        <div className="space-y-3">
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400 pointer-events-none" />
+            <Input
+              placeholder="Buscar projeto por nome..."
+              autoComplete="off"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="pl-9 h-9 text-sm"
+            />
+          </div>
+          {loading ? (
+            <div className="flex items-center justify-center py-8">
+              <Loader2 className="h-5 w-5 animate-spin text-slate-400" />
+            </div>
+          ) : (
+            <div className="max-h-64 overflow-y-auto space-y-1 border border-slate-200 dark:border-border rounded-lg p-2">
+              {filtered.length === 0 ? (
+                <p className="text-sm text-slate-400 text-center py-4">Nenhum projeto encontrado.</p>
+              ) : (
+                filtered.map((p: any) => (
+                  <button
+                    key={p.id}
+                    onClick={() => setSelected(p.id === selected ? null : p.id)}
+                    className={cn(
+                      "w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-left transition-colors border",
+                      selected === p.id
+                        ? "bg-blue-50 border-blue-300"
+                        : "hover:bg-slate-50 border-transparent",
+                    )}
+                  >
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium text-slate-800 dark:text-slate-200 truncate">
+                        {p.title}
+                      </p>
+                      <p className="text-xs text-slate-400 truncate">
+                        {p.project_code}
+                        {p.client?.name ? ` — ${p.client.name}` : ""}
+                      </p>
+                    </div>
+                  </button>
+                ))
+              )}
+            </div>
+          )}
+          {error && <p className="text-xs text-red-600">{error}</p>}
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose} disabled={saving} className="h-9 text-sm">
+            Cancelar
+          </Button>
+          <Button
+            onClick={handleConfirm}
+            disabled={!selected || saving}
+            className="h-9 text-sm bg-slate-800 hover:bg-slate-900 text-white"
+          >
+            {saving && <Loader2 className="h-4 w-4 animate-spin mr-1.5" />}
+            Transferir
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 // ─── MAIN PAGE ────────────────────────────────────────────────────────────────
 
 interface AdminTarefasPageProps {
@@ -1041,6 +1176,8 @@ export default function AdminTarefasPage({
   const [launchDrawerOpen, setLaunchDrawerOpen] = useState(false);
   const [assignTask, setAssignTask] = useState<TarefaOperacional | null>(null);
   const [assignOpen, setAssignOpen] = useState(false);
+  const [transferTask, setTransferTask] = useState<TarefaOperacional | null>(null);
+  const [transferOpen, setTransferOpen] = useState(false);
   const [projectData, setProjectData] = useState<any | null>(null);
   const [projectOpen, setProjectOpen] = useState(false);
   // Edição de projeto — reaproveita o mesmo ProjectManagementModal usado em
@@ -1899,14 +2036,21 @@ export default function AdminTarefasPage({
             </div>
 
             {hasHorizontalOverflow && (
-              <div
-                ref={topScrollRef}
-                onScroll={handleTopBarScroll}
-                title="Arraste para rolar a tabela na horizontal e ver as colunas que não couberem na tela"
-                className="hidden md:block flex-1 min-w-[80px] overflow-x-scroll allka-table-scroll self-center"
-                style={{ height: 12 }}
-              >
-                <div style={{ minWidth: colWidths.reduce((a, b) => a + b, 0), height: 1 }} />
+              <div className="hidden md:flex flex-1 min-w-[120px] items-center gap-1.5 self-center">
+                <span className="flex items-center gap-0.5 text-[10px] font-medium text-slate-400 dark:text-slate-500 shrink-0 whitespace-nowrap select-none">
+                  <ChevronLeft className="h-3 w-3" />
+                  arraste
+                  <ChevronRight className="h-3 w-3" />
+                </span>
+                <div
+                  ref={topScrollRef}
+                  onScroll={handleTopBarScroll}
+                  title="Arraste para rolar a tabela na horizontal e ver as colunas que não couberem na tela"
+                  className="flex-1 overflow-x-scroll allka-table-scroll"
+                  style={{ height: 12 }}
+                >
+                  <div style={{ minWidth: colWidths.reduce((a, b) => a + b, 0), height: 1 }} />
+                </div>
               </div>
             )}
 
@@ -2253,6 +2397,21 @@ export default function AdminTarefasPage({
                                     <span className="flex h-6 w-6 items-center justify-center rounded-md bg-slate-100 dark:bg-slate-900/30 shrink-0"><ExternalLink className="h-3.5 w-3.5 text-slate-600 dark:text-slate-400" /></span>
                                     Abrir projeto
                                   </DropdownMenuItem>
+                                  {/* Só a nível de UX — o backend revalida
+                                      tudo de novo (nômade/etapas/anexos/
+                                      briefing) antes de aceitar. */}
+                                  {tarefa.status === "PARA_LANCAMENTO" && !tarefa.nomade_responsavel_id && (
+                                    <DropdownMenuItem
+                                      className="gap-2.5 rounded-lg py-2 px-2.5 text-sm cursor-pointer"
+                                      onClick={() => {
+                                        setTransferTask(tarefa);
+                                        setTransferOpen(true);
+                                      }}
+                                    >
+                                      <span className="flex h-6 w-6 items-center justify-center rounded-md bg-violet-100 dark:bg-violet-900/30 shrink-0"><RotateCcw className="h-3.5 w-3.5 text-violet-600 dark:text-violet-400" /></span>
+                                      Transferir para outro projeto
+                                    </DropdownMenuItem>
+                                  )}
                                 </DropdownMenuContent>
                               </DropdownMenu>
                             </div>
@@ -2735,14 +2894,21 @@ export default function AdminTarefasPage({
               </div>
 
               {hasHorizontalOverflow && (
-                <div
-                  ref={bottomScrollRef}
-                  onScroll={handleBottomBarScroll}
-                  title="Arraste para rolar a tabela na horizontal e ver as colunas que não couberem na tela"
-                  className="hidden md:block flex-1 min-w-[80px] overflow-x-scroll allka-table-scroll self-center"
-                  style={{ height: 12 }}
-                >
-                  <div style={{ minWidth: colWidths.reduce((a, b) => a + b, 0), height: 1 }} />
+                <div className="hidden md:flex flex-1 min-w-[120px] items-center gap-1.5 self-center">
+                  <span className="flex items-center gap-0.5 text-[10px] font-medium text-slate-400 dark:text-slate-500 shrink-0 whitespace-nowrap select-none">
+                    <ChevronLeft className="h-3 w-3" />
+                    arraste
+                    <ChevronRight className="h-3 w-3" />
+                  </span>
+                  <div
+                    ref={bottomScrollRef}
+                    onScroll={handleBottomBarScroll}
+                    title="Arraste para rolar a tabela na horizontal e ver as colunas que não couberem na tela"
+                    className="flex-1 overflow-x-scroll allka-table-scroll"
+                    style={{ height: 12 }}
+                  >
+                    <div style={{ minWidth: colWidths.reduce((a, b) => a + b, 0), height: 1 }} />
+                  </div>
                 </div>
               )}
 
@@ -2793,6 +2959,17 @@ export default function AdminTarefasPage({
           setAssignTask(null);
         }}
         onAssigned={handleNomadeAssigned}
+      />
+
+      {/* Transfer to another project */}
+      <TransferTaskDialog
+        open={transferOpen}
+        task={transferTask}
+        onClose={() => {
+          setTransferOpen(false);
+          setTransferTask(null);
+        }}
+        onTransferred={() => void fetchTarefas()}
       />
 
       {/* Column config — Popup 1 */}

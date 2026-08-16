@@ -6,6 +6,7 @@ import {
   fillBriefingWithAI,
   improveAnswerWithAI,
   improveProductField,
+  improveFeedbackTicket,
   researchProductPricing,
   researchSpecialtyMarket,
   researchEmergingSpecialties,
@@ -120,6 +121,45 @@ router.post(
         approach,
       );
       res.json({ improved_value });
+    } catch (err) {
+      next(err);
+    }
+  },
+);
+
+const improveFeedbackTicketSchema = z.object({
+  type: z.string().min(1),
+  title: z.string().optional().default(""),
+  description: z.string().optional().default(""),
+  steps: z.string().optional().default(""),
+  expected_result: z.string().optional().default(""),
+  actual_result: z.string().optional().default(""),
+});
+
+// POST /api/ai-consultor/improve-feedback-ticket — botão "Melhorar com IA" no
+// formulário "Ajuda e sugestões" (product-feedback-widget.tsx). Reescreve o
+// conjunto de campos do chamado em linguagem clara para o desenvolvedor/QA
+// que vai tratar — nunca inventa conteúdo pra campo vazio.
+router.post(
+  "/improve-feedback-ticket",
+  verifyToken,
+  validate(improveFeedbackTicketSchema),
+  async (req, res, next) => {
+    try {
+      const { type, title, description, steps, expected_result, actual_result } = req.body as z.infer<
+        typeof improveFeedbackTicketSchema
+      >;
+      const improved = await improveFeedbackTicket(
+        { title, description, steps, expectedResult: expected_result, actualResult: actual_result },
+        type,
+      );
+      res.json({
+        title: improved.title,
+        description: improved.description,
+        steps: improved.steps,
+        expected_result: improved.expectedResult,
+        actual_result: improved.actualResult,
+      });
     } catch (err) {
       next(err);
     }

@@ -326,6 +326,118 @@ ${
   return (response.text ?? "").trim();
 }
 
+// Persona separada das demais — aqui a IA só reescreve o relato de um
+// usuário comum (chamado de "Ajuda e sugestões") em linguagem clara e
+// objetiva para quem vai TRATAR o chamado (um desenvolvedor/QA interno),
+// nunca para o cliente final. Usa a base de conhecimento da categoria
+// "desenvolvedores" (admin > Configurações > Base de Conhecimento IA) —
+// glossário técnico, convenções de nomenclatura, como o time prefere que
+// bugs/ideias sejam descritos.
+const FEEDBACK_TICKET_EDITOR_PERSONA = `
+Você ajuda a reescrever chamados de suporte/sugestão enviados por usuários de uma plataforma (allka.com.vc) — vindos de qualquer perfil (empresa, agência, nômade, admin) — para que fiquem claros e objetivos para o DESENVOLVEDOR ou QA que vai ler e resolver.
+Nunca invente fatos, passos, mensagens de erro ou resultados que o usuário não descreveu — só reescreva o que já foi informado, corrigindo clareza/ortografia/estrutura e usando termos técnicos corretos quando o relato já der a entender do que se trata.
+Se um campo veio vazio, devolva ele vazio — não preencha com suposições.
+Português do Brasil, direto, sem gírias, sem emojis.
+`.trim();
+
+async function buildFeedbackTicketSystemInstruction(): Promise<string> {
+  const kb = await getCategoryKnowledgeText("desenvolvedores");
+  if (!kb) return FEEDBACK_TICKET_EDITOR_PERSONA;
+  return `${FEEDBACK_TICKET_EDITOR_PERSONA}
+
+=== GLOSSÁRIO E CONVENÇÕES DO TIME DE DESENVOLVIMENTO (referência — não cite nomes de arquivo) ===
+${kb}
+=== FIM DA REFERÊNCIA ===`;
+}
+
+export interface FeedbackTicketFields {
+  title: string;
+  description: string;
+  steps?: string;
+  expectedResult?: string;
+  actualResult?: string;
+}
+
+const feedbackTypeLabels: Record<string, string> = {
+  PROBLEM: "Algo não funcionou (relato de bug)",
+  IDEA: "Sugestão de ideia nova",
+  IMPROVEMENT: "Pedido de melhoria em algo existente",
+};
+
+/** "Melhorar com IA" no formulário "Ajuda e sugestões": reescreve o conjunto
+ * de campos do chamado (não campo a campo, já que descrição/passos/
+ * resultados só fazem sentido juntos) em linguagem clara para quem vai
+ * tratar o chamado. Só reescreve campos que já vieram preenchidos — nunca
+ * inventa conteúdo para um campo vazio. */
+export async function improveFeedbackTicket(
+  fields: FeedbackTicketFields,
+  type: string,
+): Promise<FeedbackTicketFields> {
+  const prompt = `Tipo do chamado: ${feedbackTypeLabels[type] || type}
+
+Título atual:
+"""
+${fields.title || "(vazio)"}
+"""
+
+Descrição atual:
+"""
+${fields.description || "(vazio)"}
+"""
+
+Passos para reproduzir atuais (só se aplica a bugs):
+"""
+${fields.steps || "(vazio)"}
+"""
+
+Resultado esperado atual:
+"""
+${fields.expectedResult || "(vazio)"}
+"""
+
+Resultado obtido atual:
+"""
+${fields.actualResult || "(vazio)"}
+"""
+
+Reescreva cada campo acima de forma mais clara e objetiva para um desenvolvedor/QA, preservando 100% das informações reais já dadas (não invente passos, mensagens de erro ou resultados). Campos que vieram vazios devem continuar vazios na resposta ("").`;
+
+  const ai = getClient();
+  const response = await ai.models.generateContent({
+    model: MODEL,
+    contents: prompt,
+    config: {
+      systemInstruction: await buildFeedbackTicketSystemInstruction(),
+      temperature: 0.4,
+      responseMimeType: "application/json",
+      responseSchema: {
+        type: "object",
+        properties: {
+          title: { type: "string" },
+          description: { type: "string" },
+          steps: { type: "string" },
+          expectedResult: { type: "string" },
+          actualResult: { type: "string" },
+        },
+        required: ["title", "description", "steps", "expectedResult", "actualResult"],
+      },
+    },
+  });
+
+  await recordAIUsage({ model: MODEL, feature: "improve-feedback-ticket", ...usageFromGeminiResponse(response) });
+
+  const text = response.text;
+  if (!text) return fields;
+  const parsed = JSON.parse(text) as FeedbackTicketFields;
+  return {
+    title: parsed.title || "",
+    description: parsed.description || "",
+    steps: parsed.steps || "",
+    expectedResult: parsed.expectedResult || "",
+    actualResult: parsed.actualResult || "",
+  };
+}
+
 // ─── Pesquisa de mercado com Google Search grounding ────────────────────────
 // Diferente das funções acima (texto gerado só com o conhecimento do modelo),
 // estas usam `tools: [{ googleSearch: {} }]` — o Gemini faz buscas reais na

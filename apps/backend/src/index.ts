@@ -1,9 +1,12 @@
+import cron from "node-cron";
 import { config } from "./config";
 import app from "./app";
 import { prisma } from "./lib/prisma";
 import { cleanZeroDatetimes } from "./lib/clean-zero-datetimes";
 import { ensureDefaultKnowledgeCategories } from "./lib/ai-knowledge-base";
 import { ensureDefaultAIServices } from "./lib/ai-usage-tracker";
+import { isMetaIntegrationConfigured } from "./lib/meta-ads-client";
+import { runDailySyncForAllConnections } from "./lib/meta-ads-sync";
 
 // Mascara a URL do banco: mantém apenas o caminho do arquivo, omite credenciais
 function maskDatabaseUrl(url: string): string {
@@ -74,6 +77,21 @@ async function main() {
   await ensureDefaultAIServices();
 
   await logStartupState();
+
+  // Sincronização diária de métricas das Conexões do projeto (Meta Ads por
+  // enquanto) — 03:15, dá tempo do próprio pipeline de dados da Meta
+  // assentar "ontem" antes da gente puxar. Nunca impede o boot se a
+  // integração não estiver configurada.
+  if (isMetaIntegrationConfigured()) {
+    cron.schedule("15 3 * * *", () => {
+      runDailySyncForAllConnections().catch((err) =>
+        console.error("❌ Falha na sincronização diária Meta Ads:", err),
+      );
+    });
+    console.log("🔄 Sincronização diária Meta Ads agendada (03:15).");
+  } else {
+    console.log("ℹ️  Integração Meta Ads não configurada — sincronização diária desativada.");
+  }
 
   // Passenger/cPanel sets PORT as a socket path or port number
   // Use process.env.PORT directly to support both TCP and Unix socket

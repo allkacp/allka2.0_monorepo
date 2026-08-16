@@ -132,6 +132,7 @@ import { apiClient } from "@/lib/api-client";
 import { TarefaDetailDrawer } from "@/components/tarefa-detail-drawer";
 import { TaskLaunchDrawer } from "@/components/task-launch-drawer";
 import { BulkTaskLaunchDrawer } from "@/components/bulk-task-launch-drawer";
+import { TASK_STATUS_LABEL } from "@/lib/task-status-display";
 import {
   buildProposalData,
   exportProposalPDF,
@@ -3204,13 +3205,6 @@ export function ProjectManagementModal({
                         return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
                       };
 
-                      const taskStatusLabel: Record<string, string> = {
-                        PARA_LANCAMENTO: "Para Lançamento", EM_LANCAMENTO: "Em Lançamento",
-                        LIBERADA_PARA_EXECUCAO: "Liberada", EM_EXECUCAO: "Em Execução",
-                        EM_REVISAO: "Em Revisão", EM_APROVACAO: "Em Aprovação",
-                        CONCLUIDA: "Concluída", CANCELADA: "Cancelada",
-                      };
-
                       return (
                         <>
                           {/* Summary pills */}
@@ -3261,7 +3255,7 @@ export function ProjectManagementModal({
                                           )}
                                           {file.task?.status && (
                                             <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-slate-100 text-slate-500 font-medium">
-                                              {taskStatusLabel[file.task.status] ?? file.task.status}
+                                              {TASK_STATUS_LABEL[file.task.status] ?? file.task.status}
                                             </span>
                                           )}
                                           {file.product?.name && (

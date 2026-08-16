@@ -144,6 +144,32 @@ router.put("/invoices/:id", verifyToken, validate(updateSchema), async (req, res
       });
     }
 
+    // ── Destrava tarefa bloqueada por alteração extra ──────────────────────
+    // Pagar libera a próxima reprovação (soma 1 em alteracoes_extras_pagas);
+    // cancelar também destrava, mas como perdão administrativo, sem contar
+    // como paga. Ver PATCH /api/project-tasks/:id/reprovar.
+    if (previous?.status !== "paid" && data["status"] === "paid") {
+      const blockedTask = await prisma.projectTask.findFirst({
+        where: { pending_fee_invoice_id: invoice.id },
+      });
+      if (blockedTask) {
+        await prisma.projectTask.update({
+          where: { id: blockedTask.id },
+          data: { alteracoes_extras_pagas: { increment: 1 }, pending_fee_invoice_id: null },
+        });
+      }
+    } else if (data["status"] === "cancelled" && previous?.status === "pending") {
+      const blockedTask = await prisma.projectTask.findFirst({
+        where: { pending_fee_invoice_id: invoice.id },
+      });
+      if (blockedTask) {
+        await prisma.projectTask.update({
+          where: { id: blockedTask.id },
+          data: { pending_fee_invoice_id: null },
+        });
+      }
+    }
+
     res.json(invoice);
   } catch (err) {
     next(err);

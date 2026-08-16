@@ -33,7 +33,6 @@ import { ChatProvider } from "@/contexts/chat-context";
 import { ChatWidget } from "@/components/chat-widget";
 import { OpenScreensProvider } from "@/contexts/open-screens-context";
 import { OpenScreensTray } from "@/components/open-screens-tray";
-import { AlertsHeaderIcon } from "@/components/alerts-header-icon";
 import { HeaderFloatingTools } from "@/components/header-floating-tools";
 import { PinActivationListener } from "@/components/pin-activation-listener";
 import { ProductFeedbackWidget } from "@/components/product-feedback-widget";
@@ -568,8 +567,9 @@ function AppLayout({ children }: { children: React.ReactNode }) {
                             <ChatWidget />
                             {/* Bandeja de telas abertas — logo abaixo do chat */}
                             <OpenScreensTray />
-                            {/* Alertas, modo escuro e tamanho de fonte — logo abaixo da bandeja */}
-                            <AlertsHeaderIcon />
+                            {/* Modo escuro e tamanho de fonte — logo abaixo da bandeja.
+                                Alertas do sistema virou aba dentro do painel do sino
+                                (Notificações), não é mais um ícone flutuante à parte. */}
                             <HeaderFloatingTools />
                             <ProductFeedbackWidget />
                             <PinActivationListener />

@@ -257,6 +257,7 @@ router.post(
           title: message.title,
           message: message.content,
           severity: "info",
+          category: "notificacao",
           user_id: userId,
           action_url: action_url ?? null,
           notification_message_id: message.id,

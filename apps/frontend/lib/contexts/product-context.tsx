@@ -338,6 +338,10 @@ export interface Product {
   executionHoursPerDay?: number;
   testsEnabled?: boolean;
   stepsEnabled?: boolean;
+  // limite de alterações grátis por tarefa + taxa emergencial
+  alteracoesIncluidas?: number;
+  valorAlteracaoExtra?: number;
+  taxaEmergencialReducaoPercentual?: number;
   // etapas de execução do produto
   stages?: ProductStage[];
   // testes dos nômades

@@ -54,6 +54,7 @@ import {
   Loader2,
   Link2,
   KeyRound,
+  MoreHorizontal,
 } from "lucide-react";
 import { useSorting, SortableHeader } from "@/hooks/useSorting";
 import { useTableScrollSync } from "@/hooks/useTableScrollSync";
@@ -116,6 +117,7 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { useToast } from "@/components/ui/use-toast";
@@ -2876,46 +2878,6 @@ type UsuarioDaLista = User & {
                               <Tooltip>
                                 <TooltipTrigger asChild>
                                   <button
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      openInfoPanel(user);
-                                    }}
-                                    className="h-[21px] w-[21px] flex items-center justify-center rounded-full bg-[#2558FF] text-white shadow-[0_2px_6px_rgba(37,88,255,0.35)] hover:bg-gradient-to-br hover:from-[#2558FF] hover:via-[#6E2C96] hover:to-[#D92293] hover:text-white dark:hover:text-[#0a1628] hover:shadow-[0_2px_10px_rgba(110,44,150,0.5)] transition-all"
-                                  >
-                                    <Plus className="h-3 w-3" />
-                                  </button>
-                                </TooltipTrigger>
-                                <TooltipContent className="text-xs font-medium">Clique para visualizar todas as informações</TooltipContent>
-                              </Tooltip>
-                            </TooltipProvider>
-                            {/* Link de primeiro acesso — só faz sentido para
-                                quem ainda não definiu senha. */}
-                            {(user as any).must_set_password && (
-                              <TooltipProvider delayDuration={400}>
-                                <Tooltip>
-                                  <TooltipTrigger asChild>
-                                    <button
-                                      type="button"
-                                      disabled={emitindoAcesso === user.id}
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        emitirPrimeiroAcesso(user);
-                                      }}
-                                      className="h-[26px] w-[26px] flex items-center justify-center rounded-[8px] bg-white dark:bg-slate-800 border border-[#e8edf5] dark:border-slate-700 text-amber-500 shadow-[0_4px_10px_rgba(15,23,42,0.06)] hover:bg-amber-500 hover:text-white hover:border-transparent transition-all duration-150 disabled:opacity-50"
-                                    >
-                                      <KeyRound className="h-3.5 w-3.5" />
-                                    </button>
-                                  </TooltipTrigger>
-                                  <TooltipContent>
-                                    Copiar link de primeiro acesso
-                                  </TooltipContent>
-                                </Tooltip>
-                              </TooltipProvider>
-                            )}
-                            <TooltipProvider delayDuration={400}>
-                              <Tooltip>
-                                <TooltipTrigger asChild>
-                                  <button
                                     onClick={() => handleUserAction(user, "view")}
                                     className="h-[26px] w-[26px] flex items-center justify-center rounded-[8px] bg-white dark:bg-slate-800 border border-[#e8edf5] dark:border-slate-700 text-[#2558FF] dark:text-slate-500 shadow-[0_4px_10px_rgba(15,23,42,0.06)] hover:bg-gradient-to-br hover:from-[#2558FF] hover:via-[#6E2C96] hover:to-[#D92293] hover:text-white dark:hover:text-[#0a1628] hover:border-transparent hover:shadow-[0_8px_18px_rgba(15,23,42,0.18)] hover:-translate-y-px transition-all duration-150"
                                   >
@@ -2927,30 +2889,6 @@ type UsuarioDaLista = User & {
                                 </TooltipContent>
                               </Tooltip>
                             </TooltipProvider>
-                            {/* Link de primeiro acesso — só faz sentido para
-                                quem ainda não definiu senha. */}
-                            {(user as any).must_set_password && (
-                              <TooltipProvider delayDuration={400}>
-                                <Tooltip>
-                                  <TooltipTrigger asChild>
-                                    <button
-                                      type="button"
-                                      disabled={emitindoAcesso === user.id}
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        emitirPrimeiroAcesso(user);
-                                      }}
-                                      className="h-[26px] w-[26px] flex items-center justify-center rounded-[8px] bg-white dark:bg-slate-800 border border-[#e8edf5] dark:border-slate-700 text-amber-500 shadow-[0_4px_10px_rgba(15,23,42,0.06)] hover:bg-amber-500 hover:text-white hover:border-transparent transition-all duration-150 disabled:opacity-50"
-                                    >
-                                      <KeyRound className="h-3.5 w-3.5" />
-                                    </button>
-                                  </TooltipTrigger>
-                                  <TooltipContent>
-                                    Copiar link de primeiro acesso
-                                  </TooltipContent>
-                                </Tooltip>
-                              </TooltipProvider>
-                            )}
                             <TooltipProvider delayDuration={400}>
                               <Tooltip>
                                 <TooltipTrigger asChild>
@@ -2966,97 +2904,80 @@ type UsuarioDaLista = User & {
                                 </TooltipContent>
                               </Tooltip>
                             </TooltipProvider>
-                            {/* Link de primeiro acesso — só faz sentido para
-                                quem ainda não definiu senha. */}
-                            {(user as any).must_set_password && (
-                              <TooltipProvider delayDuration={400}>
-                                <Tooltip>
-                                  <TooltipTrigger asChild>
-                                    <button
-                                      type="button"
-                                      disabled={emitindoAcesso === user.id}
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        emitirPrimeiroAcesso(user);
-                                      }}
-                                      className="h-[26px] w-[26px] flex items-center justify-center rounded-[8px] bg-white dark:bg-slate-800 border border-[#e8edf5] dark:border-slate-700 text-amber-500 shadow-[0_4px_10px_rgba(15,23,42,0.06)] hover:bg-amber-500 hover:text-white hover:border-transparent transition-all duration-150 disabled:opacity-50"
-                                    >
-                                      <KeyRound className="h-3.5 w-3.5" />
-                                    </button>
-                                  </TooltipTrigger>
-                                  <TooltipContent>
+
+                            {/* Demais ações (info rápida, link de primeiro
+                                acesso, bloquear/desbloquear, deletar) vivem
+                                aqui dentro — eram 5-9 ícones soltos na frente
+                                do nome, confuso demais na tabela inteira.
+                                Mesmo padrão "2 botões + reticências" já usado
+                                em admin/tarefas. */}
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <button
+                                  onClick={(e) => e.stopPropagation()}
+                                  className="h-[26px] w-[26px] flex items-center justify-center rounded-[8px] bg-white dark:bg-slate-800 border border-[#e8edf5] dark:border-slate-700 text-slate-400 dark:text-slate-500 shadow-[0_4px_10px_rgba(15,23,42,0.06)] hover:bg-gradient-to-br hover:from-[#2558FF] hover:via-[#6E2C96] hover:to-[#D92293] hover:text-white dark:hover:text-[#0a1628] hover:border-transparent hover:shadow-[0_8px_18px_rgba(15,23,42,0.18)] hover:-translate-y-px transition-all duration-150"
+                                >
+                                  <MoreHorizontal className="h-3.5 w-3.5" />
+                                </button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent
+                                align="start"
+                                className="w-64 rounded-xl p-1.5 shadow-lg border-slate-200/70 dark:border-slate-700/60"
+                              >
+                                <DropdownMenuItem
+                                  className="gap-2.5 rounded-lg py-2 px-2.5 text-sm cursor-pointer"
+                                  onClick={() => openInfoPanel(user)}
+                                >
+                                  <span className="flex h-6 w-6 items-center justify-center rounded-md bg-blue-100 dark:bg-blue-900/30 shrink-0">
+                                    <Plus className="h-3.5 w-3.5 text-blue-600 dark:text-blue-400" />
+                                  </span>
+                                  Ver todas as informações
+                                </DropdownMenuItem>
+                                {/* Link de primeiro acesso — só faz sentido
+                                    para quem ainda não definiu senha. */}
+                                {(user as any).must_set_password && (
+                                  <DropdownMenuItem
+                                    className="gap-2.5 rounded-lg py-2 px-2.5 text-sm cursor-pointer"
+                                    disabled={emitindoAcesso === user.id}
+                                    onClick={() => emitirPrimeiroAcesso(user)}
+                                  >
+                                    <span className="flex h-6 w-6 items-center justify-center rounded-md bg-amber-100 dark:bg-amber-900/30 shrink-0">
+                                      <KeyRound className="h-3.5 w-3.5 text-amber-600 dark:text-amber-400" />
+                                    </span>
                                     Copiar link de primeiro acesso
-                                  </TooltipContent>
-                                </Tooltip>
-                              </TooltipProvider>
-                            )}
-                            <TooltipProvider delayDuration={400}>
-                              <Tooltip>
-                                <TooltipTrigger asChild>
-                                  <button
-                                    onClick={() => handleUserAction(user, "block")}
-                                    className={`h-[26px] w-[26px] flex items-center justify-center rounded-[8px] bg-white dark:bg-slate-800 border border-[#e8edf5] dark:border-slate-700 shadow-[0_4px_10px_rgba(15,23,42,0.06)] hover:bg-gradient-to-br hover:from-[#2558FF] hover:via-[#6E2C96] hover:to-[#D92293] hover:text-white dark:hover:text-[#0a1628] hover:border-transparent hover:shadow-[0_8px_18px_rgba(15,23,42,0.18)] hover:-translate-y-px transition-all duration-150 ${
-                                      user.is_active ? "text-amber-500 dark:text-amber-400" : "text-emerald-500 dark:text-emerald-400"
+                                  </DropdownMenuItem>
+                                )}
+                                <DropdownMenuSeparator className="my-1" />
+                                <DropdownMenuItem
+                                  className="gap-2.5 rounded-lg py-2 px-2.5 text-sm cursor-pointer"
+                                  onClick={() => handleUserAction(user, "block")}
+                                >
+                                  <span
+                                    className={`flex h-6 w-6 items-center justify-center rounded-md shrink-0 ${
+                                      user.is_active ? "bg-amber-100 dark:bg-amber-900/30" : "bg-emerald-100 dark:bg-emerald-900/30"
                                     }`}
                                   >
                                     {user.is_active ? (
-                                      <UserX className="h-3.5 w-3.5" />
+                                      <UserX className="h-3.5 w-3.5 text-amber-600 dark:text-amber-400" />
                                     ) : (
-                                      <Shield className="h-3.5 w-3.5" />
+                                      <Shield className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
                                     )}
-                                  </button>
-                                </TooltipTrigger>
-                                <TooltipContent className="text-xs font-medium">
-                                  {user.is_active ? "Bloquear" : "Desbloquear"}
-                                </TooltipContent>
-                              </Tooltip>
-                            </TooltipProvider>
-                            {/* Link de primeiro acesso — só faz sentido para
-                                quem ainda não definiu senha. */}
-                            {(user as any).must_set_password && (
-                              <TooltipProvider delayDuration={400}>
-                                <Tooltip>
-                                  <TooltipTrigger asChild>
-                                    <button
-                                      type="button"
-                                      disabled={emitindoAcesso === user.id}
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        emitirPrimeiroAcesso(user);
-                                      }}
-                                      className="h-[26px] w-[26px] flex items-center justify-center rounded-[8px] bg-white dark:bg-slate-800 border border-[#e8edf5] dark:border-slate-700 text-amber-500 shadow-[0_4px_10px_rgba(15,23,42,0.06)] hover:bg-amber-500 hover:text-white hover:border-transparent transition-all duration-150 disabled:opacity-50"
-                                    >
-                                      <KeyRound className="h-3.5 w-3.5" />
-                                    </button>
-                                  </TooltipTrigger>
-                                  <TooltipContent>
-                                    Copiar link de primeiro acesso
-                                  </TooltipContent>
-                                </Tooltip>
-                              </TooltipProvider>
-                            )}
-                            <TooltipProvider delayDuration={400}>
-                              <Tooltip>
-                                <TooltipTrigger asChild>
-                                  <button
-                                    onClick={() => handleUserAction(user, "delete")}
-                                    disabled={!canDelete}
-                                    className={`h-[26px] w-[26px] flex items-center justify-center rounded-[8px] bg-white dark:bg-slate-800 border border-[#e8edf5] dark:border-slate-700 text-red-500 dark:text-red-400 shadow-[0_4px_10px_rgba(15,23,42,0.06)] transition-all duration-150 ${
-                                      canDelete
-                                        ? "hover:bg-gradient-to-br hover:from-[#2558FF] hover:via-[#6E2C96] hover:to-[#D92293] hover:text-white dark:hover:text-[#0a1628] hover:border-transparent hover:shadow-[0_8px_18px_rgba(15,23,42,0.18)] hover:-translate-y-px"
-                                        : "opacity-40 cursor-not-allowed"
-                                    }`}
-                                  >
-                                    <Trash2 className="h-3.5 w-3.5" />
-                                  </button>
-                                </TooltipTrigger>
-                                <TooltipContent className="text-xs font-medium">
-                                  {!canDelete
-                                    ? "Não pode deletar este usuário"
-                                    : "Deletar usuário"}
-                                </TooltipContent>
-                              </Tooltip>
-                            </TooltipProvider>
+                                  </span>
+                                  {user.is_active ? "Bloquear usuário" : "Desbloquear usuário"}
+                                </DropdownMenuItem>
+                                <DropdownMenuSeparator className="my-1" />
+                                <DropdownMenuItem
+                                  className="gap-2.5 rounded-lg py-2 px-2.5 text-sm cursor-pointer text-red-600 dark:text-red-400 focus:text-red-600 dark:focus:text-red-400"
+                                  disabled={!canDelete}
+                                  onClick={() => handleUserAction(user, "delete")}
+                                >
+                                  <span className="flex h-6 w-6 items-center justify-center rounded-md bg-red-100 dark:bg-red-900/30 shrink-0">
+                                    <Trash2 className="h-3.5 w-3.5 text-red-600 dark:text-red-400" />
+                                  </span>
+                                  {canDelete ? "Deletar usuário" : "Não pode deletar este usuário"}
+                                </DropdownMenuItem>
+                              </DropdownMenuContent>
+                            </DropdownMenu>
                           </div>
                         </td>
 

@@ -22,6 +22,7 @@ vi.mock("@/lib/api-client", () => {
       getProductFeedbackAccess: vi.fn(),
       createProductFeedbackWorkItem: vi.fn(),
       getProductFeedbackWorkItems: vi.fn(),
+      aiImproveFeedbackTicket: vi.fn(),
     },
   };
 });
@@ -225,6 +226,102 @@ describe("ProductFeedbackWidget — submitting a ticket", () => {
     await user.click(screen.getByRole("button", { name: /enviar/i }));
 
     expect(await screen.findByText("ALK-000099")).toBeInTheDocument();
+  });
+});
+
+describe("ProductFeedbackWidget — Melhorar com IA", () => {
+  beforeEach(() => {
+    (apiClient.getProductFeedbackAccess as any).mockResolvedValue({ canUse: true });
+  });
+
+  it("disables the button until título OR descrição have content", async () => {
+    const user = userEvent.setup();
+    renderWidget();
+    await user.click(await getTrigger());
+
+    const improveButton = screen.getByRole("button", { name: /melhorar textos com ia/i });
+    expect(improveButton).toBeDisabled();
+
+    await user.type(screen.getByPlaceholderText("Resuma em poucas palavras"), "Título");
+    expect(improveButton).not.toBeDisabled();
+  });
+
+  it("sends the current fields and replaces título/descrição with the AI's response", async () => {
+    (apiClient.aiImproveFeedbackTicket as any).mockResolvedValue({
+      title: "Botão Salvar não responde ao clique",
+      description: "Ao clicar em Salvar na tela de configurações, nada acontece e nenhum erro é exibido.",
+      steps: "",
+      expected_result: "",
+      actual_result: "",
+    });
+    const user = userEvent.setup();
+    renderWidget();
+    await user.click(await getTrigger());
+
+    await user.type(screen.getByPlaceholderText("Resuma em poucas palavras"), "botao nao funciona");
+    await user.type(
+      screen.getByPlaceholderText("Descreva com o máximo de detalhe possível"),
+      "cliquei em salvar e nao rolou nada",
+    );
+    await user.click(screen.getByRole("button", { name: /melhorar textos com ia/i }));
+
+    await waitFor(() => expect(apiClient.aiImproveFeedbackTicket).toHaveBeenCalledTimes(1));
+    const callArg = (apiClient.aiImproveFeedbackTicket as any).mock.calls[0][0];
+    expect(callArg.type).toBe("PROBLEM");
+    expect(callArg.title).toBe("botao nao funciona");
+    expect(callArg.description).toBe("cliquei em salvar e nao rolou nada");
+
+    expect(await screen.findByDisplayValue("Botão Salvar não responde ao clique")).toBeInTheDocument();
+    expect(
+      screen.getByDisplayValue(
+        "Ao clicar em Salvar na tela de configurações, nada acontece e nenhum erro é exibido.",
+      ),
+    ).toBeInTheDocument();
+  });
+
+  it("never overwrites an optional field that the user left empty, even if the AI response fills it in", async () => {
+    (apiClient.aiImproveFeedbackTicket as any).mockResolvedValue({
+      title: "Título melhorado",
+      description: "Descrição melhorada",
+      steps: "1. Abra a tela\n2. Clique em Salvar", // AI shouldn't invent this — the component must ignore it anyway
+      expected_result: "O formulário deveria salvar",
+      actual_result: "Nada acontece",
+    });
+    const user = userEvent.setup();
+    renderWidget();
+    await user.click(await getTrigger());
+
+    await user.type(screen.getByPlaceholderText("Resuma em poucas palavras"), "Título original");
+    await user.type(
+      screen.getByPlaceholderText("Descreva com o máximo de detalhe possível"),
+      "Descrição original",
+    );
+    // "Passos para reproduzir" (steps) left empty on purpose — only shown for type PROBLEM, which is the default.
+    await user.click(screen.getByRole("button", { name: /melhorar textos com ia/i }));
+
+    await waitFor(() => expect(apiClient.aiImproveFeedbackTicket).toHaveBeenCalledTimes(1));
+    await screen.findByDisplayValue("Título melhorado");
+
+    // "Passos para reproduzir" stayed empty — never backfilled from a blank field.
+    const stepsTextarea = document.querySelectorAll("textarea")[1] as HTMLTextAreaElement;
+    expect(stepsTextarea.value).toBe("");
+  });
+
+  it("shows a friendly error and keeps the form untouched when the AI call fails", async () => {
+    (apiClient.aiImproveFeedbackTicket as any).mockRejectedValue(new ApiError("Serviço de IA indisponível", 503));
+    const user = userEvent.setup();
+    renderWidget();
+    await user.click(await getTrigger());
+
+    await user.type(screen.getByPlaceholderText("Resuma em poucas palavras"), "Título original");
+    await user.type(
+      screen.getByPlaceholderText("Descreva com o máximo de detalhe possível"),
+      "Descrição original",
+    );
+    await user.click(screen.getByRole("button", { name: /melhorar textos com ia/i }));
+
+    expect(await screen.findByText("Serviço de IA indisponível")).toBeInTheDocument();
+    expect(screen.getByPlaceholderText("Resuma em poucas palavras")).toHaveValue("Título original");
   });
 });
 
