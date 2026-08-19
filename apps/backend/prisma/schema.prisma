@@ -89,9 +89,13 @@ model User {
   product_feedback_override          ProductFeedbackUserOverride?
   product_feedback_group_memberships ProductFeedbackAccessGroupMember[]
   product_feedback_work_item_links   ProductFeedbackWorkItemLink[]
+  share_links                        ShareLink[]
+  dashboard_templates                DashboardTemplate[]
+  share_comments                     ShareComment[]
   notification_preferences           NotificationPreference[]
   notification_groups_owned          NotificationGroup[]                @relation("NotificationGroupOwner")
   notification_group_memberships     NotificationGroupMember[]          @relation("NotificationGroupMemberUser")
+  iallka_sessions                    IallkaSession[]
 
   // ── Rastreio da plataforma antiga ─────────────────────────────────────
   // id numérico do registro equivalente no dump legado (Dump20260423.sql).
@@ -721,6 +725,7 @@ model Project {
   credentials     ProjectCredential[]
   attachments     ProjectAttachment[]
   connections     ProjectConnection[]
+  iallka_session  IallkaSession?
 
   // ── Rastreio da plataforma antiga ─────────────────────────────────────
   // id numérico do registro equivalente no dump legado (Dump20260423.sql).
@@ -977,6 +982,52 @@ model ProductBundleItem {
   @@map("product_bundle_items")
 }
 
+// ─── IallkaSession / IallkaMessage — assistente IA de montagem de projeto ────
+// Chat multi-turno: a IA pergunta o que precisar até ter informação
+// suficiente, propõe uma lista real de produtos/variações do catálogo, e ao
+// ser aprovada gera o Project + ProjectProducts de verdade (ver
+// lib/project-products-bulk.ts, origin="AI_ASSEMBLY"). Não reaproveita
+// Conversation/ChatMessage (chat humano-humano, sender_id é FK obrigatória
+// pra User) — é um modelo dedicado, mais simples.
+
+model IallkaSession {
+  id                 String   @id @default(cuid())
+  user_id            String
+  user               User     @relation(fields: [user_id], references: [id])
+  // Auto-resolvido pra usuário de agência (resolveMyAgencyId) no momento da
+  // criação da sessão; nulo pra admin — nesta fase a IA não pergunta
+  // cliente/empresa, só produto/necessidade.
+  agency_id          String?
+  status             String   @default("gathering")
+  // gathering | proposal | approved | cancelled
+  created_project_id String?  @unique
+  created_project    Project? @relation(fields: [created_project_id], references: [id])
+  created_at         DateTime @default(now())
+  updated_at         DateTime @updatedAt
+
+  messages IallkaMessage[]
+
+  @@index([user_id])
+  @@map("iallka_sessions")
+}
+
+model IallkaMessage {
+  id                 String        @id @default(cuid())
+  session_id         String
+  session            IallkaSession @relation(fields: [session_id], references: [id], onDelete: Cascade)
+  role               String
+  // user | assistant
+  content            String        @db.LongText
+  // JSON do turno inteiro da IA (reply_text/stage/project_title/
+  // selected_products) — só preenchido em role="assistant". Usado pra
+  // recuperar a última proposta na hora de aprovar.
+  structured_payload String?       @db.LongText
+  created_at         DateTime      @default(now())
+
+  @@index([session_id])
+  @@map("iallka_messages")
+}
+
 model ProductAddon {
   id          String   @id @default(cuid())
   product_id  String
@@ -1126,10 +1177,13 @@ model ProjectProduct {
   expected_end_date DateTime?
 
   origin String @default("VENDA")
-  // VENDA | TRANSFERENCIA | COMBO — TRANSFERENCIA marca um vínculo criado
-  // pela transferência de uma tarefa não usada de outro projeto (já paga
-  // lá, nunca cobrar de novo aqui). COMBO marca um vínculo nascido da
-  // contratação de um ProductBundle (ver POST /api/product-bundles/:id/contract).
+  // VENDA | TRANSFERENCIA | COMBO | AI_ASSEMBLY — TRANSFERENCIA marca um
+  // vínculo criado pela transferência de uma tarefa não usada de outro
+  // projeto (já paga lá, nunca cobrar de novo aqui). COMBO marca um vínculo
+  // nascido da contratação de um ProductBundle (ver POST
+  // /api/product-bundles/:id/contract). AI_ASSEMBLY marca um vínculo
+  // nascido de uma proposta aprovada do assistente IALLKA (ver POST
+  // /api/iallka/sessions/:id/approve).
 
   // Agrupa as N linhas nascidas do MESMO evento de contratação de combo —
   // não aponta pro ProductBundle (que pode ser editado/apagado depois), é
@@ -1137,6 +1191,11 @@ model ProjectProduct {
   // tabela. Nulo pra origin != "COMBO".
   origin_bundle_purchase_id   String?
   origin_bundle_name_snapshot String?
+
+  // Rastreia qual sessão do IALLKA gerou esta linha (origin="AI_ASSEMBLY").
+  // Sem FK de propósito — mesmo espírito snapshot-safe de
+  // origin_bundle_purchase_id, sobrevive mesmo se a sessão for limpa depois.
+  origin_ai_session_id String?
 
   created_at DateTime @default(now())
   updated_at DateTime @updatedAt
@@ -2840,4 +2899,221 @@ model ProductFeedbackWorkItemLink {
 
   @@index([user_id])
   @@map("product_feedback_work_item_links")
+}
+
+// ─── Dashboard share links ──────────────────────────────────────────────────
+// Antes (v1/v2) o "link" era só um payload Base64 decodificado no cliente —
+// sem registro no banco, qualquer um podia forjar um token arbitrário (ex.
+// profile: "admin", sem pin) e a rota pública de dados aceitava. Este model
+// torna o link opaco (token aleatório, ver routes/share.ts) e movable/
+// revogável: a config de verdade mora aqui, o token só é a chave de lookup.
+// scope_id é sempre resolvido pelo SERVIDOR a partir de quem criou o link
+// (nunca aceito do cliente, exceto pra admin) — ver resolveOwnScopeId em
+// routes/share.ts.
+model ShareLink {
+  id                   String    @id @default(cuid())
+  token                String    @unique
+  // URL amigável opcional (ex.: "visao-financeira") — só serve pra
+  // LOCALIZAR o registro, nunca pra autorizar nada; todo o resto (status,
+  // revoked_at, expires_at, deleted_at, PIN, permission, escopo) continua
+  // sendo checado depois de resolvido, exatamente como acontece hoje com
+  // o token (ver findShareLinkByIdentifier em routes/share.ts). Opcional e
+  // único globalmente — link antigo sem slug continua funcionando só pelo
+  // token. Nunca reaproveitado: revogar/arquivar não libera o slug (evita
+  // uma URL antiga de cliente futuramente apontar pra outro conteúdo);
+  // editar o slug troca o valor da própria linha, o slug anterior fica
+  // livre pra qualquer um (sem alias/redirect — decisão deliberada, ver
+  // PATCH /api/dashboard-shares/:id).
+  slug                 String?   @unique
+  target_id            String
+  target_type          String
+  // widget | dashboard
+  target_title         String
+  permission           String
+  // view | comment
+  pin_hash             String?
+  profile              String
+  // admin | agency | company | nomad | partner | leader
+  scope_id             String?
+  period_type          String?
+  period_from          DateTime?
+  period_to            DateTime?
+  period_label         String?
+  allow_filter_changes Boolean   @default(false)
+  expires_at           DateTime?
+  revoked_at           DateTime?
+  // Soft-delete/arquivamento (ver routes/dashboard-shares.ts) — some da
+  // listagem operacional padrão e passa a ser tratado como inválido nas
+  // rotas públicas de routes/share.ts, mas a linha (e os comentários que
+  // dependem dela via FK) continua no banco. Nunca DELETE destrutivo aqui:
+  // é a base pro item futuro de audit log.
+  deleted_at           DateTime?
+  created_by           String
+  creator              User      @relation(fields: [created_by], references: [id], onDelete: Cascade)
+  created_at           DateTime  @default(now())
+  comments             ShareComment[]
+  activities           ShareLinkActivity[]
+
+  @@index([created_by])
+  @@map("share_links")
+}
+
+// Auditoria persistente das ações administrativas sobre um ShareLink (item
+// 8) — sobrevive a revogação/expiração/arquivamento de propósito: mesmo um
+// link arquivado (deleted_at setado) continua com o histórico completo no
+// banco, só some da listagem operacional. Nome/e-mail do ator são
+// SNAPSHOT no momento da ação (não FK só pro User atual) — se a conta for
+// removida ou renomeada depois, o log continua legível com quem fez o quê
+// na época. Nunca grava PIN em texto puro, pin_hash, JWT ou qualquer
+// segredo — ver ACTIVITY_ACTIONS e redactMetadata em lib/share-link-activity.ts.
+model ShareLinkActivity {
+  id             String    @id @default(cuid())
+  share_link_id  String
+  share_link     ShareLink @relation(fields: [share_link_id], references: [id], onDelete: Cascade)
+  action         String
+  // created | slug_changed | permission_changed | pin_enabled | pin_changed
+  // | pin_removed | expiry_changed | revoked | reactivated | archived
+  actor_user_id  String?
+  actor_name     String?
+  actor_email    String?
+  // JSON só com valores seguros (ex.: {"from":"view","to":"comment"}) —
+  // nunca PIN/hash/token. Ver redactMetadata.
+  metadata       Json?
+  created_at     DateTime  @default(now())
+
+  @@index([share_link_id, created_at])
+  @@map("share_link_activities")
+}
+
+// Comentários em dashboards/widgets compartilhados (permission="comment").
+// Não duplica target_id/target_type — isso já vem do ShareLink; um
+// comentário sempre herda o escopo (dashboard inteiro ou widget específico)
+// do link em que foi feito. Autor: se quem comenta está autenticado na
+// plataforma (Authorization: Bearer enviado pelo próprio browser da pessoa,
+// não pelo token do link), user_id/author_name/author_email vêm do JWT,
+// nunca do corpo da requisição — ver routes/share.ts. Visitante sem sessão
+// preenche nome/e-mail uma vez; e-mail é obrigatório pra ter alguma
+// identificação mínima persistida.
+model ShareComment {
+  id             String    @id @default(cuid())
+  share_link_id  String
+  share_link     ShareLink @relation(fields: [share_link_id], references: [id], onDelete: Cascade)
+  // Nullable: comentário pode ser só anexo (ver regra em routes/share.ts —
+  // content vazio + attachments.length === 0 é o único caso rejeitado).
+  content        String?   @db.LongText
+  // "plain": texto puro, formato de todo comentário criado antes do editor
+  // rico — continua renderizado como sempre foi (cor única em `color`,
+  // sem HTML). "html": HTML restrito sanitizado no backend (ver
+  // sanitizeRichContent em routes/share.ts) — cor/tamanho por trecho vêm
+  // de classes dentro do próprio HTML, `color` é ignorado nesse caso.
+  // Default "plain" propositalmente: nenhuma migração destrutiva precisa
+  // tocar as linhas já existentes.
+  content_format String    @default("plain")
+  // Cor única do comentário INTEIRO — só usada quando content_format=
+  // "plain" (comentário antigo/sem rich text). Chave de uma paleta fixa
+  // validada no backend, nunca CSS arbitrário.
+  color          String    @default("default")
+  author_name    String?
+  author_email   String
+  author_whatsapp String?
+  user_id        String?
+  user           User?     @relation(fields: [user_id], references: [id], onDelete: SetNull)
+  status         String    @default("visible")
+  // visible | deleted (soft delete — reservado para moderação futura, não
+  // implementada nesta tarefa)
+  created_at     DateTime  @default(now())
+  updated_at     DateTime  @updatedAt
+  attachments    ShareCommentAttachment[]
+
+  @@index([share_link_id])
+  @@map("share_comments")
+}
+
+// Anexos (imagem/PDF) de um comentário — separado do ShareComment porque um
+// comentário pode ter mais de um arquivo. Storage local em disco, mesmo
+// padrão de apps/backend/src/lib/file-storage.ts já usado por
+// ProjectAttachment (routes/projects.ts) — sem infra nova.
+model ShareCommentAttachment {
+  id         String       @id @default(cuid())
+  comment_id String
+  comment    ShareComment @relation(fields: [comment_id], references: [id], onDelete: Cascade)
+  filename   String
+  // Nome original enviado pela pessoa — exibido na UI.
+  mime_type  String
+  size       Int
+  // storage_key = nome gerado em disco (uploads/share-comments/{comment_id}/{storage_key}),
+  // nunca o filename original (evita colisão e path traversal).
+  storage_key String
+  created_at DateTime     @default(now())
+
+  @@index([comment_id])
+  @@map("share_comment_attachments")
+}
+
+// ─── Dashboard Templates (padrão por perfil) — Item 9/10 ─────────────────────
+// Template administrativo global, separado da personalização individual do
+// usuário (que continua vivendo em localStorage — ver
+// apps/frontend/lib/dashboard-presets-by-role.ts). Um usuário sem
+// personalização própria recebe o template default do seu perfil como base
+// inicial; editar o próprio dashboard NUNCA grava aqui, e editar o template
+// aqui NUNCA sobrescreve quem já personalizou (ver GET /resolve em
+// routes/dashboard-templates.ts).
+model DashboardTemplate {
+  id          String    @id @default(cuid())
+  name        String
+  profile     String
+  // admin | agency | company | nomad | partner | leader — mesmo vocabulário
+  // já usado em ShareLink.profile, não o DashboardRole (maiúsculo) do
+  // frontend; a rota normaliza para minúsculo nos dois sentidos.
+  is_default  Boolean   @default(false)
+  // Só pode haver 1 default ativo por profile — garantido em transaction em
+  // POST /:id/set-default (nunca por unique constraint composta, porque
+  // teríamos vários templates com is_default=false simultâneos).
+  is_active   Boolean   @default(true)
+  widgets     Json
+  // Array de WidgetState — mesmo shape (id/type/visible/order/customTitle?/
+  // colSpan?) usado hoje em localStorage pelas 6 telas (ver
+  // features/dashboards/shared/dashboard-common.tsx). Guardado como JSON
+  // estruturado (não texto livre) pra não perder nenhum campo existente.
+  created_by  String?
+  creator     User?     @relation(fields: [created_by], references: [id], onDelete: SetNull)
+  created_at  DateTime  @default(now())
+  updated_at  DateTime  @updatedAt
+  contents    DashboardTemplateContent[]
+
+  @@index([profile, is_active])
+  @@index([profile, is_default])
+  @@map("dashboard_templates")
+}
+
+// Banner/aviso fixo vinculado a um template. `locked=true` = o usuário não
+// pode remover da própria visão (faz parte da experiência padrão do
+// perfil); `locked=false` = pode ser dispensado individualmente (dispensa
+// fica em localStorage, mesmo padrão de persistência pessoal do item 9).
+model DashboardTemplateContent {
+  id                 String            @id @default(cuid())
+  template_id        String
+  template           DashboardTemplate @relation(fields: [template_id], references: [id], onDelete: Cascade)
+  type               String
+  // banner | notice
+  title              String
+  body               String?           @db.Text
+  image_storage_key  String?
+  // Nome gerado em disco (uploads/dashboard-template-contents/{id}/{key}) —
+  // mesmo padrão de ShareCommentAttachment.storage_key, nunca o nome
+  // original. Servido publicamente (sem auth) por ser conteúdo de
+  // marketing interno não sensível — ver GET /contents/:id/image.
+  image_mime_type    String?
+  link_url           String?
+  link_label         String?
+  active             Boolean           @default(true)
+  starts_at          DateTime?
+  ends_at            DateTime?
+  sort_order         Int               @default(0)
+  locked             Boolean           @default(false)
+  created_at         DateTime          @default(now())
+  updated_at         DateTime          @updatedAt
+
+  @@index([template_id, active])
+  @@map("dashboard_template_contents")
 }

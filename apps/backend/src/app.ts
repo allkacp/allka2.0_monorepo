@@ -14,6 +14,7 @@ import nomadeLevelsRouter from "./routes/nomade-levels";
 import agenciesRouter from "./routes/agencies";
 import productsRouter from "./routes/products";
 import productBundlesRouter from "./routes/product-bundles";
+import iallkaRouter from "./routes/iallka";
 import specialtiesRouter from "./routes/specialties";
 import financialRouter from "./routes/financial";
 import billingRouter from "./routes/billing";
@@ -44,6 +45,8 @@ import paymentsRouter from "./routes/payments";
 import liderRouter from "./routes/lider";
 import habilidadesRouter from "./routes/habilidades";
 import shareRouter from "./routes/share";
+import dashboardSharesRouter from "./routes/dashboard-shares";
+import dashboardTemplatesRouter, { dashboardTemplatesPublicRouter } from "./routes/dashboard-templates";
 import expensesRouter from "./routes/expenses";
 import walletsRouter from "./routes/wallets";
 import squadRouter from "./routes/squad";
@@ -171,6 +174,8 @@ app.use("/api/task-templates", taskTemplatesRouter);
 app.use("/api/project-products", projectProductsRouter);
 // Combos: lista de produtos existentes que, contratada, gera N ProjectProduct
 app.use("/api/product-bundles", productBundlesRouter);
+// IALLKA: assistente de IA que monta um projeto por chat (ver lib/iallka.ts)
+app.use("/api/iallka", iallkaRouter);
 // Canonical CRUD for operational execution tasks
 app.use("/api/project-tasks", projectTasksRouter);
 app.use("/api/project-connections", projectConnectionsRouter);
@@ -186,8 +191,14 @@ app.use("/api/payments", paymentsRouter);
 app.use("/api/lider", liderRouter);
 // Habilidades — nomad skills and leader area CRUD
 app.use("/api/habilidades", habilidadesRouter);
-// Share links — public endpoint (no auth required)
+// Share links — /api/share é público (o token é a identidade), a criação/
+// listagem/revogação do link mora em /api/dashboard-shares e exige sessão.
 app.use("/api/share", shareRouter);
+app.use("/api/dashboard-shares", dashboardSharesRouter);
+// Público (sem auth) primeiro, específico só pra imagem de banner; o router
+// autenticado cobre o resto do CRUD no mesmo prefixo.
+app.use("/api/dashboard-templates", dashboardTemplatesPublicRouter);
+app.use("/api/dashboard-templates", dashboardTemplatesRouter);
 // Expenses — operational expenses of Allka (separate from CMV/costs)
 app.use("/api/expenses", expensesRouter);
 // Wallets — unified ledger for company/agency/nomad/partner/platform accounts

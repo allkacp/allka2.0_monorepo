@@ -372,24 +372,54 @@ export type ShareConfig = {
   permission: "view" | "comment";
   pin?: string;
   expiry?: Date;
+  // URL amigável opcional (ver ShareSlugField) — o backend normaliza e
+  // valida de novo, isto aqui é só o que o usuário digitou/aceitou da
+  // sugestão. Nunca decide autorização, só localização do link.
+  slug?: string;
 };
 
-export const generatePublicToken = (
+// Antes isso montava um payload Base64 decodificável por qualquer um no
+// cliente (sem registro no banco — impossível de revogar, e o "escopo" era
+// o que o próprio cliente dissesse que era). Agora o link é criado no
+// backend: o token é opaco e o escopo (empresa/agência/nômade dona dos
+// dados) é resolvido lá a partir de quem está logado, nunca aceito daqui.
+// Ver apps/backend/src/routes/dashboard-shares.ts.
+export const generatePublicToken = async (
   config: ShareConfig,
-  extras?: { profile?: string; period?: object; allowFilterChanges?: boolean },
-): string => {
-  const payload = {
-    target: config.target,
+  extras?: {
+    profile?: string;
+    period?: { type: string; from?: string; to?: string; label: string };
+    allowFilterChanges?: boolean;
+  },
+): Promise<{ token: string; slug: string | null; link: import("@/lib/api-client").DashboardShareLink }> => {
+  const { apiClient } = await import("@/lib/api-client");
+  const { token, link } = await apiClient.createDashboardShare({
+    targetId: config.target.id,
+    targetType: config.target.type,
+    targetTitle: config.target.title,
     permission: config.permission,
-    pin: config.pin ?? null,
-    expiry: config.expiry ? config.expiry.toISOString() : null,
-    issued: new Date().toISOString(),
-    ...(extras?.profile ? { profile: extras.profile } : {}),
-    ...(extras?.period ? { period: extras.period } : {}),
-    ...(extras?.allowFilterChanges !== undefined ? { allowFilterChanges: extras.allowFilterChanges } : {}),
-    v: 2,
-  };
-  return btoa(unescape(encodeURIComponent(JSON.stringify(payload))));
+    pin: config.pin,
+    expiresAt: config.expiry ? config.expiry.toISOString() : undefined,
+    slug: config.slug,
+    profile: extras?.profile ?? "admin",
+    periodType: extras?.period?.type,
+    periodFrom: extras?.period?.from,
+    periodTo: extras?.period?.to,
+    periodLabel: extras?.period?.label,
+    allowFilterChanges: extras?.allowFilterChanges,
+  });
+  // `link` já vem serializado do backend (POST /api/dashboard-shares) — o
+  // chamador usa isto pra inserir o novo registro direto no estado da
+  // lista de "Links criados" (ver ShareLinksPanel.pendingLink), em vez de
+  // depender só de um refetch que pode não disparar se o painel de lista
+  // não estiver montado no momento (era a causa da regressão "link
+  // criado não aparece na lista sem F5").
+  return { token, slug: link?.slug ?? null, link };
 };
+
+/** Monta a URL pública final, preferindo o slug amigável quando existir. */
+export function buildShareUrl(identifier: { token: string; slug?: string | null }): string {
+  return `${window.location.origin}/dashboard/share/${identifier.slug || identifier.token}`;
+}
 // ───────────────────────────────────────────────────────────────────────────────
 
