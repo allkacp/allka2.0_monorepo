@@ -5,6 +5,22 @@ import { Label } from "@/components/ui/label";
 import { apiClient } from "@/lib/api-client";
 import { useToast } from "@/hooks/use-toast";
 import { Loader2, ArrowRight, Eye, EyeOff } from "lucide-react";
+import { LOGIN_ROLE_CONFIGS } from "@/lib/login-role-configs";
+import { LoginLoadingOverlay } from "@/components/login-loading-overlay";
+import { usePostLoginProgress } from "@/hooks/use-post-login-progress";
+
+// Preload do chunk lazy da página de dashboard-alvo (ver React.lazy em
+// App.tsx) — usado como sinal REAL de "pronto" na animação pós-login: só
+// avança pra 100% quando o código que vai renderizar o dashboard já estiver
+// carregado, não com um temporizador cego.
+const DASHBOARD_PRELOADERS: Record<string, () => Promise<unknown>> = {
+  "/admin/dashboard": () => import("@/app/admin/dashboard/page"),
+  "/nomad/dashboard": () => import("@/app/nomades/dashboard/page"),
+  "/partner/dashboard": () => import("@/app/partner/dashboard/page"),
+  "/company/dashboard": () => import("@/app/company/dashboard/page"),
+  "/agency/dashboard": () => import("@/app/agency/dashboard/page"),
+  "/leader/dashboard": () => import("@/app/leader/dashboard/page"),
+};
 
 export type Locale = "pt" | "en" | "es" | "zh";
 
@@ -52,8 +68,7 @@ export interface LoginRoleConfig {
 
 // Partner não tem login próprio — é a mesma Agency, com upgrade de status
 // via convite (ver PartnerProfile e as rotas /partner/login e /parceiro/login
-// em App.tsx, que só redirecionam pra /agency/login). Por isso não aparece
-// aqui nem em PORTAL_LINKS abaixo — juntado com Agency.
+// em App.tsx, que só redirecionam pra /agency/login).
 const ACCESS_TYPES = [
   { id: "ADMIN", label: "Admin", redirectPath: "/admin/dashboard" },
   { id: "AGENCY", label: "Agency", redirectPath: "/agency/dashboard" },
@@ -63,35 +78,6 @@ const ACCESS_TYPES = [
 ] as const;
 
 export type AccessTypeId = (typeof ACCESS_TYPES)[number]["id"];
-
-// Portais públicos visíveis nos botões de seleção de perfil
-const PORTAL_LINKS = [
-  {
-    id: "ADMIN",
-    loginPath: "/admin/login",
-    labels: { pt: "Allka", en: "Allka", es: "Allka", zh: "Allka" },
-  },
-  {
-    id: "NOMAD",
-    loginPath: "/nomades/login",
-    labels: { pt: "Nomad", en: "Nomad", es: "Nomad", zh: "Nomad" },
-  },
-  {
-    id: "AGENCY",
-    loginPath: "/agencia/login",
-    labels: { pt: "Agency", en: "Agency", es: "Agency", zh: "Agency" },
-  },
-  {
-    id: "COMPANY",
-    loginPath: "/company/login",
-    labels: { pt: "Company", en: "Company", es: "Company", zh: "Company" },
-  },
-  {
-    id: "LEADER",
-    loginPath: "/lider/login",
-    labels: { pt: "Leader", en: "Leader", es: "Leader", zh: "Leader" },
-  },
-] as const;
 
 // ─── Locale selector ─────────────────────────────────────────────────────────
 
@@ -212,13 +198,34 @@ const UI: Record<
 };
 
 interface Props {
-  config: LoginRoleConfig;
+  /**
+   * Perfil exibido antes de qualquer e-mail ser digitado/identificado — e
+   * pra onde a tela volta se o e-mail não bater com nenhum perfil conhecido
+   * (ver detecção automática abaixo).
+   */
+  initialAccessType: AccessTypeId;
 }
 
-export function LoginPageTemplate({ config }: Props) {
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+export function LoginPageTemplate({ initialAccessType }: Props) {
   const [locale, setLocale] = useState<Locale>(() => {
     return (localStorage.getItem("allka_login_locale") as Locale) ?? "pt";
   });
+
+  // Depois que o login autentica, a própria tela vira a experiência de
+  // carregamento (painel de marca expande pra tela inteira) — ver
+  // handleSubmit e o hook de progresso abaixo.
+  const [postLogin, setPostLogin] = useState(false);
+
+  // Perfil exibido agora — muda sozinho conforme o e-mail digitado é
+  // identificado (ver efeito de detecção abaixo). Tela única de login: o
+  // usuário nunca escolhe isso manualmente.
+  const [accessType, setAccessType] = useState<AccessTypeId>(initialAccessType);
+  const config = LOGIN_ROLE_CONFIGS[accessType];
+  // Só usado pra disparar a transição de fade quando o perfil muda de fato.
+  const [transitioning, setTransitioning] = useState(false);
+
   const [perfilId, setPerfilId] = useState(config.perfis?.[0]?.id ?? "");
   const perfil = config.perfis?.find((p) => p.id === perfilId);
   const [email, setEmail] = useState(
@@ -229,20 +236,57 @@ export function LoginPageTemplate({ config }: Props) {
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
-  const [portalOpen, setPortalOpen] = useState(false);
-  const portalRef = useRef<HTMLDivElement>(null);
   const navigate = useNavigate();
 
+  // ── Detecção automática de perfil por e-mail ───────────────────────────
+  // Debounce de 450ms, só dispara com e-mail em formato válido, ignora
+  // respostas que não são mais da última consulta (evita e-mails digitados
+  // rápido demais "voltando no tempo" a UI).
+  const lastQueriedRef = useRef<string | null>(null);
+  const requestIdRef = useRef(0);
   useEffect(() => {
-    if (!portalOpen) return;
-    const handler = (e: MouseEvent) => {
-      if (portalRef.current && !portalRef.current.contains(e.target as Node)) {
-        setPortalOpen(false);
+    const trimmed = email.trim().toLowerCase();
+    if (!EMAIL_RE.test(trimmed)) return;
+    if (trimmed === lastQueriedRef.current) return;
+
+    const timer = setTimeout(async () => {
+      lastQueriedRef.current = trimmed;
+      const myRequestId = ++requestIdRef.current;
+      try {
+        const res: any = await apiClient.identifyAccount(trimmed);
+        if (myRequestId !== requestIdRef.current) return; // resposta obsoleta
+        const detected = res?.accessType as AccessTypeId | undefined;
+        if (detected && LOGIN_ROLE_CONFIGS[detected]) {
+          // Partner não tem accessType próprio (continua "AGENCY"), então a
+          // troca de sub-perfil dentro do card Agency também precisa disparar
+          // a transição — não só a troca de accessType.
+          const targetPerfilId =
+            detected === "AGENCY"
+              ? res.isPartner
+                ? "partner"
+                : "agency"
+              : (LOGIN_ROLE_CONFIGS[detected].perfis?.[0]?.id ?? "");
+          if (detected !== accessType || targetPerfilId !== perfilId) {
+            setTransitioning(true);
+            setTimeout(() => {
+              setAccessType(detected);
+              setPerfilId(targetPerfilId);
+              setTransitioning(false);
+            }, 280);
+          }
+        }
+        // E-mail não encontrado: mantém a experiência atual, sem quebrar o
+        // formulário (comportamento neutro pedido).
+      } catch {
+        // Falha silenciosa: identificação é só cosmética, login continua
+        // funcionando normalmente com o perfil atualmente exibido.
       }
-    };
-    document.addEventListener("mousedown", handler);
-    return () => document.removeEventListener("mousedown", handler);
-  }, [portalOpen]);
+    }, 450);
+
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [email]);
+
   const { toast } = useToast();
 
   const ui = UI[locale];
@@ -260,6 +304,37 @@ export function LoginPageTemplate({ config }: Props) {
     setLocale(l);
     localStorage.setItem("allka_login_locale", l);
   };
+
+  // Sinal real de "dashboard pronto": revalida o usuário e, principalmente,
+  // pré-carrega o chunk lazy da página de destino — só quando esse import
+  // resolver é que sabemos que a rota vai renderizar sem esperar de novo.
+  const prepareDashboard = async () => {
+    try {
+      await apiClient.getCurrentUser();
+    } catch (err) {
+      // Não é fatal: o próprio dashboard revalida o usuário de novo ao
+      // montar (ver AgenciaProvider/SidebarProvider). Só logamos.
+      console.warn("[Login] getCurrentUser falhou antes do dashboard:", err);
+    }
+    const preload = DASHBOARD_PRELOADERS[destino];
+    if (preload) await preload();
+  };
+
+  const {
+    progress: loadProgress,
+    status: loadStatus,
+    retry: retryPrepare,
+  } = usePostLoginProgress(prepareDashboard, {
+    active: postLogin,
+    minDurationMs: 5000,
+  });
+
+  useEffect(() => {
+    if (loadStatus !== "done") return;
+    // Segura ~350ms no 100% pra não parecer um corte abrupto.
+    const t = setTimeout(() => navigate(destino, { replace: true }), 350);
+    return () => clearTimeout(t);
+  }, [loadStatus, navigate, destino]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -283,7 +358,7 @@ export function LoginPageTemplate({ config }: Props) {
         if (res.user)
           localStorage.setItem("allka_user", JSON.stringify(res.user));
         localStorage.removeItem("allka_logged_out");
-        navigate(destino, { replace: true });
+        setPostLogin(true);
       } else {
         setErrorMsg(ui.errorLogin);
       }
@@ -320,13 +395,32 @@ export function LoginPageTemplate({ config }: Props) {
     <div className="min-h-screen flex flex-col lg:flex-row">
       {/* ── Painel brand (topo no mobile, esquerda no desktop) ──────────────── */}
       <div
-        className="flex flex-col lg:w-[55%] xl:w-[58%] relative overflow-hidden"
+        className={`flex flex-col relative overflow-hidden transition-all duration-500 ease-out ${
+          postLogin ? "w-full" : "lg:w-[55%] xl:w-[58%]"
+        } ${
+          transitioning
+            ? "opacity-0 -translate-x-6"
+            : "opacity-100 translate-x-0"
+        }`}
         style={{ background: config.gradient }}
       >
         <div className="absolute -top-32 -left-32 w-96 h-96 rounded-full opacity-10 bg-white pointer-events-none" />
         <div className="absolute -bottom-48 -right-24 w-md h-112 rounded-full opacity-10 bg-white pointer-events-none" />
         <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-xl h-144 rounded-full opacity-[0.04] bg-white pointer-events-none" />
 
+        {postLogin ? (
+          <div className="relative z-10 flex-1 flex flex-col animate-in fade-in duration-300">
+            <LoginLoadingOverlay
+              config={config}
+              locale={locale}
+              progress={loadProgress}
+              status={loadStatus}
+              onRetry={retryPrepare}
+              onContinueAnyway={() => navigate(destino, { replace: true })}
+            />
+          </div>
+        ) : (
+          <>
         {/* ── Mobile layout ── */}
         <div className="lg:hidden relative z-10 p-5 pb-4">
           <div className="flex items-center justify-between mb-3">
@@ -428,77 +522,21 @@ export function LoginPageTemplate({ config }: Props) {
             </p>
           </div>
         </div>
+          </>
+        )}
       </div>
 
       {/* ── Painel direito: formulário ─────────────────────────────────────── */}
-      <div className="flex-1 flex flex-col bg-white dark:bg-slate-950">
-        {/* Top bar: portal selector + language */}
-        <div className="flex justify-between items-center gap-3 px-4 py-3 border-b border-slate-100 dark:border-slate-800">
-
-          {/* Desktop: pills */}
-          <div className="hidden lg:flex items-center gap-1.5 min-w-0">
-            {PORTAL_LINKS.map((portal) => {
-              const isActive = config.accessType === portal.id;
-              return (
-                <button
-                  key={portal.id}
-                  type="button"
-                  onClick={() => !isActive && navigate(portal.loginPath)}
-                  className={`px-3 py-1.5 rounded-full text-xs font-semibold transition-all duration-200 whitespace-nowrap ${
-                    isActive
-                      ? "text-white shadow-sm"
-                      : "bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700"
-                  }`}
-                  style={isActive ? { background: config.gradient } : undefined}
-                >
-                  {portal.labels[locale]}
-                </button>
-              );
-            })}
-          </div>
-
-          {/* Mobile: dropdown */}
-          <div className="lg:hidden relative" ref={portalRef}>
-            <button
-              type="button"
-              onClick={() => setPortalOpen((v) => !v)}
-              className="flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-semibold text-white shadow-sm transition-all duration-200"
-              style={{ background: config.gradient }}
-            >
-              {PORTAL_LINKS.find((p) => p.id === config.accessType)?.labels[locale] ?? "Portal"}
-              <svg
-                className={`w-3 h-3 transition-transform duration-200 ${portalOpen ? "rotate-180" : ""}`}
-                fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}
-              >
-                <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
-              </svg>
-            </button>
-            {portalOpen && (
-              <div className="absolute left-0 top-full mt-2 z-50 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-2xl shadow-xl overflow-hidden min-w-[160px]">
-                {PORTAL_LINKS.map((portal) => {
-                  const isActive = config.accessType === portal.id;
-                  return (
-                    <button
-                      key={portal.id}
-                      type="button"
-                      onClick={() => {
-                        setPortalOpen(false);
-                        if (!isActive) navigate(portal.loginPath);
-                      }}
-                      className={`w-full text-left px-4 py-2.5 text-sm font-semibold transition-colors ${
-                        isActive
-                          ? "text-white"
-                          : "text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800"
-                      }`}
-                      style={isActive ? { background: config.gradient } : undefined}
-                    >
-                      {portal.labels[locale]}
-                    </button>
-                  );
-                })}
-              </div>
-            )}
-          </div>
+      <div
+        className={`flex flex-col bg-white dark:bg-slate-950 transition-all duration-500 ease-out ${
+          postLogin
+            ? "w-0 flex-none opacity-0 pointer-events-none overflow-hidden max-h-0 lg:max-h-none"
+            : "flex-1 opacity-100"
+        }`}
+      >
+        {/* Top bar: language selector (perfil não é mais escolhido manualmente — é
+            detectado a partir do e-mail digitado, ver efeito de detecção acima) */}
+        <div className="flex justify-end items-center gap-3 px-4 py-3 border-b border-slate-100 dark:border-slate-800">
 
           {/* Language selector — igual em mobile e desktop */}
           <div className="inline-flex items-center gap-0.5 bg-slate-100 dark:bg-slate-800 rounded-xl p-1 shrink-0">

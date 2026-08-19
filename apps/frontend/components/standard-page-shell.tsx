@@ -23,6 +23,8 @@ import {
 export const STANDARD_SHELL_ROUTES = [
   "/admin/empresas",
   "/admin/dashboard",
+  "/admin/dashboard-templates",
+  "/admin/acesso-chamados",
   "/admin/usuarios",
   "/admin/clientes",
   "/admin/permissoes",

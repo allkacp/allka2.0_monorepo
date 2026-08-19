@@ -133,6 +133,8 @@ const AdminConfiguracoesPage = React.lazy(
 );
 const AdminSistemaPage = React.lazy(() => import("@/app/admin/sistema/page"));
 const AdminAlertasPage = React.lazy(() => import("@/app/admin/alertas/page"));
+const AdminLinksCompartilhadosPage = React.lazy(() => import("@/app/admin/links-compartilhados/page"));
+const AdminDashboardTemplatesPage = React.lazy(() => import("@/app/admin/dashboard-templates/page"));
 const AdminAcessoChamadosPage = React.lazy(() => import("@/app/admin/acesso-chamados/page"));
 
 // ─── Nômades Pages ────────────────────────────────────────────────────────────
@@ -866,6 +868,8 @@ export default function App() {
                   />
                   <Route path="/admin/sistema" element={<AdminSistemaPage />} />
                   <Route path="/admin/alertas" element={<AdminAlertasPage />} />
+                  <Route path="/admin/links-compartilhados" element={<AdminLinksCompartilhadosPage />} />
+                  <Route path="/admin/dashboard-templates" element={<AdminDashboardTemplatesPage />} />
                   <Route path="/admin/acesso-chamados" element={<AdminAcessoChamadosPage />} />
                   {/* ─── Nômade dashboard (replica do admin) ────────────── */}
                   <Route

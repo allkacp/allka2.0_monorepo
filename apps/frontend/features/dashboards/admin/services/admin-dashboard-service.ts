@@ -5,4 +5,4 @@
  *
  * Mantido como reexport para não alterar os imports do admin-dashboard-page.
  */
-export { generatePublicToken } from "@/features/dashboards/shared/dashboard-common";
+export { generatePublicToken, buildShareUrl } from "@/features/dashboards/shared/dashboard-common";

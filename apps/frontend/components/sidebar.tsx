@@ -510,6 +510,12 @@ const navigationConfig = {
           current: false,
         },
         {
+          name: "Dashboards Padrão",
+          href: "/admin/dashboard-templates",
+          icon: LayoutDashboard,
+          current: false,
+        },
+        {
           name: "Configurações",
           href: "/admin/configuracoes",
           icon: Settings,

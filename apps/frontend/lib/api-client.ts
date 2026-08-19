@@ -33,6 +33,74 @@ export class ApiError extends Error {
   }
 }
 
+// Ver serializeShareLink em routes/dashboard-shares.ts — status é sempre
+// calculado no backend (nunca recomputado aqui) a partir de
+// revoked_at/expires_at/deleted_at.
+export type DashboardShareLink = {
+  id: string;
+  token: string;
+  slug: string | null;
+  targetId: string;
+  targetType: "widget" | "dashboard";
+  targetTitle: string;
+  permission: "view" | "comment";
+  hasPin: boolean;
+  status: "active" | "expired" | "revoked" | "archived";
+  expiresAt: string | null;
+  revokedAt: string | null;
+  createdAt: string;
+  /** Só vem preenchido em GET /dashboard-shares?scope=all (Central Geral, admin). */
+  creatorName?: string | null;
+  creatorEmail?: string | null;
+};
+
+// profile: admin | agency | company | nomad | partner | leader (minúsculo,
+// mesmo vocabulário de ShareLink.profile — ver DashboardRole no frontend
+// pra a versão maiúscula usada nos 6 dashboards).
+export type DashboardTemplate = {
+  id: string;
+  name: string;
+  profile: string;
+  is_default: boolean;
+  is_active: boolean;
+  widgets: any[];
+  created_by: string | null;
+  created_at: string;
+  updated_at: string;
+  contents?: DashboardTemplateContent[];
+  creator?: { id: string; name: string; email: string } | null;
+  _count?: { contents: number };
+};
+
+export type DashboardTemplateContent = {
+  id: string;
+  template_id: string;
+  type: "banner" | "notice";
+  title: string;
+  body: string | null;
+  image_storage_key: string | null;
+  image_mime_type: string | null;
+  link_url: string | null;
+  link_label: string | null;
+  active: boolean;
+  starts_at: string | null;
+  ends_at: string | null;
+  sort_order: number;
+  locked: boolean;
+  created_at: string;
+  updated_at: string;
+};
+
+export type ShareLinkActivityEntry = {
+  id: string;
+  action: string;
+  label: string;
+  actorName: string | null;
+  actorEmail: string | null;
+  metadata: Record<string, unknown> | null;
+  createdAt: string;
+};
+
 class ApiClient {
   // ─── Token Management ─────────────────────────────────────────────────────
   setToken(token: string) {
@@ -187,6 +255,189 @@ class ApiClient {
     const res = await this.post("/auth/logout");
     this.clearToken();
     return res;
+  }
+
+  /**
+   * Identifica o tipo de conta (ADMIN/NOMAD/AGENCY/COMPANY/LEADER) a partir
+   * do e-mail, sem autenticar — usado pela tela única de login pra trocar de
+   * identidade visual automaticamente. Retorna `accessType: null` quando o
+   * e-mail não é reconhecido; nunca lança para esse caso (tela não deve
+   * quebrar), só em falha de rede/servidor.
+   */
+  // ─── Dashboard shares ───────────────────────────────────────────────────────
+
+  // Autenticado de propósito: o escopo (qual empresa/agência/nômade os dados
+  // pertencem) é sempre resolvido pelo backend a partir de quem está logado,
+  // nunca aceito do frontend — ver routes/dashboard-shares.ts.
+  async createDashboardShare(payload: {
+    targetId: string;
+    targetType: "widget" | "dashboard";
+    targetTitle: string;
+    permission: "view" | "comment";
+    pin?: string;
+    expiresAt?: string;
+    /** URL amigável opcional — omitir = link só por token, como sempre foi. */
+    slug?: string;
+    profile: string;
+    periodType?: string;
+    periodFrom?: string;
+    periodTo?: string;
+    periodLabel?: string;
+    allowFilterChanges?: boolean;
+  }): Promise<{ token: string; link: DashboardShareLink }> {
+    return this.post("/dashboard-shares", payload);
+  }
+
+  /** `targetId` filtra pro dashboard/widget atual — ver ShareLinksPanel. */
+  async listDashboardShares(targetId?: string): Promise<{ links: DashboardShareLink[] }> {
+    const qs = targetId ? `?targetId=${encodeURIComponent(targetId)}` : "";
+    return this.get(`/dashboard-shares${qs}`);
+  }
+
+  /**
+   * Central Geral de Links — `scope: "all"` só tem efeito se o usuário for
+   * Admin (o backend confirma de novo, nunca confia nisto vindo do
+   * cliente); pra qualquer outro perfil o backend ignora e devolve só os
+   * próprios links mesmo assim.
+   */
+  async listAllDashboardShares(filters?: {
+    scope?: "all";
+    status?: "active" | "expired" | "revoked";
+    permission?: "view" | "comment";
+    creatorEmail?: string;
+    q?: string;
+  }): Promise<{ links: DashboardShareLink[] }> {
+    const qs = new URLSearchParams();
+    if (filters?.scope) qs.set("scope", filters.scope);
+    if (filters?.status) qs.set("status", filters.status);
+    if (filters?.permission) qs.set("permission", filters.permission);
+    if (filters?.creatorEmail) qs.set("creatorEmail", filters.creatorEmail);
+    if (filters?.q) qs.set("q", filters.q);
+    const suffix = qs.toString() ? `?${qs.toString()}` : "";
+    return this.get(`/dashboard-shares${suffix}`);
+  }
+
+  /**
+   * Só UX (debounce no campo de URL personalizada) — nunca a fonte de
+   * verdade. Create/patch sempre revalidam contra a constraint única do
+   * banco, então uma corrida entre este check e o submit não reserva nada.
+   * `excludeId` evita que o dono do próprio link veja o slug atual dele
+   * como "indisponível" ao reabrir a edição.
+   */
+  async checkDashboardShareSlug(
+    slug: string,
+    excludeId?: string,
+  ): Promise<{ available: boolean; normalized: string; reason?: "invalid" | "taken"; message?: string }> {
+    const qs = new URLSearchParams({ slug });
+    if (excludeId) qs.set("excludeId", excludeId);
+    return this.get(`/dashboard-shares/check-slug?${qs.toString()}`);
+  }
+
+  /** Troca a URL personalizada. O slug anterior fica livre (sem alias/redirect). `slug: null` remove. */
+  async updateDashboardShareSlug(id: string, slug: string | null): Promise<{ link: DashboardShareLink }> {
+    return this.patch(`/dashboard-shares/${id}`, { slug });
+  }
+
+  /** Revoga (bloqueia acesso, preserva o registro) — ver routes/dashboard-shares.ts. */
+  async revokeDashboardShare(id: string): Promise<{ ok: true; link: DashboardShareLink }> {
+    return this.del(`/dashboard-shares/${id}`);
+  }
+
+  /** Desfaz a revogação — seguro pela arquitetura (revoked_at é só um timestamp nullable). */
+  async reactivateDashboardShare(id: string): Promise<{ link: DashboardShareLink }> {
+    return this.post(`/dashboard-shares/${id}/reactivate`);
+  }
+
+  /** Altera/remove a validade. `expiresAt: null` = sem expiração. */
+  async updateDashboardShareExpiry(
+    id: string,
+    expiresAt: string | null,
+  ): Promise<{ link: DashboardShareLink }> {
+    return this.patch(`/dashboard-shares/${id}`, { expiresAt });
+  }
+
+  /** Soft-delete — some da lista, mas preserva histórico no banco. */
+  async archiveDashboardShare(id: string): Promise<{ ok: true; link: DashboardShareLink }> {
+    return this.post(`/dashboard-shares/${id}/archive`);
+  }
+
+  /**
+   * Edição unificada do link — usada pelo painel "Editar" (URL, Permissão,
+   * PIN e Expiração juntos, um único PATCH). Só envie os campos que o
+   * usuário de fato mudou; campos omitidos ficam intocados no backend.
+   * `pin: "1234"` define/troca (nunca reaproveita o hash antigo);
+   * `pin: null` remove a proteção.
+   */
+  async updateDashboardShare(
+    id: string,
+    patch: {
+      slug?: string | null;
+      expiresAt?: string | null;
+      permission?: "view" | "comment";
+      pin?: string | null;
+    },
+  ): Promise<{ link: DashboardShareLink }> {
+    return this.patch(`/dashboard-shares/${id}`, patch);
+  }
+
+  /** Histórico de auditoria do link (item 8) — sobrevive a revogação/arquivamento. */
+  async getShareLinkActivity(id: string): Promise<{ activities: ShareLinkActivityEntry[] }> {
+    return this.get(`/dashboard-shares/${id}/activity`);
+  }
+
+  // ── Dashboard Templates (item 9/10) ─────────────────────────────────────
+  async listDashboardTemplates(profile?: string): Promise<{ templates: DashboardTemplate[] }> {
+    return this.get("/dashboard-templates", profile ? { profile } : undefined);
+  }
+  async getDashboardTemplate(id: string): Promise<{ template: DashboardTemplate }> {
+    return this.get(`/dashboard-templates/${id}`);
+  }
+  /** Template default ativo do próprio perfil do usuário — usado pelos 6 dashboards. */
+  async resolveDashboardTemplate(profile: string): Promise<{ template: DashboardTemplate | null }> {
+    return this.get("/dashboard-templates/resolve", { profile });
+  }
+  async createDashboardTemplate(data: { name: string; profile: string; widgets: any[] }): Promise<{ template: DashboardTemplate }> {
+    return this.post("/dashboard-templates", data);
+  }
+  async updateDashboardTemplate(id: string, data: { name?: string; widgets?: any[]; is_active?: boolean }): Promise<{ template: DashboardTemplate }> {
+    return this.patch(`/dashboard-templates/${id}`, data);
+  }
+  async duplicateDashboardTemplate(id: string): Promise<{ template: DashboardTemplate }> {
+    return this.post(`/dashboard-templates/${id}/duplicate`);
+  }
+  async setDefaultDashboardTemplate(id: string): Promise<{ template: DashboardTemplate }> {
+    return this.post(`/dashboard-templates/${id}/set-default`);
+  }
+  async deleteDashboardTemplate(id: string): Promise<void> {
+    return this.del(`/dashboard-templates/${id}`);
+  }
+  async createDashboardTemplateContent(
+    templateId: string,
+    data: Partial<DashboardTemplateContent> & { type: "banner" | "notice"; title: string },
+  ): Promise<{ content: DashboardTemplateContent }> {
+    return this.post(`/dashboard-templates/${templateId}/contents`, data);
+  }
+  async updateDashboardTemplateContent(
+    contentId: string,
+    data: Partial<DashboardTemplateContent>,
+  ): Promise<{ content: DashboardTemplateContent }> {
+    return this.patch(`/dashboard-templates/contents/${contentId}`, data);
+  }
+  async deleteDashboardTemplateContent(contentId: string): Promise<void> {
+    return this.del(`/dashboard-templates/contents/${contentId}`);
+  }
+  async uploadDashboardTemplateContentImage(contentId: string, file: File): Promise<{ content: DashboardTemplateContent }> {
+    return this.uploadFile(`/dashboard-templates/contents/${contentId}/image`, file);
+  }
+  /** URL pública (sem auth) da imagem do banner — pronta pra usar em <img src>. */
+  dashboardTemplateContentImageUrl(contentId: string): string {
+    return `${API_BASE_URL}/dashboard-templates/contents/${contentId}/image`;
+  }
+
+  async identifyAccount(
+    email: string,
+  ): Promise<{ accessType: string | null; isPartner?: boolean }> {
+    return this.post("/auth/identify-account", { email });
   }
 
   // ─── Nômade: o próprio trabalho ───────────────────────────────────────────
@@ -651,6 +902,13 @@ class ApiClient {
     return this.get("/dashboard/dre", { from, to });
   }
 
+  async getAdminDashboardWidgets(from: Date, to: Date) {
+    return this.get("/dashboard/admin-widgets", {
+      from: from.toISOString(),
+      to: to.toISOString(),
+    });
+  }
+
   async getMyTasks() {
     return this.get("/tasks", { my: "true", limit: "10" });
   }
@@ -891,6 +1149,23 @@ class ApiClient {
 
   async contractProductBundle(id: string, data: Record<string, any>) {
     return this.post(`/product-bundles/${id}/contract`, data);
+  }
+
+  // ─── IALLKA (assistente IA de montagem de projeto) ─────────────────────────
+  async createIallkaSession() {
+    return this.post("/iallka/sessions", {});
+  }
+
+  async getIallkaSession(id: string) {
+    return this.get(`/iallka/sessions/${id}`);
+  }
+
+  async sendIallkaMessage(id: string, message: string) {
+    return this.post(`/iallka/sessions/${id}/messages`, { message });
+  }
+
+  async approveIallkaSession(id: string) {
+    return this.post(`/iallka/sessions/${id}/approve`, {});
   }
 
   // ─── Campaigns ────────────────────────────────────────────────────────────

@@ -6,6 +6,7 @@
 // arquivo escondeu o erro do compilador — só aparecia no navegador.
 import { useState, useRef, useMemo, useCallback, useEffect } from "react";
 import { Link } from "react-router-dom";
+import { useTelaEstreita } from "@/hooks/useTelaEstreita";
 import {
   CheckSquare,
   Star,
@@ -38,14 +39,18 @@ import {
   FileText,
   RotateCcw,
   Info,
+  FileDown,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { PageLoader } from "@/components/ui/loading";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import { toPng } from "html-to-image";
 import { apiClient } from "@/lib/api-client";
+import { useDashboardExport } from "@/features/dashboards/shared/use-dashboard-export";
+import { DashboardExportOverlay } from "@/features/dashboards/shared/dashboard-export-overlay";
+import { useDashboardTemplate } from "@/features/dashboards/shared/use-dashboard-template";
+import { DashboardTemplateContentList } from "@/features/dashboards/shared/dashboard-template-content";
 import { useSidebar } from "@/contexts/sidebar-context";
 import { useAppFrameMetrics } from "@/hooks/useAppFrameMetrics";
 import {
@@ -55,6 +60,35 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { STANDARD_SHELL_PANEL_CLASS } from "@/components/standard-page-shell";
+import { Share2, Copy } from "lucide-react";
+import { Sheet, SheetContent } from "@/components/ui/sheet";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Input } from "@/components/ui/input";
+import { useToast } from "@/hooks/use-toast";
+import {
+  generatePublicToken,
+  buildShareUrl,
+  type ShareConfig,
+} from "@/features/dashboards/shared/dashboard-common";
+import { ShareCreateForm } from "@/features/dashboards/shared/share-create-form";
+import { ShareLinksPanel } from "@/features/dashboards/shared/share-links-panel";
+import { previewNormalizeSlug, suggestAvailableSlug } from "@/features/dashboards/shared/share-slug-field";
+import type { DashboardShareLink } from "@/lib/api-client";
+
+// ─── Compartilhamento (Pendência B) ────────────────────────────────────────
+// Reaproveita EXATAMENTE a mesma estrutura já usada por
+// Admin/Agency/Company/Leader/Partner (ShareCreateForm + ShareLinksPanel +
+// generatePublicToken/buildShareUrl) — não é uma sexta implementação
+// independente. O backend (routes/dashboard-shares.ts, routes/share.ts,
+// lib/dashboard-scope.ts) já suporta profile="nomad" desde a correção do
+// item 3 (resolveOwnScopeId resolve o Nomade pelo user_id, sem exigir
+// nenhuma mudança aqui). A única diferença real: este dashboard não tem
+// um `globalPeriod`/seletor de período como os outros 5 — é uma tela
+// pessoal de widgets, sem filtro de data global — então o compartilhamento
+// aqui é só do dashboard inteiro (sem período/allowFilterChanges) e sem
+// destino "widget" individual, únicos pontos que não fazem sentido pra
+// essa tela específica.
+const NOMAD_SHARE_TARGET_ID = "nomad-dashboard";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -325,6 +359,19 @@ const WIDGET_META: Record<
   },
 };
 
+// Catálogo real de widgets do Nomad, pra reuso no editor de template
+// (Admin > Dashboards Padrão) — nunca duplicar essa lista em outro lugar.
+// Mesmo shape de EditorWidgetLibraryItem (features/dashboards/shared/
+// dashboard-widget-editor.ts), montado a partir do WIDGET_META real acima.
+export const NOMAD_WIDGET_CATALOG: { id: string; name: string; description: string; icon: any; color?: string }[] = (
+  Object.keys(WIDGET_META) as WidgetId[]
+).map((id) => ({
+  id,
+  name: WIDGET_META[id].defaultTitle,
+  description: WIDGET_META[id].description,
+  icon: WIDGET_META[id].icon,
+}));
+
 const DEFAULT_WIDGETS: NomadeWidget[] = [
   { id: "profileHero", visible: true, order: 0, colSpan: 2 },
   { id: "kpis", visible: true, order: 1, colSpan: 2 },
@@ -423,6 +470,12 @@ function CustomizePanel({
 }) {
   const { sidebarWidth } = useSidebar();
   const { headerHeight, footerHeight } = useAppFrameMetrics();
+  // Item 12/19 — Nomad tem seu próprio painel de customização (não usa o
+  // editor compartilhado). As ações da linha (editar/colSpan/subir/descer/
+  // remover) só apareciam em hover (`opacity-0 group-hover:opacity-100`),
+  // o que as torna inacessíveis em touch (sem estado de hover): no celular
+  // ficam sempre visíveis.
+  const isMobile = useTelaEstreita();
   const [draft, setDraft] = useState<NomadeWidget[]>(() =>
     [...widgets].sort((a, b) => a.order - b.order),
   );
@@ -577,12 +630,15 @@ function CustomizePanel({
                 return (
                   <div
                     key={w.id}
-                    draggable
+                    draggable={!isMobile}
                     onDragStart={() => handleDragStart(idx)}
                     onDragOver={(e) => handleDragOver(e, idx)}
-                    className="flex items-center gap-2 p-3 bg-slate-50 rounded-xl border border-slate-100 cursor-grab active:cursor-grabbing group"
+                    className={cn(
+                      "flex items-center gap-2 p-3 bg-slate-50 rounded-xl border border-slate-100 group",
+                      !isMobile && "cursor-grab active:cursor-grabbing",
+                    )}
                   >
-                    <GripVertical className="h-4 w-4 text-slate-300 group-hover:text-slate-500 shrink-0" />
+                    <GripVertical className={cn("h-4 w-4 text-slate-300 group-hover:text-slate-500 shrink-0", isMobile && "hidden")} />
                     <div className="w-7 h-7 rounded-lg bg-emerald-50 flex items-center justify-center shrink-0">
                       <Icon className="h-3.5 w-3.5 text-emerald-600" />
                     </div>
@@ -596,15 +652,15 @@ function CustomizePanel({
                           if (e.key === "Enter") saveTitle();
                           if (e.key === "Escape") setEditingId(null);
                         }}
-                        className="flex-1 text-sm border border-emerald-300 rounded px-2 py-0.5 outline-none"
+                        className="flex-1 min-w-0 text-sm border border-emerald-300 rounded px-2 py-0.5 outline-none"
                       />
                     ) : (
-                      <span className="flex-1 text-sm font-medium text-slate-800 truncate">
+                      <span className="flex-1 min-w-0 text-sm font-medium text-slate-800 truncate">
                         {title}
                       </span>
                     )}
 
-                    <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <div className={cn("flex items-center gap-1 transition-opacity", isMobile ? "opacity-100" : "opacity-0 group-hover:opacity-100")}>
                       {editingId === w.id ? (
                         <button
                           onClick={saveTitle}
@@ -765,7 +821,66 @@ export default function NomadeDashboardPage() {
 
   const [widgets, setWidgets] = useState<NomadeWidget[]>(() => loadWidgets());
   const [showCustomize, setShowCustomize] = useState(false);
-  const [exportLoading, setExportLoading] = useState(false);
+
+  // ── Compartilhamento (Pendência B) — mesmo padrão das outras 5 telas ──
+  const { toast } = useToast();
+  const [showShareDialog, setShowShareDialog] = useState(false);
+  const [shareActiveTab, setShareActiveTab] = useState("permission");
+  const [sharePermission, setSharePermission] = useState<"view" | "comment">("view");
+  const [shareSlug, setShareSlug] = useState("");
+  const [sharePinEnabled, setSharePinEnabled] = useState(false);
+  const [sharePin, setSharePin] = useState("");
+  const [shareExpiryEnabled, setShareExpiryEnabled] = useState(false);
+  const [shareExpiry, setShareExpiry] = useState("");
+  const [shareGenerating, setShareGenerating] = useState(false);
+  const [generatedShareLink, setGeneratedShareLink] = useState("");
+  const [shareRefreshSignal, setShareRefreshSignal] = useState(0);
+  const [sharePendingLink, setSharePendingLink] = useState<DashboardShareLink | null>(null);
+
+  const openShareDialog = () => {
+    setSharePermission("view");
+    setSharePinEnabled(false);
+    setSharePin("");
+    setShareExpiryEnabled(false);
+    setShareExpiry("");
+    setShareSlug(previewNormalizeSlug("Meu Dashboard Nômade"));
+    setGeneratedShareLink("");
+    setSharePendingLink(null);
+    setShareActiveTab("permission");
+    setShowShareDialog(true);
+  };
+
+  const handleGenerateShareLink = async () => {
+    const config: ShareConfig = {
+      target: { id: NOMAD_SHARE_TARGET_ID, title: "Meu Dashboard", type: "dashboard" },
+      permission: sharePermission,
+      pin: sharePinEnabled && sharePin.length === 4 ? sharePin : undefined,
+      expiry: shareExpiryEnabled && shareExpiry ? new Date(shareExpiry) : undefined,
+      slug: shareSlug.trim() || undefined,
+    };
+    setShareGenerating(true);
+    try {
+      const { token, slug, link } = await generatePublicToken(config, { profile: "nomad" });
+      setGeneratedShareLink(buildShareUrl({ token, slug }));
+      setSharePendingLink(link);
+      setShareRefreshSignal((n) => n + 1);
+      suggestAvailableSlug("Meu Dashboard Nômade").then(setShareSlug);
+    } catch (err: any) {
+      toast({
+        title: "Não foi possível gerar o link",
+        description: err?.message ?? "Tente novamente em instantes.",
+        variant: "destructive",
+      });
+    } finally {
+      setShareGenerating(false);
+    }
+  };
+
+  const handleCopyShareLink = () => {
+    if (!generatedShareLink) return;
+    navigator.clipboard.writeText(generatedShareLink);
+    toast({ title: "Link copiado!", description: "O link foi copiado para a área de transferência." });
+  };
 
   // ── Current user ──────────────────────────────────────────────────────────
   const currentUser = useMemo(() => {
@@ -869,27 +984,73 @@ export default function NomadeDashboardPage() {
   function handleSaveCustomize(updated: NomadeWidget[]) {
     setWidgets(updated);
     saveWidgets(updated);
+    setIsViewingTemplateDefault(false);
     setShowCustomize(false);
   }
 
   // ── Export ────────────────────────────────────────────────────────────────
-  async function exportPng() {
-    if (!dashboardRef.current) return;
-    setExportLoading(true);
-    try {
-      const dataUrl = await toPng(dashboardRef.current, {
-        cacheBust: true,
-        backgroundColor: "#f8fafc",
-      });
-      const a = document.createElement("a");
-      a.download = `dashboard-nomade-${new Date().toLocaleDateString("pt-BR").replace(/\//g, "-")}.png`;
-      a.href = dataUrl;
-      a.click();
-    } catch (e) {
-      console.error(e);
-    } finally {
-      setExportLoading(false);
+  // Exportação — ponto único reutilizado pelas 6 telas (ver
+  // features/dashboards/shared/use-dashboard-export.ts). Substituiu o antigo
+  // exportPng() local (só PNG, sem PDF, sem feedback de etapas reais).
+  const { state: exportState, exportAs: handleExportAs, reset: resetExportState } = useDashboardExport(
+    "dashboard-export-area",
+    "Nomade",
+  );
+  const exportLoading = exportState.stage !== "idle" && exportState.stage !== "success" && exportState.stage !== "error";
+  // Item 9/10 — template padrão + banners. O shape de widget do Nomad
+  // ({id, visible, order, colSpan}, id = chave fixa do catálogo, sem
+  // "type" separado) é diferente do shape genérico dos outros 5 perfis
+  // ({id,type,visible,order,colSpan}, id = instância, type = catálogo).
+  // Adapter: no template genérico, `type` carrega a WidgetId do Nomad
+  // (ex.: "profileHero"); `id` só precisa ser único por widget, então
+  // usamos o próprio `type` como `id` também — nunca há 2 instâncias do
+  // mesmo widget Nomad. Ver serializeNomadTemplateWidgets abaixo.
+  const { template: profileTemplate, visibleContents: templateContents, dismissContent: dismissTemplateContent } = useDashboardTemplate("NOMAD");
+  const appliedTemplateRef = useRef<string | null>(null);
+  const [isViewingTemplateDefault, setIsViewingTemplateDefault] = useState(false);
+
+  function deserializeNomadTemplateWidgets(templateWidgets: any[]): NomadeWidget[] {
+    const known = new Set(DEFAULT_WIDGETS.map((w) => w.id));
+    const widgets = templateWidgets
+      .filter((w) => known.has(w.type))
+      .map((w) => ({
+        id: w.type as WidgetId,
+        visible: w.visible,
+        order: w.order,
+        customTitle: w.customTitle,
+        colSpan: (w.colSpan === 2 ? 2 : 1) as 1 | 2,
+      }));
+    // Qualquer widget do catálogo Nomad ausente no template entra oculto,
+    // mesmo padrão de merge do loadWidgets() local.
+    const ids = new Set(widgets.map((w) => w.id));
+    DEFAULT_WIDGETS.forEach((dw) => {
+      if (!ids.has(dw.id)) widgets.push({ ...dw, visible: false });
+    });
+    return widgets.sort((a, b) => a.order - b.order);
+  }
+
+  // Item 9 (revisado) — template padrão do Admin é a visão inicial de
+  // toda entrada, sempre.
+  useEffect(() => {
+    if (!profileTemplate) return;
+    const marker = `${profileTemplate.id}:${profileTemplate.updated_at}`;
+    if (appliedTemplateRef.current === marker) return;
+    appliedTemplateRef.current = marker;
+    setWidgets(deserializeNomadTemplateWidgets(profileTemplate.widgets as any[]));
+    setIsViewingTemplateDefault(true);
+  }, [profileTemplate]);
+
+  function handleRequestCustomize() {
+    if (isViewingTemplateDefault) {
+      if (
+        !confirm(
+          "Este é o dashboard padrão definido pelo Admin e não pode ser editado diretamente. Deseja personalizar sua própria visão a partir dele?",
+        )
+      ) {
+        return;
+      }
     }
+    setShowCustomize(true);
   }
 
   // ── Widget renderer ───────────────────────────────────────────────────────
@@ -1555,6 +1716,7 @@ export default function NomadeDashboardPage() {
   if (loading) return <PageLoader text="Carregando painel…" />;
 
   return (
+    <>
     <div className={STANDARD_SHELL_PANEL_CLASS}>
     <div className="relative h-full min-h-0 flex flex-col overflow-hidden">
       {/* Tela Slide (CustomizePanel) — precisa ficar DENTRO do container
@@ -1569,7 +1731,7 @@ export default function NomadeDashboardPage() {
       )}
 
       <div className="flex-1 min-h-0 overflow-y-auto">
-      <div className="p-6 space-y-6" ref={dashboardRef}>
+      <div className="p-6 space-y-6" ref={dashboardRef} id="dashboard-export-area">
         {/* Dashboard Header — unified toolbar */}
         <div className="flex flex-wrap items-center gap-x-1 gap-y-2 bg-background border border-border/70 rounded-xl px-[13px] py-[10px] shadow-[0_4px_24px_-4px_rgba(0,0,0,0.10),0_1px_6px_-2px_rgba(0,0,0,0.06)]">
           {/* Title + info tooltip */}
@@ -1617,26 +1779,59 @@ export default function NomadeDashboardPage() {
               </Tooltip>
             </TooltipProvider>
 
-            {/* Exportar PNG */}
+            {/* Exportar PNG/PDF — data-export-ignore: não deve aparecer no arquivo exportado */}
+            <div className="flex items-center gap-1" data-export-ignore="">
+              <TooltipProvider delayDuration={400}>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <button
+                      onClick={() => handleExportAs("png")}
+                      disabled={exportLoading}
+                      className="group relative flex items-center justify-center h-8 w-8 rounded-lg border border-border/60 hover:border-transparent overflow-hidden transition-all disabled:opacity-50"
+                    >
+                      <span className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none" style={{ background: "linear-gradient(135deg,#000000 0%,#1a2a6f 45%,#c81a7f 100%)" }} />
+                      <Download className={cn("relative z-10 h-4 w-4 text-[#7d1b6a] group-hover:text-white transition-colors", exportLoading && "animate-pulse")} />
+                    </button>
+                  </TooltipTrigger>
+                  <TooltipContent side="bottom" sideOffset={6}>{exportLoading ? "Exportando…" : "Exportar PNG"}</TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+              <TooltipProvider delayDuration={400}>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <button
+                      onClick={() => handleExportAs("pdf")}
+                      disabled={exportLoading}
+                      className="group relative flex items-center justify-center h-8 w-8 rounded-lg border border-border/60 hover:border-transparent overflow-hidden transition-all disabled:opacity-50"
+                    >
+                      <span className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none" style={{ background: "linear-gradient(135deg,#000000 0%,#1a2a6f 45%,#c81a7f 100%)" }} />
+                      <FileDown className={cn("relative z-10 h-4 w-4 text-[#7d1b6a] group-hover:text-white transition-colors", exportLoading && "animate-pulse")} />
+                    </button>
+                  </TooltipTrigger>
+                  <TooltipContent side="bottom" sideOffset={6}>{exportLoading ? "Exportando…" : "Exportar PDF"}</TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+            </div>
+
+            {/* Compartilhar */}
             <TooltipProvider delayDuration={400}>
               <Tooltip>
                 <TooltipTrigger asChild>
                   <button
-                    onClick={exportPng}
-                    disabled={exportLoading}
-                    className="group relative flex items-center justify-center h-8 w-8 rounded-lg border border-border/60 hover:border-transparent overflow-hidden transition-all disabled:opacity-50"
+                    onClick={openShareDialog}
+                    className="group relative flex items-center justify-center h-8 w-8 rounded-lg border border-border/60 hover:border-transparent overflow-hidden transition-all"
                   >
                     <span className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none" style={{ background: "linear-gradient(135deg,#000000 0%,#1a2a6f 45%,#c81a7f 100%)" }} />
-                    <Download className={cn("relative z-10 h-4 w-4 text-[#7d1b6a] group-hover:text-white transition-colors", exportLoading && "animate-pulse")} />
+                    <Share2 className="relative z-10 h-4 w-4 text-[#7d1b6a] group-hover:text-white transition-colors" />
                   </button>
                 </TooltipTrigger>
-                <TooltipContent side="bottom" sideOffset={6}>{exportLoading ? "Exportando…" : "Exportar PNG"}</TooltipContent>
+                <TooltipContent side="bottom" sideOffset={6}>Compartilhar dashboard</TooltipContent>
               </Tooltip>
             </TooltipProvider>
 
             {/* Personalizar */}
             <button
-              onClick={() => setShowCustomize(true)}
+              onClick={handleRequestCustomize}
               className="group relative flex items-center gap-1.5 px-3 py-1.5 ml-1 rounded-lg border border-border/60 hover:border-transparent overflow-hidden transition-all"
             >
               <span className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none" style={{ background: "linear-gradient(135deg,#000000 0%,#1a2a6f 45%,#c81a7f 100%)" }} />
@@ -1648,6 +1843,9 @@ export default function NomadeDashboardPage() {
           </div>
         </div>
 
+        {/* Banners/avisos do template padrão (item 10) */}
+        <DashboardTemplateContentList contents={templateContents} onDismiss={dismissTemplateContent} />
+
         {/* Widget grid */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           {sortedWidgets.filter((w) => w.visible).map((w) => renderWidget(w))}
@@ -1655,6 +1853,92 @@ export default function NomadeDashboardPage() {
       </div>
       </div>
     </div>
+
+    {/* ── Compartilhar (Pendência B) — mesma estrutura reaproveitada das
+        outras 5 telas: ShareCreateForm + ShareLinksPanel, sem período
+        (este dashboard não tem filtro global de data). ── */}
+    <Sheet open={showShareDialog} onOpenChange={setShowShareDialog}>
+      <SheetContent side="right" className="w-full sm:max-w-xl p-0 flex flex-col overflow-hidden">
+        <div
+          className="px-6 pt-5 pb-4 shrink-0"
+          style={{ background: "linear-gradient(135deg, #000000 0%, #1a2a6f 45%, #c81a7f 100%)" }}
+        >
+          <div className="flex items-center gap-3">
+            <div className="flex items-center justify-center h-9 w-9 rounded-xl bg-white/15 shrink-0">
+              <Share2 className="h-4.5 w-4.5 text-white" />
+            </div>
+            <div>
+              <h2 className="text-base font-semibold text-white leading-tight">Compartilhar via Link</h2>
+              <p className="text-xs text-white/70 mt-0.5">Gere ou copie o link público do seu dashboard.</p>
+            </div>
+          </div>
+        </div>
+
+        <div className="flex-1 overflow-y-auto px-6 py-6">
+          <Tabs value={shareActiveTab} onValueChange={setShareActiveTab} className="w-full">
+            <TabsList className="grid grid-cols-2 w-full">
+              <TabsTrigger value="permission">Configuração</TabsTrigger>
+              <TabsTrigger value="links">Links criados</TabsTrigger>
+            </TabsList>
+
+            <TabsContent value="permission" className="pt-2 space-y-4">
+              <ShareCreateForm
+                permission={sharePermission}
+                onPermissionChange={(v) => { setSharePermission(v); setGeneratedShareLink(""); }}
+                slug={shareSlug}
+                onSlugChange={(v) => { setShareSlug(v); setGeneratedShareLink(""); }}
+                pinEnabled={sharePinEnabled}
+                onPinEnabledChange={(v) => { setSharePinEnabled(v); setGeneratedShareLink(""); }}
+                pin={sharePin}
+                onPinChange={(v) => { setSharePin(v); setGeneratedShareLink(""); }}
+                expiryEnabled={shareExpiryEnabled}
+                onExpiryEnabledChange={(v) => { setShareExpiryEnabled(v); setGeneratedShareLink(""); }}
+                expiry={shareExpiry}
+                onExpiryChange={(v) => { setShareExpiry(v); setGeneratedShareLink(""); }}
+                disabled={shareGenerating}
+              />
+
+              {generatedShareLink && (
+                <div className="flex gap-2 items-center pt-1">
+                  <Input
+                    readOnly
+                    value={generatedShareLink}
+                    className="text-xs font-mono bg-muted/40"
+                    onClick={(e: any) => e.target.select()}
+                  />
+                  <Button variant="outline" size="sm" className="shrink-0 gap-1.5" onClick={handleCopyShareLink}>
+                    <Copy className="h-3.5 w-3.5" /> Copiar
+                  </Button>
+                </div>
+              )}
+
+              <div className="flex items-center justify-end pt-2">
+                <Button
+                  className="btn-brand"
+                  onClick={handleGenerateShareLink}
+                  disabled={(sharePinEnabled && sharePin.length !== 4) || shareGenerating}
+                >
+                  {shareGenerating ? "Gerando..." : "Gerar Link"}
+                </Button>
+              </div>
+            </TabsContent>
+
+            {/* forceMount: mesmo fix da regressão "link novo não aparece
+                sem F5" nas outras 5 telas — o painel precisa ficar
+                montado mesmo com a aba "Configuração" ativa. */}
+            <TabsContent value="links" className="pt-2 data-[state=inactive]:hidden" forceMount>
+              <ShareLinksPanel
+                targetId={NOMAD_SHARE_TARGET_ID}
+                refreshSignal={shareRefreshSignal}
+                pendingLink={sharePendingLink}
+              />
+            </TabsContent>
+          </Tabs>
+        </div>
+      </SheetContent>
+    </Sheet>
     </div>
+    <DashboardExportOverlay state={exportState} onDismiss={resetExportState} onRetry={handleExportAs} />
+    </>
   );
 }

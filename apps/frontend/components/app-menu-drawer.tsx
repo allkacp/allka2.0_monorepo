@@ -177,6 +177,7 @@ const navigationConfig = {
         { name: "Disponibilidade", href: "/admin/disponibilidade", icon: Target },
         { name: "Especialidades", href: "/admin/especialidades", icon: Briefcase },
         { name: "Onboarding", href: "/admin/onboarding", icon: Rocket },
+        { name: "Dashboards Padrão", href: "/admin/dashboard-templates", icon: LayoutDashboard },
         { name: "Configurações", href: "/admin/configuracoes", icon: Settings },
       ],
     },

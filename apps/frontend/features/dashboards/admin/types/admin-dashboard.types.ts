@@ -159,6 +159,9 @@ export interface SavedDashboard {
   isDefault?: boolean;
   sharedWith?: string[];
   createdBy?: string;
+  /** Item 18 — config de período (Global x Custom) por widget, própria de cada visão.
+   *  Ausente em visões antigas: tratado como [] (todos globais), sem quebrar dados legados. */
+  widgetPeriods?: WidgetPeriodOverride[];
 }
 
 // ─── Widget period override ───────────────────────────────────────────────────

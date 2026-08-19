@@ -52,6 +52,26 @@ const ACCESS_TYPE_RULES: Record<
   LEADER: (u) => u.role === "lider",
 };
 
+/**
+ * Perfil "primário" de um usuário, na mesma ordem de prioridade usada pelo
+ * guard de rotas do frontend (admin sempre vence, depois os demais) — usado
+ * só pra decidir qual identidade visual a tela de login mostra, nunca pra
+ * autorização de verdade.
+ */
+function primaryAccessType(user: {
+  role: string;
+  account_type: string;
+}): keyof typeof ACCESS_TYPE_RULES | null {
+  for (const type of ["ADMIN", "NOMAD", "AGENCY", "COMPANY", "LEADER"] as const) {
+    if (ACCESS_TYPE_RULES[type](user)) return type;
+  }
+  return null;
+}
+
+const identifyAccountSchema = z.object({
+  email: z.string().email(),
+});
+
 // POST /api/auth/login
 router.post("/login", validate(loginSchema), async (req, res, next) => {
   try {
@@ -174,6 +194,40 @@ router.post("/login", validate(loginSchema), async (req, res, next) => {
     next(err);
   }
 });
+
+// POST /api/auth/identify-account
+// Identifica o perfil (accessType) de um e-mail SEM autenticar — usado pela
+// tela única de login pra trocar de identidade visual automaticamente
+// enquanto o usuário digita o e-mail. Não expõe senha, nome, id ou qualquer
+// outro dado do usuário: só o accessType (ou null). E-mail não encontrado,
+// inativo, ou sem role/account_type reconhecido devolvem o mesmo `null` —
+// não dá pra distinguir "não existe" de "existe mas está desativado" a
+// partir da resposta.
+router.post(
+  "/identify-account",
+  validate(identifyAccountSchema),
+  async (req, res, next) => {
+    try {
+      const { email } = req.body as { email: string };
+      const user = await prisma.user.findUnique({
+        where: { email },
+        select: { id: true, role: true, account_type: true, is_active: true },
+      });
+      const accessType =
+        user && user.is_active ? primaryAccessType(user) : null;
+      // Partner não é um accessType próprio (é Agency com convite aceito —
+      // ver resolvePartnerStatus acima), mas a tela de login precisa saber
+      // pra pré-selecionar o sub-perfil certo dentro do card Agency.
+      const isPartner =
+        accessType === "AGENCY" && user
+          ? (await resolvePartnerStatus(user.id)) === "active"
+          : false;
+      res.json({ accessType, isPartner });
+    } catch (err) {
+      next(err);
+    }
+  },
+);
 
 // POST /api/auth/logout
 router.post("/logout", (_req, res) => {

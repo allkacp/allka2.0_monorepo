@@ -156,12 +156,14 @@ export function SharedPinScreen({
   onChange,
   onSubmit,
   error,
+  checking,
   targetTitle,
 }: {
   value: string;
   onChange: (v: string) => void;
   onSubmit: () => void;
   error: boolean;
+  checking?: boolean;
   targetTitle: string;
 }) {
   const inputRef = useRef<HTMLInputElement>(null);
@@ -171,7 +173,7 @@ export function SharedPinScreen({
   }, []);
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === "Enter" && value.length === 4) onSubmit();
+    if (e.key === "Enter" && value.length === 4 && !checking) onSubmit();
   };
 
   return (
@@ -231,10 +233,10 @@ export function SharedPinScreen({
           <Button
             className="w-full h-10 btn-brand text-sm"
             onClick={onSubmit}
-            disabled={value.length !== 4}
+            disabled={value.length !== 4 || checking}
           >
             <Eye className="h-4 w-4 mr-2" />
-            Acessar relatório
+            {checking ? "Verificando..." : "Acessar relatório"}
           </Button>
         </CardContent>
       </Card>

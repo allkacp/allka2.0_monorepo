@@ -6,9 +6,7 @@ import { prisma } from "../lib/prisma";
 import { verifyToken } from "../middleware/auth";
 import { validate } from "../middleware/validate";
 import { resolveMyAgencyId } from "../lib/project-scope";
-import { assertProductContractable } from "../lib/product-contractability";
-import { recalculateProjectValue } from "../lib/project-value";
-import { parseProductMetadata } from "../lib/product-metadata";
+import { createBulkProjectProducts } from "../lib/project-products-bulk";
 
 const router = Router();
 
@@ -286,57 +284,20 @@ router.post(
         return;
       }
 
-      // Recusa a contratação inteira (nenhum ProjectProduct parcial) se
-      // qualquer componente não puder ser contratado agora — mesma regra
-      // que já vale pra comprar cada produto avulso.
-      for (const item of bundle.items) {
-        await assertProductContractable(item.product_id);
-      }
-
-      // Id de agrupamento gerado uma vez, antes da transação — todas as N
-      // linhas nascidas desta contratação levam o mesmo valor. Não é FK pro
-      // ProductBundle (que pode ser editado/apagado depois), é só uma
-      // etiqueta, então não precisa vir de nenhuma linha em particular.
+      // Id de agrupamento gerado uma vez — todas as N linhas nascidas desta
+      // contratação levam o mesmo valor. Não é FK pro ProductBundle (que
+      // pode ser editado/apagado depois), é só uma etiqueta.
       const groupId = randomUUID();
 
-      const projectProducts = await prisma.$transaction(async (tx) => {
-        const created = [];
-        for (const item of bundle.items) {
-          const priceSnapshot =
-            item.variation_id && item.variation ? item.variation.price || item.product.base_price : item.product.base_price;
-          // Cada componente congela SEU PRÓPRIO limite de alterações/taxa
-          // emergencial no momento da contratação — mesma lógica de
-          // project-products.ts POST /, não um valor único pro combo.
-          const meta = parseProductMetadata(item.product.metadata);
-          const pp = await tx.projectProduct.create({
-            data: {
-              project_id,
-              product_id: item.product_id,
-              variation_id: item.variation_id,
-              product_name_snapshot: item.product.name,
-              product_code_snapshot: item.product.id,
-              product_category_snapshot: item.product.category,
-              product_price_snapshot: priceSnapshot,
-              preco_final_cliente_snapshot: priceSnapshot,
-              comissao_snapshot: 0,
-              pagador_snapshot: pagador_snapshot ?? "AGENCIA",
-              recurrence_snapshot: recurrence_snapshot || null,
-              alteracoes_incluidas_snapshot: meta.alteracoesIncluidas ?? 3,
-              valor_alteracao_extra_snapshot: meta.valorAlteracaoExtra ?? 0,
-              taxa_emergencial_reducao_percentual_snapshot:
-                meta.taxaEmergencialReducaoPercentual ?? 50,
-              origin: "COMBO",
-              origin_bundle_purchase_id: groupId,
-              origin_bundle_name_snapshot: bundle.name,
-              status: "PENDENTE",
-            },
-          });
-          created.push(pp);
-        }
-        return created;
+      const projectProducts = await createBulkProjectProducts(prisma, {
+        project_id,
+        items: bundle.items.map((item) => ({ product_id: item.product_id, variation_id: item.variation_id })),
+        origin: "COMBO",
+        pagador_snapshot,
+        recurrence_snapshot,
+        originBundlePurchaseId: groupId,
+        originBundleNameSnapshot: bundle.name,
       });
-
-      await recalculateProjectValue(prisma, project_id);
 
       res.status(201).json({ project_products: projectProducts, bundle_name: bundle.name });
     } catch (err) {

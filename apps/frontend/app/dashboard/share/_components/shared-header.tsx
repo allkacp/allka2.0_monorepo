@@ -15,11 +15,12 @@ import {
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { cn } from "@/lib/utils";
-import type { SharePayload } from "@/lib/share-token";
+import type { ShareMeta } from "@/lib/share-api";
+import type { ShareProfile } from "@/lib/share-token";
 import { PROFILE_LABELS, PROFILE_COLORS } from "@/lib/share-token";
 
 type SharedHeaderProps = {
-  config: SharePayload;
+  config: ShareMeta;
   widgetTitle: string;
 };
 
@@ -40,8 +41,8 @@ function AllkaLogo({ className }: { className?: string }) {
 // ─── Header principal com gradiente da marca ──────────────────────────────────
 export function SharedHeader({ config, widgetTitle }: SharedHeaderProps) {
   const [copied, setCopied] = useState(false);
-  const issuedAt = config.issued ? new Date(config.issued) : null;
-  const expiresAt = config.expiry ? new Date(config.expiry) : null;
+  const issuedAt = config.issuedAt ? new Date(config.issuedAt) : null;
+  const expiresAt = config.expiresAt ? new Date(config.expiresAt) : null;
   const displayTitle =
     config.target.type === "dashboard" ? config.target.title : widgetTitle;
   const typeLabel =
@@ -138,7 +139,7 @@ export function SharedHeader({ config, widgetTitle }: SharedHeaderProps) {
           {config.profile && (
             <span className="inline-flex items-center gap-1 text-[10px] font-medium bg-white/15 text-white/90 border border-white/20 rounded-full px-2 py-0.5">
               <ShieldCheck className="h-2.5 w-2.5" />
-              {PROFILE_LABELS[config.profile]}
+              {PROFILE_LABELS[config.profile as ShareProfile]}
             </span>
           )}
 
@@ -170,7 +171,7 @@ export function SharedHeader({ config, widgetTitle }: SharedHeaderProps) {
 
 // ─── Footer ───────────────────────────────────────────────────────────────────
 
-export function SharedFooter({ config }: { config: SharePayload }) {
+export function SharedFooter({ config }: { config: ShareMeta }) {
   return (
     <footer className="border-t bg-card/50 py-5 mt-auto shrink-0">
       <div className="max-w-5xl mx-auto px-4 sm:px-6 flex flex-col sm:flex-row items-center justify-between gap-2 text-xs text-muted-foreground">
@@ -189,7 +190,7 @@ export function SharedFooter({ config }: { config: SharePayload }) {
           {config.permission === "view"
             ? "Somente visualização"
             : "Visualização + Comentários"}
-          {config.profile && ` · ${PROFILE_LABELS[config.profile]}`}
+          {config.profile && ` · ${PROFILE_LABELS[config.profile as ShareProfile]}`}
         </span>
       </div>
     </footer>

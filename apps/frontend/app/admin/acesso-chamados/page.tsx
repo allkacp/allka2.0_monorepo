@@ -11,8 +11,10 @@ import {
   ChevronRight,
   X,
   FlaskConical,
+  KeyRound,
 } from "lucide-react";
-import { PageHeader } from "@/components/page-header";
+import { DashboardShellFrame } from "@/features/dashboards/shared/dashboard-shell-frame";
+import { STANDARD_SHELL_TABLE_CARD_CLASS } from "@/components/standard-page-shell";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -378,49 +380,77 @@ export default function AcessoAosChamadosPage() {
     }
   }
 
+  // Mesmo cabeçalho gradiente nos 3 estados (negado/checando/pronto) — troca
+  // de conteúdo interno, nunca de shell, pra não "piscar" outro visual
+  // enquanto a permissão ainda está sendo resolvida.
+  const header = (
+    <div
+      className="relative overflow-hidden flex flex-wrap items-center gap-3 rounded-xl px-4 py-3 shadow-[0_4px_24px_-4px_rgba(0,0,0,0.15)]"
+      style={{ background: "linear-gradient(90deg, #0a1628 0%, #3b1f6e 50%, #c81a7f 100%)" }}
+    >
+      <div className="flex items-center gap-2.5 min-w-0 flex-1">
+        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-white/15">
+          <KeyRound className="h-4.5 w-4.5 text-white" />
+        </div>
+        <div className="min-w-0">
+          <h1 className="text-base sm:text-lg font-bold text-white leading-tight truncate">Acesso aos chamados</h1>
+          <p className="text-[11px] text-white/70 leading-snug">
+            Controla quem pode usar o botão “Ajuda e sugestões” e ver o próprio histórico de chamados.
+          </p>
+        </div>
+      </div>
+      {permissionCheck === "granted" && (
+        <div className="flex items-center gap-2 shrink-0 flex-wrap">
+          {config?.roadmapInternalUrl && (
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-8 text-xs gap-1.5 bg-white/10 border-white/20 text-white hover:bg-white/20 hover:text-white"
+              onClick={() => void roadmapPanel.open()}
+              disabled={roadmapPanel.loading}
+            >
+              <ExternalLink className="h-3.5 w-3.5" />
+              {roadmapPanel.loading ? "Abrindo..." : "Abrir painel interno"}
+            </Button>
+          )}
+          <Button
+            variant="outline"
+            size="sm"
+            className="h-8 text-xs gap-1.5 bg-white/10 border-white/20 text-white hover:bg-white/20 hover:text-white"
+            onClick={() => void loadAll()}
+            disabled={loading}
+          >
+            <RefreshCw className={cn("h-3.5 w-3.5", loading && "animate-spin")} />
+            Atualizar
+          </Button>
+        </div>
+      )}
+    </div>
+  );
+
   if (!isAdmin || permissionCheck === "denied") {
     return (
-      <div className="space-y-6">
-        <PageHeader title="Acesso aos chamados" description="Acesso restrito ao Admin." />
-        <p className="text-sm text-gray-500">Você não tem permissão para ver esta página.</p>
-      </div>
+      <DashboardShellFrame>
+        <div className="space-y-4">
+          {header}
+          <p className="text-sm text-muted-foreground px-1">Você não tem permissão para ver esta página.</p>
+        </div>
+      </DashboardShellFrame>
     );
   }
 
   if (permissionCheck === "checking") {
     return (
-      <div className="space-y-6">
-        <PageHeader title="Acesso aos chamados" description="Verificando permissão..." />
-      </div>
+      <DashboardShellFrame>
+        <div className="space-y-4">{header}</div>
+      </DashboardShellFrame>
     );
   }
 
   return (
-    <div className="space-y-6">
-      <PageHeader
-        title="Acesso aos chamados"
-        description="Controla quem pode usar o botão “Ajuda e sugestões” e ver o próprio histórico de chamados."
-        actions={
-          <div className="flex items-center gap-2">
-            {config?.roadmapInternalUrl && (
-              <Button
-                variant="outline"
-                size="sm"
-                className="text-xs gap-1.5"
-                onClick={() => void roadmapPanel.open()}
-                disabled={roadmapPanel.loading}
-              >
-                <ExternalLink className="h-3.5 w-3.5" />
-                {roadmapPanel.loading ? "Abrindo..." : "Abrir painel interno"}
-              </Button>
-            )}
-            <Button variant="ghost" size="sm" className="text-xs gap-1.5" onClick={() => void loadAll()} disabled={loading}>
-              <RefreshCw className={cn("h-3.5 w-3.5", loading && "animate-spin")} />
-              Atualizar
-            </Button>
-          </div>
-        }
-      />
+    <DashboardShellFrame>
+      <div className="space-y-4">
+      {header}
 
       {(error || roadmapPanel.error) && (
         <div className="rounded-xl border border-red-200 bg-red-50 text-red-700 text-sm px-4 py-3 dark:bg-red-950/30 dark:border-red-800 dark:text-red-300 flex items-center justify-between">
@@ -440,7 +470,7 @@ export default function AcessoAosChamadosPage() {
       )}
 
       {/* ── Configuração global ─────────────────────────────────────────── */}
-      <div className="rounded-xl border border-border/70 bg-background p-5 shadow-sm space-y-4">
+      <div className={cn(STANDARD_SHELL_TABLE_CARD_CLASS, "p-5 space-y-4")}>
         <div className="flex items-center justify-between flex-wrap gap-4">
           <div className="flex items-center gap-3">
             <Switch checked={config?.enabled ?? false} onCheckedChange={toggleEnabled} disabled={!config || !canEdit} />
@@ -486,7 +516,10 @@ export default function AcessoAosChamadosPage() {
             { label: "Exceções (override)", value: summary.exceptions, icon: ShieldAlert, color: "text-amber-600" },
             { label: "Inativos", value: summary.inactive, icon: Users, color: "text-gray-500" },
           ].map((card) => (
-            <div key={card.label} className="rounded-xl border border-border/70 bg-background p-4 shadow-sm">
+            <div
+              key={card.label}
+              className="rounded-2xl border border-[#e6ebf3] dark:border-slate-700/60 bg-background p-4 shadow-[0_12px_32px_rgba(15,23,42,0.06)]"
+            >
               <div className="flex items-center gap-2">
                 <card.icon className={cn("h-4 w-4", card.color)} />
                 <span className="text-xs text-gray-500">{card.label}</span>
@@ -498,7 +531,7 @@ export default function AcessoAosChamadosPage() {
       )}
 
       {/* ── Grupos ───────────────────────────────────────────────────────── */}
-      <div className="rounded-xl border border-border/70 bg-background p-5 shadow-sm space-y-4">
+      <div className={cn(STANDARD_SHELL_TABLE_CARD_CLASS, "p-5 space-y-4")}>
         <h2 className="text-sm font-semibold">Grupos de acesso</h2>
         {canEdit && (
         <div className="flex flex-wrap gap-2 items-end">
@@ -690,7 +723,7 @@ export default function AcessoAosChamadosPage() {
       </div>
 
       {/* ── Usuários ─────────────────────────────────────────────────────── */}
-      <div className="rounded-xl border border-border/70 bg-background p-5 shadow-sm space-y-4">
+      <div className={cn(STANDARD_SHELL_TABLE_CARD_CLASS, "p-5 space-y-4")}>
         <div className="flex flex-wrap items-center justify-between gap-3">
           <h2 className="text-sm font-semibold">Usuários</h2>
           <div className="flex flex-wrap gap-2">
@@ -877,7 +910,7 @@ export default function AcessoAosChamadosPage() {
       <CentralChamadosAccessPanel />
 
       {/* ── Auditoria ────────────────────────────────────────────────────── */}
-      <div className="rounded-xl border border-border/70 bg-background p-5 shadow-sm space-y-2">
+      <div className={cn(STANDARD_SHELL_TABLE_CARD_CLASS, "p-5 space-y-2")}>
         <h2 className="text-sm font-semibold">Auditoria</h2>
         {audit.length === 0 && <p className="text-xs text-gray-400">Nenhum evento registrado ainda.</p>}
         {audit.map((entry) => (
@@ -915,6 +948,7 @@ export default function AcessoAosChamadosPage() {
           </div>
         </div>
       </div>
-    </div>
+      </div>
+    </DashboardShellFrame>
   );
 }

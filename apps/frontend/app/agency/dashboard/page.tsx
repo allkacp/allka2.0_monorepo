@@ -10,7 +10,7 @@ import {
 } from "@/lib/dashboard-presets-by-role";
 import type React from "react";
 
-import { useState, useEffect, useMemo, useRef } from "react";
+import { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import { PageLoader } from "@/components/ui/loading";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -31,6 +31,7 @@ import {
   Star,
   Award,
   Download,
+  RotateCcw,
   GripVertical,
   EyeOff,
   Edit2,
@@ -105,6 +106,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { MetricChartModal } from "@/components/admin/metric-chart-modal";
 import { toPng } from "html-to-image";
+import { computeSafePixelRatio } from "@/features/dashboards/shared/dashboard-export";
 import {
   Accordion,
   AccordionContent,
@@ -490,8 +492,18 @@ import { Switch } from "@/components/ui/switch"; // Added Switch
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast"; // Added useToast hook
 import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from "@/components/ui/tooltip";
-import { apiClient } from "@/lib/api-client";
+import { apiClient, type DashboardShareLink } from "@/lib/api-client";
 import { ConfirmationDialog } from "@/components/confirmation-dialog";
+import { ShareLinksPanel } from "@/features/dashboards/shared/share-links-panel";
+import { ShareSlugField, previewNormalizeSlug, suggestAvailableSlug } from "@/features/dashboards/shared/share-slug-field";
+import { ShareCreateForm } from "@/features/dashboards/shared/share-create-form";
+import { useDashboardExport } from "@/features/dashboards/shared/use-dashboard-export";
+import { DashboardExportOverlay } from "@/features/dashboards/shared/dashboard-export-overlay";
+import { useDashboardTemplate, TEMPLATE_DASHBOARD_ID } from "@/features/dashboards/shared/use-dashboard-template";
+import { useDashboardWidgetEditor } from "@/features/dashboards/shared/dashboard-widget-editor";
+import { useWidgetPeriodOverrides } from "@/features/dashboards/shared/use-dashboard-period";
+import { DashboardWidgetEditorModeToggle, DashboardWidgetEditorBody, DashboardWidgetEditorFooter } from "@/features/dashboards/shared/dashboard-widget-editor-panel";
+import { DashboardTemplateContentList } from "@/features/dashboards/shared/dashboard-template-content";
 
 // Redeclaration of Alert interface removed due to linting issue.
 // The original code already had an 'Alert' interface which was correct.
@@ -516,6 +528,7 @@ import {
   formatDate,
   mergeManualData,
   generatePublicToken,
+  buildShareUrl,
 } from "@/features/dashboards/shared/dashboard-common";
 
 type MetricType =
@@ -528,6 +541,76 @@ type MetricType =
   | "estimatedMargin"
   | "pendingPayments";
 const ROLE_WIDGET_IDS = new Set<string>(WIDGETS_BY_ROLE["AGENCY"]);
+
+// Catálogo real de widgets da Agency (ícone/cor/descrição), pra reuso no
+// editor de template (Admin > Dashboards Padrão) — mesma fonte, nunca uma
+// segunda lista. Hoisted pro escopo do módulo porque é 100% estático (só
+// literais, sem depender de estado/props do componente).
+export const AGENCY_WIDGET_LIBRARY: WidgetLibraryItem[] = [
+  {
+    id: "metrics",
+    name: "Cards de Métricas",
+    description: "Projetos, tarefas, aprovações e financeiro da agency",
+    icon: LayoutGrid,
+    color: "blue",
+  },
+  {
+    id: "tasks",
+    name: "Tarefas dos Projetos",
+    description: "Tarefas para lançamento, em execução e contratadas",
+    icon: CheckSquare,
+    color: "green",
+  },
+  {
+    id: "statusOverview",
+    name: "Aprovações Pendentes",
+    description: "Projetos, tarefas e propostas aguardando ação",
+    icon: LayoutGrid,
+    color: "blue",
+  },
+  {
+    id: "averageTicket",
+    name: "Financeiro da Agency",
+    description: "Valor contratado, recebíveis, ticket e margem estimada",
+    icon: DollarSign,
+    color: "teal",
+  },
+  {
+    id: "activeProjectsWidget",
+    name: "Projetos da Agency",
+    description: "Projetos ativos, entregas e lançamentos vinculados",
+    icon: Briefcase,
+    color: "indigo",
+  },
+  {
+    id: "creditPlans",
+    name: "Catálogo / Produtos Contratados",
+    description: "Produtos contratados e ofertas ativas da agency",
+    icon: CreditCard,
+    color: "slate",
+  },
+  {
+    id: "activity",
+    name: "Atividade Recente da Agency",
+    description: "Últimas ações, entregas e aprovações da agency",
+    icon: Activity,
+    color: "amber",
+  },
+  {
+    id: "alerts",
+    name: "Alertas da Agency",
+    description: "Prazos, pendências e alertas relevantes da agency",
+    icon: Bell,
+    color: "orange",
+  },
+  {
+    id: "quickActions",
+    name: "Ações Rápidas da Agency",
+    description: "Atalhos para aprovações, projetos e financeiro",
+    icon: Zap,
+    color: "sky",
+  },
+];
 
 export default function AdminDashboardPage() {
   const { sidebarCollapsed, sidebarWidth } = useSidebar(); // Get sidebar collapse state
@@ -563,8 +646,17 @@ export default function AdminDashboardPage() {
   const [customPeriodFrom, setCustomPeriodFrom] = useState<Date>();
   const [customPeriodTo, setCustomPeriodTo] = useState<Date>();
 
-  const [widgetPeriods, setWidgetPeriods] = useState<WidgetPeriodOverride[]>(
-    [],
+  // Item 18 — fonte única de verdade (Global x Local), compartilhada com
+  // as outras 5 telas. Ver features/dashboards/shared/use-dashboard-period.ts.
+  const {
+    widgetPeriods,
+    setWidgetPeriods,
+    getWidgetPeriod: sharedGetWidgetPeriod,
+    setWidgetCustomPeriod,
+  } = useWidgetPeriodOverrides("dashboard-widget-periods-agency");
+  const getWidgetPeriod = useCallback(
+    (widgetId: string) => sharedGetWidgetPeriod(globalPeriod, widgetId),
+    [sharedGetWidgetPeriod, globalPeriod],
   );
 
   type AgencyAlert = {
@@ -699,9 +791,43 @@ export default function AdminDashboardPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [globalPeriod.type, globalPeriod.from, globalPeriod.to, historicalData]);
 
-  // Convenience aliases used throughout widget JSX
-  const rv = dashboardData.revenue;
-  const apW = dashboardData.activeProjects;
+  // ── Dados reais escopados (POST /api/dashboard/widgets) ──────────────────
+  // Mesma função/consulta usada pelo dashboard compartilhado desta agência
+  // (POST /api/share/data) — o backend resolve o escopo (agency_id) a
+  // partir de quem está logado, nunca aceita um id vindo daqui. `null` =
+  // ainda carregando ou falhou (ver widgetDataError abaixo); nunca um
+  // número fabricado tomando o lugar de um erro real.
+  const [widgetData, setWidgetData] = useState<any>(null);
+  const [widgetDataError, setWidgetDataError] = useState(false);
+
+  useEffect(() => {
+    if (typeof (apiClient as any).getDashboardWidgets !== "function") return;
+    let cancelled = false;
+    setWidgetDataError(false);
+    const { from, to } = getDateRangeFromPeriod(globalPeriod.type, globalPeriod.from, globalPeriod.to);
+    (apiClient as any)
+      .getDashboardWidgets(from, to)
+      .then((d: any) => { if (!cancelled) setWidgetData(d); })
+      .catch((err: any) => {
+        if (cancelled) return;
+        console.error("[AgencyDashboard] Falha ao carregar /dashboard/widgets:", err);
+        setWidgetDataError(true);
+      });
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [globalPeriod]);
+
+  // Convenience aliases used throughout widget JSX — sobrepõe dado real
+  // (widgetData) por cima do mock só nos campos que o backend de fato
+  // calcula pra este escopo (revenue/activeProjects/tasks/accountsReceivable).
+  // Os demais (creditPlans, mrr, churn, averageTicket, ltv,
+  // platformActivities, nomads, agenciesRanking, statusOverview,
+  // nomadsIndicators) ainda não têm consulta real equivalente pro escopo
+  // de agência — permanecem mock nesta rodada (limitação documentada, não
+  // escondida: não existe hoje uma query segura de "ranking de agências
+  // concorrentes" nem de breakdown de MRR/churn por agência).
+  const rv = widgetData ? { ...dashboardData.revenue, ...widgetData.revenue } : dashboardData.revenue;
+  const apW = widgetData ? { ...dashboardData.activeProjects, ...widgetData.activeProjects } : dashboardData.activeProjects;
   const cpW = dashboardData.creditPlans;
   const mrrW = dashboardData.mrr;
   const churnW = dashboardData.churn;
@@ -711,8 +837,8 @@ export default function AdminDashboardPage() {
   const nmW = dashboardData.nomads;
   const agRankW = dashboardData.agenciesRanking;
   const soW = dashboardData.statusOverview;
-  const arW = dashboardData.accountsReceivable;
-  const tasksW = dashboardData.tasks;
+  const arW = widgetData ? { ...dashboardData.accountsReceivable, ...widgetData.accountsReceivable } : dashboardData.accountsReceivable;
+  const tasksW = widgetData ? { ...dashboardData.tasks, ...widgetData.tasks } : dashboardData.tasks;
   const niW = dashboardData.nomadsIndicators;
   const auW = dashboardData.activeUsers;
   /**
@@ -847,12 +973,14 @@ export default function AdminDashboardPage() {
   const [saveDashboardOpen, setSaveDashboardOpen] = useState(false); // State for the save dashboard dialog
   const [isEditDashboardModalOpen, setIsEditDashboardModalOpen] =
     useState(false);
-  const [draftWidgets, setDraftWidgets] = useState<WidgetState[]>([]);
-  const [modalDraggedId, setModalDraggedId] = useState<string | null>(null);
-  const [modalDragOverId, setModalDragOverId] = useState<string | null>(null);
-  const [editModalMode, setEditModalMode] = useState<
-    "none" | "remover" | "adicionar"
-  >("none");
+  // Núcleo do editor de widgets — compartilhado com o editor de template
+  // (ver features/dashboards/shared/dashboard-widget-editor.ts). Antes era
+  // 4 states locais (draftWidgets/modalDraggedId/modalDragOverId/
+  // editModalMode) + ~300 linhas de JSX duplicadas; agora é o mesmo hook e
+  // os mesmos componentes usados em /admin/dashboard-templates. Valor
+  // inicial vazio de propósito — sempre populado via editor.reset(...) no
+  // momento de abrir o painel (igual o antigo setDraftWidgets(...) fazia).
+  const editor = useDashboardWidgetEditor([]);
   const [showCancelConfirmDialog, setShowCancelConfirmDialog] = useState(false);
   const [showSaveConfirmDialog, setShowSaveConfirmDialog] = useState(false);
   const [showDeleteDashboardDialog, setShowDeleteDashboardDialog] =
@@ -902,108 +1030,20 @@ export default function AdminDashboardPage() {
   };
 
   const toggleCustomizeMode = () => {
+    // Padrão do Admin (item 8) — usuário não edita a visão global
+    // diretamente; oferece criar uma visão pessoal a partir dela.
+    if (!isCustomizeMode && isViewingTemplateDefault) {
+      if (
+        confirm(
+          "Este é o dashboard padrão definido pelo Admin e não pode ser editado diretamente. Deseja criar uma visão pessoal a partir dele para personalizar?",
+        )
+      ) {
+        createPersonalViewFromTemplate();
+        setIsCustomizeMode(true);
+      }
+      return;
+    }
     setIsCustomizeMode(!isCustomizeMode);
-  };
-
-  // Define WidgetPeriodOverride interface
-  interface WidgetPeriodOverride {
-    widgetId: string;
-    mode: "global" | "custom";
-    customPeriod?: {
-      from: string;
-      to: string;
-      label: string;
-      periodKey?: string;
-    };
-  }
-
-  const getWidgetPeriod = (widgetId: string) => {
-    const override = widgetPeriods.find((wp) => wp.widgetId === widgetId);
-    if (override && override.mode === "custom" && override.customPeriod) {
-      // Backward-compat: derive periodKey from label if not stored (old localStorage data)
-      const labelToKey: Record<string, string> = {
-        Hoje: "today",
-        "Últimos 7 dias": "7days",
-        "Últimos 30 dias": "30days",
-        "Este mês": "thisMonth",
-        "Mês passado": "lastMonth",
-        "Últimos 90 dias": "90days",
-        "Último ano": "365days",
-      };
-      const periodKey =
-        override.customPeriod.periodKey ??
-        labelToKey[override.customPeriod.label];
-      return {
-        from: new Date(override.customPeriod.from),
-        periodKey,
-        to: new Date(override.customPeriod.to),
-        label: override.customPeriod.label,
-      };
-    }
-    // Fallback to global period if no override or global mode is selected
-    return {
-      from: globalPeriod.from || new Date(0), // Use a default if from is undefined
-      to: globalPeriod.to || new Date(), // Use a default if to is undefined
-      label: globalPeriod.label,
-    };
-  };
-
-  const setWidgetCustomPeriod = (widgetId: string, period: string) => {
-    const now = new Date();
-    let from = "";
-    let to = format(now, "yyyy-MM-dd");
-    let label = period;
-
-    switch (period) {
-      case "global":
-        setWidgetPeriods((prev) =>
-          prev.filter((wp) => wp.widgetId !== widgetId),
-        );
-        return;
-      case "today":
-        from = format(now, "yyyy-MM-dd");
-        label = "Hoje";
-        break;
-      case "7days":
-        from = format(subDays(now, 7), "yyyy-MM-dd");
-        label = "Últimos 7 dias";
-        break;
-      case "30days":
-        from = format(subDays(now, 30), "yyyy-MM-dd");
-        label = "Últimos 30 dias";
-        break;
-      case "thisMonth":
-        from = format(startOfMonth(now), "yyyy-MM-dd");
-        label = "Este mês";
-        break;
-      case "lastMonth":
-        from = format(startOfMonth(subMonths(now, 1)), "yyyy-MM-dd");
-        to = format(endOfMonth(subMonths(now, 1)), "yyyy-MM-dd");
-        label = "Mês passado";
-        break;
-      case "90days":
-        from = format(subDays(now, 90), "yyyy-MM-dd");
-        label = "Últimos 90 dias";
-        break;
-      case "365days":
-        from = format(subDays(now, 365), "yyyy-MM-dd");
-        label = "Último ano";
-        break;
-      default:
-        return;
-    }
-
-    setWidgetPeriods((prev) => {
-      const filtered = prev.filter((wp) => wp.widgetId !== widgetId);
-      return [
-        ...filtered,
-        {
-          widgetId,
-          mode: "custom",
-          customPeriod: { from, to, label, periodKey: period },
-        },
-      ];
-    });
   };
 
   // Function to export a widget as PNG
@@ -1031,7 +1071,10 @@ export default function AdminDashboardPage() {
 
       const dataUrl = await toPng(widgetElement as HTMLElement, {
         quality: 1,
-        pixelRatio: 2,
+        pixelRatio: computeSafePixelRatio(
+          widgetElement.getBoundingClientRect().width,
+          widgetElement.getBoundingClientRect().height,
+        ),
         backgroundColor: "#f1f5f9",
         cacheBust: true,
       });
@@ -1084,7 +1127,10 @@ export default function AdminDashboardPage() {
 
       const dataUrl = await toPng(widgetElement, {
         quality: 1,
-        pixelRatio: 2,
+        pixelRatio: computeSafePixelRatio(
+          widgetElement.getBoundingClientRect().width,
+          widgetElement.getBoundingClientRect().height,
+        ),
         backgroundColor: "#f1f5f9",
         cacheBust: true,
       });
@@ -1401,7 +1447,6 @@ export default function AdminDashboardPage() {
   const [selectedWidgetsForExport, setSelectedWidgetsForExport] = useState<
     WidgetType[]
   >([]);
-  const [isExporting, setIsExporting] = useState(false);
 
   const [widgetSize, setWidgetSize] = useState<WidgetSize>("standard");
 
@@ -1421,6 +1466,26 @@ export default function AdminDashboardPage() {
   const [currentDashboardId, setCurrentDashboardId] = useState<string | null>(
     null,
   );
+  // Exportação — ponto único reutilizado pelas 6 telas (ver
+  // features/dashboards/shared/use-dashboard-export.ts). O título vira o
+  // nome do arquivo; troca junto com o dashboard atual selecionado.
+  const exportDashboardTitle = savedDashboards.find((d) => d.id === currentDashboardId)?.name ?? "Agency";
+  const { state: exportState, exportAs: handleExportAs, reset: resetExportState } = useDashboardExport(
+    "dashboard-export-area",
+    exportDashboardTitle,
+  );
+  const isExporting = exportState.stage !== "idle" && exportState.stage !== "success" && exportState.stage !== "error";
+  // Template padrão do perfil (item 9) + banners/avisos (item 10) — ponto
+  // único reutilizado pelas 6 telas, ver
+  // features/dashboards/shared/use-dashboard-template.ts.
+  const { template: profileTemplate, visibleContents: templateContents, dismissContent: dismissTemplateContent, reload: reloadTemplate } =
+    useDashboardTemplate("AGENCY");
+  // Id do último template aplicado como visão inicial nesta sessão — evita
+  // reaplicar a cada re-render, mas ainda assim aplica de novo se o Admin
+  // trocar/editar o template (o hook busca de novo e o id/updated_at do
+  // template resolvido muda). Ver useEffect logo após o load de
+  // savedDashboards, abaixo.
+  const appliedTemplateRef = useRef<string | null>(null);
   const [showSaveDashboardDialog, setShowSaveDashboardDialog] = useState(false);
   const [newDashboardName, setNewDashboardName] = useState("");
   const [showDashboardSelector, setShowDashboardSelector] = useState(false);
@@ -1455,6 +1520,15 @@ export default function AdminDashboardPage() {
   const [generatedShareLink, setGeneratedShareLink] = useState("");
   const [shareActiveTab, setShareActiveTab] = useState("permission");
   const [shareAllowFilterChanges, setShareAllowFilterChanges] = useState(false);
+  const [shareGenerating, setShareGenerating] = useState(false);
+  // Incrementado após criar um link novo pra forçar o ShareLinksPanel a
+  // recarregar a lista sem precisar levantar o estado da lista até aqui.
+  const [shareRefreshSignal, setShareRefreshSignal] = useState(0);
+  const [shareSlug, setShareSlug] = useState("");
+  // Link recém-criado, repassado pro ShareLinksPanel pra aparecer na lista
+  // na hora — não depende só do refetch por refreshSignal (ver comentário
+  // em share-links-panel.tsx sobre a causa da regressão original).
+  const [sharePendingLink, setSharePendingLink] = useState<DashboardShareLink | null>(null);
   // ──────────────────────────────────────────────────────────────────────────
 
   // ── Historical modal states ──────────────────────────────────────────────────
@@ -1582,7 +1656,9 @@ export default function AdminDashboardPage() {
     setSharePin("");
     setShareExpiryEnabled(false);
     setShareExpiry("");
+    setShareSlug(previewNormalizeSlug(widgetTitle));
     setGeneratedShareLink("");
+    setSharePendingLink(null);
     setShareActiveTab("permission");
     setShareAllowFilterChanges(false);
     setShowPublicShareDialog(true);
@@ -1590,9 +1666,10 @@ export default function AdminDashboardPage() {
 
   const openDashboardPublicShare = () => {
     const currentDb = savedDashboards.find((d) => d.id === currentDashboardId);
+    const title = currentDb?.name ?? "Dashboard";
     setShareTarget({
       id: currentDashboardId ?? "default",
-      title: currentDb?.name ?? "Dashboard",
+      title,
       type: "dashboard",
     });
     setSharePermission("view");
@@ -1600,13 +1677,15 @@ export default function AdminDashboardPage() {
     setSharePin("");
     setShareExpiryEnabled(false);
     setShareExpiry("");
+    setShareSlug(previewNormalizeSlug(title));
     setGeneratedShareLink("");
+    setSharePendingLink(null);
     setShareActiveTab("permission");
     setShareAllowFilterChanges(false);
     setShowPublicShareDialog(true);
   };
 
-  const handleGenerateShareLink = () => {
+  const handleGenerateShareLink = async () => {
     if (!shareTarget) return;
     const config: ShareConfig = {
       target: shareTarget,
@@ -1614,18 +1693,37 @@ export default function AdminDashboardPage() {
       pin: sharePinEnabled && sharePin.length === 4 ? sharePin : undefined,
       expiry:
         shareExpiryEnabled && shareExpiry ? new Date(shareExpiry) : undefined,
+      slug: shareSlug.trim() || undefined,
     };
-    const token = generatePublicToken(config, {
-      profile: "agency",
-      period: {
-        type: globalPeriod.type,
-        from: globalPeriod.from?.toISOString(),
-        to: globalPeriod.to?.toISOString(),
-        label: globalPeriod.label,
-      },
-      allowFilterChanges: shareAllowFilterChanges,
-    });
-    setGeneratedShareLink(`${window.location.origin}/dashboard/share/${token}`);
+    setShareGenerating(true);
+    try {
+      const { token, slug, link } = await generatePublicToken(config, {
+        profile: "agency",
+        period: {
+          type: globalPeriod.type,
+          from: globalPeriod.from?.toISOString(),
+          to: globalPeriod.to?.toISOString(),
+          label: globalPeriod.label,
+        },
+        allowFilterChanges: shareAllowFilterChanges,
+      });
+      setGeneratedShareLink(buildShareUrl({ token, slug }));
+      setSharePendingLink(link);
+      setShareRefreshSignal((n) => n + 1);
+      // O slug que acabou de ser usado não está mais livre — sugere o
+      // próximo disponível pro caso de o usuário gerar outro link em
+      // seguida sem fechar o painel (não deixa "abaixo do capô" com um
+      // valor que já daria 409 se clicasse em Gerar de novo sem editar).
+      suggestAvailableSlug(shareTarget.title).then(setShareSlug);
+    } catch (err: any) {
+      toast({
+        title: "Não foi possível gerar o link",
+        description: err?.message ?? "Tente novamente em instantes.",
+        variant: "destructive",
+      });
+    } finally {
+      setShareGenerating(false);
+    }
   };
 
   const handleCopyShareLink = () => {
@@ -1667,7 +1765,7 @@ export default function AdminDashboardPage() {
     // estado padrão enquanto o painel ainda está deslizando pra fora.
     setIsEditDashboardModalOpen(false);
     setTimeout(() => {
-      setEditModalMode("none");
+      editor.setMode("none");
       setIsNewDashboardMode(false);
       setIsEditingHeaderName(false);
     }, 420);
@@ -1698,7 +1796,7 @@ export default function AdminDashboardPage() {
   };
 
   const handleConfirmSave = () => {
-    const updated = draftWidgets.map((w, i) => ({ ...w, order: i }));
+    const updated = editor.finalize();
     if (isNewDashboardMode) {
       const name = editHeaderName.trim() || "Novo Dashboard";
       const newDashboard: SavedDashboard = {
@@ -1842,6 +1940,11 @@ export default function AdminDashboardPage() {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(parsedDashboards));
     }
     setSavedDashboards(parsedDashboards);
+    // currentDashboardId/widgets aqui são só o fallback pra quando NÃO há
+    // template configurado pro perfil (ver efeito logo abaixo, que
+    // sobrescreve isso sempre que o Admin tiver um template ativo — a
+    // visão inicial de toda entrada é decisão do Admin, não do
+    // localStorage). Sem template, o comportamento é exatamente o de antes.
     const storedId = localStorage.getItem(CURRENT_KEY);
     const currentDashboard =
       parsedDashboards.find((d) => d.id === storedId) ??
@@ -1853,6 +1956,50 @@ export default function AdminDashboardPage() {
     }
   }, []);
 
+  // Item 9 (revisado) — o template padrão do Admin é a VISÃO INICIAL de
+  // toda entrada, sempre — não uma semente aplicada uma vez. Roda de novo
+  // sempre que o hook resolver um template diferente (troca de perfil,
+  // Admin editou/trocou o default), mas só uma vez por template resolvido
+  // (appliedTemplateRef), pra não brigar com o usuário alternando pra uma
+  // visão pessoal DURANTE a sessão atual.
+  useEffect(() => {
+    if (!profileTemplate) return;
+    const marker = `${profileTemplate.id}:${profileTemplate.updated_at}`;
+    if (appliedTemplateRef.current === marker) return;
+    appliedTemplateRef.current = marker;
+    setCurrentDashboardId(TEMPLATE_DASHBOARD_ID);
+    setWidgets(profileTemplate.widgets as WidgetState[]);
+  }, [profileTemplate]);
+
+  const isViewingTemplateDefault = currentDashboardId === TEMPLATE_DASHBOARD_ID;
+
+  // Cria uma visão pessoal a partir do template padrão — único jeito de
+  // "editar" o que se vê no padrão, sem tocar no template global (que só o
+  // Admin controla). Usada pelo guard de toggleCustomizeMode abaixo e pelo
+  // botão "Criar visão personalizada".
+  function createPersonalViewFromTemplate() {
+    if (!profileTemplate) return;
+    const id = `personal-${Date.now()}`;
+    const widgetsCopy = (profileTemplate.widgets as WidgetState[]).map((w) => ({ ...w }));
+    const newDashboard: SavedDashboard = {
+      id,
+      name: "Minha visão",
+      widgets: widgetsCopy,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      isDefault: false,
+      sharedWith: [],
+    } as SavedDashboard;
+    setSavedDashboards((prev) => {
+      const next = [...prev, newDashboard];
+      localStorage.setItem(DASHBOARD_STORAGE_KEY["AGENCY"], JSON.stringify(next));
+      return next;
+    });
+    localStorage.setItem(CURRENT_DASHBOARD_KEY["AGENCY"], id);
+    setCurrentDashboardId(id);
+    setWidgets(widgetsCopy);
+    return id;
+  }
 
   useEffect(() => {
     // Guard: skip saving until the initial load effect has populated state.
@@ -1860,6 +2007,10 @@ export default function AdminDashboardPage() {
     // after the load effect runs, so this prevents the save effect from
     // overwriting localStorage with empty/default state on mount.
     if (!currentDashboardId) return;
+    // A visão "padrão do Admin" nunca é persistida como se fosse uma visão
+    // pessoal — ela não existe em savedDashboards/localStorage, é sempre
+    // resolvida ao vivo a partir do template (ver TEMPLATE_DASHBOARD_ID).
+    if (currentDashboardId === TEMPLATE_DASHBOARD_ID) return;
 
     // Ensure consistent structure when saving
     localStorage.setItem(
@@ -1904,71 +2055,10 @@ export default function AdminDashboardPage() {
     // intentionally empty - mounted
   }, []);
 
-  const widgetLibrary: WidgetLibraryItem[] = [
-    {
-      id: "metrics",
-      name: "Cards de Métricas",
-      description: "Projetos, tarefas, aprovações e financeiro da agency",
-      icon: LayoutGrid,
-      color: "blue",
-    },
-    {
-      id: "tasks",
-      name: "Tarefas dos Projetos",
-      description: "Tarefas para lançamento, em execução e contratadas",
-      icon: CheckSquare,
-      color: "green",
-    },
-    {
-      id: "statusOverview",
-      name: "Aprovações Pendentes",
-      description: "Projetos, tarefas e propostas aguardando ação",
-      icon: LayoutGrid,
-      color: "blue",
-    },
-    {
-      id: "averageTicket",
-      name: "Financeiro da Agency",
-      description: "Valor contratado, recebíveis, ticket e margem estimada",
-      icon: DollarSign,
-      color: "teal",
-    },
-    {
-      id: "activeProjectsWidget",
-      name: "Projetos da Agency",
-      description: "Projetos ativos, entregas e lançamentos vinculados",
-      icon: Briefcase,
-      color: "indigo",
-    },
-    {
-      id: "creditPlans",
-      name: "Catálogo / Produtos Contratados",
-      description: "Produtos contratados e ofertas ativas da agency",
-      icon: CreditCard,
-      color: "slate",
-    },
-    {
-      id: "activity",
-      name: "Atividade Recente da Agency",
-      description: "Últimas ações, entregas e aprovações da agency",
-      icon: Activity,
-      color: "amber",
-    },
-    {
-      id: "alerts",
-      name: "Alertas da Agency",
-      description: "Prazos, pendências e alertas relevantes da agency",
-      icon: Bell,
-      color: "orange",
-    },
-    {
-      id: "quickActions",
-      name: "Ações Rápidas da Agency",
-      description: "Atalhos para aprovações, projetos e financeiro",
-      icon: Zap,
-      color: "sky",
-    },
-  ];
+  // Alias — o catálogo real vive em module scope (AGENCY_WIDGET_LIBRARY,
+  // acima do componente) pra poder ser importado pelo editor de template
+  // sem duplicar a lista.
+  const widgetLibrary: WidgetLibraryItem[] = AGENCY_WIDGET_LIBRARY;
 
   const getMetricsForPeriod = () => {
     const activeProjects = dashboardData.activeProjects;
@@ -2340,97 +2430,12 @@ export default function AdminDashboardPage() {
     });
   };
 
-  const handleExportAs = async (exportFormat: "pdf" | "png") => {
-    const area = document.getElementById("dashboard-export-area");
-    if (!area) {
-      alert("Nenhum conteúdo encontrado para exportar.");
-      return;
-    }
-
-    setIsExporting(true);
-
-    try {
-      const timestamp = format(new Date(), "yyyy-MM-dd-HHmm");
-
-      // html-to-image handles modern CSS (oklch, etc.) natively
-      const dataUrl = await toPng(area, {
-        quality: 1,
-        pixelRatio: 2,
-        backgroundColor: "#f1f5f9",
-        cacheBust: true,
-        skipAutoScale: true,
-        filter: (node: HTMLElement) => {
-          // Skip customize-mode controls if any are present
-          if (node?.dataset?.customizeControl) return false;
-          return true;
-        },
-      });
-
-      if (exportFormat === "png") {
-        const a = document.createElement("a");
-        a.href = dataUrl;
-        a.download = `dashboard-allka-${timestamp}.png`;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-      } else {
-        // Load image to get dimensions
-        const img = new Image();
-        img.src = dataUrl;
-        await new Promise<void>((resolve, reject) => {
-          img.onload = () => resolve();
-          img.onerror = reject;
-        });
-
-        // jsPDF (385 KB) so e necessario ao exportar; carregado sob demanda
-        const { default: jsPDF } = await import("jspdf");
-        const pdf = new jsPDF({
-          orientation: "portrait",
-          unit: "mm",
-          format: "a4",
-        });
-        const marginMm = 10;
-        const usableWidth = 210 - marginMm * 2;
-        const imgHeight = (img.height * usableWidth) / img.width;
-        const pageHeight = 297 - marginMm * 2;
-        let heightLeft = imgHeight;
-        let currentY = marginMm;
-
-        // First page
-        pdf.addImage(
-          dataUrl,
-          "PNG",
-          marginMm,
-          currentY,
-          usableWidth,
-          imgHeight,
-        );
-        heightLeft -= pageHeight;
-
-        // Additional pages if content overflows
-        while (heightLeft > 0) {
-          pdf.addPage();
-          currentY = marginMm - (imgHeight - heightLeft);
-          pdf.addImage(
-            dataUrl,
-            "PNG",
-            marginMm,
-            currentY,
-            usableWidth,
-            imgHeight,
-          );
-          heightLeft -= pageHeight;
-        }
-
-        pdf.save(`dashboard-allka-${timestamp}.pdf`);
-      }
-    } catch (error) {
-      console.error("Export error:", error);
-      alert("Erro ao exportar. Tente novamente.");
-    } finally {
-      setIsExporting(false);
-    }
-  };
+  // handleExportAs agora vem de useDashboardExport (declarado acima, junto
+  // com savedDashboards/currentDashboardId) — ver
+  // features/dashboards/shared/use-dashboard-export.ts. Substituiu a cópia
+  // local que tinha pixelRatio fixo em 2 (causa raiz do travamento em
+  // dashboards longos) e paginação por reembutir a mesma imagem gigante
+  // várias vezes.
 
   const handleMetricDragStart = (e: React.DragEvent, metricId: MetricType) => {
     if (!isEditingMetrics) return;
@@ -6157,7 +6162,28 @@ export default function AdminDashboardPage() {
   }
 
   return (
+    <>
     <DashboardShellFrame ref={dashboardScrollRef}>
+      {/* Aviso de erro de carregamento — distinto de "zero real"/"sem
+          dados". Se a busca real falhar, os números seguem no mock de
+          fallback local, então o aviso é essencial pra não passar a
+          impressão de dado real (ver widgetData/widgetDataError acima). */}
+      {widgetDataError && (
+        <div className="mb-3 flex items-center gap-2 rounded-xl border border-destructive/30 bg-destructive/5 px-4 py-2.5 text-sm text-destructive">
+          <AlertTriangle className="h-4 w-4 shrink-0" />
+          <span className="flex-1">
+            Não foi possível carregar alguns dados do dashboard. Os números afetados podem não refletir a realidade atual.
+          </span>
+          <Button
+            size="sm"
+            variant="outline"
+            className="h-7 text-xs shrink-0"
+            onClick={() => setGlobalPeriod((p) => ({ ...p }))}
+          >
+            Tentar novamente
+          </Button>
+        </div>
+      )}
       {/* Sticky Dashboard Header */}
       <div
         className={cn(
@@ -6380,7 +6406,9 @@ export default function AdminDashboardPage() {
                           <span className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none" style={{ background: "linear-gradient(135deg,#000000 0%,#1a2a6f 45%,#c81a7f 100%)" }} />
                           <LayoutGrid className="relative z-10 h-3.5 w-3.5 shrink-0 text-[#7d1b6a] group-hover:text-white transition-colors" />
                           <span className="relative z-10 text-xs font-semibold truncate bg-clip-text text-transparent [background-image:linear-gradient(135deg,#1a2a6f_0%,#7d1b6a_55%,#c81a7f_100%)] group-hover:[background-image:none] group-hover:text-white transition-colors">
-                            {savedDashboards.find((d) => d.id === currentDashboardId)?.name ?? "Selecionar dashboard"}
+                            {isViewingTemplateDefault
+                              ? `${profileTemplate?.name ?? "Padrão"} (Padrão)`
+                              : savedDashboards.find((d) => d.id === currentDashboardId)?.name ?? "Selecionar dashboard"}
                           </span>
                           <ChevronDown className="relative z-10 h-3 w-3 shrink-0 ml-auto text-[#c81a7f] group-hover:text-white transition-colors" />
                         </button>
@@ -6392,6 +6420,32 @@ export default function AdminDashboardPage() {
                         </div>
                         {/* Dashboard list */}
                         <div className="p-1">
+                          {profileTemplate && (
+                            <div className="group flex items-center gap-1 rounded-lg hover:bg-muted/50 transition-all">
+                              <button
+                                className="flex items-center gap-2 flex-1 text-left px-2.5 py-1.5 min-w-0"
+                                onClick={() => {
+                                  setCurrentDashboardId(TEMPLATE_DASHBOARD_ID);
+                                  setWidgets(profileTemplate.widgets as WidgetState[]);
+                                  toast({ title: "Dashboard carregado", description: `${profileTemplate.name} (Padrão)` });
+                                }}
+                              >
+                                <Lock className={cn("h-3.5 w-3.5 shrink-0 transition-colors", isViewingTemplateDefault ? "text-[#7d1b6a]" : "text-muted-foreground group-hover:text-[#7d1b6a]")} />
+                                <span className={cn(
+                                  "text-xs font-medium transition-colors truncate",
+                                  isViewingTemplateDefault
+                                    ? "bg-clip-text text-transparent [background-image:linear-gradient(135deg,#1a2a6f_0%,#7d1b6a_55%,#c81a7f_100%)]"
+                                    : "text-foreground group-hover:bg-clip-text group-hover:text-transparent group-hover:[background-image:linear-gradient(135deg,#1a2a6f_0%,#7d1b6a_55%,#c81a7f_100%)]"
+                                )}>
+                                  {profileTemplate.name} (Padrão)
+                                </span>
+                                {isViewingTemplateDefault && <Check className="h-3 w-3 shrink-0 ml-auto text-[#c81a7f]" />}
+                              </button>
+                            </div>
+                          )}
+                          {profileTemplate && savedDashboards.length > 0 && (
+                            <div className="my-1 h-px bg-border/50" />
+                          )}
                           {savedDashboards.map((db) => {
                             const isActive = currentDashboardId === db.id;
                             return (
@@ -6433,7 +6487,7 @@ export default function AdminDashboardPage() {
                               </div>
                             );
                           })}
-                          {savedDashboards.length === 0 && (
+                          {savedDashboards.length === 0 && !profileTemplate && (
                             <p className="px-3 py-3 text-xs text-muted-foreground text-center">Nenhum dashboard salvo</p>
                           )}
                         </div>
@@ -6441,10 +6495,10 @@ export default function AdminDashboardPage() {
                         <div className="border-t border-border/50 p-1">
                           <DropdownMenuItem
                             onSelect={() => {
-                              setDraftWidgets([]);
+                              editor.reset([]);
+                              editor.setMode("adicionar");
                               setEditHeaderName("");
                               setIsEditingHeaderName(true);
-                              setEditModalMode("adicionar");
                               setIsNewDashboardMode(true);
                               setIsEditDashboardModalOpen(true);
                             }}
@@ -6478,8 +6532,46 @@ export default function AdminDashboardPage() {
             {/* Divider */}
             <div className="hidden xl:block w-px h-5 bg-border/60 mx-1 shrink-0" />
 
-            {/* Ações (Export/Histórico/Compartilhar/Editar) — colam à direita no desktop, quebram no mobile */}
-            <div className="flex items-center gap-1 shrink-0 xl:ml-auto">
+            {/* Ações (Export/Histórico/Compartilhar/Editar) — colam à direita no desktop, quebram no mobile.
+                data-export-ignore: nenhum desses controles deve aparecer no PDF/PNG exportado. */}
+            <div className="flex items-center gap-1 shrink-0 xl:ml-auto" data-export-ignore="">
+
+            {/* Item 8/9 — o padrão do Admin não se edita direto: aqui é só
+                "criar visão pessoal" (a partir do padrão) ou "restaurar
+                pro padrão" (numa visão pessoal já existente). */}
+            {profileTemplate && (
+              <TooltipProvider delayDuration={400}>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <button
+                      onClick={() => {
+                        if (isViewingTemplateDefault) {
+                          createPersonalViewFromTemplate();
+                          toast({ title: "Visão pessoal criada a partir do padrão" });
+                        } else if (
+                          confirm("Restaurar esta visão para o template padrão atual? Isso substitui os widgets dela.")
+                        ) {
+                          const seeded = (profileTemplate.widgets as WidgetState[]).map((w) => ({ ...w }));
+                          setWidgets(seeded);
+                          setSavedDashboards((prev) => {
+                            const next = prev.map((d) => (d.id === currentDashboardId ? { ...d, widgets: seeded } : d));
+                            localStorage.setItem(DASHBOARD_STORAGE_KEY["AGENCY"], JSON.stringify(next));
+                            return next;
+                          });
+                        }
+                      }}
+                      className="group relative flex items-center justify-center h-8 w-8 rounded-lg border border-border/60 hover:border-transparent overflow-hidden transition-all"
+                    >
+                      <span className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none" style={{ background: "linear-gradient(135deg,#000000 0%,#1a2a6f 45%,#c81a7f 100%)" }} />
+                      <RotateCcw className="relative z-10 h-4 w-4 text-[#7d1b6a] group-hover:text-white transition-colors" />
+                    </button>
+                  </TooltipTrigger>
+                  <TooltipContent side="bottom" sideOffset={6}>
+                    {isViewingTemplateDefault ? "Criar visão personalizada" : "Restaurar para o padrão"}
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+            )}
 
             {/* Export */}
             <TooltipProvider delayDuration={400}>
@@ -6560,7 +6652,26 @@ export default function AdminDashboardPage() {
                 <TooltipTrigger asChild>
                   <button
                     onClick={() => {
-                      setDraftWidgets([...widgets].sort((a, b) => a.order - b.order));
+                      // Item 8/9 — o padrão do Admin não se edita direto:
+                      // oferece criar (e já entrar editando) uma visão
+                      // pessoal a partir dele.
+                      if (isViewingTemplateDefault) {
+                        if (
+                          !confirm(
+                            "Este é o dashboard padrão definido pelo Admin e não pode ser editado diretamente. Deseja criar uma visão pessoal a partir dele para personalizar?",
+                          )
+                        ) {
+                          return;
+                        }
+                        const newId = createPersonalViewFromTemplate();
+                        const seeded = (profileTemplate?.widgets as WidgetState[] ?? []).map((w) => ({ ...w })).sort((a, b) => a.order - b.order);
+                        editor.reset(seeded);
+                        setEditHeaderName("Minha visão");
+                        setIsEditingHeaderName(false);
+                        setIsEditDashboardModalOpen(true);
+                        return;
+                      }
+                      editor.reset([...widgets].sort((a, b) => a.order - b.order));
                       const currentDb = savedDashboards.find((d) => d.id === currentDashboardId);
                       setEditHeaderName(currentDb?.name ?? "Dashboard Padrão");
                       setIsEditingHeaderName(false);
@@ -6586,6 +6697,9 @@ export default function AdminDashboardPage() {
       </div>{/* end Sticky Header */}
       {/* Export capture area: metrics + widgets */}
       <div id="dashboard-export-area" className="flex flex-col gap-4">
+        {/* Banners/avisos do template padrão (item 10) — entram no export
+            porque fazem parte do dashboard "vivo" que o usuário vê. */}
+        <DashboardTemplateContentList contents={templateContents} onDismiss={dismissTemplateContent} />
         {/* Metrics Cards */}
         <div className="grid grid-cols-[repeat(auto-fill,minmax(140px,1fr))] gap-3" style={{ gridAutoRows: '130px' }}>
           {metricCards
@@ -6922,185 +7036,50 @@ export default function AdminDashboardPage() {
               onValueChange={setShareActiveTab}
               className="w-full"
             >
-              <TabsList className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 w-full">
-                <TabsTrigger value="permission">Permissão</TabsTrigger>
-                <TabsTrigger value="pin">PIN</TabsTrigger>
-                <TabsTrigger value="expiry">Expiração</TabsTrigger>
+              <TabsList className="grid grid-cols-2 w-full">
+                <TabsTrigger value="permission">Configuração</TabsTrigger>
+                <TabsTrigger value="links">Links criados</TabsTrigger>
               </TabsList>
 
-              {/* Permissão */}
-              <TabsContent value="permission" className="space-y-3 pt-2">
-                <p className="text-sm text-muted-foreground">
-                  Quem acessar o link poderá:
-                </p>
-                <div className="space-y-2">
-                  <button
-                    type="button"
-                    onClick={() => setSharePermission("view")}
-                    className={cn(
-                      "w-full flex items-start gap-3 p-3 rounded-lg border text-left transition-all",
-                      sharePermission === "view"
-                        ? "border-violet-400 bg-violet-50 dark:bg-violet-950/25 dark:border-violet-600"
-                        : "border-border hover:bg-muted/50",
-                    )}
-                  >
-                    <div
-                      className={cn(
-                        "mt-0.5 h-4 w-4 rounded-full border-2 flex items-center justify-center shrink-0",
-                        sharePermission === "view"
-                          ? "border-violet-500"
-                          : "border-muted-foreground",
-                      )}
-                    >
-                      {sharePermission === "view" && (
-                        <div className="h-2 w-2 rounded-full bg-violet-500" />
-                      )}
-                    </div>
-                    <div>
-                      <p className="text-sm font-medium">Somente Visualizar</p>
-                      <p className="text-xs text-muted-foreground">
-                        Acesso de leitura aos dados do dashboard
-                      </p>
-                    </div>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setSharePermission("comment")}
-                    className={cn(
-                      "w-full flex items-start gap-3 p-3 rounded-lg border text-left transition-all",
-                      sharePermission === "comment"
-                        ? "border-violet-400 bg-violet-50 dark:bg-violet-950/25 dark:border-violet-600"
-                        : "border-border hover:bg-muted/50",
-                    )}
-                  >
-                    <div
-                      className={cn(
-                        "mt-0.5 h-4 w-4 rounded-full border-2 flex items-center justify-center shrink-0",
-                        sharePermission === "comment"
-                          ? "border-violet-500"
-                          : "border-muted-foreground",
-                      )}
-                    >
-                      {sharePermission === "comment" && (
-                        <div className="h-2 w-2 rounded-full bg-violet-500" />
-                      )}
-                    </div>
-                    <div>
-                      <p className="text-sm font-medium">
-                        Visualizar + Comentar
-                      </p>
-                      <p className="text-xs text-muted-foreground">
-                        Pode adicionar comentários e anotações
-                      </p>
-                    </div>
-                  </button>
-                </div>
-                {/* Period being shared */}
-                <div className="rounded-lg bg-muted/50 px-3 py-2 text-xs border border-border/50 flex items-center justify-between gap-2">
-                  <span className="text-muted-foreground">Este link abrirá com:</span>
-                  <strong className="text-foreground">{globalPeriod.label}</strong>
-                </div>
-                {/* Allow filter changes */}
-                <div className="flex items-center justify-between p-3 border rounded-lg">
-                  <div>
-                    <p className="text-sm font-medium">Permitir alterar filtros</p>
-                    <p className="text-xs text-muted-foreground">
-                      Quem receber pode mudar período e datas
-                    </p>
-                  </div>
-                  <Switch
-                    checked={shareAllowFilterChanges}
-                    onCheckedChange={(v) => {
-                      setShareAllowFilterChanges(v);
-                      setGeneratedShareLink("");
-                    }}
-                  />
-                </div>
+              {/* Configuração do novo link — Permissão, URL personalizada,
+                  PIN e Expiração vivem juntos aqui porque pertencem ao
+                  MESMO link (não faz sentido espalhar em abas separadas,
+                  ver item 7 revisado). */}
+              <TabsContent value="permission" className="pt-2">
+                <ShareCreateForm
+                  permission={sharePermission}
+                  onPermissionChange={(v) => { setSharePermission(v); setGeneratedShareLink(""); }}
+                  slug={shareSlug}
+                  onSlugChange={(v) => { setShareSlug(v); setGeneratedShareLink(""); }}
+                  pinEnabled={sharePinEnabled}
+                  onPinEnabledChange={(v) => { setSharePinEnabled(v); setGeneratedShareLink(""); }}
+                  pin={sharePin}
+                  onPinChange={(v) => { setSharePin(v); setGeneratedShareLink(""); }}
+                  expiryEnabled={shareExpiryEnabled}
+                  onExpiryEnabledChange={(v) => { setShareExpiryEnabled(v); setGeneratedShareLink(""); }}
+                  expiry={shareExpiry}
+                  onExpiryChange={(v) => { setShareExpiry(v); setGeneratedShareLink(""); }}
+                  periodLabel={globalPeriod.label}
+                  allowFilterChanges={shareAllowFilterChanges}
+                  onAllowFilterChangesChange={(v) => { setShareAllowFilterChanges(v); setGeneratedShareLink(""); }}
+                  disabled={shareGenerating}
+                />
               </TabsContent>
 
-              {/* PIN */}
-              <TabsContent value="pin" className="space-y-3 pt-2">
-                <div className="flex items-center justify-between p-3 border rounded-lg">
-                  <div>
-                    <p className="text-sm font-medium">Proteger com PIN</p>
-                    <p className="text-xs text-muted-foreground">
-                      Solicitar um PIN de 4 dígitos para acessar
-                    </p>
-                  </div>
-                  <Switch
-                    checked={sharePinEnabled}
-                    onCheckedChange={(v) => {
-                      setSharePinEnabled(v);
-                      if (!v) setSharePin("");
-                      setGeneratedShareLink("");
-                    }}
-                  />
-                </div>
-                {sharePinEnabled && (
-                  <div className="space-y-1.5">
-                    <Label htmlFor="share-pin" className="text-sm">
-                      PIN (4 dígitos)
-                    </Label>
-                    <Input
-                      id="share-pin"
-                      type="password"
-                      inputMode="numeric"
-                      maxLength={4}
-                      value={sharePin}
-                      onChange={(e) => {
-                        const v = e.target.value.replace(/\D/g, "").slice(0, 4);
-                        setSharePin(v);
-                        setGeneratedShareLink("");
-                      }}
-                      placeholder="••••"
-                      className="text-center tracking-[0.5em] text-lg w-28"
-                    />
-                    {sharePinEnabled &&
-                      sharePin.length > 0 &&
-                      sharePin.length < 4 && (
-                        <p className="text-xs text-destructive">
-                          Digite exatamente 4 dígitos
-                        </p>
-                      )}
-                  </div>
-                )}
-              </TabsContent>
-
-              {/* Expiração */}
-              <TabsContent value="expiry" className="space-y-3 pt-2">
-                <div className="flex items-center justify-between p-3 border rounded-lg">
-                  <div>
-                    <p className="text-sm font-medium">Definir Expiração</p>
-                    <p className="text-xs text-muted-foreground">
-                      O link deixa de funcionar após essa data
-                    </p>
-                  </div>
-                  <Switch
-                    checked={shareExpiryEnabled}
-                    onCheckedChange={(v) => {
-                      setShareExpiryEnabled(v);
-                      if (!v) setShareExpiry("");
-                      setGeneratedShareLink("");
-                    }}
-                  />
-                </div>
-                {shareExpiryEnabled && (
-                  <div className="space-y-1.5">
-                    <Label htmlFor="share-expiry" className="text-sm">
-                      Data de expiração
-                    </Label>
-                    <Input
-                      id="share-expiry"
-                      type="date"
-                      value={shareExpiry}
-                      min={new Date().toISOString().slice(0, 10)}
-                      onChange={(e) => {
-                        setShareExpiry(e.target.value);
-                        setGeneratedShareLink("");
-                      }}
-                    />
-                  </div>
-                )}
+              {/* Links já criados pra este dashboard/widget — sempre
+                  filtrado por targetId no backend (routes/dashboard-shares.ts),
+                  nunca mistura com links de outro dashboard. */}
+              {/* forceMount: este painel precisa ficar montado mesmo com a
+                  aba "Configuração" ativa, senão a inserção otimista do
+                  link recém-criado (pendingLink) e o refetch por
+                  refreshSignal não têm componente nenhum pra reagir —
+                  era a causa da regressão "link novo não aparece sem F5". */}
+              <TabsContent value="links" className="pt-2 data-[state=inactive]:hidden" forceMount>
+                <ShareLinksPanel
+                  targetId={shareTarget?.id}
+                  refreshSignal={shareRefreshSignal}
+                  pendingLink={sharePendingLink}
+                />
               </TabsContent>
             </Tabs>
 
@@ -7137,10 +7116,10 @@ export default function AdminDashboardPage() {
             <Button
               className="btn-brand"
               onClick={handleGenerateShareLink}
-              disabled={sharePinEnabled && sharePin.length !== 4}
+              disabled={(sharePinEnabled && sharePin.length !== 4) || shareGenerating}
             >
               <Link2 className="h-4 w-4 mr-1.5" />
-              Gerar Link
+              {shareGenerating ? "Gerando..." : "Gerar Link"}
             </Button>
           </div>
         </SheetContent>
@@ -7587,24 +7566,7 @@ export default function AdminDashboardPage() {
           animação de saída rodar. Gatear aqui desmontaria o painel no
           mesmo instante do fechamento, cortando a animação. */}
       {(() => {
-          const modalGradientMap: Record<string, string> = {
-            blue: "from-blue-500 to-blue-700",
-            green: "from-green-500 to-green-700",
-            purple: "from-purple-500 to-purple-700",
-            indigo: "from-indigo-500 to-indigo-700",
-            orange: "from-orange-500 to-rose-600",
-            emerald: "from-emerald-500 to-teal-600",
-            teal: "from-teal-500 to-teal-700",
-            amber: "from-amber-500 to-orange-600",
-            yellow: "from-yellow-400 to-amber-600",
-            sky: "from-sky-500 to-blue-600",
-            red: "from-red-500 to-rose-700",
-            cyan: "from-cyan-500 to-sky-600",
-            slate: "from-slate-500 to-slate-700",
-          };
-          const availableWidgets = widgetLibrary
-            .filter((lib) => ROLE_WIDGET_IDS.has(lib.id))
-            .filter((lib) => !draftWidgets.some((dw) => dw.type === lib.id));
+          const roleCatalog = widgetLibrary.filter((lib) => ROLE_WIDGET_IDS.has(lib.id));
           return (
             <Sheet
               open={isEditDashboardModalOpen}
@@ -7630,7 +7592,7 @@ export default function AdminDashboardPage() {
                   className="flex-shrink-0 pl-6 pr-14 py-4 text-white"
                   style={{ background: "var(--app-brand-gradient)" }}
                 >
-                  <div className="flex items-center justify-between">
+                  <div className="flex items-center justify-between flex-wrap gap-y-2">
                     <div className="flex items-center gap-3">
                       <div className="bg-white/20 rounded-lg p-1.5">
                         <LayoutGrid className="h-4 w-4" />
@@ -7696,409 +7658,21 @@ export default function AdminDashboardPage() {
                         <p className="text-white/70 text-[11px] mt-0.5">
                           {isNewDashboardMode
                             ? "Adicione widgets à direita e dê um nome ao dashboard"
-                            : `Arraste para reordenar · ${draftWidgets.filter((w) => w.visible).length} widgets ativos`}
+                            : `Arraste para reordenar · ${editor.draftWidgets.filter((w) => w.visible).length} widgets ativos`}
                         </p>
                       </div>
                     </div>
-                    <div className="flex items-center gap-2">
-                      {/* Mode buttons */}
-                      <button
-                        onClick={() =>
-                          setEditModalMode((m) =>
-                            m === "remover" ? "none" : "remover",
-                          )
-                        }
-                        className={cn(
-                          "flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all",
-                          editModalMode === "remover"
-                            ? "bg-red-500 text-white shadow-md"
-                            : "bg-white/15 hover:bg-white/25 text-white/90",
-                        )}
-                      >
-                        <Trash2 className="h-3.5 w-3.5" />
-                        Remover
-                      </button>
-                      <button
-                        onClick={() =>
-                          setEditModalMode((m) =>
-                            m === "adicionar" ? "none" : "adicionar",
-                          )
-                        }
-                        className={cn(
-                          "flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all",
-                          editModalMode === "adicionar"
-                            ? "bg-emerald-500 text-white shadow-md"
-                            : "bg-white/15 hover:bg-white/25 text-white/90",
-                        )}
-                      >
-                        <Plus className="h-3.5 w-3.5" />
-                        Adicionar
-                      </button>
-                    </div>
+                    <DashboardWidgetEditorModeToggle editor={editor} />
                   </div>
                 </div>
 
-                {/* Body */}
-                <div className="flex flex-1 overflow-hidden">
-                  {/* Main widgets grid */}
-                  <div
-                    className={cn(
-                      "flex-1 overflow-y-auto p-6 bg-slate-200 dark:bg-slate-950/40 transition-all duration-300",
-                      editModalMode === "adicionar" && "border-r border-border",
-                    )}
-                  >
-                    {editModalMode === "remover" && (
-                      <div className="mb-5 flex items-center gap-2.5 px-4 py-2.5 bg-red-50 dark:bg-red-950/30 rounded-xl border border-red-200 dark:border-red-800">
-                        <Trash2 className="h-3.5 w-3.5 text-red-500 shrink-0" />
-                        <p className="text-xs text-red-700 dark:text-red-300 font-medium">
-                          Modo remoção ativo — clique no &#128465; para remover
-                          um widget permanentemente do dashboard
-                        </p>
-                      </div>
-                    )}
-                    {editModalMode === "adicionar" && (
-                      <div className="mb-5 flex items-center gap-2.5 px-4 py-2.5 bg-emerald-50 dark:bg-emerald-950/30 rounded-xl border border-emerald-200 dark:border-emerald-800">
-                        <Plus className="h-3.5 w-3.5 text-emerald-600 shrink-0" />
-                        <p className="text-xs text-emerald-700 dark:text-emerald-300 font-medium">
-                          Clique em um widget disponível à direita para
-                          adicioná-lo ao dashboard
-                        </p>
-                      </div>
-                    )}
-                    {/* Section header */}
-                    <div className="flex items-center gap-2 mb-4">
-                      <LayoutGrid className="h-3.5 w-3.5 text-muted-foreground/60" />
-                      <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-                        Widgets do dashboard
-                      </p>
-                      <span className="ml-auto text-[10px] font-medium text-muted-foreground bg-muted/60 rounded-full px-2 py-0.5">
-                        {draftWidgets.length}
-                      </span>
-                    </div>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                      {draftWidgets.map((widget) => {
-                        const libItem = widgetLibrary.find(
-                          (l) => l.id === widget.type,
-                        );
-                        const WIcon = libItem?.icon ?? LayoutGrid;
-                        const color = libItem?.color ?? "blue";
-                        const title = getWidgetTitle(
-                          widget.type,
-                          widget.customTitle,
-                        );
-                        const isDraggingThis = modalDraggedId === widget.id;
-                        const isDragOver =
-                          modalDragOverId === widget.id &&
-                          modalDraggedId !== widget.id;
-                        const gradient =
-                          modalGradientMap[color] ?? modalGradientMap.blue;
-                        const widgetColSpan = widget.colSpan ?? 1;
-                        const posNum =
-                          draftWidgets.findIndex((w) => w.id === widget.id) + 1;
-
-                        return (
-                          <div
-                            key={widget.id}
-                            draggable={editModalMode !== "remover"}
-                            onDragStart={() => setModalDraggedId(widget.id)}
-                            onDragOver={(e) => {
-                              e.preventDefault();
-                              setModalDragOverId(widget.id);
-                            }}
-                            onDragLeave={() => setModalDragOverId(null)}
-                            onDrop={() => {
-                              if (
-                                !modalDraggedId ||
-                                modalDraggedId === widget.id
-                              ) {
-                                setModalDraggedId(null);
-                                setModalDragOverId(null);
-                                return;
-                              }
-                              const from = draftWidgets.findIndex(
-                                (w) => w.id === modalDraggedId,
-                              );
-                              const to = draftWidgets.findIndex(
-                                (w) => w.id === widget.id,
-                              );
-                              const next = [...draftWidgets];
-                              const [moved] = next.splice(from, 1);
-                              next.splice(to, 0, moved);
-                              next.forEach((w, i) => {
-                                w.order = i;
-                              });
-                              setDraftWidgets(next);
-                              setModalDraggedId(null);
-                              setModalDragOverId(null);
-                            }}
-                            onDragEnd={() => {
-                              setModalDraggedId(null);
-                              setModalDragOverId(null);
-                            }}
-                            className={cn(
-                              "group relative rounded-xl border overflow-hidden select-none transition-all duration-150",
-                              widgetColSpan === 3
-                                ? "col-span-3"
-                                : widgetColSpan === 2
-                                  ? "col-span-2"
-                                  : "col-span-1",
-                              editModalMode !== "remover" &&
-                                "cursor-grab active:cursor-grabbing",
-                              widget.visible
-                                ? "border-slate-200 dark:border-slate-700 shadow-sm hover:shadow-md hover:border-slate-300 dark:hover:border-slate-600"
-                                : "border-dashed border-slate-200 dark:border-slate-700 opacity-50",
-                              isDraggingThis && "opacity-30 scale-95",
-                              isDragOver &&
-                                "ring-2 ring-blue-500 ring-offset-2 scale-[1.02]",
-                            )}
-                          >
-                            {/* Top gradient band with prominent position number */}
-                            <div
-                              className={cn(
-                                "h-10 w-full bg-gradient-to-r flex items-center gap-2.5 px-3",
-                                gradient,
-                              )}
-                            >
-                              {/* Number badge */}
-                              <div className="flex items-center justify-center w-6 h-6 rounded-full bg-white shadow-md text-[11px] font-extrabold text-slate-800 shrink-0 leading-none">
-                                {posNum}
-                              </div>
-                              {/* Widget title in band */}
-                              <span className="flex-1 min-w-0 text-white text-[11px] font-semibold leading-tight truncate">
-                                {title}
-                              </span>
-                              {/* Drag handle */}
-                              {editModalMode !== "remover" && (
-                                <GripVertical className="h-4 w-4 text-white/50 group-hover:text-white/90 transition-colors shrink-0" />
-                              )}
-                            </div>
-
-                            <div className="px-3 py-2.5 bg-card">
-                              <div className="flex items-center gap-2 mb-2.5">
-                                {/* Icon */}
-                                <div
-                                  className={cn(
-                                    "shrink-0 rounded-md p-1.5 bg-gradient-to-br text-white shadow-sm",
-                                    gradient,
-                                  )}
-                                >
-                                  <WIcon className="h-3.5 w-3.5" />
-                                </div>
-                                {/* Width indicator */}
-                                <p className="text-[10px] text-muted-foreground font-medium leading-snug">
-                                  {widgetColSpan === 1
-                                    ? "1/3 da largura"
-                                    : widgetColSpan === 2
-                                      ? "2/3 da largura"
-                                      : "Largura total"}
-                                </p>
-                              </div>
-
-                              {/* Col-span selector */}
-                              <div className="flex items-center gap-1.5 mb-2">
-                                <span className="text-[10px] text-muted-foreground font-medium shrink-0">
-                                  Largura:
-                                </span>
-                                {([1, 2, 3] as const).map((n) => (
-                                  <button
-                                    key={n}
-                                    onMouseDown={(e) => e.stopPropagation()}
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      setDraftWidgets((prev) =>
-                                        prev.map((w) =>
-                                          w.id === widget.id
-                                            ? { ...w, colSpan: n }
-                                            : w,
-                                        ),
-                                      );
-                                    }}
-                                    title={
-                                      n === 1
-                                        ? "1 coluna (1/3)"
-                                        : n === 2
-                                          ? "2 colunas (2/3)"
-                                          : "3 colunas (100%)"
-                                    }
-                                    className={cn(
-                                      "flex-1 h-5 text-[10px] font-bold rounded transition-colors border",
-                                      widgetColSpan === n
-                                        ? "bg-blue-600 text-white border-blue-600"
-                                        : "bg-muted/50 text-muted-foreground border-border hover:bg-muted",
-                                    )}
-                                  >
-                                    {n}
-                                  </button>
-                                ))}
-                              </div>
-
-                              {/* Action row */}
-                              <div className="flex items-center justify-between pt-2 border-t border-border/60">
-                                {/* Visibility toggle */}
-                                <button
-                                  onMouseDown={(e) => e.stopPropagation()}
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    setDraftWidgets((prev) =>
-                                      prev.map((w) =>
-                                        w.id === widget.id
-                                          ? { ...w, visible: !w.visible }
-                                          : w,
-                                      ),
-                                    );
-                                  }}
-                                  className={cn(
-                                    "flex items-center gap-1 text-[10px] font-medium rounded-md px-2 py-1 transition-colors",
-                                    widget.visible
-                                      ? "text-emerald-600 bg-emerald-50 dark:bg-emerald-950/40 hover:bg-emerald-100"
-                                      : "text-muted-foreground bg-muted/60 hover:bg-muted",
-                                  )}
-                                >
-                                  {widget.visible ? (
-                                    <Activity className="h-3 w-3" />
-                                  ) : (
-                                    <EyeOff className="h-3 w-3" />
-                                  )}
-                                  {widget.visible ? "Visível" : "Oculto"}
-                                </button>
-
-                                {/* Remove button - only in remover mode */}
-                                {editModalMode === "remover" && (
-                                  <button
-                                    onMouseDown={(e) => e.stopPropagation()}
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      setDraftWidgets((prev) =>
-                                        prev.filter((w) => w.id !== widget.id),
-                                      );
-                                    }}
-                                    className="flex items-center gap-1 text-[10px] font-semibold text-red-600 bg-red-50 dark:bg-red-950/40 hover:bg-red-100 rounded-md px-2 py-1 transition-colors"
-                                  >
-                                    <Trash2 className="h-3 w-3" />
-                                    Remover
-                                  </button>
-                                )}
-                              </div>
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-
-                  {/* Right panel: available widgets to add */}
-                  {editModalMode === "adicionar" && (
-                    <div className="w-80 shrink-0 overflow-y-auto bg-muted/30 border-l border-border flex flex-col">
-                      <div className="sticky top-0 bg-background/95 backdrop-blur-sm border-b border-border px-5 py-3.5">
-                        <div className="flex items-center gap-2">
-                          <Plus className="h-3.5 w-3.5 text-emerald-500 shrink-0" />
-                          <h3 className="text-xs font-semibold text-foreground uppercase tracking-wider">
-                            Widgets disponíveis
-                          </h3>
-                        </div>
-                        <p className="text-[11px] text-muted-foreground mt-1">
-                          {availableWidgets.length === 0
-                            ? "Todos os widgets já estão no dashboard"
-                            : `${availableWidgets.length} widget${availableWidgets.length !== 1 ? "s" : ""} para adicionar`}
-                        </p>
-                      </div>
-                      <div className="p-4 flex flex-col gap-2.5">
-                        {availableWidgets.length === 0 ? (
-                          <div className="flex flex-col items-center justify-center py-14 text-center">
-                            <div className="bg-emerald-100 dark:bg-emerald-950/40 rounded-full p-3.5 mb-3">
-                              <Check className="h-5 w-5 text-emerald-600" />
-                            </div>
-                            <p className="text-sm font-semibold text-foreground">
-                              Tudo adicionado!
-                            </p>
-                            <p className="text-xs text-muted-foreground mt-1">
-                              Todos os widgets já estão no dashboard
-                            </p>
-                          </div>
-                        ) : (
-                          availableWidgets.map((lib) => {
-                            const WIcon = lib.icon;
-                            const gradient =
-                              modalGradientMap[lib.color ?? "blue"] ??
-                              modalGradientMap.blue;
-                            return (
-                              <button
-                                key={lib.id}
-                                onClick={() => {
-                                  const maxOrder = Math.max(
-                                    ...draftWidgets.map((w) => w.order),
-                                    -1,
-                                  );
-                                  setDraftWidgets((prev) => [
-                                    ...prev,
-                                    {
-                                      id: `${lib.id}-${Date.now()}`,
-                                      type: lib.id as WidgetType,
-                                      visible: true,
-                                      order: maxOrder + 1,
-                                      colSpan: 1,
-                                    },
-                                  ]);
-                                }}
-                                className="w-full text-left group flex items-center gap-3 px-3.5 py-3 rounded-xl border border-border bg-card hover:border-emerald-400 hover:bg-emerald-50/40 dark:hover:bg-emerald-950/20 hover:shadow-sm active:scale-[0.98] transition-all duration-150"
-                              >
-                                <div
-                                  className={cn(
-                                    "shrink-0 rounded-lg p-2 bg-gradient-to-br text-white shadow-sm",
-                                    gradient,
-                                  )}
-                                >
-                                  <WIcon className="h-3.5 w-3.5" />
-                                </div>
-                                <div className="flex-1 min-w-0">
-                                  <p className="text-xs font-semibold text-foreground leading-snug">
-                                    {lib.name}
-                                  </p>
-                                  <p className="text-[10px] text-muted-foreground mt-0.5 leading-tight">
-                                    {lib.description}
-                                  </p>
-                                </div>
-                                <div className="shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
-                                  <div className="bg-emerald-500 rounded-full p-0.5">
-                                    <Plus className="h-3 w-3 text-white" />
-                                  </div>
-                                </div>
-                              </button>
-                            );
-                          })
-                        )}
-                      </div>
-                    </div>
-                  )}
-                </div>
-
-                {/* Footer */}
-                <div className="flex-shrink-0 border-t bg-muted/20 px-6 py-3 flex items-center gap-4">
-                  <div className="flex items-center gap-2">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="h-8 px-4 text-sm"
-                      onClick={() => setShowCancelConfirmDialog(true)}
-                    >
-                      Cancelar
-                    </Button>
-                    <Button
-                      size="sm"
-                      className="h-8 px-5 text-sm btn-brand shadow-sm gap-1.5"
-                      onClick={() => setShowSaveConfirmDialog(true)}
-                    >
-                      <Save className="h-3.5 w-3.5" />
-                      {isNewDashboardMode ? "Criar" : "Salvar"}
-                    </Button>
-                  </div>
-                  <div className="w-px h-5 bg-border" />
-                  <span className="text-xs text-muted-foreground">
-                    {draftWidgets.filter((w) => w.visible).length} visíveis ·{" "}
-                    {draftWidgets.filter((w) => !w.visible).length} ocultos ·{" "}
-                    {draftWidgets.length} total
-                  </span>
-                </div>
+                <DashboardWidgetEditorBody editor={editor} catalog={roleCatalog} getWidgetTitle={getWidgetTitle} />
+                <DashboardWidgetEditorFooter
+                  editor={editor}
+                  onCancel={() => setShowCancelConfirmDialog(true)}
+                  onSave={() => setShowSaveConfirmDialog(true)}
+                  saveLabel={isNewDashboardMode ? "Criar" : "Salvar"}
+                />
               </SheetContent>
             </Sheet>
           );
@@ -8124,7 +7698,7 @@ export default function AdminDashboardPage() {
         title={isNewDashboardMode ? "Criar dashboard" : "Salvar dashboard"}
         message={
           isNewDashboardMode
-            ? `Deseja criar o dashboard "${editHeaderName.trim() || "Novo Dashboard"}" com ${draftWidgets.length} widget(s)?`
+            ? `Deseja criar o dashboard "${editHeaderName.trim() || "Novo Dashboard"}" com ${editor.draftWidgets.length} widget(s)?`
             : "Deseja salvar as alterações feitas no dashboard? As mudanças serão aplicadas imediatamente."
         }
         confirmText={isNewDashboardMode ? "Criar" : "Salvar"}
@@ -8164,7 +7738,8 @@ export default function AdminDashboardPage() {
         destructive={true}
       />
     </DashboardShellFrame>
-    // </CHANGE>
+    <DashboardExportOverlay state={exportState} onDismiss={resetExportState} onRetry={handleExportAs} />
+    </>
   );
 }
 

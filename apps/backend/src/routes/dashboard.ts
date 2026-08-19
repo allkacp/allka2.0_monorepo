@@ -1,6 +1,12 @@
 import { Router } from "express";
 import { prisma } from "../lib/prisma";
 import { verifyToken } from "../middleware/auth";
+import { computeDashboardWidgetsMetrics } from "../lib/dashboard-widgets";
+import {
+  resolveAuthenticatedProfile,
+  resolveOwnScopeId,
+  resolveDashboardScopeExtras,
+} from "../lib/dashboard-scope";
 
 const router = Router();
 
@@ -35,11 +41,26 @@ router.get("/stats", verifyToken, async (req, res, next) => {
       prisma.project.count({ where: { status: "in-progress" } }),
       prisma.nomade.count(),
       prisma.nomade.count({ where: { status: "ativo" } }),
-      prisma.taskExecution.count(),
-      prisma.taskExecution.count({
-        where: { status: { in: ["draft", "launched", "in_progress"] } },
+      // ProjectTask é o motor real de tarefas — TaskExecution é uma tabela
+      // legada praticamente vazia (ver lib/dashboard-widgets.ts).
+      prisma.projectTask.count(),
+      prisma.projectTask.count({
+        where: {
+          status: {
+            in: [
+              "PARA_LANCAMENTO",
+              "EM_LANCAMENTO",
+              "AGUARDANDO_INFORMACOES",
+              "LIBERADA_PARA_EXECUCAO",
+              "AGUARDANDO_NOMADE",
+              "EM_EXECUCAO",
+              "EM_REVISAO",
+              "EM_APROVACAO",
+            ],
+          },
+        },
       }),
-      prisma.taskExecution.count({ where: { status: "approved" } }),
+      prisma.projectTask.count({ where: { status: "CONCLUIDA" } }),
       prisma.withdrawalRequest.count(),
       prisma.withdrawalRequest.count({
         where: { status: "aguardando_analise" },
@@ -228,7 +249,8 @@ router.get("/recent-activities", verifyToken, async (req, res, next) => {
           created_by: { select: { name: true } },
         },
       }),
-      prisma.taskExecution.findMany({
+      // ProjectTask (motor real) — TaskExecution é legado/quase vazio.
+      prisma.projectTask.findMany({
         take: limit,
         orderBy: { updated_at: "desc" },
         select: {
@@ -236,7 +258,7 @@ router.get("/recent-activities", verifyToken, async (req, res, next) => {
           title: true,
           status: true,
           updated_at: true,
-          nomade: { select: { name: true } },
+          nomade_responsavel_id: true,
         },
       }),
       prisma.nomade.findMany({
@@ -245,6 +267,14 @@ router.get("/recent-activities", verifyToken, async (req, res, next) => {
         select: { id: true, name: true, level: true, status: true, registration_date: true },
       }),
     ]);
+
+    const taskNomadeIds = [
+      ...new Set(recentTasks.map((t) => t.nomade_responsavel_id).filter((v): v is string => !!v)),
+    ];
+    const taskNomades = taskNomadeIds.length
+      ? await prisma.nomade.findMany({ where: { id: { in: taskNomadeIds } }, select: { id: true, name: true } })
+      : [];
+    const nomadeNameById = new Map(taskNomades.map((n) => [n.id, n.name]));
 
     const activities = [
       ...recentProjects.map((p) => ({
@@ -261,7 +291,7 @@ router.get("/recent-activities", verifyToken, async (req, res, next) => {
         type: "task",
         id: t.id,
         title: `Tarefa: ${t.title}`,
-        subtitle: t.nomade?.name,
+        subtitle: t.nomade_responsavel_id ? nomadeNameById.get(t.nomade_responsavel_id) : undefined,
         status: t.status,
         date: t.updated_at,
       })),
@@ -292,18 +322,31 @@ router.post("/widgets", verifyToken, async (req, res, next) => {
     const from = fromRaw ? new Date(fromRaw) : new Date(now.getTime() - 30 * 86_400_000);
     const to = toRaw ? new Date(toRaw) : now;
 
-    const dateWhere = { gte: from, lte: to };
-    const paidDateOr = [
-      { paid_at: dateWhere },
-      { paid_at: null as any, created_at: dateWhere },
-    ];
+    // Escopo NUNCA vem do corpo da requisição — é sempre derivado de quem
+    // está autenticado (mesma resolução usada na criação de um ShareLink,
+    // ver lib/dashboard-scope.ts). Admin e Leader continuam sem filtro:
+    // Admin por design (vê a plataforma inteira); Leader porque hoje não
+    // existe uma forma segura de reduzir a um único id de escopo (LiderArea
+    // é um conjunto de categorias/produtos, não um id) — limitação
+    // documentada, não contornada liberando dados amplos por engano; é o
+    // mesmo comportamento que o compartilhamento de Leader já tinha.
+    const profile = resolveAuthenticatedProfile(req.user!);
+    const scopeId =
+      profile && profile !== "admin" && profile !== "leader"
+        ? await resolveOwnScopeId(prisma, req.user!, profile)
+        : null;
+    const scopeExtras =
+      profile && profile !== "admin"
+        ? await resolveDashboardScopeExtras(prisma, profile, scopeId)
+        : {};
 
-    const [
-      paidRevenue,
-      revenueRecurring,
-      revenueOneTime,
-      revenueCreditPlan,
-      pendingRevenue,
+    const {
+      revenue,
+      revenueRec,
+      revenueOne,
+      revenueCp,
+      avgTicket,
+      outstanding,
       projectsTotal,
       projectsInProgress,
       projectsDelivered,
@@ -316,7 +359,10 @@ router.post("/widgets", verifyToken, async (req, res, next) => {
       tasksClientApproval,
       tasksExpired,
       tasksCancelled,
+      completionRate,
       nomadsActive,
+      nomadsInactive,
+      nomadsTotal,
       nomadsNew,
       companiesActive,
       companiesTrial,
@@ -324,43 +370,7 @@ router.post("/widgets", verifyToken, async (req, res, next) => {
       companiesCancelled,
       companiesTotal,
       partnersActive,
-    ] = await Promise.all([
-      prisma.invoice.aggregate({ _sum: { amount: true }, _count: true, where: { status: "paid", OR: paidDateOr } }),
-      prisma.invoice.aggregate({ _sum: { amount: true }, where: { status: "paid", OR: paidDateOr, project: { lifecycle: "mensal" } } }),
-      prisma.invoice.aggregate({ _sum: { amount: true }, where: { status: "paid", OR: paidDateOr, project: { lifecycle: "avulso" } } }),
-      prisma.invoice.aggregate({ _sum: { amount: true }, where: { status: "paid", OR: paidDateOr, project_id: null } }),
-      prisma.invoice.aggregate({ _sum: { amount: true }, where: { status: { in: ["pending", "overdue"] }, created_at: dateWhere } }),
-      prisma.project.count({ where: { created_at: dateWhere } }),
-      prisma.project.count({ where: { status: "in-progress", created_at: dateWhere } }),
-      prisma.project.count({ where: { status: { in: ["completed", "paid"] }, created_at: dateWhere } }),
-      prisma.project.count({ where: { status: "cancelled", created_at: dateWhere } }),
-      prisma.taskExecution.count({ where: { created_at: dateWhere } }),
-      prisma.taskExecution.count({ where: { status: "approved", created_at: dateWhere } }),
-      prisma.taskExecution.count({ where: { status: { in: ["in_progress", "launched"] }, created_at: dateWhere } }),
-      prisma.taskExecution.count({ where: { status: { in: ["draft", "returned"] }, created_at: dateWhere } }),
-      prisma.taskExecution.count({ where: { status: "agency_approval", created_at: dateWhere } }),
-      prisma.taskExecution.count({ where: { status: "client_approval", created_at: dateWhere } }),
-      prisma.taskExecution.count({ where: { status: "expired", created_at: dateWhere } }),
-      prisma.taskExecution.count({ where: { status: "rejected", created_at: dateWhere } }),
-      prisma.nomade.count({ where: { status: "ativo" } }),
-      prisma.nomade.count({ where: { created_at: dateWhere } }),
-      prisma.company.count({ where: { status: "ativo" } }),
-      prisma.company.count({ where: { status: "prospecto" } }),
-      prisma.company.count({ where: { status: "inadimplente" } }),
-      prisma.company.count({ where: { status: "inativo" } }),
-      prisma.company.count(),
-      prisma.partnerProfile.count({ where: { status: "active" } }),
-    ]);
-
-    const revenue = paidRevenue._sum.amount ?? 0;
-    const revenueRec = revenueRecurring._sum.amount ?? 0;
-    const revenueOne = revenueOneTime._sum.amount ?? 0;
-    const revenueCp = revenueCreditPlan._sum.amount ?? 0;
-    const invoiceCount = paidRevenue._count ?? 0;
-    const avgTicket = invoiceCount > 0 ? Math.round(revenue / invoiceCount) : 0;
-    const outstanding = pendingRevenue._sum.amount ?? 0;
-    const completionRate = tasksTotal > 0 ? Math.round((tasksApproved / tasksTotal) * 100) : 0;
-    const pendingProjects = Math.max(projectsTotal - projectsInProgress - projectsDelivered - projectsCancelled, 0);
+    } = await computeDashboardWidgetsMetrics(prisma, from, to, scopeExtras);
     const trendBase = (v: number) => [0.7, 0.78, 0.84, 0.9, 0.96, 1].map((f) => Math.round(v * f));
 
     res.json({
@@ -372,7 +382,10 @@ router.post("/widgets", verifyToken, async (req, res, next) => {
       activeProjects: { total: projectsTotal, growth: 0 },
       tasks: { total: tasksTotal, completed: tasksApproved, inProgress: tasksInProgress, contracted: tasksPending, cancelled: tasksCancelled, agencyApproval: tasksAgencyApproval, clientApproval: tasksClientApproval, expired: tasksExpired },
       accountsReceivable: { total: outstanding + revenue, received: revenue },
-      nomads: { total: nomadsActive, active: nomadsActive, newInPeriod: nomadsNew, growth: 0 },
+      // Bug corrigido: "total" usava nomadsActive (era sempre igual a
+      // "active"). Nomade.status hoje só distingue ativo/inativo — soma
+      // exata do total real (ver lib/dashboard-widgets.ts).
+      nomads: { total: nomadsTotal, active: nomadsActive, inactive: nomadsInactive, newInPeriod: nomadsNew, growth: 0 },
       partnerProgram: { activePartners: partnersActive },
       statusOverview: { active: companiesActive, trial: companiesTrial, suspended: companiesSuspended, cancelled: companiesCancelled, total: companiesTotal },
       creditPlans: {},
@@ -458,6 +471,303 @@ router.get("/dre", verifyToken, async (req, res, next) => {
         amount: d._sum.amount ?? 0,
         count: d._count,
       })),
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// GET /api/dashboard/admin-widgets?from=&to=
+// Métricas adicionais do Admin Dashboard que POST /widgets não cobre (esse
+// é reaproveitado pelo compartilhamento — ver lib/dashboard-widgets.ts — e
+// fica deliberadamente enxuto). Tudo aqui é específico do Admin: rankings,
+// perfis administrativos, breakdown financeiro mais fino. Sem escopo — o
+// Admin vê a plataforma inteira, igual aos outros endpoints deste arquivo.
+//
+// Alguns campos vêm explicitamente `null` com um `reason` — não é erro, é a
+// forma de dizer "não há dado real suficiente pra calcular isto hoje" (ver
+// LTV e retenção de coorte) em vez de inventar um número.
+router.get("/admin-widgets", verifyToken, async (req, res, next) => {
+  try {
+    const fromParam = req.query.from as string | undefined;
+    const toParam = req.query.to as string | undefined;
+    const now = new Date();
+    const from = fromParam ? new Date(fromParam) : new Date(now.getTime() - 30 * 86_400_000);
+    const to = toParam ? new Date(toParam) : now;
+    const periodMs = to.getTime() - from.getTime();
+    const prevFrom = new Date(from.getTime() - periodMs);
+    const prevTo = new Date(from.getTime() - 1);
+
+    const dateWhere = { gte: from, lte: to };
+    const paidDateOr = (range: { gte: Date; lte: Date }) => [
+      { paid_at: range },
+      { paid_at: null as any, created_at: range },
+    ];
+
+    const [
+      // MRR breakdown: receita recorrente (lifecycle=mensal) do período atual
+      // agrupada por empresa, comparada com o período anterior de mesma
+      // duração — "nova" (empresa não pagava antes, paga agora), "expansão"
+      // (pagava menos, paga mais), "contração" (pagava mais, paga menos),
+      // "churn" (pagava antes, não paga mais). Isto é o que dá pra calcular
+      // com o que existe hoje (Invoice ligada a Project.lifecycle="mensal");
+      // não é MRR "oficial" de um sistema de assinaturas com ciclo próprio.
+      currentRecurringByCompany,
+      previousRecurringByCompany,
+      // Ticket médio por tipo real de projeto (Project.company_type) — não
+      // existe "Lead Premium" no schema, então essa categoria não aparece.
+      ticketByType,
+      // Contas a receber: plano de crédito = fatura sem projeto vinculado;
+      // pós-pago = fatura com projeto. "Outros" não tem base real — fica 0.
+      receivableCreditPlan,
+      receivablePostPaid,
+      // Nômades: qualidade vem de campos já mantidos no cadastro do nômade
+      // (performance_avg_rating/performance_on_time, recalculados alhures
+      // no sistema) — não recalculamos aqui, só agregamos.
+      nomadQuality,
+      nomadsInactive,
+      nomadsTotal,
+      nomadsRankingRaw,
+      agenciesRankingRaw,
+      partnerInvited,
+      partnerAccepted,
+      partnerDeclined,
+      partnerSuspended,
+      partnerByLevel,
+      partnerRevenueAgg,
+      usersByType,
+      projectsByStatus,
+      tasksByStatus,
+    ] = await Promise.all([
+      prisma.invoice.groupBy({
+        by: ["company_id"],
+        _sum: { amount: true },
+        where: {
+          status: "paid",
+          OR: paidDateOr(dateWhere),
+          project: { lifecycle: "mensal" },
+          company_id: { not: null },
+        },
+      }),
+      prisma.invoice.groupBy({
+        by: ["company_id"],
+        _sum: { amount: true },
+        where: {
+          status: "paid",
+          OR: paidDateOr({ gte: prevFrom, lte: prevTo }),
+          project: { lifecycle: "mensal" },
+          company_id: { not: null },
+        },
+      }),
+      prisma.project.groupBy({
+        by: ["company_type"],
+        _count: { id: true },
+        where: { created_at: dateWhere },
+      }),
+      prisma.invoice.aggregate({
+        _sum: { amount: true },
+        where: { status: "paid", OR: paidDateOr(dateWhere), project_id: null },
+      }),
+      prisma.invoice.aggregate({
+        _sum: { amount: true },
+        where: { status: "paid", OR: paidDateOr(dateWhere), project_id: { not: null } },
+      }),
+      prisma.nomade.aggregate({
+        // ProjectTask não tem campo de avaliação por tarefa — a nota fica
+        // só no cadastro do nômade (performance_avg_rating, mantida pelo
+        // sistema em outro fluxo). Não há segunda fonte pra cruzar aqui.
+        _avg: { performance_avg_rating: true, performance_on_time: true },
+        where: { status: "ativo" },
+      }),
+      prisma.nomade.count({ where: { status: { not: "ativo" } } }),
+      prisma.nomade.count(),
+      // Ranking real: nômades com mais tarefas concluídas no período (motor
+      // real ProjectTask — TaskExecution é a tabela legada/quase vazia).
+      prisma.projectTask.groupBy({
+        by: ["nomade_responsavel_id"],
+        _count: { id: true },
+        where: {
+          status: "CONCLUIDA",
+          created_at: dateWhere,
+          nomade_responsavel_id: { not: null },
+        },
+        orderBy: { _count: { id: "desc" } },
+        take: 10,
+      }),
+      // Ranking real: agências com mais receita paga no período.
+      prisma.invoice.groupBy({
+        by: ["project_id"],
+        _sum: { amount: true },
+        where: { status: "paid", OR: paidDateOr(dateWhere), project_id: { not: null } },
+      }),
+      prisma.partnerProfile.count({ where: { status: "invited" } }),
+      prisma.partnerProfile.count({ where: { status: "active" } }),
+      prisma.partnerProfile.count({ where: { status: "declined" } }),
+      prisma.partnerProfile.count({ where: { status: "suspended" } }),
+      prisma.agency.groupBy({
+        by: ["partner_level"],
+        _count: { id: true },
+        where: { status: "ativo" },
+      }),
+      // Receita gerada por projetos com partner_id atribuído (comissão de
+      // indicação) — proxy real disponível para "mrrGenerated".
+      prisma.invoice.aggregate({
+        _sum: { amount: true },
+        where: {
+          status: "paid",
+          OR: paidDateOr(dateWhere),
+          project: { partner_id: { not: null } },
+        },
+      }),
+      prisma.user.groupBy({ by: ["account_type"], _count: { id: true } }),
+      prisma.project.groupBy({ by: ["status"], _count: { id: true }, where: { created_at: dateWhere } }),
+      prisma.projectTask.groupBy({ by: ["status"], _count: { id: true }, where: { created_at: dateWhere } }),
+    ]);
+
+    // ── MRR breakdown por comparação de coorte simples (empresa a empresa) ──
+    const prevMap = new Map(previousRecurringByCompany.map((r) => [r.company_id, r._sum.amount ?? 0]));
+    const curMap = new Map(currentRecurringByCompany.map((r) => [r.company_id, r._sum.amount ?? 0]));
+    let newMrr = 0, expansion = 0, contraction = 0, churnMrr = 0;
+    for (const [companyId, curAmount] of curMap) {
+      const prevAmount = prevMap.get(companyId) ?? 0;
+      if (prevAmount === 0) newMrr += curAmount;
+      else if (curAmount > prevAmount) expansion += curAmount - prevAmount;
+      else if (curAmount < prevAmount) contraction += prevAmount - curAmount;
+    }
+    for (const [companyId, prevAmount] of prevMap) {
+      if (!curMap.has(companyId)) churnMrr += prevAmount;
+    }
+    const baseMrr = [...prevMap.values()].reduce((a, b) => a + b, 0);
+    const currentMrrTotal = [...curMap.values()].reduce((a, b) => a + b, 0);
+
+    // ── Ticket por tipo ──
+    const ticketByTypeOut: Record<string, number> = {};
+    for (const row of ticketByType) {
+      ticketByTypeOut[row.company_type ?? "não_classificado"] = row._count.id;
+    }
+
+    // ── Ranking de nômades: junta contagem com nome/nível real ──
+    const nomadIds = nomadsRankingRaw
+      .map((r) => r.nomade_responsavel_id)
+      .filter((v): v is string => !!v);
+    const nomadRows = nomadIds.length
+      ? await prisma.nomade.findMany({
+          where: { id: { in: nomadIds } },
+          select: { id: true, name: true, level: true, avatar: true, performance_avg_rating: true },
+        })
+      : [];
+    const nomadById = new Map(nomadRows.map((n) => [n.id, n]));
+    const nomadsRanking = nomadsRankingRaw
+      .map((r) => {
+        const n = nomadById.get(r.nomade_responsavel_id!);
+        return n
+          ? {
+              id: n.id,
+              name: n.name,
+              level: n.level,
+              avatar: n.avatar,
+              rating: n.performance_avg_rating,
+              tasksApproved: r._count.id,
+            }
+          : null;
+      })
+      .filter((v): v is NonNullable<typeof v> => !!v);
+
+    // ── Ranking de agências: soma receita por agência via project_id ──
+    const projIds = agenciesRankingRaw.map((r) => r.project_id).filter((v): v is string => !!v);
+    const projRows = projIds.length
+      ? await prisma.project.findMany({
+          where: { id: { in: projIds } },
+          select: { id: true, agency_id: true },
+        })
+      : [];
+    const agencyRevenue = new Map<string, number>();
+    const projToAgency = new Map(projRows.map((p) => [p.id, p.agency_id]));
+    for (const row of agenciesRankingRaw) {
+      const agencyId = projToAgency.get(row.project_id!);
+      if (!agencyId) continue;
+      agencyRevenue.set(agencyId, (agencyRevenue.get(agencyId) ?? 0) + (row._sum.amount ?? 0));
+    }
+    const topAgencyIds = [...agencyRevenue.entries()]
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 10)
+      .map(([id]) => id);
+    const agencyRows = topAgencyIds.length
+      ? await prisma.agency.findMany({
+          where: { id: { in: topAgencyIds } },
+          select: { id: true, name: true, partner_level: true },
+        })
+      : [];
+    const agencyById = new Map(agencyRows.map((a) => [a.id, a]));
+    // Projetos faturados no período, por agência (a partir dos mesmos
+    // projRows já buscados acima) — não é "total de projetos da agência",
+    // é "quantos projetos geraram fatura paga neste período".
+    const billedProjectsByAgency = new Map<string, number>();
+    for (const p of projRows) {
+      if (!p.agency_id) continue;
+      billedProjectsByAgency.set(p.agency_id, (billedProjectsByAgency.get(p.agency_id) ?? 0) + 1);
+    }
+    const agenciesRanking = topAgencyIds
+      .map((id) => {
+        const a = agencyById.get(id);
+        return a
+          ? {
+              id: a.id,
+              name: a.name,
+              level: a.partner_level,
+              revenue: agencyRevenue.get(id) ?? 0,
+              billedProjects: billedProjectsByAgency.get(id) ?? 0,
+            }
+          : null;
+      })
+      .filter((v): v is NonNullable<typeof v> => !!v);
+
+    res.json({
+      mrrBreakdown: {
+        total: currentMrrTotal,
+        baseMrr,
+        newMrr,
+        expansion,
+        contraction,
+        churn: churnMrr,
+        netChange: currentMrrTotal - baseMrr,
+      },
+      ticketByType: ticketByTypeOut,
+      accountsReceivableBreakdown: {
+        creditPlans: receivableCreditPlan._sum.amount ?? 0,
+        postPaid: receivablePostPaid._sum.amount ?? 0,
+        // Não existe hoje uma terceira categoria financeira real distinta
+        // destas duas — mantido em 0 de propósito, não é um dado omitido.
+        others: 0,
+      },
+      ltv: null,
+      ltvReason:
+        "Não há dados de coorte/retenção de clientes registrados (data de churn, tempo de vida da conta) suficientes para calcular LTV real. O que existe hoje (ticket médio × 12) é uma aproximação, não um LTV calculado.",
+      nomads: {
+        inactive: nomadsInactive,
+        total: nomadsTotal,
+        avgRating: nomadQuality._avg.performance_avg_rating ?? null,
+        avgOnTimeRate: nomadQuality._avg.performance_on_time ?? null,
+        retention30d: null,
+        retention30dReason:
+          "Retenção de coorte precisa de uma definição de janela de atividade por nômade que ainda não está registrada — não calculada.",
+      },
+      nomadsRanking,
+      agenciesRanking,
+      partnerProgram: {
+        invited: partnerInvited,
+        active: partnerAccepted,
+        declined: partnerDeclined,
+        suspended: partnerSuspended,
+        byLevel: Object.fromEntries(partnerByLevel.map((r) => [r.partner_level, r._count.id])),
+        revenueGenerated: partnerRevenueAgg._sum.amount ?? 0,
+      },
+      userDistribution: usersByType.map((r) => ({ type: r.account_type, count: r._count.id })),
+      statusOverview: {
+        projects: Object.fromEntries(projectsByStatus.map((r) => [r.status, r._count.id])),
+        tasks: Object.fromEntries(tasksByStatus.map((r) => [r.status, r._count.id])),
+        // Não existe model de "Lead" no schema hoje — não incluído.
+      },
     });
   } catch (err) {
     next(err);

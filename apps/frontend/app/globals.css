@@ -2227,3 +2227,28 @@
     border-top-color: rgb(30 41 59) !important;
   }
 }
+
+/*
+ * Comentários de share com rich text (ver comment-editor.tsx e
+ * routes/share.ts). Classes fechadas — o backend só aceita exatamente
+ * estas em `allowedClasses`, nunca cor/tamanho arbitrário.
+ */
+.ac-color-default { color: inherit; }
+.ac-color-slate { color: rgb(71 85 105); }
+.ac-color-blue { color: rgb(37 99 235); }
+.ac-color-green { color: rgb(5 150 105); }
+.ac-color-amber { color: rgb(217 119 6); }
+.ac-color-red { color: rgb(220 38 38); }
+.ac-color-purple { color: rgb(124 58 237); }
+.ac-color-pink { color: rgb(219 39 119); }
+.dark .ac-color-slate { color: rgb(148 163 184); }
+.dark .ac-color-blue { color: rgb(96 165 250); }
+.dark .ac-color-green { color: rgb(52 211 153); }
+.dark .ac-color-amber { color: rgb(251 191 36); }
+.dark .ac-color-red { color: rgb(248 113 113); }
+.dark .ac-color-purple { color: rgb(167 139 250); }
+.dark .ac-color-pink { color: rgb(244 114 182); }
+
+.ac-size-sm { font-size: 0.8em; }
+.ac-size-base { font-size: 1em; }
+.ac-size-lg { font-size: 1.35em; }
