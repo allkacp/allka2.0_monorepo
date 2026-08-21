@@ -232,9 +232,11 @@ export function ProjectBasketDrawer() {
     basket.setOpen(false);
   };
 
-  // Vai pro catálogo do portal atual e fecha a cesta — usado pelos botões
-  // "Ir para o catálogo" (cesta vazia) e "Continuar adicionando" (cesta com
-  // itens), que são a mesma ação de navegação em dois estados diferentes.
+  // Vai pro catálogo do portal atual e fecha a cesta — usado só pelo botão
+  // "Ir para o catálogo" do estado de cesta vazia. Com itens na cesta, o
+  // painel mostra apenas "Criar projeto com estes itens" (e "Limpar"); não
+  // existe "Continuar adicionando"/"Continuar comprando" aqui — essa ação
+  // pertence só à tela do produto, depois de uma adição confirmada.
   // Não mexe em items/clearBasket: só navega e fecha o painel.
   const handleGoToCatalog = () => {
     const target = resolveCatalogPath(location.pathname);

@@ -167,7 +167,7 @@ describe("ProductContractView", () => {
         variations: [{ id: "v1", name: "Plano Básico", price: 90.72, isActive: true }],
       }),
     });
-    const btn = screen.getByRole("button", { name: /selecione uma opção para continuar/i });
+    const btn = screen.getByRole("button", { name: /^selecione uma opção$/i });
     expect(btn).toBeDisabled();
   });
 
@@ -508,13 +508,13 @@ describe("ProductContractView — divisor ajustável entre colunas", () => {
     await flushEffects();
     fireWindowMouseMove(999); // tenta jogar quase tudo pra direita
     fireWindowMouseUp();
-    expect(Number(separator.getAttribute("aria-valuenow"))).toBeLessThanOrEqual(55);
+    expect(Number(separator.getAttribute("aria-valuenow"))).toBeLessThanOrEqual(65);
 
     fireMouseDown(separator);
     await flushEffects();
     fireWindowMouseMove(1); // tenta jogar quase tudo pra esquerda
     fireWindowMouseUp();
-    expect(Number(separator.getAttribute("aria-valuenow"))).toBeGreaterThanOrEqual(22);
+    expect(Number(separator.getAttribute("aria-valuenow"))).toBeGreaterThanOrEqual(35);
   });
 
   it("12. teclado ajusta o divisor (setas) sem alterar a cesta", async () => {
@@ -530,32 +530,39 @@ describe("ProductContractView — divisor ajustável entre colunas", () => {
     expect(onContratar).not.toHaveBeenCalled();
   });
 
-  it("13. duplo clique ou Enter restaura a proporção padrão (34%)", async () => {
+  it("13. duplo clique ou Enter restaura a proporção padrão (opções maiores, 58%)", async () => {
     const user = userEvent.setup();
     renderView();
     const separator = screen.getByRole("separator");
     separator.focus();
     await user.keyboard("{ArrowLeft}{ArrowLeft}{ArrowLeft}");
-    expect(Number(separator.getAttribute("aria-valuenow"))).not.toBe(34);
+    expect(Number(separator.getAttribute("aria-valuenow"))).not.toBe(58);
     await user.keyboard("{Enter}");
-    expect(Number(separator.getAttribute("aria-valuenow"))).toBe(34);
+    expect(Number(separator.getAttribute("aria-valuenow"))).toBe(58);
   });
 
   it("14. valor salvo localmente inválido (texto ou fora dos limites) é ignorado, cai no padrão", () => {
-    window.localStorage.setItem("allka:product-detail-right-fraction", "not-a-number");
+    window.localStorage.setItem("allka:product-detail-right-fraction-v2", "not-a-number");
     const first = renderView();
-    expect(Number(screen.getByRole("separator").getAttribute("aria-valuenow"))).toBe(34);
+    expect(Number(screen.getByRole("separator").getAttribute("aria-valuenow"))).toBe(58);
     first.unmount();
 
-    window.localStorage.setItem("allka:product-detail-right-fraction", "0.99");
+    window.localStorage.setItem("allka:product-detail-right-fraction-v2", "0.99");
     renderView();
-    expect(Number(screen.getByRole("separator").getAttribute("aria-valuenow"))).toBe(34);
+    expect(Number(screen.getByRole("separator").getAttribute("aria-valuenow"))).toBe(58);
   });
 
   it("valor salvo localmente válido é aplicado ao reabrir", () => {
-    window.localStorage.setItem("allka:product-detail-right-fraction", "0.4");
+    window.localStorage.setItem("allka:product-detail-right-fraction-v2", "0.45");
     renderView();
-    expect(Number(screen.getByRole("separator").getAttribute("aria-valuenow"))).toBe(40);
+    expect(Number(screen.getByRole("separator").getAttribute("aria-valuenow"))).toBe(45);
+  });
+
+  it("uma preferência antiga (chave v1, proporção pré-lote-de-densidade) não quebra o layout nem é usada", () => {
+    window.localStorage.setItem("allka:product-detail-right-fraction", "0.34");
+    renderView();
+    // A chave nova não existe ainda — cai no padrão novo, ignorando a v1.
+    expect(Number(screen.getByRole("separator").getAttribute("aria-valuenow"))).toBe(58);
   });
 
   it("15. celular usa coluna única, sem divisor, e mantém as opções acessíveis", () => {
@@ -592,7 +599,7 @@ describe("ProductContractView — 'Adicionar à cesta' e 'Continuar comprando'",
     renderView({
       product: productFixture({ variations: [{ id: "v1", name: "Plano Básico", price: 90.72, isActive: true }] }),
     });
-    expect(screen.getByRole("button", { name: /selecione uma opção para continuar/i })).toBeDisabled();
+    expect(screen.getByRole("button", { name: /^selecione uma opção$/i })).toBeDisabled();
   });
 
   it("19. clique adiciona exatamente um item", async () => {
@@ -637,5 +644,169 @@ describe("ProductContractView — 'Adicionar à cesta' e 'Continuar comprando'",
     await user.click(screen.getByRole("button", { name: /continuar comprando/i }));
     expect(onBack).toHaveBeenCalledTimes(1);
     expect(onContratar).toHaveBeenCalledTimes(1);
+  });
+});
+
+// ── Lote 2H (corretivo de densidade): margens, proporção inicial das
+// colunas, resumo compacto de preço/prazo/modalidade e opções compactas e
+// expansíveis. Nenhum conteúdo foi removido — só a disposição mudou.
+describe("ProductContractView — densidade e opções compactas", () => {
+  beforeEach(() => {
+    setTestViewportWidth(1280);
+    accountConfig.accountType = "empresas";
+    productsConfig.products = [];
+    window.localStorage.clear();
+  });
+
+  const twoOptionsFixture = () =>
+    productFixture({
+      deliveryDays: undefined,
+      variations: [
+        {
+          id: "v1",
+          name: "Até 10 slides",
+          price: 296.35,
+          deadlineDays: 5,
+          description: "Descrição detalhada da opção básica.",
+          features: ["Diferencial 1", "Diferencial 2"],
+          isActive: true,
+        },
+        {
+          id: "v2",
+          name: "Até 20 slides",
+          price: 465.7,
+          deadlineDays: 8,
+          description: "Descrição detalhada da opção avançada.",
+          features: ["Diferencial 3"],
+          isActive: true,
+        },
+      ],
+    });
+
+  it("1. container não tem margem extra além do padrão da plataforma (sem mx-4/mx-6 no cabeçalho)", () => {
+    const { container } = renderView();
+    const header = container.querySelector('[style*="linear-gradient(90deg"]') as HTMLElement;
+    expect(header).toBeTruthy();
+    expect(header.className).not.toMatch(/\bmx-4\b|\bmx-6\b|\bmt-4\b/);
+  });
+
+  it("2. proporção inicial favorece a coluna de opções (58%, contra 42% de detalhes)", () => {
+    renderView();
+    const separator = screen.getByRole("separator");
+    const value = Number(separator.getAttribute("aria-valuenow"));
+    expect(value).toBe(58);
+    expect(value).toBeGreaterThan(50);
+  });
+
+  it("5. preferência nova é salva no localStorage sob a chave v2", async () => {
+    const user = userEvent.setup();
+    renderView();
+    const separator = screen.getByRole("separator");
+    separator.focus();
+    await user.keyboard("{ArrowLeft}");
+    expect(window.localStorage.getItem("allka:product-detail-right-fraction-v2")).not.toBeNull();
+  });
+
+  it("6. resumo de preço/prazo/modalidade não se repete dentro do próprio painel de opções (só uma faixa 'Prazo:'/'Modalidade:', sem o bloco antigo empilhado por baixo)", () => {
+    renderView({
+      product: productFixture({ recurrence: "Mensal", deliveryDays: 7, itemLimit: 2 }),
+    });
+    // "Prazo:"/"Modalidade:" só existem na faixa compacta — uma vez cada,
+    // não uma vez na faixa e outra vez num bloco empilhado logo abaixo dela
+    // (o bloco antigo com "Prazo:" + linha de recorrência separada foi
+    // removido; o aviso de limite de contratos também saiu daqui, pois
+    // virou o "Contrato:" da própria faixa).
+    expect(screen.getAllByText(/^prazo:/i).length).toBe(1);
+    expect(screen.getAllByText(/^modalidade:/i).length).toBe(1);
+    expect(screen.queryByText(/contrato simultâneo/i)).not.toBeInTheDocument();
+    expect(screen.getByText(/^contrato:/i)).toBeInTheDocument();
+  });
+
+  it("7. opções começam recolhidas (sem descrição nem diferenciais visíveis)", () => {
+    renderView({ product: twoOptionsFixture() });
+    expect(screen.queryByText("Descrição detalhada da opção básica.")).not.toBeInTheDocument();
+    expect(screen.queryByText("Diferencial 1")).not.toBeInTheDocument();
+    expect(screen.getAllByRole("button", { name: /ver detalhes/i }).length).toBe(2);
+  });
+
+  it("8/9. 'Ver detalhes' expande e 'Ocultar detalhes' recolhe", async () => {
+    const user = userEvent.setup();
+    renderView({ product: twoOptionsFixture() });
+    const toggles = screen.getAllByRole("button", { name: /ver detalhes/i });
+    await user.click(toggles[0]);
+    expect(screen.getByText("Descrição detalhada da opção básica.")).toBeInTheDocument();
+    expect(screen.getByText("Diferencial 1")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /ocultar detalhes/i })).toHaveAttribute("aria-expanded", "true");
+
+    await user.click(screen.getByRole("button", { name: /ocultar detalhes/i }));
+    expect(screen.queryByText("Descrição detalhada da opção básica.")).not.toBeInTheDocument();
+  });
+
+  it("10. expandir uma opção não a seleciona, nem chama onContratar", async () => {
+    const user = userEvent.setup();
+    const { onContratar } = renderView({ product: twoOptionsFixture() });
+    await user.click(screen.getAllByRole("button", { name: /ver detalhes/i })[0]);
+    expect(screen.queryByRole("button", { name: /^ocultar detalhes$/i })).toBeInTheDocument();
+    // Continua sem seleção — botão principal ainda pede pra escolher.
+    expect(screen.getByRole("button", { name: /^selecione uma opção$/i })).toBeDisabled();
+    expect(onContratar).not.toHaveBeenCalled();
+  });
+
+  it("11. selecionar uma opção não adiciona à cesta", async () => {
+    const user = userEvent.setup();
+    const { onContratar } = renderView({ product: twoOptionsFixture() });
+    await user.click(screen.getByRole("button", { name: /até 10 slides/i }));
+    expect(onContratar).not.toHaveBeenCalled();
+  });
+
+  it("12. apenas uma opção fica expandida por vez", async () => {
+    const user = userEvent.setup();
+    renderView({ product: twoOptionsFixture() });
+    const toggles = screen.getAllByRole("button", { name: /ver detalhes/i });
+    await user.click(toggles[0]);
+    expect(screen.getByText("Descrição detalhada da opção básica.")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: /ver detalhes/i }));
+    expect(screen.queryByText("Descrição detalhada da opção básica.")).not.toBeInTheDocument();
+    expect(screen.getByText("Descrição detalhada da opção avançada.")).toBeInTheDocument();
+  });
+
+  it("13. nenhuma informação da opção foi perdida (nome, preço, prazo, descrição, diferenciais seguem acessíveis)", async () => {
+    const user = userEvent.setup();
+    renderView({ product: twoOptionsFixture() });
+    expect(screen.getByText("Até 10 slides")).toBeInTheDocument();
+    expect(screen.getAllByText(/296,35/).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/5 dias/).length).toBeGreaterThan(0);
+    await user.click(screen.getAllByRole("button", { name: /ver detalhes/i })[0]);
+    expect(screen.getByText("Descrição detalhada da opção básica.")).toBeInTheDocument();
+    expect(screen.getByText("Diferencial 1")).toBeInTheDocument();
+    expect(screen.getByText("Diferencial 2")).toBeInTheDocument();
+  });
+
+  it("14. sem seleção existe apenas uma orientação (nada de card amarelo duplicando a mensagem do botão)", () => {
+    renderView({ product: twoOptionsFixture() });
+    // A única pista deve ser o texto discreto acima do botão OU o próprio
+    // rótulo do botão — nunca as duas variantes de texto ao mesmo tempo.
+    const hints = screen.queryAllByText(/escolha uma opção acima para continuar/i);
+    expect(hints.length).toBeLessThanOrEqual(1);
+    expect(screen.queryByText(/selecione uma opção acima para continuar/i)).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /^selecione uma opção$/i })).toBeInTheDocument();
+  });
+
+  it("com seleção válida, a orientação desaparece e resta só 'Adicionar à cesta'", async () => {
+    const user = userEvent.setup();
+    renderView({ product: twoOptionsFixture() });
+    await user.click(screen.getByRole("button", { name: /até 10 slides/i }));
+    expect(screen.queryByText(/escolha uma opção acima para continuar/i)).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /^adicionar à cesta$/i })).toBeEnabled();
+  });
+
+  it("teclado: 'Ver detalhes' funciona por Enter/Espaço (é um botão nativo)", async () => {
+    const user = userEvent.setup();
+    renderView({ product: twoOptionsFixture() });
+    const toggle = screen.getAllByRole("button", { name: /ver detalhes/i })[0];
+    toggle.focus();
+    await user.keyboard("{Enter}");
+    expect(screen.getByText("Descrição detalhada da opção básica.")).toBeInTheDocument();
   });
 });

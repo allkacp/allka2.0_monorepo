@@ -49,10 +49,14 @@ import {
 } from "@/components/product-detail-shared";
 
 // ── Divisor ajustável entre as colunas de detalhes e contratação ──────────
-const PANEL_STORAGE_KEY = "allka:product-detail-right-fraction";
-const DEFAULT_RIGHT_FRACTION = 0.34;
-const MIN_RIGHT_FRACTION = 0.22;
-const MAX_RIGHT_FRACTION = 0.55;
+// v2: a coluna de opções/contratação passou a ser a maior por padrão (~58%
+// contra ~42% de detalhes, lote de densidade 2026-08-21) — chave nova pra
+// não herdar uma largura salva sob a proporção antiga (~34%), que ficaria
+// visualmente errada (pequena demais) sob o novo padrão.
+const PANEL_STORAGE_KEY = "allka:product-detail-right-fraction-v2";
+const DEFAULT_RIGHT_FRACTION = 0.58;
+const MIN_RIGHT_FRACTION = 0.35;
+const MAX_RIGHT_FRACTION = 0.65;
 const KEYBOARD_STEP = 0.02;
 const HIGHLIGHTS_PREVIEW_COUNT = 4;
 
@@ -121,6 +125,10 @@ export function ProductContractView({
   const [highlightsExpanded, setHighlightsExpanded] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [justAdded, setJustAdded] = useState(false);
+  // Só uma opção expandida por vez, pra economizar espaço — expandir é uma
+  // ação separada de selecionar (nenhuma altera a cesta, nenhuma faz a
+  // outra sozinha).
+  const [expandedOptionId, setExpandedOptionId] = useState<string | null>(null);
   const { accountType } = useAccountType();
   const isAdmin = accountType === "admin";
   const { products: allProducts } = useProducts();
@@ -230,7 +238,7 @@ export function ProductContractView({
             compacto. Esquerda: identidade e metadados. Direita: destaques
             (recolhíveis). Nenhum segundo título/cabeçalho de página.
         ══════════════════════════════════════════════════════════════ */}
-        <div className="shrink-0 relative overflow-hidden mx-4 mt-4 sm:mx-6 sm:mt-5 rounded-2xl shadow-[0_4px_24px_-4px_rgba(0,0,0,0.15)]">
+        <div className="shrink-0 relative overflow-hidden mb-3 rounded-2xl shadow-[0_4px_24px_-4px_rgba(0,0,0,0.15)]">
           <div
             className="absolute inset-0"
             style={{ background: "linear-gradient(90deg, #0a1628 0%, #3b1f6e 50%, #c81a7f 100%)" }}
@@ -430,7 +438,7 @@ export function ProductContractView({
 
             <ScrollArea className="flex-1 min-h-0">
               {activeTab === "portfolio" ? (
-                <div role="tabpanel" className="px-7 py-5">
+                <div role="tabpanel" className="px-6 py-4">
                   <PortfolioGallery
                     images={(product as any).demonstrations ?? []}
                     productName={product.name}
@@ -438,29 +446,29 @@ export function ProductContractView({
                   />
                 </div>
               ) : activeTab === "nomades" && isAdmin ? (
-                <div role="tabpanel" className="px-7 py-5">
+                <div role="tabpanel" className="px-6 py-4">
                   <ProductNomadsTab productId={product?.id ?? ""} />
                 </div>
               ) : (
-                <div role="tabpanel" className="px-7 py-5 space-y-6">
+                <div role="tabpanel" className="px-6 py-4 space-y-6">
                   {/* Sua seleção */}
                   {hasVariations && (
                     <div
                       className={cn(
-                        "rounded-xl border p-4 transition-colors",
+                        "rounded-xl border p-3 transition-colors",
                         selectedVariation
                           ? "border-purple-200 dark:border-purple-900/50 bg-purple-50/50 dark:bg-purple-950/20"
                           : "border-dashed border-border/70 bg-muted/30",
                       )}
                     >
-                      <div className="flex items-center gap-2 mb-2">
+                      <div className="flex items-center gap-1.5 mb-1.5">
                         <Zap
                           className={cn(
-                            "h-4 w-4",
+                            "h-3.5 w-3.5",
                             selectedVariation ? "text-purple-600" : "text-muted-foreground",
                           )}
                         />
-                        <p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
+                        <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
                           {selectedVariation ? "Sua seleção" : "Selecione uma opção ao lado"}
                         </p>
                         {selectedVariation && (
@@ -940,142 +948,158 @@ export function ProductContractView({
                 : undefined
             }
           >
+            {/* Resumo compacto — preço, prazo, modalidade e limite em uma
+                única faixa (não repete os badges do cabeçalho: aqui reflete
+                a opção selecionada, que pode ter prazo/preço diferentes). */}
+            <div
+              className="shrink-0 px-4 py-3 text-white"
+              style={{ background: "var(--app-brand-gradient, linear-gradient(135deg, #050816 0%, #1a2a6f 45%, #c81a7f 100%))" }}
+            >
+              <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1">
+                <span className="text-lg font-extrabold leading-none">
+                  {hasVariations && !selectedVariation ? "a partir de " : ""}
+                  {fmtBRL(displayedPrice)}
+                  {(product as any).recurrence === "Mensal" && (
+                    <span className="text-xs font-medium text-blue-200 ml-0.5">/mês</span>
+                  )}
+                </span>
+                {(selectedVariation?.deadlineDays || product.deliveryDays) && (
+                  <>
+                    <span className="text-white/25 text-xs" aria-hidden="true">|</span>
+                    <span className="text-xs text-blue-200 whitespace-nowrap">
+                      Prazo: <strong className="text-white font-semibold">{selectedVariation?.deadlineDays ?? product.deliveryDays} dias</strong>
+                    </span>
+                  </>
+                )}
+                {(product as any).recurrence && (
+                  <>
+                    <span className="text-white/25 text-xs" aria-hidden="true">|</span>
+                    <span className="text-xs text-blue-200 whitespace-nowrap">
+                      Modalidade: <strong className="text-white font-semibold">{(product as any).recurrence}</strong>
+                    </span>
+                  </>
+                )}
+                {(product as any).itemLimit && (
+                  <>
+                    <span className="text-white/25 text-xs" aria-hidden="true">|</span>
+                    <span className="text-xs text-blue-200 whitespace-nowrap">
+                      Contrato: <strong className="text-white font-semibold">{(product as any).itemLimit}</strong>
+                    </span>
+                  </>
+                )}
+              </div>
+              {selectedVariation && (
+                <p className="text-xs text-emerald-300 font-semibold mt-1 truncate">{selectedVariation.name}</p>
+              )}
+            </div>
+
+            {/* Lista de opções — rolagem própria, resumo e ação continuam
+                sempre visíveis fora dela. */}
             <ScrollArea className="flex-1 min-h-0">
-              <div className="p-4 space-y-4 bg-linear-to-b from-slate-50 via-white to-slate-50/70 dark:from-slate-950 dark:via-slate-900 dark:to-slate-950">
-                {/* Bloco de preço */}
-                <div
-                  className="relative overflow-hidden rounded-3xl p-5 text-white shadow-[0_18px_50px_rgba(26,42,111,0.28)]"
-                  style={{
-                    background: "var(--app-brand-gradient, linear-gradient(135deg, #050816 0%, #1a2a6f 45%, #c81a7f 100%))",
-                  }}
-                >
-                  <div className="absolute inset-0 pointer-events-none">
-                    <div className="absolute -top-10 right-0 h-36 w-36 rounded-full bg-white/10 blur-3xl" />
-                    <div className="absolute -bottom-12 left-8 h-28 w-28 rounded-full bg-fuchsia-300/15 blur-2xl" />
-                  </div>
-                  <p className="text-[10px] font-bold uppercase tracking-widest text-blue-300 mb-2">
-                    {hasVariations && !selectedVariation
-                      ? "A partir de"
-                      : (product as any).recurrence === "Mensal"
-                        ? "Valor mensal"
-                        : "Valor do serviço"}
-                  </p>
-                  <div className="flex items-baseline gap-1.5">
-                    <span className="text-3xl font-extrabold leading-none">{fmtBRL(displayedPrice)}</span>
-                    {(product as any).recurrence === "Mensal" && (
-                      <span className="text-blue-300 text-sm font-medium">/mês</span>
-                    )}
-                  </div>
-                  {selectedVariation && (
-                    <p className="text-sm text-emerald-300 font-semibold mt-1.5">{selectedVariation.name}</p>
-                  )}
-                  {(selectedVariation?.deadlineDays || product.deliveryDays) && (
-                    <div className="flex items-center gap-2 mt-3 pt-3 border-t border-white/15 text-xs text-blue-200">
-                      <CalendarClock className="h-3.5 w-3.5 text-blue-300 shrink-0" />
-                      Prazo: <span className="font-semibold text-white">{selectedVariation?.deadlineDays ?? product.deliveryDays} dias</span>
-                    </div>
-                  )}
-                  {(product as any).recurrence && (
-                    <div className="flex items-center gap-2 mt-2 text-xs text-blue-200">
-                      <Repeat2 className="h-3.5 w-3.5 text-blue-300 shrink-0" />
-                      <span>{(product as any).recurrence}</span>
-                    </div>
+              <div className="p-3 space-y-2">
+                <div className="flex items-center justify-between px-1">
+                  <h2 className="text-[11px] font-bold uppercase tracking-wide text-muted-foreground">
+                    {hasVariations ? "Opções" : "Contratação"}
+                  </h2>
+                  {hasVariations && (
+                    <span className="text-[10px] text-muted-foreground font-medium">
+                      {activeVariations.length} {activeVariations.length === 1 ? "opção" : "opções"}
+                    </span>
                   )}
                 </div>
 
-                {/* Opções */}
-                <div className="space-y-2.5">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <Layers className={cn("h-4 w-4 shrink-0", selectedVariation ? "text-emerald-600" : "text-purple-600")} />
-                      <h2 className="text-sm font-bold">
-                        {hasVariations ? (selectedVariation ? "Opção selecionada" : "Escolha uma opção") : "Contratação"}
-                      </h2>
-                    </div>
-                    {hasVariations && (
-                      <span className="text-[10px] text-muted-foreground font-medium">
-                        {activeVariations.length} {activeVariations.length === 1 ? "opção" : "opções"}
-                      </span>
-                    )}
-                  </div>
+                {hasVariations ? (
+                  sortedVariations.map((v: any) => {
+                    const isSel = selectedVariation?.id === v.id;
+                    const isExpanded = expandedOptionId === v.id;
+                    const campaignCount = parseCampaigns(v.name);
+                    const platformCount = parsePlatforms(v.scopeDescription);
+                    const pageCount = parsePages(v.name);
+                    const deadlineLabel = getDeadlineLabel(v.name, v.deadlineDays, variationsInternal);
+                    const features: string[] = v.features || [];
+                    const hasExtraDetails = !!v.description || features.length > 0;
 
-                  <div className="space-y-2">
-                    {hasVariations ? (
-                      sortedVariations.map((v: any) => {
-                        const isSel = selectedVariation?.id === v.id;
-                        const campaignCount = parseCampaigns(v.name);
-                        const platformCount = parsePlatforms(v.scopeDescription);
-                        const pageCount = parsePages(v.name);
-                        const deadlineLabel = getDeadlineLabel(v.name, v.deadlineDays, variationsInternal);
-                        const features: string[] = v.features || [];
-
-                        return (
-                          <button
-                            key={v.id}
-                            type="button"
-                            onClick={() => selectVariation(isSel ? null : v)}
-                            className={cn(
-                              "w-full text-left rounded-2xl border-2 p-4 transition-all bg-background",
-                              isSel
-                                ? "border-emerald-500 shadow-md ring-2 ring-emerald-200 dark:ring-emerald-900"
-                                : "border-slate-200 dark:border-slate-700 hover:border-purple-300 hover:shadow-sm",
-                            )}
-                          >
-                            <div className="flex items-start justify-between gap-3">
-                              <div className="flex items-start gap-2.5 min-w-0">
-                                {isSel ? (
-                                  <CheckCircle2 className="h-4 w-4 text-emerald-500 shrink-0 mt-0.5" />
-                                ) : (
-                                  <Circle className="h-4 w-4 text-slate-300 dark:text-slate-600 shrink-0 mt-0.5" />
-                                )}
-                                <p className="text-sm font-bold leading-tight">{v.name}</p>
-                              </div>
-                              <div className="text-right shrink-0">
-                                <span className={cn("text-base font-extrabold block leading-tight", isSel ? "text-emerald-600" : "text-foreground")}>
-                                  {fmtBRL(v.price)}
-                                </span>
-                                {(product as any).recurrence === "Mensal" && (
-                                  <span className="text-[10px] text-muted-foreground">/mês</span>
-                                )}
-                                {(product as any).recurrence === "Avulso e Mensal" && (
-                                  <span className="text-[10px] text-muted-foreground">avulso ou /mês</span>
-                                )}
-                              </div>
+                    return (
+                      <div
+                        key={v.id}
+                        className={cn(
+                          "rounded-xl border-2 transition-all bg-background overflow-hidden",
+                          isSel
+                            ? "border-emerald-500 shadow-sm ring-2 ring-emerald-100 dark:ring-emerald-900/40"
+                            : "border-slate-200 dark:border-slate-700 hover:border-purple-300",
+                        )}
+                      >
+                        <button
+                          type="button"
+                          onClick={() => selectVariation(isSel ? null : v)}
+                          className="w-full text-left px-3 py-2.5 flex items-start gap-2.5"
+                        >
+                          {isSel ? (
+                            <CheckCircle2 className="h-4 w-4 text-emerald-500 shrink-0 mt-0.5" />
+                          ) : (
+                            <Circle className="h-4 w-4 text-slate-300 dark:text-slate-600 shrink-0 mt-0.5" />
+                          )}
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-start justify-between gap-2">
+                              <p className="text-xs font-bold leading-tight truncate">{v.name}</p>
+                              <span className={cn("text-sm font-extrabold shrink-0 leading-tight", isSel ? "text-emerald-600" : "text-foreground")}>
+                                {fmtBRL(v.price)}
+                              </span>
                             </div>
-
-                            <div className="flex flex-wrap gap-1.5 mt-2.5 ml-6">
+                            <div className="flex flex-wrap gap-1 mt-1">
+                              {deadlineLabel && (
+                                <span className="inline-flex items-center gap-1 text-[9px] font-semibold px-1.5 py-0.5 rounded-full bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-700">
+                                  <CalendarClock className="h-2 w-2" />
+                                  {deadlineLabel}
+                                </span>
+                              )}
+                              {(product as any).recurrence && (
+                                <span className="inline-flex items-center gap-1 text-[9px] font-semibold px-1.5 py-0.5 rounded-full bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-700">
+                                  <Repeat2 className="h-2 w-2" />
+                                  {(product as any).recurrence}
+                                </span>
+                              )}
                               {campaignCount && (
-                                <span className="inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full bg-purple-50 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 border border-purple-200 dark:border-purple-700">
-                                  <Target className="h-2.5 w-2.5" />
+                                <span className="inline-flex items-center gap-1 text-[9px] font-semibold px-1.5 py-0.5 rounded-full bg-purple-50 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 border border-purple-200 dark:border-purple-700">
                                   {campaignCount} campanhas
                                 </span>
                               )}
                               {platformCount && (
-                                <span className="inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-700">
-                                  <Layers className="h-2.5 w-2.5" />
+                                <span className="inline-flex items-center gap-1 text-[9px] font-semibold px-1.5 py-0.5 rounded-full bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-700">
                                   {platformCount} plataformas
                                 </span>
                               )}
                               {pageCount && (
-                                <span className="inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full bg-indigo-50 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-700">
-                                  <Target className="h-2.5 w-2.5" />
+                                <span className="inline-flex items-center gap-1 text-[9px] font-semibold px-1.5 py-0.5 rounded-full bg-indigo-50 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-700">
                                   até {pageCount} páginas
                                 </span>
                               )}
-                              {deadlineLabel && (
-                                <span className="inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-700">
-                                  <CalendarClock className="h-2.5 w-2.5" />
-                                  {deadlineLabel}
-                                </span>
-                              )}
                             </div>
+                          </div>
+                        </button>
 
+                        {hasExtraDetails && (
+                          <button
+                            type="button"
+                            aria-expanded={isExpanded}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setExpandedOptionId(isExpanded ? null : v.id);
+                            }}
+                            className="w-full flex items-center justify-center gap-1 text-[10px] font-semibold text-blue-600 dark:text-blue-400 border-t border-border/40 px-3 py-1.5 hover:bg-muted/40 transition-colors"
+                          >
+                            {isExpanded ? "Ocultar detalhes" : "Ver detalhes"}
+                            {isExpanded ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
+                          </button>
+                        )}
+
+                        {isExpanded && hasExtraDetails && (
+                          <div className="px-3 pb-3 pt-2 border-t border-border/40 bg-muted/10 space-y-2">
                             {v.description && (
-                              <p className="mt-2 ml-6 text-[11px] text-muted-foreground leading-snug line-clamp-2">{v.description}</p>
+                              <p className="text-[11px] text-muted-foreground leading-snug">{v.description}</p>
                             )}
-
                             {features.length > 0 && (
-                              <ul className="mt-2.5 ml-6 space-y-1">
+                              <ul className="space-y-1">
                                 {features.map((f: string, i: number) => (
                                   <li key={i} className="flex items-start gap-1.5 text-[11px] text-muted-foreground leading-snug">
                                     <CheckCircle2 className="h-3 w-3 text-emerald-500 shrink-0 mt-0.5" />
@@ -1084,50 +1108,41 @@ export function ProductContractView({
                                 ))}
                               </ul>
                             )}
-                          </button>
-                        );
-                      })
-                    ) : (
-                      <div className="rounded-2xl border-2 border-slate-200 dark:border-slate-700 p-4 flex items-center justify-between gap-3 bg-background">
-                        <div className="flex items-start gap-2.5 min-w-0">
-                          <CheckCircle2 className="h-4 w-4 text-emerald-500 shrink-0 mt-0.5" />
-                          <div className="min-w-0">
-                            <p className="text-sm font-bold leading-tight">Contratação padrão</p>
-                            <div className="flex flex-wrap gap-x-3 gap-y-0.5 mt-1 text-[11px] text-muted-foreground">
-                              {product.deliveryDays != null && (
-                                <span className="inline-flex items-center gap-1">
-                                  <CalendarClock className="h-3 w-3" />
-                                  {product.deliveryDays} dias
-                                </span>
-                              )}
-                              {(product as any).recurrence && (
-                                <span className="inline-flex items-center gap-1">
-                                  <Repeat2 className="h-3 w-3" />
-                                  {(product as any).recurrence}
-                                </span>
-                              )}
-                            </div>
                           </div>
-                        </div>
-                        <span className="text-sm font-extrabold text-foreground shrink-0">{fmtBRL(displayedPrice)}</span>
+                        )}
                       </div>
-                    )}
-                  </div>
-                </div>
-
-                {(product as any).itemLimit && (
-                  <div className="flex items-center gap-3 px-4 py-3 rounded-xl bg-muted/50 text-sm">
-                    <Users className="h-4 w-4 text-indigo-500 shrink-0" />
-                    <span>
-                      Limite de <strong>{(product as any).itemLimit} contrato{(product as any).itemLimit !== 1 ? "s" : ""}</strong> simultâneo{(product as any).itemLimit !== 1 ? "s" : ""}
-                    </span>
+                    );
+                  })
+                ) : (
+                  <div className="rounded-xl border-2 border-slate-200 dark:border-slate-700 px-3 py-2.5 flex items-center justify-between gap-3 bg-background">
+                    <div className="flex items-start gap-2.5 min-w-0">
+                      <CheckCircle2 className="h-4 w-4 text-emerald-500 shrink-0 mt-0.5" />
+                      <div className="min-w-0">
+                        <p className="text-xs font-bold leading-tight">Contratação padrão</p>
+                        <div className="flex flex-wrap gap-x-3 gap-y-0.5 mt-1 text-[10px] text-muted-foreground">
+                          {product.deliveryDays != null && (
+                            <span className="inline-flex items-center gap-1">
+                              <CalendarClock className="h-3 w-3" />
+                              {product.deliveryDays} dias
+                            </span>
+                          )}
+                          {(product as any).recurrence && (
+                            <span className="inline-flex items-center gap-1">
+                              <Repeat2 className="h-3 w-3" />
+                              {(product as any).recurrence}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                    <span className="text-sm font-extrabold text-foreground shrink-0">{fmtBRL(displayedPrice)}</span>
                   </div>
                 )}
               </div>
             </ScrollArea>
 
-            {/* CTA fixo */}
-            <div className="shrink-0 border-t border-border/50 bg-background px-5 py-4 space-y-3">
+            {/* CTA fixo — uma única orientação, sem repetir a mensagem */}
+            <div className="shrink-0 border-t border-border/50 bg-background px-4 py-3 space-y-2">
               {justAdded && (
                 <div
                   role="status"
@@ -1137,19 +1152,16 @@ export function ProductContractView({
                   Adicionado à cesta.
                 </div>
               )}
-              {hasVariations && !selectedVariation && (
-                <div className="flex items-center gap-2 px-3 py-2.5 rounded-xl bg-amber-50 border border-amber-200 text-amber-700 dark:bg-amber-900/20 dark:border-amber-700/50 dark:text-amber-300">
-                  <AlertCircle className="h-4 w-4 shrink-0" />
-                  <p className="text-xs font-medium leading-snug">Selecione uma opção acima para continuar</p>
-                </div>
+              {!alreadyInBasket && !canContratar && (
+                <p className="text-[11px] text-muted-foreground text-center">Escolha uma opção acima para continuar</p>
               )}
               <Button
                 size="lg"
                 disabled={!canContratar || submitting || alreadyInBasket}
                 onClick={handleContratar}
                 className={cn(
-                  "w-full gap-2.5 rounded-2xl font-bold text-sm border-0 shadow-lg transition-all",
-                  "h-auto min-h-10 py-2.5 whitespace-normal text-center leading-snug",
+                  "w-full gap-2 rounded-xl font-bold text-sm border-0 shadow-lg transition-all",
+                  "h-auto min-h-9 py-2 whitespace-normal text-center leading-snug",
                   "disabled:opacity-40 disabled:cursor-not-allowed disabled:shadow-none",
                   alreadyInBasket
                     ? "bg-emerald-600 hover:bg-emerald-600 text-white"
@@ -1164,7 +1176,7 @@ export function ProductContractView({
                 }
               >
                 <ShoppingCart className="h-4 w-4 shrink-0" />
-                {alreadyInBasket ? "Já está na cesta" : !canContratar ? "Selecione uma opção para continuar" : "Adicionar à cesta"}
+                {alreadyInBasket ? "Já está na cesta" : !canContratar ? "Selecione uma opção" : "Adicionar à cesta"}
               </Button>
               {justAdded && (
                 <Button
@@ -1172,7 +1184,7 @@ export function ProductContractView({
                   variant="outline"
                   size="lg"
                   onClick={onBack}
-                  className="w-full gap-2 rounded-2xl font-semibold text-sm h-auto min-h-10 py-2.5 whitespace-normal text-center leading-snug"
+                  className="w-full gap-2 rounded-xl font-semibold text-sm h-auto min-h-9 py-2 whitespace-normal text-center leading-snug"
                 >
                   <ArrowLeft className="h-3.5 w-3.5 shrink-0" />
                   Continuar comprando
