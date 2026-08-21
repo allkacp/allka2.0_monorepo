@@ -57,7 +57,6 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-import { useSidebar } from "@/contexts/sidebar-context";
 import { computeProductRating } from "@/dev-mocks/data/product-nomads";
 import { PageLoader } from "@/components/ui/loading";
 import { CatalogCartStickyBar } from "@/components/catalog-cart-sticky-bar";
@@ -313,10 +312,6 @@ export function ProductCatalogView({
     const state = (location.state || {}) as any;
     return state?.projectId ?? state?.openProjectId ?? state?.draftProjectId ?? null;
   }, [location.state]);
-
-  const { sidebarWidth } = useSidebar();
-  const headerHeight = 64;
-  const footerHeight = 40;
 
   const [search, setSearch] = useState("");
   const [detailProduct, setDetailProduct] = useState<Product | null>(null);
@@ -583,19 +578,6 @@ export function ProductCatalogView({
     }
 
     basket.setOpen(true);
-  };
-
-  const continueShopping = () => {
-    const searchBox = document.querySelector<HTMLInputElement>(
-      'input[placeholder="Buscar produtos, tags..."]',
-    );
-
-    if (searchBox) {
-      searchBox.focus();
-      return;
-    }
-
-    window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
   return (
@@ -1655,19 +1637,25 @@ export function ProductCatalogView({
         )}
       </div>
 
-      {!readOnly && mode === "page" && basket.items.length > 0 && (
-        <CatalogCartStickyBar
-          items={basket.items}
-          total={basket.getTotalPrice()}
-          projectId={basket.projectId ?? locationProjectId}
-          sidebarOffset={sidebarWidth}
-          onPrimaryAction={cartPrimaryAction}
-          onClearCart={basket.clearBasket}
-          onContinueShopping={continueShopping}
-          onUpdateQuantity={basket.updateQuantity}
-          onRemoveItem={basket.removeItem}
-        />
-      )}
+      {/* Escondida enquanto a cesta global (ProjectBasketDrawer) ou o
+          detalhe do produto estiverem abertos — evita dois resumos de
+          cesta na tela ao mesmo tempo e a barra brigando visualmente com
+          o painel de detalhe. */}
+      {!readOnly &&
+        mode === "page" &&
+        basket.items.length > 0 &&
+        !basket.isOpen &&
+        !detailOpen && (
+          <CatalogCartStickyBar
+            items={basket.items}
+            total={basket.getTotalPrice()}
+            projectId={basket.projectId ?? locationProjectId}
+            onPrimaryAction={cartPrimaryAction}
+            onClearCart={basket.clearBasket}
+            onUpdateQuantity={basket.updateQuantity}
+            onRemoveItem={basket.removeItem}
+          />
+        )}
 
       {/* ── Sticky footer (panel mode only) ─────────────────── */}
       {/* Detail sheet */}

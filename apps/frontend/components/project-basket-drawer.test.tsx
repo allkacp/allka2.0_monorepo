@@ -5,17 +5,18 @@ import userEvent from "@testing-library/user-event";
 import { MemoryRouter, Routes, Route, Link, useLocation } from "react-router-dom";
 import { setTestViewportWidth } from "@/vitest.setup";
 
-// Lote 2B (ata 2026-08-20): a cesta de projeto é um contexto GLOBAL — abre
-// por cima de qualquer página, em qualquer portal. Este arquivo prova, com
-// o componente real (ProjectBasketDrawer) e o HeaderSlideScreen real (não
-// mockado), que:
-//   1. "Ir para o catálogo" (cesta vazia) e "Continuar adicionando" (cesta
-//      com itens) navegam pro catálogo certo do portal atual, em vez de só
-//      fechar sem sair do lugar (bug confirmado na auditoria anterior).
+// Lotes 2B e 2C (ata 2026-08-20/21): a cesta de projeto é um contexto
+// GLOBAL — abre por cima de qualquer página, em qualquer portal. Este
+// arquivo prova, com o componente real (ProjectBasketDrawer) e o
+// HeaderSlideScreen real (não mockado), que:
+//   1. "Ir para o catálogo" (só no estado vazio, 2B) navega pro catálogo
+//      certo do portal atual, em vez de só fechar sem sair do lugar.
 //   2. Fechar continua funcionando manualmente e ao navegar por qualquer
 //      outro lugar (ex.: um link fora da cesta) — a lógica original de
 //      "fecha ao trocar de rota" foi preservada de propósito, não removida.
 //   3. Nenhum item da cesta é apagado por esses cliques.
+//   4. (2C) O resumo com itens não tem mais "Continuar adicionando" —
+//      única ação principal é "Criar projeto com estes itens".
 
 const { setOpenSpy, clearBasketSpy, removeItemSpy, basketConfig } = vi.hoisted(() => ({
   setOpenSpy: vi.fn(),
@@ -176,16 +177,40 @@ describe("ProjectBasketDrawer — navegação do botão de catálogo", () => {
     expect(setOpenSpy).toHaveBeenCalledWith(false);
   });
 
-  it("4/6. Cesta COM itens: 'Continuar adicionando' também navega e fecha, itens preservados", async () => {
+  // Lote 2C (ata 2026-08-21): o resumo da cesta serve pra CONCLUIR a cesta
+  // existente — "Continuar adicionando" foi removido daqui de propósito
+  // (é redundante com "Ir para o catálogo" do estado vazio). Só deve
+  // sobrar UMA ação principal: "Criar projeto com estes itens".
+  it("2. Cesta COM itens NÃO mostra 'Continuar adicionando'", () => {
     basketConfig.items = [itemFixture()];
-    const user = userEvent.setup();
     renderDrawer("/admin/dashboard");
     expect(screen.queryByRole("button", { name: /ir para o catálogo/i })).not.toBeInTheDocument();
-    await user.click(screen.getByRole("button", { name: /continuar adicionando/i }));
-    expect(screen.getByTestId("current-path").textContent).toBe("/admin/catalogo-produtos");
-    expect(setOpenSpy).toHaveBeenCalledWith(false);
+    expect(screen.queryByRole("button", { name: /continuar adicionando/i })).not.toBeInTheDocument();
+  });
+
+  it("3. Cesta COM itens mostra somente 'Criar projeto com estes itens' como ação principal", () => {
+    basketConfig.items = [itemFixture()];
+    renderDrawer("/admin/dashboard");
+    expect(screen.getByRole("button", { name: /criar projeto com estes itens/i })).toBeInTheDocument();
+    // "Limpar" continua existindo (ação secundária/destrutiva, não é "continuar comprando").
+    expect(screen.getByRole("button", { name: /^limpar$/i })).toBeInTheDocument();
+  });
+
+  it("4. Itens e quantidades permanecem intactos ao abrir o resumo com itens", () => {
+    basketConfig.items = [itemFixture("prod-1"), { ...itemFixture("prod-2"), quantity: 3 }];
+    renderDrawer("/admin/dashboard");
+    // Contagem no cabeçalho soma quantidades (1 + 3 = 4), não produtos distintos.
+    expect(screen.getByText(/4 produtos selecionados/i)).toBeInTheDocument();
+    expect(screen.getAllByText("3")).not.toHaveLength(0); // quantidade do segundo item visível
     expect(clearBasketSpy).not.toHaveBeenCalled();
     expect(removeItemSpy).not.toHaveBeenCalled();
+  });
+
+  it("5. Resumo da cesta não é renderizado duplicado", () => {
+    basketConfig.items = [itemFixture()];
+    renderDrawer("/admin/dashboard");
+    expect(screen.getAllByRole("button", { name: /criar projeto com estes itens/i })).toHaveLength(1);
+    expect(screen.getAllByText("Produto Teste")).toHaveLength(1);
   });
 
   it("8. Fechar manualmente (X) continua funcionando, sem navegar", async () => {

@@ -307,6 +307,7 @@ export function ProductDetailSheet({
   const [nestedDetailProduct, setNestedDetailProduct] = useState<any | null>(
     null,
   );
+  const [descriptionExpanded, setDescriptionExpanded] = useState(false);
   const { accountType } = useAccountType();
   const isAdmin = accountType === "admin";
   const { products: allProducts } = useProducts();
@@ -322,6 +323,7 @@ export function ProductDetailSheet({
       setSelectedVariation(null);
       setActiveTab("detalhes");
       setNestedDetailProduct(null);
+      setDescriptionExpanded(false);
     }
   }, [open]);
 
@@ -383,19 +385,18 @@ export function ProductDetailSheet({
 
   return (
     <>
-      <EmbeddedSlideScreen
-        open={open}
-        onClose={handleClose}
-        title={product.name}
-        subtitle={product.category || undefined}
-      >
+      <EmbeddedSlideScreen open={open} onClose={handleClose} hideHeader>
         <div className="flex flex-col flex-1 min-h-0 overflow-hidden w-full">
           {/* ══════════════════════════════════════════════════════════════
-              IDENTITY BAR — categoria, variações, descrição, chips, destaques
+              IDENTITY BAR — único cabeçalho de contexto: nome, categoria,
+              variações, descrição (recolhível), chips, destaques, fechar
           ══════════════════════════════════════════════════════════════ */}
           <div className="shrink-0 px-6 pt-4 pb-4 border-b border-border/50 bg-muted/20">
             <div className="flex items-start justify-between gap-4">
               <div className="min-w-0 flex-1">
+                <h2 className="text-lg font-bold leading-tight text-foreground truncate mb-1.5">
+                  {product.name}
+                </h2>
                 <div className="flex items-center gap-2 mb-1.5 flex-wrap">
                   <Badge className="bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300 border-blue-200 dark:border-blue-800 text-[10px] font-semibold tracking-wider uppercase">
                     {product.category || "Serviço"}
@@ -416,9 +417,25 @@ export function ProductDetailSheet({
                 )}
                 {!hasPresentation &&
                   (product.summaryDescription || product.description) && (
-                    <p className="text-xs text-muted-foreground leading-snug max-w-2xl line-clamp-2">
-                      {product.summaryDescription || product.description}
-                    </p>
+                    <div className="max-w-2xl">
+                      <p
+                        className={cn(
+                          "text-xs text-muted-foreground leading-snug",
+                          !descriptionExpanded && "line-clamp-2",
+                        )}
+                      >
+                        {product.summaryDescription || product.description}
+                      </p>
+                      <button
+                        type="button"
+                        onClick={() => setDescriptionExpanded((v) => !v)}
+                        className="mt-1 text-[11px] font-semibold text-blue-600 dark:text-blue-400 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 rounded"
+                      >
+                        {descriptionExpanded
+                          ? "Mostrar menos"
+                          : "Ver descrição completa"}
+                      </button>
+                    </div>
                   )}
 
                 <div className="flex flex-wrap gap-1.5 mt-2">
@@ -455,6 +472,14 @@ export function ProductDetailSheet({
 
               <div className="flex items-center gap-1.5 shrink-0">
                 <CopyLinkButton />
+                <button
+                  type="button"
+                  onClick={handleClose}
+                  aria-label="Fechar detalhe do produto"
+                  className="flex items-center justify-center h-8 w-8 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+                >
+                  <X className="h-4 w-4" />
+                </button>
               </div>
             </div>
 

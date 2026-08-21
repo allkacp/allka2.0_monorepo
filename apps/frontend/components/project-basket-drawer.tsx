@@ -850,19 +850,11 @@ export function ProjectBasketDrawer() {
                 </div>
               )}
 
-              {/* Single row: [← Continuar] [Criar projeto →] [Limpar]  |  TOTAL */}
+              {/* Single row: [Criar projeto →] [Limpar]  |  TOTAL — este
+                  resumo serve pra concluir a cesta existente, não pra
+                  continuar adicionando produtos (isso já existe no estado
+                  vazio, via "Ir para o catálogo"). Ação principal única. */}
               <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap">
-                {/* Continuar adicionando — mesma ação de ir pro catálogo,
-                    só que no estado com itens (ver handleGoToCatalog) */}
-                <button
-                  type="button"
-                  onClick={handleGoToCatalog}
-                  className="shrink-0 flex items-center gap-1.5 h-8 px-3 rounded-lg text-xs font-semibold text-slate-600 dark:text-white/50 bg-slate-50 dark:bg-white/5 border border-slate-100 dark:border-white/8 hover:bg-slate-100 dark:hover:bg-white/10 transition-colors whitespace-nowrap"
-                >
-                  <ArrowRight className="h-3 w-3 rotate-180 shrink-0" />
-                  Continuar adicionando
-                </button>
-
                 {/* Criar projeto — botão principal */}
                 <button
                   type="button"
@@ -901,7 +893,7 @@ export function ProjectBasketDrawer() {
                   ) : (
                     <>
                       <FolderPlus className="h-3 w-3 shrink-0" />
-                      Criar projeto com esses itens
+                      Criar projeto com estes itens
                       <ChevronRight className="h-3 w-3 opacity-70 shrink-0" />
                     </>
                   )}
