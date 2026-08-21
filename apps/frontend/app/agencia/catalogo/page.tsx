@@ -1,21 +1,27 @@
 "use client";
 
 import { useMemo } from "react";
+import { useNavigate, useParams } from "react-router-dom";
 import { useProjectBasket } from "@/contexts/project-basket-context";
 import {
   ProductCatalogView,
   type CatalogSelectedProduct,
 } from "@/components/product-catalog-view";
-import { type Product } from "@/lib/contexts/product-context";
+import { ProductContractView } from "@/components/product-contract-view";
+import { useProducts, type Product } from "@/lib/contexts/product-context";
 import {
   STANDARD_SHELL_PANEL_CLASS,
   StandardPageBanner,
 } from "@/components/standard-page-shell";
 import { PinToTrayButton } from "@/components/pin-to-tray-button";
-import { Store } from "lucide-react";
+import { PageLoader } from "@/components/ui/loading";
+import { Store, PackageX, ArrowLeft } from "lucide-react";
 
 export default function AgenciaCatalogo() {
   const basket = useProjectBasket();
+  const navigate = useNavigate();
+  const { produtoId } = useParams<{ produtoId?: string }>();
+  const { products, loading } = useProducts();
 
   const selectedProducts = useMemo<CatalogSelectedProduct[]>(
     () =>
@@ -60,6 +66,59 @@ export default function AgenciaCatalogo() {
     if (!item) return;
     basket.updateQuantity(item.id, item.quantity - 1);
   };
+
+  // ── Tela cheia de um produto (rota /agency/catalogo/:produtoId) ──
+  if (produtoId) {
+    if (loading) return <PageLoader text="Carregando produto…" />;
+
+    const product = products.find((p) => String(p.id) === String(produtoId));
+    if (!product) {
+      return (
+        <div className={STANDARD_SHELL_PANEL_CLASS}>
+          <div className="h-full min-h-0 flex flex-col items-center justify-center gap-4 text-center px-6">
+            <PackageX className="h-10 w-10 text-slate-300" />
+            <div>
+              <p className="text-sm font-bold text-slate-700 dark:text-white">
+                Produto não encontrado
+              </p>
+              <p className="text-xs text-slate-400 mt-1">
+                Ele pode ter sido removido ou desativado do catálogo.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => navigate("/agency/catalogo")}
+              className="inline-flex items-center gap-1.5 text-xs font-semibold text-blue-600 hover:underline"
+            >
+              <ArrowLeft className="h-3.5 w-3.5" />
+              Voltar ao catálogo
+            </button>
+          </div>
+        </div>
+      );
+    }
+
+    return (
+      <ProductContractView
+        product={product}
+        isItemInBasket={(variationId) => {
+          const itemId = variationId ? `${product.id}--${variationId}` : product.id;
+          return basket.items.some((i) => i.id === itemId);
+        }}
+        onContratar={({ selectedVariation, finalPrice }) => {
+          basket.addItem({
+            ...product,
+            selectedVariation: selectedVariation ?? undefined,
+            finalPrice,
+            ...(selectedVariation
+              ? { name: `${product.name} — ${selectedVariation.name}` }
+              : {}),
+          });
+        }}
+        onBack={() => navigate("/agency/catalogo")}
+      />
+    );
+  }
 
   return (
     <div className={STANDARD_SHELL_PANEL_CLASS}>

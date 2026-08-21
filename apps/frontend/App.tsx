@@ -1000,6 +1000,10 @@ export default function App() {
                     element={<EmpresaProdutosPage />}
                   />
                   <Route
+                    path="/company/produtos/:produtoId"
+                    element={<EmpresaProdutosPage />}
+                  />
+                  <Route
                     path="/company/relatorios"
                     element={<CompanyRelatoriosPage />}
                   />
@@ -1041,6 +1045,10 @@ export default function App() {
                   />
                   <Route
                     path="/agency/catalogo"
+                    element={<AgencyCatalogoPage />}
+                  />
+                  <Route
+                    path="/agency/catalogo/:produtoId"
                     element={<AgencyCatalogoPage />}
                   />
                   <Route
@@ -1087,6 +1095,10 @@ export default function App() {
                   />
                   <Route
                     path="/agencia/catalogo"
+                    element={<RedirectToAgency />}
+                  />
+                  <Route
+                    path="/agencia/catalogo/:produtoId"
                     element={<RedirectToAgency />}
                   />
                   <Route

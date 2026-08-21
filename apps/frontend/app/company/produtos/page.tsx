@@ -1,9 +1,9 @@
 "use client";
 
 import { useState, useMemo, useEffect, useRef } from "react";
-import { useLocation } from "react-router-dom";
+import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { PageLoader } from "@/components/ui/loading";
-import { ShoppingCart, X, Trash2, Minus, Plus, Package } from "lucide-react";
+import { ShoppingCart, X, Trash2, Minus, Plus, Package, PackageX, ArrowLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { useProducts, type Product } from "@/lib/contexts/product-context";
@@ -11,6 +11,7 @@ import {
   ProductCatalogView,
   type CatalogSelectedProduct,
 } from "@/components/product-catalog-view";
+import { ProductContractView } from "@/components/product-contract-view";
 import { ProjectCreateNewPanel } from "@/components/project-create-new-panel";
 import { useProjectBasket } from "@/contexts/project-basket-context";
 import { cn } from "@/lib/utils";
@@ -27,6 +28,8 @@ function fmtBRL(n: number) {
 export default function EmpresaProdutos() {
   const { products, loading, refetch } = useProducts();
   const basket = useProjectBasket();
+  const navigate = useNavigate();
+  const { produtoId } = useParams<{ produtoId?: string }>();
   const [cartOpen, setCartOpen] = useState(false);
   const [panelOpen, setPanelOpen] = useState(false);
   const { pathname } = useLocation();
@@ -101,6 +104,58 @@ export default function EmpresaProdutos() {
     setCartOpen(false);
     setPanelOpen(true);
   };
+
+  // ── Tela cheia de um produto (rota /company/produtos/:produtoId) ──
+  // Substitui a listagem por completo — não é modal/painel sobre o catálogo.
+  if (produtoId) {
+    const product = products.find((p) => String(p.id) === String(produtoId));
+    if (!product) {
+      return (
+        <div className={STANDARD_SHELL_PANEL_CLASS}>
+          <div className="h-full min-h-0 flex flex-col items-center justify-center gap-4 text-center px-6">
+            <PackageX className="h-10 w-10 text-slate-300" />
+            <div>
+              <p className="text-sm font-bold text-slate-700 dark:text-white">
+                Produto não encontrado
+              </p>
+              <p className="text-xs text-slate-400 mt-1">
+                Ele pode ter sido removido ou desativado do catálogo.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => navigate("/company/produtos")}
+              className="inline-flex items-center gap-1.5 text-xs font-semibold text-blue-600 hover:underline"
+            >
+              <ArrowLeft className="h-3.5 w-3.5" />
+              Voltar ao catálogo
+            </button>
+          </div>
+        </div>
+      );
+    }
+
+    return (
+      <ProductContractView
+        product={product}
+        isItemInBasket={(variationId) => {
+          const itemId = variationId ? `${product.id}--${variationId}` : product.id;
+          return basket.items.some((i) => i.id === itemId);
+        }}
+        onContratar={({ selectedVariation, finalPrice }) => {
+          basket.addItem({
+            ...product,
+            selectedVariation: selectedVariation ?? undefined,
+            finalPrice,
+            ...(selectedVariation
+              ? { name: `${product.name} — ${selectedVariation.name}` }
+              : {}),
+          });
+        }}
+        onBack={() => navigate("/company/produtos")}
+      />
+    );
+  }
 
   return (
     <div className={STANDARD_SHELL_PANEL_CLASS}>
