@@ -153,6 +153,8 @@ export default function EmpresaProdutos() {
           });
         }}
         onBack={() => navigate("/company/produtos")}
+        onViewComplementaryProduct={(id) => navigate(`/company/produtos/${id}`)}
+        onAddComplementaryProduct={(cp) => basket.addItem(cp)}
       />
     );
   }

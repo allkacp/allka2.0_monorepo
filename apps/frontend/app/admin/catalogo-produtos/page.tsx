@@ -118,6 +118,8 @@ export default function AdminCatalogoProdutos() {
           });
         }}
         onBack={() => navigate("/admin/catalogo-produtos")}
+        onViewComplementaryProduct={(id) => navigate(`/admin/catalogo-produtos/${id}`)}
+        onAddComplementaryProduct={(cp) => basket.addItem(cp)}
       />
     );
   }

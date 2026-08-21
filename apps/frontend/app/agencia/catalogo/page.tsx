@@ -116,6 +116,8 @@ export default function AgenciaCatalogo() {
           });
         }}
         onBack={() => navigate("/agency/catalogo")}
+        onViewComplementaryProduct={(id) => navigate(`/agency/catalogo/${id}`)}
+        onAddComplementaryProduct={(cp) => basket.addItem(cp)}
       />
     );
   }

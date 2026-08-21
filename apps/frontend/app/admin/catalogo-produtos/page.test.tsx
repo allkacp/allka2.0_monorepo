@@ -46,6 +46,24 @@ vi.mock("@/contexts/open-screens-context", () => ({
   usePinEntry: () => ({ pinned: false, toggle: vi.fn() }),
 }));
 
+// A tela cheia do produto (Lote 2E) recuperou conteúdo do antigo modal —
+// abas, avaliação, nômades relacionados — que dependem destes contextos.
+vi.mock("@/contexts/account-type-context", () => ({
+  useAccountType: () => ({ accountType: "admin", accountSubType: null }),
+}));
+
+vi.mock("@/components/admin/product-nomads-tab", () => ({
+  ProductNomadsTab: () => null,
+}));
+
+vi.mock("@/components/product-rating-display", () => ({
+  ProductRatingDisplay: () => <span data-testid="rating-stub" />,
+}));
+
+vi.mock("@/components/copy-link-button", () => ({
+  CopyLinkButton: () => <button type="button">Copiar link</button>,
+}));
+
 // A listagem real (ProductCatalogView) é gigante e não é o alvo deste
 // teste — o que importa aqui é que ela NÃO é renderizada quando existe um
 // produtoId na URL. Um stub simples com um texto identificável basta pra
