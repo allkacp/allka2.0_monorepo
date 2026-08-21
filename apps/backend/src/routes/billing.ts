@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { z } from "zod";
 import { prisma } from "../lib/prisma";
-import { verifyToken } from "../middleware/auth";
+import { verifyToken, requireRole, requirePermission } from "../middleware/auth";
 import { validate, parsePagination } from "../middleware/validate";
 import { recordWalletEvent } from "../lib/wallet-service";
 
@@ -97,7 +97,17 @@ router.post("/invoices", verifyToken, validate(createSchema), async (req, res, n
 });
 
 // PUT /api/billing/invoices/:id
-router.put("/invoices/:id", verifyToken, validate(updateSchema), async (req, res, next) => {
+// Muda status da fatura (inclui "paid", que credita a carteira da empresa
+// via recordWalletEvent abaixo, e "cancelled") — só admin com permissão
+// administrativa (module "sistema", action "edit"). Mesma política do
+// lote de segurança anterior (ver routes/products.ts).
+router.put(
+  "/invoices/:id",
+  verifyToken,
+  requireRole("admin"),
+  requirePermission("sistema", "edit"),
+  validate(updateSchema),
+  async (req, res, next) => {
   try {
     // Capture previous status to detect the paid transition
     const previous = await prisma.invoice.findUnique({
@@ -177,14 +187,23 @@ router.put("/invoices/:id", verifyToken, validate(updateSchema), async (req, res
 });
 
 // DELETE /api/billing/invoices/:id
-router.delete("/invoices/:id", verifyToken, async (req, res, next) => {
-  try {
-    await prisma.invoice.delete({ where: { id: (req.params.id as string) } });
-    res.status(204).send();
-  } catch (err) {
-    next(err);
-  }
-});
+// Exclusão física da fatura — distinta de cancelar (PUT acima com status
+// "cancelled", que preserva o histórico). Só admin com permissão
+// administrativa (module "sistema", action "delete").
+router.delete(
+  "/invoices/:id",
+  verifyToken,
+  requireRole("admin"),
+  requirePermission("sistema", "delete"),
+  async (req, res, next) => {
+    try {
+      await prisma.invoice.delete({ where: { id: (req.params.id as string) } });
+      res.status(204).send();
+    } catch (err) {
+      next(err);
+    }
+  },
+);
 
 // GET /api/billing/stats
 router.get("/stats", verifyToken, async (req, res, next) => {

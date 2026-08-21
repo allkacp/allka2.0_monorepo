@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { z } from "zod";
 import { prisma } from "../lib/prisma";
-import { verifyToken } from "../middleware/auth";
+import { verifyToken, requireRole, requirePermission } from "../middleware/auth";
 import { validate, parsePagination } from "../middleware/validate";
 import { recordWalletEvent } from "../lib/wallet-service";
 
@@ -93,7 +93,17 @@ router.post("/withdrawals", verifyToken, validate(createSchema), async (req, res
 });
 
 // PUT /api/financial/withdrawals/:id — review/update status
-router.put("/withdrawals/:id", verifyToken, validate(reviewSchema), async (req, res, next) => {
+// Aprova, agenda, rejeita ou cancela um saque, e pode disparar débito real
+// na carteira do nômade (recordWalletEvent abaixo) — só admin com permissão
+// administrativa (module "sistema", action "edit") pode chamar. Mesma
+// política adotada no lote de segurança anterior (ver routes/products.ts).
+router.put(
+  "/withdrawals/:id",
+  verifyToken,
+  requireRole("admin"),
+  requirePermission("sistema", "edit"),
+  validate(reviewSchema),
+  async (req, res, next) => {
   try {
     const { status, notes, scheduled_for } = req.body as {
       status: string;
@@ -145,14 +155,23 @@ router.put("/withdrawals/:id", verifyToken, validate(reviewSchema), async (req, 
 });
 
 // DELETE /api/financial/withdrawals/:id
-router.delete("/withdrawals/:id", verifyToken, async (req, res, next) => {
-  try {
-    await prisma.withdrawalRequest.delete({ where: { id: (req.params.id as string) } });
-    res.status(204).send();
-  } catch (err) {
-    next(err);
-  }
-});
+// Exclusão física do registro do saque — distinto de cancelar (PUT acima
+// com status "cancelado", que preserva o histórico). Só admin com
+// permissão administrativa (module "sistema", action "delete").
+router.delete(
+  "/withdrawals/:id",
+  verifyToken,
+  requireRole("admin"),
+  requirePermission("sistema", "delete"),
+  async (req, res, next) => {
+    try {
+      await prisma.withdrawalRequest.delete({ where: { id: (req.params.id as string) } });
+      res.status(204).send();
+    } catch (err) {
+      next(err);
+    }
+  },
+);
 
 // GET /api/financial/stats — summary for admin
 router.get("/stats", verifyToken, async (req, res, next) => {
