@@ -7,6 +7,15 @@ import { recordWalletEvent } from "../lib/wallet-service";
 
 const router = Router();
 
+// Resolve a empresa vinculada à sessão autenticada — nunca confiar num
+// company_id vindo do cliente (query string ou corpo) pra decidir de quem
+// é o quê. Mesma ideia de "derive o dono da sessão" usada em
+// resolveOwnNomadeId (routes/financial.ts).
+async function resolveOwnCompanyId(userId: string): Promise<string | null> {
+  const user = await prisma.user.findUnique({ where: { id: userId }, select: { company_id: true } });
+  return user?.company_id ?? null;
+}
+
 const createSchema = z.object({
   company_id: z.string().optional(),
   project_id: z.string().optional(),
@@ -36,6 +45,25 @@ router.get("/invoices", verifyToken, async (req, res, next) => {
       if (fromRaw) dateFilter.gte = new Date(fromRaw);
       if (toRaw) dateFilter.lte = new Date(toRaw);
       where["created_at"] = dateFilter;
+    }
+
+    if (req.user?.account_type === "empresas") {
+      // Sobrescreve (não só complementa) o company_id vindo da query —
+      // uma empresa nunca deve conseguir ver fatura de outra só trocando
+      // o parâmetro. Sem isso, a rota devolvia TODAS as faturas de
+      // TODAS as empresas pra qualquer sessão válida (é o que o portal
+      // de agência hoje busca sem perceber — ver contexts/agencia-context.tsx).
+      const ownCompanyId = await resolveOwnCompanyId(req.user.id);
+      if (!ownCompanyId) {
+        res.json({ data: [], total: 0, page, limit });
+        return;
+      }
+      where["company_id"] = ownCompanyId;
+    } else if (req.user?.account_type !== "admin") {
+      // Agência, nômade, parceiro/líder: não existe hoje nenhum vínculo
+      // legítimo entre esses papéis e Invoice.company_id no schema atual.
+      res.json({ data: [], total: 0, page, limit });
+      return;
     }
 
     const [total, data] = await Promise.all([
@@ -74,6 +102,17 @@ router.get("/invoices/:id", verifyToken, async (req, res, next) => {
       return;
     }
 
+    if (req.user?.account_type !== "admin") {
+      const ownCompanyId =
+        req.user?.account_type === "empresas" ? await resolveOwnCompanyId(req.user.id) : null;
+      if (!ownCompanyId || ownCompanyId !== invoice.company_id) {
+        // 404, não 403 — não confirma pra quem não tem relação com a
+        // fatura que ela de fato existe (evita enumeração).
+        res.status(404).json({ error: "Fatura não encontrada" });
+        return;
+      }
+    }
+
     res.json(invoice);
   } catch (err) {
     next(err);
@@ -81,7 +120,16 @@ router.get("/invoices/:id", verifyToken, async (req, res, next) => {
 });
 
 // POST /api/billing/invoices
-router.post("/invoices", verifyToken, validate(createSchema), async (req, res, next) => {
+// Só admin cria fatura hoje — é a única tela do produto que chama isso
+// (admin/financeiro/page.tsx). Mesma permissão administrativa já usada
+// pra editar/excluir fatura (module "sistema").
+router.post(
+  "/invoices",
+  verifyToken,
+  requireRole("admin"),
+  requirePermission("sistema", "create"),
+  validate(createSchema),
+  async (req, res, next) => {
   try {
     const invoice = await prisma.invoice.create({
       data: req.body,

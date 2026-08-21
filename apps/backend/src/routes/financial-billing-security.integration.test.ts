@@ -441,9 +441,20 @@ describe("segurança financeira profunda — saques e faturas (lote 2A-2, ata 20
       assert.equal(res.status, 200);
     });
 
-    it("criação de fatura (POST) continua funcionando para admin autorizado — não tocamos esse endpoint", async () => {
+    it("criação de fatura (POST) continua funcionando para admin autorizado", async () => {
+      // Neste lote (2A-2) o POST ainda era aberto a qualquer sessão válida
+      // — só precisava de ALGUM admin, por isso o perfil de teste original
+      // tinha só "edit". O lote seguinte (2A-3) passou a exigir também
+      // "sistema/create" em POST /invoices (mesma falha de controle de
+      // acesso na criação, corrigida à parte) — o perfil aqui precisa das
+      // duas permissões pra continuar provando "admin autorizado consegue".
       const company = await createCompany();
-      const profile = await createProfile({ permissions: [{ module: "sistema", action: "edit" }] });
+      const profile = await createProfile({
+        permissions: [
+          { module: "sistema", action: "edit" },
+          { module: "sistema", action: "create" },
+        ],
+      });
       const admin = await createUser({ role: "admin", account_type: "admin", admin_profile_id: profile.id });
       const res = await api("/api/billing/invoices", {
         method: "POST",

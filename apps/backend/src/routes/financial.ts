@@ -1,11 +1,20 @@
 import { Router } from "express";
 import { z } from "zod";
 import { prisma } from "../lib/prisma";
-import { verifyToken, requireRole, requirePermission } from "../middleware/auth";
+import { verifyToken, requireRole, requirePermission, evaluateAnyPermission } from "../middleware/auth";
 import { validate, parsePagination } from "../middleware/validate";
 import { recordWalletEvent } from "../lib/wallet-service";
 
 const router = Router();
+
+// Resolve o Nomade vinculado à sessão autenticada — nunca confiar num
+// nomade_id enviado pelo cliente pra decidir de quem é o quê (ver GET/:id
+// e POST abaixo). Mesma ideia de "derive o dono da sessão" já usada pelo
+// escopo de nômade em GET /withdrawals.
+async function resolveOwnNomadeId(userId: string): Promise<string | null> {
+  const nomade = await prisma.nomade.findUnique({ where: { user_id: userId }, select: { id: true } });
+  return nomade?.id ?? null;
+}
 
 const createSchema = z.object({
   nomade_id: z.string().min(1),
@@ -41,6 +50,14 @@ router.get("/withdrawals", verifyToken, async (req, res, next) => {
     // Nomad users can only see their own withdrawals
     if (req.user?.role === "nomad" || req.user?.role === "nomad_admin") {
       where["nomade"] = { user_id: req.user.id };
+    } else if (req.user?.account_type !== "admin") {
+      // Empresa, agência, parceiro/líder: nenhum motivo legítimo pra ver
+      // saques de nômade — nunca existiu tela nem fluxo do produto pra
+      // isso. Sem esse corte, a rota devolvia a lista inteira (nome,
+      // e-mail, chave PIX, valor) de todos os nômades pra qualquer sessão
+      // válida.
+      res.json({ data: [], total: 0, page, limit });
+      return;
     }
 
     const [total, data] = await Promise.all([
@@ -73,6 +90,15 @@ router.get("/withdrawals/:id", verifyToken, async (req, res, next) => {
       return;
     }
 
+    const isAdmin = req.user?.account_type === "admin";
+    const isOwner = req.user?.id != null && withdrawal.nomade?.user_id === req.user.id;
+    if (!isAdmin && !isOwner) {
+      // 404, não 403 — não confirma pra quem não tem relação com o
+      // registro que ele de fato existe (evita enumeração).
+      res.status(404).json({ error: "Solicitação não encontrada" });
+      return;
+    }
+
     res.json(withdrawal);
   } catch (err) {
     next(err);
@@ -80,10 +106,47 @@ router.get("/withdrawals/:id", verifyToken, async (req, res, next) => {
 });
 
 // POST /api/financial/withdrawals
+// Nômade solicitando o próprio saque: o nomade_id nunca vem do corpo da
+// requisição, é sempre resolvido pelo vínculo real da sessão — senão um
+// nômade logado poderia solicitar saque em nome de outro só trocando o
+// nomade_id enviado. Admin continua podendo cadastrar em nome de um
+// nômade (ex.: pedido recebido por outro canal), mas só com a mesma
+// permissão administrativa já usada pra aprovar/excluir saques
+// (module "sistema", action "create") — não é liberado pra qualquer
+// account_type diferente de nômade.
 router.post("/withdrawals", verifyToken, validate(createSchema), async (req, res, next) => {
   try {
+    const isNomadeSelf = req.user?.role === "nomad" || req.user?.role === "nomad_admin";
+    let nomadeId = req.body.nomade_id as string;
+
+    if (isNomadeSelf) {
+      const ownNomadeId = await resolveOwnNomadeId(req.user!.id);
+      if (!ownNomadeId) {
+        res.status(403).json({ error: "Usuário não está vinculado a um cadastro de nômade" });
+        return;
+      }
+      nomadeId = ownNomadeId;
+    } else if (req.user?.account_type === "admin") {
+      const admin = await prisma.user.findUnique({
+        where: { id: req.user.id },
+        select: {
+          admin_profile: {
+            select: { is_master: true, is_active: true, permissions: { select: { module: true, action: true } } },
+          },
+        },
+      });
+      if (!evaluateAnyPermission(admin?.admin_profile, [["sistema", "create"]])) {
+        res.status(403).json({ error: "Seu perfil de acesso não permite cadastrar saques em nome de um nômade." });
+        return;
+      }
+      // nomadeId permanece o valor enviado no corpo — admin agindo por terceiro.
+    } else {
+      res.status(403).json({ error: "Você não tem permissão para solicitar saques" });
+      return;
+    }
+
     const withdrawal = await prisma.withdrawalRequest.create({
-      data: req.body,
+      data: { ...req.body, nomade_id: nomadeId },
       include: { nomade: { select: { id: true, name: true } } },
     });
     res.status(201).json(withdrawal);
