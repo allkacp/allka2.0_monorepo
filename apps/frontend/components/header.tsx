@@ -12,9 +12,6 @@ import {
   User,
   CreditCard,
   FolderOpen,
-  Award,
-  Shield,
-  DollarSign,
   CheckSquare,
   Building2,
   Users,
@@ -479,7 +476,6 @@ export function Header({ transparent = false }: { transparent?: boolean } = {}) 
     nextLevel: null,
     tasks: null,
     settingsPath: path,
-    menuItems: [],
   });
 
   let ctx = (() => {
@@ -511,30 +507,11 @@ export function Header({ transparent = false }: { transparent?: boolean } = {}) 
         nextLevel: null,
         tasks: `${activeCount} projetos ativos`,
         settingsPath: "/company/dashboard",
-        menuItems: [
-          {
-            label: "Minha Empresa",
-            icon: Building2,
-            path: "/company/dashboard",
-          },
-          { label: "Projetos", icon: FolderOpen, path: "/company/projetos" },
-          { label: "Tarefas", icon: CheckSquare, path: "/company/tarefas" },
-          { label: "Faturas", icon: CreditCard, path: "/company/faturas" },
-        ],
       };
     }
     if (accountType === "agencias") {
       const p = agencia.profile;
       if (!p) return PLACEHOLDER("Agência", "/agency/dashboard");
-      // Partner é um upgrade da Agency (PartnerProfile.status "active") —
-      // quando ativo, anexa os atalhos de Partner ao menu da própria Agency.
-      const partnerMenuItems = isPartnerActive
-        ? [
-            { label: "Comissões", icon: DollarSign, path: "/partner/comissoes" },
-            { label: "Saques", icon: Wallet, path: "/partner/saques" },
-            { label: "Agências lideradas", icon: Building2, path: "/partner/agencias" },
-          ]
-        : [];
       return {
         name: p.name,
         email: p.email,
@@ -557,17 +534,6 @@ export function Header({ transparent = false }: { transparent?: boolean } = {}) 
         nextLevel: null,
         tasks: `${p.totalProjects} projetos no total`,
         settingsPath: "/agency/dashboard",
-        menuItems: [
-          {
-            label: "Minha Agência",
-            icon: Building2,
-            path: "/agency/dashboard",
-          },
-          { label: "Projetos", icon: FolderOpen, path: "/agency/projetos" },
-          { label: "Tarefas", icon: CheckSquare, path: "/agency/tarefas" },
-          { label: "Financeiro", icon: Wallet, path: "/agency/financeiro" },
-          ...partnerMenuItems,
-        ],
       };
     }
     if (accountType === "nomades") {
@@ -590,16 +556,6 @@ export function Header({ transparent = false }: { transparent?: boolean } = {}) 
         nextLevel: "Prata",
         tasks: "5 tarefas pendentes",
         settingsPath: "/nomades/perfil",
-        menuItems: [
-          { label: "Meu Perfil", icon: User, path: "/nomades/perfil" },
-          {
-            label: "Minhas Tarefas",
-            icon: CheckSquare,
-            path: "/nomades/minhastarefas",
-          },
-          { label: "Ganhos", icon: DollarSign, path: "/nomades/ganhos" },
-          { label: "Habilitações", icon: Award, path: "/nomades/habilitacoes" },
-        ],
       };
     }
     if (accountType === "lider") {
@@ -617,20 +573,6 @@ export function Header({ transparent = false }: { transparent?: boolean } = {}) 
         nextLevel: null,
         tasks: null,
         settingsPath: "/leader/perfil",
-        menuItems: [
-          { label: "Meu Perfil", icon: User, path: "/leader/perfil" },
-          { label: "Dashboard", icon: Activity, path: "/leader/dashboard" },
-          {
-            label: "Para Qualificar",
-            icon: CheckSquare,
-            path: "/leader/qualificacao",
-          },
-          {
-            label: "Tarefas da Área",
-            icon: FolderOpen,
-            path: "/leader/tarefas",
-          },
-        ],
       };
     }
     const name = userProfile.name || "Admin Sistema";
@@ -647,16 +589,6 @@ export function Header({ transparent = false }: { transparent?: boolean } = {}) 
       nextLevel: null,
       tasks: null,
       settingsPath: "/admin/configuracoes",
-      menuItems: [
-        { label: "Meu Perfil", icon: User, path: "/admin/dashboard" },
-        { label: "Usuários", icon: Shield, path: "/admin/usuarios" },
-        { label: "Permissões", icon: Shield, path: "/admin/permissoes" },
-        {
-          label: "Configurações",
-          icon: Settings,
-          path: "/admin/configuracoes",
-        },
-      ],
     };
   })();
 

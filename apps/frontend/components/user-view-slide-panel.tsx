@@ -1898,6 +1898,14 @@ export function UserViewSlidePanel({
       open={open}
       onClose={handleClose}
       hideHeader
+      // Este painel é aberto pelo header global (menu "Meu Perfil"), então
+      // pode abrir em CIMA do conteúdo de qualquer página — que também usa
+      // EmbeddedSlideScreen com o zIndex padrão (30). Sem um valor maior
+      // aqui, o painel de perfil renderiza escondido atrás do conteúdo da
+      // página (a ordem no DOM decide o empate), ficando praticamente
+      // inacessível. 45 fica acima do padrão (30) e do único outro valor
+      // customizado do app (40, em project-create-new-panel.tsx).
+      zIndex={45}
       pin={{
         id: `usuarios-view-${user?.id ?? "none"}`,
         label: user?.name ? `Usuário: ${user.name}` : "Detalhes do usuário",
