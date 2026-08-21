@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   ArrowLeft,
   CheckCircle2,
@@ -14,6 +14,8 @@ import {
   ClipboardList,
   Users,
   ChevronRight,
+  ChevronDown,
+  ChevronUp,
   AlertCircle,
   MessageCircle,
   Tag,
@@ -23,14 +25,15 @@ import {
   Link2,
   PlusCircle,
   Zap,
+  GripVertical,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { cn } from "@/lib/utils";
 import { STANDARD_SHELL_PANEL_CLASS } from "@/components/standard-page-shell";
 import { useAccountType } from "@/contexts/account-type-context";
 import { useProducts, type Product } from "@/lib/contexts/product-context";
+import { useTelaEstreita } from "@/hooks/useTelaEstreita";
 import { ProductNomadsTab } from "@/components/admin/product-nomads-tab";
 import { ProductRatingDisplay } from "@/components/product-rating-display";
 import { CopyLinkButton } from "@/components/copy-link-button";
@@ -44,6 +47,34 @@ import {
   Section,
   PortfolioGallery,
 } from "@/components/product-detail-shared";
+
+// ── Divisor ajustável entre as colunas de detalhes e contratação ──────────
+const PANEL_STORAGE_KEY = "allka:product-detail-right-fraction";
+const DEFAULT_RIGHT_FRACTION = 0.34;
+const MIN_RIGHT_FRACTION = 0.22;
+const MAX_RIGHT_FRACTION = 0.55;
+const KEYBOARD_STEP = 0.02;
+const HIGHLIGHTS_PREVIEW_COUNT = 4;
+
+function clampRightFraction(value: number): number {
+  if (!Number.isFinite(value)) return DEFAULT_RIGHT_FRACTION;
+  return Math.min(MAX_RIGHT_FRACTION, Math.max(MIN_RIGHT_FRACTION, value));
+}
+
+function readStoredRightFraction(): number {
+  if (typeof window === "undefined") return DEFAULT_RIGHT_FRACTION;
+  try {
+    const raw = window.localStorage.getItem(PANEL_STORAGE_KEY);
+    if (!raw) return DEFAULT_RIGHT_FRACTION;
+    const parsed = Number(raw);
+    if (!Number.isFinite(parsed) || parsed < MIN_RIGHT_FRACTION || parsed > MAX_RIGHT_FRACTION) {
+      return DEFAULT_RIGHT_FRACTION;
+    }
+    return parsed;
+  } catch {
+    return DEFAULT_RIGHT_FRACTION;
+  }
+}
 
 interface ProductContractViewProps {
   product: Product;
@@ -87,11 +118,67 @@ export function ProductContractView({
   const [selectedVariation, setSelectedVariation] = useState<any | null>(null);
   const [activeTab, setActiveTab] = useState<TabId>("detalhes");
   const [descriptionExpanded, setDescriptionExpanded] = useState(false);
+  const [highlightsExpanded, setHighlightsExpanded] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [justAdded, setJustAdded] = useState(false);
   const { accountType } = useAccountType();
   const isAdmin = accountType === "admin";
   const { products: allProducts } = useProducts();
+
+  // Colunas ajustáveis (Detalhes / Contratação) — só no desktop; no celular
+  // e tablet estreito vira uma coluna única, sem divisor.
+  const isNarrowViewport = useTelaEstreita(1024);
+  const isTwoColumnLayout = !isNarrowViewport;
+  const columnsRef = useRef<HTMLDivElement | null>(null);
+  const [rightFraction, setRightFraction] = useState<number>(() => readStoredRightFraction());
+  const [isDraggingDivider, setIsDraggingDivider] = useState(false);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    try {
+      window.localStorage.setItem(PANEL_STORAGE_KEY, String(rightFraction));
+    } catch {
+      // localStorage indisponível (modo privado, quota etc.) — segue sem persistir
+    }
+  }, [rightFraction]);
+
+  useEffect(() => {
+    if (!isDraggingDivider) return;
+    const handleMove = (e: MouseEvent) => {
+      const el = columnsRef.current;
+      if (!el) return;
+      const rect = el.getBoundingClientRect();
+      if (rect.width <= 0) return;
+      const fromRight = rect.right - e.clientX;
+      setRightFraction(clampRightFraction(fromRight / rect.width));
+    };
+    const handleUp = () => setIsDraggingDivider(false);
+    window.addEventListener("mousemove", handleMove);
+    window.addEventListener("mouseup", handleUp);
+    const prevCursor = document.body.style.cursor;
+    const prevUserSelect = document.body.style.userSelect;
+    document.body.style.cursor = "col-resize";
+    document.body.style.userSelect = "none";
+    return () => {
+      window.removeEventListener("mousemove", handleMove);
+      window.removeEventListener("mouseup", handleUp);
+      document.body.style.cursor = prevCursor;
+      document.body.style.userSelect = prevUserSelect;
+    };
+  }, [isDraggingDivider]);
+
+  const handleDividerKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === "ArrowLeft") {
+      e.preventDefault();
+      setRightFraction((f) => clampRightFraction(f + KEYBOARD_STEP));
+    } else if (e.key === "ArrowRight") {
+      e.preventDefault();
+      setRightFraction((f) => clampRightFraction(f - KEYBOARD_STEP));
+    } else if (e.key === "Home" || e.key === "Enter") {
+      e.preventDefault();
+      setRightFraction(DEFAULT_RIGHT_FRACTION);
+    }
+  };
 
   const pres = (product as any).presentation;
   const hasPresentation = !!pres;
@@ -139,43 +226,87 @@ export function ProductContractView({
     <div className={STANDARD_SHELL_PANEL_CLASS}>
       <div className="h-full min-h-0 flex flex-col overflow-hidden">
         {/* ══════════════════════════════════════════════════════════════
-            CABEÇALHO — único, nome do produto como título, identidade e
-            metadados essenciais. Nenhum segundo título/cabeçalho de página.
+            CABEÇALHO INSTITUCIONAL — degradê oficial da Allka, único,
+            compacto. Esquerda: identidade e metadados. Direita: destaques
+            (recolhíveis). Nenhum segundo título/cabeçalho de página.
         ══════════════════════════════════════════════════════════════ */}
-        <div className="shrink-0 px-6 pt-5 pb-4 border-b border-border/50 bg-muted/20">
-          <div className="flex items-start justify-between gap-4">
-            <div className="min-w-0 flex-1">
-              <button
-                type="button"
-                onClick={onBack}
-                className="inline-flex items-center gap-1.5 text-xs font-semibold text-muted-foreground hover:text-foreground transition-colors mb-3"
-              >
-                <ArrowLeft className="h-3.5 w-3.5" />
-                Voltar ao catálogo
-              </button>
+        <div className="shrink-0 relative overflow-hidden mx-4 mt-4 sm:mx-6 sm:mt-5 rounded-2xl shadow-[0_4px_24px_-4px_rgba(0,0,0,0.15)]">
+          <div
+            className="absolute inset-0"
+            style={{ background: "linear-gradient(90deg, #0a1628 0%, #3b1f6e 50%, #c81a7f 100%)" }}
+          />
+          <div
+            className="absolute inset-0 opacity-20 pointer-events-none"
+            style={{ backgroundImage: "radial-gradient(circle at 88% 15%, rgba(255,255,255,0.35), transparent 45%)" }}
+          />
 
-              <h1 className="text-xl font-bold leading-tight text-foreground mb-1.5">
+          <div className="relative z-10 px-5 py-4 sm:px-6 sm:py-5 flex flex-col lg:flex-row lg:items-start gap-4">
+            {/* ── Esquerda: identidade e metadados ── */}
+            <div className="min-w-0 flex-1">
+              <div className="flex items-start justify-between gap-3">
+                <button
+                  type="button"
+                  onClick={onBack}
+                  className="inline-flex items-center gap-1.5 text-xs font-semibold text-white/70 hover:text-white transition-colors mb-2.5"
+                >
+                  <ArrowLeft className="h-3.5 w-3.5" />
+                  Voltar ao catálogo
+                </button>
+                <div className="shrink-0 -mt-1 -mr-1">
+                  <CopyLinkButton />
+                </div>
+              </div>
+
+              <h1 className="text-xl sm:text-2xl font-bold leading-tight text-white mb-2">
                 {product.name}
               </h1>
 
-              <div className="flex items-center gap-2 mb-1.5 flex-wrap">
-                <Badge className="bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300 border-blue-200 dark:border-blue-800 text-[10px] font-semibold tracking-wider uppercase">
+              <div className="flex flex-wrap items-center gap-1.5 mb-2.5">
+                <span className="inline-flex items-center text-[10px] font-semibold px-2 py-0.5 rounded-full bg-white/15 border border-white/25 text-white uppercase tracking-wider">
                   {product.category || "Serviço"}
-                </Badge>
+                </span>
                 {hasVariations && (
-                  <span className="inline-flex items-center gap-1 text-[10px] bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 rounded-full px-2 py-0.5 border border-purple-200 dark:border-purple-700 font-semibold">
+                  <span className="inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full bg-white/12 border border-white/20 text-white/90">
                     <Layers className="h-2.5 w-2.5" />
                     {activeVariations.length} {activeVariations.length === 1 ? "opção" : "opções"}
                   </span>
                 )}
+                <span className="inline-flex items-center text-[11px] font-mono font-bold px-2 py-0.5 rounded-md bg-white/10 border border-white/20 text-white/80 tracking-widest">
+                  {product.id}
+                </span>
+                {(product as any).recurrence && (
+                  <span className="inline-flex items-center gap-1 text-[10px] font-medium px-2 py-0.5 rounded-full bg-white/12 border border-white/20 text-white/90">
+                    <Repeat2 className="h-2.5 w-2.5" />
+                    {(product as any).recurrence}
+                  </span>
+                )}
+                {product.deliveryDays && (
+                  <span className="inline-flex items-center gap-1 text-[10px] font-medium px-2 py-0.5 rounded-full bg-white/12 border border-white/20 text-white/90">
+                    <CalendarClock className="h-2.5 w-2.5" />
+                    {product.deliveryDays} dias
+                  </span>
+                )}
+                {(product as any).itemLimit && (
+                  <span className="inline-flex items-center gap-1 text-[10px] font-medium px-2 py-0.5 rounded-full bg-white/12 border border-white/20 text-white/90">
+                    <Users className="h-2.5 w-2.5" />
+                    {(product as any).itemLimit} contrato{(product as any).itemLimit !== 1 ? "s" : ""}
+                  </span>
+                )}
+                <ProductRatingDisplay
+                  productId={product.id}
+                  size="xs"
+                  showCount={true}
+                  variant="white"
+                  className="bg-white/12 rounded-full px-2 py-0.5 border border-white/20"
+                />
               </div>
 
               {pres?.tagline && (
                 <div className="max-w-2xl">
                   <p
                     className={cn(
-                      "text-xs text-muted-foreground leading-snug",
-                      !descriptionExpanded && "line-clamp-2",
+                      "text-xs text-white/75 leading-snug",
+                      descriptionExpanded ? "max-h-32 overflow-y-auto pr-1" : "line-clamp-2",
                     )}
                   >
                     {pres.tagline}
@@ -184,7 +315,7 @@ export function ProductContractView({
                     <button
                       type="button"
                       onClick={() => setDescriptionExpanded((v) => !v)}
-                      className="mt-1 text-[11px] font-semibold text-blue-600 dark:text-blue-400 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 rounded"
+                      className="mt-1 text-[11px] font-semibold text-white hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/60 rounded"
                     >
                       {descriptionExpanded ? "Mostrar menos" : "Ver descrição completa"}
                     </button>
@@ -195,8 +326,8 @@ export function ProductContractView({
                 <div className="max-w-2xl">
                   <p
                     className={cn(
-                      "text-xs text-muted-foreground leading-snug",
-                      !descriptionExpanded && "line-clamp-2",
+                      "text-xs text-white/75 leading-snug",
+                      descriptionExpanded ? "max-h-32 overflow-y-auto pr-1" : "line-clamp-2",
                     )}
                   >
                     {product.summaryDescription || product.description}
@@ -204,74 +335,74 @@ export function ProductContractView({
                   <button
                     type="button"
                     onClick={() => setDescriptionExpanded((v) => !v)}
-                    className="mt-1 text-[11px] font-semibold text-blue-600 dark:text-blue-400 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 rounded"
+                    className="mt-1 text-[11px] font-semibold text-white hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/60 rounded"
                   >
                     {descriptionExpanded ? "Mostrar menos" : "Ver descrição completa"}
                   </button>
                 </div>
               )}
+            </div>
 
-              <div className="flex flex-wrap gap-1.5 mt-2">
-                <span className="inline-flex items-center text-[11px] font-mono font-bold bg-slate-100 dark:bg-slate-800 rounded-md px-2 py-0.5 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 tracking-widest">
-                  {product.id}
-                </span>
-                {(product as any).recurrence && (
-                  <span className="inline-flex items-center gap-1 text-[10px] bg-slate-100 dark:bg-slate-800 rounded-full px-2 py-0.5 font-medium border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300">
-                    <Repeat2 className="h-2.5 w-2.5" />
-                    {(product as any).recurrence}
-                  </span>
+            {/* ── Direita: destaques (recolhíveis) ── */}
+            {pres?.highlights?.length > 0 && (
+              <div className="lg:w-72 shrink-0 lg:border-l lg:border-white/15 lg:pl-5 pt-3 lg:pt-0 border-t lg:border-t-0 border-white/15">
+                <p className="text-[9px] font-bold uppercase tracking-widest text-white/60 mb-1.5">
+                  Destaques
+                </p>
+                <div
+                  className={cn(
+                    "grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-1 gap-x-6 gap-y-1",
+                    highlightsExpanded && "max-h-40 overflow-y-auto pr-1",
+                  )}
+                >
+                  {(highlightsExpanded ? pres.highlights : pres.highlights.slice(0, HIGHLIGHTS_PREVIEW_COUNT)).map(
+                    (h: string, i: number) => (
+                      <div key={i} className="flex items-start gap-1.5 text-[12px]">
+                        <CheckCircle2 className="h-3 w-3 text-emerald-300 shrink-0 mt-0.5" />
+                        <span className="text-white/90 leading-snug">{h}</span>
+                      </div>
+                    ),
+                  )}
+                </div>
+                {pres.highlights.length > HIGHLIGHTS_PREVIEW_COUNT && (
+                  <button
+                    type="button"
+                    onClick={() => setHighlightsExpanded((v) => !v)}
+                    className="mt-1.5 inline-flex items-center gap-1 text-[11px] font-semibold text-white hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/60 rounded"
+                  >
+                    {highlightsExpanded ? (
+                      <>
+                        Mostrar menos
+                        <ChevronUp className="h-3 w-3" />
+                      </>
+                    ) : (
+                      <>
+                        Ver todos os destaques
+                        <ChevronDown className="h-3 w-3" />
+                      </>
+                    )}
+                  </button>
                 )}
-                {product.deliveryDays && (
-                  <span className="inline-flex items-center gap-1 text-[10px] bg-slate-100 dark:bg-slate-800 rounded-full px-2 py-0.5 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300">
-                    <CalendarClock className="h-2.5 w-2.5" />
-                    {product.deliveryDays} dias
-                  </span>
-                )}
-                {(product as any).itemLimit && (
-                  <span className="inline-flex items-center gap-1 text-[10px] bg-slate-100 dark:bg-slate-800 rounded-full px-2 py-0.5 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300">
-                    <Users className="h-2.5 w-2.5" />
-                    {(product as any).itemLimit} contrato{(product as any).itemLimit !== 1 ? "s" : ""}
-                  </span>
-                )}
-                <ProductRatingDisplay
-                  productId={product.id}
-                  size="xs"
-                  showCount={true}
-                  className="bg-slate-100 dark:bg-slate-800 rounded-full px-2 py-0.5 border border-slate-200 dark:border-slate-700"
-                />
               </div>
-            </div>
-
-            <div className="shrink-0">
-              <CopyLinkButton />
-            </div>
+            )}
           </div>
-
-          {pres?.highlights?.length > 0 && (
-            <div className="mt-3 pt-3 border-t border-border/40">
-              <p className="text-[9px] font-bold uppercase tracking-widest text-muted-foreground mb-1.5">
-                Destaques
-              </p>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-1">
-                {pres.highlights.map((h: string, i: number) => (
-                  <div key={i} className="flex items-start gap-1.5 text-[12px]">
-                    <CheckCircle2 className="h-3 w-3 text-emerald-500 shrink-0 mt-0.5" />
-                    <span className="text-foreground/90 leading-snug">{h}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
         </div>
 
         {/* ══════════════════════════════════════════════════════════════
             CORPO — abas + conteúdo (principal) e opções/contratação
-            (lateral no desktop, primeiro no mobile). Tudo dentro do mesmo
-            container branco.
+            (lateral no desktop, redimensionável; primeiro no mobile).
+            Tudo dentro do mesmo container branco.
         ══════════════════════════════════════════════════════════════ */}
-        <div className="flex flex-1 min-h-0 overflow-hidden flex-col sm:flex-row">
+        <div ref={columnsRef} className="flex flex-1 min-h-0 overflow-hidden flex-col lg:flex-row">
           {/* ── ÁREA PRINCIPAL: abas + conteúdo informativo ─────────── */}
-          <div className="flex flex-col min-h-0 flex-1 order-2 sm:order-1">
+          <div
+            className="flex flex-col min-h-0 order-2 lg:order-1 min-w-0"
+            style={
+              isTwoColumnLayout
+                ? { flex: "1 1 0%", minWidth: 320 }
+                : undefined
+            }
+          >
             <div
               role="tablist"
               aria-label="Seções do produto"
@@ -638,7 +769,7 @@ export function ProductContractView({
                           <div>
                             <p className="text-sm font-medium text-purple-800 dark:text-purple-200">Processo de contratação não disponível</p>
                             <p className="text-xs text-purple-700/70 dark:text-purple-400/70 mt-0.5">
-                              Selecione uma opção e clique em "Contratar" para iniciar o processo de contratação deste serviço.
+                              Selecione uma opção e clique em "Adicionar à cesta" para iniciar o processo de contratação deste serviço.
                             </p>
                           </div>
                         </div>
@@ -767,8 +898,48 @@ export function ProductContractView({
             </ScrollArea>
           </div>
 
+          {/* ── DIVISOR AJUSTÁVEL — só no desktop/tablet largo ──────── */}
+          {isTwoColumnLayout && (
+            <div
+              role="separator"
+              aria-orientation="vertical"
+              aria-label="Redimensionar colunas de detalhes e contratação"
+              aria-valuenow={Math.round(rightFraction * 100)}
+              aria-valuemin={Math.round(MIN_RIGHT_FRACTION * 100)}
+              aria-valuemax={Math.round(MAX_RIGHT_FRACTION * 100)}
+              tabIndex={0}
+              onMouseDown={(e) => {
+                e.preventDefault();
+                setIsDraggingDivider(true);
+              }}
+              onDoubleClick={() => setRightFraction(DEFAULT_RIGHT_FRACTION)}
+              onKeyDown={handleDividerKeyDown}
+              className={cn(
+                "hidden lg:flex order-2 shrink-0 relative group w-2.5 cursor-col-resize select-none items-center justify-center bg-border/40 hover:bg-purple-300 focus-visible:bg-purple-300 focus-visible:outline-none transition-colors",
+                isDraggingDivider && "bg-purple-500 hover:bg-purple-500",
+              )}
+              title="Arraste para redimensionar (duplo clique ou Enter para restaurar; setas do teclado ajustam)"
+            >
+              <div
+                className={cn(
+                  "h-12 w-1 rounded-full bg-border group-hover:bg-purple-500 group-focus-visible:bg-purple-500 transition-colors flex items-center justify-center",
+                  isDraggingDivider && "bg-white",
+                )}
+              >
+                <GripVertical className="h-3 w-3 text-white/0 group-hover:text-white/80 -ml-1" />
+              </div>
+            </div>
+          )}
+
           {/* ── PAINEL DE OPÇÕES E CONTRATAÇÃO ──────────────────────── */}
-          <div className="shrink-0 order-1 sm:order-2 w-full sm:w-96 border-b sm:border-b-0 sm:border-l border-border/50 flex flex-col bg-slate-50/60 dark:bg-slate-900/20 min-h-0">
+          <div
+            className="shrink-0 order-1 lg:order-3 w-full border-b lg:border-b-0 lg:border-l border-border/50 flex flex-col bg-slate-50/60 dark:bg-slate-900/20 min-h-0"
+            style={
+              isTwoColumnLayout
+                ? { flex: `0 0 ${rightFraction * 100}%`, width: `${rightFraction * 100}%`, minWidth: 280 }
+                : undefined
+            }
+          >
             <ScrollArea className="flex-1 min-h-0">
               <div className="p-4 space-y-4 bg-linear-to-b from-slate-50 via-white to-slate-50/70 dark:from-slate-950 dark:via-slate-900 dark:to-slate-950">
                 {/* Bloco de preço */}
@@ -978,6 +1149,7 @@ export function ProductContractView({
                 onClick={handleContratar}
                 className={cn(
                   "w-full gap-2.5 rounded-2xl font-bold text-sm border-0 shadow-lg transition-all",
+                  "h-auto min-h-10 py-2.5 whitespace-normal text-center leading-snug",
                   "disabled:opacity-40 disabled:cursor-not-allowed disabled:shadow-none",
                   alreadyInBasket
                     ? "bg-emerald-600 hover:bg-emerald-600 text-white"
@@ -991,9 +1163,21 @@ export function ProductContractView({
                     : undefined
                 }
               >
-                <ShoppingCart className="h-4 w-4" />
-                {alreadyInBasket ? "Já está na cesta" : !canContratar ? "Selecione uma opção para continuar" : "Contratar"}
+                <ShoppingCart className="h-4 w-4 shrink-0" />
+                {alreadyInBasket ? "Já está na cesta" : !canContratar ? "Selecione uma opção para continuar" : "Adicionar à cesta"}
               </Button>
+              {justAdded && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="lg"
+                  onClick={onBack}
+                  className="w-full gap-2 rounded-2xl font-semibold text-sm h-auto min-h-10 py-2.5 whitespace-normal text-center leading-snug"
+                >
+                  <ArrowLeft className="h-3.5 w-3.5 shrink-0" />
+                  Continuar comprando
+                </Button>
+              )}
             </div>
           </div>
         </div>

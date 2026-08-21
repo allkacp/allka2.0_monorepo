@@ -143,10 +143,10 @@ describe("AdminCatalogoProdutos — rota da tela cheia do produto", () => {
     expect(addItemSpy).not.toHaveBeenCalled();
   });
 
-  it("11. Contratar chama basket.addItem exatamente uma vez, com o produto certo", async () => {
+  it("11. Adicionar à cesta chama basket.addItem exatamente uma vez, com o produto certo", async () => {
     const user = userEvent.setup();
     renderAt("/admin/catalogo-produtos/prod-1");
-    await user.click(screen.getByRole("button", { name: /^contratar$/i }));
+    await user.click(screen.getByRole("button", { name: /^adicionar à cesta$/i }));
     expect(addItemSpy).toHaveBeenCalledTimes(1);
     expect(addItemSpy).toHaveBeenCalledWith(expect.objectContaining({ id: "prod-1" }));
   });
