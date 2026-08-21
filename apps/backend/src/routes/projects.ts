@@ -1529,6 +1529,24 @@ router.put("/:id/link", verifyToken, validate(updateProjectLinkSchema), async (r
 });
 
 // DELETE /api/projects/:id
+//
+// Revisão de segurança (lote 2A, ata 2026-08-20): o gate de autorização
+// aqui é `projectVisibleToUser`, o mesmo usado para leitura — ou seja,
+// qualquer usuário vinculado à agência/empresa dona do projeto pode
+// apagá-lo, não só quem o criou. Confirmado que isso NÃO é uma falha de
+// isolamento entre contas (um usuário de uma agência não enxerga nem
+// apaga projeto de outra agência/empresa) — é a mesma regra de escopo já
+// usada em toda a tela de projetos. Mantida sem alteração: decidir se
+// exclusão exige um papel mais restrito que "membro da organização dona"
+// é uma decisão de negócio do Lote 3 (arquivamento/ciclo de vida de
+// projeto), não deste lote de segurança.
+//
+// O único ajuste feito aqui é de tratamento de erro: `Project` tem FKs
+// sem onDelete:Cascade a partir de TaskExecution, Invoice e Payment
+// (schema.prisma) — ou seja, o banco já impede fisicamente apagar um
+// projeto com tarefas executadas, faturas ou pagamentos (P2003). Antes,
+// esse caso vazava como erro 500 genérico do Prisma; agora retorna uma
+// mensagem clara, sem mudar quem pode ou não apagar.
 router.delete("/:id", verifyToken, async (req, res, next) => {
   try {
     const project = await prisma.project.findUnique({
@@ -1546,6 +1564,14 @@ router.delete("/:id", verifyToken, async (req, res, next) => {
     await prisma.project.delete({ where: { id: req.params.id as string } });
     res.status(204).send();
   } catch (err) {
+    const code = (err as { code?: string }).code;
+    if (code === "P2003") {
+      res.status(409).json({
+        error:
+          "Este projeto possui tarefas executadas, faturas ou pagamentos vinculados e não pode ser excluído.",
+      });
+      return;
+    }
     next(err);
   }
 });
