@@ -136,6 +136,26 @@ const VIEW_MODE_OPTIONS: Array<{
   { value: "grid4", label: "4 colunas", Icon: Columns4, minWidth: 1280 },
 ];
 
+// ─── Portal → catálogo ────────────────────────────────────────────────────
+// Mesmo estilo de detecção de portal por prefixo já usado no onCreate()
+// deste componente (linhas abaixo, redirecionamento pós-criação de
+// projeto) — aqui mapeando pro catálogo de cada portal, não pra tela de
+// projetos. Cobre só os portais que realmente têm catálogo próprio e
+// adicionam itens à cesta hoje (admin, empresa/company, agência —
+// confirmado em app/admin/catalogo-produtos, app/company/produtos e
+// app/agencia/catalogo, este último servindo tanto /agencia quanto
+// /agency). Líder nunca vê o botão da cesta no cabeçalho; nômade e
+// parceiro não têm tela de catálogo nem adicionam item à cesta hoje — pra
+// esses casos retorna null de propósito, pra nunca navegar pra uma rota
+// que não existe (o clique ainda fecha a cesta normalmente).
+function resolveCatalogPath(pathname: string): string | null {
+  if (pathname.startsWith("/admin")) return "/admin/catalogo-produtos";
+  if (pathname.startsWith("/company")) return "/company/produtos";
+  if (pathname.startsWith("/agencia")) return "/agencia/catalogo";
+  if (pathname.startsWith("/agency")) return "/agency/catalogo";
+  return null;
+}
+
 // ─── Component ───────────────────────────────────────────────────────────────
 
 export function ProjectBasketDrawer() {
@@ -212,7 +232,24 @@ export function ProjectBasketDrawer() {
     basket.setOpen(false);
   };
 
-  // Fecha ao navegar para outra página
+  // Vai pro catálogo do portal atual e fecha a cesta — usado pelos botões
+  // "Ir para o catálogo" (cesta vazia) e "Continuar adicionando" (cesta com
+  // itens), que são a mesma ação de navegação em dois estados diferentes.
+  // Não mexe em items/clearBasket: só navega e fecha o painel.
+  const handleGoToCatalog = () => {
+    const target = resolveCatalogPath(location.pathname);
+    if (target) {
+      navigate(target);
+    }
+    handleClose();
+  };
+
+  // Fecha ao navegar para outra página — a cesta é global (persiste entre
+  // rotas via contexto), então sem isto ela ficaria "presa" aberta por
+  // cima de qualquer página nova ao navegar por outro lugar (ex.: um link
+  // da sidebar). handleGoToCatalog() já dispara essa mesma troca de rota
+  // de propósito, então este efeito também cobre (de forma redundante e
+  // inofensiva) o fechamento depois do clique em "ir pro catálogo".
   useEffect(() => {
     if (basket.isOpen) {
       basket.setOpen(false);
@@ -319,7 +356,7 @@ export function ProjectBasketDrawer() {
                 </div>
                 <button
                   type="button"
-                  onClick={handleClose}
+                  onClick={handleGoToCatalog}
                   className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-900/30 hover:bg-indigo-100 dark:hover:bg-indigo-900/50 transition-colors"
                 >
                   <ArrowRight className="h-4 w-4" />
@@ -815,10 +852,11 @@ export function ProjectBasketDrawer() {
 
               {/* Single row: [← Continuar] [Criar projeto →] [Limpar]  |  TOTAL */}
               <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap">
-                {/* Continuar adicionando */}
+                {/* Continuar adicionando — mesma ação de ir pro catálogo,
+                    só que no estado com itens (ver handleGoToCatalog) */}
                 <button
                   type="button"
-                  onClick={handleClose}
+                  onClick={handleGoToCatalog}
                   className="shrink-0 flex items-center gap-1.5 h-8 px-3 rounded-lg text-xs font-semibold text-slate-600 dark:text-white/50 bg-slate-50 dark:bg-white/5 border border-slate-100 dark:border-white/8 hover:bg-slate-100 dark:hover:bg-white/10 transition-colors whitespace-nowrap"
                 >
                   <ArrowRight className="h-3 w-3 rotate-180 shrink-0" />
