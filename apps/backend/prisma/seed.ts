@@ -157,6 +157,25 @@ async function main() {
     },
   });
 
+  // ─── Líder de teste local (login .lamego.com.vc) ──────────────────────────
+  // update não-vazio de propósito: essa conta já existia com account_type
+  // desatualizado ("nomades"), o que fazia o login classificá-la como Nômade
+  // antes de reconhecer o vínculo de Líder (ver ACCESS_TYPE_RULES em
+  // src/routes/auth.ts). Rodar o seed de novo precisa AUTOCORRIGIR o valor,
+  // não só criar a conta se ela não existir.
+  await prisma.user.upsert({
+    where: { email: "leader@lamego.com.vc" },
+    update: { role: "lider", account_type: "lider" },
+    create: {
+      email: "leader@lamego.com.vc",
+      password_hash: sharedPassword,
+      name: "Líder Allka",
+      role: "lider",
+      account_type: "lider",
+      is_active: true,
+    },
+  });
+
   const companyUser = await prisma.user.upsert({
     where: { email: "empresa@exemplo.com" },
     update: {},
