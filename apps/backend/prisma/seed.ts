@@ -2,6 +2,7 @@ import "dotenv/config";
 import { PrismaClient } from "@prisma/client";
 import bcrypt from "bcryptjs";
 import { withProjectCode } from "../src/lib/create-project";
+import { assertLocalDatabase } from "../src/lib/assert-local-database";
 
 const prisma = new PrismaClient();
 
@@ -10,6 +11,12 @@ async function main() {
     console.error("❌ Este seed não pode rodar em produção.");
     process.exit(1);
   }
+
+  // NODE_ENV sozinho não garante nada se o .env local aponta DATABASE_URL
+  // para um host remoto (produção ou QA online) por engano — este segundo
+  // gate confirma o host de verdade antes de qualquer escrita.
+  const { host, database } = assertLocalDatabase(process.env.DATABASE_URL);
+  console.log(`🔒 Banco confirmado: host="${host}" database="${database}"`);
 
   const seedPassword = process.env.SEED_TEST_USER_PASSWORD;
   if (!seedPassword) {
@@ -189,7 +196,7 @@ async function main() {
     },
   });
 
-  const partnerUser = await prisma.user.upsert({
+  await prisma.user.upsert({
     where: { email: "parceiro@exemplo.com" },
     update: {},
     create: {
@@ -1389,43 +1396,49 @@ async function main() {
   }
 
   // ─── Agency ────────────────────────────────────────────────────────────────
-  const existingAgency = await prisma.agency.findUnique({
-    where: { user_id: agencyUser.id },
+  // Campo de dono é "owner_user_id" no Prisma (coluna física continua
+  // "user_id" via @map — ver model Agency em schema.prisma). O antigo
+  // "user_id" direto não existe mais como nome de campo do client, o que
+  // quebrava esta consulta com PrismaClientValidationError.
+  const agency = await prisma.agency.upsert({
+    where: { owner_user_id: agencyUser.id },
+    update: {},
+    create: {
+      owner_user_id: agencyUser.id,
+      name: "Agência Digital Creative",
+      cnpj: "77.888.999/0001-11",
+      email: "agencia@exemplo.com",
+      partner_level: "gold",
+      wallet_balance: 3200,
+      status: "ativo",
+    },
   });
-  if (!existingAgency) {
-    await prisma.agency.create({
-      data: {
-        user_id: agencyUser.id,
-        name: "Agência Digital Creative",
-        cnpj: "77.888.999/0001-11",
-        email: "agencia@exemplo.com",
-        partner_level: "gold",
-        wallet_balance: 3200,
-        status: "ativo",
-      },
-    });
-  }
 
   // ─── Partner Profile ──────────────────────────────────────────────────────
-  const existingPartner = await prisma.partnerProfile.findUnique({
-    where: { user_id: partnerUser.id },
+  // PartnerProfile não tem mais vínculo direto com um User — hoje Partner é
+  // um status da própria Agency (ver Agency.partner_profile / model
+  // PartnerProfile.agency_id em schema.prisma; mesmo padrão usado pela rota
+  // real POST /api/agencies/:id/partner-invite em src/routes/agencies.ts). O
+  // campo antigo "user_id" não existe neste model, e por isso este bloco
+  // também quebrava. A Agência de exemplo acima é quem recebe o status de
+  // Partner; o usuário "parceiro@exemplo.com" continua existindo como conta
+  // de teste separada, só não fica mais preso a este registro.
+  await prisma.partnerProfile.upsert({
+    where: { agency_id: agency.id },
+    update: {},
+    create: {
+      agency_id: agency.id,
+      balance: 1240,
+      total_earned: 4870.5,
+      total_withdrawn: 3630.5,
+      referral_code: "CARLOS10",
+      referral_link: "https://allka.com.br/ref/carlos10",
+      status: "active",
+      pix_key: "parceiro@exemplo.com",
+      pix_key_type: "email",
+      linked_campaign_id: campaigns[9].id,
+    },
   });
-  if (!existingPartner) {
-    await prisma.partnerProfile.create({
-      data: {
-        user_id: partnerUser.id,
-        balance: 1240,
-        total_earned: 4870.5,
-        total_withdrawn: 3630.5,
-        referral_code: "CARLOS10",
-        referral_link: "https://allka.com.br/ref/carlos10",
-        status: "active",
-        pix_key: "parceiro@exemplo.com",
-        pix_key_type: "email",
-        linked_campaign_id: campaigns[9].id,
-      },
-    });
-  }
 
   // ─── Terms (3 total) ──────────────────────────────────────────────────────
   await prisma.term.create({

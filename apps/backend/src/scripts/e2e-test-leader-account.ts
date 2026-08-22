@@ -6,6 +6,7 @@
  * em src/routes/auth.ts) reconhece essa conta como Líder, não como Nômade.
  */
 import { PrismaClient } from "@prisma/client";
+import { assertLocalDatabase } from "../lib/assert-local-database";
 
 const prisma = new PrismaClient({ log: ["warn", "error"] });
 const BASE_URL = "http://localhost:3001/api";
@@ -31,6 +32,9 @@ async function main() {
   console.log("=".repeat(70));
   console.log("  SMOKE TEST — Conta de teste do Líder");
   console.log("=".repeat(70));
+
+  const { host, database } = assertLocalDatabase(process.env.DATABASE_URL);
+  console.log(`🔒 Banco confirmado: host="${host}" database="${database}"`);
 
   if (!PASSWORD) {
     console.error("❌ SEED_TEST_USER_PASSWORD não configurado no .env");
