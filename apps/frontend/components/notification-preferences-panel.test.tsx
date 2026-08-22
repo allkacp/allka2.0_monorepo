@@ -125,36 +125,26 @@ describe("NotificationPreferencesPanel — Preferências (real, per event x chan
   });
 });
 
-describe("NotificationPreferencesPanel — Regras (Nova Regra agora funciona)", () => {
-  it("'Nova Regra' opens a real modal and submitting it saves a preference — the button used to have no onClick at all", async () => {
-    const user = userEvent.setup();
-    renderPanel({ initialTab: "rules" });
+// Lote de remoção da aba "Regras" (redundante com "Preferências" — mesma
+// tabela NotificationPreference, sem função exclusiva: confirmado por
+// auditoria de código antes da remoção).
+describe("NotificationPreferencesPanel — aba 'Regras' removida", () => {
+  it("não existe mais nenhuma aba nem botão 'Regras' ou 'Nova Regra'", async () => {
+    renderPanel({ initialTab: "prefs" });
 
-    await user.click(screen.getByRole("tab", { name: /regras/i }));
-    await user.click(screen.getByRole("button", { name: /nova regra/i }));
-
-    const dialog = await screen.findByRole("dialog");
-    await user.selectOptions(within(dialog).getByRole("combobox"), "task-approved");
-
-    const whatsappSwitch = within(dialog).getAllByRole("switch")[1]; // in_app row has no switch; order: email, whatsapp, push
-    await user.click(whatsappSwitch);
-    await user.click(within(dialog).getByRole("button", { name: /salvar regra/i }));
-
-    await waitFor(() =>
-      expect(apiClient.updateNotificationPreference).toHaveBeenCalledWith(
-        "task-approved",
-        expect.objectContaining({ whatsapp: true }),
-      ),
-    );
+    await screen.findByRole("tab", { name: /preferências/i });
+    expect(screen.queryByRole("tab", { name: /regras/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /nova regra/i })).not.toBeInTheDocument();
   });
 
-  it("shows an active rule card for any event with a non-in_app channel already enabled", async () => {
-    (apiClient.getNotificationPreferences as any).mockResolvedValue({
-      data: [{ event_type: "task-returned", channel: "whatsapp", enabled: true }],
-    });
+  it("um estado/link antigo com initialTab=\"rules\" abre 'Preferências' em vez de ficar em branco", async () => {
     renderPanel({ initialTab: "rules" });
 
-    await screen.findByText("Tarefa devolvida");
+    // Preferências é a aba que fica ativa: seu conteúdo real aparece, sem
+    // precisar clicar em nada — prova que a tela não ficou em branco.
+    expect(await screen.findByText("Tarefas")).toBeInTheDocument();
+    const prefsTab = await screen.findByRole("tab", { name: /preferências/i });
+    expect(prefsTab).toHaveAttribute("data-state", "active");
   });
 });
 

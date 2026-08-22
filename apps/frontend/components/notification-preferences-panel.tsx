@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from "react"
 import { useLocation, useNavigate } from "react-router-dom"
 import {
   Bell, Mail, MessageSquare, Smartphone, CheckCircle2,
-  Settings, CheckCheck, Zap, Info, Plus, AlertTriangle, ArrowRight,
+  Settings, CheckCheck, Info, Plus, AlertTriangle, ArrowRight,
   Users, Edit, Trash2, Archive, ArchiveRestore, X,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
@@ -11,7 +11,6 @@ import { HeaderSlideScreen } from "@/components/header-slide-screen"
 import { Switch } from "@/components/ui/switch"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { ConfirmationDialog } from "@/components/confirmation-dialog"
-import { NotificationRuleFormModal, type PrefEventOption } from "@/components/modals/notification-rule-form-modal"
 import {
   NotificationGroupFormModal,
   type NotificationGroupDraft,
@@ -24,8 +23,8 @@ import {
 import { useAccountType } from "@/contexts/account-type-context"
 import { cn } from "@/lib/utils"
 
-/* ─── Catálogo de tipos de evento (fixo, usado por Preferências e Regras —
-   mesma tabela real por trás das duas, NotificationPreference) ──────────── */
+/* ─── Catálogo de tipos de evento (fixo, usado pela aba Preferências —
+   NotificationPreference é a tabela real por trás dela) ─────────────────── */
 const PREF_GROUPS = [
   { key: "tarefas",   label: "Tarefas",    color: "bg-emerald-50 text-emerald-700", dot: "bg-emerald-500",
     items: [
@@ -50,10 +49,6 @@ const PREF_GROUPS = [
       { id: "sys-level",  label: "Evolução de nível",          desc: "Quando sua agência sobe de nível" },
     ]},
 ]
-
-const EVENT_OPTIONS: PrefEventOption[] = PREF_GROUPS.flatMap((g) =>
-  g.items.map((i) => ({ id: i.id, label: i.label, groupLabel: g.label })),
-)
 
 type PrefChannel = "email" | "whatsapp" | "push"
 const PREF_CHANNELS: { key: PrefChannel; label: string; Icon: typeof Mail; color: string }[] = [
@@ -107,6 +102,13 @@ export function NotificationPreferencesPanel({
   open = false, onClose, embedded = false, initialTab = "inbox",
 }: NotificationPreferencesPanelProps) {
   const location = useLocation()
+
+  // "rules" era a aba "Regras", removida por ser 100% redundante com
+  // "Preferências" (mesmo dado, mesma tabela NotificationPreference — ver
+  // comentário do PrefsTab). Qualquer estado/link antigo que ainda mande
+  // abrir "rules" cai em "Preferências" em vez de deixar a tela em branco
+  // (Tabs não acha TabsTrigger/TabsContent nenhum pra um value inexistente).
+  const resolvedInitialTab = initialTab === "rules" ? "prefs" : initialTab
 
   /* ── Inbox — mesma fonte real (SystemAlert) que o triângulo de alertas,
      nunca um segundo inbox paralelo. ────────────────────────────────────── */
@@ -249,8 +251,7 @@ export function NotificationPreferencesPanel({
     }
   }
 
-  /* ── Preferências / Regras — mesma tabela real (NotificationPreference),
-     duas telas sobre o mesmo dado. ───────────────────────────────────────── */
+  /* ── Preferências — tabela real NotificationPreference. ─────────────────── */
   const [prefsMap, setPrefsMap] = useState<Map<string, boolean>>(new Map())
 
   const fetchPreferences = useCallback(async () => {
@@ -280,11 +281,6 @@ export function NotificationPreferencesPanel({
     } catch {
       setPrefsMap((prev) => new Map(prev).set(prefsKey(eventType, channel), !enabled))
     }
-  }
-
-  async function saveRule(eventType: string, channels: { email: boolean; whatsapp: boolean; push: boolean }) {
-    await apiClient.updateNotificationPreference(eventType, channels)
-    await fetchPreferences()
   }
 
   /* ── Grupos ──────────────────────────────────────────────────────────── */
@@ -337,8 +333,6 @@ export function NotificationPreferencesPanel({
     }
   }
 
-  const [ruleModalOpen, setRuleModalOpen] = useState(false)
-
   /* ── Tab bodies ──────────────────────────────────────────────────────── */
 
   return embedded ? (
@@ -350,7 +344,6 @@ export function NotificationPreferencesPanel({
           <TabsTrigger value="inbox"><Bell className="h-3.5 w-3.5 mr-1.5" />Notificações</TabsTrigger>
           <TabsTrigger value="alertas"><AlertTriangle className="h-3.5 w-3.5 mr-1.5" />Alertas</TabsTrigger>
           <TabsTrigger value="prefs"><Settings className="h-3.5 w-3.5 mr-1.5" />Preferências</TabsTrigger>
-          <TabsTrigger value="rules"><Zap className="h-3.5 w-3.5 mr-1.5" />Regras</TabsTrigger>
           <TabsTrigger value="groups"><Users className="h-3.5 w-3.5 mr-1.5" />Grupos</TabsTrigger>
         </TabsList>
         <TabsContent value="inbox" className="pt-2">
@@ -380,9 +373,6 @@ export function NotificationPreferencesPanel({
         <TabsContent value="prefs" className="pt-2">
           <PrefsTab isChannelEnabled={isChannelEnabled} setChannel={setChannel} />
         </TabsContent>
-        <TabsContent value="rules" className="pt-2">
-          <RulesTab isChannelEnabled={isChannelEnabled} setChannel={setChannel} onNewRule={() => setRuleModalOpen(true)} />
-        </TabsContent>
         <TabsContent value="groups" className="pt-2">
           <GroupsTab
             groups={groups}
@@ -398,8 +388,7 @@ export function NotificationPreferencesPanel({
           />
         </TabsContent>
       </Tabs>
-      <RuleAndGroupModals
-        ruleModalOpen={ruleModalOpen} setRuleModalOpen={setRuleModalOpen} saveRule={saveRule}
+      <GroupModals
         groupModalOpen={groupModalOpen} setGroupModalOpen={setGroupModalOpen} editingGroup={editingGroup} saveGroup={saveGroup}
         deletingGroup={deletingGroup} setDeletingGroup={setDeletingGroup} confirmDeleteGroup={confirmDeleteGroup}
       />
@@ -422,7 +411,7 @@ export function NotificationPreferencesPanel({
     >
       <div className="flex flex-col flex-1 min-h-0 w-full">
         {/* Tabs — flex-1 min-h-0 so it shrinks properly */}
-        <Tabs defaultValue={initialTab} className="flex-1 min-h-0 flex flex-col">
+        <Tabs defaultValue={resolvedInitialTab} className="flex-1 min-h-0 flex flex-col">
           <div className="px-5 pt-4 pb-1 shrink-0">
             <TabsList className="w-full bg-slate-100 dark:bg-slate-800 p-1 rounded-xl h-auto gap-1">
               <TabsTrigger value="inbox"
@@ -448,10 +437,6 @@ export function NotificationPreferencesPanel({
               <TabsTrigger value="prefs"
                 className="flex-1 gap-1.5 text-xs rounded-lg data-[state=active]:bg-white dark:data-[state=active]:bg-slate-700 data-[state=active]:shadow-sm py-2">
                 <Settings className="h-3.5 w-3.5" />Preferências
-              </TabsTrigger>
-              <TabsTrigger value="rules"
-                className="flex-1 gap-1.5 text-xs rounded-lg data-[state=active]:bg-white dark:data-[state=active]:bg-slate-700 data-[state=active]:shadow-sm py-2">
-                <Zap className="h-3.5 w-3.5" />Regras
               </TabsTrigger>
               <TabsTrigger value="groups"
                 className="flex-1 gap-1.5 text-xs rounded-lg data-[state=active]:bg-white dark:data-[state=active]:bg-slate-700 data-[state=active]:shadow-sm py-2">
@@ -491,10 +476,6 @@ export function NotificationPreferencesPanel({
             <PrefsTab isChannelEnabled={isChannelEnabled} setChannel={setChannel} />
           </TabsContent>
 
-          <TabsContent value="rules" className="flex-1 min-h-0 overflow-y-auto mt-0">
-            <RulesTab isChannelEnabled={isChannelEnabled} setChannel={setChannel} onNewRule={() => setRuleModalOpen(true)} />
-          </TabsContent>
-
           <TabsContent value="groups" className="flex-1 min-h-0 overflow-y-auto mt-0">
             <GroupsTab
               groups={groups}
@@ -512,8 +493,7 @@ export function NotificationPreferencesPanel({
         </Tabs>
       </div>
     </HeaderSlideScreen>
-    <RuleAndGroupModals
-      ruleModalOpen={ruleModalOpen} setRuleModalOpen={setRuleModalOpen} saveRule={saveRule}
+    <GroupModals
       groupModalOpen={groupModalOpen} setGroupModalOpen={setGroupModalOpen} editingGroup={editingGroup} saveGroup={saveGroup}
       deletingGroup={deletingGroup} setDeletingGroup={setDeletingGroup} confirmDeleteGroup={confirmDeleteGroup}
     />
@@ -521,15 +501,11 @@ export function NotificationPreferencesPanel({
   )
 }
 
-/* ─── Modais compartilhados pelos dois modos de render ───────────────────── */
-function RuleAndGroupModals({
-  ruleModalOpen, setRuleModalOpen, saveRule,
+/* ─── Modal de Grupos, compartilhado pelos dois modos de render ─────────── */
+function GroupModals({
   groupModalOpen, setGroupModalOpen, editingGroup, saveGroup,
   deletingGroup, setDeletingGroup, confirmDeleteGroup,
 }: {
-  ruleModalOpen: boolean
-  setRuleModalOpen: (v: boolean) => void
-  saveRule: (eventType: string, channels: { email: boolean; whatsapp: boolean; push: boolean }) => Promise<void>
   groupModalOpen: boolean
   setGroupModalOpen: (v: boolean) => void
   editingGroup: NotificationGroupDraft | null
@@ -540,12 +516,6 @@ function RuleAndGroupModals({
 }) {
   return (
     <>
-      <NotificationRuleFormModal
-        open={ruleModalOpen}
-        onClose={() => setRuleModalOpen(false)}
-        eventOptions={EVENT_OPTIONS}
-        onSave={saveRule}
-      />
       <NotificationGroupFormModal
         open={groupModalOpen}
         onClose={() => setGroupModalOpen(false)}
@@ -822,76 +792,6 @@ function PrefsTab({
           outros canais ficam guardados pra quando existir envio real por e-mail/WhatsApp/push.
         </p>
       </div>
-    </div>
-  )
-}
-
-function RulesTab({
-  isChannelEnabled, setChannel, onNewRule,
-}: {
-  isChannelEnabled: (eventType: string, channel: PrefChannel) => boolean
-  setChannel: (eventType: string, channel: PrefChannel, enabled: boolean) => void
-  onNewRule: () => void
-}) {
-  // Uma "regra" é só um PREF_GROUPS.item com algum canal (além de in_app) ligado.
-  const allItems = PREF_GROUPS.flatMap((g) => g.items.map((i) => ({ ...i, groupLabel: g.label })))
-  const activeRules = allItems.filter((item) => PREF_CHANNELS.some((c) => isChannelEnabled(item.id, c.key)))
-
-  function toggleRule(eventType: string, enable: boolean) {
-    for (const { key } of PREF_CHANNELS) setChannel(eventType, key, enable)
-  }
-
-  return (
-    <div className="p-5 space-y-4">
-      <div className="flex items-start gap-3 px-4 py-3 rounded-xl bg-blue-50 dark:bg-blue-950/20 border border-blue-100 dark:border-blue-800/40">
-        <Info className="h-3.5 w-3.5 text-blue-500 shrink-0 mt-0.5" />
-        <p className="text-xs text-blue-700 dark:text-blue-300 leading-relaxed">
-          <strong>Regras</strong> são a mesma preferência da aba "Preferências", só que listadas
-          uma a uma — ligar um canal aqui é a mesma coisa que ligar lá.
-        </p>
-      </div>
-
-      <div className="flex items-center justify-between">
-        <p className="text-xs font-semibold text-slate-700 dark:text-slate-200">{activeRules.length} regra{activeRules.length !== 1 ? "s" : ""} ativa{activeRules.length !== 1 ? "s" : ""}</p>
-        <Button size="sm" className="h-7 text-xs gap-1.5 btn-brand border-0" onClick={onNewRule}>
-          <Plus className="h-3.5 w-3.5" />Nova Regra
-        </Button>
-      </div>
-
-      {activeRules.length > 0 && (
-        <div className="space-y-2">
-          {activeRules.map((item) => {
-            const activeChannels = PREF_CHANNELS.filter((c) => isChannelEnabled(item.id, c.key))
-            return (
-              <div key={item.id} className="flex items-start gap-3 p-4 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800">
-                <div className="p-1.5 rounded-lg shrink-0 mt-0.5 bg-violet-100">
-                  <Zap className="h-3.5 w-3.5 text-violet-600" />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-semibold text-slate-800 dark:text-white">{item.label}</p>
-                  <p className="text-xs text-slate-400 mt-0.5">{item.groupLabel} — {item.desc}</p>
-                  <div className="flex items-center gap-2 mt-2 flex-wrap">
-                    {activeChannels.map((c) => (
-                      <span key={c.key} className="text-[10px] bg-indigo-50 dark:bg-indigo-950/30 text-indigo-600 px-2 py-0.5 rounded-full font-medium">{c.label}</span>
-                    ))}
-                  </div>
-                </div>
-                <div className="flex items-center gap-1 shrink-0">
-                  <Switch checked={true} onCheckedChange={(v) => toggleRule(item.id, v)} />
-                </div>
-              </div>
-            )
-          })}
-        </div>
-      )}
-
-      {activeRules.length === 0 && (
-        <div className="border border-dashed border-slate-200 rounded-xl py-10 flex flex-col items-center gap-3 text-slate-400">
-          <Zap className="h-8 w-8" />
-          <p className="text-sm">Nenhuma regra criada</p>
-          <Button size="sm" variant="outline" className="text-xs" onClick={onNewRule}>Criar primeira regra</Button>
-        </div>
-      )}
     </div>
   )
 }
