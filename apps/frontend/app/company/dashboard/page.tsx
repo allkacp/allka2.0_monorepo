@@ -1,5 +1,6 @@
 import { WIDGETS_BY_ROLE } from "@/lib/dashboard-widget-roles";
 import { COMPANY_PRESETS, buildWidgets, DASHBOARD_STORAGE_KEY, CURRENT_DASHBOARD_KEY } from "@/lib/dashboard-presets-by-role";
+import { getDashboardStorageKey } from "@/lib/dashboard-storage-scope";
 import { DashboardShellFrame } from "@/features/dashboards/shared/dashboard-shell-frame";
 import { useDashboardScrollCompact } from "@/hooks/useDashboardScrollCompact";
 import type React from "react";
@@ -536,7 +537,7 @@ export default function AdminDashboardPage() {
     setWidgetPeriods,
     getWidgetPeriod: sharedGetWidgetPeriod,
     setWidgetCustomPeriod,
-  } = useWidgetPeriodOverrides("dashboard-widget-periods-company");
+  } = useWidgetPeriodOverrides(getDashboardStorageKey("dashboard-widget-periods", "company"));
   const getWidgetPeriod = useCallback(
     (widgetId: string) => sharedGetWidgetPeriod(globalPeriod, widgetId),
     [sharedGetWidgetPeriod, globalPeriod],
@@ -1679,7 +1680,10 @@ export default function AdminDashboardPage() {
       localStorage.setItem(CURRENT_DASHBOARD_KEY["COMPANY"], newDashboard.id);
       setCurrentDashboardId(newDashboard.id);
       setWidgets(updated);
-      localStorage.setItem("dashboard-widget-config-company", JSON.stringify(updated));
+      localStorage.setItem(
+        getDashboardStorageKey("dashboard-widget-config", "company"),
+        JSON.stringify(updated),
+      );
       setShowSaveConfirmDialog(false);
       handleCloseEditPanel();
       toast({
@@ -1688,7 +1692,10 @@ export default function AdminDashboardPage() {
       });
     } else {
       setWidgets(updated);
-      localStorage.setItem("dashboard-widget-config-company", JSON.stringify(updated));
+      localStorage.setItem(
+        getDashboardStorageKey("dashboard-widget-config", "company"),
+        JSON.stringify(updated),
+      );
       if (currentDashboardId) {
         const updatedDashboards = savedDashboards.map((d) =>
           d.id === currentDashboardId
@@ -1722,7 +1729,9 @@ export default function AdminDashboardPage() {
   // End Undeclared Variables Fixes
 
   useEffect(() => {
-    const savedConfig = localStorage.getItem("dashboard-widget-config-company");
+    const savedConfig = localStorage.getItem(
+      getDashboardStorageKey("dashboard-widget-config", "company"),
+    );
     if (savedConfig) {
       try {
         // Ensure the loaded config matches the WidgetState type
@@ -1741,7 +1750,8 @@ export default function AdminDashboardPage() {
       }
     }
 
-    const savedMetrics = localStorage.getItem("dashboard-metric-cards-company");
+    const metricCardsKey = getDashboardStorageKey("dashboard-metric-cards", "company");
+    const savedMetrics = localStorage.getItem(metricCardsKey);
     if (savedMetrics) {
       try {
         const parsed = JSON.parse(savedMetrics);
@@ -1751,20 +1761,24 @@ export default function AdminDashboardPage() {
         if (!wasOldDefault) {
           setMetricCards(parsed);
         } else {
-          localStorage.removeItem("dashboard-metric-cards-company");
+          localStorage.removeItem(metricCardsKey);
         }
       } catch (e) {
         console.error("Failed to parse saved metric cards:", e);
       }
     }
 
-    const savedSize = localStorage.getItem("dashboard-widget-size-company");
+    const savedSize = localStorage.getItem(
+      getDashboardStorageKey("dashboard-widget-size", "company"),
+    );
     if (savedSize) {
       setWidgetSize(savedSize as WidgetSize);
     }
 
     // Load widget period overrides from localStorage
-    const savedWidgetPeriods = localStorage.getItem("dashboard-widget-periods-company");
+    const savedWidgetPeriods = localStorage.getItem(
+      getDashboardStorageKey("dashboard-widget-periods", "company"),
+    );
     if (savedWidgetPeriods) {
       try {
         setWidgetPeriods(JSON.parse(savedWidgetPeriods));
@@ -1872,7 +1886,7 @@ export default function AdminDashboardPage() {
 
     // Ensure consistent structure when saving
     localStorage.setItem(
-      "dashboard-widget-config-company",
+      getDashboardStorageKey("dashboard-widget-config", "company"),
       JSON.stringify(
         widgets.map((w) => ({
           id: w.id,
@@ -1883,11 +1897,14 @@ export default function AdminDashboardPage() {
         })),
       ),
     );
-    localStorage.setItem("dashboard-metric-cards-company", JSON.stringify(metricCards));
-    localStorage.setItem("dashboard-widget-size-company", widgetSize);
+    localStorage.setItem(
+      getDashboardStorageKey("dashboard-metric-cards", "company"),
+      JSON.stringify(metricCards),
+    );
+    localStorage.setItem(getDashboardStorageKey("dashboard-widget-size", "company"), widgetSize);
     // Save widget period overrides to localStorage
     localStorage.setItem(
-      "dashboard-widget-periods-company",
+      getDashboardStorageKey("dashboard-widget-periods", "company"),
       JSON.stringify(widgetPeriods),
     );
 
@@ -4911,7 +4928,7 @@ export default function AdminDashboardPage() {
       setWidgets(dashboard.widgets);
       setCurrentDashboardId(dashboardId);
       localStorage.setItem(
-        "dashboard-widget-config-company",
+        getDashboardStorageKey("dashboard-widget-config", "company"),
         JSON.stringify(dashboard.widgets),
       );
       localStorage.setItem(CURRENT_DASHBOARD_KEY["COMPANY"], dashboardId);

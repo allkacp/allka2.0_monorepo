@@ -152,6 +152,7 @@ import { Switch } from "@/components/ui/switch"; // Added Switch
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast"; // Added useToast hook
 import { ConfirmationDialog } from "@/components/confirmation-dialog";
+import { getDashboardStorageKey } from "@/lib/dashboard-storage-scope";
 import { ShareLinksPanel } from "@/features/dashboards/shared/share-links-panel";
 import { ShareSlugField, previewNormalizeSlug, suggestAvailableSlug } from "@/features/dashboards/shared/share-slug-field";
 import { ShareCreateForm } from "@/features/dashboards/shared/share-create-form";
@@ -1717,7 +1718,10 @@ export function AdminDashboardPage() {
         : d,
     );
     setSavedDashboards(updatedDashboards);
-    localStorage.setItem("saved-dashboards", JSON.stringify(updatedDashboards));
+    localStorage.setItem(
+      getDashboardStorageKey("saved-dashboards", "admin"),
+      JSON.stringify(updatedDashboards),
+    );
     setShowEditDialog(false);
     setEditingDashboardId(null);
     setEditingDashboardName("");
@@ -1754,7 +1758,7 @@ export function AdminDashboardPage() {
       );
       setSavedDashboards(updatedDashboards);
       localStorage.setItem(
-        "saved-dashboards",
+        getDashboardStorageKey("saved-dashboards", "admin"),
         JSON.stringify(updatedDashboards),
       );
     }
@@ -1779,13 +1783,16 @@ export function AdminDashboardPage() {
       const updatedDashboards = [...savedDashboards, newDashboard];
       setSavedDashboards(updatedDashboards);
       localStorage.setItem(
-        "saved-dashboards",
+        getDashboardStorageKey("saved-dashboards", "admin"),
         JSON.stringify(updatedDashboards),
       );
-      localStorage.setItem("current-dashboard-id", newDashboard.id);
+      localStorage.setItem(getDashboardStorageKey("current-dashboard-id", "admin"), newDashboard.id);
       setCurrentDashboardId(newDashboard.id);
       setWidgets(updated);
-      localStorage.setItem("dashboard-widget-config", JSON.stringify(updated));
+      localStorage.setItem(
+        getDashboardStorageKey("dashboard-widget-config", "admin"),
+        JSON.stringify(updated),
+      );
       setShowSaveConfirmDialog(false);
       handleCloseEditPanel();
       toast({
@@ -1794,7 +1801,10 @@ export function AdminDashboardPage() {
       });
     } else {
       setWidgets(updated);
-      localStorage.setItem("dashboard-widget-config", JSON.stringify(updated));
+      localStorage.setItem(
+        getDashboardStorageKey("dashboard-widget-config", "admin"),
+        JSON.stringify(updated),
+      );
       if (currentDashboardId) {
         const updatedDashboards = savedDashboards.map((d) =>
           d.id === currentDashboardId
@@ -1808,7 +1818,7 @@ export function AdminDashboardPage() {
         );
         setSavedDashboards(updatedDashboards);
         localStorage.setItem(
-          "saved-dashboards",
+          getDashboardStorageKey("saved-dashboards", "admin"),
           JSON.stringify(updatedDashboards),
         );
       }
@@ -1828,7 +1838,9 @@ export function AdminDashboardPage() {
   // End Undeclared Variables Fixes
 
   useEffect(() => {
-    const savedConfig = localStorage.getItem("dashboard-widget-config");
+    const savedConfig = localStorage.getItem(
+      getDashboardStorageKey("dashboard-widget-config", "admin"),
+    );
     if (savedConfig) {
       try {
         // Ensure the loaded config matches the WidgetState type
@@ -1844,7 +1856,9 @@ export function AdminDashboardPage() {
       }
     }
 
-    const savedMetrics = localStorage.getItem("admin-dashboard-metric-cards");
+    const savedMetrics = localStorage.getItem(
+      getDashboardStorageKey("dashboard-metric-cards", "admin"),
+    );
     if (savedMetrics) {
       try {
         setMetricCards(JSON.parse(savedMetrics));
@@ -1853,7 +1867,9 @@ export function AdminDashboardPage() {
       }
     }
 
-    const savedSize = localStorage.getItem("admin-dashboard-widget-size");
+    const savedSize = localStorage.getItem(
+      getDashboardStorageKey("dashboard-widget-size", "admin"),
+    );
     if (savedSize) {
       setWidgetSize(savedSize as WidgetSize);
     }
@@ -1864,7 +1880,9 @@ export function AdminDashboardPage() {
     // `widgetPeriods` (visões salvas antes desta mudança); a partir da
     // primeira alteração, cada visão passa a persistir a sua própria cópia.
     let legacyFlatWidgetPeriods: WidgetPeriodOverride[] = [];
-    const savedWidgetPeriods = localStorage.getItem("admin-dashboard-widget-periods");
+    const savedWidgetPeriods = localStorage.getItem(
+      getDashboardStorageKey("dashboard-widget-periods", "admin"),
+    );
     if (savedWidgetPeriods) {
       try {
         legacyFlatWidgetPeriods = JSON.parse(savedWidgetPeriods);
@@ -1938,7 +1956,9 @@ export function AdminDashboardPage() {
       },
     ] as SavedDashboard[];
 
-    const savedDashboardsData = localStorage.getItem("saved-dashboards");
+    const savedDashboardsData = localStorage.getItem(
+      getDashboardStorageKey("saved-dashboards", "admin"),
+    );
     let parsedDashboards: SavedDashboard[] = savedDashboardsData
       ? JSON.parse(savedDashboardsData)
       : [];
@@ -1949,12 +1969,14 @@ export function AdminDashboardPage() {
     if (missingPresets.length > 0) {
       parsedDashboards = [...missingPresets, ...parsedDashboards];
       localStorage.setItem(
-        "saved-dashboards",
+        getDashboardStorageKey("saved-dashboards", "admin"),
         JSON.stringify(parsedDashboards),
       );
     }
     setSavedDashboards(parsedDashboards);
-    const storedId = localStorage.getItem("current-dashboard-id");
+    const storedId = localStorage.getItem(
+      getDashboardStorageKey("current-dashboard-id", "admin"),
+    );
     const currentDashboard =
       parsedDashboards.find((d) => d.id === storedId) ??
       parsedDashboards.find((d) => d.isDefault) ??
@@ -2012,10 +2034,13 @@ export function AdminDashboardPage() {
     } as SavedDashboard;
     setSavedDashboards((prev) => {
       const next = [...prev, newDashboard];
-      localStorage.setItem("saved-dashboards", JSON.stringify(next));
+      localStorage.setItem(
+        getDashboardStorageKey("saved-dashboards", "admin"),
+        JSON.stringify(next),
+      );
       return next;
     });
-    localStorage.setItem("current-dashboard-id", id);
+    localStorage.setItem(getDashboardStorageKey("current-dashboard-id", "admin"), id);
     setCurrentDashboardId(id);
     setWidgets(widgetsCopy);
     setWidgetPeriods(periodsCopy);
@@ -2032,7 +2057,7 @@ export function AdminDashboardPage() {
 
     // Ensure consistent structure when saving
     localStorage.setItem(
-      "dashboard-widget-config",
+      getDashboardStorageKey("dashboard-widget-config", "admin"),
       JSON.stringify(
         widgets.map((w) => ({
           id: w.id,
@@ -2043,17 +2068,26 @@ export function AdminDashboardPage() {
         })),
       ),
     );
-    localStorage.setItem("admin-dashboard-metric-cards", JSON.stringify(metricCards));
-    localStorage.setItem("admin-dashboard-widget-size", widgetSize);
+    localStorage.setItem(
+      getDashboardStorageKey("dashboard-metric-cards", "admin"),
+      JSON.stringify(metricCards),
+    );
+    localStorage.setItem(getDashboardStorageKey("dashboard-widget-size", "admin"), widgetSize);
     // Save widget period overrides to localStorage
     localStorage.setItem(
-      "admin-dashboard-widget-periods",
+      getDashboardStorageKey("dashboard-widget-periods", "admin"),
       JSON.stringify(widgetPeriods),
     );
 
     // Save dashboards to localStorage whenever they change
-    localStorage.setItem("saved-dashboards", JSON.stringify(savedDashboards));
-    localStorage.setItem("current-dashboard-id", currentDashboardId);
+    localStorage.setItem(
+      getDashboardStorageKey("saved-dashboards", "admin"),
+      JSON.stringify(savedDashboards),
+    );
+    localStorage.setItem(
+      getDashboardStorageKey("current-dashboard-id", "admin"),
+      currentDashboardId,
+    );
   }, [
     widgets,
     metricCards,
@@ -2079,7 +2113,10 @@ export function AdminDashboardPage() {
       const next = prev.map((d) =>
         d.id === currentDashboardId ? { ...d, widgetPeriods } : d,
       );
-      localStorage.setItem("saved-dashboards", JSON.stringify(next));
+      localStorage.setItem(
+        getDashboardStorageKey("saved-dashboards", "admin"),
+        JSON.stringify(next),
+      );
       return next;
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -10656,8 +10693,11 @@ export function AdminDashboardPage() {
 
     const updatedDashboards = [...savedDashboards, newDashboard];
     setSavedDashboards(updatedDashboards);
-    localStorage.setItem("saved-dashboards", JSON.stringify(updatedDashboards));
-    localStorage.setItem("current-dashboard-id", newDashboard.id);
+    localStorage.setItem(
+      getDashboardStorageKey("saved-dashboards", "admin"),
+      JSON.stringify(updatedDashboards),
+    );
+    localStorage.setItem(getDashboardStorageKey("current-dashboard-id", "admin"), newDashboard.id);
 
     setCurrentDashboardId(newDashboard.id);
     setNewDashboardName("");
@@ -10696,7 +10736,10 @@ export function AdminDashboardPage() {
     );
 
     setSavedDashboards(updatedDashboards);
-    localStorage.setItem("saved-dashboards", JSON.stringify(updatedDashboards));
+    localStorage.setItem(
+      getDashboardStorageKey("saved-dashboards", "admin"),
+      JSON.stringify(updatedDashboards),
+    );
 
     setSharingDashboardId(null);
     setShareGlobal(false);
@@ -10722,10 +10765,10 @@ export function AdminDashboardPage() {
       setWidgetPeriods(dashboard.widgetPeriods ?? []);
       setCurrentDashboardId(dashboardId);
       localStorage.setItem(
-        "dashboard-widget-config",
+        getDashboardStorageKey("dashboard-widget-config", "admin"),
         JSON.stringify(dashboard.widgets),
       );
-      localStorage.setItem("current-dashboard-id", dashboardId);
+      localStorage.setItem(getDashboardStorageKey("current-dashboard-id", "admin"), dashboardId);
     }
   };
 
@@ -10734,7 +10777,10 @@ export function AdminDashboardPage() {
       (d) => d.id !== dashboardId,
     );
     setSavedDashboards(updatedDashboards);
-    localStorage.setItem("saved-dashboards", JSON.stringify(updatedDashboards));
+    localStorage.setItem(
+      getDashboardStorageKey("saved-dashboards", "admin"),
+      JSON.stringify(updatedDashboards),
+    );
     if (currentDashboardId === dashboardId) {
       const fallback =
         updatedDashboards.find((d) => d.isDefault) ?? updatedDashboards[0];
@@ -10751,7 +10797,10 @@ export function AdminDashboardPage() {
       isDefault: d.id === dashboardId,
     }));
     setSavedDashboards(updatedDashboards);
-    localStorage.setItem("saved-dashboards", JSON.stringify(updatedDashboards));
+    localStorage.setItem(
+      getDashboardStorageKey("saved-dashboards", "admin"),
+      JSON.stringify(updatedDashboards),
+    );
     toast({
       title: "Dashboard padrão definido",
       description: "Este dashboard será carregado automaticamente.",
@@ -11245,7 +11294,10 @@ export function AdminDashboardPage() {
                         setWidgets(seeded);
                         setSavedDashboards((prev) => {
                           const next = prev.map((d) => (d.id === currentDashboardId ? { ...d, widgets: seeded } : d));
-                          localStorage.setItem("saved-dashboards", JSON.stringify(next));
+                          localStorage.setItem(
+                            getDashboardStorageKey("saved-dashboards", "admin"),
+                            JSON.stringify(next),
+                          );
                           return next;
                         });
                       }
