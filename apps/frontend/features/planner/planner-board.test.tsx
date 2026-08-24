@@ -32,6 +32,7 @@ const { apiMock, ApiErrorMock, toastSpy } = vi.hoisted(() => {
       movePlannerCard: vi.fn(),
       deletePlannerCard: vi.fn(),
       restorePlannerCard: vi.fn(),
+      getPlannerArchivedCards: vi.fn(),
     },
   };
 });
@@ -81,6 +82,9 @@ function card(overrides: Partial<any> = {}) {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  // Contador do botão "Cards arquivados" no cabeçalho — default neutro
+  // (0 arquivados) pra não quebrar os testes que não são sobre ele.
+  apiMock.getPlannerArchivedCards.mockResolvedValue({ data: [], total: 0, page: 1, limit: 1 });
 });
 
 describe("PlannerBoard — estados obrigatórios", () => {
@@ -230,5 +234,135 @@ describe("PlannerBoard — remover card (confirmação dupla)", () => {
 
     await waitFor(() => expect(screen.queryByText("Briefing com cliente")).not.toBeInTheDocument());
     expect(apiMock.deletePlannerCard).toHaveBeenCalledWith("card-1");
+  });
+});
+
+describe("PlannerBoard — botão e contador de Cards arquivados", () => {
+  it("1. botão aparece sem número quando não há arquivados", async () => {
+    apiMock.getPlannerBoard.mockResolvedValue({ columns: [column()], cards: [] });
+    apiMock.getPlannerArchivedCards.mockResolvedValue({ data: [], total: 0, page: 1, limit: 1 });
+    renderBoard();
+    const btn = await screen.findByRole("button", { name: /cards arquivados/i });
+    expect(btn.textContent).not.toMatch(/\(\d+\)/);
+  });
+
+  it("1. contador mostra a quantidade quando há arquivados", async () => {
+    apiMock.getPlannerBoard.mockResolvedValue({ columns: [column()], cards: [] });
+    apiMock.getPlannerArchivedCards.mockResolvedValue({ data: [], total: 3, page: 1, limit: 1 });
+    renderBoard();
+    await waitFor(async () => {
+      const btn = await screen.findByRole("button", { name: /cards arquivados/i });
+      expect(btn.textContent).toContain("(3)");
+    });
+  });
+});
+
+describe("PlannerBoard — painel de Cards arquivados", () => {
+  function archivedCard(overrides: Partial<any> = {}) {
+    return {
+      id: "arch-1",
+      columnId: "col-1",
+      columnLabel: "Backlog",
+      title: "Card arquivado de teste",
+      description: "Descrição resumida",
+      priority: "medium",
+      dueDate: null,
+      projectId: null,
+      position: 0,
+      archivedAt: "2026-08-20T12:00:00.000Z",
+      createdAt: "2026-08-01T00:00:00.000Z",
+      updatedAt: "2026-08-20T12:00:00.000Z",
+      ...overrides,
+    };
+  }
+
+  async function openPanel() {
+    const user = userEvent.setup();
+    apiMock.getPlannerBoard.mockResolvedValue({ columns: [column()], cards: [] });
+    renderBoard();
+    await user.click(await screen.findByRole("button", { name: /cards arquivados/i }));
+    return user;
+  }
+
+  it("2/3. estado vazio e carregamento", async () => {
+    let resolveList: (v: any) => void = () => {};
+    apiMock.getPlannerArchivedCards
+      .mockResolvedValueOnce({ data: [], total: 0, page: 1, limit: 1 }) // contador do cabeçalho
+      .mockImplementationOnce(() => new Promise((resolve) => { resolveList = resolve; }));
+    const user = await openPanel();
+    expect(screen.getByText(/carregando cards arquivados/i)).toBeInTheDocument();
+    resolveList({ data: [], total: 0, page: 1, limit: 10 });
+    expect(await screen.findByText(/nenhum card arquivado/i)).toBeInTheDocument();
+  });
+
+  it("4. erro amigável, nunca a mensagem técnica bruta", async () => {
+    apiMock.getPlannerArchivedCards
+      .mockResolvedValueOnce({ data: [], total: 0, page: 1, limit: 1 })
+      .mockRejectedValueOnce(new ApiErrorMock("Não foi possível carregar os cards arquivados.", 500));
+    await openPanel();
+    expect(await screen.findByText("Não foi possível carregar os cards arquivados.")).toBeInTheDocument();
+  });
+
+  it("5/6/7. listagem mostra título, descrição resumida e data legível", async () => {
+    apiMock.getPlannerArchivedCards
+      .mockResolvedValueOnce({ data: [], total: 1, page: 1, limit: 1 })
+      .mockResolvedValueOnce({ data: [archivedCard()], total: 1, page: 1, limit: 10 });
+    await openPanel();
+    expect(await screen.findByText("Card arquivado de teste")).toBeInTheDocument();
+    expect(screen.getByText("Descrição resumida")).toBeInTheDocument();
+    expect(screen.getByText(/coluna: backlog/i)).toBeInTheDocument();
+    expect(screen.getByText(/ago\.? de 2026|20 ago/i)).toBeInTheDocument();
+  });
+
+  it("13. coluna removida mostra aviso em vez de travar", async () => {
+    apiMock.getPlannerArchivedCards
+      .mockResolvedValueOnce({ data: [], total: 1, page: 1, limit: 1 })
+      .mockResolvedValueOnce({ data: [archivedCard({ columnLabel: null })], total: 1, page: 1, limit: 10 });
+    await openPanel();
+    expect(await screen.findByText(/coluna removida/i)).toBeInTheDocument();
+  });
+
+  it("8/11/12. restaurar remove da lista de arquivados, volta ao quadro e avisa quando usou fallback", async () => {
+    apiMock.getPlannerArchivedCards
+      .mockResolvedValueOnce({ data: [], total: 1, page: 1, limit: 1 })
+      .mockResolvedValueOnce({ data: [archivedCard()], total: 1, page: 1, limit: 10 });
+    apiMock.restorePlannerCard.mockResolvedValue({
+      ok: true,
+      card: { ...archivedCard(), archivedAt: null },
+      usedFallbackColumn: true,
+    });
+    apiMock.getPlannerBoard.mockResolvedValue({ columns: [column()], cards: [] });
+
+    const user = await openPanel();
+    await screen.findByText("Card arquivado de teste");
+    await user.click(screen.getByRole("button", { name: /^restaurar$/i }));
+
+    await waitFor(() => expect(screen.queryByText("Card arquivado de teste")).not.toBeInTheDocument());
+    expect(apiMock.restorePlannerCard).toHaveBeenCalledWith("arch-1");
+    expect(apiMock.getPlannerBoard).toHaveBeenCalled(); // board.reload() após restaurar
+    await waitFor(() =>
+      expect(toastSpy).toHaveBeenCalledWith(
+        expect.objectContaining({ description: expect.stringMatching(/backlog/i) }),
+      ),
+    );
+  });
+
+  it("9/10. clique duplo em Restaurar chama a API só uma vez", async () => {
+    apiMock.getPlannerArchivedCards
+      .mockResolvedValueOnce({ data: [], total: 1, page: 1, limit: 1 })
+      .mockResolvedValueOnce({ data: [archivedCard()], total: 1, page: 1, limit: 10 });
+    let resolveRestore: (v: any) => void = () => {};
+    apiMock.restorePlannerCard.mockImplementation(() => new Promise((resolve) => { resolveRestore = resolve; }));
+    apiMock.getPlannerBoard.mockResolvedValue({ columns: [column()], cards: [] });
+
+    const user = await openPanel();
+    await screen.findByText("Card arquivado de teste");
+    const restoreBtn = screen.getByRole("button", { name: /^restaurar$/i });
+    await user.click(restoreBtn);
+    expect(await screen.findByText(/restaurando/i)).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: /restaurando/i })).catch(() => {});
+    resolveRestore({ ok: true, card: { ...archivedCard(), archivedAt: null }, usedFallbackColumn: false });
+
+    await waitFor(() => expect(apiMock.restorePlannerCard).toHaveBeenCalledTimes(1));
   });
 });

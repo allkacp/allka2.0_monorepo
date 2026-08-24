@@ -5,7 +5,7 @@
 // exige extraí-lo pra um componente próprio, controlado pelo hook
 // usePlannerBoard (./use-planner-board.ts) — a página só fornece o
 // contexto que falta (a lista de projetos reais, já carregada por ela).
-import { useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import {
   DndContext,
   DragOverlay,
@@ -38,9 +38,10 @@ import {
 } from "@/components/ui/dialog";
 import { ConfirmationDialog } from "@/components/confirmation-dialog";
 import { useToast } from "@/hooks/use-toast";
-import { Plus, Settings, X, Calendar, LayoutDashboard, AlertCircle, RefreshCw } from "lucide-react";
+import { Plus, Settings, X, Calendar, LayoutDashboard, AlertCircle, RefreshCw, Archive } from "lucide-react";
 import { usePlannerBoard, type PlannerPriority } from "./use-planner-board";
-import type { PlannerCard as PlannerCardData, PlannerColumn as PlannerColumnData } from "@/lib/api-client";
+import { PlannerArchivedPanel } from "./planner-archived-panel";
+import { apiClient, type PlannerCard as PlannerCardData, type PlannerColumn as PlannerColumnData } from "@/lib/api-client";
 import type { FrontendProject } from "@/lib/project-adapter";
 
 const PRIORITY_CFG: Record<PlannerPriority, { label: string; pill: string; border: string }> = {
@@ -100,6 +101,24 @@ export function PlannerBoard({ projects }: { projects: FrontendProject[] }) {
   const [isSavingCard, setIsSavingCard] = useState(false);
 
   const [removingCard, setRemovingCard] = useState<PlannerCardData | null>(null);
+
+  const [showArchivedPanel, setShowArchivedPanel] = useState(false);
+  const [archivedCount, setArchivedCount] = useState<number | null>(null);
+  const refreshArchivedCount = useCallback(async () => {
+    try {
+      const res = await apiClient.getPlannerArchivedCards(1, 1);
+      setArchivedCount(res.total);
+    } catch {
+      // Contador é só um indicador auxiliar no cabeçalho — uma falha aqui
+      // não deve travar nem sujar o Planejador com um erro visível; o
+      // painel de arquivados (quando aberto) tem seu próprio estado de erro.
+    }
+  }, []);
+
+  useEffect(() => {
+    if (board.status === "ready") refreshArchivedCount();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [board.status]);
 
   const handleDragStart = (event: DragStartEvent) => {
     const { active } = event;
@@ -257,6 +276,22 @@ export function PlannerBoard({ projects }: { projects: FrontendProject[] }) {
     if (!removingCard) return;
     const result = await board.removeCard(removingCard.id);
     if (!result.ok) throw new Error(result.error);
+    refreshArchivedCount();
+  };
+
+  const handleRestored = (_card: PlannerCardData, usedFallbackColumn: boolean) => {
+    // A resposta já veio persistida do backend — recarrega o board pra
+    // refletir o card de volta na coluna certa (original ou fallback) e
+    // com a posição/ordem definitivas, sem tentar reconstruir isso à mão
+    // no cliente.
+    board.reload();
+    refreshArchivedCount();
+    toast({
+      title: "Card restaurado",
+      description: usedFallbackColumn
+        ? "A coluna original não existe mais — o card voltou para o Backlog."
+        : "O card voltou para o quadro.",
+    });
   };
 
   // ── Estados de carregamento/erro/vazio ──────────────────────────────────
@@ -285,7 +320,16 @@ export function PlannerBoard({ projects }: { projects: FrontendProject[] }) {
 
   return (
     <div className="py-2 pb-0" data-testid="planner-board">
-      <div className="flex items-center justify-end mb-2">
+      <div className="flex items-center justify-end gap-2 mb-2">
+        <Button
+          onClick={() => setShowArchivedPanel(true)}
+          size="sm"
+          variant="outline"
+          className="h-7 text-xs px-2.5"
+        >
+          <Archive className="h-3 w-3 mr-1" />
+          Cards arquivados{archivedCount ? ` (${archivedCount})` : ""}
+        </Button>
         <Button
           onClick={openNewColumnDialog}
           size="sm"
@@ -295,6 +339,12 @@ export function PlannerBoard({ projects }: { projects: FrontendProject[] }) {
           Nova Coluna
         </Button>
       </div>
+
+      <PlannerArchivedPanel
+        open={showArchivedPanel}
+        onClose={() => setShowArchivedPanel(false)}
+        onRestored={handleRestored}
+      />
 
       {isEmpty && (
         <div className="flex flex-col items-center justify-center gap-2 py-8 mb-2 rounded-lg border border-dashed border-slate-200 bg-slate-50/50 text-center">

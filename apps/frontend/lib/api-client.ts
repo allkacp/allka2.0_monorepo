@@ -111,7 +111,7 @@ export type PlannerColumn = {
 
 export type PlannerCard = {
   id: string;
-  columnId: string;
+  columnId: string | null;
   title: string;
   description: string | null;
   priority: "low" | "medium" | "high" | "urgent";
@@ -122,6 +122,10 @@ export type PlannerCard = {
   createdAt: string;
   updatedAt: string;
 };
+
+/** Card arquivado, com o rótulo da coluna anterior (`null` se a coluna já
+ * foi excluída — o card sobrevive, só perde a referência). */
+export type PlannerArchivedCard = PlannerCard & { columnLabel: string | null };
 
 class ApiClient {
   // ─── Token Management ─────────────────────────────────────────────────────
@@ -513,8 +517,16 @@ class ApiClient {
   async deletePlannerCard(id: string): Promise<{ ok: boolean; card: PlannerCard }> {
     return this.del(`/planner/cards/${id}`);
   }
-  async restorePlannerCard(id: string): Promise<{ ok: boolean; card: PlannerCard }> {
+  /** `usedFallbackColumn: true` quando a coluna original do card não
+   * existia mais e a restauração caiu pro Backlog/coluna padrão. */
+  async restorePlannerCard(id: string): Promise<{ ok: boolean; card: PlannerCard; usedFallbackColumn: boolean }> {
     return this.post(`/planner/cards/${id}/restore`);
+  }
+  async getPlannerArchivedCards(
+    page = 1,
+    limit = 20,
+  ): Promise<{ data: PlannerArchivedCard[]; total: number; page: number; limit: number }> {
+    return this.get("/planner/cards/archived", { page, limit });
   }
 
   // ─── Nômade: o próprio trabalho ───────────────────────────────────────────

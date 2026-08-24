@@ -2,7 +2,7 @@ import { Router } from "express";
 import { z } from "zod";
 import { prisma } from "../lib/prisma";
 import { verifyToken, requireRole, requirePermission } from "../middleware/auth";
-import { validate } from "../middleware/validate";
+import { validate, parsePagination } from "../middleware/validate";
 
 // Planejador (Admin → Projetos → Planejador). Quadro pessoal — cada usuário
 // só vê/edita as próprias colunas e cards (owner_user_id, sempre resolvido
@@ -62,7 +62,7 @@ function serializeColumn(c: {
 
 function serializeCard(c: {
   id: string;
-  column_id: string;
+  column_id: string | null;
   title: string;
   description: string | null;
   priority: string;
@@ -86,6 +86,17 @@ function serializeCard(c: {
     createdAt: c.created_at.toISOString(),
     updatedAt: c.updated_at.toISOString(),
   };
+}
+
+/** Igual a `serializeCard`, mas com o rótulo da coluna anterior (item 3 do
+ * lote de arquivados: "coluna anterior" precisa aparecer mesmo que a
+ * coluna já tenha sido excluída — nesse caso `columnLabel` fica `null` e o
+ * frontend mostra "Coluna removida"). */
+function serializeArchivedCard(
+  c: Parameters<typeof serializeCard>[0],
+  columnLabel: string | null,
+) {
+  return { ...serializeCard(c), columnLabel };
 }
 
 /** Garante que o usuário tenha ao menos as colunas padrão — só na primeira
@@ -147,6 +158,46 @@ router.get("/board", requirePermission("projetos", "view"), async (req, res, nex
     res.json({
       columns: columns.map(serializeColumn),
       cards: cards.map(serializeCard),
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// ─── GET /api/planner/cards/archived — lista paginada dos cards arquivados
+// do usuário ─────────────────────────────────────────────────────────────
+// Vem antes de qualquer rota "/cards/:id" por causa da ordem de match do
+// Express (mesmo cuidado de /columns/reorder acima).
+router.get("/cards/archived", requirePermission("projetos", "view"), async (req, res, next) => {
+  try {
+    const ownerId = req.user!.id;
+    const { page, limit, skip } = parsePagination(req.query);
+
+    const [total, cards] = await Promise.all([
+      prisma.plannerCard.count({ where: { owner_user_id: ownerId, archived_at: { not: null } } }),
+      prisma.plannerCard.findMany({
+        where: { owner_user_id: ownerId, archived_at: { not: null } },
+        select: CARD_SELECT,
+        orderBy: { archived_at: "desc" },
+        skip,
+        take: limit,
+      }),
+    ]);
+
+    const columnIds = [...new Set(cards.map((c) => c.column_id).filter((id): id is string => !!id))];
+    const columns = columnIds.length
+      ? await prisma.plannerColumn.findMany({
+          where: { id: { in: columnIds }, owner_user_id: ownerId },
+          select: { id: true, label: true },
+        })
+      : [];
+    const labelById = new Map(columns.map((c) => [c.id, c.label]));
+
+    res.json({
+      data: cards.map((c) => serializeArchivedCard(c, c.column_id ? (labelById.get(c.column_id) ?? null) : null)),
+      total,
+      page,
+      limit,
     });
   } catch (err) {
     next(err);
@@ -513,7 +564,49 @@ router.delete("/cards/:id", requirePermission("projetos", "delete"), async (req,
   }
 });
 
+/** Resolve a coluna de destino pra restauração: a original, se ela ainda
+ * existir e pertencer ao usuário; senão cai pro Backlog do usuário (ou a
+ * coluna de menor `position`, se por algum motivo não houver nenhuma
+ * chamada "Backlog"); se o usuário não tiver NENHUMA coluna (caso
+ * extremo), semeia as padrão primeiro. Nunca falha silenciosamente — o
+ * chamador sempre recebe uma coluna válida de volta. */
+async function resolveRestoreColumn(
+  ownerId: string,
+  originalColumnId: string | null,
+): Promise<{ columnId: string; usedFallback: boolean }> {
+  if (originalColumnId) {
+    const original = await prisma.plannerColumn.findFirst({
+      where: { id: originalColumnId, owner_user_id: ownerId },
+      select: { id: true },
+    });
+    if (original) return { columnId: original.id, usedFallback: false };
+  }
+
+  await ensureDefaultColumns(ownerId);
+  const backlog = await prisma.plannerColumn.findFirst({
+    where: { owner_user_id: ownerId, label: "Backlog" },
+    orderBy: { position: "asc" },
+    select: { id: true },
+  });
+  if (backlog) return { columnId: backlog.id, usedFallback: true };
+
+  const fallbackColumn = await prisma.plannerColumn.findFirst({
+    where: { owner_user_id: ownerId },
+    orderBy: { position: "asc" },
+    select: { id: true },
+  });
+  // ensureDefaultColumns() já garante ao menos 1 coluna — isto nunca deveria
+  // ser null, mas o `!` seria menos seguro que um erro explícito aqui.
+  if (!fallbackColumn) throw new Error("Usuário sem nenhuma coluna após ensureDefaultColumns()");
+  return { columnId: fallbackColumn.id, usedFallback: true };
+}
+
 // ─── POST /api/planner/cards/:id/restore — desarquivar ────────────────────
+// Idempotente: card já ativo não é "restaurado de novo" — a segunda
+// chamada (clique duplo, ou requisição repetida) só devolve o card como
+// está, sem reposicionar nem trocar de coluna. Isso é o que impede tanto
+// duplicidade quanto um card ativo sendo indevidamente puxado pro Backlog
+// por um clique perdido em "Restaurar".
 router.post("/cards/:id/restore", requirePermission("projetos", "edit"), async (req, res, next) => {
   try {
     const ownerId = req.user!.id;
@@ -523,18 +616,20 @@ router.post("/cards/:id/restore", requirePermission("projetos", "edit"), async (
       return;
     }
     if (!found.card.archived_at) {
-      res.json({ ok: true, card: serializeCard(found.card) });
+      res.json({ ok: true, card: serializeCard(found.card), usedFallbackColumn: false });
       return;
     }
+
+    const { columnId, usedFallback } = await resolveRestoreColumn(ownerId, found.card.column_id);
     const count = await prisma.plannerCard.count({
-      where: { column_id: found.card.column_id, owner_user_id: ownerId, archived_at: null },
+      where: { column_id: columnId, owner_user_id: ownerId, archived_at: null },
     });
     const card = await prisma.plannerCard.update({
       where: { id: found.card.id },
-      data: { archived_at: null, position: count, updated_by_user_id: ownerId },
+      data: { archived_at: null, column_id: columnId, position: count, updated_by_user_id: ownerId },
       select: CARD_SELECT,
     });
-    res.json({ ok: true, card: serializeCard(card) });
+    res.json({ ok: true, card: serializeCard(card), usedFallbackColumn: usedFallback });
   } catch (err) {
     next(err);
   }

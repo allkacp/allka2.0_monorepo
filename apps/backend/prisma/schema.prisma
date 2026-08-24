@@ -760,6 +760,15 @@ model Project {
 // relatório de fechamento). Arquivamento lógico (archived_at) em vez de
 // exclusão física, pra deixar a estrutura pronta pra uma tela de
 // restauração futura sem precisar de nova migration.
+//
+// `column_id` nullable + `onDelete: SetNull` (lote da tela de arquivados,
+// ata 2026-08-24): antes era obrigatório + `Cascade`, o que significava
+// que excluir uma coluna com cards ARQUIVADOS destruiria esses cards
+// junto (o endpoint de exclusão de coluna só bloqueia por cards ATIVOS) —
+// contradizia a garantia de "arquivar não é apagar". Agora a coluna pode
+// sumir e o card arquivado sobrevive com `column_id: null`; a restauração
+// cai pro Backlog/coluna padrão nesse caso (ver GET/POST .../restore em
+// routes/planner.ts).
 model PlannerColumn {
   id            String   @id @default(cuid())
   owner_user_id String
@@ -780,8 +789,8 @@ model PlannerCard {
   id            String        @id @default(cuid())
   owner_user_id String
   owner         User          @relation(fields: [owner_user_id], references: [id], onDelete: Cascade)
-  column_id     String
-  column        PlannerColumn @relation(fields: [column_id], references: [id], onDelete: Cascade)
+  column_id     String?
+  column        PlannerColumn? @relation(fields: [column_id], references: [id], onDelete: SetNull)
   title         String
   description   String?       @db.LongText
   priority      String        @default("medium")
