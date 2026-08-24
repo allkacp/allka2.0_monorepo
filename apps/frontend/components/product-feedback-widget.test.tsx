@@ -121,6 +121,22 @@ describe("ProductFeedbackWidget — submitting a ticket", () => {
     (apiClient.getProductFeedbackAccess as any).mockResolvedValue({ canUse: true });
   });
 
+  // These three tests were intermittently hitting vitest's default 5000ms
+  // per-test timeout ONLY when the full 18-file suite runs together (12
+  // parallel worker threads on this machine) — never in isolation, never
+  // combined with just a few other files. Root cause confirmed by running
+  // the full suite with testTimeout raised to 20000ms: every assertion
+  // (call counts, clientSubmissionId matching, payload shape) still passed
+  // correctly, just slower — one run measured 6514ms for the retry test.
+  // So this is real CPU contention from `user.type()` simulating a full
+  // keystroke-by-keystroke sequence (several sentences of text, each
+  // flushed through React's act()) while 12 other jsdom+React suites
+  // compete for the CPU, not a leak, a race, or a wrong assertion. A
+  // 15000ms budget (~2.3x the worst measured duration) keeps determinism
+  // without masking a real defect. Un-related files/tests weren't slow —
+  // only ones with an equal amount of `user.type()` text plus a submit.
+  const SLOW_UNDER_FULL_SUITE_LOAD_MS = 15000;
+
   it("sends only the allowed fields, deriving pathname from window.location itself", async () => {
     (apiClient.createProductFeedbackWorkItem as any).mockResolvedValue({ protocol: "ALK-000042" });
     // The component reads the real browser URL (window.location), not
@@ -167,7 +183,7 @@ describe("ProductFeedbackWidget — submitting a ticket", () => {
     expect(callArg.clientSubmissionId).toMatch(
       /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i,
     );
-  });
+  }, SLOW_UNDER_FULL_SUITE_LOAD_MS);
 
   it("reuses the same clientSubmissionId across a retry of the same submit, but mints a new one for a genuinely new ticket", async () => {
     (apiClient.createProductFeedbackWorkItem as any)
@@ -210,7 +226,7 @@ describe("ProductFeedbackWidget — submitting a ticket", () => {
 
     const thirdCallId = (apiClient.createProductFeedbackWorkItem as any).mock.calls[2][0].clientSubmissionId;
     expect(thirdCallId).not.toBe(firstCallId);
-  });
+  }, SLOW_UNDER_FULL_SUITE_LOAD_MS);
 
   it("shows the returned protocol after a successful submit", async () => {
     (apiClient.createProductFeedbackWorkItem as any).mockResolvedValue({ protocol: "ALK-000099" });
@@ -226,7 +242,7 @@ describe("ProductFeedbackWidget — submitting a ticket", () => {
     await user.click(screen.getByRole("button", { name: /enviar/i }));
 
     expect(await screen.findByText("ALK-000099")).toBeInTheDocument();
-  });
+  }, SLOW_UNDER_FULL_SUITE_LOAD_MS);
 });
 
 describe("ProductFeedbackWidget — Melhorar com IA", () => {
