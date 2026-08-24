@@ -26,6 +26,14 @@ interface ConfirmationDialogProps {
   cancelText?: string
   /** Whether the confirm button should have destructive styling (default: true) */
   destructive?: boolean
+  /** Variante de "atenção" (âmbar) para ações reversíveis/de personalização
+   * que não apagam dado real (ex.: remover um card de uma visão local, ou
+   * remover um widget da personalização de um painel) — nunca use vermelho
+   * de exclusão permanente para essas. Aditivo: quando omitido, todo uso
+   * anterior com `destructive` continua com a mesma cor de sempre. Quando
+   * `attention` é true, ele tem prioridade sobre `destructive` na escolha
+   * de cor (o ícone padrão continua AlertTriangle). */
+  attention?: boolean
   /** Icon shown in the highlight badge (default: AlertTriangle when
    * destructive, CheckCircle2 otherwise). */
   icon?: LucideIcon
@@ -89,6 +97,7 @@ export function ConfirmationDialog({
   confirmText = "Confirmar",
   cancelText = "Cancelar",
   destructive = true,
+  attention = false,
   icon,
   twoStep = false,
   targetName,
@@ -144,8 +153,29 @@ export function ConfirmationDialog({
     }
   }
 
-  const Icon: LucideIcon = icon ?? (destructive ? AlertTriangle : CheckCircle2)
+  const Icon: LucideIcon = icon ?? (destructive || attention ? AlertTriangle : CheckCircle2)
   const showingFinalStep = !twoStep || step === 2
+
+  // `attention` (âmbar) tem prioridade sobre `destructive` (vermelho) na
+  // escolha de cor — pensada pra ações reversíveis/de personalização (ver
+  // doc da prop). Quando nenhum dos dois está marcado, cai no estilo
+  // "neutro" (btn-brand) que já existia antes desta prop.
+  const finalButtonClass = attention
+    ? "bg-amber-500 hover:bg-amber-600 disabled:bg-amber-500/60 shadow-md hover:shadow-lg shadow-amber-500/20 dark:shadow-amber-900/40 focus-visible:ring-2 focus-visible:ring-amber-500 focus-visible:ring-offset-2"
+    : "bg-red-600 hover:bg-red-700 disabled:bg-red-600/60 shadow-md hover:shadow-lg shadow-red-500/20 dark:shadow-red-900/40 focus-visible:ring-2 focus-visible:ring-red-500 focus-visible:ring-offset-2"
+  const badgeClass = attention
+    ? "bg-amber-100 dark:bg-amber-900/30"
+    : destructive
+      ? "bg-red-100 dark:bg-red-900/30"
+      : "bg-blue-100 dark:bg-blue-900/30"
+  const badgeIconClass = attention
+    ? "text-amber-600 dark:text-amber-400"
+    : destructive
+      ? "text-red-600 dark:text-red-400"
+      : "text-blue-600 dark:text-blue-400"
+  const finalWarningClass = attention
+    ? "text-amber-600 dark:text-amber-400"
+    : "text-red-600 dark:text-red-400"
 
   const footer = twoStep ? (
     step === 1 ? (
@@ -176,14 +206,14 @@ export function ConfirmationDialog({
           Voltar
         </Button>
         <Button
-          className="flex-1 h-10 text-sm font-semibold text-white border-0 transition-all bg-red-600 hover:bg-red-700 disabled:bg-red-600/60 shadow-md hover:shadow-lg shadow-red-500/20 dark:shadow-red-900/40 focus-visible:ring-2 focus-visible:ring-red-500 focus-visible:ring-offset-2"
+          className={`flex-1 h-10 text-sm font-semibold text-white border-0 transition-all ${finalButtonClass}`}
           onClick={() => void handleConfirm()}
           disabled={isSubmitting}
         >
           {isSubmitting ? (
             <span className="flex items-center justify-center gap-2">
               <Loader2 className="h-3.5 w-3.5 animate-spin" />
-              Excluindo…
+              {attention ? "Removendo…" : "Excluindo…"}
             </span>
           ) : (
             finalConfirmText ?? confirmText
@@ -203,9 +233,11 @@ export function ConfirmationDialog({
       </Button>
       <Button
         className={`flex-1 h-10 text-sm font-semibold text-white border-0 transition-all ${
-          destructive
-            ? "bg-red-600 hover:bg-red-700 disabled:bg-red-600/60 shadow-md hover:shadow-lg shadow-red-500/20 dark:shadow-red-900/40 focus-visible:ring-2 focus-visible:ring-red-500 focus-visible:ring-offset-2"
-            : "btn-brand"
+          attention
+            ? finalButtonClass
+            : destructive
+              ? "bg-red-600 hover:bg-red-700 disabled:bg-red-600/60 shadow-md hover:shadow-lg shadow-red-500/20 dark:shadow-red-900/40 focus-visible:ring-2 focus-visible:ring-red-500 focus-visible:ring-offset-2"
+              : "btn-brand"
         }`}
         onClick={() => void handleConfirm()}
         disabled={isSubmitting}
@@ -231,12 +263,8 @@ export function ConfirmationDialog({
       footer={footer}
     >
       <div className="px-6 py-5 flex-1 overflow-y-auto">
-        <div className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl mb-5 ${
-          destructive
-            ? "bg-red-100 dark:bg-red-900/30"
-            : "bg-blue-100 dark:bg-blue-900/30"
-        }`}>
-          <Icon className={`h-6 w-6 ${destructive ? "text-red-600 dark:text-red-400" : "text-blue-600 dark:text-blue-400"}`} />
+        <div className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl mb-5 ${badgeClass}`}>
+          <Icon className={`h-6 w-6 ${badgeIconClass}`} />
         </div>
 
         <p className="text-sm text-slate-600 dark:text-slate-300 leading-relaxed">{message}</p>
@@ -264,7 +292,7 @@ export function ConfirmationDialog({
         )}
 
         {twoStep && step === 2 && (
-          <p className="mt-3 text-xs font-medium text-red-600 dark:text-red-400">
+          <p className={`mt-3 text-xs font-medium ${finalWarningClass}`}>
             Esta é a confirmação final — a ação será executada imediatamente ao clicar abaixo.
           </p>
         )}

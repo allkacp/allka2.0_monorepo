@@ -1181,8 +1181,25 @@ export default function AdminProjetosPage({
     setEditingPlannerCard(null);
   };
 
-  const handleDeletePlannerCard = (cardId: string) => {
-    setPlannerCards((cards) => cards.filter((c) => c.id !== cardId));
+  // Remoção de card do planner: confirmação dupla (ver ConfirmationDialog).
+  // O planner inteiro (plannerColumns/plannerCards) é estado local, sem
+  // nenhuma chamada de API e sem localStorage (ver auditoria do lote) —
+  // então "remover" aqui é só uma mudança de tela: some da visão atual, mas
+  // um F5 na página recarrega os cartões de exemplo originais, inclusive o
+  // que acabou de ser removido. Por isso o texto usado é "Remover card
+  // desta visualização", nunca "excluir definitivamente" — seria uma
+  // promessa falsa enquanto o planner não tiver persistência de verdade.
+  const [removingPlannerCard, setRemovingPlannerCard] =
+    useState<PlannerCardType | null>(null);
+
+  const requestDeletePlannerCard = (cardId: string) => {
+    const card = plannerCards.find((c) => c.id === cardId) ?? null;
+    setRemovingPlannerCard(card);
+  };
+
+  const confirmDeletePlannerCard = () => {
+    if (!removingPlannerCard) return;
+    setPlannerCards((cards) => cards.filter((c) => c.id !== removingPlannerCard.id));
   };
 
   const handleExport = (format: "csv" | "excel" | "pdf") => {
@@ -4963,7 +4980,7 @@ export default function AdminProjetosPage({
                           onDelete={() => handleDeletePlannerColumn(col.id)}
                           onAddCard={() => handleAddPlannerCard(col.id)}
                           onEditCard={handleEditPlannerCard}
-                          onDeleteCard={handleDeletePlannerCard}
+                          onDeleteCard={requestDeletePlannerCard}
                         />
                       ))}
                     </SortableContext>
@@ -5182,8 +5199,8 @@ export default function AdminProjetosPage({
                           variant="destructive"
                           className="mr-auto"
                           onClick={() => {
-                            handleDeletePlannerCard(editingPlannerCard.id);
                             setShowPlannerCardDialog(false);
+                            requestDeletePlannerCard(editingPlannerCard.id);
                           }}
                         >
                           Excluir
@@ -5199,6 +5216,26 @@ export default function AdminProjetosPage({
                     </DialogFooter>
                   </DialogContent>
                 </Dialog>
+
+                <ConfirmationDialog
+                  open={removingPlannerCard !== null}
+                  onClose={() => setRemovingPlannerCard(null)}
+                  onConfirm={confirmDeletePlannerCard}
+                  title="Remover card"
+                  message="O card some desta visualização do planner."
+                  twoStep
+                  attention
+                  targetName={removingPlannerCard?.title}
+                  targetDetail={
+                    plannerColumns.find((c) => c.id === removingPlannerCard?.columnId)
+                      ?.label
+                  }
+                  consequences={[
+                    "O planner ainda não salva alterações — atualizar a página (F5) recarrega os cartões de exemplo, incluindo este.",
+                    "Nenhum outro card é afetado.",
+                  ]}
+                  finalConfirmText="Remover este card"
+                />
               </div>
             )}
           </div>
@@ -5985,6 +6022,7 @@ function PlannerCard({
             e.stopPropagation();
             onDelete();
           }}
+          aria-label="Remover card"
           className="opacity-0 group-hover:opacity-100 h-4 w-4 flex items-center justify-center rounded hover:bg-red-100 text-slate-300 hover:text-red-500 transition-all flex-shrink-0"
         >
           <X className="h-2.5 w-2.5" />

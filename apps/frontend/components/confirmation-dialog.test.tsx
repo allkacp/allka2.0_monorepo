@@ -254,3 +254,57 @@ describe("ConfirmationDialog — twoStep", () => {
     expect(screen.getByRole("button", { name: /voltar/i })).toBeInTheDocument();
   });
 });
+
+// Lote 4 (ata 2026-08-24) — variante `attention` (âmbar), pra ações
+// reversíveis/de personalização que não apagam dado real (remover card do
+// planner, remover widget do painel). Aditiva: não deve mudar nenhum
+// comportamento nem cor dos usos anteriores (destructive=true por padrão).
+describe("ConfirmationDialog — variante attention (aditiva, não quebra usos anteriores)", () => {
+  it("sem `attention`, o botão final da 2ª etapa continua vermelho (bg-red-600) — comportamento antigo preservado", async () => {
+    const user = userEvent.setup();
+    render(<Harness twoStep finalConfirmText="Excluir produto definitivamente" />);
+    await openViaTrigger(user);
+    await user.click(screen.getByRole("button", { name: /continuar para confirmação/i }));
+    const finalButton = screen.getByRole("button", { name: /excluir produto definitivamente/i });
+    expect(finalButton.className).toMatch(/bg-red-600/);
+    expect(finalButton.className).not.toMatch(/bg-amber-500/);
+  });
+
+  it("com `attention`, o botão final da 2ª etapa fica âmbar, nunca vermelho de exclusão", async () => {
+    const user = userEvent.setup();
+    render(<Harness twoStep attention finalConfirmText="Remover este card" />);
+    await openViaTrigger(user);
+    await user.click(screen.getByRole("button", { name: /continuar para confirmação/i }));
+    const finalButton = screen.getByRole("button", { name: /remover este card/i });
+    expect(finalButton.className).toMatch(/bg-amber-500/);
+    expect(finalButton.className).not.toMatch(/bg-red-600/);
+  });
+
+  it("com `attention`, onConfirm ainda é chamado exatamente uma vez na confirmação final", async () => {
+    const onConfirm = vi.fn().mockResolvedValue(undefined);
+    const user = userEvent.setup();
+    render(<Harness twoStep attention onConfirm={onConfirm} finalConfirmText="Remover este card" />);
+    await openViaTrigger(user);
+    await user.click(screen.getByRole("button", { name: /continuar para confirmação/i }));
+    await user.click(screen.getByRole("button", { name: /remover este card/i }));
+    await waitFor(() => expect(onConfirm).toHaveBeenCalledTimes(1));
+  });
+
+  it("com `attention`, erro mantém o item e mostra mensagem amigável, igual ao modo destrutivo", async () => {
+    const onConfirm = vi.fn().mockRejectedValue(new Error("Não foi possível remover agora."));
+    const user = userEvent.setup();
+    render(<Harness twoStep attention onConfirm={onConfirm} finalConfirmText="Remover este card" />);
+    await openViaTrigger(user);
+    await user.click(screen.getByRole("button", { name: /continuar para confirmação/i }));
+    await user.click(screen.getByRole("button", { name: /remover este card/i }));
+    expect(await screen.findByText("Não foi possível remover agora.")).toBeInTheDocument();
+  });
+
+  it("modo simples (sem twoStep) com `attention` também usa âmbar em vez de vermelho", async () => {
+    const user = userEvent.setup();
+    render(<Harness attention confirmText="Ocultar" />);
+    await openViaTrigger(user);
+    const confirmButton = screen.getByRole("button", { name: /^ocultar$/i });
+    expect(confirmButton.className).toMatch(/bg-amber-500/);
+  });
+});
