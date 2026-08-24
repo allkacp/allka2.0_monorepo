@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { useSidebar } from "@/contexts/sidebar-context";
 import { HeaderSlideScreen } from "@/components/header-slide-screen";
@@ -40,6 +40,7 @@ import { useProjectBasket } from "@/contexts/project-basket-context";
 import { ProjectCreateNewPanel } from "@/components/project-create-new-panel";
 import { ProductDetailSheet } from "@/components/product-detail-sheet";
 import { ButtonLoader } from "@/components/ui/loading";
+import { ConfirmationDialog } from "@/components/confirmation-dialog";
 
 // ─── Category → icon map (mirrors product-catalog-view) ─────────────────────
 const CATEGORY_ICONS: Record<string, any> = {
@@ -167,6 +168,8 @@ export function ProjectBasketDrawer() {
   /** Loading state when preparing/opening the project creation drawer */
   const [isPreparingProject, setIsPreparingProject] = useState(false);
   const [prepareError, setPrepareError] = useState<string | null>(null);
+  /** Confirmação dupla antes de limpar a cesta — ver ConfirmationDialog. */
+  const [clearConfirmOpen, setClearConfirmOpen] = useState(false);
   /** Product currently being inspected via the detail sheet. */
   const [detailProduct, setDetailProduct] = useState<any | null>(null);
   /** View mode for the basket items — persisted in localStorage. */
@@ -252,7 +255,18 @@ export function ProjectBasketDrawer() {
   // da sidebar). handleGoToCatalog() já dispara essa mesma troca de rota
   // de propósito, então este efeito também cobre (de forma redundante e
   // inofensiva) o fechamento depois do clique em "ir pro catálogo".
+  //
+  // `isMountedRef` evita fechar a cesta na PRÓPRIA montagem: todo efeito
+  // roda uma vez após o primeiro render, independente da lista de
+  // dependências — sem essa guarda, montar este componente com a cesta já
+  // aberta (ex.: navegação para uma rota que a mantém aberta) a fechava
+  // imediatamente, sem nenhuma troca de rota de verdade ter acontecido.
+  const isMountedRef = useRef(false);
   useEffect(() => {
+    if (!isMountedRef.current) {
+      isMountedRef.current = true;
+      return;
+    }
     if (basket.isOpen) {
       basket.setOpen(false);
     }
@@ -901,10 +915,10 @@ export function ProjectBasketDrawer() {
                   )}
                 </button>
 
-                {/* Limpar */}
+                {/* Limpar — confirmação dupla antes de apagar tudo (ver ConfirmationDialog) */}
                 <button
                   type="button"
-                  onClick={() => basket.clearBasket()}
+                  onClick={() => setClearConfirmOpen(true)}
                   className="shrink-0 flex items-center gap-1 h-8 px-2.5 rounded-lg text-xs font-semibold text-red-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors whitespace-nowrap"
                 >
                   <Trash2 className="h-3 w-3 shrink-0" />
@@ -1048,6 +1062,22 @@ export function ProjectBasketDrawer() {
           if (!v) setDetailProduct(null);
         }}
         isSelected={true}
+      />
+
+      {/* ── Confirmação dupla antes de limpar a cesta ─────────────────────── */}
+      <ConfirmationDialog
+        open={clearConfirmOpen}
+        onClose={() => setClearConfirmOpen(false)}
+        onConfirm={() => basket.clearBasket()}
+        title="Limpar cesta"
+        message="Isso remove todos os itens da cesta. Nenhum projeto será criado a partir deles."
+        twoStep
+        targetName={`${totalItems} ${totalItems === 1 ? "item" : "itens"} na cesta`}
+        consequences={[
+          "Todos os produtos selecionados saem da cesta.",
+          "Nenhum projeto é criado — a cesta só fica vazia.",
+        ]}
+        finalConfirmText="Limpar todos os itens da cesta"
       />
     </>
   );

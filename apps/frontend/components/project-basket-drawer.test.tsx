@@ -259,3 +259,79 @@ describe("ProjectBasketDrawer — navegação do botão de catálogo", () => {
     });
   });
 });
+
+// Fundação de confirmação dupla (ata 2026-08-22) — "Limpar" não apaga mais
+// a cesta direto no clique; abre o mesmo ConfirmationDialog (twoStep) usado
+// pela exclusão de produto no Admin.
+describe("ProjectBasketDrawer — 'Limpar' com confirmação dupla", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    basketConfig.items = [itemFixture("prod-1"), { ...itemFixture("prod-2"), quantity: 2 }];
+    basketConfig.isOpen = true;
+    setTestViewportWidth(1280);
+  });
+
+  it("clicar em 'Limpar' abre a 1ª etapa e ainda não limpa nada", async () => {
+    const user = userEvent.setup();
+    renderDrawer("/admin/dashboard");
+    await user.click(screen.getByRole("button", { name: /^limpar$/i }));
+    expect(await screen.findByText(/Isso remove todos os itens da cesta/i)).toBeInTheDocument();
+    expect(screen.getByText(/3 itens na cesta/i)).toBeInTheDocument();
+    expect(clearBasketSpy).not.toHaveBeenCalled();
+  });
+
+  it("cancelar mantém todos os itens", async () => {
+    const user = userEvent.setup();
+    renderDrawer("/admin/dashboard");
+    await user.click(screen.getByRole("button", { name: /^limpar$/i }));
+    await user.click(screen.getByRole("button", { name: /^cancelar$/i }));
+    expect(clearBasketSpy).not.toHaveBeenCalled();
+    expect(screen.getAllByText("Produto Teste").length).toBeGreaterThan(0);
+  });
+
+  it("voltar (da 2ª pra 1ª etapa) mantém todos os itens", async () => {
+    const user = userEvent.setup();
+    renderDrawer("/admin/dashboard");
+    await user.click(screen.getByRole("button", { name: /^limpar$/i }));
+    await user.click(screen.getByRole("button", { name: /continuar para confirmação/i }));
+    await user.click(screen.getByRole("button", { name: /voltar/i }));
+    expect(clearBasketSpy).not.toHaveBeenCalled();
+    expect(screen.getAllByText("Produto Teste").length).toBeGreaterThan(0);
+  });
+
+  it("primeira confirmação ('Continuar') ainda não limpa a cesta", async () => {
+    const user = userEvent.setup();
+    renderDrawer("/admin/dashboard");
+    await user.click(screen.getByRole("button", { name: /^limpar$/i }));
+    await user.click(screen.getByRole("button", { name: /continuar para confirmação/i }));
+    expect(clearBasketSpy).not.toHaveBeenCalled();
+    expect(screen.getByRole("button", { name: /limpar todos os itens da cesta/i })).toBeInTheDocument();
+  });
+
+  it("confirmação final limpa a cesta — quantidade e total zeram só nesse momento", async () => {
+    const user = userEvent.setup();
+    renderDrawer("/admin/dashboard");
+    await user.click(screen.getByRole("button", { name: /^limpar$/i }));
+    await user.click(screen.getByRole("button", { name: /continuar para confirmação/i }));
+    await user.click(screen.getByRole("button", { name: /limpar todos os itens da cesta/i }));
+    await waitFor(() => expect(clearBasketSpy).toHaveBeenCalledTimes(1));
+    // Com a cesta vazia, o resumo com itens some (volta pro estado vazio).
+    await waitFor(() => expect(screen.queryByText("Produto Teste")).not.toBeInTheDocument());
+    expect(await screen.findByRole("button", { name: /ir para o catálogo/i })).toBeInTheDocument();
+  });
+
+  it("abrir novamente não recupera os itens já apagados", async () => {
+    const user = userEvent.setup();
+    renderDrawer("/admin/dashboard");
+    await user.click(screen.getByRole("button", { name: /^limpar$/i }));
+    await user.click(screen.getByRole("button", { name: /continuar para confirmação/i }));
+    await user.click(screen.getByRole("button", { name: /limpar todos os itens da cesta/i }));
+    await waitFor(() => expect(clearBasketSpy).toHaveBeenCalledTimes(1));
+
+    const catalogButton = await screen.findByRole("button", { name: /ir para o catálogo/i });
+    await user.click(catalogButton);
+    expect(setOpenSpy).toHaveBeenCalledWith(false);
+    // Reabrir (setOpen(true) simulado) continua vazio — nada foi recuperado.
+    expect(screen.queryByText("Produto Teste")).not.toBeInTheDocument();
+  });
+});
