@@ -74,6 +74,7 @@ import { ShareCreateForm } from "@/features/dashboards/shared/share-create-form"
 import { ShareLinksPanel } from "@/features/dashboards/shared/share-links-panel";
 import { previewNormalizeSlug, suggestAvailableSlug } from "@/features/dashboards/shared/share-slug-field";
 import type { DashboardShareLink } from "@/lib/api-client";
+import { getDashboardStorageKey } from "@/lib/dashboard-storage-scope";
 
 // ─── Compartilhamento (Pendência B) ────────────────────────────────────────
 // Reaproveita EXATAMENTE a mesma estrutura já usada por
@@ -384,11 +385,14 @@ const DEFAULT_WIDGETS: NomadeWidget[] = [
   { id: "taskStatusDist", visible: false, order: 8, colSpan: 2 },
 ];
 
-const STORAGE_KEY = "nomade_dashboard_widgets_v1";
-
+// Item 3 (lote 6, bloco 3) — chave própria do Nômade, sem sufixo de
+// usuário; layout do widget virava compartilhado entre duas contas
+// Nômade no mesmo navegador. `getDashboardStorageKey()` computado a cada
+// chamada (nunca capturado como constante de módulo) pra sempre refletir a
+// sessão atual, mesmo padrão dos outros 5 portais.
 function loadWidgets(): NomadeWidget[] {
   try {
-    const saved = localStorage.getItem(STORAGE_KEY);
+    const saved = localStorage.getItem(getDashboardStorageKey("dashboard-widget-config", "nomad"));
     if (!saved) return DEFAULT_WIDGETS;
     const parsed: NomadeWidget[] = JSON.parse(saved);
     const ids = new Set(parsed.map((w) => w.id));
@@ -403,7 +407,7 @@ function loadWidgets(): NomadeWidget[] {
 }
 
 function saveWidgets(widgets: NomadeWidget[]) {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(widgets));
+  localStorage.setItem(getDashboardStorageKey("dashboard-widget-config", "nomad"), JSON.stringify(widgets));
 }
 
 // ─── MiniBar ──────────────────────────────────────────────────────────────────

@@ -2,7 +2,7 @@ import { DashboardShellFrame } from "@/features/dashboards/shared/dashboard-shel
 import { useDashboardScrollCompact } from "@/hooks/useDashboardScrollCompact";
 import { WIDGETS_BY_ROLE } from "@/lib/dashboard-widget-roles";
 import { LEADER_PRESETS, buildWidgets, DASHBOARD_STORAGE_KEY, CURRENT_DASHBOARD_KEY } from "@/lib/dashboard-presets-by-role";
-import { getDashboardStorageKey } from "@/lib/dashboard-storage-scope";
+import { getDashboardStorageKey, getSensitiveDashboardStorageKey } from "@/lib/dashboard-storage-scope";
 import type React from "react";
 
 import { useState, useEffect, useMemo, useCallback, useRef } from "react";
@@ -969,7 +969,9 @@ export default function AdminDashboardPage() {
   );
 
   useEffect(() => {
-    const savedPeriod = localStorage.getItem("dashboard_global_period");
+    const savedPeriod = localStorage.getItem(
+      getDashboardStorageKey("dashboard_global_period", "leader"),
+    );
     if (savedPeriod) {
       try {
         const parsed = JSON.parse(savedPeriod);
@@ -987,7 +989,7 @@ export default function AdminDashboardPage() {
 
   useEffect(() => {
     localStorage.setItem(
-      "dashboard_global_period",
+      getDashboardStorageKey("dashboard_global_period", "leader"),
       JSON.stringify({
         type: globalPeriod.type,
         from: globalPeriod.from?.toISOString(),
@@ -1050,11 +1052,15 @@ export default function AdminDashboardPage() {
   };
 
   // ── Historical data (persisted in localStorage) ──────────────────────────
+  // Item 3 (lote 6, bloco 3) — dado sensível: chave "sensível", nunca cai
+  // no balde anonymous. Sem sessão, fica com {} em memória.
   const [historicalData, setHistoricalData] = useState<
     Record<string, ManualDataEntry>
   >(() => {
+    const key = getSensitiveDashboardStorageKey("dashboard_historical_data", "leader");
+    if (!key) return {};
     try {
-      const saved = localStorage.getItem("dashboard_historical_data");
+      const saved = localStorage.getItem(key);
       return saved ? JSON.parse(saved) : {};
     } catch {
       return {};
@@ -1799,7 +1805,8 @@ export default function AdminDashboardPage() {
       [histModalKey]: histFormData as ManualDataEntry,
     };
     setHistoricalData(updated);
-    localStorage.setItem("dashboard_historical_data", JSON.stringify(updated));
+    const key = getSensitiveDashboardStorageKey("dashboard_historical_data", "leader");
+    if (key) localStorage.setItem(key, JSON.stringify(updated));
     setShowHistoricalModal(false);
     const [y, m] = histModalKey.split("-").map(Number);
     toast({
@@ -1812,7 +1819,8 @@ export default function AdminDashboardPage() {
     const updated = { ...historicalData };
     delete updated[key];
     setHistoricalData(updated);
-    localStorage.setItem("dashboard_historical_data", JSON.stringify(updated));
+    const storageKey = getSensitiveDashboardStorageKey("dashboard_historical_data", "leader");
+    if (storageKey) localStorage.setItem(storageKey, JSON.stringify(updated));
   };
   const handleOpenShareDialog = (dashboardId: string) => {
     setSharingDashboardId(dashboardId);

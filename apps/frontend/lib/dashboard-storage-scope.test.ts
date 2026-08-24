@@ -4,6 +4,7 @@ import {
   getUserScopedStorageKey,
   getCurrentUserScopedStorageKey,
   getDashboardStorageKey,
+  getSensitiveDashboardStorageKey,
 } from "@/lib/dashboard-storage-scope";
 import { DASHBOARD_STORAGE_KEY, CURRENT_DASHBOARD_KEY } from "@/lib/dashboard-presets-by-role";
 
@@ -337,5 +338,184 @@ describe("getDashboardStorageKey — dashboard do Admin e esquema legado de widg
   it("identidade ausente nunca gera 'undefined'/'null' na chave", () => {
     const key = getDashboardStorageKey("current-dashboard-id", "admin");
     expect(key).not.toMatch(/undefined|null/);
+  });
+});
+
+// Lote 6, bloco 3 (ata 2026-08-24, último bloco) — período global (na
+// verdade uma preferência pessoal de filtro), histórico do dashboard
+// (dado sensível: financeiro/projeto/desempenho, ver ManualDataEntry em
+// dashboard-common.tsx) e o layout de widgets do Nômade. As três eram
+// chaves literais, sem sufixo de portal nem de usuário —
+// `dashboard_global_period` e `dashboard_historical_data` eram
+// literalmente a MESMA chave em Admin/Agency/Company/Leader/Partner ao
+// mesmo tempo.
+describe("getDashboardStorageKey — período (preferência pessoal) e widgets do Nômade", () => {
+  it("1/3. dashboard_global_period é preferência pessoal — isolada por usuário, dentro do mesmo portal", () => {
+    setSessionUser({ id: "user-a" });
+    const keyA = getDashboardStorageKey("dashboard_global_period", "agency");
+    setSessionUser({ id: "user-b" });
+    const keyB = getDashboardStorageKey("dashboard_global_period", "agency");
+    expect(keyA).not.toBe(keyB);
+  });
+
+  it("2. período de A não aparece pra B — chaves distintas mesmo no mesmo portal", () => {
+    setSessionUser({ id: "user-a" });
+    const keyA = getDashboardStorageKey("dashboard_global_period", "leader");
+    setSessionUser({ id: "user-b" });
+    const keyB = getDashboardStorageKey("dashboard_global_period", "leader");
+    expect(keyA).not.toBe(keyB);
+  });
+
+  it("3. período fica separado por portal — a mesma conta em 2 portais nunca compartilha a chave (a colisão de 5 vias que existia antes)", () => {
+    setSessionUser({ id: "user-a" });
+    const keys = new Set([
+      getDashboardStorageKey("dashboard_global_period", "admin"),
+      getDashboardStorageKey("dashboard_global_period", "agency"),
+      getDashboardStorageKey("dashboard_global_period", "company"),
+      getDashboardStorageKey("dashboard_global_period", "leader"),
+      getDashboardStorageKey("dashboard_global_period", "partner"),
+    ]);
+    expect(keys.size).toBe(5);
+  });
+
+  it("4. leitura e gravação usam a mesma chave", () => {
+    setSessionUser({ id: "user-a" });
+    const writeKey = getDashboardStorageKey("dashboard_global_period", "company");
+    const readKey = getDashboardStorageKey("dashboard_global_period", "company");
+    expect(writeKey).toBe(readKey);
+  });
+
+  it("10. Nômade A salva layout — chave isolada por usuário", () => {
+    setSessionUser({ id: "nomad-a" });
+    const keyA = getDashboardStorageKey("dashboard-widget-config", "nomad");
+    window.localStorage.setItem(keyA, JSON.stringify({ widgets: "a" }));
+    setSessionUser({ id: "nomad-a" });
+    expect(getDashboardStorageKey("dashboard-widget-config", "nomad")).toBe(keyA);
+    expect(JSON.parse(window.localStorage.getItem(keyA)!)).toEqual({ widgets: "a" });
+  });
+
+  it("11. Nômade B nunca deriva a chave de A — recebe o padrão (chave própria, vazia)", () => {
+    setSessionUser({ id: "nomad-a" });
+    const keyA = getDashboardStorageKey("dashboard-widget-config", "nomad");
+    window.localStorage.setItem(keyA, JSON.stringify({ widgets: "a" }));
+
+    setSessionUser({ id: "nomad-b" });
+    const keyB = getDashboardStorageKey("dashboard-widget-config", "nomad");
+    expect(keyB).not.toBe(keyA);
+    expect(window.localStorage.getItem(keyB)).toBeNull();
+  });
+
+  it("12. voltar pra Nômade A recupera o layout de A", () => {
+    setSessionUser({ id: "nomad-a" });
+    const keyFirstVisit = getDashboardStorageKey("dashboard-widget-config", "nomad");
+    window.localStorage.setItem(keyFirstVisit, JSON.stringify({ widgets: "a" }));
+
+    setSessionUser({ id: "nomad-b" });
+    setSessionUser({ id: "nomad-a" });
+    const keyReturn = getDashboardStorageKey("dashboard-widget-config", "nomad");
+    expect(keyReturn).toBe(keyFirstVisit);
+    expect(JSON.parse(window.localStorage.getItem(keyReturn)!)).toEqual({ widgets: "a" });
+  });
+
+  it("13. Líder não recebe o layout do Nômade — portais diferentes nunca colidem, mesmo usuário", () => {
+    setSessionUser({ id: "user-a" });
+    const nomadKey = getDashboardStorageKey("dashboard-widget-config", "nomad");
+    const leaderKey = getDashboardStorageKey("dashboard-widget-config", "leader");
+    expect(nomadKey).not.toBe(leaderKey);
+  });
+
+  it("17. nenhum e-mail ou token aparece na chave do Nômade", () => {
+    setSessionUser({ id: "nomad-1", email: "nomade@example.com" });
+    const key = getDashboardStorageKey("dashboard-widget-config", "nomad");
+    expect(key).not.toMatch(/@/);
+    expect(key).not.toMatch(/token/i);
+  });
+});
+
+describe("getSensitiveDashboardStorageKey — histórico do dashboard (dado de negócio)", () => {
+  it("com sessão, deriva a mesma chave (não-null) que getDashboardStorageKey — mesma base, mesmo formato", () => {
+    setSessionUser({ id: "user-a" });
+    const sensitiveKey = getSensitiveDashboardStorageKey("dashboard_historical_data", "company");
+    const regularKey = getDashboardStorageKey("dashboard_historical_data", "company");
+    expect(sensitiveKey).toBe(regularKey);
+  });
+
+  it("5. histórico de A não aparece pra B", () => {
+    setSessionUser({ id: "user-a" });
+    const keyA = getSensitiveDashboardStorageKey("dashboard_historical_data", "agency")!;
+    setSessionUser({ id: "user-b" });
+    const keyB = getSensitiveDashboardStorageKey("dashboard_historical_data", "agency")!;
+    expect(keyA).not.toBe(keyB);
+  });
+
+  it("6. histórico fica separado por portal — mesma conta, 5 portais, 5 chaves distintas", () => {
+    setSessionUser({ id: "user-a" });
+    const keys = new Set([
+      getSensitiveDashboardStorageKey("dashboard_historical_data", "admin"),
+      getSensitiveDashboardStorageKey("dashboard_historical_data", "agency"),
+      getSensitiveDashboardStorageKey("dashboard_historical_data", "company"),
+      getSensitiveDashboardStorageKey("dashboard_historical_data", "leader"),
+      getSensitiveDashboardStorageKey("dashboard_historical_data", "partner"),
+    ]);
+    expect(keys.size).toBe(5);
+  });
+
+  it("7/14. identidade ausente retorna null — nunca lê (nem gera) cache de usuário real, nunca cai no balde anonymous", () => {
+    const key = getSensitiveDashboardStorageKey("dashboard_historical_data", "agency");
+    expect(key).toBeNull();
+  });
+
+  it("9. 'logout limpa estado em memória' — pós-logout, a função nunca reaproveita a chave do usuário anterior (volta a null)", () => {
+    setSessionUser({ id: "user-a" });
+    const keyA = getSensitiveDashboardStorageKey("dashboard_historical_data", "leader");
+    expect(keyA).not.toBeNull();
+    setSessionUser(null);
+    const keyAfterLogout = getSensitiveDashboardStorageKey("dashboard_historical_data", "leader");
+    expect(keyAfterLogout).toBeNull();
+  });
+
+  it("8. troca rápida de conta: cada gravação vai pra chave do usuário certo, sem misturar (a resposta atrasada de uma conta nunca teria a chave da próxima)", () => {
+    setSessionUser({ id: "user-a" });
+    const keyA = getSensitiveDashboardStorageKey("dashboard_historical_data", "company")!;
+    window.localStorage.setItem(keyA, JSON.stringify({ "2026-08": { revenue_total: 111 } }));
+
+    setSessionUser({ id: "user-b" });
+    const keyB = getSensitiveDashboardStorageKey("dashboard_historical_data", "company")!;
+    window.localStorage.setItem(keyB, JSON.stringify({ "2026-08": { revenue_total: 222 } }));
+
+    expect(JSON.parse(window.localStorage.getItem(keyA)!)).toEqual({
+      "2026-08": { revenue_total: 111 },
+    });
+    expect(JSON.parse(window.localStorage.getItem(keyB)!)).toEqual({
+      "2026-08": { revenue_total: 222 },
+    });
+    expect(keyA).not.toBe(keyB);
+  });
+
+  it("15/16. a chave antiga (literal, sem portal nem usuário) nunca é lida nem apagada por este caminho", () => {
+    const oldKey = "dashboard_historical_data";
+    window.localStorage.setItem(oldKey, JSON.stringify({ legacy: true }));
+    const removeSpy = vi.spyOn(Storage.prototype, "removeItem");
+
+    setSessionUser({ id: "user-a" });
+    const newKey = getSensitiveDashboardStorageKey("dashboard_historical_data", "admin")!;
+    window.localStorage.setItem(newKey, JSON.stringify({ owner: "a" }));
+
+    expect(window.localStorage.getItem(oldKey)).toBe(JSON.stringify({ legacy: true }));
+    expect(removeSpy).not.toHaveBeenCalledWith(oldKey);
+    expect(newKey).not.toBe(oldKey);
+    removeSpy.mockRestore();
+  });
+
+  it("17. nenhum e-mail ou token aparece na chave do histórico", () => {
+    setSessionUser({ id: "usr-9", email: "conta@example.com" });
+    const key = getSensitiveDashboardStorageKey("dashboard_historical_data", "partner");
+    expect(key).not.toMatch(/@/);
+    expect(key).not.toMatch(/token/i);
+  });
+
+  it("identidade ausente nunca gera chave com 'undefined'/'null' — retorna null direto, sem tentar montar chave nenhuma", () => {
+    const key = getSensitiveDashboardStorageKey("dashboard_historical_data", "admin");
+    expect(key).toBeNull();
   });
 });

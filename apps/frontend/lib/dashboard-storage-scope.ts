@@ -39,13 +39,34 @@
  * Parceiro; `getDashboardStorageKey()` sempre inclui o portal na chave base,
  * então essa colisão não existe mais.
  *
- * Auditadas e com o MESMO problema, mas propositalmente NÃO tocadas
- * ainda (próximo lote):
- *   - `dashboard_global_period` e `dashboard_historical_data` — globais,
- *     sem nenhum sufixo de portal OU usuário; compartilhadas por
- *     qualquer conta em qualquer portal no mesmo navegador.
- *   - `nomades/dashboard/page.tsx`: `nomade_dashboard_widgets_v1` — um
- *     esquema de nômade próprio, de widget único, também sem usuário.
+ * ── Escopo do lote 6, bloco 3 (ata 2026-08-24, último bloco) ────────────
+ * `dashboard_global_period` era, apesar do nome, uma PREFERÊNCIA PESSOAL —
+ * o filtro de período (tipo/de/até/label) que o usuário escolhe pro
+ * dashboard inteiro (distinto do override por widget, esse sim chamado
+ * "custom" no resto do código). Não é configuração oficial da plataforma:
+ * é lida/gravada pela própria página, no mesmo `useEffect` que reage à
+ * escolha do usuário no seletor de período, sem nenhum endpoint de admin
+ * por trás. Confirmado como pessoal, agora escopado como as outras via
+ * `getDashboardStorageKey()`.
+ *
+ * `dashboard_historical_data` continha dado de negócio de verdade —
+ * `ManualDataEntry` (dashboard-common.tsx) guarda financeiro
+ * (revenue/mrr/creditPlans/accountsReceivable/cmv), projetos/tarefas,
+ * nômades/partners e churn/ticket/LTV, indexado por mês
+ * (`{ "2026-08": {...} }`). Uma ÚNICA chave, sem sufixo de portal nem de
+ * usuário, era lida e escrita por TODAS as 5 páginas de dashboard — dado
+ * financeiro/operacional de uma conta A podia aparecer mesclado no
+ * dashboard de uma conta B no mesmo navegador. Por ser dado sensível (não
+ * só preferência de UI), usa `getSensitiveDashboardStorageKey()` abaixo em
+ * vez de `getDashboardStorageKey()`: nunca cai no balde `anonymous`
+ * compartilhado — sem sessão, o chamador fica com estado em memória
+ * (`{}`) e não lê nem escreve localStorage até a sessão existir.
+ *
+ * `nomades/dashboard/page.tsx`: `nomade_dashboard_widgets_v1` era o único
+ * esquema de widget que sobrou sem escopo — layout pessoal do nômade
+ * (visibilidade/ordem/colSpan por widget), sem sufixo de usuário. Agora
+ * via `getDashboardStorageKey("dashboard-widget-config", "nomad")`
+ * (adicionado `"nomad"` a `DashboardStoragePortal`).
  */
 
 const SESSION_USER_STORAGE_KEY = "allka_user";
@@ -98,14 +119,17 @@ export type DashboardStorageLogicalKey =
   | "dashboard-widget-config"
   | "dashboard-metric-cards"
   | "dashboard-widget-size"
-  | "dashboard-widget-periods";
+  | "dashboard-widget-periods"
+  | "dashboard_global_period"
+  | "dashboard_historical_data";
 
 export type DashboardStoragePortal =
   | "admin"
   | "agency"
   | "company"
   | "partner"
-  | "leader";
+  | "leader"
+  | "nomad";
 
 /** Getter centralizado pras chaves pessoais de dashboard que ainda eram
  * literais espalhadas pelas páginas (admin e o esquema de widget único de
@@ -120,4 +144,20 @@ export function getDashboardStorageKey(
   portal: DashboardStoragePortal,
 ): string {
   return getCurrentUserScopedStorageKey(`${logicalKey}-${portal}`);
+}
+
+/** Igual a `getDashboardStorageKey()`, mas pra dado potencialmente
+ * sensível (financeiro, de projeto, de desempenho — não apenas preferência
+ * de UI). A diferença: NUNCA cai no balde `anonymous` compartilhado. Sem
+ * sessão disponível, retorna `null` — o chamador deve usar estado padrão
+ * em memória (nunca ler nem escrever localStorage) até a sessão existir,
+ * em vez de gravar dado real num balde que qualquer usuário anônimo no
+ * mesmo navegador acabaria lendo depois. */
+export function getSensitiveDashboardStorageKey(
+  logicalKey: DashboardStorageLogicalKey,
+  portal: DashboardStoragePortal,
+): string | null {
+  const userId = readSessionUserId();
+  if (!userId) return null;
+  return getUserScopedStorageKey(`${logicalKey}-${portal}`, userId);
 }

@@ -152,7 +152,7 @@ import { Switch } from "@/components/ui/switch"; // Added Switch
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast"; // Added useToast hook
 import { ConfirmationDialog } from "@/components/confirmation-dialog";
-import { getDashboardStorageKey } from "@/lib/dashboard-storage-scope";
+import { getDashboardStorageKey, getSensitiveDashboardStorageKey } from "@/lib/dashboard-storage-scope";
 import { ShareLinksPanel } from "@/features/dashboards/shared/share-links-panel";
 import { ShareSlugField, previewNormalizeSlug, suggestAvailableSlug } from "@/features/dashboards/shared/share-slug-field";
 import { ShareCreateForm } from "@/features/dashboards/shared/share-create-form";
@@ -454,7 +454,9 @@ export function AdminDashboardPage() {
   const [dreData, setDreData] = useState<any>(null);
 
   useEffect(() => {
-    const savedPeriod = localStorage.getItem("dashboard_global_period");
+    const savedPeriod = localStorage.getItem(
+      getDashboardStorageKey("dashboard_global_period", "admin"),
+    );
     if (savedPeriod) {
       try {
         const parsed = JSON.parse(savedPeriod);
@@ -472,7 +474,7 @@ export function AdminDashboardPage() {
 
   useEffect(() => {
     localStorage.setItem(
-      "dashboard_global_period",
+      getDashboardStorageKey("dashboard_global_period", "admin"),
       JSON.stringify({
         type: globalPeriod.type,
         from: globalPeriod.from?.toISOString(),
@@ -538,11 +540,15 @@ export function AdminDashboardPage() {
   };
 
   // ── Historical data (persisted in localStorage) ──────────────────────────
+  // Item 3 (lote 6, bloco 3) — dado sensível: chave "sensível", nunca cai
+  // no balde anonymous. Sem sessão, fica com {} em memória.
   const [historicalData, setHistoricalData] = useState<
     Record<string, ManualDataEntry>
   >(() => {
+    const key = getSensitiveDashboardStorageKey("dashboard_historical_data", "admin");
+    if (!key) return {};
     try {
-      const saved = localStorage.getItem("dashboard_historical_data");
+      const saved = localStorage.getItem(key);
       return saved ? JSON.parse(saved) : {};
     } catch {
       return {};
@@ -1588,7 +1594,8 @@ export function AdminDashboardPage() {
       [histModalKey]: histFormData as ManualDataEntry,
     };
     setHistoricalData(updated);
-    localStorage.setItem("dashboard_historical_data", JSON.stringify(updated));
+    const key = getSensitiveDashboardStorageKey("dashboard_historical_data", "admin");
+    if (key) localStorage.setItem(key, JSON.stringify(updated));
     setShowHistoricalModal(false);
     const [y, m] = histModalKey.split("-").map(Number);
     toast({
@@ -1601,7 +1608,8 @@ export function AdminDashboardPage() {
     const updated = { ...historicalData };
     delete updated[key];
     setHistoricalData(updated);
-    localStorage.setItem("dashboard_historical_data", JSON.stringify(updated));
+    const storageKey = getSensitiveDashboardStorageKey("dashboard_historical_data", "admin");
+    if (storageKey) localStorage.setItem(storageKey, JSON.stringify(updated));
   };
   const handleOpenShareDialog = (dashboardId: string) => {
     setSharingDashboardId(dashboardId);

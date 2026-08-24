@@ -8,7 +8,7 @@ import {
   DASHBOARD_STORAGE_KEY,
   CURRENT_DASHBOARD_KEY,
 } from "@/lib/dashboard-presets-by-role";
-import { getDashboardStorageKey } from "@/lib/dashboard-storage-scope";
+import { getDashboardStorageKey, getSensitiveDashboardStorageKey } from "@/lib/dashboard-storage-scope";
 import type React from "react";
 
 import { useState, useEffect, useMemo, useRef, useCallback } from "react";
@@ -679,7 +679,9 @@ export default function AdminDashboardPage() {
   }, [])
 
   useEffect(() => {
-    const savedPeriod = localStorage.getItem("dashboard_global_period");
+    const savedPeriod = localStorage.getItem(
+      getDashboardStorageKey("dashboard_global_period", "agency"),
+    );
     if (savedPeriod) {
       try {
         const parsed = JSON.parse(savedPeriod);
@@ -697,7 +699,7 @@ export default function AdminDashboardPage() {
 
   useEffect(() => {
     localStorage.setItem(
-      "dashboard_global_period",
+      getDashboardStorageKey("dashboard_global_period", "agency"),
       JSON.stringify({
         type: globalPeriod.type,
         from: globalPeriod.from?.toISOString(),
@@ -760,11 +762,17 @@ export default function AdminDashboardPage() {
   };
 
   // ── Historical data (persisted in localStorage) ──────────────────────────
+  // Item 3 (lote 6, bloco 3) — dado sensível (financeiro/projeto/desempenho,
+  // ver ManualDataEntry): usa a chave "sensível", que nunca cai no balde
+  // anonymous. Sem sessão disponível, fica com {} em memória — nunca lê o
+  // cache real de outro usuário.
   const [historicalData, setHistoricalData] = useState<
     Record<string, ManualDataEntry>
   >(() => {
+    const key = getSensitiveDashboardStorageKey("dashboard_historical_data", "agency");
+    if (!key) return {};
     try {
-      const saved = localStorage.getItem("dashboard_historical_data");
+      const saved = localStorage.getItem(key);
       return saved ? JSON.parse(saved) : {};
     } catch {
       return {};
@@ -1624,7 +1632,8 @@ export default function AdminDashboardPage() {
       [histModalKey]: histFormData as ManualDataEntry,
     };
     setHistoricalData(updated);
-    localStorage.setItem("dashboard_historical_data", JSON.stringify(updated));
+    const key = getSensitiveDashboardStorageKey("dashboard_historical_data", "agency");
+    if (key) localStorage.setItem(key, JSON.stringify(updated));
     setShowHistoricalModal(false);
     const [y, m] = histModalKey.split("-").map(Number);
     toast({
@@ -1637,7 +1646,8 @@ export default function AdminDashboardPage() {
     const updated = { ...historicalData };
     delete updated[key];
     setHistoricalData(updated);
-    localStorage.setItem("dashboard_historical_data", JSON.stringify(updated));
+    const storageKey = getSensitiveDashboardStorageKey("dashboard_historical_data", "agency");
+    if (storageKey) localStorage.setItem(storageKey, JSON.stringify(updated));
   };
   const handleOpenShareDialog = (dashboardId: string) => {
     setSharingDashboardId(dashboardId);
