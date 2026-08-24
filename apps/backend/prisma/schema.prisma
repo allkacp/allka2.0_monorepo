@@ -89,6 +89,8 @@ model User {
   product_feedback_override          ProductFeedbackUserOverride?
   product_feedback_group_memberships ProductFeedbackAccessGroupMember[]
   product_feedback_work_item_links   ProductFeedbackWorkItemLink[]
+  planner_columns                    PlannerColumn[]
+  planner_cards                      PlannerCard[]
   share_links                        ShareLink[]
   dashboard_templates                DashboardTemplate[]
   share_comments                     ShareComment[]
@@ -726,6 +728,7 @@ model Project {
   attachments     ProjectAttachment[]
   connections     ProjectConnection[]
   iallka_session  IallkaSession?
+  planner_cards   PlannerCard[]
 
   // ── Rastreio da plataforma antiga ─────────────────────────────────────
   // id numérico do registro equivalente no dump legado (Dump20260423.sql).
@@ -739,6 +742,66 @@ model Project {
 
   @@index([created_by_user_id])
   @@map("projects")
+}
+
+// ─── PlannerColumn / PlannerCard — quadro do Planejador (Admin → Projetos,
+// ata 2026-08-24). Entidade própria, NÃO um Project: os 7 cards de exemplo
+// do mock antigo tinham colunas genéricas de kanban (Backlog/A Fazer/Em
+// Andamento/Em Revisão/Concluído) sem relação com o `status`/`lifecycle`
+// reais de Project, e um `projectId: number` que nunca chegou a apontar
+// pra um `Project.id` de verdade (que é String/cuid) — nunca foi uma view
+// de Project, sempre foi uma entidade solta. `project_id` abaixo é só um
+// vínculo leve e opcional ("este card se refere a este projeto"), sem
+// herdar nada do ciclo de vida do Project — não confundir com uma segunda
+// tabela de projetos.
+//
+// Quadro é pessoal (owner_user_id): cada usuário só vê/edita o próprio,
+// sem visão de equipe compartilhada neste lote (fora de escopo — ver
+// relatório de fechamento). Arquivamento lógico (archived_at) em vez de
+// exclusão física, pra deixar a estrutura pronta pra uma tela de
+// restauração futura sem precisar de nova migration.
+model PlannerColumn {
+  id            String   @id @default(cuid())
+  owner_user_id String
+  owner         User     @relation(fields: [owner_user_id], references: [id], onDelete: Cascade)
+  label         String
+  color         String   @default("bg-slate-500")
+  position      Int      @default(0)
+  created_at    DateTime @default(now())
+  updated_at    DateTime @updatedAt
+
+  cards PlannerCard[]
+
+  @@index([owner_user_id])
+  @@map("planner_columns")
+}
+
+model PlannerCard {
+  id            String        @id @default(cuid())
+  owner_user_id String
+  owner         User          @relation(fields: [owner_user_id], references: [id], onDelete: Cascade)
+  column_id     String
+  column        PlannerColumn @relation(fields: [column_id], references: [id], onDelete: Cascade)
+  title         String
+  description   String?       @db.LongText
+  priority      String        @default("medium")
+  // low | medium | high | urgent
+  due_date      DateTime?
+  project_id    String?
+  project       Project?      @relation(fields: [project_id], references: [id], onDelete: SetNull)
+  position      Int           @default(0)
+  archived_at   DateTime?
+  // Quem editou por último (pode divergir do owner_user_id — ex.: um admin
+  // master corrigindo o card de outro admin). Nunca confiado do payload:
+  // sempre resolvido do token no backend, igual created_by_user_id em Project.
+  updated_by_user_id String?
+  created_at         DateTime @default(now())
+  updated_at         DateTime @updatedAt
+
+  @@index([owner_user_id])
+  @@index([column_id])
+  @@index([project_id])
+  @@map("planner_cards")
 }
 
 // ─── EntitySequence — contador atômico e seguro para códigos sequenciais ────

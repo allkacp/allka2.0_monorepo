@@ -101,6 +101,28 @@ export type ShareLinkActivityEntry = {
   createdAt: string;
 };
 
+export type PlannerColumn = {
+  id: string;
+  label: string;
+  color: string;
+  position: number;
+  updatedAt: string;
+};
+
+export type PlannerCard = {
+  id: string;
+  columnId: string;
+  title: string;
+  description: string | null;
+  priority: "low" | "medium" | "high" | "urgent";
+  dueDate: string | null;
+  projectId: string | null;
+  position: number;
+  archivedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
 class ApiClient {
   // ─── Token Management ─────────────────────────────────────────────────────
   setToken(token: string) {
@@ -438,6 +460,61 @@ class ApiClient {
     email: string,
   ): Promise<{ accessType: string | null; isPartner?: boolean }> {
     return this.post("/auth/identify-account", { email });
+  }
+
+  // ── Planejador (Admin → Projetos → Planejador) ──────────────────────────
+  // Quadro pessoal — escopo (owner) é sempre resolvido pelo backend a
+  // partir de quem está autenticado, nunca aceito do frontend.
+  async getPlannerBoard(): Promise<{ columns: PlannerColumn[]; cards: PlannerCard[] }> {
+    return this.get("/planner/board");
+  }
+  async createPlannerColumn(data: { label: string; color?: string }): Promise<{ column: PlannerColumn }> {
+    return this.post("/planner/columns", data);
+  }
+  async updatePlannerColumn(id: string, data: { label?: string; color?: string }): Promise<{ column: PlannerColumn }> {
+    return this.put(`/planner/columns/${id}`, data);
+  }
+  async reorderPlannerColumns(orderedIds: string[]): Promise<{ columns: PlannerColumn[] }> {
+    return this.put("/planner/columns/reorder", { orderedIds });
+  }
+  async deletePlannerColumn(id: string): Promise<void> {
+    return this.del(`/planner/columns/${id}`);
+  }
+  async createPlannerCard(data: {
+    columnId: string;
+    title: string;
+    description?: string;
+    priority?: PlannerCard["priority"];
+    dueDate?: string | null;
+    projectId?: string | null;
+  }): Promise<{ card: PlannerCard }> {
+    return this.post("/planner/cards", data);
+  }
+  async updatePlannerCard(
+    id: string,
+    data: {
+      title?: string;
+      description?: string | null;
+      priority?: PlannerCard["priority"];
+      dueDate?: string | null;
+      projectId?: string | null;
+      /** Última `updatedAt` conhecida pelo cliente — habilita a checagem de conflito (409) no backend. */
+      updatedAt?: string;
+    },
+  ): Promise<{ card: PlannerCard }> {
+    return this.put(`/planner/cards/${id}`, data);
+  }
+  async movePlannerCard(
+    id: string,
+    data: { columnId: string; position: number; updatedAt?: string },
+  ): Promise<{ card: PlannerCard }> {
+    return this.put(`/planner/cards/${id}/position`, data);
+  }
+  async deletePlannerCard(id: string): Promise<{ ok: boolean; card: PlannerCard }> {
+    return this.del(`/planner/cards/${id}`);
+  }
+  async restorePlannerCard(id: string): Promise<{ ok: boolean; card: PlannerCard }> {
+    return this.post(`/planner/cards/${id}/restore`);
   }
 
   // ─── Nômade: o próprio trabalho ───────────────────────────────────────────

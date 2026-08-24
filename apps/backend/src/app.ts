@@ -46,6 +46,7 @@ import liderRouter from "./routes/lider";
 import habilidadesRouter from "./routes/habilidades";
 import shareRouter from "./routes/share";
 import dashboardSharesRouter from "./routes/dashboard-shares";
+import plannerRouter from "./routes/planner";
 import dashboardTemplatesRouter, { dashboardTemplatesPublicRouter } from "./routes/dashboard-templates";
 import expensesRouter from "./routes/expenses";
 import walletsRouter from "./routes/wallets";
@@ -195,6 +196,8 @@ app.use("/api/habilidades", habilidadesRouter);
 // listagem/revogação do link mora em /api/dashboard-shares e exige sessão.
 app.use("/api/share", shareRouter);
 app.use("/api/dashboard-shares", dashboardSharesRouter);
+// Planejador (Admin → Projetos) — quadro pessoal do usuário autenticado.
+app.use("/api/planner", plannerRouter);
 // Público (sem auth) primeiro, específico só pra imagem de banner; o router
 // autenticado cobre o resto do CRUD no mesmo prefixo.
 app.use("/api/dashboard-templates", dashboardTemplatesPublicRouter);
