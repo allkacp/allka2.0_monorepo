@@ -49,6 +49,7 @@ import { PinToTrayButton } from "@/components/pin-to-tray-button";
 import { useNomadeLevels } from "@/hooks/useNomadeLevels";
 import { useNomades } from "@/hooks/useNomades";
 import { apiClient } from "@/lib/api-client";
+import { hasAdminModulePermission } from "@/lib/admin-permissions";
 import { PageLoader } from "@/components/ui/loading";
 
 const LEVEL_THEMES: Record<
@@ -657,28 +658,44 @@ export default function NiveisNomadesPage() {
     id: number | null;
     name: string;
   }>({ open: false, id: null, name: "" });
-
-  // Sync API levels into local state (parse benefits JSON string if needed)
+  // Perfil admin atual, só pra decidir se o botão "Excluir" fica habilitado
+  // (module "sistema", action "delete" — mesmo par que o backend já exige
+  // em DELETE /api/nomade-levels/:id). É só um sinal de UI: a permissão de
+  // verdade continua sendo aplicada no servidor.
+  const [adminProfile, setAdminProfile] = useState<any>(undefined);
   useEffect(() => {
-    if (apiLevels.length > 0) {
-      const parsed = apiLevels.map((l: any) => ({
-        ...l,
-        benefits:
-          typeof l.benefits === "string"
-            ? (() => {
-                try {
-                  const p = JSON.parse(l.benefits);
-                  return Array.isArray(p) ? p : [];
-                } catch {
-                  return [];
-                }
-              })()
-            : Array.isArray(l.benefits)
-              ? l.benefits
-              : [],
-      }));
-      setNomadLevels(parsed);
-    }
+    let cancelled = false;
+    apiClient
+      .getCurrentUser()
+      .then((me: any) => { if (!cancelled) setAdminProfile(me?.admin_profile ?? null); })
+      .catch(() => { if (!cancelled) setAdminProfile(null); });
+    return () => { cancelled = true; };
+  }, []);
+  const canDeleteLevel = hasAdminModulePermission(adminProfile, "sistema", "delete");
+
+  // Sync API levels into local state (parse benefits JSON string if needed).
+  // Sempre sincroniza, mesmo quando `apiLevels` fica vazio — antes, o guard
+  // `apiLevels.length > 0` fazia a lista ficar "presa" no último estado não
+  // vazio depois de excluir o penúltimo nível: a exclusão funcionava no
+  // backend, mas a tela continuava mostrando um nível que não existe mais.
+  useEffect(() => {
+    const parsed = apiLevels.map((l: any) => ({
+      ...l,
+      benefits:
+        typeof l.benefits === "string"
+          ? (() => {
+              try {
+                const p = JSON.parse(l.benefits);
+                return Array.isArray(p) ? p : [];
+              } catch {
+                return [];
+              }
+            })()
+          : Array.isArray(l.benefits)
+            ? l.benefits
+            : [],
+    }));
+    setNomadLevels(parsed);
   }, [apiLevels]);
 
   const handleSaveLevel = async (levelData: any) => {
@@ -695,13 +712,16 @@ export default function NiveisNomadesPage() {
     setIsDialogOpen(false);
   };
 
-  const handleDeleteLevel = async (id: number) => {
-    try {
-      await apiDeleteLevel(String(id));
-    } catch {
-      /* handled */
-    }
-    setNomadLevels((levels) => levels.filter((l) => l.id !== id));
+  // Exclusão de nível de Nômade: confirmação dupla (ver ConfirmationDialog)
+  // — antes, o catch aqui engolia o erro e a lista era filtrada de
+  // qualquer forma, então um 403/409/erro de rede fazia o nível "sumir" da
+  // tela sem ter sido excluído de verdade. Agora o erro sobe pro
+  // ConfirmationDialog (mensagem amigável, nível mantido) e a lista só
+  // reflete a exclusão depois que apiDeleteLevel confirma sucesso e refaz
+  // o fetch (useNomadeLevels.deleteLevel já chama fetchLevels()).
+  const confirmDeleteLevel = async () => {
+    if (deleteDialog.id == null) return;
+    await apiDeleteLevel(String(deleteDialog.id));
   };
 
   const openEditDialog = (level?: any) => {
@@ -889,20 +909,32 @@ export default function NiveisNomadesPage() {
                             >
                               <Edit className="h-3.5 w-3.5" />
                             </Button>
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() =>
-                                setDeleteDialog({
-                                  open: true,
-                                  id: level.id,
-                                  name: level.name,
-                                })
-                              }
-                              className="h-7 w-7 p-0 border-red-100 dark:border-red-900/40 bg-white dark:bg-slate-800/50 hover:bg-red-50 dark:hover:bg-red-950/30 text-red-400 hover:text-red-600"
-                            >
-                              <Trash2 className="h-3.5 w-3.5" />
-                            </Button>
+                            <TooltipProvider delayDuration={400}>
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() =>
+                                      canDeleteLevel &&
+                                      setDeleteDialog({
+                                        open: true,
+                                        id: level.id,
+                                        name: level.name,
+                                      })
+                                    }
+                                    disabled={!canDeleteLevel}
+                                    aria-label={canDeleteLevel ? "Excluir nível" : "Sem permissão para excluir níveis"}
+                                    className="h-7 w-7 p-0 border-red-100 dark:border-red-900/40 bg-white dark:bg-slate-800/50 hover:bg-red-50 dark:hover:bg-red-950/30 text-red-400 hover:text-red-600 disabled:opacity-40 disabled:pointer-events-none"
+                                  >
+                                    <Trash2 className="h-3.5 w-3.5" />
+                                  </Button>
+                                </TooltipTrigger>
+                                <TooltipContent side="bottom" sideOffset={6}>
+                                  {canDeleteLevel ? "Excluir nível" : "Sem permissão para excluir níveis"}
+                                </TooltipContent>
+                              </Tooltip>
+                            </TooltipProvider>
                           </div>
                         </div>
                       </CardHeader>
@@ -1074,15 +1106,17 @@ export default function NiveisNomadesPage() {
       <ConfirmationDialog
         open={deleteDialog.open}
         onClose={() => setDeleteDialog({ open: false, id: null, name: "" })}
-        onConfirm={() => {
-          handleDeleteLevel(deleteDialog.id!);
-          setDeleteDialog({ open: false, id: null, name: "" });
-        }}
-        title="Excluir nível"
-        message={`Tem certeza que deseja excluir o nível "${deleteDialog.name}"? Esta ação não pode ser desfeita.`}
-        confirmText="Excluir"
-        cancelText="Cancelar"
-        destructive
+        onConfirm={confirmDeleteLevel}
+        title="Excluir nível de Nômade"
+        message="Esta ação é permanente e não pode ser desfeita."
+        twoStep
+        targetName={deleteDialog.name}
+        targetDetail="Nível do Programa de Nômades"
+        consequences={[
+          "O nível sai da lista de configuração de Nômades imediatamente.",
+          "Se houver nômades ou vínculos associados a este nível, a exclusão será recusada.",
+        ]}
+        finalConfirmText="Excluir nível de Nômade definitivamente"
       />
     </div>
     </div>
