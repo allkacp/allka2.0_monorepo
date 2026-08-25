@@ -48,6 +48,10 @@ export function usePlannerBoard() {
   const [cards, setCards] = useState<PlannerCard[]>([]);
   // Guarda contra clique duplo/duplo-submit — uma criação por vez.
   const creatingRef = useRef(false);
+  // Guarda contra clique duplo/requisição repetida na exclusão física —
+  // por card, pra não travar a exclusão de outros cards enquanto uma está
+  // em andamento.
+  const deletingRef = useRef<Set<string>>(new Set());
 
   const reload = useCallback(async () => {
     setStatus("loading");
@@ -194,7 +198,27 @@ export function usePlannerBoard() {
     [cards],
   );
 
-  const removeCard = useCallback(async (id: string): Promise<MutationResult> => {
+  // Arquivar — reversível, preenche archived_at no backend, nunca apaga a
+  // linha. Some do quadro ativo (aparece em "Cards arquivados").
+  const archiveCard = useCallback(async (id: string): Promise<MutationResult> => {
+    const previous = cards;
+    setCards((prev) => prev.filter((c) => c.id !== id));
+    try {
+      await apiClient.archivePlannerCard(id);
+      return { ok: true };
+    } catch (err) {
+      setCards(previous);
+      return { ok: false, error: friendlyError(err, "Não foi possível arquivar o card.") };
+    }
+  }, [cards]);
+
+  // Excluir definitivamente — irreversível, apaga a linha de verdade.
+  // Guarda por ref (não por state): evita uma segunda chamada síncrona
+  // logo após a primeira, antes do re-render refletir o estado "em
+  // andamento" (mesmo motivo do creatingRef acima).
+  const deleteCardPermanently = useCallback(async (id: string): Promise<MutationResult> => {
+    if (deletingRef.current.has(id)) return { ok: false, error: "Exclusão já em andamento." };
+    deletingRef.current.add(id);
     const previous = cards;
     setCards((prev) => prev.filter((c) => c.id !== id));
     try {
@@ -202,7 +226,9 @@ export function usePlannerBoard() {
       return { ok: true };
     } catch (err) {
       setCards(previous);
-      return { ok: false, error: friendlyError(err, "Não foi possível remover o card.") };
+      return { ok: false, error: friendlyError(err, "Não foi possível excluir o card.") };
+    } finally {
+      deletingRef.current.delete(id);
     }
   }, [cards]);
 
@@ -229,7 +255,8 @@ export function usePlannerBoard() {
     createCard,
     updateCard,
     moveCard,
-    removeCard,
+    archiveCard,
+    deleteCardPermanently,
     restoreCard,
   };
 }

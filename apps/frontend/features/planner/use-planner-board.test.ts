@@ -26,6 +26,7 @@ const { apiMock, ApiErrorMock } = vi.hoisted(() => {
       createPlannerCard: vi.fn(),
       updatePlannerCard: vi.fn(),
       movePlannerCard: vi.fn(),
+      archivePlannerCard: vi.fn(),
       deletePlannerCard: vi.fn(),
       restorePlannerCard: vi.fn(),
     },
@@ -192,22 +193,56 @@ describe("usePlannerBoard — mover card", () => {
   });
 });
 
-describe("usePlannerBoard — remover/restaurar card", () => {
-  it("12(remover). sucesso remove o card da lista", async () => {
+describe("usePlannerBoard — arquivar card (reversível)", () => {
+  it("sucesso arquiva (chama archivePlannerCard) e remove o card da lista ativa", async () => {
     apiMock.getPlannerBoard.mockResolvedValue({ columns: [column()], cards: [card()] });
-    apiMock.deletePlannerCard.mockResolvedValue({ ok: true, card: card({ archivedAt: "2026-08-24T00:00:00.000Z" }) });
+    apiMock.archivePlannerCard.mockResolvedValue({ ok: true, card: card({ archivedAt: "2026-08-24T00:00:00.000Z" }) });
     const { result } = renderHook(() => usePlannerBoard());
     await waitFor(() => expect(result.current.status).toBe("ready"));
 
     let mutation: any;
     await act(async () => {
-      mutation = await result.current.removeCard("card-1");
+      mutation = await result.current.archiveCard("card-1");
     });
     expect(mutation.ok).toBe(true);
     expect(result.current.cards).toHaveLength(0);
+    expect(apiMock.archivePlannerCard).toHaveBeenCalledWith("card-1");
+    expect(apiMock.deletePlannerCard).not.toHaveBeenCalled();
   });
 
-  it("11(erro). erro na remoção mantém o card visível (rollback)", async () => {
+  it("erro ao arquivar mantém o card visível (rollback)", async () => {
+    apiMock.getPlannerBoard.mockResolvedValue({ columns: [column()], cards: [card()] });
+    apiMock.archivePlannerCard.mockRejectedValue(new ApiErrorMock("Sem permissão", 403));
+    const { result } = renderHook(() => usePlannerBoard());
+    await waitFor(() => expect(result.current.status).toBe("ready"));
+
+    let mutation: any;
+    await act(async () => {
+      mutation = await result.current.archiveCard("card-1");
+    });
+    expect(mutation.ok).toBe(false);
+    expect(result.current.cards).toHaveLength(1);
+  });
+});
+
+describe("usePlannerBoard — excluir card definitivamente (irreversível)", () => {
+  it("sucesso chama deletePlannerCard (nunca archivePlannerCard) e remove o card da lista", async () => {
+    apiMock.getPlannerBoard.mockResolvedValue({ columns: [column()], cards: [card()] });
+    apiMock.deletePlannerCard.mockResolvedValue({ ok: true });
+    const { result } = renderHook(() => usePlannerBoard());
+    await waitFor(() => expect(result.current.status).toBe("ready"));
+
+    let mutation: any;
+    await act(async () => {
+      mutation = await result.current.deleteCardPermanently("card-1");
+    });
+    expect(mutation.ok).toBe(true);
+    expect(result.current.cards).toHaveLength(0);
+    expect(apiMock.deletePlannerCard).toHaveBeenCalledWith("card-1");
+    expect(apiMock.archivePlannerCard).not.toHaveBeenCalled();
+  });
+
+  it("erro ao excluir mantém o card visível (rollback)", async () => {
     apiMock.getPlannerBoard.mockResolvedValue({ columns: [column()], cards: [card()] });
     apiMock.deletePlannerCard.mockRejectedValue(new ApiErrorMock("Sem permissão", 403));
     const { result } = renderHook(() => usePlannerBoard());
@@ -215,12 +250,33 @@ describe("usePlannerBoard — remover/restaurar card", () => {
 
     let mutation: any;
     await act(async () => {
-      mutation = await result.current.removeCard("card-1");
+      mutation = await result.current.deleteCardPermanently("card-1");
     });
     expect(mutation.ok).toBe(false);
     expect(result.current.cards).toHaveLength(1);
   });
 
+  it("clique duplo (chamada concorrente pro mesmo id) só chama a API uma vez", async () => {
+    apiMock.getPlannerBoard.mockResolvedValue({ columns: [column()], cards: [card()] });
+    let resolveDelete: (v: any) => void = () => {};
+    apiMock.deletePlannerCard.mockImplementation(() => new Promise((resolve) => { resolveDelete = resolve; }));
+    const { result } = renderHook(() => usePlannerBoard());
+    await waitFor(() => expect(result.current.status).toBe("ready"));
+
+    let firstCall: Promise<any>;
+    let secondResult: any;
+    await act(async () => {
+      firstCall = result.current.deleteCardPermanently("card-1");
+      secondResult = await result.current.deleteCardPermanently("card-1");
+      resolveDelete({ ok: true });
+      await firstCall;
+    });
+    expect(secondResult.ok).toBe(false);
+    expect(apiMock.deletePlannerCard).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("usePlannerBoard — restaurar card", () => {
   it("restaurar card arquivado adiciona de volta à lista", async () => {
     apiMock.getPlannerBoard.mockResolvedValue({ columns: [column()], cards: [] });
     apiMock.restorePlannerCard.mockResolvedValue({ ok: true, card: card({ archivedAt: null }) });

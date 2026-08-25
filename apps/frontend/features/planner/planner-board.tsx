@@ -38,7 +38,7 @@ import {
 } from "@/components/ui/dialog";
 import { ConfirmationDialog } from "@/components/confirmation-dialog";
 import { useToast } from "@/hooks/use-toast";
-import { Plus, Settings, X, Calendar, LayoutDashboard, AlertCircle, RefreshCw, Archive } from "lucide-react";
+import { Plus, Settings, X, Calendar, LayoutDashboard, AlertCircle, RefreshCw, Archive, Trash2 } from "lucide-react";
 import { usePlannerBoard, type PlannerPriority } from "./use-planner-board";
 import { PlannerArchivedPanel } from "./planner-archived-panel";
 import { apiClient, type PlannerCard as PlannerCardData, type PlannerColumn as PlannerColumnData } from "@/lib/api-client";
@@ -100,7 +100,8 @@ export function PlannerBoard({ projects }: { projects: FrontendProject[] }) {
   const [cardForm, setCardForm] = useState<CardFormState>(EMPTY_CARD_FORM);
   const [isSavingCard, setIsSavingCard] = useState(false);
 
-  const [removingCard, setRemovingCard] = useState<PlannerCardData | null>(null);
+  const [archivingCard, setArchivingCard] = useState<PlannerCardData | null>(null);
+  const [deletingCard, setDeletingCard] = useState<PlannerCardData | null>(null);
 
   const [showArchivedPanel, setShowArchivedPanel] = useState(false);
   const [archivedCount, setArchivedCount] = useState<number | null>(null);
@@ -268,15 +269,25 @@ export function PlannerBoard({ projects }: { projects: FrontendProject[] }) {
     }
   };
 
-  const requestDeleteCard = (cardId: string) => {
+  const requestArchiveCard = (cardId: string) => {
     const card = board.cards.find((c) => c.id === cardId) ?? null;
-    setRemovingCard(card);
+    setArchivingCard(card);
   };
-  const confirmDeleteCard = async () => {
-    if (!removingCard) return;
-    const result = await board.removeCard(removingCard.id);
+  const confirmArchiveCard = async () => {
+    if (!archivingCard) return;
+    const result = await board.archiveCard(archivingCard.id);
     if (!result.ok) throw new Error(result.error);
     refreshArchivedCount();
+  };
+
+  const requestDeleteCard = (cardId: string) => {
+    const card = board.cards.find((c) => c.id === cardId) ?? null;
+    setDeletingCard(card);
+  };
+  const confirmDeleteCard = async () => {
+    if (!deletingCard) return;
+    const result = await board.deleteCardPermanently(deletingCard.id);
+    if (!result.ok) throw new Error(result.error);
   };
 
   const handleRestored = (_card: PlannerCardData, usedFallbackColumn: boolean) => {
@@ -344,6 +355,7 @@ export function PlannerBoard({ projects }: { projects: FrontendProject[] }) {
         open={showArchivedPanel}
         onClose={() => setShowArchivedPanel(false)}
         onRestored={handleRestored}
+        onDeleted={refreshArchivedCount}
       />
 
       {isEmpty && (
@@ -375,6 +387,7 @@ export function PlannerBoard({ projects }: { projects: FrontendProject[] }) {
                 onDelete={() => deleteColumn(col.id)}
                 onAddCard={() => openNewCardDialog(col.id)}
                 onEditCard={openEditCardDialog}
+                onArchiveCard={requestArchiveCard}
                 onDeleteCard={requestDeleteCard}
               />
             ))}
@@ -524,14 +537,15 @@ export function PlannerBoard({ projects }: { projects: FrontendProject[] }) {
           <DialogFooter>
             {editingCard && (
               <Button
-                variant="destructive"
-                className="mr-auto"
+                variant="outline"
+                className="mr-auto text-amber-600 border-amber-200 hover:bg-amber-50 hover:text-amber-700"
                 onClick={() => {
                   setShowCardDialog(false);
-                  requestDeleteCard(editingCard.id);
+                  requestArchiveCard(editingCard.id);
                 }}
               >
-                Excluir
+                <Archive className="h-3.5 w-3.5 mr-1.5" />
+                Arquivar
               </Button>
             )}
             <Button variant="outline" onClick={() => setShowCardDialog(false)} disabled={isSavingCard}>
@@ -545,17 +559,34 @@ export function PlannerBoard({ projects }: { projects: FrontendProject[] }) {
       </Dialog>
 
       <ConfirmationDialog
-        open={removingCard !== null}
-        onClose={() => setRemovingCard(null)}
-        onConfirm={confirmDeleteCard}
-        title="Remover card"
-        message="O card sai do quadro. Dá pra recuperar depois, se precisar."
+        open={archivingCard !== null}
+        onClose={() => setArchivingCard(null)}
+        onConfirm={confirmArchiveCard}
+        title="Arquivar card"
+        message="O card sai do quadro. Dá pra recuperar depois em Cards arquivados."
         twoStep
         attention
-        targetName={removingCard?.title}
-        targetDetail={board.columns.find((c) => c.id === removingCard?.columnId)?.label}
-        consequences={["O card é arquivado, não apagado — nenhum outro card é afetado."]}
-        finalConfirmText="Remover este card"
+        targetName={archivingCard?.title}
+        targetDetail={board.columns.find((c) => c.id === archivingCard?.columnId)?.label}
+        consequences={["O card é arquivado, não apagado — nenhum outro card é afetado.", "Você pode restaurá-lo a qualquer momento em \"Cards arquivados\"."]}
+        finalConfirmText="Arquivar este card"
+      />
+
+      <ConfirmationDialog
+        open={deletingCard !== null}
+        onClose={() => setDeletingCard(null)}
+        onConfirm={confirmDeleteCard}
+        title="Excluir card definitivamente"
+        message="O card será apagado do banco de dados."
+        twoStep
+        destructive
+        targetName={deletingCard?.title}
+        targetDetail={board.columns.find((c) => c.id === deletingCard?.columnId)?.label}
+        consequences={[
+          "Esta ação é permanente — o registro é removido de vez, não fica arquivado.",
+          "Não poderá ser restaurado depois.",
+        ]}
+        finalConfirmText="Excluir card definitivamente"
       />
     </div>
   );
@@ -571,6 +602,7 @@ function PlannerColumnView({
   onDelete,
   onAddCard,
   onEditCard,
+  onArchiveCard,
   onDeleteCard,
 }: {
   column: PlannerColumnData;
@@ -580,6 +612,7 @@ function PlannerColumnView({
   onDelete: () => void;
   onAddCard: () => void;
   onEditCard: (card: PlannerCardData) => void;
+  onArchiveCard: (id: string) => void;
   onDeleteCard: (id: string) => void;
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: column.id });
@@ -637,6 +670,7 @@ function PlannerColumnView({
                 card={card}
                 projects={projects}
                 onEdit={() => onEditCard(card)}
+                onArchive={() => onArchiveCard(card.id)}
                 onDelete={() => onDeleteCard(card.id)}
               />
             ))
@@ -658,11 +692,13 @@ function PlannerCardView({
   card,
   projects,
   onEdit,
+  onArchive,
   onDelete,
 }: {
   card: PlannerCardData;
   projects: FrontendProject[];
   onEdit: () => void;
+  onArchive: () => void;
   onDelete: () => void;
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: card.id });
@@ -691,16 +727,30 @@ function PlannerCardView({
     >
       <div className="flex items-start justify-between gap-1 mb-1">
         <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium ${cfg.pill}`}>{cfg.label}</span>
-        <button
-          onClick={(e) => {
-            e.stopPropagation();
-            onDelete();
-          }}
-          aria-label="Remover card"
-          className="opacity-0 group-hover:opacity-100 h-4 w-4 flex items-center justify-center rounded hover:bg-red-100 text-slate-300 hover:text-red-500 transition-all flex-shrink-0"
-        >
-          <X className="h-2.5 w-2.5" />
-        </button>
+        <div className="opacity-0 group-hover:opacity-100 flex items-center gap-0.5 transition-all shrink-0">
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              onArchive();
+            }}
+            title="Arquivar card"
+            aria-label={`Arquivar card ${card.title}`}
+            className="h-4 w-4 flex items-center justify-center rounded hover:bg-amber-100 text-slate-300 hover:text-amber-600 transition-colors"
+          >
+            <Archive className="h-2.5 w-2.5" />
+          </button>
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              onDelete();
+            }}
+            title="Excluir card definitivamente"
+            aria-label={`Excluir card ${card.title} definitivamente`}
+            className="h-4 w-4 flex items-center justify-center rounded hover:bg-red-100 text-slate-300 hover:text-red-500 transition-colors"
+          >
+            <Trash2 className="h-2.5 w-2.5" />
+          </button>
+        </div>
       </div>
 
       <h4

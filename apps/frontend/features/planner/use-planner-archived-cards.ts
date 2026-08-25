@@ -14,6 +14,8 @@ export type RestoreResult =
   | { ok: true; card: PlannerCard; usedFallbackColumn: boolean }
   | { ok: false; error: string };
 
+export type DeleteResult = { ok: boolean; error?: string };
+
 function friendlyError(err: unknown, fallback: string): string {
   if (err instanceof ApiError) return err.message || fallback;
   return fallback;
@@ -31,6 +33,9 @@ export function usePlannerArchivedCards() {
   // (spinner/"Restaurando…"), nunca usado pra decidir se chama a API de novo.
   const restoringRef = useRef<Set<string>>(new Set());
   const [restoringIds, setRestoringIds] = useState<Set<string>>(new Set());
+  // Mesma lógica pra exclusão física em andamento, por card.
+  const deletingRef = useRef<Set<string>>(new Set());
+  const [deletingIds, setDeletingIds] = useState<Set<string>>(new Set());
 
   const load = useCallback(async (targetPage: number) => {
     setStatus("loading");
@@ -76,6 +81,27 @@ export function usePlannerArchivedCards() {
     }
   }, []);
 
+  // Exclusão física — irreversível. Depois do sucesso, recarrega a
+  // página atual do servidor (em vez de só tirar o item do array local):
+  // isso reaproveita a mesma lógica de `load()` que devolve pra página
+  // anterior quando a atual fica vazia, então total/paginação sempre
+  // refletem o servidor de verdade, nunca um cálculo otimista local.
+  const deletePermanently = useCallback(async (id: string): Promise<DeleteResult> => {
+    if (deletingRef.current.has(id)) return { ok: false, error: "Exclusão já em andamento." };
+    deletingRef.current.add(id);
+    setDeletingIds(new Set(deletingRef.current));
+    try {
+      await apiClient.deletePlannerCard(id);
+      await load(page);
+      return { ok: true };
+    } catch (err) {
+      return { ok: false, error: friendlyError(err, "Não foi possível excluir o card.") };
+    } finally {
+      deletingRef.current.delete(id);
+      setDeletingIds(new Set(deletingRef.current));
+    }
+  }, [page, load]);
+
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
   return {
@@ -88,7 +114,9 @@ export function usePlannerArchivedCards() {
     pageSize: PAGE_SIZE,
     load,
     restore,
+    deletePermanently,
     isRestoring: (id: string) => restoringIds.has(id),
+    isDeleting: (id: string) => deletingIds.has(id),
   };
 }
 

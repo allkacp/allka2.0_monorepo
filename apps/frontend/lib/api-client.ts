@@ -514,7 +514,18 @@ class ApiClient {
   ): Promise<{ card: PlannerCard }> {
     return this.put(`/planner/cards/${id}/position`, data);
   }
-  async deletePlannerCard(id: string): Promise<{ ok: boolean; card: PlannerCard }> {
+  /** Arquivamento lógico (reversível) — preenche `archived_at`, nunca
+   * apaga a linha. Card continua existindo, some do quadro ativo e
+   * aparece em "Cards arquivados"; ver `restorePlannerCard`. */
+  async archivePlannerCard(id: string): Promise<{ ok: boolean; card: PlannerCard }> {
+    return this.patch(`/planner/cards/${id}/archive`);
+  }
+  /** Exclusão FÍSICA e irreversível — apaga a linha de `planner_cards` de
+   * vez (nunca mais aparece em nenhuma listagem, nunca mais pode ser
+   * restaurado). Diferente de `archivePlannerCard`: exige a permissão
+   * `projetos:delete`, não `projetos:edit`. Funciona tanto num card ativo
+   * quanto num já arquivado. */
+  async deletePlannerCard(id: string): Promise<{ ok: boolean }> {
     return this.del(`/planner/cards/${id}`);
   }
   /** `usedFallbackColumn: true` quando a coluna original do card não

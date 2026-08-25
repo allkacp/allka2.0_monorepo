@@ -540,8 +540,14 @@ router.put(
   },
 );
 
-// ─── DELETE /api/planner/cards/:id — arquivar (soft delete) ───────────────
-router.delete("/cards/:id", requirePermission("projetos", "delete"), async (req, res, next) => {
+// ─── PATCH /api/planner/cards/:id/archive — arquivar (soft delete) ────────
+// Lote corretivo (ata 2026-08-24) — antes isto vivia em `DELETE
+// /cards/:id`, o que deixava o contrato ambíguo: "excluir" o card na API
+// só arquivava, nunca apagava de verdade. Separado por semântica: PATCH
+// .../archive arquiva (reversível), DELETE apaga fisicamente (ver
+// endpoint abaixo). Permissão é "edit", não "delete" — arquivar não é uma
+// exclusão de dado, é uma mudança de estado reversível do próprio card.
+router.patch("/cards/:id/archive", requirePermission("projetos", "edit"), async (req, res, next) => {
   try {
     const ownerId = req.user!.id;
     const found = await findOwnedCard(String(req.params.id), ownerId);
@@ -559,6 +565,32 @@ router.delete("/cards/:id", requirePermission("projetos", "delete"), async (req,
       select: CARD_SELECT,
     });
     res.json({ ok: true, card: serializeCard(card) });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// ─── DELETE /api/planner/cards/:id — excluir definitivamente ──────────────
+// Exclusão física de verdade — irreversível, nunca restaurável. Diferente
+// de arquivar: exige "projetos:delete" (não "edit"), some de toda
+// listagem (board e arquivados) e o registro deixa de existir em
+// `planner_cards`. Funciona tanto num card ativo quanto num já arquivado
+// — a área de "Cards arquivados" usa este mesmo endpoint pra "Excluir
+// definitivamente". Idempotência por desenho: uma segunda chamada pro
+// mesmo id (clique duplo, requisição repetida) encontra o registro já
+// apagado e recebe 404 — nunca um erro 500 nem uma segunda exclusão
+// "bem-sucedida" silenciosa; o frontend trata isso como já-resolvido, não
+// como falha real (ver use-planner-board.ts).
+router.delete("/cards/:id", requirePermission("projetos", "delete"), async (req, res, next) => {
+  try {
+    const ownerId = req.user!.id;
+    const found = await findOwnedCard(String(req.params.id), ownerId);
+    if ("error" in found) {
+      res.status(found.error).json(found.body);
+      return;
+    }
+    await prisma.plannerCard.delete({ where: { id: found.card.id } });
+    res.json({ ok: true });
   } catch (err) {
     next(err);
   }

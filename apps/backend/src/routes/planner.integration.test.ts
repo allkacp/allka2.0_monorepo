@@ -272,8 +272,8 @@ describe("planner routes (persistência, isolamento e concorrência — lote 6)"
       body: { columnId, title: "Vai ser removido" },
     });
 
-    const removed = await api(`/api/planner/cards/${created.json.card.id}`, {
-      method: "DELETE",
+    const removed = await api(`/api/planner/cards/${created.json.card.id}/archive`, {
+      method: "PATCH",
       token: tokenFor(user),
     });
     assert.equal(removed.status, 200);
@@ -295,7 +295,7 @@ describe("planner routes (persistência, isolamento e concorrência — lote 6)"
       token: tokenFor(user),
       body: { columnId, title: "Arquivo e volto" },
     });
-    await api(`/api/planner/cards/${created.json.card.id}`, { method: "DELETE", token: tokenFor(user) });
+    await api(`/api/planner/cards/${created.json.card.id}/archive`, { method: "PATCH", token: tokenFor(user) });
 
     const restored = await api(`/api/planner/cards/${created.json.card.id}/restore`, {
       method: "POST",
@@ -430,7 +430,7 @@ describe("planner — cards arquivados (listagem, restauração, fallback de col
     const columnId = board.json.columns[0].id;
     const active = await api("/api/planner/cards", { method: "POST", token: tokenFor(user), body: { columnId, title: "Ativo" } });
     const toArchive = await api("/api/planner/cards", { method: "POST", token: tokenFor(user), body: { columnId, title: "Vai arquivar" } });
-    await api(`/api/planner/cards/${toArchive.json.card.id}`, { method: "DELETE", token: tokenFor(user) });
+    await api(`/api/planner/cards/${toArchive.json.card.id}/archive`, { method: "PATCH", token: tokenFor(user) });
 
     const archived = await api("/api/planner/cards/archived", { token: tokenFor(user) });
     assert.equal(archived.status, 200);
@@ -449,7 +449,7 @@ describe("planner — cards arquivados (listagem, restauração, fallback de col
       token: tokenFor(userA),
       body: { columnId: boardA.json.columns[0].id, title: "Card de A" },
     });
-    await api(`/api/planner/cards/${cardA.json.card.id}`, { method: "DELETE", token: tokenFor(userA) });
+    await api(`/api/planner/cards/${cardA.json.card.id}/archive`, { method: "PATCH", token: tokenFor(userA) });
 
     const archivedForB = await api("/api/planner/cards/archived", { token: tokenFor(userB) });
     assert.equal(archivedForB.json.data.length, 0);
@@ -485,7 +485,7 @@ describe("planner — cards arquivados (listagem, restauração, fallback de col
     const board = await api("/api/planner/board", { token: tokenFor(user) });
     const columnId = board.json.columns[0].id;
     const created = await api("/api/planner/cards", { method: "POST", token: tokenFor(user), body: { columnId, title: "Vai e volta" } });
-    await api(`/api/planner/cards/${created.json.card.id}`, { method: "DELETE", token: tokenFor(user) });
+    await api(`/api/planner/cards/${created.json.card.id}/archive`, { method: "PATCH", token: tokenFor(user) });
 
     const restored = await api(`/api/planner/cards/${created.json.card.id}/restore`, { method: "POST", token: tokenFor(user) });
     assert.equal(restored.status, 200);
@@ -508,7 +508,7 @@ describe("planner — cards arquivados (listagem, restauração, fallback de col
     const board = await api("/api/planner/board", { token: tokenFor(user) });
     const targetColumn = board.json.columns[2]; // "Em Andamento", não é o Backlog
     const created = await api("/api/planner/cards", { method: "POST", token: tokenFor(user), body: { columnId: targetColumn.id, title: "Fica na mesma coluna" } });
-    await api(`/api/planner/cards/${created.json.card.id}`, { method: "DELETE", token: tokenFor(user) });
+    await api(`/api/planner/cards/${created.json.card.id}/archive`, { method: "PATCH", token: tokenFor(user) });
 
     const restored = await api(`/api/planner/cards/${created.json.card.id}/restore`, { method: "POST", token: tokenFor(user) });
     assert.equal(restored.json.usedFallbackColumn, false);
@@ -521,7 +521,7 @@ describe("planner — cards arquivados (listagem, restauração, fallback de col
     const board = await api("/api/planner/board", { token: tokenFor(user) });
     const columnId = board.json.columns[2].id; // "Em Andamento"
     const created = await api("/api/planner/cards", { method: "POST", token: tokenFor(user), body: { columnId, title: "Coluna vai sumir" } });
-    await api(`/api/planner/cards/${created.json.card.id}`, { method: "DELETE", token: tokenFor(user) });
+    await api(`/api/planner/cards/${created.json.card.id}/archive`, { method: "PATCH", token: tokenFor(user) });
 
     // A coluna só tem o card ARQUIVADO agora (0 ativos) — a API permite
     // excluí-la; graças ao ON DELETE SET NULL, o card sobrevive com
@@ -546,7 +546,7 @@ describe("planner — cards arquivados (listagem, restauração, fallback de col
     const board = await api("/api/planner/board", { token: tokenFor(user) });
     const columnId = board.json.columns[0].id;
     const created = await api("/api/planner/cards", { method: "POST", token: tokenFor(user), body: { columnId, title: "Restaurado 2x" } });
-    await api(`/api/planner/cards/${created.json.card.id}`, { method: "DELETE", token: tokenFor(user) });
+    await api(`/api/planner/cards/${created.json.card.id}/archive`, { method: "PATCH", token: tokenFor(user) });
 
     const first = await api(`/api/planner/cards/${created.json.card.id}/restore`, { method: "POST", token: tokenFor(user) });
     const second = await api(`/api/planner/cards/${created.json.card.id}/restore`, { method: "POST", token: tokenFor(user) });
@@ -578,7 +578,7 @@ describe("planner — cards arquivados (listagem, restauração, fallback de col
     const columnId = board.json.columns[0].id;
     for (let i = 0; i < 5; i++) {
       const c = await api("/api/planner/cards", { method: "POST", token: tokenFor(user), body: { columnId, title: `Arquivo ${i}` } });
-      await api(`/api/planner/cards/${c.json.card.id}`, { method: "DELETE", token: tokenFor(user) });
+      await api(`/api/planner/cards/${c.json.card.id}/archive`, { method: "PATCH", token: tokenFor(user) });
     }
 
     const page1 = await api("/api/planner/cards/archived?page=1&limit=2", { token: tokenFor(user) });
@@ -590,5 +590,201 @@ describe("planner — cards arquivados (listagem, restauração, fallback de col
     const page3 = await api("/api/planner/cards/archived?page=3&limit=2", { token: tokenFor(user) });
     assert.equal(page3.json.data.length, 1);
     assert.equal(page3.json.total, 5);
+  });
+});
+
+// Lote corretivo (mesma ata, "exclusão definitiva que faltou") — antes
+// `DELETE /cards/:id` só arquivava (ver auditoria: nunca havia exclusão
+// física). Agora arquivar mora em `PATCH /cards/:id/archive` e `DELETE
+// /cards/:id` apaga de verdade. Este describe cobre só o contrato NOVO —
+// arquivar/restaurar/fallback/paginação continuam coberto pelos describes
+// acima (já migrados pro PATCH .../archive), que também rodam nos gates
+// como regressão.
+describe("planner — exclusão definitiva de card", () => {
+  before(async () => {
+    requireTestDatabaseUrl();
+    process.env.DATABASE_URL = process.env.TEST_DATABASE_URL ?? process.env.DATABASE_URL;
+
+    const listener = app.listen(0);
+    server = listener;
+    await new Promise<void>((resolve) => listener.once("listening", () => resolve()));
+    const address = listener.address() as AddressInfo;
+    baseUrl = `http://127.0.0.1:${address.port}`;
+  });
+
+  after(async () => {
+    await prisma.plannerCard.deleteMany({ where: { owner_user_id: { in: createdUserIds } } });
+    await prisma.plannerColumn.deleteMany({ where: { owner_user_id: { in: createdUserIds } } });
+    await prisma.user.deleteMany({ where: { id: { in: createdUserIds } } });
+    await prisma.adminProfile.deleteMany({ where: { id: { in: createdProfileIds } } });
+    await new Promise<void>((resolve, reject) => server.close((err) => (err ? reject(err) : resolve())));
+    await prisma.$disconnect();
+  });
+
+  // ─── 1. arquivar não apaga registro ────────────────────────────────────
+  it("1. PATCH .../archive não remove a linha do banco — só seta archived_at", async () => {
+    const user = await createUser();
+    const board = await api("/api/planner/board", { token: tokenFor(user) });
+    const columnId = board.json.columns[0].id;
+    const created = await api("/api/planner/cards", { method: "POST", token: tokenFor(user), body: { columnId, title: "Só arquiva" } });
+
+    const archived = await api(`/api/planner/cards/${created.json.card.id}/archive`, { method: "PATCH", token: tokenFor(user) });
+    assert.equal(archived.status, 200);
+
+    const row = await prisma.plannerCard.findUnique({ where: { id: created.json.card.id } });
+    assert.ok(row, "arquivar não deveria apagar a linha");
+    assert.notEqual(row?.archived_at, null);
+  });
+
+  // ─── 2. DELETE apaga registro ativo ────────────────────────────────────
+  it("2. DELETE num card ativo apaga a linha do banco", async () => {
+    const user = await createUser();
+    const board = await api("/api/planner/board", { token: tokenFor(user) });
+    const columnId = board.json.columns[0].id;
+    const created = await api("/api/planner/cards", { method: "POST", token: tokenFor(user), body: { columnId, title: "Ativo, vai sumir" } });
+
+    const deleted = await api(`/api/planner/cards/${created.json.card.id}`, { method: "DELETE", token: tokenFor(user) });
+    assert.equal(deleted.status, 200);
+
+    const row = await prisma.plannerCard.findUnique({ where: { id: created.json.card.id } });
+    assert.equal(row, null);
+  });
+
+  // ─── 3. DELETE apaga registro arquivado ────────────────────────────────
+  it("3. DELETE num card já arquivado também apaga a linha do banco", async () => {
+    const user = await createUser();
+    const board = await api("/api/planner/board", { token: tokenFor(user) });
+    const columnId = board.json.columns[0].id;
+    const created = await api("/api/planner/cards", { method: "POST", token: tokenFor(user), body: { columnId, title: "Arquivado, vai sumir" } });
+    await api(`/api/planner/cards/${created.json.card.id}/archive`, { method: "PATCH", token: tokenFor(user) });
+
+    const deleted = await api(`/api/planner/cards/${created.json.card.id}`, { method: "DELETE", token: tokenFor(user) });
+    assert.equal(deleted.status, 200);
+
+    const row = await prisma.plannerCard.findUnique({ where: { id: created.json.card.id } });
+    assert.equal(row, null);
+  });
+
+  // ─── 4. não aparece em nenhuma listagem ────────────────────────────────
+  it("4. card excluído não aparece no board nem em arquivados", async () => {
+    const user = await createUser();
+    const board = await api("/api/planner/board", { token: tokenFor(user) });
+    const columnId = board.json.columns[0].id;
+    const created = await api("/api/planner/cards", { method: "POST", token: tokenFor(user), body: { columnId, title: "Some de tudo" } });
+    await api(`/api/planner/cards/${created.json.card.id}`, { method: "DELETE", token: tokenFor(user) });
+
+    const boardAgain = await api("/api/planner/board", { token: tokenFor(user) });
+    assert.ok(!boardAgain.json.cards.some((c: any) => c.id === created.json.card.id));
+
+    const archived = await api("/api/planner/cards/archived", { token: tokenFor(user) });
+    assert.ok(!archived.json.data.some((c: any) => c.id === created.json.card.id));
+  });
+
+  // ─── 5. não pode ser restaurado ────────────────────────────────────────
+  it("5. tentar restaurar um card excluído retorna 404", async () => {
+    const user = await createUser();
+    const board = await api("/api/planner/board", { token: tokenFor(user) });
+    const columnId = board.json.columns[0].id;
+    const created = await api("/api/planner/cards", { method: "POST", token: tokenFor(user), body: { columnId, title: "Excluído, sem volta" } });
+    await api(`/api/planner/cards/${created.json.card.id}`, { method: "DELETE", token: tokenFor(user) });
+
+    const restoreAttempt = await api(`/api/planner/cards/${created.json.card.id}/restore`, { method: "POST", token: tokenFor(user) });
+    assert.equal(restoreAttempt.status, 404);
+  });
+
+  // ─── 6. isolamento entre contas ────────────────────────────────────────
+  it("6. conta A não consegue excluir card de B (404, card de B sobrevive)", async () => {
+    const userA = await createUser();
+    const userB = await createUser();
+    const boardB = await api("/api/planner/board", { token: tokenFor(userB) });
+    const cardB = await api("/api/planner/cards", {
+      method: "POST",
+      token: tokenFor(userB),
+      body: { columnId: boardB.json.columns[0].id, title: "Card de B" },
+    });
+
+    const deleteAttempt = await api(`/api/planner/cards/${cardB.json.card.id}`, { method: "DELETE", token: tokenFor(userA) });
+    assert.equal(deleteAttempt.status, 404);
+
+    const row = await prisma.plannerCard.findUnique({ where: { id: cardB.json.card.id } });
+    assert.ok(row, "o card de B não deveria ter sido afetado pela tentativa de A");
+  });
+
+  // ─── 7. 401 ──────────────────────────────────────────────────────────
+  it("7. DELETE sem token retorna 401", async () => {
+    const res = await api("/api/planner/cards/whatever-id", { method: "DELETE" });
+    assert.equal(res.status, 401);
+  });
+
+  // ─── 8. 403 sem projetos/delete ────────────────────────────────────────
+  it("8. usuário com perfil sem 'projetos:delete' recebe 403 ao tentar excluir", async () => {
+    const profile = await createProfile({
+      permissions: [
+        { module: "projetos", action: "view" },
+        { module: "projetos", action: "create" },
+        { module: "projetos", action: "edit" },
+      ],
+    });
+    const user = await createUser({ admin_profile_id: profile.id });
+    const board = await api("/api/planner/board", { token: tokenFor(user) });
+    const created = await api("/api/planner/cards", {
+      method: "POST",
+      token: tokenFor(user),
+      body: { columnId: board.json.columns[0].id, title: "Protegido" },
+    });
+
+    const res = await api(`/api/planner/cards/${created.json.card.id}`, { method: "DELETE", token: tokenFor(user) });
+    assert.equal(res.status, 403);
+
+    const row = await prisma.plannerCard.findUnique({ where: { id: created.json.card.id } });
+    assert.ok(row, "sem permissão, o card não deveria ter sido apagado");
+  });
+
+  // ─── 9. 404 seguro ───────────────────────────────────────────────────
+  it("9. DELETE num id inexistente retorna 404", async () => {
+    const user = await createUser();
+    const res = await api("/api/planner/cards/does-not-exist", { method: "DELETE", token: tokenFor(user) });
+    assert.equal(res.status, 404);
+  });
+
+  // ─── 10. clique/requisição repetida ────────────────────────────────────
+  it("10. duas chamadas DELETE seguidas pro mesmo id: a 1ª apaga (200), a 2ª não encontra mais nada (404) — nunca um erro 500", async () => {
+    const user = await createUser();
+    const board = await api("/api/planner/board", { token: tokenFor(user) });
+    const created = await api("/api/planner/cards", {
+      method: "POST",
+      token: tokenFor(user),
+      body: { columnId: board.json.columns[0].id, title: "Clique duplo" },
+    });
+
+    const first = await api(`/api/planner/cards/${created.json.card.id}`, { method: "DELETE", token: tokenFor(user) });
+    const second = await api(`/api/planner/cards/${created.json.card.id}`, { method: "DELETE", token: tokenFor(user) });
+    assert.equal(first.status, 200);
+    assert.equal(second.status, 404);
+  });
+
+  // ─── 11. arquivar exige só permissão de edição ─────────────────────────
+  it("11. arquivar funciona com só 'projetos:edit' (sem 'projetos:delete')", async () => {
+    const profile = await createProfile({
+      permissions: [
+        { module: "projetos", action: "view" },
+        { module: "projetos", action: "create" },
+        { module: "projetos", action: "edit" },
+      ],
+    });
+    const user = await createUser({ admin_profile_id: profile.id });
+    const board = await api("/api/planner/board", { token: tokenFor(user) });
+    const created = await api("/api/planner/cards", {
+      method: "POST",
+      token: tokenFor(user),
+      body: { columnId: board.json.columns[0].id, title: "Arquivo só com edit" },
+    });
+
+    const archived = await api(`/api/planner/cards/${created.json.card.id}/archive`, { method: "PATCH", token: tokenFor(user) });
+    assert.equal(archived.status, 200);
+
+    // Confirma que o mesmo perfil (sem "delete") é barrado na exclusão de verdade.
+    const deleteAttempt = await api(`/api/planner/cards/${created.json.card.id}`, { method: "DELETE", token: tokenFor(user) });
+    assert.equal(deleteAttempt.status, 403);
   });
 });

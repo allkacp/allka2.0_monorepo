@@ -30,6 +30,7 @@ const { apiMock, ApiErrorMock, toastSpy } = vi.hoisted(() => {
       createPlannerCard: vi.fn(),
       updatePlannerCard: vi.fn(),
       movePlannerCard: vi.fn(),
+      archivePlannerCard: vi.fn(),
       deletePlannerCard: vi.fn(),
       restorePlannerCard: vi.fn(),
       getPlannerArchivedCards: vi.fn(),
@@ -187,50 +188,160 @@ describe("PlannerBoard — editar card", () => {
   });
 });
 
-describe("PlannerBoard — remover card (confirmação dupla)", () => {
-  it("9/10. confirmação dupla — abrir não remove; cancelar não remove", async () => {
+describe("PlannerBoard — ícones distintos (arquivar x excluir)", () => {
+  it("1/2/3/4. X genérico sumiu; ícones de arquivar e excluir aparecem com tooltip/aria-label distintos", async () => {
+    apiMock.getPlannerBoard.mockResolvedValue({ columns: [column()], cards: [card()] });
+    renderBoard();
+    await screen.findByText("Briefing com cliente");
+
+    expect(screen.queryByRole("button", { name: "Remover card" })).not.toBeInTheDocument();
+    const archiveBtn = screen.getByRole("button", { name: "Arquivar card Briefing com cliente" });
+    const deleteBtn = screen.getByRole("button", { name: "Excluir card Briefing com cliente definitivamente" });
+    expect(archiveBtn).toHaveAttribute("title", "Arquivar card");
+    expect(deleteBtn).toHaveAttribute("title", "Excluir card definitivamente");
+    expect(archiveBtn).not.toBe(deleteBtn);
+  });
+});
+
+describe("PlannerBoard — arquivar card (reversível, confirmação dupla)", () => {
+  it("5. ícone de arquivar chama só a rota de arquivamento (nunca DELETE)", async () => {
+    apiMock.getPlannerBoard.mockResolvedValue({ columns: [column()], cards: [card()] });
+    apiMock.archivePlannerCard.mockResolvedValue({ ok: true, card: card({ archivedAt: "2026-08-24T00:00:00.000Z" }) });
+    const user = userEvent.setup();
+    renderBoard();
+
+    await screen.findByText("Briefing com cliente");
+    await user.click(screen.getByRole("button", { name: "Arquivar card Briefing com cliente" }));
+    await user.click(screen.getByRole("button", { name: /continuar para confirmação/i }));
+    await user.click(screen.getByRole("button", { name: /arquivar este card/i }));
+
+    await waitFor(() => expect(apiMock.archivePlannerCard).toHaveBeenCalledWith("card-1"));
+    expect(apiMock.deletePlannerCard).not.toHaveBeenCalled();
+  });
+
+  it("7/8. primeira confirmação não arquiva; cancelar mantém o card", async () => {
     apiMock.getPlannerBoard.mockResolvedValue({ columns: [column()], cards: [card()] });
     const user = userEvent.setup();
     renderBoard();
 
     await screen.findByText("Briefing com cliente");
-    await user.click(screen.getByRole("button", { name: /remover card/i }));
-    expect(await screen.findByText(/remover card/i)).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Arquivar card Briefing com cliente" }));
+    expect(await screen.findByText(/arquivar card/i)).toBeInTheDocument();
+    expect(apiMock.archivePlannerCard).not.toHaveBeenCalled();
+
+    await user.click(screen.getByRole("button", { name: /cancelar/i }));
+    await waitFor(() => expect(screen.queryByRole("button", { name: /arquivar este card/i })).not.toBeInTheDocument());
+    expect(screen.getByText("Briefing com cliente")).toBeInTheDocument();
+    expect(apiMock.archivePlannerCard).not.toHaveBeenCalled();
+  });
+
+  it("11. erro ao arquivar mantém o card visível", async () => {
+    apiMock.getPlannerBoard.mockResolvedValue({ columns: [column()], cards: [card()] });
+    apiMock.archivePlannerCard.mockRejectedValue(new ApiErrorMock("Não foi possível arquivar", 500));
+    const user = userEvent.setup();
+    renderBoard();
+
+    await screen.findByText("Briefing com cliente");
+    await user.click(screen.getByRole("button", { name: "Arquivar card Briefing com cliente" }));
+    await user.click(screen.getByRole("button", { name: /continuar para confirmação/i }));
+    await user.click(screen.getByRole("button", { name: /arquivar este card/i }));
+
+    await waitFor(() => expect(screen.getAllByText("Briefing com cliente").length).toBeGreaterThan(0));
+    expect(apiMock.archivePlannerCard).toHaveBeenCalled();
+  });
+
+  it("12. sucesso arquiva e some do quadro", async () => {
+    apiMock.getPlannerBoard.mockResolvedValue({ columns: [column()], cards: [card()] });
+    apiMock.archivePlannerCard.mockResolvedValue({ ok: true, card: card({ archivedAt: "2026-08-24T00:00:00.000Z" }) });
+    const user = userEvent.setup();
+    renderBoard();
+
+    await screen.findByText("Briefing com cliente");
+    await user.click(screen.getByRole("button", { name: "Arquivar card Briefing com cliente" }));
+    await user.click(screen.getByRole("button", { name: /continuar para confirmação/i }));
+    await user.click(screen.getByRole("button", { name: /arquivar este card/i }));
+
+    await waitFor(() => expect(screen.queryByText("Briefing com cliente")).not.toBeInTheDocument());
+    expect(apiMock.archivePlannerCard).toHaveBeenCalledWith("card-1");
+  });
+});
+
+describe("PlannerBoard — excluir card definitivamente (confirmação dupla)", () => {
+  it("6. lixeira nunca chama a rota de arquivamento", async () => {
+    apiMock.getPlannerBoard.mockResolvedValue({ columns: [column()], cards: [card()] });
+    apiMock.deletePlannerCard.mockResolvedValue({ ok: true });
+    const user = userEvent.setup();
+    renderBoard();
+
+    await screen.findByText("Briefing com cliente");
+    await user.click(screen.getByRole("button", { name: "Excluir card Briefing com cliente definitivamente" }));
+    await user.click(screen.getByRole("button", { name: /continuar para confirmação/i }));
+    await user.click(screen.getByRole("button", { name: /excluir card definitivamente/i }));
+
+    await waitFor(() => expect(apiMock.deletePlannerCard).toHaveBeenCalledWith("card-1"));
+    expect(apiMock.archivePlannerCard).not.toHaveBeenCalled();
+  });
+
+  it("7/8/9. primeira etapa não exclui; cancelar mantém; voltar mantém", async () => {
+    apiMock.getPlannerBoard.mockResolvedValue({ columns: [column()], cards: [card()] });
+    const user = userEvent.setup();
+    renderBoard();
+
+    await screen.findByText("Briefing com cliente");
+    await user.click(screen.getByRole("button", { name: "Excluir card Briefing com cliente definitivamente" }));
+    expect(await screen.findByText(/excluir card definitivamente/i)).toBeInTheDocument();
+    expect(apiMock.deletePlannerCard).not.toHaveBeenCalled();
+
+    await user.click(screen.getByRole("button", { name: /continuar para confirmação/i }));
+    await user.click(screen.getByRole("button", { name: /voltar/i }));
+    expect(screen.getAllByText("Briefing com cliente").length).toBeGreaterThan(0);
     expect(apiMock.deletePlannerCard).not.toHaveBeenCalled();
 
     await user.click(screen.getByRole("button", { name: /cancelar/i }));
-    await waitFor(() => expect(screen.queryByRole("button", { name: /remover este card/i })).not.toBeInTheDocument());
+    await waitFor(() => expect(screen.queryByRole("button", { name: /excluir card definitivamente/i })).not.toBeInTheDocument());
     expect(screen.getByText("Briefing com cliente")).toBeInTheDocument();
     expect(apiMock.deletePlannerCard).not.toHaveBeenCalled();
   });
 
-  it("11. erro na remoção mantém o card visível", async () => {
+  it("10. confirmação final chama DELETE uma única vez", async () => {
     apiMock.getPlannerBoard.mockResolvedValue({ columns: [column()], cards: [card()] });
-    apiMock.deletePlannerCard.mockRejectedValue(new ApiErrorMock("Não foi possível remover", 500));
+    apiMock.deletePlannerCard.mockResolvedValue({ ok: true });
     const user = userEvent.setup();
     renderBoard();
 
     await screen.findByText("Briefing com cliente");
-    await user.click(screen.getByRole("button", { name: /remover card/i }));
+    await user.click(screen.getByRole("button", { name: "Excluir card Briefing com cliente definitivamente" }));
     await user.click(screen.getByRole("button", { name: /continuar para confirmação/i }));
-    await user.click(screen.getByRole("button", { name: /remover este card/i }));
+    await user.click(screen.getByRole("button", { name: /excluir card definitivamente/i }));
 
-    // O card continua no quadro (a mensagem de erro do ConfirmationDialog
-    // também repete o nome do card, por isso findAllByText).
+    await waitFor(() => expect(apiMock.deletePlannerCard).toHaveBeenCalledTimes(1));
+  });
+
+  it("11. erro mantém o card visível", async () => {
+    apiMock.getPlannerBoard.mockResolvedValue({ columns: [column()], cards: [card()] });
+    apiMock.deletePlannerCard.mockRejectedValue(new ApiErrorMock("Sem permissão para excluir", 403));
+    const user = userEvent.setup();
+    renderBoard();
+
+    await screen.findByText("Briefing com cliente");
+    await user.click(screen.getByRole("button", { name: "Excluir card Briefing com cliente definitivamente" }));
+    await user.click(screen.getByRole("button", { name: /continuar para confirmação/i }));
+    await user.click(screen.getByRole("button", { name: /excluir card definitivamente/i }));
+
     await waitFor(() => expect(screen.getAllByText("Briefing com cliente").length).toBeGreaterThan(0));
     expect(apiMock.deletePlannerCard).toHaveBeenCalled();
   });
 
-  it("12. sucesso remove o card do quadro", async () => {
+  it("12. sucesso remove do quadro", async () => {
     apiMock.getPlannerBoard.mockResolvedValue({ columns: [column()], cards: [card()] });
-    apiMock.deletePlannerCard.mockResolvedValue({ ok: true, card: card({ archivedAt: "2026-08-24T00:00:00.000Z" }) });
+    apiMock.deletePlannerCard.mockResolvedValue({ ok: true });
     const user = userEvent.setup();
     renderBoard();
 
     await screen.findByText("Briefing com cliente");
-    await user.click(screen.getByRole("button", { name: /remover card/i }));
+    await user.click(screen.getByRole("button", { name: "Excluir card Briefing com cliente definitivamente" }));
     await user.click(screen.getByRole("button", { name: /continuar para confirmação/i }));
-    await user.click(screen.getByRole("button", { name: /remover este card/i }));
+    await user.click(screen.getByRole("button", { name: /excluir card definitivamente/i }));
 
     await waitFor(() => expect(screen.queryByText("Briefing com cliente")).not.toBeInTheDocument());
     expect(apiMock.deletePlannerCard).toHaveBeenCalledWith("card-1");
@@ -364,5 +475,35 @@ describe("PlannerBoard — painel de Cards arquivados", () => {
     resolveRestore({ ok: true, card: { ...archivedCard(), archivedAt: null }, usedFallbackColumn: false });
 
     await waitFor(() => expect(apiMock.restorePlannerCard).toHaveBeenCalledTimes(1));
+  });
+
+  it("13. lixeira 'Excluir definitivamente' aparece em cada card arquivado", async () => {
+    apiMock.getPlannerArchivedCards
+      .mockResolvedValueOnce({ data: [], total: 1, page: 1, limit: 1 })
+      .mockResolvedValueOnce({ data: [archivedCard()], total: 1, page: 1, limit: 10 });
+    await openPanel();
+    expect(await screen.findByText("Card arquivado de teste")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /excluir card card arquivado de teste definitivamente/i })).toBeInTheDocument();
+  });
+
+  it("14. excluir um arquivado (confirmação dupla) tira da lista e atualiza o contador", async () => {
+    apiMock.getPlannerArchivedCards
+      .mockResolvedValueOnce({ data: [], total: 1, page: 1, limit: 1 }) // contador inicial no cabeçalho
+      .mockResolvedValueOnce({ data: [archivedCard()], total: 1, page: 1, limit: 10 }) // lista do painel (load(1) ao abrir)
+      .mockResolvedValueOnce({ data: [], total: 0, page: 1, limit: 10 }) // deletePermanently() recarrega a página atual
+      .mockResolvedValueOnce({ data: [], total: 0, page: 1, limit: 1 }); // refreshArchivedCount() (onDeleted) após excluir
+    apiMock.deletePlannerCard.mockResolvedValue({ ok: true });
+
+    const user = await openPanel();
+    await screen.findByText("Card arquivado de teste");
+    await user.click(screen.getByRole("button", { name: /excluir card card arquivado de teste definitivamente/i }));
+    await user.click(screen.getByRole("button", { name: /continuar para confirmação/i }));
+    await user.click(screen.getByRole("button", { name: /^excluir card definitivamente$/i }));
+
+    await waitFor(() => expect(screen.queryByText("Card arquivado de teste")).not.toBeInTheDocument());
+    expect(apiMock.deletePlannerCard).toHaveBeenCalledWith("arch-1");
+    expect(apiMock.restorePlannerCard).not.toHaveBeenCalled();
+    // 4 chamadas: contador inicial + load(1) ao abrir + reload após excluir + refreshArchivedCount (onDeleted).
+    await waitFor(() => expect(apiMock.getPlannerArchivedCards).toHaveBeenCalledTimes(4));
   });
 });
