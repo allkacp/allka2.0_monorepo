@@ -84,6 +84,7 @@ model User {
   linked_coupons                     Coupon[]
   created_clients                    Client[]                           @relation("ClientCreatedBy")
   created_projects                   Project[]                          @relation("ProjectCreatedBy")
+  archived_projects                  Project[]                          @relation("ProjectArchivedBy")
   profile                            UserProfile?
   deleted_company_archives           CompanyArchive[]                   @relation("CompanyArchiveDeletedBy")
   product_feedback_override          ProductFeedbackUserOverride?
@@ -719,6 +720,15 @@ model Project {
   created_at           DateTime        @default(now())
   updated_at           DateTime        @updatedAt
 
+  // Arquivamento (Lote reunião 2026-08: "Arquivar Projetos") — soft state,
+  // nunca exclusão física. archived_at != null é a única fonte de verdade
+  // de "está arquivado"; status (acima) não é reaproveitado pra isso, pois
+  // já tem "cancelled"/"completed" com significado próprio e distinto.
+  archived_at          DateTime?
+  archive_reason       String?         @db.Text
+  archived_by_user_id  String?
+  archived_by          User?           @relation("ProjectArchivedBy", fields: [archived_by_user_id], references: [id], onDelete: SetNull)
+
   task_executions TaskExecution[]
   invoices        Invoice[]
   products        ProjectProduct[]
@@ -741,6 +751,8 @@ model Project {
   legacy_client_id Int?
 
   @@index([created_by_user_id])
+  @@index([archived_by_user_id])
+  @@index([archived_at])
   @@map("projects")
 }
 

@@ -308,3 +308,37 @@ describe("ConfirmationDialog — variante attention (aditiva, não quebra usos a
     expect(confirmButton.className).toMatch(/bg-amber-500/);
   });
 });
+
+// `confirmDisabled` (lote "Arquivar Projetos", ata 2026-08) — usado pelo
+// diálogo de arquivamento de projeto pra desabilitar a confirmação enquanto
+// o motivo obrigatório ainda é inválido, sem precisar de duas etapas.
+describe("ConfirmationDialog — confirmDisabled (modo simples)", () => {
+  it("com confirmDisabled=true, o botão de confirmação fica desabilitado e onConfirm não é chamado", async () => {
+    const onConfirm = vi.fn();
+    const user = userEvent.setup();
+    render(<Harness onConfirm={onConfirm} confirmText="Arquivar projeto" confirmDisabled />);
+    await openViaTrigger(user);
+    const confirmButton = screen.getByRole("button", { name: /arquivar projeto/i });
+    expect(confirmButton).toBeDisabled();
+    await user.click(confirmButton);
+    expect(onConfirm).not.toHaveBeenCalled();
+  });
+
+  it("com confirmDisabled=false, o botão fica habilitado e onConfirm é chamado normalmente", async () => {
+    const onConfirm = vi.fn();
+    const user = userEvent.setup();
+    render(<Harness onConfirm={onConfirm} confirmText="Arquivar projeto" confirmDisabled={false} />);
+    await openViaTrigger(user);
+    const confirmButton = screen.getByRole("button", { name: /arquivar projeto/i });
+    expect(confirmButton).not.toBeDisabled();
+    await user.click(confirmButton);
+    await waitFor(() => expect(onConfirm).toHaveBeenCalledTimes(1));
+  });
+
+  it("omitido (retrocompatibilidade), o botão continua habilitado por padrão", async () => {
+    const user = userEvent.setup();
+    render(<Harness confirmText="Confirmar" />);
+    await openViaTrigger(user);
+    expect(screen.getByRole("button", { name: /^confirmar$/i })).not.toBeDisabled();
+  });
+});

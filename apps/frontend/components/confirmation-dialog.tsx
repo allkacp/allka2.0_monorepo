@@ -57,6 +57,11 @@ interface ConfirmationDialogProps {
   /** Texto do botão final da 2ª etapa (ex.: "Excluir produto
    * definitivamente"). Obrigatório em espírito quando `twoStep` é usado. */
   finalConfirmText?: string
+  /** Desabilita o botão de confirmação (modo simples, não-twoStep) mesmo
+   * fora do estado de submissão — ex.: campo obrigatório ainda inválido.
+   * Aditivo: omitido, o comportamento de sempre (só desabilita durante o
+   * submit) continua igual. */
+  confirmDisabled?: boolean
 }
 
 /**
@@ -105,6 +110,7 @@ export function ConfirmationDialog({
   consequences,
   continueText = "Continuar para confirmação",
   finalConfirmText,
+  confirmDisabled = false,
 }: ConfirmationDialogProps) {
   const [step, setStep] = useState<1 | 2>(1)
   const [isSubmitting, setIsSubmitting] = useState(false)
@@ -240,7 +246,7 @@ export function ConfirmationDialog({
               : "btn-brand"
         }`}
         onClick={() => void handleConfirm()}
-        disabled={isSubmitting}
+        disabled={isSubmitting || confirmDisabled}
       >
         {isSubmitting ? (
           <span className="flex items-center justify-center gap-2">

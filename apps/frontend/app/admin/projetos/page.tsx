@@ -93,6 +93,7 @@ import {
   GripVertical,
   Hash,
   Trash2,
+  Archive,
   Save,
   Download,
   ImageDown,
@@ -317,6 +318,12 @@ export default function AdminProjetosPage({
   const [projectToCancel, setProjectToCancel] =
     useState<FrontendProject | null>(null);
   const [cancelReason, setCancelReason] = useState("");
+
+  // ── Arquivamento de projeto (soft state, motivo obrigatório) ────────────
+  const [showArchiveDialog, setShowArchiveDialog] = useState(false);
+  const [projectToArchive, setProjectToArchive] =
+    useState<FrontendProject | null>(null);
+  const [archiveReason, setArchiveReason] = useState("");
 
   // ── New state: table + filters ──────────────────────────────────────────
   const [viewPanelOpen, setViewPanelOpen] = useState(false);
@@ -652,8 +659,15 @@ export default function AdminProjetosPage({
         project.client.toLowerCase().includes(searchTerm.toLowerCase()) ||
         project.agency.toLowerCase().includes(searchTerm.toLowerCase());
 
+      // Arquivados ficam fora da visão padrão ("all"/Todos) e de qualquer
+      // status específico — só aparecem no filtro dedicado "Arquivados".
+      // (Objetos diferentes de "card arquivado do Planejador".)
       const matchesStatus =
-        filterStatus === "all" || project.status === filterStatus;
+        filterStatus === "archived"
+          ? project.isArchived
+          : project.isArchived
+            ? false
+            : filterStatus === "all" || project.status === filterStatus;
       const matchesType = filterType === "all" || project.type === filterType;
       const matchesCompany =
         filterCompany === "all" || project.client === filterCompany;
@@ -1334,6 +1348,45 @@ export default function AdminProjetosPage({
     setProjectToCancel(null);
     setIsCancellingProject(false);
     setCancelReason("");
+  };
+
+  const ARCHIVE_REASON_MIN = 5;
+  const ARCHIVE_REASON_MAX = 500;
+
+  const handleStartArchiveProject = (project: FrontendProject) => {
+    setProjectToArchive(project);
+    setArchiveReason("");
+    setShowArchiveDialog(true);
+  };
+
+  // onConfirm do ConfirmationDialog: lançar aqui mantém o diálogo aberto
+  // com o motivo digitado e mostra a mensagem de erro embutida (o
+  // componente já trata isso — inclusive proteção contra clique duplo via
+  // seu próprio isSubmitting).
+  const handleConfirmArchiveProject = async () => {
+    if (!projectToArchive) return;
+    const trimmedReason = archiveReason.trim();
+    if (trimmedReason.length < ARCHIVE_REASON_MIN) {
+      throw new Error(
+        `O motivo do arquivamento deve ter no mínimo ${ARCHIVE_REASON_MIN} caracteres`,
+      );
+    }
+    const updated = await apiClient.archiveProject(
+      projectToArchive.id,
+      trimmedReason,
+    );
+    const adapted = adaptApiProject(updated);
+    // Patch local — só a linha afetada, sem refetch completo (evita o
+    // loader de página inteira nesta ação específica).
+    setApiProjects((prev) =>
+      prev.map((p) => (String(p.id) === String(adapted.id) ? adapted : p)),
+    );
+    toast({
+      title: "Projeto arquivado",
+      description: "O projeto saiu da lista de ativos e ficou disponível em Arquivados.",
+    });
+    setProjectToArchive(null);
+    setArchiveReason("");
   };
 
   const handleConfirmCloneAndOpen = () => {
@@ -3092,7 +3145,25 @@ export default function AdminProjetosPage({
                               onClick={(e) => e.stopPropagation()}
                             >
                               <div className="flex items-center justify-center gap-1">
-                                {project.status === "draft" ? (
+                                {project.isArchived ? (
+                                  <Tooltip>
+                                    <TooltipTrigger asChild>
+                                      <Button
+                                        variant="ghost"
+                                        size="sm"
+                                        onClick={() =>
+                                          handleViewProject(project)
+                                        }
+                                        className="h-[26px] w-[26px] rounded-[8px] bg-white dark:bg-slate-800 border border-[#e8edf5] dark:border-slate-700 text-blue-500 dark:text-slate-500 shadow-[0_4px_10px_rgba(15,23,42,0.06)] hover:bg-gradient-to-br hover:from-[#2558FF] hover:via-[#6E2C96] hover:to-[#D92293] hover:text-white dark:hover:text-[#0a1628] hover:border-transparent hover:shadow-[0_8px_18px_rgba(15,23,42,0.18)] hover:-translate-y-px transition-all duration-150"
+                                      >
+                                        <Eye className="h-3.5 w-3.5" />
+                                      </Button>
+                                    </TooltipTrigger>
+                                    <TooltipContent className="text-xs">
+                                      Visualizar (arquivado)
+                                    </TooltipContent>
+                                  </Tooltip>
+                                ) : project.status === "draft" ? (
                                   <>
                                     <Tooltip>
                                       <TooltipTrigger asChild>
@@ -3199,6 +3270,24 @@ export default function AdminProjetosPage({
                                         Cancelar
                                       </TooltipContent>
                                     </Tooltip>
+                                    <Tooltip>
+                                      <TooltipTrigger asChild>
+                                        <Button
+                                          variant="ghost"
+                                          size="sm"
+                                          onClick={() =>
+                                            handleStartArchiveProject(project)
+                                          }
+                                          aria-label={`Arquivar projeto — ${project.name}`}
+                                          className="h-[26px] w-[26px] rounded-[8px] bg-white dark:bg-slate-800 border border-[#e8edf5] dark:border-slate-700 text-slate-500 dark:text-slate-500 shadow-[0_4px_10px_rgba(15,23,42,0.06)] hover:bg-slate-700 hover:text-white hover:border-transparent hover:shadow-[0_8px_18px_rgba(15,23,42,0.18)] hover:-translate-y-px transition-all duration-150"
+                                        >
+                                          <Archive className="h-3.5 w-3.5" />
+                                        </Button>
+                                      </TooltipTrigger>
+                                      <TooltipContent className="text-xs">
+                                        Arquivar projeto
+                                      </TooltipContent>
+                                    </Tooltip>
                                   </>
                                 ) : (
                                   <>
@@ -3268,6 +3357,24 @@ export default function AdminProjetosPage({
                                       </TooltipTrigger>
                                       <TooltipContent className="text-xs">
                                         Cancelar
+                                      </TooltipContent>
+                                    </Tooltip>
+                                    <Tooltip>
+                                      <TooltipTrigger asChild>
+                                        <Button
+                                          variant="ghost"
+                                          size="sm"
+                                          onClick={() =>
+                                            handleStartArchiveProject(project)
+                                          }
+                                          aria-label={`Arquivar projeto — ${project.name}`}
+                                          className="h-[26px] w-[26px] rounded-[8px] bg-white dark:bg-slate-800 border border-[#e8edf5] dark:border-slate-700 text-slate-500 dark:text-slate-500 shadow-[0_4px_10px_rgba(15,23,42,0.06)] hover:bg-slate-700 hover:text-white hover:border-transparent hover:shadow-[0_8px_18px_rgba(15,23,42,0.18)] hover:-translate-y-px transition-all duration-150"
+                                        >
+                                          <Archive className="h-3.5 w-3.5" />
+                                        </Button>
+                                      </TooltipTrigger>
+                                      <TooltipContent className="text-xs">
+                                        Arquivar projeto
                                       </TooltipContent>
                                     </Tooltip>
                                   </>
@@ -3485,7 +3592,33 @@ export default function AdminProjetosPage({
                                   overflow: "hidden",
                                 }}
                               >
-                                {getStatusBadge(project.status)}
+                                <div className="flex flex-col items-start gap-1">
+                                  {getStatusBadge(project.status)}
+                                  {project.isArchived && (
+                                    <Tooltip>
+                                      <TooltipTrigger asChild>
+                                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-slate-200 text-slate-600 border border-slate-300 whitespace-nowrap cursor-help">
+                                          <Archive className="h-2.5 w-2.5" />
+                                          Arquivado
+                                        </span>
+                                      </TooltipTrigger>
+                                      <TooltipContent className="text-xs max-w-[260px]">
+                                        <p>
+                                          <strong>Motivo:</strong>{" "}
+                                          {project.archiveReason || "—"}
+                                        </p>
+                                        <p>
+                                          <strong>Em:</strong>{" "}
+                                          {project.archivedAtDate || "—"}
+                                        </p>
+                                        <p>
+                                          <strong>Por:</strong>{" "}
+                                          {project.archivedByName || "—"}
+                                        </p>
+                                      </TooltipContent>
+                                    </Tooltip>
+                                  )}
+                                </div>
                               </td>
                             )}
 
@@ -4126,6 +4259,10 @@ export default function AdminProjetosPage({
                                       {
                                         value: "cancelled",
                                         label: "Cancelado",
+                                      },
+                                      {
+                                        value: "archived",
+                                        label: "Arquivados",
                                       },
                                     ].map(({ value, label }) => (
                                       <button
@@ -4863,6 +5000,59 @@ export default function AdminProjetosPage({
           cancelText="Voltar"
           destructive
         />
+
+        {/* Arquivar Projeto — ação não destrutiva, motivo obrigatório */}
+        <ConfirmationDialog
+          open={showArchiveDialog}
+          onClose={() => {
+            // Cancelar não altera o projeto — só fecha o diálogo.
+            setShowArchiveDialog(false);
+            setProjectToArchive(null);
+            setArchiveReason("");
+          }}
+          onConfirm={handleConfirmArchiveProject}
+          title="Arquivar projeto"
+          icon={Archive}
+          destructive={false}
+          message={
+            <>
+              <span className="block mb-3">
+                Tem certeza que deseja arquivar{" "}
+                <strong>{projectToArchive?.name}</strong>? O projeto sairá da
+                lista de projetos ativos, mas permanecerá disponível no
+                histórico de Arquivados — nada será excluído.
+              </span>
+              <label className="block text-xs font-medium text-slate-600 mb-1">
+                Motivo do arquivamento (obrigatório)
+              </label>
+              <textarea
+                value={archiveReason}
+                onChange={(e) =>
+                  setArchiveReason(e.target.value.slice(0, ARCHIVE_REASON_MAX))
+                }
+                placeholder="Ex.: perda do projeto, cliente cancelou o contrato..."
+                className="w-full h-20 p-3 border border-gray-300 rounded-lg text-sm resize-none"
+                onClick={(e) => e.stopPropagation()}
+                maxLength={ARCHIVE_REASON_MAX}
+              />
+              <span
+                className={`block mt-1 text-[11px] ${
+                  archiveReason.trim().length > 0 &&
+                  archiveReason.trim().length < ARCHIVE_REASON_MIN
+                    ? "text-red-500"
+                    : "text-slate-400"
+                }`}
+              >
+                {archiveReason.length}/{ARCHIVE_REASON_MAX} caracteres
+                (mínimo {ARCHIVE_REASON_MIN})
+              </span>
+            </>
+          }
+          confirmText="Arquivar projeto"
+          cancelText="Cancelar"
+          confirmDisabled={archiveReason.trim().length < ARCHIVE_REASON_MIN}
+        />
+
         <ProjectManagementModal
           // FrontendProject.id e string|number (projetos importados usam cuid);
           // o modal declara number. Nao ha conversao segura — o modal so usa o

@@ -7,6 +7,7 @@ import { verifyToken } from "../middleware/auth";
 import { validate, parsePagination } from "../middleware/validate";
 import { gerarTarefasDoProjeto } from "../lib/generate-tasks";
 import { withProjectCode } from "../lib/create-project";
+import { writeAccessAudit } from "../lib/product-feedback-service";
 import { ensureUploadDir, generateStoredFileName, uploadedFilePath, deleteUploadedFile } from "../lib/file-storage";
 import {
   getProjectScope,
@@ -128,6 +129,15 @@ router.get("/", verifyToken, async (req, res, next) => {
       where = orConditions.length > 1 ? { OR: orConditions } : orConditions[0];
     }
     if (status) where["status"] = status;
+    // Projetos arquivados ficam de fora da listagem por padrão — só
+    // aparecem se pedidos explicitamente (?archived=true mostra só os
+    // arquivados; ?archived=all mostra os dois juntos).
+    const archivedParam = req.query.archived as string | undefined;
+    if (archivedParam === "true") {
+      where["archived_at"] = { not: null };
+    } else if (archivedParam !== "all") {
+      where["archived_at"] = null;
+    }
     if (search) where["title"] = { contains: search };
     // client_id filter is only applied for admin/open — scoped users already have their scope locked
     if (client_id && (scope.kind === "admin" || scope.kind === "open")) {
@@ -171,6 +181,7 @@ router.get("/", verifyToken, async (req, res, next) => {
           agency_owner: { select: { id: true, name: true } },
           company_owner: { select: { id: true, name: true } },
           partner_owner: { select: { id: true, agency: { select: { owner: { select: { name: true } } } } } },
+          archived_by: { select: { id: true, name: true } },
         },
         skip,
         take: limit,
@@ -268,6 +279,7 @@ router.get("/:id", verifyToken, async (req, res, next) => {
         client: true,
         agency_owner: { select: { id: true, name: true } },
         company_owner: { select: { id: true, name: true } },
+        archived_by: { select: { id: true, name: true } },
         products: {
           include: {
             product: {
@@ -1454,6 +1466,97 @@ router.put(
       // tarefas sozinho — a única origem permitida de geração automática
       // nesta fase é pagamento confirmado como PAGO (ver
       // src/lib/confirm-payment.ts). Chamada removida de propósito.
+
+      res.json(project);
+    } catch (err) {
+      next(err);
+    }
+  },
+);
+
+const archiveProjectSchema = z.object({
+  reason: z
+    .string()
+    .trim()
+    .min(5, "O motivo do arquivamento deve ter no mínimo 5 caracteres")
+    .max(500, "O motivo do arquivamento deve ter no máximo 500 caracteres"),
+});
+
+// PATCH /api/projects/:id/archive — arquiva um projeto real (soft state,
+// nunca exclusão física). Não mexe em `status`: "cancelled"/"completed" já
+// têm significado próprio e distinto de "arquivado". Ver ata 2026-08
+// ("Arquivar Projetos: ... registrar o motivo do arquivamento").
+router.patch(
+  "/:id/archive",
+  verifyToken,
+  validate(archiveProjectSchema),
+  async (req, res, next) => {
+    try {
+      if (isLeaderUser(req.user)) {
+        res.status(403).json({ error: "Permissão insuficiente" });
+        return;
+      }
+
+      const id = req.params.id as string;
+      const before = await prisma.project.findUnique({
+        where: { id },
+        select: {
+          status: true,
+          agency: true,
+          client_id: true,
+          agency_id: true,
+          company_id: true,
+          partner_id: true,
+          archived_at: true,
+        },
+      });
+
+      if (!before) {
+        res.status(404).json({ error: "Projeto não encontrado" });
+        return;
+      }
+
+      if (!(await projectVisibleToUser(prisma, req.user!, before))) {
+        res.status(403).json({ error: "Acesso negado" });
+        return;
+      }
+
+      if (before.archived_at) {
+        res.status(409).json({ error: "Este projeto já está arquivado" });
+        return;
+      }
+
+      // reason já vem aparado (trim) pelo schema acima.
+      const { reason } = req.body as { reason: string };
+      const archivedAt = new Date();
+
+      const project = await prisma.$transaction(async (tx) => {
+        const updated = await tx.project.update({
+          where: { id },
+          data: {
+            archived_at: archivedAt,
+            archive_reason: reason,
+            archived_by_user_id: req.user!.id,
+          },
+          include: {
+            client: { select: { id: true, name: true, cnpj: true } },
+            agency_owner: { select: { id: true, name: true } },
+            company_owner: { select: { id: true, name: true } },
+            partner_owner: { select: { id: true, agency: { select: { owner: { select: { name: true } } } } } },
+            archived_by: { select: { id: true, name: true } },
+          },
+        });
+
+        await writeAccessAudit({
+          actorId: req.user!.id,
+          action: "project.archived",
+          before: { project_id: id, status: before.status, archived_at: null },
+          after: { project_id: id, status: before.status, archived_at: archivedAt.toISOString() },
+          reason,
+        });
+
+        return updated;
+      });
 
       res.json(project);
     } catch (err) {

@@ -923,6 +923,11 @@ class ApiClient {
     return this.del(`/projects/${id}`);
   }
 
+  // Arquivamento (soft state, nunca exclusão física) — motivo obrigatório.
+  async archiveProject(id: string | number, reason: string) {
+    return this.patch(`/projects/${id}/archive`, { reason });
+  }
+
   // ─── Conexões do projeto (Meta Ads e, no futuro, Google/TikTok) ────────────
   async getProjectConnections(projectId: string | number) {
     return this.get<{
