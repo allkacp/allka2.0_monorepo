@@ -192,13 +192,21 @@ export default function UsuariosPage() {
     error: usersError,
     refetch: refetchUsers,
     createUser,
-    updateUser,
-    deleteUser: apiDeleteUser,
   } = useUsers({
     admin: true,
     limit: 1000,
     is_active: statusFilter === "active" ? true : statusFilter === "inactive" ? false : undefined,
   });
+  // Fica `true` depois da primeira vez que `usersLoading` termina (com
+  // resultado ou vazio) e nunca mais volta a `false` — é o que distingue
+  // "carregando pela primeira vez" (deve mostrar o loader de página cheia,
+  // ver gate mais abaixo) de "atualizando em segundo plano" (não deve —
+  // era exatamente esse gate incondicional que fazia qualquer ação de
+  // linha piscar a tela inteira e mostrar o loader de novo).
+  const hasLoadedUsersOnceRef = useRef(false);
+  useEffect(() => {
+    if (!usersLoading) hasLoadedUsersOnceRef.current = true;
+  }, [usersLoading]);
   const { toast } = useToast();
   const { sidebarWidth, sidebarSettings, previewTheme } = useSidebar();
   const { headerHeight: infoModalHeaderHeight } = useAppFrameMetrics();
@@ -451,7 +459,12 @@ type UsuarioDaLista = User & {
     });
     setUsers(mapped);
     setFilteredUsers(mapped);
-    setCurrentPage(1);
+    // Não reseta `currentPage` aqui — isso incluiria qualquer atualização
+    // localizada de uma linha (bloquear/desbloquear/excluir, que também
+    // passam por `setUsers`) nesse reset, jogando o usuário de volta pra
+    // página 1 no meio de uma ação. A página só reseta quando um filtro de
+    // verdade muda (ver efeito abaixo) e só cai pra um valor menor quando
+    // deixa de existir (ver o clamp de validade, mais abaixo ainda).
   }, [apiUsers]);
 
   // Reabre a tela certa quando o usuário chega aqui clicando num pin de
@@ -675,8 +688,16 @@ type UsuarioDaLista = User & {
     });
 
     setFilteredUsers(filtered);
-    setCurrentPage(1);
+    // Reset de página fica só no efeito de baixo, disparado por mudança de
+    // filtro de verdade — `users` sozinho mudar (ação localizada numa
+    // linha) não deve mais voltar a página pra 1.
   }, [users, searchTerm, statusFilter, advancedFilters]);
+
+  // Volta pra página 1 só quando um filtro de verdade muda — nunca quando
+  // `users` muda sozinho (ação localizada numa linha).
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm, statusFilter, advancedFilters]);
 
   // Pagination effect
   useEffect(() => {
@@ -684,6 +705,14 @@ type UsuarioDaLista = User & {
     const endIndex = startIndex + pageSize;
     setPaginatedUsers(sortUsers(filteredUsers).slice(startIndex, endIndex));
   }, [filteredUsers, currentPage, pageSize, userSortKey, userSortDir]);
+
+  // Se a página atual deixou de existir (ex.: excluir o último usuário da
+  // última página), volta pra última página válida — nunca deixa a tela
+  // "vazia" mostrando uma página que não tem mais nenhum resultado.
+  useEffect(() => {
+    const totalPages = Math.max(1, Math.ceil(filteredUsers.length / pageSize));
+    if (currentPage > totalPages) setCurrentPage(totalPages);
+  }, [filteredUsers, pageSize, currentPage]);
 
   // Measure header/footer heights for modal positioning
   useEffect(() => {
@@ -1014,11 +1043,17 @@ type UsuarioDaLista = User & {
     if (!selectedUser) return;
 
     setIsDeleteLoading(true);
+    const targetId = String(selectedUser.id);
     try {
-      // Real API call to delete user — o motivo digitado acima agora chega
-      // no backend e é gravado no log de auditoria (writeAccessAudit), não
-      // fica só decorativo na tela.
-      await apiDeleteUser(String(selectedUser.id), deletionReason.trim());
+      // Chama a API direto (não o `deleteUser` do hook) — o do hook refaz
+      // um fetch da lista inteira depois, o que reacende `usersLoading` e
+      // piscava a tela inteira. O motivo digitado acima chega no backend e
+      // é gravado no log de auditoria (writeAccessAudit), não fica só
+      // decorativo na tela. Só remove da lista local DEPOIS da resposta do
+      // servidor confirmar — nunca antes.
+      await apiClient.deleteUser(targetId, deletionReason.trim());
+
+      setUsers((prev) => prev.filter((u) => String(u.id) !== targetId));
 
       toast({
         title: "Usuário excluído",
@@ -1177,15 +1212,23 @@ type UsuarioDaLista = User & {
     if (!selectedUser) return;
 
     const newStatus = !selectedUser.is_active;
-    await updateUser(String(selectedUser.id), { is_active: newStatus });
+    const targetId = String(selectedUser.id);
+    // Chama a API direto (não o `updateUser` do hook) — o do hook refaz um
+    // fetch da lista inteira depois, o que reacende `usersLoading` e (antes
+    // deste lote) piscava a tela inteira. Atualiza só a linha afetada aqui.
+    await apiClient.updateUser(targetId, { is_active: newStatus });
     // Sync into PlatformUsersContext so company tabs reflect the change immediately
-    updatePlatformUser(String(selectedUser.id), { is_active: newStatus });
+    updatePlatformUser(targetId, { is_active: newStatus });
 
+    setUsers((prev) =>
+      prev.map((u) => (String(u.id) === targetId ? { ...u, is_active: newStatus } : u)),
+    );
     setSelectedUser({ ...selectedUser, is_active: newStatus });
     toast({
       title: newStatus ? "Usuário desbloqueado" : "Usuário bloqueado",
       description: `O usuário "${selectedUser.name}" foi ${newStatus ? "desbloqueado" : "bloqueado"} com sucesso.`,
     });
+    window.dispatchEvent(new Event("allka:admin-counts-changed"));
 
     // Close dialog
     setIsDeleteAlertOpen(false);
@@ -1482,7 +1525,10 @@ type UsuarioDaLista = User & {
     );
   };
 
-  if (usersLoading) {
+  // Só a carga INICIAL bloqueia a tela inteira — depois que a lista já
+  // apareceu uma vez, nenhuma ação de linha (bloquear, excluir, editar,
+  // criar) pode mais substituir a página inteira por um loader.
+  if (usersLoading && !hasLoadedUsersOnceRef.current) {
     return <PageLoader text="Carregando usuários…" />;
   }
 
