@@ -16,6 +16,9 @@ import {
   MessageCircle,
   Mail,
   AlertTriangle,
+  PauseCircle,
+  CheckCircle,
+  Trash2,
 } from "lucide-react";
 import { NomadMetricsWidgets } from "@/components/admin/nomad-metrics-widgets";
 import { NomadViewModal } from "@/components/admin/nomad-view-modal";
@@ -24,6 +27,9 @@ import { PageHeader } from "@/components/page-header";
 import { useNomades } from "@/hooks/useNomades";
 import { PageLoader } from "@/components/ui/loading";
 import { LegacyIdBadge } from "@/components/legacy-id-badge";
+import { ConfirmationDialog } from "@/components/confirmation-dialog";
+import { apiClient } from "@/lib/api-client";
+import { useToast } from "@/hooks/use-toast";
 
 const NOMAD_LEVEL_BADGE: Record<string, { icon: string; className: string }> = {
   Bronze: {
@@ -103,7 +109,8 @@ export default function AdminNomadesPage() {
   // `inativo`, e o filtro padrão ("Em operação") esconde exatamente esses —
   // sobrava zero card com 397 nômades no banco. 500 é o teto do backend
   // (parsePagination) e cobre o cadastro inteiro com folga.
-  const { nomades: nomadesDaApi, loading, error, updateNomade } = useNomades({ limit: "500" });
+  const { nomades: nomadesDaApi, loading, error, updateNomade, refetch } = useNomades({ limit: "500" });
+  const { toast } = useToast();
 
   /**
    * Normaliza a resposta da API para o formato que os cards desta tela
@@ -179,6 +186,109 @@ export default function AdminNomadesPage() {
 
   const handleInvite = (nomadId: number) => {
     setInvitedNomads((prev) => new Set([...prev, nomadId]));
+  };
+
+  // Desativar/reativar (reversível, 1 etapa) e remover perfil (irreversível,
+  // 2 etapas) — mesma regra de backend do lote anterior (DELETE/PATCH
+  // /api/nomades/:id), só que esta é a tela que o admin realmente usa no
+  // dia a dia (link "Nômades" do Dashboard/menu mobile) — a versão dentro
+  // de Admin > Empresas > aba Nomad tinha as ações, mas essa aqui nunca as
+  // recebeu.
+  const [statusDialog, setStatusDialog] = useState<{
+    open: boolean;
+    nomadId: string | null;
+    name: string;
+    email: string;
+    willActivate: boolean;
+  }>({ open: false, nomadId: null, name: "", email: "", willActivate: false });
+
+  const [removeDialog, setRemoveDialog] = useState<{
+    open: boolean;
+    nomadId: string | null;
+    name: string;
+    email: string;
+    relations: {
+      walletTransactions: number;
+      hasBankAccount: boolean;
+      qualifications: number;
+      withdrawalRequests: number;
+      taskExecutions: number;
+    } | null;
+  }>({ open: false, nomadId: null, name: "", email: "", relations: null });
+
+  const maskEmail = (email: string) => {
+    const [local, domain] = (email || "").split("@");
+    if (!domain) return email;
+    const visible = local.slice(0, 2);
+    return `${visible}${"*".repeat(Math.max(local.length - visible.length, 3))}@${domain}`;
+  };
+
+  const requestToggleStatus = (nomad: any) => {
+    setStatusDialog({
+      open: true,
+      nomadId: String(nomad.id),
+      name: nomad.name,
+      email: nomad.email || "",
+      willActivate: nomad.status !== "ativo",
+    });
+  };
+
+  const confirmToggleStatus = async () => {
+    if (!statusDialog.nomadId) return;
+    await apiClient.updateNomadeStatus(statusDialog.nomadId, statusDialog.willActivate ? "ativo" : "inativo");
+    toast({
+      title: statusDialog.willActivate ? "Nômade reativado" : "Nômade desativado",
+      description: statusDialog.willActivate
+        ? `"${statusDialog.name}" pode acessar a plataforma novamente.`
+        : `"${statusDialog.name}" não poderá acessar a plataforma como Nômade. O perfil e o histórico continuam intactos — reative a qualquer momento por aqui.`,
+    });
+    refetch();
+  };
+
+  const requestRemoveProfile = async (nomad: any) => {
+    try {
+      const full: any = await apiClient.getNomade(nomad.id);
+      setRemoveDialog({
+        open: true,
+        nomadId: String(nomad.id),
+        name: nomad.name,
+        email: nomad.email || "",
+        relations: {
+          walletTransactions: full?._count?.wallet_transactions ?? 0,
+          hasBankAccount: !!full?.bank_account,
+          qualifications: full?._count?.qualifications ?? 0,
+          withdrawalRequests: full?._count?.withdrawal_requests ?? 0,
+          taskExecutions: full?._count?.task_executions ?? 0,
+        },
+      });
+    } catch (error: any) {
+      toast({
+        title: "Não foi possível verificar o perfil",
+        description: error.message,
+        variant: "destructive",
+      });
+    }
+  };
+
+  const confirmRemoveProfile = async () => {
+    if (!removeDialog.nomadId) return;
+    await apiClient.deleteNomade(removeDialog.nomadId);
+    toast({
+      title: "Perfil de Nômade removido",
+      description: `O perfil profissional de "${removeDialog.name}" foi removido. A conta de login não foi apagada — ela ficou desativada, exatamente como um bloqueio.`,
+    });
+    refetch();
+  };
+
+  const removeRelationsList = (relations: typeof removeDialog.relations) => {
+    if (!relations) return [];
+    const items: string[] = [];
+    if (relations.walletTransactions > 0) items.push(`${relations.walletTransactions} lançamento(s) de carteira`);
+    if (relations.hasBankAccount) items.push("conta bancária cadastrada");
+    if (relations.qualifications > 0) items.push(`${relations.qualifications} qualificação(ões)`);
+    if (relations.withdrawalRequests > 0) items.push(`${relations.withdrawalRequests} solicitação(ões) de saque`);
+    if (relations.taskExecutions > 0) items.push(`${relations.taskExecutions} tarefa(s) executada(s)`);
+    return items;
   };
 
   const filteredNomades = apiNomades.filter((nomade: any) => {
@@ -675,8 +785,42 @@ export default function AdminNomadesPage() {
                       size="icon"
                       className="h-8 w-8 bg-transparent"
                       onClick={() => handleEdit(nomade)}
+                      title="Editar"
+                      aria-label={`Editar ${nomade.name}`}
                     >
                       <Edit className="h-4 w-4" />
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="icon"
+                      onClick={() => requestToggleStatus(nomade)}
+                      title={nomade.status === "ativo" ? "Desativar Nômade" : "Reativar Nômade"}
+                      aria-label={
+                        nomade.status === "ativo"
+                          ? `Desativar Nômade ${nomade.name}`
+                          : `Reativar Nômade ${nomade.name}`
+                      }
+                      className={`h-8 w-8 bg-transparent focus-visible:ring-2 focus-visible:ring-offset-2 ${
+                        nomade.status === "ativo"
+                          ? "border-amber-300 text-amber-600 hover:bg-amber-50 hover:text-amber-700 focus-visible:ring-amber-400"
+                          : "border-emerald-300 text-emerald-600 hover:bg-emerald-50 hover:text-emerald-700 focus-visible:ring-emerald-400"
+                      }`}
+                    >
+                      {nomade.status === "ativo" ? (
+                        <PauseCircle className="h-4 w-4" />
+                      ) : (
+                        <CheckCircle className="h-4 w-4" />
+                      )}
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="icon"
+                      onClick={() => requestRemoveProfile(nomade)}
+                      title="Remover perfil de Nômade"
+                      aria-label={`Remover perfil de Nômade ${nomade.name}`}
+                      className="h-8 w-8 bg-transparent border-red-300 text-red-600 hover:bg-red-50 hover:text-red-700 focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-red-400"
+                    >
+                      <Trash2 className="h-4 w-4" />
                     </Button>
                   </div>
                 </div>
@@ -707,6 +851,52 @@ export default function AdminNomadesPage() {
           />
         </>
       )}
+
+      {/* Nômade — desativar/reativar (reversível, 1 etapa) */}
+      <ConfirmationDialog
+        open={statusDialog.open}
+        onClose={() => setStatusDialog((s) => ({ ...s, open: false }))}
+        onConfirm={confirmToggleStatus}
+        title={statusDialog.willActivate ? "Reativar Nômade" : "Desativar Nômade"}
+        message={
+          statusDialog.willActivate
+            ? "O Nômade volta a acessar a plataforma imediatamente, com o mesmo perfil e histórico de antes."
+            : "O Nômade não poderá acessar a plataforma nem atuar em tarefas enquanto estiver desativado. O perfil, o histórico e a carteira continuam intactos — é possível reativar a qualquer momento por aqui."
+        }
+        targetName={statusDialog.name}
+        targetDetail={statusDialog.email ? maskEmail(statusDialog.email) : undefined}
+        consequences={
+          statusDialog.willActivate
+            ? ["O Nômade consegue fazer login e receber tarefas normalmente de novo."]
+            : ["O login fica bloqueado até alguém reativar por aqui.", "Nenhum dado é apagado."]
+        }
+        confirmText={statusDialog.willActivate ? "Reativar" : "Desativar"}
+        cancelText="Cancelar"
+        destructive={!statusDialog.willActivate}
+        attention={statusDialog.willActivate}
+      />
+
+      {/* Nômade — remover perfil (irreversível, 2 etapas) — nunca apaga a
+          conta global, ver DELETE /api/nomades/:id. */}
+      <ConfirmationDialog
+        open={removeDialog.open}
+        onClose={() => setRemoveDialog({ open: false, nomadId: null, name: "", email: "", relations: null })}
+        onConfirm={confirmRemoveProfile}
+        title="Remover perfil de Nômade"
+        message="O perfil profissional (histórico de qualificações, nível, dados de cadastro) será apagado do banco de dados — a conta de login não é apagada, mas fica desativada, já que deixa de fazer sentido entrar no portal Nômade sem um perfil por trás."
+        twoStep
+        destructive
+        targetName={removeDialog.name}
+        targetDetail={removeDialog.email ? maskEmail(removeDialog.email) : undefined}
+        consequences={[
+          "Esta ação é permanente — o perfil profissional é removido de vez.",
+          "A conta global NÃO é apagada — só fica desativada, como um bloqueio.",
+          ...(removeRelationsList(removeDialog.relations).length > 0
+            ? [`Vínculos encontrados: ${removeRelationsList(removeDialog.relations).join(", ")}.`]
+            : []),
+        ]}
+        finalConfirmText="Remover perfil definitivamente"
+      />
     </div>
   );
 }
