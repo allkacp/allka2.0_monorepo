@@ -955,13 +955,14 @@ router.put("/:id", verifyToken, requireRole("admin"), requirePermission("nomades
   }
 });
 
-// ─── PATCH /api/nomades/:id/status — desativar/reativar (reversível) ──────
-// Ação DISTINTA de "remover perfil" (DELETE abaixo): aqui o registro
-// `Nomade` inteiro continua intacto (histórico, qualificações, carteira,
-// habilidades) — só `status` muda, e a conta global vinculada é
+// ─── PATCH /api/nomades/:id/status — desativar/reativar empresa Nomad (reversível) ──
+// Nomad é um tipo de empresa (CNPJ), gerida junto de Company/Agência — não um
+// perfil profissional individual. Ação DISTINTA de "excluir" (DELETE abaixo):
+// aqui o registro `Nomade` inteiro continua intacto (histórico, qualificações,
+// carteira, habilidades) — só `status` muda, e a conta de login vinculada é
 // bloqueada/desbloqueada junto (`User.is_active`), porque hoje o login não
 // olha `Nomade.status` (só `User.is_active` bloqueia de verdade) — sem essa
-// sincronização, "desativar o nômade" não impediria o login de fato.
+// sincronização, "desativar a empresa" não impediria o login de fato.
 const statusToggleSchema = z.object({
   status: z.enum(["ativo", "inativo"]),
   reason: z.string().trim().max(2000).optional(),
@@ -1016,16 +1017,17 @@ router.patch(
   },
 );
 
-// ─── DELETE /api/nomades/:id — remove SOMENTE o perfil profissional ───────
-// Nunca apaga a conta global (`User`) — só o registro `Nomade`. Bloqueado
-// (409) quando há histórico real vinculado (carteira, conta bancária,
-// qualificações, saques, tarefas executadas): remover o perfil nesse caso
-// apagaria histórico de negócio, o que este lote proíbe explicitamente —
-// a saída correta pra esses casos é desativar (rota acima), não remover.
-// Quando a remoção é permitida (perfil sem histórico), a conta global
-// vinculada é desativada na mesma transação — sem isso, a pessoa
-// continuaria logando e sendo roteada pro portal Nômade (`account_type`/
-// `role` continuam apontando pra lá) sem nenhum perfil por trás.
+// ─── DELETE /api/nomades/:id — exclui SOMENTE o cadastro empresarial ──────
+// Nunca apaga a conta de login (`User`) — só o registro `Nomade` (a empresa
+// Nomad em si: CNPJ, nível, dados de cadastro). Bloqueado (409) quando há
+// histórico real vinculado (carteira, conta bancária, qualificações, saques,
+// tarefas executadas): excluir a empresa nesse caso apagaria histórico de
+// negócio, o que este lote proíbe explicitamente — a saída correta pra esses
+// casos é desativar (rota acima), não excluir.
+// Quando a exclusão é permitida (sem histórico vinculado), a conta de login
+// vinculada é desativada na mesma transação — sem isso, a pessoa continuaria
+// logando e sendo roteada pro portal Nomad (`account_type`/`role` continuam
+// apontando pra lá) sem nenhuma empresa por trás.
 router.delete("/:id", verifyToken, requireRole("admin"), requirePermission("nomades", "delete"), async (req, res, next) => {
   try {
     const id = req.params.id as string;
@@ -1060,7 +1062,7 @@ router.delete("/:id", verifyToken, requireRole("admin"), requirePermission("noma
 
     if (blockers.length > 0) {
       res.status(409).json({
-        error: `Este perfil tem histórico vinculado (${blockers.join(", ")}) e não pode ser removido — desative o Nômade em vez de remover o perfil.`,
+        error: `Esta empresa Nomad tem histórico vinculado (${blockers.join(", ")}) e não pode ser excluída — desative a empresa Nomad em vez de excluí-la.`,
       });
       return;
     }

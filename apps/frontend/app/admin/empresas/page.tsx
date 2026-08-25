@@ -14,7 +14,7 @@ import type {
   CompanyStatusFilter,
 } from "@/types/company";
 import { useItemsPerPage } from "@/lib/use-items-per-page";
-import { useNavigate, useParams } from "react-router-dom";
+import { useNavigate, useParams, useLocation } from "react-router-dom";
 import { PageLoader } from "@/components/ui/loading";
 import {
   STANDARD_SHELL_PANEL_CLASS,
@@ -661,6 +661,7 @@ export default function EmpresasPage() {
   const [footerHeight, setFooterHeight] = useState(40);
   const navigate = useNavigate();
   const { empresaId: urlEmpresaId } = useParams<{ empresaId?: string }>();
+  const location = useLocation();
 
   // ── Column visibility ──────────────────────────────────────────
   type ColKey =
@@ -1100,9 +1101,11 @@ export default function EmpresasPage() {
   >({});
   const [deleteDialogLoadingMembers, setDeleteDialogLoadingMembers] = useState(false);
 
-  // Nômade: desativar/reativar (reversível, 1 etapa) e remover perfil
-  // (irreversível, 2 etapas) são ações DISTINTAS de "excluir empresa" —
-  // nenhuma das duas apaga a conta global (ver DELETE /api/nomades/:id).
+  // Empresa Nomad (CNPJ, gerida junto de Company/Agência — não um perfil
+  // profissional isolado): desativar/reativar (reversível, 1 etapa) e
+  // excluir (irreversível, 2 etapas) são ações DISTINTAS da exclusão
+  // genérica de empresa — nenhuma das duas apaga a conta de login
+  // vinculada (ver DELETE /api/nomades/:id).
   const [nomadStatusDialog, setNomadStatusDialog] = useState<{
     open: boolean;
     nomadId: string | null;
@@ -1147,10 +1150,10 @@ export default function EmpresasPage() {
     if (!nomadStatusDialog.nomadId) return;
     await apiClient.updateNomadeStatus(nomadStatusDialog.nomadId, nomadStatusDialog.willActivate ? "ativo" : "inativo");
     toast({
-      title: nomadStatusDialog.willActivate ? "Nômade reativado" : "Nômade desativado",
+      title: nomadStatusDialog.willActivate ? "Empresa Nomad reativada" : "Empresa Nomad desativada",
       description: nomadStatusDialog.willActivate
-        ? `"${nomadStatusDialog.name}" pode acessar a plataforma novamente.`
-        : `"${nomadStatusDialog.name}" não poderá acessar a plataforma como Nômade. O perfil e o histórico continuam intactos — reative a qualquer momento por aqui.`,
+        ? `"${nomadStatusDialog.name}" volta a operar normalmente na plataforma.`
+        : `"${nomadStatusDialog.name}" não poderá operar como Nomad enquanto estiver desativada. O CNPJ, o histórico e a carteira continuam intactos — reative a qualquer momento por aqui.`,
     });
     refetchAllOrgTypes();
   };
@@ -1174,7 +1177,7 @@ export default function EmpresasPage() {
       });
     } catch (error: any) {
       toast({
-        title: "Não foi possível verificar o perfil",
+        title: "Não foi possível verificar a empresa",
         description: error.message,
         variant: "destructive",
       });
@@ -1185,8 +1188,8 @@ export default function EmpresasPage() {
     if (!nomadRemoveDialog.nomadId) return;
     await apiClient.deleteNomade(nomadRemoveDialog.nomadId);
     toast({
-      title: "Perfil de Nômade removido",
-      description: `O perfil profissional de "${nomadRemoveDialog.name}" foi removido. A conta de login não foi apagada — ela ficou desativada, exatamente como um bloqueio.`,
+      title: "Empresa Nomad excluída",
+      description: `O cadastro empresarial de "${nomadRemoveDialog.name}" foi removido. A conta de login vinculada não foi apagada — ela ficou desativada, exatamente como um bloqueio.`,
     });
     refetchAllOrgTypes();
   };
@@ -1203,7 +1206,17 @@ export default function EmpresasPage() {
   };
 
   // Filtros avançados
-  const [advancedFilters, setAdvancedFilters] = useState(EMPTY_ADVANCED_FILTERS);
+  // `?type=nomad` (ou company/agency) chega aqui via redirecionamento da
+  // rota antiga /admin/nomades — ver App.tsx. É a única forma hoje de abrir
+  // a tela já na aba certa; se o valor não bater com um tipo válido, cai no
+  // filtro padrão normalmente.
+  const [advancedFilters, setAdvancedFilters] = useState(() => {
+    const typeParam = new URLSearchParams(location.search).get("type");
+    if (typeParam && ["company", "agency", "nomad"].includes(typeParam)) {
+      return { ...EMPTY_ADVANCED_FILTERS, types: [typeParam] };
+    }
+    return EMPTY_ADVANCED_FILTERS;
+  });
 
   // Gerenciamento de filtros salvos
   const [savedFilters, setSavedFilters] = useState<
@@ -2979,9 +2992,10 @@ export default function EmpresasPage() {
                               </Tooltip>
                             </TooltipProvider>
                           )}
-                        {/* Nômade: duas ações distintas (nunca "Excluir Nômade
-                            definitivamente" — a conta global não é apagada
-                            por aqui, ver DELETE /api/nomades/:id). */}
+                        {/* Nomad é uma empresa (CNPJ), não um perfil profissional
+                            isolado — duas ações distintas, nunca "Excluir
+                            empresa definitivamente" sem checar vínculos, ver
+                            DELETE /api/nomades/:id. */}
                         {company.type === "nomad" ? (
                           <>
                             <TooltipProvider delayDuration={400}>
@@ -2994,8 +3008,8 @@ export default function EmpresasPage() {
                                     }}
                                     aria-label={
                                       company.status === "active"
-                                        ? `Desativar Nômade ${company.name}`
-                                        : `Reativar Nômade ${company.name}`
+                                        ? `Desativar empresa Nomad ${company.name}`
+                                        : `Reativar empresa Nomad ${company.name}`
                                     }
                                     className={`h-[26px] w-[26px] flex items-center justify-center rounded-[8px] bg-white dark:bg-slate-800 border border-[#e8edf5] dark:border-slate-700 shadow-[0_4px_10px_rgba(15,23,42,0.06)] hover:bg-gradient-to-br hover:from-[#2558FF] hover:via-[#6E2C96] hover:to-[#D92293] hover:text-white dark:hover:text-[#0a1628] hover:border-transparent hover:shadow-[0_8px_18px_rgba(15,23,42,0.18)] hover:-translate-y-px transition-all duration-150 ${
                                       company.status === "active" ? "text-amber-500 dark:text-amber-400" : "text-emerald-500 dark:text-emerald-400"
@@ -3009,7 +3023,7 @@ export default function EmpresasPage() {
                                   </button>
                                 </TooltipTrigger>
                                 <TooltipContent className="text-xs font-medium">
-                                  {company.status === "active" ? "Desativar Nômade" : "Reativar Nômade"}
+                                  {company.status === "active" ? "Desativar empresa Nomad" : "Reativar empresa Nomad"}
                                 </TooltipContent>
                               </Tooltip>
                             </TooltipProvider>
@@ -3021,14 +3035,14 @@ export default function EmpresasPage() {
                                       e.stopPropagation();
                                       requestRemoveNomadProfile(company);
                                     }}
-                                    aria-label={`Remover perfil de Nômade ${company.name}`}
+                                    aria-label={`Excluir empresa Nomad ${company.name}`}
                                     className="h-[26px] w-[26px] flex items-center justify-center rounded-[8px] bg-white dark:bg-slate-800 border border-[#e8edf5] dark:border-slate-700 text-red-500 dark:text-red-400 shadow-[0_4px_10px_rgba(15,23,42,0.06)] hover:bg-gradient-to-br hover:from-[#2558FF] hover:via-[#6E2C96] hover:to-[#D92293] hover:text-white dark:hover:text-[#0a1628] hover:border-transparent hover:shadow-[0_8px_18px_rgba(15,23,42,0.18)] hover:-translate-y-px transition-all duration-150"
                                   >
                                     <Trash2 className="h-3.5 w-3.5" />
                                   </button>
                                 </TooltipTrigger>
                                 <TooltipContent className="text-xs font-medium">
-                                  Remover perfil de Nômade
+                                  Excluir empresa Nomad
                                 </TooltipContent>
                               </Tooltip>
                             </TooltipProvider>
@@ -4704,7 +4718,7 @@ export default function EmpresasPage() {
                         ) : (
                           <CheckCircle className="h-3.5 w-3.5 mr-1.5" />
                         )}
-                        {company.status === "active" ? "Desativar Nômade" : "Reativar Nômade"}
+                        {company.status === "active" ? "Desativar empresa Nomad" : "Reativar empresa Nomad"}
                       </Button>
                       <Button
                         variant="outline"
@@ -4715,7 +4729,7 @@ export default function EmpresasPage() {
                         }}
                       >
                         <Trash2 className="h-3.5 w-3.5 mr-1.5" />
-                        Remover perfil de Nômade
+                        Excluir empresa Nomad
                       </Button>
                     </>
                   ) : (
@@ -5567,22 +5581,24 @@ export default function EmpresasPage() {
         destructive
       />
 
-      {/* Nômade — desativar/reativar (reversível, 1 etapa) */}
+      {/* Empresa Nomad — desativar/reativar (reversível, 1 etapa). Nomad é um
+          tipo de empresa (CNPJ), gerida junto de Company/Agência — nunca um
+          perfil profissional isolado. */}
       <ConfirmationDialog
         open={nomadStatusDialog.open}
         onClose={() => setNomadStatusDialog((s) => ({ ...s, open: false }))}
         onConfirm={confirmToggleNomadStatus}
-        title={nomadStatusDialog.willActivate ? "Reativar Nômade" : "Desativar Nômade"}
+        title={nomadStatusDialog.willActivate ? "Reativar empresa Nomad" : "Desativar empresa Nomad"}
         message={
           nomadStatusDialog.willActivate
-            ? "O Nômade volta a acessar a plataforma imediatamente, com o mesmo perfil e histórico de antes."
-            : "O Nômade não poderá acessar a plataforma nem atuar em tarefas enquanto estiver desativado. O perfil, o histórico e a carteira continuam intactos — é possível reativar a qualquer momento por aqui."
+            ? "A empresa Nomad volta a operar na plataforma imediatamente, com o mesmo CNPJ e histórico de antes."
+            : "A empresa Nomad não poderá operar nem atuar em tarefas enquanto estiver desativada. O CNPJ, o histórico e a carteira continuam intactos — é possível reativar a qualquer momento por aqui."
         }
         targetName={nomadStatusDialog.name}
         targetDetail={nomadStatusDialog.email ? maskEmailForConfirmation(nomadStatusDialog.email) : undefined}
         consequences={
           nomadStatusDialog.willActivate
-            ? ["O Nômade consegue fazer login e receber tarefas normalmente de novo."]
+            ? ["A empresa Nomad consegue fazer login e receber tarefas normalmente de novo."]
             : ["O login fica bloqueado até alguém reativar por aqui.", "Nenhum dado é apagado."]
         }
         confirmText={nomadStatusDialog.willActivate ? "Reativar" : "Desativar"}
@@ -5591,26 +5607,28 @@ export default function EmpresasPage() {
         attention={nomadStatusDialog.willActivate}
       />
 
-      {/* Nômade — remover perfil (irreversível, 2 etapas) — nunca apaga a
-          conta global, ver DELETE /api/nomades/:id. */}
+      {/* Empresa Nomad — excluir (irreversível, 2 etapas) — nunca apaga a
+          conta de login vinculada, só o cadastro empresarial, ver
+          DELETE /api/nomades/:id. Bloqueada no backend se houver carteira,
+          conta bancária, qualificações, saques ou tarefas vinculadas. */}
       <ConfirmationDialog
         open={nomadRemoveDialog.open}
         onClose={() => setNomadRemoveDialog({ open: false, nomadId: null, name: "", email: "", relations: null })}
         onConfirm={confirmRemoveNomadProfile}
-        title="Remover perfil de Nômade"
-        message="O perfil profissional (histórico de qualificações, nível, dados de cadastro) será apagado do banco de dados — a conta de login não é apagada, mas fica desativada, já que deixa de fazer sentido entrar no portal Nômade sem um perfil por trás."
+        title="Excluir empresa Nomad"
+        message="O cadastro empresarial (CNPJ, nível, dados de cadastro) será apagado do banco de dados — a conta de login vinculada não é apagada, mas fica desativada, já que deixa de fazer sentido acessar o portal Nomad sem uma empresa por trás."
         twoStep
         destructive
         targetName={nomadRemoveDialog.name}
         targetDetail={nomadRemoveDialog.email ? maskEmailForConfirmation(nomadRemoveDialog.email) : undefined}
         consequences={[
-          "Esta ação é permanente — o perfil profissional é removido de vez.",
-          "A conta global NÃO é apagada — só fica desativada, como um bloqueio.",
+          "Esta ação é permanente — o cadastro empresarial é removido de vez.",
+          "A conta de login vinculada NÃO é apagada — só fica desativada, como um bloqueio.",
           ...(nomadRemoveRelationsList(nomadRemoveDialog.relations).length > 0
             ? [`Vínculos encontrados: ${nomadRemoveRelationsList(nomadRemoveDialog.relations).join(", ")}.`]
             : []),
         ]}
-        finalConfirmText="Remover perfil definitivamente"
+        finalConfirmText="Excluir empresa definitivamente"
       />
 
       <ConfirmationDialog

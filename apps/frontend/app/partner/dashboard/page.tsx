@@ -3621,7 +3621,7 @@ export default function AdminDashboardPage() {
                       text: "text-info",
                     },
                     {
-                      to: "/admin/nomades",
+                      to: "/admin/empresas?type=nomad",
                       icon: UserCheck,
                       label: "Gerenciar Nômades",
                       desc: "Ver e gerenciar a base de nômades",

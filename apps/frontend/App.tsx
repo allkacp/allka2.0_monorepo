@@ -69,7 +69,6 @@ const AdminUsuariosInternosPage = React.lazy(
   () => import("@/app/admin/usuarios-internos/page"),
 );
 const AdminEmpresasPage = React.lazy(() => import("@/app/admin/empresas/page"));
-const AdminNomadesPg = React.lazy(() => import("@/app/admin/nomades/page"));
 const AdminProjetosPage = React.lazy(() => import("@/app/admin/projetos/page"));
 const AdminProdutosPage = React.lazy(() => import("@/app/admin/produtos/page"));
 const AdminCatalogoProdutosPage = React.lazy(
@@ -753,7 +752,16 @@ export default function App() {
                     path="/admin/empresas/:empresaId"
                     element={<AdminEmpresasPage />}
                   />
-                  <Route path="/admin/nomades" element={<AdminNomadesPg />} />
+                  {/* Nomad é uma empresa (CNPJ, gerida junto de Company/Agência) —
+                      a tela oficial é /admin/empresas com a aba Nomad. Esta rota
+                      antiga tratava Nomad como profissional individual isolado;
+                      preservada só como redirecionamento pra não quebrar links
+                      salvos (sidebar, dashboard, menu móvel já apontam direto
+                      pra /admin/empresas?type=nomad). */}
+                  <Route
+                    path="/admin/nomades"
+                    element={<Navigate to="/admin/empresas?type=nomad" replace />}
+                  />
                   <Route
                     path="/admin/projetos"
                     element={<AdminProjetosPage />}

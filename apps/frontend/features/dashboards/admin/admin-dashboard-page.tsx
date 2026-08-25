@@ -6399,7 +6399,7 @@ export function AdminDashboardPage() {
                       text: "text-info",
                     },
                     {
-                      to: "/admin/nomades",
+                      to: "/admin/empresas?type=nomad",
                       icon: UserCheck,
                       label: "Gerenciar Nômades",
                       desc: "Ver e gerenciar a base de nômades",
@@ -7661,7 +7661,7 @@ export function AdminDashboardPage() {
                       Top nômades por desempenho
                     </p>
                   </div>
-                  <Link to="/admin/nomades" className="shrink-0">
+                  <Link to="/admin/empresas?type=nomad" className="shrink-0">
                     <Button
                       variant="ghost"
                       size="sm"
@@ -7800,7 +7800,7 @@ export function AdminDashboardPage() {
                         text: "text-info",
                       },
                       {
-                        to: "/admin/nomades",
+                        to: "/admin/empresas?type=nomad",
                         icon: UserCheck,
                         label: "Gerenciar Nômades",
                         border: "border-success/20",

@@ -6,13 +6,13 @@ import { MemoryRouter } from "react-router-dom";
 import { SidebarProvider } from "@/contexts/sidebar-context";
 import { OpenScreensProvider } from "@/contexts/open-screens-context";
 
-// Lote "remoção/exclusão de perfil de Nômade" (ata 2026-08-25) — cobre os
-// dois fluxos de confirmação novos na tela de Nômades dentro de
-// admin/empresas/page.tsx: desativar/reativar (reversível, 1 etapa) e
-// remover perfil (irreversível, 2 etapas, nunca apaga a conta global). O
-// texto do botão/tooltip mudou de "Excluir empresa" genérico pra refletir
-// a ação real — nunca "Excluir Nômade definitivamente", já que a conta
-// continua existindo depois da remoção do perfil.
+// Lote "align Nomad management with company domain" (ata 2026-08) — Nomad é
+// um tipo de EMPRESA (CNPJ), gerida junto de Company/Agência na aba/badge
+// Nomad desta mesma tela — nunca um perfil profissional isolado. Cobre os
+// dois fluxos de confirmação da aba Nomad: desativar/reativar empresa
+// (reversível, 1 etapa) e excluir empresa (irreversível, 2 etapas, nunca
+// apaga a conta de login vinculada). Textos usam sempre "empresa Nomad",
+// nunca "perfil de Nômade".
 
 const { apiMock, ApiErrorMock } = vi.hoisted(() => {
   class ApiErrorMock extends Error {
@@ -81,18 +81,20 @@ beforeEach(() => {
   apiMock.getNomades.mockResolvedValue({ data: [nomadFixture()], total: 1 });
 });
 
-describe("admin/empresas — Nômade: desativar/reativar (reversível)", () => {
-  it("1. o botão mostra 'Desativar Nômade' pra um perfil ativo (nunca 'Excluir')", async () => {
+describe("admin/empresas — empresa Nomad: desativar/reativar (reversível)", () => {
+  it("1. o botão mostra 'Desativar empresa Nomad' pra uma empresa ativa (nunca 'Excluir')", async () => {
     renderPage();
-    expect(await screen.findByRole("button", { name: "Desativar Nômade Fulano Nômade" })).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: /excluir.*fulano/i })).not.toBeInTheDocument();
+    expect(await screen.findByRole("button", { name: "Desativar empresa Nomad Fulano Nômade" })).toBeInTheDocument();
+    // Nunca o rótulo genérico de pessoa física usado no lote errado anterior.
+    expect(screen.queryByRole("button", { name: "Excluir Nômade Fulano Nômade" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Remover perfil de Nômade Fulano Nômade" })).not.toBeInTheDocument();
   });
 
   it("2/3. abrir a confirmação mostra nome, e-mail mascarado e a consequência; cancelar não altera", async () => {
     const user = userEvent.setup();
     renderPage();
 
-    await user.click(await screen.findByRole("button", { name: "Desativar Nômade Fulano Nômade" }));
+    await user.click(await screen.findByRole("button", { name: "Desativar empresa Nomad Fulano Nômade" }));
     expect(await screen.findByText(/fu\*+@example\.com/)).toBeInTheDocument();
     expect(screen.getByText(/login fica bloqueado/i)).toBeInTheDocument();
 
@@ -106,7 +108,7 @@ describe("admin/empresas — Nômade: desativar/reativar (reversível)", () => {
     const user = userEvent.setup();
     renderPage();
 
-    await user.click(await screen.findByRole("button", { name: "Desativar Nômade Fulano Nômade" }));
+    await user.click(await screen.findByRole("button", { name: "Desativar empresa Nomad Fulano Nômade" }));
     await user.click(screen.getByRole("button", { name: "Desativar" }));
 
     await waitFor(() => expect(apiMock.updateNomadeStatus).toHaveBeenCalledWith("nomade-1", "inativo"));
@@ -118,7 +120,7 @@ describe("admin/empresas — Nômade: desativar/reativar (reversível)", () => {
     const user = userEvent.setup();
     renderPage();
 
-    await user.click(await screen.findByRole("button", { name: "Desativar Nômade Fulano Nômade" }));
+    await user.click(await screen.findByRole("button", { name: "Desativar empresa Nomad Fulano Nômade" }));
     await user.click(screen.getByRole("button", { name: "Desativar" }));
 
     expect(await screen.findByText("Não foi possível desativar")).toBeInTheDocument();
@@ -127,10 +129,10 @@ describe("admin/empresas — Nômade: desativar/reativar (reversível)", () => {
     expect(apiMock.getNomades).toHaveBeenCalledTimes(1);
   });
 
-  it("8. reativação aparece quando o Nômade está inativo", async () => {
+  it("8. reativação aparece quando a empresa Nomad está inativa", async () => {
     // A lista abre filtrada só por status "Ativo" por padrão (comportamento
     // já existente da tela, não deste lote) — precisa incluir "Inativo" no
-    // filtro avançado pra um Nômade desativado aparecer na tabela.
+    // filtro avançado pra uma empresa Nomad desativada aparecer na tabela.
     apiMock.getNomades.mockResolvedValue({ data: [nomadFixture({ status: "inativo" })], total: 1 });
     const user = userEvent.setup();
     renderPage();
@@ -139,11 +141,11 @@ describe("admin/empresas — Nômade: desativar/reativar (reversível)", () => {
     await user.click(await screen.findByRole("button", { name: "Inativo" }));
     await user.click(await screen.findByRole("button", { name: "Aplicar Filtros" }));
 
-    expect(await screen.findByRole("button", { name: "Reativar Nômade Fulano Nômade" })).toBeInTheDocument();
+    expect(await screen.findByRole("button", { name: "Reativar empresa Nomad Fulano Nômade" })).toBeInTheDocument();
   });
 });
 
-describe("admin/empresas — Nômade: remover perfil (duas etapas, conta global preservada)", () => {
+describe("admin/empresas — empresa Nomad: excluir (duas etapas, conta de login preservada)", () => {
   it("1. window.confirm não é usado neste fluxo", async () => {
     const confirmSpy = vi.spyOn(window, "confirm");
     renderPage();
@@ -161,19 +163,19 @@ describe("admin/empresas — Nômade: remover perfil (duas etapas, conta global 
     const user = userEvent.setup();
     renderPage();
 
-    await user.click(await screen.findByRole("button", { name: "Remover perfil de Nômade Fulano Nômade" }));
-    expect(await screen.findByText("Remover perfil de Nômade")).toBeInTheDocument();
+    await user.click(await screen.findByRole("button", { name: "Excluir empresa Nomad Fulano Nômade" }));
+    expect(await screen.findByText("Excluir empresa Nomad")).toBeInTheDocument();
     expect(apiMock.deleteNomade).not.toHaveBeenCalled();
 
     await user.click(screen.getByRole("button", { name: /continuar para confirmação/i }));
-    expect(await screen.findByText("Remover perfil definitivamente")).toBeInTheDocument();
+    expect(await screen.findByText("Excluir empresa definitivamente")).toBeInTheDocument();
     expect(apiMock.deleteNomade).not.toHaveBeenCalled();
 
-    await user.click(screen.getByRole("button", { name: "Remover perfil definitivamente" }));
+    await user.click(screen.getByRole("button", { name: "Excluir empresa definitivamente" }));
     await waitFor(() => expect(apiMock.deleteNomade).toHaveBeenCalledTimes(1));
   });
 
-  it("2. cancelar mantém o Nômade", async () => {
+  it("2. cancelar mantém a empresa Nomad", async () => {
     apiMock.getNomade.mockResolvedValue({
       _count: { wallet_transactions: 0, qualifications: 0, withdrawal_requests: 0, task_executions: 0 },
       bank_account: null,
@@ -181,7 +183,7 @@ describe("admin/empresas — Nômade: remover perfil (duas etapas, conta global 
     const user = userEvent.setup();
     renderPage();
 
-    await user.click(await screen.findByRole("button", { name: "Remover perfil de Nômade Fulano Nômade" }));
+    await user.click(await screen.findByRole("button", { name: "Excluir empresa Nomad Fulano Nômade" }));
     await user.click(await screen.findByRole("button", { name: "Cancelar" }));
 
     expect(apiMock.deleteNomade).not.toHaveBeenCalled();
@@ -196,7 +198,7 @@ describe("admin/empresas — Nômade: remover perfil (duas etapas, conta global 
     const user = userEvent.setup();
     renderPage();
 
-    await user.click(await screen.findByRole("button", { name: "Remover perfil de Nômade Fulano Nômade" }));
+    await user.click(await screen.findByRole("button", { name: "Excluir empresa Nomad Fulano Nômade" }));
     expect(await screen.findByText(/lançamento\(s\) de carteira/)).toBeInTheDocument();
     expect(screen.getByText(/conta bancária cadastrada/)).toBeInTheDocument();
     expect(screen.getByText(/tarefa\(s\) executada\(s\)/)).toBeInTheDocument();
@@ -208,20 +210,20 @@ describe("admin/empresas — Nômade: remover perfil (duas etapas, conta global 
       bank_account: null,
     });
     apiMock.deleteNomade.mockRejectedValue(
-      new ApiErrorMock("Este perfil tem histórico vinculado (2 tarefa(s) executada(s)) e não pode ser removido — desative o Nômade em vez de remover o perfil.", 409),
+      new ApiErrorMock("Esta empresa Nomad tem histórico vinculado (2 tarefa(s) executada(s)) e não pode ser excluída — desative a empresa Nomad em vez de excluí-la.", 409),
     );
     const user = userEvent.setup();
     renderPage();
 
-    await user.click(await screen.findByRole("button", { name: "Remover perfil de Nômade Fulano Nômade" }));
+    await user.click(await screen.findByRole("button", { name: "Excluir empresa Nomad Fulano Nômade" }));
     await user.click(await screen.findByRole("button", { name: /continuar para confirmação/i }));
-    await user.click(screen.getByRole("button", { name: "Remover perfil definitivamente" }));
+    await user.click(screen.getByRole("button", { name: "Excluir empresa definitivamente" }));
 
-    expect(await screen.findByText(/não pode ser removido/i)).toBeInTheDocument();
+    expect(await screen.findByText(/não pode ser excluída/i)).toBeInTheDocument();
     expect(screen.getAllByText("Fulano Nômade").length).toBeGreaterThan(0);
   });
 
-  it("explica que a conta global não é apagada", async () => {
+  it("explica que a conta de login vinculada não é apagada", async () => {
     apiMock.getNomade.mockResolvedValue({
       _count: { wallet_transactions: 0, qualifications: 0, withdrawal_requests: 0, task_executions: 0 },
       bank_account: null,
@@ -229,7 +231,25 @@ describe("admin/empresas — Nômade: remover perfil (duas etapas, conta global 
     const user = userEvent.setup();
     renderPage();
 
-    await user.click(await screen.findByRole("button", { name: "Remover perfil de Nômade Fulano Nômade" }));
-    expect(await screen.findByText(/conta global NÃO é apagada/i)).toBeInTheDocument();
+    await user.click(await screen.findByRole("button", { name: "Excluir empresa Nomad Fulano Nômade" }));
+    expect((await screen.findAllByText(/conta de login vinculada.*NÃO é apagada|conta de login vinculada não é apagada/i)).length).toBeGreaterThan(0);
+  });
+});
+
+describe("admin/empresas — redirecionamento da rota antiga /admin/nomades", () => {
+  it("?type=nomad abre a lista já filtrada na aba Nomad", async () => {
+    render(
+      <MemoryRouter initialEntries={["/admin/empresas?type=nomad"]}>
+        <SidebarProvider>
+          <OpenScreensProvider>
+            <AdminEmpresasPage />
+          </OpenScreensProvider>
+        </SidebarProvider>
+      </MemoryRouter>,
+    );
+
+    expect(await screen.findByText("Fulano Nômade")).toBeInTheDocument();
+    const nomadChip = await screen.findByRole("button", { name: "Nomad" });
+    expect(nomadChip).toHaveAttribute("aria-pressed", "true");
   });
 });
