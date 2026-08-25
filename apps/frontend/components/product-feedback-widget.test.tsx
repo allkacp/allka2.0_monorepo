@@ -58,6 +58,19 @@ async function getTrigger() {
   return triggers[0];
 }
 
+// `user.paste()` sets the whole value via one input/change event instead of
+// simulating a keydown/keyup per character like `user.type()` — same
+// end-state for these plain controlled `<input onChange>` fields (no
+// onKeyDown, debounce, or char-limit logic to skip), but doesn't pay for a
+// React act() flush per keystroke. Used only where the test asserts on the
+// submitted payload/clientSubmissionId/call count/success state, never on
+// typing itself — real keystroke coverage stays intact elsewhere in this
+// file (e.g. the "Melhorar com IA" tests below still use `user.type()`).
+async function fillByPaste(user: ReturnType<typeof userEvent.setup>, input: HTMLElement, text: string) {
+  await user.click(input);
+  await user.paste(text);
+}
+
 beforeEach(() => {
   vi.clearAllMocks();
 });
@@ -122,19 +135,21 @@ describe("ProductFeedbackWidget — submitting a ticket", () => {
   });
 
   // These three tests were intermittently hitting vitest's default 5000ms
-  // per-test timeout ONLY when the full 18-file suite runs together (12
-  // parallel worker threads on this machine) — never in isolation, never
-  // combined with just a few other files. Root cause confirmed by running
-  // the full suite with testTimeout raised to 20000ms: every assertion
-  // (call counts, clientSubmissionId matching, payload shape) still passed
-  // correctly, just slower — one run measured 6514ms for the retry test.
-  // So this is real CPU contention from `user.type()` simulating a full
-  // keystroke-by-keystroke sequence (several sentences of text, each
-  // flushed through React's act()) while 12 other jsdom+React suites
-  // compete for the CPU, not a leak, a race, or a wrong assertion. A
-  // 15000ms budget (~2.3x the worst measured duration) keeps determinism
+  // per-test timeout ONLY when the full suite runs together (12 parallel
+  // worker threads on this machine) — never in isolation, never combined
+  // with just a few other files. Root cause: real CPU contention from
+  // `user.type()` simulating a full keystroke-by-keystroke sequence
+  // (several sentences of text, each flushed through React's act()) while
+  // a dozen other jsdom+React suites compete for the CPU — not a leak, a
+  // race, or a wrong assertion. Since none of these three tests assert on
+  // typing itself (only payload shape, clientSubmissionId, call counts,
+  // success state — see `fillByPaste` above), the fields are now filled via
+  // paste instead of per-character typing, which cut isolated duration
+  // roughly in half. Still, under full-suite contention one run measured
+  // 5068ms for the retry test — already past the 5000ms default on its
+  // own — so the override stays; a 15000ms budget keeps determinism
   // without masking a real defect. Un-related files/tests weren't slow —
-  // only ones with an equal amount of `user.type()` text plus a submit.
+  // only ones with an equal amount of typed/pasted text plus a submit.
   const SLOW_UNDER_FULL_SUITE_LOAD_MS = 15000;
 
   it("sends only the allowed fields, deriving pathname from window.location itself", async () => {
@@ -150,9 +165,9 @@ describe("ProductFeedbackWidget — submitting a ticket", () => {
     await user.click(trigger);
 
     const titleInput = await screen.findByPlaceholderText("Resuma em poucas palavras");
-    await user.type(titleInput, "Botão não responde");
+    await fillByPaste(user, titleInput, "Botão não responde");
     const descriptionInput = screen.getByPlaceholderText("Descreva com o máximo de detalhe possível");
-    await user.type(descriptionInput, "Cliquei em salvar e nada aconteceu.");
+    await fillByPaste(user, descriptionInput, "Cliquei em salvar e nada aconteceu.");
 
     const submitButton = screen.getByRole("button", { name: /enviar/i });
     await user.click(submitButton);
@@ -193,8 +208,9 @@ describe("ProductFeedbackWidget — submitting a ticket", () => {
     renderWidget();
 
     await user.click(await getTrigger());
-    await user.type(screen.getByPlaceholderText("Resuma em poucas palavras"), "Primeiro título");
-    await user.type(
+    await fillByPaste(user, screen.getByPlaceholderText("Resuma em poucas palavras"), "Primeiro título");
+    await fillByPaste(
+      user,
       screen.getByPlaceholderText("Descreva com o máximo de detalhe possível"),
       "Primeira descrição enviada pelo usuário.",
     );
@@ -216,8 +232,9 @@ describe("ProductFeedbackWidget — submitting a ticket", () => {
     // this must mint a fresh id, never reusing the previous submission's.
     (apiClient.createProductFeedbackWorkItem as any).mockResolvedValueOnce({ protocol: "ALK-000002" });
     await user.click(screen.getByRole("button", { name: /novo chamado/i }));
-    await user.type(screen.getByPlaceholderText("Resuma em poucas palavras"), "Segundo título");
-    await user.type(
+    await fillByPaste(user, screen.getByPlaceholderText("Resuma em poucas palavras"), "Segundo título");
+    await fillByPaste(
+      user,
       screen.getByPlaceholderText("Descreva com o máximo de detalhe possível"),
       "Segunda descrição, um chamado diferente.",
     );
@@ -234,8 +251,9 @@ describe("ProductFeedbackWidget — submitting a ticket", () => {
     renderWidget();
 
     await user.click(await getTrigger());
-    await user.type(screen.getByPlaceholderText("Resuma em poucas palavras"), "Ideia nova");
-    await user.type(
+    await fillByPaste(user, screen.getByPlaceholderText("Resuma em poucas palavras"), "Ideia nova");
+    await fillByPaste(
+      user,
       screen.getByPlaceholderText("Descreva com o máximo de detalhe possível"),
       "Seria bom ter um atalho aqui.",
     );
