@@ -591,3 +591,254 @@ describe("admin/empresas — desativar/reativar Nômade não recarrega a página
     expect(apiMock.getAgencies.mock.calls.length).toBe(agenciesCallsBefore);
   });
 });
+
+// Lote "company table nomad actual rows" (ata 2026-08) — o responsável
+// reportou uma captura mostrando "Agência Digital Creative" como LINHA REAL
+// da tabela (não a caixa de sugestões, já corrigida no commit 5603304), com
+// busca vazia, em /admin/empresas?type=nomad. Reproduzido exaustivamente
+// (URL direta, F5, troca de chip com dado já carregado, voltar/avançar, e
+// uma corrida forçada com /api/agencies atrasado 4s) contra o código atual
+// sem sucesso — o <tbody> sempre mostrou só nômades. Estes testes fixam
+// exatamente os cenários pedidos, direto no <tbody> real (não em chips nem
+// em funções puras), inclusive o de chegada assíncrona fora de ordem, que é
+// o mais próximo de uma causa real que a hipótese lista.
+function getTbodyRowTexts() {
+  const tbody = document.querySelector("tbody");
+  if (!tbody) return [];
+  return Array.from(tbody.querySelectorAll("tr")).map((tr) => tr.textContent || "");
+}
+
+describe("admin/empresas — linhas reais do <tbody> com type=nomad e busca vazia", () => {
+  it("1. montagem inicial direto em ?type=nomad: <tbody> só tem nômades", async () => {
+    apiMock.getCompanies.mockResolvedValue({ data: [companyFixture()], total: 1 });
+    apiMock.getAgencies.mockResolvedValue({
+      data: [agencyFixture({ name: "Agência Digital Creative", partner_profile: { status: "active" } })],
+      total: 1,
+    });
+    apiMock.getNomades.mockResolvedValue({ data: [nomadFixture()], total: 1 });
+
+    renderAtUrl("/admin/empresas?type=nomad");
+    await screen.findByText("Fulano Nômade");
+
+    const rows = getTbodyRowTexts();
+    expect(rows.length).toBeGreaterThan(0);
+    expect(rows.some((r) => r.includes("Agência Digital Creative"))).toBe(false);
+    expect(rows.some((r) => r.includes("Empresa Cliente Direta"))).toBe(false);
+    expect(rows.every((r) => r.includes("Nômade") || r.includes("Fulano"))).toBe(true);
+  });
+
+  it("2. respostas chegando em ordem diferente (companies resolve DEPOIS de agencies+nomades) não deixa Agency/Company no <tbody>", async () => {
+    // `refetchOrgTypes` busca agencies e nomades juntos, num único
+    // Promise.all — não há como um chegar antes do outro. O par que
+    // realmente pode chegar em ordens diferentes é `companies` (hook
+    // independente, `useCompanies()`) vs. o par agencies+nomades.
+    let resolveCompanies: (v: any) => void;
+    const companiesPromise = new Promise((resolve) => {
+      resolveCompanies = resolve;
+    });
+    apiMock.getCompanies.mockReturnValue(companiesPromise);
+    apiMock.getAgencies.mockResolvedValue({
+      data: [agencyFixture({ name: "Agência Digital Creative", partner_profile: { status: "active" } })],
+      total: 1,
+    });
+    apiMock.getNomades.mockResolvedValue({ data: [nomadFixture()], total: 1 });
+
+    renderAtUrl("/admin/empresas?type=nomad");
+    // Enquanto `companies` (carga inicial) não resolve, a tela inteira
+    // mostra o loader de primeira carga — comportamento esperado (ver
+    // `hasLoadedCompaniesOnceRef`, lote anterior). Não há <tbody> ainda
+    // pra inspecionar neste instante.
+    expect(screen.queryByText("Fulano Nômade")).not.toBeInTheDocument();
+
+    // Companies resolve por último, bem depois de agencies+nomades.
+    resolveCompanies!({ data: [companyFixture()], total: 1 });
+
+    // Depois de tudo assentar, o filtro Nomad continua valendo — nem a
+    // Agency nem a Company entram no <tbody> filtrado, não importa a ordem
+    // de chegada das três respostas.
+    await screen.findByText("Fulano Nômade");
+    const rows = getTbodyRowTexts();
+    expect(rows.some((r) => r.includes("Digital Creative"))).toBe(false);
+    expect(rows.some((r) => r.includes("Empresa Cliente Direta"))).toBe(false);
+    expect(rows.some((r) => r.includes("Fulano Nômade"))).toBe(true);
+  });
+
+  it("3/4. <tbody> de Nomad não contém Agency Partner nem Company", async () => {
+    apiMock.getCompanies.mockResolvedValue({ data: [companyFixture()], total: 1 });
+    apiMock.getAgencies.mockResolvedValue({
+      data: [agencyFixture({ partner_profile: { status: "active" } })],
+      total: 1,
+    });
+    apiMock.getNomades.mockResolvedValue({
+      data: [nomadFixture({ id: "n1", name: "Nômade A" }), nomadFixture({ id: "n2", name: "Nômade B", email: "b@example.com" })],
+      total: 2,
+    });
+
+    renderAtUrl("/admin/empresas?type=nomad");
+    await screen.findByText("Nômade A");
+    const rows = getTbodyRowTexts();
+    expect(rows).toHaveLength(2);
+    expect(rows.some((r) => r.includes("Agência Parceira"))).toBe(false);
+    expect(rows.some((r) => r.includes("Empresa Cliente Direta"))).toBe(false);
+  });
+
+  it("5/6. o total exibido é igual à quantidade de nômades filtrados, e a paginação usa só nômades", async () => {
+    apiMock.getCompanies.mockResolvedValue({ data: [companyFixture()], total: 1 });
+    apiMock.getAgencies.mockResolvedValue({ data: [agencyFixture()], total: 1 });
+    apiMock.getNomades.mockResolvedValue({
+      data: Array.from({ length: 4 }, (_, i) =>
+        nomadFixture({ id: `n${i}`, name: `Nômade ${i}`, email: `n${i}@example.com` }),
+      ),
+      total: 4,
+    });
+
+    renderAtUrl("/admin/empresas?type=nomad");
+    await screen.findByText("Nômade 0");
+    const rows = getTbodyRowTexts();
+    // 4 nômades cabem numa página (paginação padrão é maior que 4) — todas
+    // as linhas visíveis são nômades, nenhuma company/agency entra na conta.
+    expect(rows).toHaveLength(4);
+    expect(rows.every((r) => /Nômade \d/.test(r))).toBe(true);
+  });
+
+  it("7. trocar de Todos para Nomad remove imediatamente as linhas Agency/Company do <tbody>", async () => {
+    apiMock.getCompanies.mockResolvedValue({ data: [companyFixture()], total: 1 });
+    apiMock.getAgencies.mockResolvedValue({ data: [agencyFixture()], total: 1 });
+    apiMock.getNomades.mockResolvedValue({ data: [nomadFixture()], total: 1 });
+
+    const user = userEvent.setup();
+    renderAtUrl("/admin/empresas");
+    await screen.findByText("Empresa Cliente Direta");
+    expect(getTbodyRowTexts()).toHaveLength(3);
+
+    await user.click(screen.getByRole("button", { name: "Nomad" }));
+    await waitFor(() => expect(getTbodyRowTexts()).toHaveLength(1));
+    const rows = getTbodyRowTexts();
+    expect(rows[0]).toContain("Fulano Nômade");
+    expect(rows.some((r) => r.includes("Agência Parceira") || r.includes("Empresa Cliente Direta"))).toBe(false);
+  });
+
+  it("8. trocar de Agency (na página 2) para Nomad volta pra uma página válida", async () => {
+    apiMock.getCompanies.mockResolvedValue({ data: [], total: 0 });
+    apiMock.getAgencies.mockResolvedValue({
+      data: Array.from({ length: 15 }, (_, i) => agencyFixture({ id: `a${i}`, name: `Agência ${i}`, email: `a${i}@example.com` })),
+      total: 15,
+    });
+    apiMock.getNomades.mockResolvedValue({ data: [nomadFixture()], total: 1 });
+
+    const user = userEvent.setup();
+    renderAtUrl("/admin/empresas?type=agency");
+    await screen.findByText("Agência 0");
+    await user.click(screen.getAllByRole("button", { name: "Próxima página" })[0]);
+    await waitFor(() => expect(screen.queryByText("Agência 0")).not.toBeInTheDocument());
+
+    await user.click(screen.getByRole("button", { name: "Nomad" }));
+    // Só existe 1 nômade — se a página não voltasse pra 1, a lista ficaria
+    // vazia mesmo havendo resultado.
+    expect(await screen.findByText("Fulano Nômade")).toBeInTheDocument();
+    expect(getTbodyRowTexts()).toHaveLength(1);
+  });
+
+  it("9. F5 simulado (remontagem na mesma URL) mantém só nômades no <tbody>", async () => {
+    apiMock.getCompanies.mockResolvedValue({ data: [companyFixture()], total: 1 });
+    apiMock.getAgencies.mockResolvedValue({
+      data: [agencyFixture({ name: "Agência Digital Creative", partner_profile: { status: "active" } })],
+      total: 1,
+    });
+    apiMock.getNomades.mockResolvedValue({ data: [nomadFixture()], total: 1 });
+
+    const { unmount } = renderAtUrl("/admin/empresas?type=nomad");
+    await screen.findByText("Fulano Nômade");
+    expect(getTbodyRowTexts()).toHaveLength(1);
+    unmount();
+
+    renderAtUrl("/admin/empresas?type=nomad");
+    await screen.findByText("Fulano Nômade");
+    const rows = getTbodyRowTexts();
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).not.toContain("Digital Creative");
+  });
+
+  it("10. voltar/avançar sincroniza chip, total e <tbody> juntos", async () => {
+    apiMock.getCompanies.mockResolvedValue({ data: [companyFixture()], total: 1 });
+    apiMock.getAgencies.mockResolvedValue({ data: [agencyFixture()], total: 1 });
+    apiMock.getNomades.mockResolvedValue({ data: [nomadFixture()], total: 1 });
+
+    function GoBackButton() {
+      const navigate = useNavigate();
+      return (
+        <button type="button" onClick={() => navigate(-1)}>
+          voltar-teste-tbody
+        </button>
+      );
+    }
+    const user = userEvent.setup();
+    render(
+      <MemoryRouter initialEntries={["/admin/empresas?type=nomad"]}>
+        <SidebarProvider>
+          <OpenScreensProvider>
+            <GoBackButton />
+            <AdminEmpresasPage />
+          </OpenScreensProvider>
+        </SidebarProvider>
+      </MemoryRouter>,
+    );
+    await screen.findByText("Fulano Nômade");
+    expect(getTbodyRowTexts()).toHaveLength(1);
+
+    await user.click(screen.getByRole("button", { name: "Agency" }));
+    await screen.findByText("Agência Parceira");
+    expect(getTbodyRowTexts()).toHaveLength(1);
+    expect(getTbodyRowTexts()[0]).toContain("Agência Parceira");
+
+    await user.click(screen.getByRole("button", { name: "voltar-teste-tbody" }));
+    await screen.findByText("Fulano Nômade");
+    const rows = getTbodyRowTexts();
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toContain("Fulano Nômade");
+    expect(screen.getByRole("button", { name: "Nomad" })).toHaveAttribute("aria-pressed", "true");
+  });
+
+  it("11. desativar/reativar (atualização localizada) não reinsere uma Agency no filtro Nomad", async () => {
+    apiMock.getCompanies.mockResolvedValue({ data: [companyFixture()], total: 1 });
+    apiMock.getAgencies.mockResolvedValue({
+      data: [agencyFixture({ name: "Agência Digital Creative", partner_profile: { status: "active" } })],
+      total: 1,
+    });
+    apiMock.getNomades.mockResolvedValue({ data: [nomadFixture()], total: 1 });
+    apiMock.updateNomadeStatus.mockResolvedValue({ status: "inativo" });
+
+    const user = userEvent.setup();
+    renderAtUrl("/admin/empresas?type=nomad");
+    await screen.findByText("Fulano Nômade");
+
+    await user.click(await screen.findByRole("button", { name: "Desativar empresa Nomad Fulano Nômade" }));
+    await user.click(screen.getByRole("button", { name: "Desativar" }));
+    await waitFor(() => expect(apiMock.updateNomadeStatus).toHaveBeenCalled());
+
+    // O nômade desativado some do filtro padrão (só Ativos) — a Agency
+    // Partner, que nunca deveria ter entrado, continua fora também.
+    await waitFor(() => expect(getTbodyRowTexts()).toHaveLength(0));
+    expect(getTbodyRowTexts().some((r) => r.includes("Digital Creative"))).toBe(false);
+  });
+
+  it("12. busca vazia não usa nem depende da caixa de sugestões", async () => {
+    apiMock.getCompanies.mockResolvedValue({ data: [companyFixture()], total: 1 });
+    apiMock.getAgencies.mockResolvedValue({
+      data: [agencyFixture({ name: "Agência Digital Creative", partner_profile: { status: "active" } })],
+      total: 1,
+    });
+    apiMock.getNomades.mockResolvedValue({ data: [nomadFixture()], total: 1 });
+
+    renderAtUrl("/admin/empresas?type=nomad");
+    await screen.findByText("Fulano Nômade");
+
+    // Busca vazia: a caixa de sugestões (searchSuggestions) nem chega a
+    // existir no DOM — searchFocused/searchQuery vazios não abrem o
+    // dropdown. O <tbody> não depende dela pra estar correto.
+    expect(screen.queryByText("Nenhuma empresa encontrada com esse termo")).not.toBeInTheDocument();
+    const rows = getTbodyRowTexts();
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toContain("Fulano Nômade");
+  });
+});
