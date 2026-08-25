@@ -265,6 +265,9 @@ type UsuarioDaLista = User & {
   const [isDeleteLoading, setIsDeleteLoading] = useState(false);
   const [deletionReason, setDeletionReason] = useState("");
   const [deletionReasonError, setDeletionReasonError] = useState("");
+  // Exclusão física real (irreversível) exige confirmação em DUAS etapas —
+  // a 1ª só coleta o motivo e avança, a 2ª é a única que chama DELETE.
+  const [deleteStep, setDeleteStep] = useState<1 | 2>(1);
   const [searchTerm, setSearchTerm] = useState("");
   /**
    * Funções que existem de fato na plataforma (conferido contra o banco).
@@ -975,41 +978,47 @@ type UsuarioDaLista = User & {
       case "delete":
         setDeletionReason("");
         setDeletionReasonError("");
+        setDeleteStep(1);
         setIsDeleteUserAlertOpen(true);
         break;
     }
   };
 
-  const handleDeleteUser = async () => {
+  // 1ª etapa: só valida o motivo e avança pra 2ª tela — nenhuma chamada de
+  // API acontece aqui.
+  const handleContinueToDeleteConfirmation = () => {
     if (!selectedUser) return;
 
-    // Validate deletion reason
     if (!deletionReason.trim()) {
       setDeletionReasonError("O motivo da exclusão é obrigatório");
       return;
     }
-
     if (deletionReason.trim().length < 10) {
       setDeletionReasonError("O motivo deve ter no mínimo 10 caracteres");
       return;
     }
-
-    // Security check: prevent deletion of current user
     if (selectedUser.id === currentUserId) {
       console.error("Cannot delete current logged-in user");
       return;
     }
-
-    // Security check: prevent deletion of main admin accounts
     if (selectedUser.is_admin && selectedUser.role === "admin") {
       console.error("Cannot delete main admin account");
       return;
     }
 
+    setDeleteStep(2);
+  };
+
+  // 2ª etapa (única que chama DELETE): "Excluir usuário definitivamente".
+  const handleDeleteUser = async () => {
+    if (!selectedUser) return;
+
     setIsDeleteLoading(true);
     try {
-      // Real API call to delete user
-      await apiDeleteUser(String(selectedUser.id));
+      // Real API call to delete user — o motivo digitado acima agora chega
+      // no backend e é gravado no log de auditoria (writeAccessAudit), não
+      // fica só decorativo na tela.
+      await apiDeleteUser(String(selectedUser.id), deletionReason.trim());
 
       toast({
         title: "Usuário excluído",
@@ -1022,6 +1031,7 @@ type UsuarioDaLista = User & {
       setSelectedUser(null);
       setDeletionReason("");
       setDeletionReasonError("");
+      setDeleteStep(1);
     } catch (error: any) {
       console.error("Error deleting user:", error);
       toast({
@@ -1045,6 +1055,17 @@ type UsuarioDaLista = User & {
     // Remove formatting and open WhatsApp
     const cleanPhone = phone.replace(/\D/g, "");
     window.open(`https://wa.me/${cleanPhone}`, "_blank");
+  };
+
+  // Mostrado nas confirmações de bloqueio/desbloqueio — confirma a pessoa
+  // certa sem expor o e-mail inteiro na tela. "ab***@dominio.com" (mantém
+  // domínio inteiro, útil pra reconhecer a organização; mascara só a parte
+  // local depois dos 2 primeiros caracteres).
+  const maskEmail = (email: string) => {
+    const [local, domain] = email.split("@");
+    if (!domain) return email;
+    const visible = local.slice(0, 2);
+    return `${visible}${"*".repeat(Math.max(local.length - visible.length, 3))}@${domain}`;
   };
 
   const getAccountTypeLabel = (type: string) => {
@@ -1147,30 +1168,24 @@ type UsuarioDaLista = User & {
     }
   };
 
-  const handleStatusConfirmation = async (
-    reason: string,
-    duration: "indefinite" | Date,
-  ) => {
+  // Ação reversível (bloquear/desbloquear login) — não deve engolir o erro:
+  // deixar o `ConfirmationDialog` receber a rejeição é o que faz ele manter
+  // o diálogo aberto com a mensagem amigável (403/409/rede) em vez de
+  // fechar como se tivesse dado certo (bug corrigido neste lote — antes o
+  // catch aqui só mostrava um toast e a Promise resolvia normalmente).
+  const handleStatusConfirmation = async () => {
     if (!selectedUser) return;
 
-    try {
-      const newStatus = !selectedUser.is_active;
-      await updateUser(String(selectedUser.id), { is_active: newStatus });
-      // Sync into PlatformUsersContext so company tabs reflect the change immediately
-      updatePlatformUser(String(selectedUser.id), { is_active: newStatus });
+    const newStatus = !selectedUser.is_active;
+    await updateUser(String(selectedUser.id), { is_active: newStatus });
+    // Sync into PlatformUsersContext so company tabs reflect the change immediately
+    updatePlatformUser(String(selectedUser.id), { is_active: newStatus });
 
-      setSelectedUser({ ...selectedUser, is_active: newStatus });
-      toast({
-        title: newStatus ? "Usuário desbloqueado" : "Usuário bloqueado",
-        description: `O usuário "${selectedUser.name}" foi ${newStatus ? "desbloqueado" : "bloqueado"} com sucesso.`,
-      });
-    } catch (error: any) {
-      toast({
-        title: "Erro",
-        description: error.message || "Erro ao atualizar status do usuário.",
-        variant: "destructive",
-      });
-    }
+    setSelectedUser({ ...selectedUser, is_active: newStatus });
+    toast({
+      title: newStatus ? "Usuário desbloqueado" : "Usuário bloqueado",
+      description: `O usuário "${selectedUser.name}" foi ${newStatus ? "desbloqueado" : "bloqueado"} com sucesso.`,
+    });
 
     // Close dialog
     setIsDeleteAlertOpen(false);
@@ -2915,6 +2930,8 @@ type UsuarioDaLista = User & {
                               <DropdownMenuTrigger asChild>
                                 <button
                                   onClick={(e) => e.stopPropagation()}
+                                  aria-label={`Mais ações — ${user.name}`}
+                                  title="Mais ações"
                                   className="h-[26px] w-[26px] flex items-center justify-center rounded-[8px] bg-white dark:bg-slate-800 border border-[#e8edf5] dark:border-slate-700 text-slate-400 dark:text-slate-500 shadow-[0_4px_10px_rgba(15,23,42,0.06)] hover:bg-gradient-to-br hover:from-[#2558FF] hover:via-[#6E2C96] hover:to-[#D92293] hover:text-white dark:hover:text-[#0a1628] hover:border-transparent hover:shadow-[0_8px_18px_rgba(15,23,42,0.18)] hover:-translate-y-px transition-all duration-150"
                                 >
                                   <MoreHorizontal className="h-3.5 w-3.5" />
@@ -3668,14 +3685,21 @@ type UsuarioDaLista = User & {
       <ConfirmationDialog
         open={isDeleteAlertOpen && !!selectedUser}
         onClose={() => setIsDeleteAlertOpen(false)}
-        onConfirm={() => handleStatusConfirmation("Desconhecido", "indefinite")}
+        onConfirm={handleStatusConfirmation}
         title={
           selectedUser?.is_active ? "Bloquear Usuário" : "Desbloquear Usuário"
         }
         message={
           selectedUser?.is_active
-            ? `Tem certeza que deseja bloquear o usuário "${selectedUser?.name}"? Ele não poderá acessar a plataforma enquanto estiver bloqueado.`
-            : `Tem certeza que deseja desbloquear o usuário "${selectedUser?.name}"? Ele voltará a ter acesso à plataforma.`
+            ? "O usuário não poderá acessar a plataforma enquanto estiver bloqueado. A conta e todo o histórico permanecem no sistema — é possível desbloquear a qualquer momento."
+            : "O usuário volta a ter acesso à plataforma imediatamente, com o mesmo histórico e permissões de antes do bloqueio."
+        }
+        targetName={selectedUser?.name}
+        targetDetail={selectedUser ? `${maskEmail(selectedUser.email)} · ${getAccountTypeLabel(selectedUser.account_type)}` : undefined}
+        consequences={
+          selectedUser?.is_active
+            ? ["O login fica bloqueado até alguém desbloquear pela mesma tela.", "Nenhum dado é apagado."]
+            : ["O usuário consegue fazer login normalmente de novo."]
         }
         confirmText={selectedUser?.is_active ? "Bloquear" : "Desbloquear"}
         cancelText="Cancelar"
@@ -3700,83 +3724,125 @@ type UsuarioDaLista = User & {
         <StandardModalDialog
           open={isDeleteUserAlertOpen}
           onClose={() => {
-            if (!isDeleteLoading) setIsDeleteUserAlertOpen(false);
+            if (!isDeleteLoading) {
+              setIsDeleteUserAlertOpen(false);
+              setDeleteStep(1);
+            }
           }}
-          title="Excluir Usuário"
+          title={deleteStep === 1 ? "Excluir Usuário" : "Excluir Usuário — confirmação final"}
           size="compact"
           footer={
-            <div className="flex gap-3 w-full">
-              <Button
-                variant="outline"
-                className="flex-1 h-9 text-sm border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800"
-                onClick={() => setIsDeleteUserAlertOpen(false)}
-                disabled={isDeleteLoading}
-              >
-                Cancelar
-              </Button>
-              <Button
-                className="flex-1 h-9 text-sm font-semibold text-white border-0 shadow-sm bg-gradient-to-r from-red-500 to-rose-600 hover:from-red-600 hover:to-rose-700 disabled:opacity-50 disabled:cursor-not-allowed"
-                onClick={handleDeleteUser}
-                disabled={isDeleteLoading || !deletionReason.trim()}
-              >
-                {isDeleteLoading ? (
-                  <ButtonLoader text="Excluindo..." />
-                ) : (
-                  <>
-                    <Trash2 className="h-3.5 w-3.5 mr-1.5" />
-                    Excluir Definitivamente
-                  </>
-                )}
-              </Button>
-            </div>
+            deleteStep === 1 ? (
+              <div className="flex gap-3 w-full">
+                <Button
+                  variant="outline"
+                  className="flex-1 h-9 text-sm border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800"
+                  onClick={() => setIsDeleteUserAlertOpen(false)}
+                >
+                  Cancelar
+                </Button>
+                <Button
+                  className="flex-1 h-9 text-sm font-semibold"
+                  onClick={handleContinueToDeleteConfirmation}
+                  disabled={!deletionReason.trim()}
+                >
+                  Continuar para confirmação
+                </Button>
+              </div>
+            ) : (
+              <div className="flex gap-3 w-full">
+                <Button
+                  variant="outline"
+                  className="flex-1 h-9 text-sm border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800"
+                  onClick={() => setDeleteStep(1)}
+                  disabled={isDeleteLoading}
+                >
+                  Voltar
+                </Button>
+                <Button
+                  className="flex-1 h-9 text-sm font-semibold text-white border-0 shadow-sm bg-gradient-to-r from-red-500 to-rose-600 hover:from-red-600 hover:to-rose-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                  onClick={handleDeleteUser}
+                  disabled={isDeleteLoading}
+                >
+                  {isDeleteLoading ? (
+                    <ButtonLoader text="Excluindo..." />
+                  ) : (
+                    <>
+                      <Trash2 className="h-3.5 w-3.5 mr-1.5" />
+                      Excluir usuário definitivamente
+                    </>
+                  )}
+                </Button>
+              </div>
+            )
           }
         >
-          <div className="px-6 py-5 space-y-4">
-            <div className="flex items-start gap-3">
-              <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-red-50 dark:bg-red-900/20">
-                <Trash2 className="h-5 w-5 text-red-500" />
-              </div>
-              <p className="text-sm text-slate-500 dark:text-slate-400 leading-relaxed pt-2">
-                Tem certeza que deseja excluir este usuário? Esta ação é{" "}
-                <strong>irreversível</strong>.
-              </p>
-            </div>
-
-            <div className="bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 rounded-xl p-3">
-              <div className="text-sm font-semibold text-slate-900 dark:text-white">
-                {selectedUser.name}
-              </div>
-              <div className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                {selectedUser.email}
-              </div>
-            </div>
-
-            <div className="space-y-1.5">
-              <label className="text-sm font-semibold text-slate-700 dark:text-slate-300 flex items-center gap-1">
-                Motivo da Exclusão <span className="text-red-500">*</span>
-              </label>
-              <Textarea
-                placeholder="Descreva o motivo da exclusão para fins de auditoria (mínimo 10 caracteres)"
-                value={deletionReason}
-                onChange={(e) => {
-                  setDeletionReason(e.target.value);
-                  if (deletionReasonError) setDeletionReasonError("");
-                }}
-                disabled={isDeleteLoading}
-                className="text-sm resize-none focus-visible:ring-red-500"
-                rows={3}
-              />
-              {deletionReasonError && (
-                <p className="text-xs text-red-500 flex items-center gap-1">
-                  <AlertCircle className="h-3 w-3" />
-                  {deletionReasonError}
+          {deleteStep === 1 ? (
+            <div className="px-6 py-5 space-y-4">
+              <div className="flex items-start gap-3">
+                <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-red-50 dark:bg-red-900/20">
+                  <Trash2 className="h-5 w-5 text-red-500" />
+                </div>
+                <p className="text-sm text-slate-500 dark:text-slate-400 leading-relaxed pt-2">
+                  Esta ação apaga a conta do banco de dados — o usuário deixa de existir e não pode ser restaurado.
+                  Se ele for dono de uma agência ou empresa vinculada, a exclusão será bloqueada até esses vínculos serem resolvidos.
                 </p>
-              )}
-              <p className="text-xs text-slate-400">
-                Caracteres: {deletionReason.length}/10 (mínimo)
-              </p>
+              </div>
+
+              <div className="bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 rounded-xl p-3">
+                <div className="text-sm font-semibold text-slate-900 dark:text-white">
+                  {selectedUser.name}
+                </div>
+                <div className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                  {selectedUser.email}
+                </div>
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-sm font-semibold text-slate-700 dark:text-slate-300 flex items-center gap-1">
+                  Motivo da Exclusão <span className="text-red-500">*</span>
+                </label>
+                <Textarea
+                  placeholder="Descreva o motivo da exclusão para fins de auditoria (mínimo 10 caracteres)"
+                  value={deletionReason}
+                  onChange={(e) => {
+                    setDeletionReason(e.target.value);
+                    if (deletionReasonError) setDeletionReasonError("");
+                  }}
+                  className="text-sm resize-none focus-visible:ring-red-500"
+                  rows={3}
+                />
+                {deletionReasonError && (
+                  <p className="text-xs text-red-500 flex items-center gap-1">
+                    <AlertCircle className="h-3 w-3" />
+                    {deletionReasonError}
+                  </p>
+                )}
+                <p className="text-xs text-slate-400">
+                  Caracteres: {deletionReason.length}/10 (mínimo)
+                </p>
+              </div>
             </div>
-          </div>
+          ) : (
+            <div className="px-6 py-5 space-y-4">
+              <div className="flex items-start gap-3">
+                <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-red-50 dark:bg-red-900/20">
+                  <Trash2 className="h-5 w-5 text-red-500" />
+                </div>
+                <p className="text-sm text-slate-500 dark:text-slate-400 leading-relaxed pt-2">
+                  Esta é a confirmação final — a conta será apagada assim que você clicar abaixo.
+                </p>
+              </div>
+              <div className="bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 rounded-xl p-3">
+                <div className="text-sm font-semibold text-slate-900 dark:text-white">
+                  {selectedUser.name}
+                </div>
+                <div className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                  {selectedUser.email}
+                </div>
+              </div>
+            </div>
+          )}
         </StandardModalDialog>
       )}
     </div>

@@ -750,8 +750,8 @@ class ApiClient {
     return this.put(`/users/${id}`, data);
   }
 
-  async deleteUser(id: string | number) {
-    return this.del(`/users/${id}`);
+  async deleteUser(id: string | number, reason?: string) {
+    return this.del(`/users/${id}`, reason ? { reason } : undefined);
   }
 
   // ─── Companies ────────────────────────────────────────────────────────────

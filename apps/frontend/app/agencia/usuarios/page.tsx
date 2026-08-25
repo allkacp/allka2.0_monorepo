@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { SlidePanel } from "@/components/slide-panel";
+import { ConfirmationDialog } from "@/components/confirmation-dialog";
 import { useToast } from "@/components/ui/use-toast";
 import { apiClient } from "@/lib/api-client";
 import {
@@ -50,6 +51,8 @@ export default function AgenciaUsuariosPage() {
   const [editOpen, setEditOpen] = useState(false);
   const [editForm, setEditForm] = useState({ name: "", is_active: true, password: "" });
   const [editSaving, setEditSaving] = useState(false);
+  // Ver comentário equivalente em company/usuarios/page.tsx.
+  const [confirmingBlock, setConfirmingBlock] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -122,6 +125,7 @@ export default function AgenciaUsuariosPage() {
   function openEdit(u: AgencyUser) {
     setEditUser(u);
     setEditForm({ name: u.name, is_active: u.is_active, password: "" });
+    setConfirmingBlock(false);
     setEditOpen(true);
   }
   function closeEdit() {
@@ -146,6 +150,23 @@ export default function AgenciaUsuariosPage() {
     } finally {
       setEditSaving(false);
     }
+  }
+
+  function maskEmail(email: string) {
+    const [local, domain] = email.split("@");
+    if (!domain) return email;
+    const visible = local.slice(0, 2);
+    return `${visible}${"*".repeat(Math.max(local.length - visible.length, 3))}@${domain}`;
+  }
+
+  async function confirmToggleBlock() {
+    if (!editUser) return;
+    const nextActive = !editForm.is_active;
+    await apiClient.updateAgencyUser(editUser.id, { is_active: nextActive });
+    setEditForm((f) => ({ ...f, is_active: nextActive }));
+    setEditUser((u) => (u ? { ...u, is_active: nextActive } : u));
+    toast({ title: nextActive ? "Usuário desbloqueado" : "Usuário bloqueado" });
+    load();
   }
 
   return (
@@ -239,7 +260,14 @@ export default function AgenciaUsuariosPage() {
                     {new Date(u.created_at).toLocaleDateString("pt-BR")}
                   </td>
                   <td className="px-4 py-3 text-right">
-                    <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={() => openEdit(u)}>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-7 w-7 p-0"
+                      onClick={() => openEdit(u)}
+                      aria-label={`Editar ${u.name}`}
+                      title="Editar"
+                    >
                       <Pencil className="h-3.5 w-3.5" />
                     </Button>
                   </td>
@@ -362,7 +390,7 @@ export default function AgenciaUsuariosPage() {
                 variant="ghost"
                 size="sm"
                 className="h-7 gap-1.5"
-                onClick={() => setEditForm((f) => ({ ...f, is_active: !f.is_active }))}
+                onClick={() => setConfirmingBlock(true)}
               >
                 {editForm.is_active ? <Lock className="h-3.5 w-3.5" /> : <Unlock className="h-3.5 w-3.5" />}
                 {editForm.is_active ? "Bloquear" : "Desbloquear"}
@@ -371,6 +399,28 @@ export default function AgenciaUsuariosPage() {
           )}
         </div>
       </SlidePanel>
+
+      <ConfirmationDialog
+        open={confirmingBlock && !!editUser}
+        onClose={() => setConfirmingBlock(false)}
+        onConfirm={confirmToggleBlock}
+        title={editForm.is_active ? "Bloquear usuário" : "Desbloquear usuário"}
+        message={
+          editForm.is_active
+            ? "O usuário não poderá fazer login enquanto estiver bloqueado. A conta e o histórico continuam existindo — dá pra desbloquear a qualquer momento nesta mesma tela."
+            : "O usuário volta a conseguir fazer login imediatamente, com o mesmo histórico e função de antes do bloqueio."
+        }
+        targetName={editUser?.name}
+        targetDetail={editUser ? maskEmail(editUser.email) : undefined}
+        consequences={
+          editForm.is_active
+            ? ["O login fica bloqueado até alguém desbloquear por aqui.", "Nenhum dado é apagado."]
+            : ["O usuário consegue fazer login normalmente de novo."]
+        }
+        confirmText={editForm.is_active ? "Bloquear" : "Desbloquear"}
+        cancelText="Cancelar"
+        destructive={editForm.is_active}
+      />
     </div>
     </div>
   );

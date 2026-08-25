@@ -6,6 +6,7 @@ import { verifyToken } from "../middleware/auth";
 import { validate, parsePagination } from "../middleware/validate";
 import { generateNextUserCode } from "../lib/user-code";
 import { resolveMyAgencyId } from "../lib/project-scope";
+import { writeAccessAudit } from "../lib/product-feedback-service";
 
 // Fluxo self-service: uma Agency cria/gerencia os próprios usuários
 // (colaboradores). Sempre escopado à agência do usuário logado — nunca
@@ -182,7 +183,7 @@ router.put("/:id", verifyToken, requireAgencyAdmin, validate(updateSchema), asyn
 
     const target = await prisma.user.findUnique({
       where: { id: req.params.id as string },
-      select: { id: true, agency_id: true },
+      select: { id: true, agency_id: true, is_active: true },
     });
     if (!target || target.agency_id !== agencyId) {
       res.status(404).json({ error: "Usuário não encontrado" });
@@ -215,6 +216,16 @@ router.put("/:id", verifyToken, requireAgencyAdmin, validate(updateSchema), asyn
       data,
       select: agencyUserSelect,
     });
+
+    if (typeof data.is_active === "boolean" && data.is_active !== target.is_active) {
+      await writeAccessAudit({
+        actorId: req.user!.id,
+        targetUserId: target.id,
+        action: data.is_active ? "user.reactivated" : "user.deactivated",
+        before: { is_active: target.is_active },
+        after: { is_active: data.is_active },
+      });
+    }
 
     res.json(toDTO(updated));
   } catch (err) {

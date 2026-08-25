@@ -11,6 +11,8 @@ import {
 import { validate, parsePagination } from "../middleware/validate";
 import { generateNextUserCode } from "../lib/user-code";
 import { claimNextOrgSequenceNumber } from "../lib/company-sequence";
+import { hasMasterAccess, countActiveResponsibleAdmins } from "../lib/admin-account-safety";
+import { writeAccessAudit } from "../lib/product-feedback-service";
 
 const router = Router();
 
@@ -154,6 +156,10 @@ const updateUserSchema = createUserSchema
   .extend({
     password: z.string().min(6).optional(),
     is_active: z.boolean().optional(),
+    // Motivo opcional de bloqueio/desbloqueio — nunca persistido na própria
+    // tabela users, só repassado pro log de auditoria (ver writeAccessAudit
+    // no handler abaixo).
+    reason: z.string().trim().max(2000).optional(),
   });
 
 const safeSelect = {
@@ -519,60 +525,131 @@ router.post(
 );
 
 // PUT /api/users/:id
-router.put("/:id", verifyToken, validate(updateUserSchema), async (req, res, next) => {
-  try {
-    const { password, ...rest } = req.body as {
-      password?: string;
-      [key: string]: unknown;
-    };
+//
+// Endpoint sensível: pode alterar `is_active` (bloquear/desbloquear login),
+// `role` e `admin_profile_id` (nível de acesso) de qualquer usuário —
+// exatamente por isso exige admin + a permissão granular `usuarios:edit`
+// (faltava até este lote: qualquer conta autenticada, de qualquer
+// account_type, conseguia chamar isto sobre qualquer outro usuário, incluindo
+// se auto-promover a admin/is_master via `role`/`admin_profile_id` no
+// payload — ver auditoria do lote "ações destrutivas de conta").
+router.put(
+  "/:id",
+  verifyToken,
+  requireRole("admin"),
+  requirePermission("usuarios", "edit"),
+  validate(updateUserSchema),
+  async (req, res, next) => {
+    try {
+      const { password, reason, ...rest } = req.body as {
+        password?: string;
+        reason?: string;
+        [key: string]: unknown;
+      };
 
-    // Separa os campos de UserProfile (tabela relacionada) do resto —
-    // eles não existem na tabela users, então não podem ir direto pro
-    // prisma.user.update.
-    const profileData: Record<string, unknown> = {};
-    for (const key of PROFILE_FIELD_KEYS) {
-      if (rest[key] !== undefined) {
-        profileData[key] = key === "birth_date" && rest[key] ? new Date(rest[key] as string) : rest[key];
-        delete rest[key];
+      // Separa os campos de UserProfile (tabela relacionada) do resto —
+      // eles não existem na tabela users, então não podem ir direto pro
+      // prisma.user.update.
+      const profileData: Record<string, unknown> = {};
+      for (const key of PROFILE_FIELD_KEYS) {
+        if (rest[key] !== undefined) {
+          profileData[key] = key === "birth_date" && rest[key] ? new Date(rest[key] as string) : rest[key];
+          delete rest[key];
+        }
       }
-    }
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const data: Record<string, any> = { ...rest };
-    if (password) {
-      data["password_hash"] = await bcrypt.hash(password, 10);
-    }
-
-    // `status` e `is_active` sao a mesma informacao em dois formatos: o
-    // primeiro diz QUAL a situacao, o segundo se ela permite acesso. Indices e
-    // consultas de toda a plataforma usam is_active, entao os dois andam
-    // juntos — mexer num sem o outro deixaria a conta em estado incoerente.
-    if (typeof data.status === "string") {
-      data.is_active = data.status === "ativo";
-    } else if (typeof data.is_active === "boolean" && data.status === undefined) {
-      data.status = data.is_active ? "ativo" : "inativo";
-    }
-
-    const id = req.params.id as string;
-    const user = await prisma.$transaction(async (tx) => {
-      if (Object.keys(data).length > 0) {
-        await tx.user.update({ where: { id }, data });
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const data: Record<string, any> = { ...rest };
+      if (password) {
+        data["password_hash"] = await bcrypt.hash(password, 10);
       }
-      if (Object.keys(profileData).length > 0) {
-        await tx.userProfile.upsert({
-          where: { user_id: id },
-          create: { user_id: id, ...profileData },
-          update: profileData,
+
+      // `status` e `is_active` sao a mesma informacao em dois formatos: o
+      // primeiro diz QUAL a situacao, o segundo se ela permite acesso. Indices e
+      // consultas de toda a plataforma usam is_active, entao os dois andam
+      // juntos — mexer num sem o outro deixaria a conta em estado incoerente.
+      if (typeof data.status === "string") {
+        data.is_active = data.status === "ativo";
+      } else if (typeof data.is_active === "boolean" && data.status === undefined) {
+        data.status = data.is_active ? "ativo" : "inativo";
+      }
+
+      const id = req.params.id as string;
+      const target = await prisma.user.findUnique({
+        where: { id },
+        select: { role: true, is_active: true, admin_profile: { select: { is_master: true, is_active: true } } },
+      });
+      if (!target) {
+        res.status(404).json({ error: "Usuário não encontrado" });
+        return;
+      }
+
+      // Campos que alteram nível de acesso ou capacidade de login — os únicos
+      // que disparam as proteções de "responsável" abaixo. Editar nome,
+      // telefone etc. de um Admin Master continua livre pra qualquer admin
+      // com `usuarios:edit`.
+      const touchesAccess =
+        data.is_active !== undefined ||
+        ("role" in data && data.role !== target.role) ||
+        "admin_profile_id" in data;
+
+      const targetIsMasterAdmin = target.role === "admin" && hasMasterAccess(target.admin_profile);
+
+      if (touchesAccess && targetIsMasterAdmin) {
+        const actor = await prisma.user.findUnique({
+          where: { id: req.user!.id },
+          select: { admin_profile: { select: { is_master: true, is_active: true } } },
+        });
+        const actorIsMaster = hasMasterAccess(actor?.admin_profile);
+        if (!actorIsMaster && req.user!.id !== id) {
+          res.status(403).json({ error: "Só um Admin Master pode alterar o acesso de outro Admin Master." });
+          return;
+        }
+
+        const willReduceResponsibility =
+          data.is_active === false || ("role" in data && data.role !== "admin") || "admin_profile_id" in data;
+        if (willReduceResponsibility) {
+          const remaining = await countActiveResponsibleAdmins(id);
+          if (remaining === 0) {
+            res.status(409).json({
+              error: "Não é possível remover o acesso do último administrador responsável (Master) do sistema.",
+            });
+            return;
+          }
+        }
+      }
+
+      const user = await prisma.$transaction(async (tx) => {
+        if (Object.keys(data).length > 0) {
+          await tx.user.update({ where: { id }, data });
+        }
+        if (Object.keys(profileData).length > 0) {
+          await tx.userProfile.upsert({
+            where: { user_id: id },
+            create: { user_id: id, ...profileData },
+            update: profileData,
+          });
+        }
+        return tx.user.findUnique({ where: { id }, select: safeSelect });
+      });
+
+      if (typeof data.is_active === "boolean" && data.is_active !== target.is_active) {
+        await writeAccessAudit({
+          actorId: req.user!.id,
+          targetUserId: id,
+          action: data.is_active ? "user.reactivated" : "user.deactivated",
+          before: { is_active: target.is_active },
+          after: { is_active: data.is_active },
+          reason: typeof reason === "string" ? reason : undefined,
         });
       }
-      return tx.user.findUnique({ where: { id }, select: safeSelect });
-    });
 
-    res.json(flattenProfile(user!));
-  } catch (err) {
-    next(err);
-  }
-});
+      res.json(flattenProfile(user!));
+    } catch (err) {
+      next(err);
+    }
+  },
+);
 
 // POST /api/users/:id/primeiro-acesso — emite um link para a pessoa definir
 // a própria senha.
@@ -636,7 +713,11 @@ router.post(
   },
 );
 
-// DELETE /api/users/:id
+// DELETE /api/users/:id — exclusão física, irreversível. Protegida contra:
+// Admin comum apagando Admin Master, apagar o último responsável do
+// sistema, e uma exclusão que esbarra em organizações vinculadas
+// (Agency/Company de que o usuário é dono — relação obrigatória, sem
+// cascade) virando um 500 cru em vez de uma mensagem amigável.
 router.delete(
   "/:id",
   verifyToken,
@@ -644,9 +725,66 @@ router.delete(
   requirePermission("usuarios", "delete"),
   async (req, res, next) => {
     try {
-      await prisma.user.delete({ where: { id: (req.params.id as string) } });
+      const id = req.params.id as string;
+      const reason = typeof (req.body as { reason?: unknown } | undefined)?.reason === "string"
+        ? (req.body as { reason?: string }).reason
+        : undefined;
+
+      const target = await prisma.user.findUnique({
+        where: { id },
+        select: { role: true, is_active: true, admin_profile: { select: { is_master: true, is_active: true } } },
+      });
+      if (!target) {
+        res.status(404).json({ error: "Usuário não encontrado" });
+        return;
+      }
+
+      const targetIsMasterAdmin = target.role === "admin" && hasMasterAccess(target.admin_profile);
+      if (target.role === "admin") {
+        if (targetIsMasterAdmin) {
+          const actor = await prisma.user.findUnique({
+            where: { id: req.user!.id },
+            select: { admin_profile: { select: { is_master: true, is_active: true } } },
+          });
+          const actorIsMaster = hasMasterAccess(actor?.admin_profile);
+          if (!actorIsMaster) {
+            res.status(403).json({ error: "Só um Admin Master pode excluir outro Admin Master." });
+            return;
+          }
+        }
+        if (target.is_active) {
+          const remaining = await countActiveResponsibleAdmins(id);
+          if (targetIsMasterAdmin && remaining === 0) {
+            res.status(409).json({
+              error: "Não é possível excluir o último administrador responsável (Master) do sistema.",
+            });
+            return;
+          }
+        }
+      }
+
+      await prisma.user.delete({ where: { id } });
+
+      await writeAccessAudit({
+        actorId: req.user!.id,
+        targetUserId: id,
+        action: "user.deleted",
+        reason,
+      });
+
       res.status(204).send();
-    } catch (err) {
+    } catch (err: any) {
+      // Dono de Agency/Company (relação obrigatória, sem onDelete definido —
+      // Prisma cai no default Restrict) faz o delete estourar uma violação
+      // de FK em vez de simplesmente apagar em cascata o histórico da
+      // organização. Isso é o comportamento certo — só falta a mensagem
+      // amigável em vez do 500 genérico.
+      if (err?.code === "P2003") {
+        res.status(409).json({
+          error: "Este usuário possui uma organização (agência ou empresa) ou outros registros vinculados que impedem a exclusão. Resolva esses vínculos antes de excluir a conta.",
+        });
+        return;
+      }
       next(err);
     }
   }
