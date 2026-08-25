@@ -1055,8 +1055,17 @@ class ApiClient {
     return this.put(`/nomades/${id}`, data);
   }
 
-  async deleteNomade(id: string | number) {
-    return this.del(`/nomades/${id}`);
+  /** Desativar/reativar (reversível) — mantém o perfil (histórico,
+   * qualificações, carteira) intacto, só bloqueia/libera o login vinculado. */
+  async updateNomadeStatus(id: string | number, status: "ativo" | "inativo", reason?: string) {
+    return this.patch(`/nomades/${id}/status`, { status, ...(reason ? { reason } : {}) });
+  }
+
+  /** Remove SÓ o perfil profissional — nunca a conta global. Bloqueado
+   * (409) quando há histórico real vinculado (carteira, qualificações,
+   * saques, tarefas). A conta global vinculada é desativada, nunca apagada. */
+  async deleteNomade(id: string | number, reason?: string) {
+    return this.del(`/nomades/${id}`, reason ? { reason } : undefined);
   }
 
   // ─── Nomade Levels ────────────────────────────────────────────────────────
