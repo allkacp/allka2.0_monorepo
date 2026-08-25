@@ -2,7 +2,7 @@ import React from "react";
 import { describe, expect, it, vi, beforeEach } from "vitest";
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { MemoryRouter, useLocation } from "react-router-dom";
+import { MemoryRouter, useLocation, useNavigate } from "react-router-dom";
 import { SidebarProvider } from "@/contexts/sidebar-context";
 import { OpenScreensProvider } from "@/contexts/open-screens-context";
 
@@ -418,6 +418,155 @@ describe("admin/empresas — filtros principais mostram só o tipo selecionado",
 
     await user.click(await screen.findByRole("button", { name: "Todos" }));
     await waitFor(() => expect(currentSearch).toBe(""));
+  });
+});
+
+// Lote "correct company type filter source of truth" (ata 2026-08) — o
+// responsável reproduziu: em /admin/empresas?type=nomad, com o chip "Nomad"
+// selecionado, a tabela mostrava "Agência Digital Creative" (badges Agency +
+// Partner). Causa real: a caixa de sugestões de busca (`searchSuggestions`)
+// lia a lista `companies` SEM filtro nenhum de tipo, só a tabela
+// (`filteredCompanies`) filtrava certo. Corrigido centralizando a regra
+// "este registro pertence ao filtro de tipo ativo" numa função só
+// (`matchesTypeAndPartnerFilter`) usada tanto pela tabela quanto pelas
+// sugestões, via `typeFilteredCompanies`.
+describe("admin/empresas — fonte única de verdade do tipo (regressão da Agência aparecendo em Nomad)", () => {
+  it("8/9. uma Agency Partner buscada por nome não aparece nas sugestões nem na tabela com o filtro Nomad ativo", async () => {
+    apiMock.getCompanies.mockResolvedValue({ data: [], total: 0 });
+    apiMock.getAgencies.mockResolvedValue({
+      data: [agencyFixture({ name: "Agência Digital Creative", partner_profile: { status: "active" } })],
+      total: 1,
+    });
+    apiMock.getNomades.mockResolvedValue({ data: [nomadFixture()], total: 1 });
+    const user = userEvent.setup();
+    renderAtUrl("/admin/empresas?type=nomad");
+    await screen.findByText("Fulano Nômade");
+
+    const searchBox = screen.getByPlaceholderText(/buscar/i);
+    await user.click(searchBox);
+    await user.type(searchBox, "Digital Creative");
+
+    // Nem na caixa de sugestões (dropdown abaixo da busca)...
+    await waitFor(() => expect(screen.queryByText("Agência Digital Creative")).not.toBeInTheDocument());
+    // ...nem na tabela.
+    expect(screen.queryByText("Agência Digital Creative")).not.toBeInTheDocument();
+  });
+
+  it("8/9. a mesma Agency Partner não aparece com o filtro Company ativo", async () => {
+    apiMock.getCompanies.mockResolvedValue({ data: [companyFixture()], total: 1 });
+    apiMock.getAgencies.mockResolvedValue({
+      data: [agencyFixture({ name: "Agência Digital Creative", partner_profile: { status: "active" } })],
+      total: 1,
+    });
+    renderAtUrl("/admin/empresas?type=company");
+    await screen.findByText("Empresa Cliente Direta");
+    expect(screen.queryByText("Agência Digital Creative")).not.toBeInTheDocument();
+  });
+
+  it("10. Company aparece em Company e não nos outros dois tipos", async () => {
+    apiMock.getCompanies.mockResolvedValue({ data: [companyFixture()], total: 1 });
+    apiMock.getAgencies.mockResolvedValue({ data: [agencyFixture()], total: 1 });
+    apiMock.getNomades.mockResolvedValue({ data: [nomadFixture()], total: 1 });
+
+    renderAtUrl("/admin/empresas?type=company");
+    expect(await screen.findByText("Empresa Cliente Direta")).toBeInTheDocument();
+    expect(screen.queryByText("Agência Parceira")).not.toBeInTheDocument();
+    expect(screen.queryByText("Fulano Nômade")).not.toBeInTheDocument();
+  });
+
+  it("11. Todos reúne os três tipos sem duplicar registros", async () => {
+    apiMock.getCompanies.mockResolvedValue({ data: [companyFixture()], total: 1 });
+    apiMock.getAgencies.mockResolvedValue({ data: [agencyFixture()], total: 1 });
+    apiMock.getNomades.mockResolvedValue({ data: [nomadFixture()], total: 1 });
+
+    renderAtUrl("/admin/empresas");
+    expect(await screen.findByText("Empresa Cliente Direta")).toBeInTheDocument();
+    expect(screen.getByText("Agência Parceira")).toBeInTheDocument();
+    expect(screen.getByText("Fulano Nômade")).toBeInTheDocument();
+    // Nenhum nome duplicado na tela (cada um aparece exatamente uma vez).
+    expect(screen.getAllByText("Empresa Cliente Direta")).toHaveLength(1);
+    expect(screen.getAllByText("Agência Parceira")).toHaveLength(1);
+    expect(screen.getAllByText("Fulano Nômade")).toHaveLength(1);
+  });
+
+  it("12. o filtro é aplicado antes da paginação — a página renderizada contém só nômades, mesmo com company/agency no total combinado", async () => {
+    apiMock.getCompanies.mockResolvedValue({ data: [companyFixture()], total: 1 });
+    apiMock.getAgencies.mockResolvedValue({ data: [agencyFixture()], total: 1 });
+    apiMock.getNomades.mockResolvedValue({
+      data: Array.from({ length: 3 }, (_, i) =>
+        nomadFixture({ id: `nomade-${i}`, name: `Nômade ${i}`, email: `nomade${i}@example.com` }),
+      ),
+      total: 3,
+    });
+
+    renderAtUrl("/admin/empresas?type=nomad");
+    // Os 3 nômades aparecem — se a paginação rodasse ANTES do filtro de
+    // tipo (sobre os 5 registros combinados, 10 por página), um resultado
+    // errado ainda passaria por acidente aqui; o que prova a ordem certa é
+    // a ausência total de company/agency abaixo, não a contagem em si.
+    expect(await screen.findByText("Nômade 0")).toBeInTheDocument();
+    expect(screen.getByText("Nômade 1")).toBeInTheDocument();
+    expect(screen.getByText("Nômade 2")).toBeInTheDocument();
+    expect(screen.queryByText("Empresa Cliente Direta")).not.toBeInTheDocument();
+    expect(screen.queryByText("Agência Parceira")).not.toBeInTheDocument();
+  });
+
+  it("13. ?type=nomad produz o mesmo resultado depois de um F5 (remontagem da página na mesma URL)", async () => {
+    apiMock.getCompanies.mockResolvedValue({ data: [companyFixture()], total: 1 });
+    apiMock.getAgencies.mockResolvedValue({ data: [agencyFixture()], total: 1 });
+    apiMock.getNomades.mockResolvedValue({ data: [nomadFixture()], total: 1 });
+
+    const { unmount } = renderAtUrl("/admin/empresas?type=nomad");
+    expect(await screen.findByText("Fulano Nômade")).toBeInTheDocument();
+    expect(screen.queryByText("Agência Parceira")).not.toBeInTheDocument();
+    unmount();
+
+    // F5 = remontar do zero na mesma URL.
+    renderAtUrl("/admin/empresas?type=nomad");
+    expect(await screen.findByText("Fulano Nômade")).toBeInTheDocument();
+    expect(screen.queryByText("Agência Parceira")).not.toBeInTheDocument();
+    expect(screen.queryByText("Empresa Cliente Direta")).not.toBeInTheDocument();
+  });
+
+  it("14. voltar do navegador troca o chip e os dados junto com a URL", async () => {
+    apiMock.getCompanies.mockResolvedValue({ data: [companyFixture()], total: 1 });
+    apiMock.getAgencies.mockResolvedValue({ data: [agencyFixture()], total: 1 });
+    apiMock.getNomades.mockResolvedValue({ data: [nomadFixture()], total: 1 });
+
+    // MemoryRouter tem sua própria pilha de histórico, independente de
+    // window.history — expõe um botão que chama navigate(-1) pra simular
+    // "voltar" de dentro da própria árvore de rotas, do jeito que o app
+    // real reage a um voltar/avançar de verdade do navegador.
+    function GoBackButton() {
+      const navigate = useNavigate();
+      return (
+        <button type="button" onClick={() => navigate(-1)}>
+          voltar-teste
+        </button>
+      );
+    }
+    const user = userEvent.setup();
+    render(
+      <MemoryRouter initialEntries={["/admin/empresas?type=nomad"]}>
+        <SidebarProvider>
+          <OpenScreensProvider>
+            <GoBackButton />
+            <AdminEmpresasPage />
+          </OpenScreensProvider>
+        </SidebarProvider>
+      </MemoryRouter>,
+    );
+    await screen.findByText("Fulano Nômade");
+
+    await user.click(await screen.findByRole("button", { name: "Agency" }));
+    expect(await screen.findByText("Agência Parceira")).toBeInTheDocument();
+    expect(screen.queryByText("Fulano Nômade")).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "voltar-teste" }));
+    expect(await screen.findByText("Fulano Nômade")).toBeInTheDocument();
+    expect(screen.queryByText("Agência Parceira")).not.toBeInTheDocument();
+    const nomadChip = screen.getByRole("button", { name: "Nomad" });
+    expect(nomadChip).toHaveAttribute("aria-pressed", "true");
   });
 });
 

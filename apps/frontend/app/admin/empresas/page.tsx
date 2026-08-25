@@ -1513,6 +1513,42 @@ export default function EmpresasPage() {
     setCompanies([...mapped, ...mappedAgencies, ...mappedNomades]);
   }, [apiCompanies, apiAgencies, apiNomades]);
 
+  // ── Fonte única de verdade pra "este registro pertence ao filtro de tipo
+  // principal selecionado" (Nomad/Agency/Company/Todos + subfiltro Partner
+  // dentro de Agency). Usa SÓ `company.type` (já normalizado uma vez só, no
+  // merge Company/Agency/Nomade acima — nunca nome, e-mail, badge ou ID) e
+  // `company.partner_status` (exclusivo do subfiltro Partner). Extraída
+  // como função pura + useMemo porque TODA lista que aparece na tela
+  // enquanto um filtro de tipo está ativo precisa passar por ela — a tabela
+  // (via `filteredCompanies` abaixo) E as sugestões de busca
+  // (`searchSuggestions`, logo abaixo). Antes, `searchSuggestions` lia
+  // `companies` sem filtro nenhum e podia sugerir uma Agency com a aba
+  // Nomad selecionada — a tabela já filtrava certo, mas a caixa de sugestão
+  // não, e é isso que o responsável viu ao digitar uma busca com o filtro
+  // Nomad ativo.
+  const matchesTypeAndPartnerFilter = useCallback(
+    (company: Company) => {
+      if (advancedFilters.types.length > 0 && !advancedFilters.types.includes(company.type)) {
+        return false;
+      }
+      if (
+        advancedFilters.types.length === 1 &&
+        advancedFilters.types[0] === "agency" &&
+        advancedFilters.agencyPartnerFilter !== "all"
+      ) {
+        const isPartner = company.partner_status === "active" || company.partner_status === "invited";
+        if (advancedFilters.agencyPartnerFilter === "only" ? !isPartner : isPartner) return false;
+      }
+      return true;
+    },
+    [advancedFilters.types, advancedFilters.agencyPartnerFilter],
+  );
+
+  const typeFilteredCompanies = useMemo(
+    () => companies.filter(matchesTypeAndPartnerFilter),
+    [companies, matchesTypeAndPartnerFilter],
+  );
+
   // ── Search autocomplete (name/ID suggestions as you type) ────────────────
   const [searchFocused, setSearchFocused] = useState(false);
   const searchBoxRef = useRef<HTMLDivElement>(null);
@@ -1532,7 +1568,10 @@ export default function EmpresasPage() {
   const searchSuggestions = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
     if (!q) return [];
-    return companies
+    // Parte de `typeFilteredCompanies`, não de `companies` — nunca sugerir
+    // um registro de um tipo diferente do filtro principal ativo (ver
+    // comentário acima de `matchesTypeAndPartnerFilter`).
+    return typeFilteredCompanies
       .filter((c) => {
         const idCode = `emp_${c.sequence_number ?? ""}`;
         return (
@@ -1540,7 +1579,7 @@ export default function EmpresasPage() {
         );
       })
       .slice(0, 6);
-  }, [companies, searchQuery]);
+  }, [typeFilteredCompanies, searchQuery]);
   useEffect(() => {
     const onClickOutside = (e: MouseEvent) => {
       if (
@@ -1555,8 +1594,13 @@ export default function EmpresasPage() {
   }, []);
 
   // ── Filtered companies (derived — useMemo ensures instant reactive updates) ──
+  // Parte de `typeFilteredCompanies` (tipo principal + Partner já aplicados)
+  // — busca, CNPJ, status etc. só afinam dentro do tipo já selecionado,
+  // nunca revertem pra fora dele. Isso também é o que garante "filtro antes
+  // da paginação": a paginação (`paginatedCompanies` abaixo) sempre faz
+  // `.slice()` em cima do resultado JÁ filtrado por tipo e por tudo mais.
   const filteredCompanies = useMemo(() => {
-    let filtered = companies;
+    let filtered: Company[] = typeFilteredCompanies;
 
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase().trim();
@@ -1626,11 +1670,8 @@ export default function EmpresasPage() {
       );
     }
 
-    if (advancedFilters.types.length > 0) {
-      filtered = filtered.filter((company) =>
-        advancedFilters.types.includes(company.type),
-      );
-    }
+    // Tipo principal e subfiltro Partner já foram aplicados em
+    // `typeFilteredCompanies`, acima — não repetir aqui.
 
     if (advancedFilters.statuses.length > 0) {
       filtered = filtered.filter((company) =>
@@ -1660,22 +1701,6 @@ export default function EmpresasPage() {
           ? advancedFilters.partnerLevels.includes(company.partner_level)
           : false,
       );
-    }
-
-    // Subfiltro Partner — só se aplica com Agência como único tipo ativo
-    // (a UI já garante isso escondendo o controle fora dessa condição, mas
-    // filtra pela condição de novo aqui pra nunca depender só do estado da
-    // UI). "Partner" = mesma regra já usada pro badge/convite da linha:
-    // partner_status "active" (já é Partner) ou "invited" (convite pendente).
-    if (
-      advancedFilters.types.length === 1 &&
-      advancedFilters.types[0] === "agency" &&
-      advancedFilters.agencyPartnerFilter !== "all"
-    ) {
-      filtered = filtered.filter((company) => {
-        const isPartner = company.partner_status === "active" || company.partner_status === "invited";
-        return advancedFilters.agencyPartnerFilter === "only" ? isPartner : !isPartner;
-      });
     }
 
     if (advancedFilters.minUsers) {
@@ -1725,7 +1750,7 @@ export default function EmpresasPage() {
     }
 
     return filtered;
-  }, [searchQuery, companies, advancedFilters]);
+  }, [searchQuery, typeFilteredCompanies, advancedFilters]);
 
   // Reset to page 1 whenever filter criteria change
   useEffect(() => {
