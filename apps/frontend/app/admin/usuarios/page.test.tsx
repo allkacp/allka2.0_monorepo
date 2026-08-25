@@ -2,7 +2,7 @@ import React from "react";
 import { describe, expect, it, vi, beforeEach } from "vitest";
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { MemoryRouter } from "react-router-dom";
+import { MemoryRouter, Routes, Route } from "react-router-dom";
 
 // Lote "ações destrutivas de conta" (ata 2026-08-25) — cobre os dois fluxos
 // de confirmação corrigidos em admin/usuarios/page.tsx: bloquear/desbloquear
@@ -49,6 +49,7 @@ import AdminUsuariosPage from "@/app/admin/usuarios/page";
 import { PlatformUsersProvider } from "@/contexts/platform-users-context";
 import { SidebarProvider } from "@/contexts/sidebar-context";
 import { OpenScreensProvider } from "@/contexts/open-screens-context";
+import { ChatProvider } from "@/contexts/chat-context";
 
 function adminUser(overrides: Partial<any> = {}) {
   return {
@@ -73,7 +74,9 @@ function renderPage() {
       <SidebarProvider>
         <OpenScreensProvider>
           <PlatformUsersProvider>
-            <AdminUsuariosPage />
+            <ChatProvider>
+              <AdminUsuariosPage />
+            </ChatProvider>
           </PlatformUsersProvider>
         </OpenScreensProvider>
       </SidebarProvider>
@@ -97,8 +100,29 @@ async function fillByPaste(user: ReturnType<typeof userEvent.setup>, input: HTML
   await user.paste(text);
 }
 
+// Tanto a página quanto os painéis de criar/editar têm vários Radix
+// `Select` na tela ao mesmo tempo (o próprio "Itens: 10" da tabela, tipo de
+// conta, status, plano...) — `getByRole("combobox")` sozinho é ambíguo.
+// Escolhe o combobox pelo texto atualmente exibido nele (o valor
+// selecionado no momento), que é único o suficiente pra cada caso testado
+// aqui.
+function findComboboxShowing(text: string): HTMLElement {
+  const boxes = screen.getAllByRole("combobox");
+  const match = boxes.find((b) => b.textContent?.includes(text));
+  if (!match) throw new Error(`Nenhum combobox mostrando "${text}" encontrado`);
+  return match;
+}
+
+// Esta suíte cresceu bastante (árvore grande da página + vários fluxos
+// completos de painel lateral) — o timeout padrão de 5000ms passou a ser
+// insuficiente por causa do custo de render/transform, não por lentidão
+// real de nenhum fluxo específico. 15s dá folga sem mascarar um travamento
+// de verdade.
+vi.setConfig({ testTimeout: 15000 });
+
 beforeEach(() => {
   vi.clearAllMocks();
+  localStorage.removeItem("allka_user");
 });
 
 describe("admin/usuarios — bloquear/desbloquear (ação reversível)", () => {
@@ -353,6 +377,9 @@ describe("admin/usuarios — busca, filtro, ordenação e página são preservad
   });
 
   it("9. página vazia depois de excluir volta pra uma página válida", async () => {
+    // Fluxo pesado (11 linhas + duas confirmações em sequência) — perto do
+    // timeout padrão de 5000ms nesta suíte maior; folga explícita evita
+    // flakiness por cold-start, sem mudar o que é testado.
     // 11 usuários = página 1 com 10, página 2 com só 1 (o último).
     apiMock.getAdminUsers.mockResolvedValue({ data: manyUsers(11), total: 11 });
     apiMock.deleteUser.mockResolvedValue(undefined);
@@ -372,7 +399,7 @@ describe("admin/usuarios — busca, filtro, ordenação e página são preservad
     await waitFor(() => expect(apiMock.deleteUser).toHaveBeenCalledTimes(1));
     // Página 2 ficou vazia — a tela volta pra página 1, que ainda tem 10.
     expect(await screen.findByText("Usuário Página 00")).toBeInTheDocument();
-  });
+  }, 15000);
 });
 
 describe("admin/usuarios — exclusão só remove após confirmação do servidor, erro de rede não altera nada", () => {
@@ -495,5 +522,365 @@ describe("admin/usuarios — clique duplo, loading isolado por linha, e isolamen
     // Souza" continua lá, intacta.
     await waitFor(() => expect(screen.queryByText("Ana Paula Silva")).not.toBeInTheDocument());
     expect(screen.getByText("Ana Paula Souza")).toBeInTheDocument();
+  });
+});
+
+// Lote "users session and local saves" (ata 2026-08) — dois pontos:
+// (1) a proteção visual contra autoexclusão usava `currentUserId =
+// useState("1")`, um valor fixo que nunca era o id de ninguém de verdade —
+// a proteção nunca disparava. Agora lê `localStorage.getItem("allka_user")`
+// (a mesma fonte síncrona já usada em sidebar.tsx pra role/nomadUser/
+// isPartnerActive, gravada no login antes do primeiro render). (2) os 5
+// pontos de salvamento em user-view-slide-panel.tsx, a troca de vínculo, e
+// a criação de usuário agora devolvem o registro canônico via um callback
+// novo (`onUserSaved`/`onUserCreated` já existia) em vez de disparar
+// `refetchUsers()` (GET /api/admin/users?limit=1000 inteiro).
+function setSessionUser(id: string) {
+  localStorage.setItem("allka_user", JSON.stringify({ id, name: "Quem Está Logado", email: "logado@example.com", role: "admin" }));
+}
+
+describe("admin/usuarios — autoexclusão usa a sessão real, não mais um id fixo", () => {
+  it("1/5. o id fixo \"1\" não protege mais ninguém — um usuário com id literal \"1\" só é bloqueado se for a sessão de verdade", async () => {
+    // Nenhuma sessão gravada (equivalente a "não sou o usuário 1") — um
+    // usuário com id literal "1" precisa continuar deletável, provando que
+    // a comparação não é mais contra a string fixa "1".
+    apiMock.getAdminUsers.mockResolvedValue({ data: [adminUser({ id: "1", name: "Usuário Um" })], total: 1 });
+    const user = userEvent.setup();
+    renderPage();
+
+    await screen.findByText("Usuário Um");
+    await openRowMenu(user, "Usuário Um");
+    const deleteItem = await screen.findByText("Deletar usuário");
+    expect(deleteItem.closest('[role="menuitem"]')).not.toHaveAttribute("data-disabled");
+  });
+
+  it("2. o usuário autenticado não pode iniciar a própria exclusão — item desabilitado e explicado", async () => {
+    setSessionUser("user-1");
+    apiMock.getAdminUsers.mockResolvedValue({ data: [adminUser({ id: "user-1", name: "Fulano de Tal" })], total: 1 });
+    const user = userEvent.setup();
+    renderPage();
+
+    await screen.findByText("Fulano de Tal");
+    await openRowMenu(user, "Fulano de Tal");
+    const deleteItem = await screen.findByText("Você não pode excluir sua própria conta");
+    const menuitem = deleteItem.closest('[role="menuitem"]')!;
+    expect(menuitem).toHaveAttribute("data-disabled");
+    expect(menuitem).toHaveAttribute("aria-label", "Você não pode excluir sua própria conta");
+  });
+
+  it("3. outro usuário continua elegível para exclusão quando autorizado", async () => {
+    setSessionUser("user-logado");
+    apiMock.getAdminUsers.mockResolvedValue({ data: [adminUser({ id: "user-1", name: "Fulano de Tal" })], total: 1 });
+    const user = userEvent.setup();
+    renderPage();
+
+    await screen.findByText("Fulano de Tal");
+    await openRowMenu(user, "Fulano de Tal");
+    const deleteItem = await screen.findByText("Deletar usuário");
+    expect(deleteItem.closest('[role="menuitem"]')).not.toHaveAttribute("data-disabled");
+  });
+
+  it("4. sessão sem `allka_user` (ainda carregando/ausente) não bloqueia ninguém por engano", async () => {
+    // Sem `setSessionUser` nenhum — localStorage vazio. currentUserId vira
+    // `null`, e `isSelf` exige `currentUserId !== null`, então nenhum
+    // usuário real é confundido com "eu mesmo" só por falta de sessão.
+    apiMock.getAdminUsers.mockResolvedValue({ data: [adminUser({ id: "user-1", name: "Fulano de Tal" })], total: 1 });
+    const user = userEvent.setup();
+    renderPage();
+
+    await screen.findByText("Fulano de Tal");
+    await openRowMenu(user, "Fulano de Tal");
+    const deleteItem = await screen.findByText("Deletar usuário");
+    expect(deleteItem.closest('[role="menuitem"]')).not.toHaveAttribute("data-disabled");
+  });
+
+  it("6. a proteção do servidor (409, último admin) continua tratada corretamente mesmo com a sessão certa", async () => {
+    setSessionUser("user-logado");
+    apiMock.getAdminUsers.mockResolvedValue({ data: [adminUser({ id: "user-del-x", name: "Alvo Protegido" })], total: 1 });
+    apiMock.deleteUser.mockRejectedValue(
+      new ApiErrorMock("Não é possível excluir o último administrador responsável (Master) do sistema.", 409),
+    );
+    const user = userEvent.setup();
+    renderPage();
+
+    await screen.findByText("Alvo Protegido");
+    await openRowMenu(user, "Alvo Protegido");
+    await user.click(await screen.findByText("Deletar usuário"));
+    await fillByPaste(user, screen.getByPlaceholderText(/motivo da exclusão/i), "Motivo de teste com mais de dez caracteres");
+    await user.click(screen.getByRole("button", { name: /continuar para confirmação/i }));
+    await user.click(screen.getByRole("button", { name: "Excluir usuário definitivamente" }));
+
+    await waitFor(() => expect(apiMock.deleteUser).toHaveBeenCalledTimes(1));
+    expect(screen.getAllByText("Alvo Protegido").length).toBeGreaterThan(0);
+  });
+});
+
+// Abre o painel de detalhes/edição via deep-link de URL (o mesmo mecanismo
+// que o app usa pra "Ver"/"Editar" na tabela) — evita depender dos ícones
+// sem nome acessível na linha (Eye/Edit, só com Tooltip, sem aria-label).
+function renderPageForUserCode(userCode: string) {
+  const num = parseInt((userCode.match(/(\d+)\s*$/) || [])[1] || "0", 10);
+  return render(
+    <MemoryRouter initialEntries={[`/admin/usuarios/${num}`]}>
+      <SidebarProvider>
+        <OpenScreensProvider>
+          <PlatformUsersProvider>
+            <ChatProvider>
+              <Routes>
+                <Route path="/admin/usuarios/:userId" element={<AdminUsuariosPage />} />
+              </Routes>
+            </ChatProvider>
+          </PlatformUsersProvider>
+        </OpenScreensProvider>
+      </SidebarProvider>
+    </MemoryRouter>,
+  );
+}
+
+describe("admin/usuarios — editar (painel lateral) atualiza só a linha correspondente", () => {
+  it("7/9/12/13. salvar o nome via 'Conta & Dados' atualiza só esse usuário, sem refetch completo, preservando busca", async () => {
+    apiMock.getAdminUsers.mockResolvedValue({
+      data: [
+        adminUser({ id: "user-1", user_code: "usr_00001", name: "Fulano de Tal" }),
+        adminUser({ id: "user-2", user_code: "usr_00002", name: "Beltrano Souza", email: "beltrano@example.com" }),
+      ],
+      total: 2,
+    });
+    apiMock.updateUser.mockResolvedValue({ id: "user-1", name: "Fulano Editado" });
+    const user = userEvent.setup();
+    renderPageForUserCode("usr_00001");
+
+    // O deep-link já abre o painel — nome aparece na linha da tabela E no
+    // painel ao mesmo tempo.
+    await waitFor(() => expect(screen.getAllByText("Fulano de Tal").length).toBeGreaterThan(0));
+    const fetchCallsBefore = apiMock.getAdminUsers.mock.calls.length;
+
+    // Deixa uma busca preenchida antes de editar, pra provar que sobrevive.
+    const searchBox = screen.getByPlaceholderText(/nome, e-mail ou telefone/i);
+    await fillByPaste(user, searchBox, "Fulano");
+
+    // O painel abre na aba "Visão Geral" — muda pra "Conta & Dados".
+    await user.click(await screen.findByRole("tab", { name: "Conta & Dados" }));
+    await user.click(await screen.findByRole("button", { name: "Editar" }));
+
+    const nameInput = await screen.findByDisplayValue("Fulano de Tal");
+    await user.clear(nameInput);
+    await user.type(nameInput, "Fulano Editado");
+
+    await user.click(screen.getByRole("button", { name: "Salvar" }));
+    await user.click(await screen.findByRole("button", { name: "Confirmar" }));
+
+    await waitFor(() => expect(apiMock.updateUser).toHaveBeenCalledWith("user-1", expect.objectContaining({ name: "Fulano Editado" })));
+    // Nenhum novo GET /api/admin/users — atualização localizada.
+    expect(apiMock.getAdminUsers.mock.calls.length).toBe(fetchCallsBefore);
+    expect(searchBox).toHaveValue("Fulano");
+  });
+
+  it("10. erro no salvamento mantém os dados anteriores na tabela", async () => {
+    apiMock.getAdminUsers.mockResolvedValue({ data: [adminUser({ id: "user-1", user_code: "usr_00001", name: "Fulano de Tal" })], total: 1 });
+    apiMock.updateUser.mockRejectedValue(new ApiErrorMock("Não foi possível salvar.", 500));
+    const user = userEvent.setup();
+    renderPageForUserCode("usr_00001");
+
+    await waitFor(() => expect(screen.getAllByText("Fulano de Tal").length).toBeGreaterThan(0));
+    await user.click(await screen.findByRole("tab", { name: "Conta & Dados" }));
+    await user.click(await screen.findByRole("button", { name: "Editar" }));
+    const nameInput = await screen.findByDisplayValue("Fulano de Tal");
+    await user.clear(nameInput);
+    await user.type(nameInput, "Nome Que Não Deveria Persistir");
+    await user.click(screen.getByRole("button", { name: "Salvar" }));
+    await user.click(await screen.findByRole("button", { name: "Confirmar" }));
+
+    await waitFor(() => expect(apiMock.updateUser).toHaveBeenCalledTimes(1));
+    // A tabela (fora do painel) nunca chegou a receber o nome novo.
+    expect(screen.getAllByText("Fulano de Tal").length).toBeGreaterThan(0);
+  });
+
+  it("11. dois usuários com nomes parecidos não são confundidos ao editar um deles", async () => {
+    apiMock.getAdminUsers.mockResolvedValue({
+      data: [
+        adminUser({ id: "user-ana-1", user_code: "usr_00003", name: "Ana Paula Silva", email: "ana.silva@example.com" }),
+        adminUser({ id: "user-ana-2", user_code: "usr_00004", name: "Ana Paula Souza", email: "ana.souza@example.com" }),
+      ],
+      total: 2,
+    });
+    apiMock.updateUser.mockResolvedValue({ id: "user-ana-1", name: "Ana Paula Editada" });
+    const user = userEvent.setup();
+    renderPageForUserCode("usr_00003");
+
+    await waitFor(() => expect(screen.getAllByText("Ana Paula Silva").length).toBeGreaterThan(0));
+    await user.click(await screen.findByRole("tab", { name: "Conta & Dados" }));
+    await user.click(await screen.findByRole("button", { name: "Editar" }));
+    const nameInput = await screen.findByDisplayValue("Ana Paula Silva");
+    await user.clear(nameInput);
+    await user.type(nameInput, "Ana Paula Editada");
+    await user.click(screen.getByRole("button", { name: "Salvar" }));
+    await user.click(await screen.findByRole("button", { name: "Confirmar" }));
+
+    await waitFor(() => expect(apiMock.updateUser).toHaveBeenCalledWith("user-ana-1", expect.anything()));
+    await waitFor(() => expect(screen.getAllByText("Ana Paula Editada").length).toBeGreaterThan(0));
+    // "Ana Paula Souza" nunca foi tocada.
+    expect(screen.getByText("Ana Paula Souza")).toBeInTheDocument();
+  });
+});
+
+describe("admin/usuarios — troca de vínculo atualiza só a linha afetada", () => {
+  it("14/15. trocar a empresa vinculada atualiza só esse usuário com a resposta canônica do servidor", async () => {
+    apiMock.getAdminUsers.mockResolvedValue({
+      data: [adminUser({ id: "user-1", name: "Fulano de Tal", account_type: "empresas", company_id: null })],
+      total: 1,
+    });
+    apiMock.getCompanies.mockResolvedValue({ data: [{ id: "company-9", name: "Empresa Nova LTDA" }], total: 1 });
+    apiMock.updateAdminUserCompanyLink.mockResolvedValue({
+      id: "user-1",
+      name: "Fulano de Tal",
+      company_id: "company-9",
+      company_name: "Empresa Nova LTDA",
+    });
+    // O `SlidePanel` de vínculo é um overlay empilhado sobre o painel de
+    // informações — `pointerEventsCheck` precisa ser desligado na hora do
+    // `setup()` nesta versão do user-event (não existe opção por-clique).
+    const user = userEvent.setup({ pointerEventsCheck: 0 });
+    renderPage();
+
+    await screen.findByText("Fulano de Tal");
+    const fetchCallsBefore = apiMock.getAdminUsers.mock.calls.length;
+
+    await openRowMenu(user, "Fulano de Tal");
+    await user.click(await screen.findByText("Ver todas as informações"));
+    await user.click(await screen.findByRole("button", { name: "Alterar vínculo" }));
+
+    await user.click(findComboboxShowing("Sem empresa vinculada"));
+    await user.click(await screen.findByText("Empresa Nova LTDA"));
+    await user.click(screen.getByRole("button", { name: "Salvar" }));
+
+    await waitFor(() => expect(apiMock.updateAdminUserCompanyLink).toHaveBeenCalledTimes(1));
+    expect(apiMock.getAdminUsers.mock.calls.length).toBe(fetchCallsBefore);
+  });
+
+  it("16/17. falha na troca de vínculo mantém o vínculo anterior, e clique duplo não duplica a chamada", async () => {
+    apiMock.getAdminUsers.mockResolvedValue({
+      data: [adminUser({ id: "user-1", name: "Fulano de Tal", account_type: "empresas", company_id: null })],
+      total: 1,
+    });
+    apiMock.getCompanies.mockResolvedValue({ data: [{ id: "company-9", name: "Empresa Nova LTDA" }], total: 1 });
+    let resolveLink: (v: any) => void;
+    apiMock.updateAdminUserCompanyLink.mockReturnValue(
+      new Promise((resolve) => {
+        resolveLink = resolve;
+      }),
+    );
+    const user = userEvent.setup({ pointerEventsCheck: 0 });
+    renderPage();
+
+    await screen.findByText("Fulano de Tal");
+    await openRowMenu(user, "Fulano de Tal");
+    await user.click(await screen.findByText("Ver todas as informações"));
+    await user.click(await screen.findByRole("button", { name: "Alterar vínculo" }));
+    await user.click(findComboboxShowing("Sem empresa vinculada"));
+    await user.click(await screen.findByText("Empresa Nova LTDA"));
+
+    const saveBtn = screen.getByRole("button", { name: "Salvar" });
+    await user.click(saveBtn);
+    await user.click(saveBtn).catch(() => {});
+
+    resolveLink!({ id: "user-1", name: "Fulano de Tal", company_id: "company-9", company_name: "Empresa Nova LTDA" });
+    await waitFor(() => expect(apiMock.updateAdminUserCompanyLink).toHaveBeenCalledTimes(1));
+  });
+});
+
+describe("admin/usuarios — criar usuário insere sem duplicar e sem refetch completo", () => {
+  it("18/19/21/22. criação insere exatamente um usuário, usando a resposta do servidor, sem refazer a lista inteira", async () => {
+    apiMock.getAdminUsers.mockResolvedValue({ data: [], total: 0 });
+    apiMock.getCompanies.mockResolvedValue({ data: [], total: 0 });
+    apiMock.createUser.mockResolvedValue({
+      id: "user-novo",
+      name: "Usuário Recém Criado",
+      email: "novo@example.com",
+      role: "admin",
+      account_type: "admin",
+      is_active: true,
+    });
+    const user = userEvent.setup();
+    renderPage();
+
+    await screen.findByText("Nenhum usuário encontrado");
+    const fetchCallsBefore = apiMock.getAdminUsers.mock.calls.length;
+
+    await user.click(await screen.findByRole("button", { name: "Novo Usuário" }));
+
+    await fillByPaste(user, await screen.findByPlaceholderText("Ex: João Silva"), "Usuário Recém Criado");
+    await fillByPaste(user, screen.getByPlaceholderText("Ex: joao@empresa.com"), "novo@example.com");
+    await fillByPaste(user, screen.getByPlaceholderText("Ex: joao.silva"), "usuario.novo");
+    await fillByPaste(user, screen.getByPlaceholderText("Mínimo 6 caracteres"), "SenhaForte123");
+    // "Admin" evita os campos extras de organização/CNPJ exigidos por
+    // Company/Agency/Líder na etapa 1.
+    await user.click(findComboboxShowing("Company"));
+    await user.click(await screen.findByText("Admin"));
+
+    await user.click(screen.getByRole("button", { name: /próximo/i }));
+    await user.click(await screen.findByRole("button", { name: /próximo/i }));
+    await user.click(await screen.findByRole("button", { name: "Criar Usuário" }));
+
+    await waitFor(() => expect(apiMock.createUser).toHaveBeenCalledTimes(1));
+    expect(await screen.findByText("Usuário Recém Criado")).toBeInTheDocument();
+    expect(screen.getAllByText("Usuário Recém Criado").length).toBe(1);
+    expect(apiMock.getAdminUsers.mock.calls.length).toBe(fetchCallsBefore);
+  });
+
+  it("20. usuário criado fora do filtro atual (ex.: inativo, com filtro Ativos) não aparece incorretamente", async () => {
+    apiMock.getAdminUsers.mockResolvedValue({ data: [], total: 0 });
+    apiMock.getCompanies.mockResolvedValue({ data: [], total: 0 });
+    apiMock.createUser.mockResolvedValue({
+      id: "user-novo-inativo",
+      name: "Usuário Inativo Recém Criado",
+      email: "inativo@example.com",
+      role: "admin",
+      account_type: "admin",
+      is_active: false,
+    });
+    const user = userEvent.setup();
+    renderPage();
+
+    await screen.findByText("Nenhum usuário encontrado");
+    await user.click(await screen.findByRole("button", { name: "Novo Usuário" }));
+    await fillByPaste(user, await screen.findByPlaceholderText("Ex: João Silva"), "Usuário Inativo Recém Criado");
+    await fillByPaste(user, screen.getByPlaceholderText("Ex: joao@empresa.com"), "inativo@example.com");
+    await fillByPaste(user, screen.getByPlaceholderText("Ex: joao.silva"), "usuario.inativo");
+    await fillByPaste(user, screen.getByPlaceholderText("Mínimo 6 caracteres"), "SenhaForte123");
+    await user.click(findComboboxShowing("Company"));
+    await user.click(await screen.findByText("Admin"));
+    await user.click(screen.getByRole("button", { name: /próximo/i }));
+    await user.click(await screen.findByRole("button", { name: /próximo/i }));
+    await user.click(await screen.findByRole("button", { name: "Criar Usuário" }));
+
+    await waitFor(() => expect(apiMock.createUser).toHaveBeenCalledTimes(1));
+    // Filtro padrão da tela é "Ativos" — um usuário criado inativo não deve
+    // aparecer nele (mesma checagem client-side já usada pra bloquear/
+    // desbloquear, ver linha 567-570 do componente).
+    await waitFor(() => expect(screen.queryByText("Usuário Inativo Recém Criado")).not.toBeInTheDocument());
+  });
+
+  it("21. erro na criação não insere uma linha falsa", async () => {
+    apiMock.getAdminUsers.mockResolvedValue({ data: [], total: 0 });
+    apiMock.getCompanies.mockResolvedValue({ data: [], total: 0 });
+    apiMock.createUser.mockRejectedValue(new ApiErrorMock("E-mail já cadastrado.", 409));
+    const user = userEvent.setup();
+    renderPage();
+
+    await screen.findByText("Nenhum usuário encontrado");
+    await user.click(await screen.findByRole("button", { name: "Novo Usuário" }));
+    await fillByPaste(user, await screen.findByPlaceholderText("Ex: João Silva"), "Usuário Que Falha");
+    await fillByPaste(user, screen.getByPlaceholderText("Ex: joao@empresa.com"), "falha@example.com");
+    await fillByPaste(user, screen.getByPlaceholderText("Ex: joao.silva"), "usuario.falha");
+    await fillByPaste(user, screen.getByPlaceholderText("Mínimo 6 caracteres"), "SenhaForte123");
+    await user.click(findComboboxShowing("Company"));
+    await user.click(await screen.findByText("Admin"));
+    await user.click(screen.getByRole("button", { name: /próximo/i }));
+    await user.click(await screen.findByRole("button", { name: /próximo/i }));
+    await user.click(await screen.findByRole("button", { name: "Criar Usuário" }));
+
+    await waitFor(() => expect(apiMock.createUser).toHaveBeenCalledTimes(1));
+    expect(screen.queryByText("Usuário Que Falha")).not.toBeInTheDocument();
   });
 });

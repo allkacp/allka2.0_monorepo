@@ -263,6 +263,52 @@ type UsuarioDaLista = User & {
   auto_paused?: boolean;
 };
 
+  // Única normalização de um registro cru da API pro formato que a tabela
+  // usa — extraída da carga inicial (useEffect abaixo) pra ser reaproveitada
+  // também por qualquer patch localizado depois de editar/criar/trocar
+  // vínculo (ver `upsertUserRow`), sem duplicar a regra de
+  // inactivity_bucket/auto_paused em cada callback.
+  const mapApiUserToRow = (u: any): UsuarioDaLista => {
+    const bucket = computeInactivityBucket(u.last_login);
+    return {
+      ...u,
+      is_active: u.is_active ?? true,
+      online_status: u.online_status ?? "offline",
+      account_type: u.account_type || "empresas",
+      inactivity_bucket: bucket,
+      auto_paused: bucket === "inactive_90" || u.reactivation_review_required === true,
+    };
+  };
+
+  // Fonte única pra "inserir ou substituir um usuário por id" — usada por
+  // toda ação que precisa atualizar só um registro (editar em qualquer uma
+  // das abas do painel lateral, trocar vínculo, criar) em vez de refazer
+  // GET /api/admin/users?limit=1000 inteiro. SEMPRE mescla com a linha
+  // existente (nunca substitui por inteiro): `PUT /users/:id` devolve um
+  // subconjunto (safeSelect, sem company_name/agency_name/has_profile_link
+  // etc.) — substituir a linha por esse subconjunto apagaria colunas que
+  // GET /api/admin/users enriquece e que a tabela mostra. Reaplica
+  // `mapApiUserToRow` sempre, pra recalcular inactivity_bucket/auto_paused
+  // se last_login/reactivation_review_required vieram na resposta.
+  const upsertUserRow = (updated: any) => {
+    if (!updated?.id) return;
+    setUsers((prev) => {
+      const idx = prev.findIndex((u) => u.id === updated.id);
+      if (idx === -1) {
+        // Sem linha existente pra mesclar (ex.: usuário recém-criado) —
+        // normaliza o que veio e insere no topo.
+        return [mapApiUserToRow(updated), ...prev];
+      }
+      const next = [...prev];
+      next[idx] = mapApiUserToRow({ ...prev[idx], ...updated });
+      return next;
+    });
+  };
+
+  const removeUserRow = (id: string) => {
+    setUsers((prev) => prev.filter((u) => u.id !== id));
+  };
+
   const [users, setUsers] = useState<UsuarioDaLista[]>([]);
   const [filteredUsers, setFilteredUsers] = useState<UsuarioDaLista[]>([]);
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
@@ -295,7 +341,25 @@ type UsuarioDaLista = User & {
     { value: "nomad", label: "Nômade" },
     { value: "nomad_admin", label: "Admin de nômades" },
   ];
-  const [currentUserId] = useState("1");
+  // ID de quem está logado, pra impedir autoexclusão pela interface — vinha
+  // fixo em "1" (nunca era o id de ninguém de verdade, então a proteção
+  // visual nunca disparava). `allka_user` é gravado no login/primeiro
+  // acesso (ver POST /api/auth/login) e lido de forma síncrona antes do
+  // primeiro render em todo o app (mesmo padrão de sidebar.tsx pra
+  // role/nomadUser/isPartnerActive) — não existe uma janela de "id ainda
+  // não chegou" pra essa leitura, diferente do `GET /api/auth/me`
+  // assíncrono (que só seria necessário se precisássemos de admin_profile/
+  // is_master aqui, o que não é o caso deste guard). O servidor continua
+  // sendo a autoridade final — isto é só a explicação na interface antes
+  // de chegar lá.
+  const [currentUserId] = useState<string | null>(() => {
+    try {
+      const stored = JSON.parse(localStorage.getItem("allka_user") || "{}");
+      return typeof stored?.id === "string" ? stored.id : null;
+    } catch {
+      return null;
+    }
+  });
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
 
   const [isCreateUserModalOpen, setIsCreateUserModalOpen] = useState(false);
@@ -383,7 +447,10 @@ type UsuarioDaLista = User & {
       if (infoPanelUser && infoPanelUser.id === linkTargetUser.id) {
         setInfoPanelUser(updated);
       }
-      refetchUsers();
+      // `updateAdminUserCompanyLink` já devolve o formato canônico
+      // enriquecido (mesmo mapUser() de GET /admin/users) — dá pra
+      // atualizar só esta linha sem refazer a consulta inteira.
+      upsertUserRow(updated);
     } catch (e: any) {
       toast({
         title: "Não foi possível salvar o vínculo",
@@ -446,17 +513,7 @@ type UsuarioDaLista = User & {
     // /api/auth/login). auto_paused é "grudento": fica true tanto pelo
     // bucket ao vivo quanto por reactivation_review_required persistido,
     // pra não voltar a "Ativo" sozinho só porque o usuário logou de novo.
-    const mapped = apiUsers.map((u: any) => {
-      const bucket = computeInactivityBucket(u.last_login);
-      return {
-        ...u,
-        is_active: u.is_active ?? true,
-        online_status: "offline",
-        account_type: u.account_type || "empresas",
-        inactivity_bucket: bucket,
-        auto_paused: bucket === "inactive_90" || u.reactivation_review_required === true,
-      };
-    });
+    const mapped = apiUsers.map(mapApiUserToRow);
     setUsers(mapped);
     setFilteredUsers(mapped);
     // Não reseta `currentPage` aqui — isso incluiria qualquer atualização
@@ -1026,12 +1083,19 @@ type UsuarioDaLista = User & {
       setDeletionReasonError("O motivo deve ter no mínimo 10 caracteres");
       return;
     }
-    if (selectedUser.id === currentUserId) {
-      console.error("Cannot delete current logged-in user");
+    // Defesa em profundidade — o item do menu já vem desabilitado pra esse
+    // caso (ver `canDelete`/`isSelf` na renderização da linha), então isto
+    // não deveria disparar por um clique normal; existe só pra não deixar
+    // a tela seguir em frente se algo chamar esta função por outro
+    // caminho. O servidor continua sendo a autoridade final de qualquer
+    // forma (PUT/DELETE /api/users/:id já bloqueiam autoexclusão e
+    // exclusão do Admin Master do lado de lá).
+    if (currentUserId !== null && selectedUser.id === currentUserId) {
+      setDeletionReasonError("Você não pode excluir sua própria conta.");
       return;
     }
     if (selectedUser.is_admin && selectedUser.role === "admin") {
-      console.error("Cannot delete main admin account");
+      setDeletionReasonError("Não é possível excluir a conta principal de administrador por aqui.");
       return;
     }
 
@@ -1053,7 +1117,7 @@ type UsuarioDaLista = User & {
       // servidor confirmar — nunca antes.
       await apiClient.deleteUser(targetId, deletionReason.trim());
 
-      setUsers((prev) => prev.filter((u) => String(u.id) !== targetId));
+      removeUserRow(targetId);
 
       toast({
         title: "Usuário excluído",
@@ -1220,9 +1284,7 @@ type UsuarioDaLista = User & {
     // Sync into PlatformUsersContext so company tabs reflect the change immediately
     updatePlatformUser(targetId, { is_active: newStatus });
 
-    setUsers((prev) =>
-      prev.map((u) => (String(u.id) === targetId ? { ...u, is_active: newStatus } : u)),
-    );
+    upsertUserRow({ id: targetId, is_active: newStatus });
     setSelectedUser({ ...selectedUser, is_active: newStatus });
     toast({
       title: newStatus ? "Usuário desbloqueado" : "Usuário bloqueado",
@@ -2912,9 +2974,14 @@ type UsuarioDaLista = User & {
                       user.account_type,
                       user.role,
                     );
+                    const isSelf = currentUserId !== null && user.id === currentUserId;
                     const canDelete =
-                      user.id !== currentUserId &&
-                      !(user.is_admin && user.role === "admin");
+                      !isSelf && !(user.is_admin && user.role === "admin");
+                    const deleteBlockedReason = isSelf
+                      ? "Você não pode excluir sua própria conta"
+                      : !canDelete
+                        ? "Não pode deletar este usuário"
+                        : undefined;
 
                     return (
                       <tr
@@ -3032,12 +3099,14 @@ type UsuarioDaLista = User & {
                                 <DropdownMenuItem
                                   className="gap-2.5 rounded-lg py-2 px-2.5 text-sm cursor-pointer text-red-600 dark:text-red-400 focus:text-red-600 dark:focus:text-red-400"
                                   disabled={!canDelete}
+                                  aria-label={canDelete ? undefined : deleteBlockedReason}
+                                  title={canDelete ? undefined : deleteBlockedReason}
                                   onClick={() => handleUserAction(user, "delete")}
                                 >
                                   <span className="flex h-6 w-6 items-center justify-center rounded-md bg-red-100 dark:bg-red-900/30 shrink-0">
                                     <Trash2 className="h-3.5 w-3.5 text-red-600 dark:text-red-400" />
                                   </span>
-                                  {canDelete ? "Deletar usuário" : "Não pode deletar este usuário"}
+                                  {canDelete ? "Deletar usuário" : deleteBlockedReason}
                                 </DropdownMenuItem>
                               </DropdownMenuContent>
                             </DropdownMenu>
@@ -3714,6 +3783,13 @@ type UsuarioDaLista = User & {
           navigate("/admin/usuarios", { replace: true });
         }}
         onRefresh={refetchUsers}
+        onUserSaved={(updated) => {
+          upsertUserRow(updated);
+          if (updated?.id) {
+            setSelectedUser((prev) => (prev && String(prev.id) === String(updated.id) ? { ...prev, ...updated } : prev));
+          }
+          window.dispatchEvent(new Event("allka:admin-counts-changed"));
+        }}
         user={selectedUser}
         startInEditMode={viewStartInEditMode}
       />
@@ -3721,8 +3797,16 @@ type UsuarioDaLista = User & {
       <UserCreateSlidePanel
         open={showCreateUser}
         onClose={() => setShowCreateUser(false)}
-        onUserCreated={() => {
-          refetchUsers();
+        onUserCreated={(created) => {
+          // `POST /users` devolve o formato "seguro" (safeSelect) — sem os
+          // campos que só GET /admin/users enriquece (company_name,
+          // agency_name, has_profile_link...). Como é um registro novo, não
+          // há linha existente pra mesclar; a normalização oficial
+          // (mapApiUserToRow, dentro de upsertUserRow) preenche os campos
+          // obrigatórios com os mesmos defaults da carga inicial — o vínculo
+          // detalhado só aparece completo na próxima vez que a lista
+          // recarregar de verdade (ex.: trocar o filtro de status).
+          upsertUserRow(created);
           window.dispatchEvent(new Event("allka:admin-counts-changed"));
           setShowCreateUser(false);
         }}
