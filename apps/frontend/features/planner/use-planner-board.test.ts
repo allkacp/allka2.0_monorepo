@@ -23,6 +23,7 @@ const { apiMock, ApiErrorMock } = vi.hoisted(() => {
       updatePlannerColumn: vi.fn(),
       reorderPlannerColumns: vi.fn(),
       deletePlannerColumn: vi.fn(),
+      getPlannerColumnCounts: vi.fn(),
       createPlannerCard: vi.fn(),
       updatePlannerCard: vi.fn(),
       movePlannerCard: vi.fn(),
@@ -41,7 +42,7 @@ vi.mock("@/lib/api-client", () => ({
 import { usePlannerBoard } from "@/features/planner/use-planner-board";
 
 function column(overrides: Partial<any> = {}) {
-  return { id: "col-1", label: "Backlog", color: "bg-slate-500", position: 0, updatedAt: "2026-08-24T00:00:00.000Z", ...overrides };
+  return { id: "col-1", label: "Backlog", color: "bg-slate-500", position: 0, isDefault: false, updatedAt: "2026-08-24T00:00:00.000Z", ...overrides };
 }
 function card(overrides: Partial<any> = {}) {
   return {
@@ -290,8 +291,23 @@ describe("usePlannerBoard — restaurar card", () => {
   });
 });
 
-describe("usePlannerBoard — colunas", () => {
-  it("excluir coluna com conflito (409) reverte a remoção otimista", async () => {
+describe("usePlannerBoard — excluir coluna (segura, sem remoção otimista)", () => {
+  it("sucesso chama deletePlannerColumn e só remove a coluna da lista depois da resposta", async () => {
+    apiMock.getPlannerBoard.mockResolvedValue({ columns: [column()], cards: [] });
+    apiMock.deletePlannerColumn.mockResolvedValue(undefined);
+    const { result } = renderHook(() => usePlannerBoard());
+    await waitFor(() => expect(result.current.status).toBe("ready"));
+
+    let mutation: any;
+    await act(async () => {
+      mutation = await result.current.deleteColumn("col-1");
+    });
+    expect(mutation.ok).toBe(true);
+    expect(apiMock.deletePlannerColumn).toHaveBeenCalledWith("col-1");
+    expect(result.current.columns).toHaveLength(0);
+  });
+
+  it("erro (409, coluna principal ou com cards ativos) mantém a coluna — nunca some antes da resposta", async () => {
     apiMock.getPlannerBoard.mockResolvedValue({ columns: [column()], cards: [] });
     apiMock.deletePlannerColumn.mockRejectedValue(new ApiErrorMock("Coluna tem cards", 409));
     const { result } = renderHook(() => usePlannerBoard());
@@ -302,9 +318,31 @@ describe("usePlannerBoard — colunas", () => {
       mutation = await result.current.deleteColumn("col-1");
     });
     expect(mutation.ok).toBe(false);
+    expect(mutation.error).toBe("Coluna tem cards");
     expect(result.current.columns).toHaveLength(1);
   });
 
+  it("clique duplo (chamada concorrente pra mesma coluna) só chama a API uma vez", async () => {
+    apiMock.getPlannerBoard.mockResolvedValue({ columns: [column()], cards: [] });
+    let resolveDelete: () => void = () => {};
+    apiMock.deletePlannerColumn.mockImplementation(() => new Promise((resolve) => { resolveDelete = () => resolve(undefined); }));
+    const { result } = renderHook(() => usePlannerBoard());
+    await waitFor(() => expect(result.current.status).toBe("ready"));
+
+    let firstCall: Promise<any>;
+    let secondResult: any;
+    await act(async () => {
+      firstCall = result.current.deleteColumn("col-1");
+      secondResult = await result.current.deleteColumn("col-1");
+      resolveDelete();
+      await firstCall;
+    });
+    expect(secondResult.ok).toBe(false);
+    expect(apiMock.deletePlannerColumn).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("usePlannerBoard — colunas", () => {
   it("reordenar colunas persiste a ordem devolvida pelo servidor", async () => {
     apiMock.getPlannerBoard.mockResolvedValue({
       columns: [column({ id: "a", position: 0 }), column({ id: "b", position: 1 })],

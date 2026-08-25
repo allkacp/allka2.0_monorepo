@@ -34,6 +34,7 @@ const { apiMock, ApiErrorMock, toastSpy } = vi.hoisted(() => {
       deletePlannerCard: vi.fn(),
       restorePlannerCard: vi.fn(),
       getPlannerArchivedCards: vi.fn(),
+      getPlannerColumnCounts: vi.fn(),
     },
   };
 });
@@ -62,7 +63,7 @@ function renderBoard() {
 }
 
 function column(overrides: Partial<any> = {}) {
-  return { id: "col-1", label: "Backlog", color: "bg-slate-500", position: 0, updatedAt: "2026-08-24T00:00:00.000Z", ...overrides };
+  return { id: "col-1", label: "Backlog", color: "bg-slate-500", position: 0, isDefault: false, updatedAt: "2026-08-24T00:00:00.000Z", ...overrides };
 }
 function card(overrides: Partial<any> = {}) {
   return {
@@ -86,6 +87,7 @@ beforeEach(() => {
   // Contador do botão "Cards arquivados" no cabeçalho — default neutro
   // (0 arquivados) pra não quebrar os testes que não são sobre ele.
   apiMock.getPlannerArchivedCards.mockResolvedValue({ data: [], total: 0, page: 1, limit: 1 });
+  apiMock.getPlannerColumnCounts.mockResolvedValue({ activeCount: 0, archivedCount: 0 });
 });
 
 describe("PlannerBoard — estados obrigatórios", () => {
@@ -345,6 +347,169 @@ describe("PlannerBoard — excluir card definitivamente (confirmação dupla)", 
 
     await waitFor(() => expect(screen.queryByText("Briefing com cliente")).not.toBeInTheDocument());
     expect(apiMock.deletePlannerCard).toHaveBeenCalledWith("card-1");
+  });
+});
+
+describe("PlannerBoard — excluir coluna (confirmação dupla, sem window.confirm)", () => {
+  it("1. window.confirm nunca é chamado nesse fluxo", async () => {
+    const confirmSpy = vi.spyOn(window, "confirm");
+    apiMock.getPlannerBoard.mockResolvedValue({ columns: [column({ label: "A Fazer" })], cards: [] });
+    apiMock.deletePlannerColumn.mockResolvedValue(undefined);
+    const user = userEvent.setup();
+    renderBoard();
+
+    await screen.findByText("A Fazer");
+    await user.click(screen.getByRole("button", { name: "Excluir coluna A Fazer definitivamente" }));
+    await waitFor(() => expect(screen.getByRole("button", { name: /continuar para confirmação/i })).toBeInTheDocument());
+    await user.click(screen.getByRole("button", { name: /continuar para confirmação/i }));
+    await user.click(screen.getByRole("button", { name: /excluir coluna definitivamente/i }));
+
+    await waitFor(() => expect(apiMock.deletePlannerColumn).toHaveBeenCalledWith("col-1"));
+    expect(confirmSpy).not.toHaveBeenCalled();
+    confirmSpy.mockRestore();
+  });
+
+  it("2. coluna principal (isDefault) não oferece exclusão — lixeira desabilitada com o tooltip certo", async () => {
+    apiMock.getPlannerBoard.mockResolvedValue({ columns: [column({ isDefault: true })], cards: [] });
+    renderBoard();
+    await screen.findByText("Backlog");
+
+    expect(screen.queryByRole("button", { name: /excluir coluna backlog definitivamente/i })).not.toBeInTheDocument();
+    const disabledBtn = screen.getByRole("button", { name: "A coluna principal não pode ser excluída" });
+    expect(disabledBtn).toBeDisabled();
+    expect(disabledBtn).toHaveAttribute("title", "A coluna principal não pode ser excluída");
+  });
+
+  it("3. coluna personalizada (vazia ou não) mostra a lixeira", async () => {
+    apiMock.getPlannerBoard.mockResolvedValue({ columns: [column({ label: "Vazia" })], cards: [] });
+    renderBoard();
+    await screen.findByText("Vazia");
+    expect(screen.getByRole("button", { name: "Excluir coluna Vazia definitivamente" })).toBeInTheDocument();
+  });
+
+  it("4/5. clicar na lixeira busca a contagem e abre a 1ª etapa sem chamar DELETE", async () => {
+    apiMock.getPlannerBoard.mockResolvedValue({ columns: [column({ label: "A Fazer" })], cards: [] });
+    apiMock.getPlannerColumnCounts.mockResolvedValue({ activeCount: 2, archivedCount: 1 });
+    const user = userEvent.setup();
+    renderBoard();
+
+    await screen.findByText("A Fazer");
+    await user.click(screen.getByRole("button", { name: "Excluir coluna A Fazer definitivamente" }));
+
+    await waitFor(() => expect(apiMock.getPlannerColumnCounts).toHaveBeenCalledWith("col-1"));
+    expect(await screen.findByText(/2 card\(s\) ativo\(s\).*1 arquivado\(s\)/)).toBeInTheDocument();
+    expect(apiMock.deletePlannerColumn).not.toHaveBeenCalled();
+  });
+
+  it("6/7. voltar e cancelar não excluem a coluna", async () => {
+    apiMock.getPlannerBoard.mockResolvedValue({ columns: [column({ label: "A Fazer" })], cards: [] });
+    const user = userEvent.setup();
+    renderBoard();
+
+    await screen.findByText("A Fazer");
+    await user.click(screen.getByRole("button", { name: "Excluir coluna A Fazer definitivamente" }));
+    await user.click(await screen.findByRole("button", { name: /continuar para confirmação/i }));
+    await user.click(screen.getByRole("button", { name: /voltar/i }));
+    expect(apiMock.deletePlannerColumn).not.toHaveBeenCalled();
+    expect(screen.getAllByText("A Fazer").length).toBeGreaterThan(0);
+
+    await user.click(screen.getByRole("button", { name: /cancelar/i }));
+    await waitFor(() =>
+      expect(screen.queryByRole("button", { name: /excluir coluna definitivamente/i })).not.toBeInTheDocument(),
+    );
+    expect(apiMock.deletePlannerColumn).not.toHaveBeenCalled();
+    expect(screen.getByText("A Fazer")).toBeInTheDocument();
+  });
+
+  it("8/9. 2ª etapa chama DELETE uma única vez, mesmo com clique duplo", async () => {
+    apiMock.getPlannerBoard.mockResolvedValue({ columns: [column({ label: "A Fazer" })], cards: [] });
+    let resolveDelete: () => void = () => {};
+    apiMock.deletePlannerColumn.mockImplementation(() => new Promise((resolve) => { resolveDelete = () => resolve(undefined); }));
+    const user = userEvent.setup();
+    renderBoard();
+
+    await screen.findByText("A Fazer");
+    await user.click(screen.getByRole("button", { name: "Excluir coluna A Fazer definitivamente" }));
+    await user.click(await screen.findByRole("button", { name: /continuar para confirmação/i }));
+    const finalBtn = screen.getByRole("button", { name: /excluir coluna definitivamente/i });
+    await user.click(finalBtn);
+    await user.click(finalBtn); // 2º clique enquanto isSubmitting — botão fica desabilitado
+    resolveDelete();
+
+    await waitFor(() => expect(apiMock.deletePlannerColumn).toHaveBeenCalledTimes(1));
+  });
+
+  it("10. 403 (sem permissão) mantém a coluna e mostra o motivo", async () => {
+    apiMock.getPlannerBoard.mockResolvedValue({ columns: [column({ label: "A Fazer" })], cards: [] });
+    apiMock.deletePlannerColumn.mockRejectedValue(new ApiErrorMock("Sem permissão para excluir colunas", 403));
+    const user = userEvent.setup();
+    renderBoard();
+
+    await screen.findByText("A Fazer");
+    await user.click(screen.getByRole("button", { name: "Excluir coluna A Fazer definitivamente" }));
+    await user.click(await screen.findByRole("button", { name: /continuar para confirmação/i }));
+    await user.click(screen.getByRole("button", { name: /excluir coluna definitivamente/i }));
+
+    expect(await screen.findByText("Sem permissão para excluir colunas")).toBeInTheDocument();
+    expect(screen.getAllByText("A Fazer").length).toBeGreaterThan(0);
+  });
+
+  it("11. 409 (cards ativos) mantém a coluna e mostra o motivo", async () => {
+    apiMock.getPlannerBoard.mockResolvedValue({ columns: [column({ label: "A Fazer" })], cards: [] });
+    apiMock.deletePlannerColumn.mockRejectedValue(
+      new ApiErrorMock("Esta coluna possui cards ativos. Mova, arquive ou exclua esses cards antes de apagar a coluna.", 409),
+    );
+    const user = userEvent.setup();
+    renderBoard();
+
+    await screen.findByText("A Fazer");
+    await user.click(screen.getByRole("button", { name: "Excluir coluna A Fazer definitivamente" }));
+    await user.click(await screen.findByRole("button", { name: /continuar para confirmação/i }));
+    await user.click(screen.getByRole("button", { name: /excluir coluna definitivamente/i }));
+
+    expect(await screen.findByText(/possui cards ativos/i)).toBeInTheDocument();
+    expect(screen.getAllByText("A Fazer").length).toBeGreaterThan(0);
+  });
+
+  it("12. erro de rede mostra mensagem amigável e mantém a coluna", async () => {
+    apiMock.getPlannerBoard.mockResolvedValue({ columns: [column({ label: "A Fazer" })], cards: [] });
+    apiMock.deletePlannerColumn.mockRejectedValue(new TypeError("Failed to fetch"));
+    const user = userEvent.setup();
+    renderBoard();
+
+    await screen.findByText("A Fazer");
+    await user.click(screen.getByRole("button", { name: "Excluir coluna A Fazer definitivamente" }));
+    await user.click(await screen.findByRole("button", { name: /continuar para confirmação/i }));
+    await user.click(screen.getByRole("button", { name: /excluir coluna definitivamente/i }));
+
+    expect(await screen.findByText("Não foi possível excluir a coluna.")).toBeInTheDocument();
+    expect(screen.getAllByText("A Fazer").length).toBeGreaterThan(0);
+  });
+
+  it("13. sucesso remove a coluna do quadro", async () => {
+    apiMock.getPlannerBoard.mockResolvedValue({ columns: [column({ label: "A Fazer" })], cards: [] });
+    apiMock.deletePlannerColumn.mockResolvedValue(undefined);
+    const user = userEvent.setup();
+    renderBoard();
+
+    await screen.findByText("A Fazer");
+    await user.click(screen.getByRole("button", { name: "Excluir coluna A Fazer definitivamente" }));
+    await user.click(await screen.findByRole("button", { name: /continuar para confirmação/i }));
+    await user.click(screen.getByRole("button", { name: /excluir coluna definitivamente/i }));
+
+    await waitFor(() => expect(screen.queryByText("A Fazer")).not.toBeInTheDocument());
+  });
+
+  it("14. cards arquivados vinculados são mencionados na 1ª etapa, quando houver", async () => {
+    apiMock.getPlannerBoard.mockResolvedValue({ columns: [column({ label: "Só arquivados" })], cards: [] });
+    apiMock.getPlannerColumnCounts.mockResolvedValue({ activeCount: 0, archivedCount: 3 });
+    const user = userEvent.setup();
+    renderBoard();
+
+    await screen.findByText("Só arquivados");
+    await user.click(screen.getByRole("button", { name: "Excluir coluna Só arquivados definitivamente" }));
+
+    expect(await screen.findByText(/vão continuar existindo.*voltam para o Backlog/i)).toBeInTheDocument();
   });
 });
 

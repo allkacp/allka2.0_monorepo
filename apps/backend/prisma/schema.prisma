@@ -776,6 +776,13 @@ model PlannerColumn {
   label         String
   color         String   @default("bg-slate-500")
   position      Int      @default(0)
+  // Marca a coluna principal (Backlog) por identidade, não por texto do
+  // `label` (lote de exclusão de coluna, ata 2026-08-24): o título é
+  // editável pelo usuário, então confiar em `label === "Backlog"` pra
+  // proteger contra exclusão seria furável só renomeando a coluna. Setada
+  // uma única vez em `ensureDefaultColumns()`, nunca exposta pro payload
+  // de criação/edição — não pode ser ligada/desligada pela API.
+  is_default    Boolean  @default(false)
   created_at    DateTime @default(now())
   updated_at    DateTime @updatedAt
 

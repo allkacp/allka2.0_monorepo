@@ -52,6 +52,8 @@ export function usePlannerBoard() {
   // por card, pra não travar a exclusão de outros cards enquanto uma está
   // em andamento.
   const deletingRef = useRef<Set<string>>(new Set());
+  // Mesma guarda, por coluna — exclusão de coluna.
+  const deletingColumnRef = useRef<Set<string>>(new Set());
 
   const reload = useCallback(async () => {
     setStatus("loading");
@@ -89,17 +91,25 @@ export function usePlannerBoard() {
     }
   }, [columns]);
 
+  // Exclusão FÍSICA e irreversível — ao contrário das outras mutações de
+  // coluna, NÃO remove otimisticamente: só tira a coluna da lista depois
+  // da API confirmar (a coluna principal e colunas com cards ativos são
+  // bloqueadas pelo backend com 409, e "sumir da tela antes de saber se
+  // deu certo" violaria essa garantia). Guarda por ref evita uma segunda
+  // chamada em cima da mesma coluna enquanto a primeira ainda não voltou.
   const deleteColumn = useCallback(async (id: string): Promise<MutationResult> => {
-    const previousColumns = columns;
-    setColumns((prev) => prev.filter((c) => c.id !== id));
+    if (deletingColumnRef.current.has(id)) return { ok: false, error: "Exclusão já em andamento." };
+    deletingColumnRef.current.add(id);
     try {
       await apiClient.deletePlannerColumn(id);
+      setColumns((prev) => prev.filter((c) => c.id !== id));
       return { ok: true };
     } catch (err) {
-      setColumns(previousColumns);
       return { ok: false, error: friendlyError(err, "Não foi possível excluir a coluna.") };
+    } finally {
+      deletingColumnRef.current.delete(id);
     }
-  }, [columns]);
+  }, []);
 
   const reorderColumns = useCallback(async (orderedIds: string[]): Promise<MutationResult> => {
     const previous = columns;

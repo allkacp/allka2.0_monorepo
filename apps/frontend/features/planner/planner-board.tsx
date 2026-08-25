@@ -38,7 +38,7 @@ import {
 } from "@/components/ui/dialog";
 import { ConfirmationDialog } from "@/components/confirmation-dialog";
 import { useToast } from "@/hooks/use-toast";
-import { Plus, Settings, X, Calendar, LayoutDashboard, AlertCircle, RefreshCw, Archive, Trash2 } from "lucide-react";
+import { Plus, Settings, Calendar, LayoutDashboard, AlertCircle, RefreshCw, Archive, Trash2 } from "lucide-react";
 import { usePlannerBoard, type PlannerPriority } from "./use-planner-board";
 import { PlannerArchivedPanel } from "./planner-archived-panel";
 import { apiClient, type PlannerCard as PlannerCardData, type PlannerColumn as PlannerColumnData } from "@/lib/api-client";
@@ -102,6 +102,9 @@ export function PlannerBoard({ projects }: { projects: FrontendProject[] }) {
 
   const [archivingCard, setArchivingCard] = useState<PlannerCardData | null>(null);
   const [deletingCard, setDeletingCard] = useState<PlannerCardData | null>(null);
+
+  const [deletingColumn, setDeletingColumn] = useState<PlannerColumnData | null>(null);
+  const [deletingColumnCounts, setDeletingColumnCounts] = useState<{ activeCount: number; archivedCount: number } | null>(null);
 
   const [showArchivedPanel, setShowArchivedPanel] = useState(false);
   const [archivedCount, setArchivedCount] = useState<number | null>(null);
@@ -195,12 +198,26 @@ export function PlannerBoard({ projects }: { projects: FrontendProject[] }) {
       });
     }
   };
-  const deleteColumn = async (columnId: string) => {
-    if (!confirm("Excluir esta coluna?")) return;
-    const result = await board.deleteColumn(columnId);
-    if (!result.ok) {
-      toast({ title: "Não foi possível excluir a coluna", description: result.error, variant: "destructive" });
+  // Busca a contagem real de cards (ativos/arquivados) ANTES de abrir a
+  // confirmação — a 1ª etapa precisa mostrar números reais, não um
+  // placeholder que muda depois de já estar na tela.
+  const requestDeleteColumn = async (column: PlannerColumnData) => {
+    try {
+      const counts = await apiClient.getPlannerColumnCounts(column.id);
+      setDeletingColumnCounts(counts);
+      setDeletingColumn(column);
+    } catch (err) {
+      toast({
+        title: "Não foi possível verificar a coluna",
+        description: err instanceof Error ? err.message : undefined,
+        variant: "destructive",
+      });
     }
+  };
+  const confirmDeleteColumn = async () => {
+    if (!deletingColumn) return;
+    const result = await board.deleteColumn(deletingColumn.id);
+    if (!result.ok) throw new Error(result.error);
   };
 
   const openNewCardDialog = (columnId: string) => {
@@ -384,7 +401,7 @@ export function PlannerBoard({ projects }: { projects: FrontendProject[] }) {
                 cards={board.cards.filter((c) => c.columnId === col.id).sort((a, b) => a.position - b.position)}
                 projects={projects}
                 onEdit={() => openEditColumnDialog(col)}
-                onDelete={() => deleteColumn(col.id)}
+                onDelete={() => requestDeleteColumn(col)}
                 onAddCard={() => openNewCardDialog(col.id)}
                 onEditCard={openEditCardDialog}
                 onArchiveCard={requestArchiveCard}
@@ -588,6 +605,35 @@ export function PlannerBoard({ projects }: { projects: FrontendProject[] }) {
         ]}
         finalConfirmText="Excluir card definitivamente"
       />
+
+      <ConfirmationDialog
+        open={deletingColumn !== null}
+        onClose={() => {
+          setDeletingColumn(null);
+          setDeletingColumnCounts(null);
+        }}
+        onConfirm={confirmDeleteColumn}
+        title="Excluir coluna definitivamente"
+        message="A coluna será apagada do banco de dados."
+        twoStep
+        destructive
+        targetName={deletingColumn?.label}
+        targetDetail={
+          deletingColumnCounts
+            ? `${deletingColumnCounts.activeCount} card(s) ativo(s) · ${deletingColumnCounts.archivedCount} arquivado(s)`
+            : undefined
+        }
+        consequences={[
+          "Esta ação é permanente — a coluna é removida de vez, não fica arquivada.",
+          ...(deletingColumnCounts && deletingColumnCounts.archivedCount > 0
+            ? [
+                `${deletingColumnCounts.archivedCount} card(s) arquivado(s) nesta coluna vão continuar existindo, só perdem o vínculo com ela — ao restaurar, voltam para o Backlog.`,
+              ]
+            : []),
+          "Cards ativos impedem a exclusão — mova, arquive ou exclua-os antes de apagar a coluna.",
+        ]}
+        finalConfirmText="Excluir coluna definitivamente"
+      />
     </div>
   );
 }
@@ -644,15 +690,29 @@ function PlannerColumnView({
           >
             <Settings className="h-3 w-3" />
           </button>
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              onDelete();
-            }}
-            className="hover:bg-white/20 rounded p-0.5 transition-colors"
-          >
-            <X className="h-3 w-3" />
-          </button>
+          {column.isDefault ? (
+            <button
+              type="button"
+              disabled
+              title="A coluna principal não pode ser excluída"
+              aria-label="A coluna principal não pode ser excluída"
+              className="rounded p-0.5 text-white/40 cursor-not-allowed"
+            >
+              <Trash2 className="h-3 w-3" />
+            </button>
+          ) : (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                onDelete();
+              }}
+              title="Excluir coluna definitivamente"
+              aria-label={`Excluir coluna ${column.label} definitivamente`}
+              className="hover:bg-red-500/30 rounded p-0.5 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white"
+            >
+              <Trash2 className="h-3 w-3" />
+            </button>
+          )}
         </div>
       </div>
 

@@ -375,10 +375,19 @@ describe("planner routes (persistência, isolamento e concorrência — lote 6)"
   });
 
   // ─── excluir coluna com cards ativos é bloqueado (409) ───────────────────
+  // Usa uma coluna PERSONALIZADA (não a coluna[0]/Backlog) de propósito: a
+  // coluna principal agora é bloqueada por si só (`is_default`), então
+  // testar o bloqueio por "cards ativos" precisa de uma coluna que não seja
+  // a principal — senão o 409 aqui poderia estar mascarando o motivo errado.
+  // Cobertura completa da exclusão de coluna está no describe abaixo.
   it("excluir coluna com cards ativos retorna 409; coluna vazia é excluída", async () => {
     const user = await createUser();
-    const board = await api("/api/planner/board", { token: tokenFor(user) });
-    const columnId = board.json.columns[0].id;
+    const custom = await api("/api/planner/columns", {
+      method: "POST",
+      token: tokenFor(user),
+      body: { label: "Coluna com card" },
+    });
+    const columnId = custom.json.column.id;
     await api("/api/planner/cards", { method: "POST", token: tokenFor(user), body: { columnId, title: "Ocupando a coluna" } });
 
     const blocked = await api(`/api/planner/columns/${columnId}`, { method: "DELETE", token: tokenFor(user) });
@@ -786,5 +795,205 @@ describe("planner — exclusão definitiva de card", () => {
     // Confirma que o mesmo perfil (sem "delete") é barrado na exclusão de verdade.
     const deleteAttempt = await api(`/api/planner/cards/${created.json.card.id}`, { method: "DELETE", token: tokenFor(user) });
     assert.equal(deleteAttempt.status, 403);
+  });
+});
+
+// Último lote do Planejador persistente (mesma ata, "exclusão segura de
+// coluna") — substitui o `window.confirm` por confirmação dupla real e
+// corrige a exclusão de coluna: coluna principal (Backlog) protegida por
+// `is_default`, cards ativos bloqueiam (409), cards arquivados sobrevivem
+// via `column_id` -> NULL. `before`/`after` próprios pelo mesmo motivo dos
+// describes anteriores (o `after()` de cima fecha server/prisma).
+describe("planner — exclusão de coluna (segura, com confirmação dupla)", () => {
+  before(async () => {
+    requireTestDatabaseUrl();
+    process.env.DATABASE_URL = process.env.TEST_DATABASE_URL ?? process.env.DATABASE_URL;
+
+    const listener = app.listen(0);
+    server = listener;
+    await new Promise<void>((resolve) => listener.once("listening", () => resolve()));
+    const address = listener.address() as AddressInfo;
+    baseUrl = `http://127.0.0.1:${address.port}`;
+  });
+
+  after(async () => {
+    await prisma.plannerCard.deleteMany({ where: { owner_user_id: { in: createdUserIds } } });
+    await prisma.plannerColumn.deleteMany({ where: { owner_user_id: { in: createdUserIds } } });
+    await prisma.project.deleteMany({ where: { id: { in: createdProjectIds } } });
+    await prisma.user.deleteMany({ where: { id: { in: createdUserIds } } });
+    await prisma.adminProfile.deleteMany({ where: { id: { in: createdProfileIds } } });
+    await new Promise<void>((resolve, reject) => server.close((err) => (err ? reject(err) : resolve())));
+    await prisma.$disconnect();
+  });
+
+  // ─── 1. 401 sem sessão ───────────────────────────────────────────────────
+  it("1. DELETE /columns/:id sem token retorna 401", async () => {
+    const res = await api("/api/planner/columns/whatever-id", { method: "DELETE" });
+    assert.equal(res.status, 401);
+  });
+
+  // ─── 2. 403 sem permissão ────────────────────────────────────────────────
+  it("2. usuário com perfil sem 'projetos:delete' recebe 403 ao tentar excluir coluna", async () => {
+    const profile = await createProfile({
+      permissions: [
+        { module: "projetos", action: "view" },
+        { module: "projetos", action: "create" },
+        { module: "projetos", action: "edit" },
+      ],
+    });
+    const user = await createUser({ admin_profile_id: profile.id });
+    const custom = await api("/api/planner/columns", { method: "POST", token: tokenFor(user), body: { label: "Sem permissão" } });
+
+    const res = await api(`/api/planner/columns/${custom.json.column.id}`, { method: "DELETE", token: tokenFor(user) });
+    assert.equal(res.status, 403);
+
+    const row = await prisma.plannerColumn.findUnique({ where: { id: custom.json.column.id } });
+    assert.ok(row, "sem permissão, a coluna não deveria ter sido apagada");
+  });
+
+  // ─── 3. 404 para outra conta ─────────────────────────────────────────────
+  it("3. conta A não consegue excluir coluna de B (404, coluna de B sobrevive)", async () => {
+    const userA = await createUser();
+    const userB = await createUser();
+    const columnB = await api("/api/planner/columns", { method: "POST", token: tokenFor(userB), body: { label: "Coluna de B" } });
+
+    const attempt = await api(`/api/planner/columns/${columnB.json.column.id}`, { method: "DELETE", token: tokenFor(userA) });
+    assert.equal(attempt.status, 404);
+
+    const row = await prisma.plannerColumn.findUnique({ where: { id: columnB.json.column.id } });
+    assert.ok(row, "a coluna de B não deveria ter sido afetada pela tentativa de A");
+  });
+
+  // ─── 4. coluna principal bloqueada ───────────────────────────────────────
+  it("4. coluna principal (Backlog, is_default) não pode ser excluída, mesmo vazia", async () => {
+    const user = await createUser();
+    const board = await api("/api/planner/board", { token: tokenFor(user) });
+    const backlog = board.json.columns.find((c: any) => c.isDefault);
+    assert.ok(backlog, "deveria existir uma coluna principal");
+
+    const res = await api(`/api/planner/columns/${backlog.id}`, { method: "DELETE", token: tokenFor(user) });
+    assert.equal(res.status, 409);
+
+    const row = await prisma.plannerColumn.findUnique({ where: { id: backlog.id } });
+    assert.ok(row, "a coluna principal não deveria ter sido apagada");
+  });
+
+  // ─── 5. coluna com card ativo bloqueada ──────────────────────────────────
+  it("5. coluna personalizada com card ativo retorna 409 e nada é apagado", async () => {
+    const user = await createUser();
+    const column = await api("/api/planner/columns", { method: "POST", token: tokenFor(user), body: { label: "Com card ativo" } });
+    const card = await api("/api/planner/cards", { method: "POST", token: tokenFor(user), body: { columnId: column.json.column.id, title: "Ativo" } });
+
+    const res = await api(`/api/planner/columns/${column.json.column.id}`, { method: "DELETE", token: tokenFor(user) });
+    assert.equal(res.status, 409);
+
+    const columnRow = await prisma.plannerColumn.findUnique({ where: { id: column.json.column.id } });
+    assert.ok(columnRow);
+    const cardRow = await prisma.plannerCard.findUnique({ where: { id: card.json.card.id } });
+    assert.ok(cardRow, "o card ativo não deveria ter sido apagado");
+  });
+
+  // ─── 6. coluna vazia excluída ────────────────────────────────────────────
+  it("6. coluna personalizada vazia é excluída (200) e some do banco", async () => {
+    const user = await createUser();
+    const column = await api("/api/planner/columns", { method: "POST", token: tokenFor(user), body: { label: "Vazia" } });
+
+    const res = await api(`/api/planner/columns/${column.json.column.id}`, { method: "DELETE", token: tokenFor(user) });
+    assert.equal(res.status, 200);
+
+    const row = await prisma.plannerColumn.findUnique({ where: { id: column.json.column.id } });
+    assert.equal(row, null);
+  });
+
+  // ─── 7/8/9. coluna só com arquivados: excluída, cards sobrevivem, column_id vira null ──
+  it("7/8/9. coluna com só cards arquivados é excluída; os cards sobrevivem com column_id nulo", async () => {
+    const user = await createUser();
+    const column = await api("/api/planner/columns", { method: "POST", token: tokenFor(user), body: { label: "Só arquivados" } });
+    const card = await api("/api/planner/cards", { method: "POST", token: tokenFor(user), body: { columnId: column.json.column.id, title: "Vai arquivar" } });
+    await api(`/api/planner/cards/${card.json.card.id}/archive`, { method: "PATCH", token: tokenFor(user) });
+
+    const res = await api(`/api/planner/columns/${column.json.column.id}`, { method: "DELETE", token: tokenFor(user) });
+    assert.equal(res.status, 200);
+
+    const columnRow = await prisma.plannerColumn.findUnique({ where: { id: column.json.column.id } });
+    assert.equal(columnRow, null);
+
+    const cardRow = await prisma.plannerCard.findUnique({ where: { id: card.json.card.id } });
+    assert.ok(cardRow, "o card arquivado deveria sobreviver à exclusão da coluna");
+    assert.equal(cardRow?.archived_at instanceof Date, true);
+    assert.equal(cardRow?.column_id, null);
+  });
+
+  // ─── 10. restauração usa Backlog ─────────────────────────────────────────
+  it("10. restaurar um card cuja coluna foi excluída cai no Backlog (fallback)", async () => {
+    const user = await createUser();
+    const column = await api("/api/planner/columns", { method: "POST", token: tokenFor(user), body: { label: "Some depois" } });
+    const card = await api("/api/planner/cards", { method: "POST", token: tokenFor(user), body: { columnId: column.json.column.id, title: "Vai voltar pro Backlog" } });
+    await api(`/api/planner/cards/${card.json.card.id}/archive`, { method: "PATCH", token: tokenFor(user) });
+    await api(`/api/planner/columns/${column.json.column.id}`, { method: "DELETE", token: tokenFor(user) });
+
+    const board = await api("/api/planner/board", { token: tokenFor(user) });
+    const backlog = board.json.columns.find((c: any) => c.isDefault);
+
+    const restored = await api(`/api/planner/cards/${card.json.card.id}/restore`, { method: "POST", token: tokenFor(user) });
+    assert.equal(restored.status, 200);
+    assert.equal(restored.json.usedFallbackColumn, true);
+    assert.equal(restored.json.card.columnId, backlog.id);
+  });
+
+  // ─── 11. requisição repetida não gera erro interno ───────────────────────
+  it("11. duas chamadas DELETE seguidas na mesma coluna: 1ª apaga (200), 2ª não encontra nada (404) — nunca 500", async () => {
+    const user = await createUser();
+    const column = await api("/api/planner/columns", { method: "POST", token: tokenFor(user), body: { label: "Clique duplo" } });
+
+    const first = await api(`/api/planner/columns/${column.json.column.id}`, { method: "DELETE", token: tokenFor(user) });
+    const second = await api(`/api/planner/columns/${column.json.column.id}`, { method: "DELETE", token: tokenFor(user) });
+    assert.equal(first.status, 200);
+    assert.equal(second.status, 404);
+  });
+
+  // ─── 12/13. outra coluna não é afetada; nenhuma exclusão em cascata ─────
+  it("12/13. excluir uma coluna não afeta outra coluna do usuário, nem apaga cards de outra coluna", async () => {
+    const user = await createUser();
+    const toDelete = await api("/api/planner/columns", { method: "POST", token: tokenFor(user), body: { label: "Vai sumir" } });
+    const survivor = await api("/api/planner/columns", { method: "POST", token: tokenFor(user), body: { label: "Sobrevive" } });
+    const survivorCard = await api("/api/planner/cards", {
+      method: "POST",
+      token: tokenFor(user),
+      body: { columnId: survivor.json.column.id, title: "Card que fica" },
+    });
+
+    const res = await api(`/api/planner/columns/${toDelete.json.column.id}`, { method: "DELETE", token: tokenFor(user) });
+    assert.equal(res.status, 200);
+
+    const survivorColumnRow = await prisma.plannerColumn.findUnique({ where: { id: survivor.json.column.id } });
+    assert.ok(survivorColumnRow, "a outra coluna não deveria ter sido afetada");
+    const survivorCardRow = await prisma.plannerCard.findUnique({ where: { id: survivorCard.json.card.id } });
+    assert.ok(survivorCardRow, "o card de outra coluna não deveria ter sido apagado em cascata");
+    assert.equal(survivorCardRow?.column_id, survivor.json.column.id);
+  });
+
+  // ─── 14. persiste após nova consulta ─────────────────────────────────────
+  it("14. coluna excluída não reaparece numa nova consulta do board (equivalente a F5)", async () => {
+    const user = await createUser();
+    const column = await api("/api/planner/columns", { method: "POST", token: tokenFor(user), body: { label: "F5" } });
+    await api(`/api/planner/columns/${column.json.column.id}`, { method: "DELETE", token: tokenFor(user) });
+
+    const boardAgain = await api("/api/planner/board", { token: tokenFor(user) });
+    assert.ok(!boardAgain.json.columns.some((c: any) => c.id === column.json.column.id));
+  });
+
+  // ─── GET /columns/:id/counts — usado pela 1ª etapa da confirmação ───────
+  it("GET /columns/:id/counts devolve a contagem real de cards ativos e arquivados da coluna", async () => {
+    const user = await createUser();
+    const column = await api("/api/planner/columns", { method: "POST", token: tokenFor(user), body: { label: "Com contagem" } });
+    await api("/api/planner/cards", { method: "POST", token: tokenFor(user), body: { columnId: column.json.column.id, title: "Ativo 1" } });
+    const toArchive = await api("/api/planner/cards", { method: "POST", token: tokenFor(user), body: { columnId: column.json.column.id, title: "Vai arquivar" } });
+    await api(`/api/planner/cards/${toArchive.json.card.id}/archive`, { method: "PATCH", token: tokenFor(user) });
+
+    const counts = await api(`/api/planner/columns/${column.json.column.id}/counts`, { token: tokenFor(user) });
+    assert.equal(counts.status, 200);
+    assert.equal(counts.json.activeCount, 1);
+    assert.equal(counts.json.archivedCount, 1);
   });
 });

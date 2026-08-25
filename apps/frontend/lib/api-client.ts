@@ -106,6 +106,9 @@ export type PlannerColumn = {
   label: string;
   color: string;
   position: number;
+  /** Coluna principal (Backlog) — não pode ser excluída. Nunca aceito de
+   * volta num payload de criação/edição, só lido do backend. */
+  isDefault: boolean;
   updatedAt: string;
 };
 
@@ -481,8 +484,17 @@ class ApiClient {
   async reorderPlannerColumns(orderedIds: string[]): Promise<{ columns: PlannerColumn[] }> {
     return this.put("/planner/columns/reorder", { orderedIds });
   }
+  /** Exclusão FÍSICA e irreversível da coluna. Bloqueada pelo backend com
+   * 409 se for a coluna principal (`isDefault`) ou se tiver cards ativos —
+   * cards arquivados não bloqueiam, sobrevivem com `columnId: null`. */
   async deletePlannerColumn(id: string): Promise<void> {
     return this.del(`/planner/columns/${id}`);
+  }
+  /** Contagem de cards ativos/arquivados vinculados à coluna — usado na 1ª
+   * etapa da confirmação dupla de exclusão, pra mostrar números reais
+   * antes do usuário decidir. */
+  async getPlannerColumnCounts(id: string): Promise<{ activeCount: number; archivedCount: number }> {
+    return this.get(`/planner/columns/${id}/counts`);
   }
   async createPlannerCard(data: {
     columnId: string;

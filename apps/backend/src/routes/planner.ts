@@ -27,6 +27,7 @@ const COLUMN_SELECT = {
   label: true,
   color: true,
   position: true,
+  is_default: true,
   updated_at: true,
 } as const;
 
@@ -49,6 +50,7 @@ function serializeColumn(c: {
   label: string;
   color: string;
   position: number;
+  is_default: boolean;
   updated_at: Date;
 }) {
   return {
@@ -56,6 +58,7 @@ function serializeColumn(c: {
     label: c.label,
     color: c.color,
     position: c.position,
+    isDefault: c.is_default,
     updatedAt: c.updated_at.toISOString(),
   };
 }
@@ -111,11 +114,12 @@ async function ensureDefaultColumns(ownerId: string) {
       label: c.label,
       color: c.color,
       position: i,
+      is_default: i === 0, // Backlog — única coluna protegida contra exclusão.
     })),
   });
 }
 
-type OwnedColumnResult = { error: 404; body: { error: string } } | { column: { id: string; label: string; color: string; position: number; updated_at: Date } };
+type OwnedColumnResult = { error: 404; body: { error: string } } | { column: { id: string; label: string; color: string; position: number; is_default: boolean; updated_at: Date } };
 
 async function findOwnedColumn(id: string, ownerId: string): Promise<OwnedColumnResult> {
   const row = await prisma.plannerColumn.findFirst({
@@ -310,9 +314,38 @@ router.put(
   },
 );
 
-// ─── DELETE /api/planner/columns/:id — excluir coluna vazia ───────────────
-// Só permite excluir coluna sem cards ativos (409 senão) — evita apagar
-// cards em cascata sem o usuário perceber. Mova/arquive os cards antes.
+// ─── GET /api/planner/columns/:id/counts — cards ativos/arquivados da
+// coluna, pra a 1ª etapa da confirmação de exclusão mostrar números reais
+// antes de o usuário decidir (lote de exclusão de coluna, ata 2026-08-24).
+// Vem antes de qualquer rota "/columns/:id" só por hábito de organização —
+// não colide de fato, o segmento extra ("/counts") já desambigua no Express.
+router.get("/columns/:id/counts", requirePermission("projetos", "view"), async (req, res, next) => {
+  try {
+    const ownerId = req.user!.id;
+    const found = await findOwnedColumn(String(req.params.id), ownerId);
+    if ("error" in found) {
+      res.status(found.error).json(found.body);
+      return;
+    }
+    const [activeCount, archivedCount] = await Promise.all([
+      prisma.plannerCard.count({ where: { column_id: found.column.id, archived_at: null } }),
+      prisma.plannerCard.count({ where: { column_id: found.column.id, archived_at: { not: null } } }),
+    ]);
+    res.json({ activeCount, archivedCount });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// ─── DELETE /api/planner/columns/:id — excluir coluna definitivamente ─────
+// Bloqueia a coluna principal (Backlog, via `is_default` — nunca o texto
+// do `label`, que é editável) e qualquer coluna com cards ATIVOS (409).
+// Cards ARQUIVADOS não bloqueiam: sobrevivem à exclusão via
+// `column_id` -> NULL (ON DELETE SET NULL no schema), então não há cascade
+// manual pra fazer aqui — o próprio Prisma delete cuida disso no banco.
+// A checagem + exclusão rodam numa transação pra reduzir a janela de corrida
+// entre "contar cards ativos" e "excluir a coluna" (ex.: um card sendo
+// criado na coluna entre as duas chamadas).
 router.delete("/columns/:id", requirePermission("projetos", "delete"), async (req, res, next) => {
   try {
     const ownerId = req.user!.id;
@@ -321,18 +354,27 @@ router.delete("/columns/:id", requirePermission("projetos", "delete"), async (re
       res.status(found.error).json(found.body);
       return;
     }
-    const activeCards = await prisma.plannerCard.count({
-      where: { column_id: found.column.id, archived_at: null },
+    if (found.column.is_default) {
+      res.status(409).json({ error: "A coluna principal não pode ser excluída." });
+      return;
+    }
+    await prisma.$transaction(async (tx) => {
+      const activeCards = await tx.plannerCard.count({
+        where: { column_id: found.column.id, archived_at: null },
+      });
+      if (activeCards > 0) {
+        throw new Error("ACTIVE_CARDS");
+      }
+      await tx.plannerColumn.delete({ where: { id: found.column.id } });
     });
-    if (activeCards > 0) {
+    res.json({ ok: true });
+  } catch (err) {
+    if (err instanceof Error && err.message === "ACTIVE_CARDS") {
       res.status(409).json({
-        error: "Esta coluna ainda tem cards. Mova ou remova os cards antes de excluir a coluna.",
+        error: "Esta coluna possui cards ativos. Mova, arquive ou exclua esses cards antes de apagar a coluna.",
       });
       return;
     }
-    await prisma.plannerColumn.delete({ where: { id: found.column.id } });
-    res.json({ ok: true });
-  } catch (err) {
     next(err);
   }
 });
@@ -616,7 +658,7 @@ async function resolveRestoreColumn(
 
   await ensureDefaultColumns(ownerId);
   const backlog = await prisma.plannerColumn.findFirst({
-    where: { owner_user_id: ownerId, label: "Backlog" },
+    where: { owner_user_id: ownerId, is_default: true },
     orderBy: { position: "asc" },
     select: { id: true },
   });
