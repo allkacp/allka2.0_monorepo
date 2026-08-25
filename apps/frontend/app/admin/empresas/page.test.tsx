@@ -2,7 +2,7 @@ import React from "react";
 import { describe, expect, it, vi, beforeEach } from "vitest";
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { MemoryRouter } from "react-router-dom";
+import { MemoryRouter, useLocation } from "react-router-dom";
 import { SidebarProvider } from "@/contexts/sidebar-context";
 import { OpenScreensProvider } from "@/contexts/open-screens-context";
 
@@ -64,6 +64,40 @@ function nomadFixture(overrides: Partial<any> = {}) {
   };
 }
 
+function companyFixture(overrides: Partial<any> = {}) {
+  return {
+    id: "company-1",
+    sequence_number: 501,
+    name: "Empresa Cliente Direta",
+    type: "empresa",
+    cnpj: "11222333000144",
+    email: "contato@clientedireta.example.com",
+    phone: "11988887777",
+    status: "ativo",
+    address: "",
+    created_at: "2026-08-24T00:00:00.000Z",
+    updated_at: "2026-08-24T00:00:00.000Z",
+    ...overrides,
+  };
+}
+
+function agencyFixture(overrides: Partial<any> = {}) {
+  return {
+    id: "agency-1",
+    sequence_number: 601,
+    name: "Agência Parceira",
+    cnpj: "22333444000155",
+    email: "contato@agenciaparceira.example.com",
+    phone: "11977776666",
+    status: "ativo",
+    address: "",
+    partner_level: "bronze",
+    partner_profile: null,
+    created_at: "2026-08-24T00:00:00.000Z",
+    ...overrides,
+  };
+}
+
 function renderPage() {
   return render(
     <MemoryRouter>
@@ -79,6 +113,8 @@ function renderPage() {
 beforeEach(() => {
   vi.clearAllMocks();
   apiMock.getNomades.mockResolvedValue({ data: [nomadFixture()], total: 1 });
+  apiMock.getCompanies.mockResolvedValue({ data: [], total: 0 });
+  apiMock.getAgencies.mockResolvedValue({ data: [], total: 0 });
 });
 
 describe("admin/empresas — empresa Nomad: desativar/reativar (reversível)", () => {
@@ -103,7 +139,7 @@ describe("admin/empresas — empresa Nomad: desativar/reativar (reversível)", (
     expect(apiMock.updateNomadeStatus).not.toHaveBeenCalled();
   });
 
-  it("4/7. confirmar chama a API uma vez com status inativo e atualiza a lista", async () => {
+  it("4/7. confirmar chama a API uma vez com status inativo e atualiza a lista SEM refazer o fetch (evita o recarregamento completo)", async () => {
     apiMock.updateNomadeStatus.mockResolvedValue({ status: "inativo" });
     const user = userEvent.setup();
     renderPage();
@@ -112,7 +148,10 @@ describe("admin/empresas — empresa Nomad: desativar/reativar (reversível)", (
     await user.click(screen.getByRole("button", { name: "Desativar" }));
 
     await waitFor(() => expect(apiMock.updateNomadeStatus).toHaveBeenCalledWith("nomade-1", "inativo"));
-    await waitFor(() => expect(apiMock.getNomades).toHaveBeenCalledTimes(2));
+    // A lista sai do filtro padrão (só Ativos) sem um novo GET /api/nomades —
+    // a linha é atualizada localmente a partir da própria resposta da ação.
+    await waitFor(() => expect(screen.queryByText("Fulano Nômade")).not.toBeInTheDocument());
+    expect(apiMock.getNomades).toHaveBeenCalledTimes(1);
   });
 
   it("5/6. erro na desativação mostra mensagem amigável e mantém o registro", async () => {
@@ -251,5 +290,155 @@ describe("admin/empresas — redirecionamento da rota antiga /admin/nomades", ()
     expect(await screen.findByText("Fulano Nômade")).toBeInTheDocument();
     const nomadChip = await screen.findByRole("button", { name: "Nomad" });
     expect(nomadChip).toHaveAttribute("aria-pressed", "true");
+  });
+});
+
+// Lote "update company table without reload and correct filters" (ata
+// 2026-08) — Nomad/Agência/Company são os três tipos principais; Partner NÃO
+// é um quarto tipo, é um upgrade que uma Agência recebe (company.partner_status),
+// só filtrável como subfiltro dentro de Agência.
+function renderAtUrl(url: string) {
+  return render(
+    <MemoryRouter initialEntries={[url]}>
+      <SidebarProvider>
+        <OpenScreensProvider>
+          <AdminEmpresasPage />
+        </OpenScreensProvider>
+      </SidebarProvider>
+    </MemoryRouter>,
+  );
+}
+
+describe("admin/empresas — filtros principais mostram só o tipo selecionado", () => {
+  beforeEach(() => {
+    apiMock.getCompanies.mockResolvedValue({ data: [companyFixture()], total: 1 });
+    apiMock.getAgencies.mockResolvedValue({
+      data: [agencyFixture({ partner_profile: { status: "active" } })],
+      total: 1,
+    });
+    apiMock.getNomades.mockResolvedValue({ data: [nomadFixture()], total: 1 });
+  });
+
+  it("1. Nomad mostra somente Nomad", async () => {
+    renderAtUrl("/admin/empresas?type=nomad");
+    expect(await screen.findByText("Fulano Nômade")).toBeInTheDocument();
+    expect(screen.queryByText("Empresa Cliente Direta")).not.toBeInTheDocument();
+    expect(screen.queryByText("Agência Parceira")).not.toBeInTheDocument();
+  });
+
+  it("2. Agency mostra somente Agência", async () => {
+    renderAtUrl("/admin/empresas?type=agency");
+    expect(await screen.findByText("Agência Parceira")).toBeInTheDocument();
+    expect(screen.queryByText("Empresa Cliente Direta")).not.toBeInTheDocument();
+    expect(screen.queryByText("Fulano Nômade")).not.toBeInTheDocument();
+  });
+
+  it("3. Company mostra somente Company", async () => {
+    renderAtUrl("/admin/empresas?type=company");
+    expect(await screen.findByText("Empresa Cliente Direta")).toBeInTheDocument();
+    expect(screen.queryByText("Agência Parceira")).not.toBeInTheDocument();
+    expect(screen.queryByText("Fulano Nômade")).not.toBeInTheDocument();
+  });
+
+  it("4/5. Partner não é um chip principal — só existe dentro de Agência", async () => {
+    renderAtUrl("/admin/empresas?type=nomad");
+    await screen.findByText("Fulano Nômade");
+    expect(screen.queryByRole("button", { name: "Partner" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Partners" })).not.toBeInTheDocument();
+
+    const user = userEvent.setup();
+    await user.click(await screen.findByRole("button", { name: "Agency" }));
+    expect(await screen.findByRole("button", { name: "Partners" })).toBeInTheDocument();
+  });
+
+  it("6. Partner filtra corretamente dentro de Agência", async () => {
+    apiMock.getAgencies.mockResolvedValue({
+      data: [
+        agencyFixture({ id: "agency-partner", name: "Agência Partner Ativa", partner_profile: { status: "active" } }),
+        agencyFixture({ id: "agency-plain", name: "Agência Sem Partner", partner_profile: null }),
+      ],
+      total: 2,
+    });
+    renderAtUrl("/admin/empresas?type=agency");
+    await screen.findByText("Agência Partner Ativa");
+    expect(screen.getByText("Agência Sem Partner")).toBeInTheDocument();
+
+    const user = userEvent.setup();
+    await user.click(await screen.findByRole("button", { name: "Partners" }));
+    await waitFor(() => expect(screen.queryByText("Agência Sem Partner")).not.toBeInTheDocument());
+    expect(screen.getByText("Agência Partner Ativa")).toBeInTheDocument();
+
+    await user.click(await screen.findByRole("button", { name: "Não Partners" }));
+    await waitFor(() => expect(screen.queryByText("Agência Partner Ativa")).not.toBeInTheDocument());
+    expect(screen.getByText("Agência Sem Partner")).toBeInTheDocument();
+  });
+
+  it("7. sair de Agência limpa o subfiltro Partner", async () => {
+    const user = userEvent.setup();
+    renderAtUrl("/admin/empresas?type=agency");
+    await user.click(await screen.findByRole("button", { name: "Partners" }));
+    expect(await screen.findByRole("button", { name: "Partners" })).toHaveAttribute("aria-pressed", "true");
+
+    await user.click(await screen.findByRole("button", { name: "Company" }));
+    expect(screen.queryByRole("button", { name: "Partners" })).not.toBeInTheDocument();
+
+    await user.click(await screen.findByRole("button", { name: "Agency" }));
+    expect(await screen.findByRole("button", { name: "Todas as Agências" })).toHaveAttribute("aria-pressed", "true");
+  });
+
+  it("9. clicar num chip atualiza a URL preservando o tipo", async () => {
+    let currentSearch = "";
+    function LocationProbe() {
+      const location = useLocation();
+      currentSearch = location.search;
+      return null;
+    }
+    const user = userEvent.setup();
+    render(
+      <MemoryRouter initialEntries={["/admin/empresas"]}>
+        <SidebarProvider>
+          <OpenScreensProvider>
+            <LocationProbe />
+            <AdminEmpresasPage />
+          </OpenScreensProvider>
+        </SidebarProvider>
+      </MemoryRouter>,
+    );
+
+    await user.click(await screen.findByRole("button", { name: "Nomad" }));
+    await waitFor(() => expect(currentSearch).toBe("?type=nomad"));
+    expect(await screen.findByText("Fulano Nômade")).toBeInTheDocument();
+    expect(screen.queryByText("Empresa Cliente Direta")).not.toBeInTheDocument();
+
+    await user.click(await screen.findByRole("button", { name: "Agency" }));
+    await waitFor(() => expect(currentSearch).toBe("?type=agency"));
+
+    await user.click(await screen.findByRole("button", { name: "Partners" }));
+    await waitFor(() => expect(currentSearch).toBe("?type=agency&partner=only"));
+
+    await user.click(await screen.findByRole("button", { name: "Todos" }));
+    await waitFor(() => expect(currentSearch).toBe(""));
+  });
+});
+
+describe("admin/empresas — desativar/reativar Nômade não recarrega a página", () => {
+  it("11/12/13. não chama getCompanies/getAgencies de novo, e sidebar/topbar (fora desta árvore) não são afetados", async () => {
+    apiMock.updateNomadeStatus.mockResolvedValue({ status: "inativo" });
+    apiMock.getCompanies.mockResolvedValue({ data: [companyFixture()], total: 1 });
+    apiMock.getAgencies.mockResolvedValue({ data: [agencyFixture()], total: 1 });
+    const user = userEvent.setup();
+    renderPage();
+
+    await screen.findByText("Fulano Nômade");
+    const companiesCallsBefore = apiMock.getCompanies.mock.calls.length;
+    const agenciesCallsBefore = apiMock.getAgencies.mock.calls.length;
+
+    await user.click(await screen.findByRole("button", { name: "Desativar empresa Nomad Fulano Nômade" }));
+    await user.click(screen.getByRole("button", { name: "Desativar" }));
+    await waitFor(() => expect(apiMock.updateNomadeStatus).toHaveBeenCalled());
+
+    // Nenhum outro fetch de tipo foi refeito — só a linha afetada mudou.
+    expect(apiMock.getCompanies.mock.calls.length).toBe(companiesCallsBefore);
+    expect(apiMock.getAgencies.mock.calls.length).toBe(agenciesCallsBefore);
   });
 });
