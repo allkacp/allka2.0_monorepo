@@ -1,10 +1,12 @@
 
-// Ex-AlertsHeaderIcon: era um ícone flutuante separado do sino, mostrando o
-// mesmo feed (SystemAlert) sem nenhuma distinção — virou a aba "Alertas"
-// dentro do painel do sino (ver notification-preferences-panel.tsx,
-// componente AlertasTab). Este arquivo agora só guarda os helpers puros que
-// aquela aba (e o resto da plataforma) reaproveita — nenhum componente aqui
-// é mais renderizado diretamente.
+// Ex-AlertsHeaderIcon: era um ícone flutuante separado do sino, depois virou
+// aba "Alertas" dentro do painel do sino — o responsável rejeitou essa
+// versão combinada na revisão visual (ata 2026-08) e pediu um painel de
+// verdade separado. Hoje é AlertsPanel (components/alerts-panel.tsx),
+// aberto por AlertsFloatingIcon na barra vertical direita. Este arquivo só
+// guarda os helpers puros (ícone por tipo, cor/label de severidade e
+// criticidade) que AlertsPanel e o resto da plataforma reaproveitam —
+// nenhum componente aqui é renderizado diretamente.
 import { CheckSquare, Briefcase, DollarSign, Settings, Info, Clock, AlertCircle, CheckCircle2, AlertTriangle, AlertOctagon } from "lucide-react"
 import type { AccountType } from "@/contexts/account-type-context"
 
@@ -160,15 +162,24 @@ export const criticalityIcon: Record<Criticality, React.ElementType> = {
 
 // Chip sólido — cor própria de criticidade, para não confundir com o azul
 // de `severityBadgeColor` (que significa outra coisa).
+//
+// Amarelo usa `yellow-*`, nunca `amber-*` — correção pedida pelo responsável
+// depois da revisão visual do lote anterior (âmbar lia como laranja). Texto
+// escuro (`yellow-900`/`yellow-950`) sobre fundo amarelo sólido: branco sobre
+// yellow-400/500 não tem contraste suficiente (WCAG), então este é o único
+// badge de criticidade que não usa texto branco.
 export const criticalityBadgeColor: Record<Criticality, string> = {
   verde: "bg-emerald-600 text-white border-transparent dark:bg-emerald-500",
-  amarelo: "bg-amber-600 text-white border-transparent dark:bg-amber-500",
+  amarelo: "bg-yellow-400 text-yellow-900 border-transparent dark:bg-yellow-500 dark:text-yellow-950",
   vermelho: "bg-red-600 text-white border-transparent dark:bg-red-500",
 }
 
-export const criticalityCardColor: Record<Criticality, string> = {
-  verde: "text-emerald-700 bg-emerald-50 border-emerald-200 dark:bg-emerald-950/30 dark:border-emerald-800 dark:text-emerald-300",
-  amarelo: "text-amber-700 bg-amber-50 border-amber-200 dark:bg-amber-950/30 dark:border-amber-800 dark:text-amber-300",
-  vermelho: "text-red-700 bg-red-50 border-red-200 dark:bg-red-950/30 dark:border-red-800 dark:text-red-300",
+// Faixa lateral (borda esquerda) — identifica a criticidade sem pintar o
+// card inteiro (pedido do responsável: "não pinte todo o painel de forma
+// pesada"). Usado em AlertsPanel junto com um card neutro (branco/slate).
+export const criticalityAccentBorder: Record<Criticality, string> = {
+  verde: "border-l-emerald-500",
+  amarelo: "border-l-yellow-400",
+  vermelho: "border-l-red-500",
 }
 

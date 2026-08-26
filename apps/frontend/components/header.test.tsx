@@ -95,8 +95,8 @@ vi.mock("@/contexts/notifications-panel-context", () => ({
 
 vi.mock("@/lib/api-client", () => ({ apiClient: apiClientMock }));
 
-vi.mock("@/components/notification-preferences-panel", () => ({
-  NotificationPreferencesPanel: () => <div data-testid="notif-panel-mock" />,
+vi.mock("@/components/notifications-panel", () => ({
+  NotificationsPanel: () => <div data-testid="notif-panel-mock" />,
 }));
 
 vi.mock("@/components/project-basket-drawer", () => ({
@@ -208,12 +208,13 @@ describe("Header — 'Meu Perfil' abre o painel compartilhado, nunca o dashboard
   });
 });
 
-// Lote "separar alertas de notificações" (ata 2026-08) — o header tinha um
-// único sino cobrindo os dois conceitos (contador somava notificação +
-// alerta junto, violando a regra de contadores independentes). Cobre os
-// dois acionadores distintos, tooltips, contadores independentes e o pulso
-// com prefers-reduced-motion.
-describe("Header — Notificações e Alertas são dois acionadores distintos", () => {
+// Lote de correção visual (ata 2026-08, revisão do responsável) — o lote
+// anterior tinha colocado o ícone de Alertas AO LADO do sino, no cabeçalho.
+// O responsável rejeitou visualmente e pediu que Alertas saísse do
+// cabeçalho de vez, indo para a barra vertical direita (ver
+// alerts-floating-icon.test.tsx pros testes desse ícone e do AlertsPanel).
+// Este describe garante que o cabeçalho ficou só com o sino.
+describe("Header — só o sino de Notificações fica no cabeçalho (Alertas saiu daqui)", () => {
   beforeEach(() => {
     accountConfig.accountType = "admin";
     accountConfig.isPartnerActive = false;
@@ -223,83 +224,44 @@ describe("Header — Notificações e Alertas são dois acionadores distintos", 
     });
   });
 
-  it("13. existem dois ícones distintos (Bell e AlertTriangle), não um só", () => {
+  it("1. o sino (Notificações) aparece no cabeçalho desktop", () => {
     renderHeader();
     expect(document.querySelector("header button svg.lucide-bell")).toBeTruthy();
-    expect(document.querySelector("header button svg.lucide-triangle-alert")).toBeTruthy();
   });
 
-  it("14. cada ícone tem um tooltip/aria-label próprio ('Notificações' e 'Alertas')", () => {
+  it("2. o ícone de Alertas NÃO aparece ao lado do sino no cabeçalho", () => {
+    renderHeader();
+    expect(document.querySelector("header button svg.lucide-triangle-alert")).toBeNull();
+    expect(document.querySelector("header svg.lucide-triangle-alert")).toBeNull();
+  });
+
+  it("4. o sino tem tooltip/aria-label próprio ('Notificações')", () => {
     renderHeader();
     const bellButton = document.querySelector("header button svg.lucide-bell")?.closest("button");
-    const alertButton = document.querySelector("header button svg.lucide-triangle-alert")?.closest("button");
     expect(bellButton).toHaveAttribute("title", "Notificações");
-    expect(alertButton).toHaveAttribute("title", "Alertas");
     expect(bellButton?.getAttribute("aria-label")).toMatch(/^Notificações/);
-    expect(alertButton?.getAttribute("aria-label")).toMatch(/^Alertas/);
   });
 
-  it("15. clicar no sino define a aba 'inbox' e abre o painel; clicar no triângulo define 'alertas' — cada um só define sua própria aba", async () => {
+  it("6. clicar no sino define a aba 'inbox' e abre o painel de Notificações", async () => {
     const user = userEvent.setup();
     renderHeader();
 
     const bellButton = document.querySelector("header button svg.lucide-bell")?.closest("button") as HTMLElement;
-    const alertButton = document.querySelector("header button svg.lucide-triangle-alert")?.closest("button") as HTMLElement;
-
     await user.click(bellButton);
     expect(notifPanelMock.setTab).toHaveBeenLastCalledWith("inbox");
     expect(notifPanelMock.setOpen).toHaveBeenLastCalledWith(true);
-
-    await user.click(alertButton);
-    expect(notifPanelMock.setTab).toHaveBeenLastCalledWith("alertas");
-    expect(notifPanelMock.setOpen).toHaveBeenLastCalledWith(true);
   });
 
-  it("16. os dois acionadores compartilham o mesmo painel — nunca dois paineis que poderiam ficar sobrepostos", async () => {
-    const user = userEvent.setup();
-    renderHeader();
-
-    const bellButton = document.querySelector("header button svg.lucide-bell")?.closest("button") as HTMLElement;
-    const alertButton = document.querySelector("header button svg.lucide-triangle-alert")?.closest("button") as HTMLElement;
-    await user.click(bellButton);
-    await user.click(alertButton);
-
-    // Um único NotificationPreferencesPanel é montado por Header,
-    // independentemente de qual dos dois ícones foi clicado.
-    expect(screen.getAllByTestId("notif-panel-mock")).toHaveLength(1);
-  });
-
-  it("17. contadores são independentes: notificações usa category=notificacao, alertas usa category=alerta", async () => {
+  it("5/17. contador do sino usa somente category=notificacao, nunca soma alerta", async () => {
     apiClientMock.getUnreadSystemAlertsCount = vi.fn((filters?: any) => {
       if (filters?.category === "notificacao") return Promise.resolve({ count: 3 });
-      if (filters?.category === "alerta") return Promise.resolve({ count: 5, bySeverity: { info: 2, warning: 2, error: 1 } });
-      return Promise.resolve({ count: 999 }); // nunca deveria ser chamado sem categoria
+      return Promise.resolve({ count: 999 }); // nunca deveria ser chamado sem categoria, nem com "alerta"
     });
     renderHeader();
 
     expect(await screen.findByText("3")).toBeInTheDocument();
-    expect(await screen.findByText("5")).toBeInTheDocument();
-    // Nunca chamado sem filtro de categoria — cada acionador pede só o seu.
     expect(apiClientMock.getUnreadSystemAlertsCount).not.toHaveBeenCalledWith(undefined);
     expect(apiClientMock.getUnreadSystemAlertsCount).not.toHaveBeenCalledWith({});
-  });
-
-  it("29. o pulso de urgência usa motion-safe (respeita prefers-reduced-motion, nunca 'animate-pulse' puro)", async () => {
-    apiClientMock.getUnreadSystemAlertsCount = vi.fn((filters?: any) => {
-      if (filters?.category === "alerta") return Promise.resolve({ count: 1, bySeverity: { info: 0, warning: 0, error: 1 } });
-      return Promise.resolve({ count: 0 });
-    });
-    renderHeader();
-
-    const alertIcon = await screen.findByText("1");
-    await vi.waitFor(() => {
-      const svg = document.querySelector("header button svg.lucide-triangle-alert");
-      expect(svg?.getAttribute("class")).toMatch(/motion-safe:animate-pulse/);
-    });
-    const svg = document.querySelector("header button svg.lucide-triangle-alert");
-    // Nunca "animate-pulse" puro (sem o prefixo motion-safe:), que ignora
-    // prefers-reduced-motion.
-    expect(svg?.getAttribute("class")?.split(" ")).not.toContain("animate-pulse");
-    expect(alertIcon).toBeInTheDocument();
+    expect(apiClientMock.getUnreadSystemAlertsCount).not.toHaveBeenCalledWith({ category: "alerta" });
   });
 });

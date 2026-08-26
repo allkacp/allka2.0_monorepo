@@ -3,6 +3,11 @@
  * Header porque o pin da Bandeja de Telas (reaberto de qualquer página)
  * precisa conseguir abrir o painel sem depender do Header estar "dono" do
  * estado local. Mesmo papel que ProjectBasketProvider cumpre pra Cesta.
+ *
+ * "tab" não inclui mais "alertas" (correção visual, ata 2026-08): Alertas
+ * virou um painel de verdade separado (AlertsPanel, aberto pela barra
+ * vertical direita — ver alerts-floating-icon.tsx), nunca mais uma aba
+ * dentro deste painel de Notificações.
  */
 import { createContext, useContext, useState, type ReactNode } from "react";
 import { useGlobalHeaderPanel } from "@/contexts/global-header-panel-context";
@@ -10,8 +15,8 @@ import { useGlobalHeaderPanel } from "@/contexts/global-header-panel-context";
 interface NotificationsPanelContextValue {
   open: boolean;
   setOpen: (v: boolean) => void;
-  tab: "inbox" | "alertas" | "prefs" | "groups";
-  setTab: (t: "inbox" | "alertas" | "prefs" | "groups") => void;
+  tab: "inbox" | "prefs" | "groups";
+  setTab: (t: "inbox" | "prefs" | "groups") => void;
 }
 
 const NotificationsPanelContext =
@@ -22,7 +27,7 @@ export function NotificationsPanelProvider({ children }: { children: ReactNode }
   const open = isActive("notifications");
   const setOpen = (v: boolean) =>
     v ? openPanel("notifications") : closePanel("notifications");
-  const [tab, setTab] = useState<"inbox" | "alertas" | "prefs" | "groups">("inbox");
+  const [tab, setTab] = useState<"inbox" | "prefs" | "groups">("inbox");
   return (
     <NotificationsPanelContext.Provider value={{ open, setOpen, tab, setTab }}>
       {children}

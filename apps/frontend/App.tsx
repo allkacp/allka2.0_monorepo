@@ -34,6 +34,7 @@ import { ChatWidget } from "@/components/chat-widget";
 import { OpenScreensProvider } from "@/contexts/open-screens-context";
 import { OpenScreensTray } from "@/components/open-screens-tray";
 import { HeaderFloatingTools } from "@/components/header-floating-tools";
+import { AlertsFloatingIcon } from "@/components/alerts-floating-icon";
 import { PinActivationListener } from "@/components/pin-activation-listener";
 import { ProductFeedbackWidget } from "@/components/product-feedback-widget";
 import { isStandardShellRoute } from "@/components/standard-page-shell";
@@ -570,11 +571,14 @@ function AppLayout({ children }: { children: React.ReactNode }) {
                             <ChatWidget />
                             {/* Bandeja de telas abertas — logo abaixo do chat */}
                             <OpenScreensTray />
-                            {/* Modo escuro e tamanho de fonte — logo abaixo da bandeja.
-                                Alertas do sistema virou aba dentro do painel do sino
-                                (Notificações), não é mais um ícone flutuante à parte. */}
+                            {/* Modo escuro e tamanho de fonte — logo abaixo da bandeja. */}
                             <HeaderFloatingTools />
                             <ProductFeedbackWidget />
+                            {/* Alertas — barra vertical direita (correção visual, ata
+                                2026-08): saiu do cabeçalho, ao lado do sino, e ganhou
+                                painel próprio (AlertsPanel), nunca mais uma aba do
+                                painel de Notificações. */}
+                            <AlertsFloatingIcon />
                             <PinActivationListener />
                           </NotificationsPanelProvider>
                           </ProjectBasketProvider>

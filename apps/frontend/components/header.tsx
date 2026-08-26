@@ -1,7 +1,6 @@
 import {
   Search,
   Bell,
-  AlertTriangle,
   Menu,
   X,
   Wallet,
@@ -42,7 +41,7 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { useAccountType } from "@/contexts/account-type-context";
 import { useSidebar } from "@/contexts/sidebar-context";
-import { NotificationPreferencesPanel } from "@/components/notification-preferences-panel";
+import { NotificationsPanel } from "@/components/notifications-panel";
 import { UserViewSlidePanel } from "@/components/user-view-slide-panel";
 import { usePartner } from "@/contexts/partner-context";
 import { useEmpresa } from "@/contexts/empresa-context";
@@ -122,11 +121,11 @@ export function Header({ transparent = false }: { transparent?: boolean } = {}) 
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
   const { open: notifOpen, setOpen: setNotifOpen, tab: notifTab, setTab: setNotifTab } = useNotificationsPanel();
-  // Ata 2026-08 ("separar alertas de notificações"): dois acionadores
-  // independentes no header — o sino conta só `category: "notificacao"`
-  // (antes contava os dois juntos, o que violava a regra "o contador de
-  // notificação não pode incluir alertas"); o triângulo conta só
-  // `category: "alerta"`, com quebra por criticidade pro indicador visual.
+  // Correção visual (ata 2026-08, revisão do responsável): o sino conta só
+  // `category: "notificacao"` — nunca soma alerta (regra "o contador de
+  // notificação não pode incluir alertas"). O contador/ícone de Alertas
+  // saiu daqui de vez: agora vive em AlertsFloatingIcon, na barra vertical
+  // direita, com seu próprio polling (não duplica esta chamada).
   const [bellUnreadCount, setBellUnreadCount] = useState(0);
   useEffect(() => {
     const fetchUnread = () => {
@@ -137,25 +136,6 @@ export function Header({ transparent = false }: { transparent?: boolean } = {}) 
     };
     fetchUnread();
     const id = setInterval(fetchUnread, 60_000);
-    return () => clearInterval(id);
-  }, []);
-
-  const [alertUnreadCount, setAlertUnreadCount] = useState(0);
-  // Verde/amarelo/vermelho — reaproveita `severity` (info/warning/error) já
-  // existente no SystemAlert, não uma coluna nova (ver alerts-header-icon.tsx).
-  const [alertHasVermelho, setAlertHasVermelho] = useState(false);
-  useEffect(() => {
-    const fetchAlerts = () => {
-      apiClient
-        .getUnreadSystemAlertsCount({ category: "alerta" })
-        .then((r) => {
-          setAlertUnreadCount(r?.count ?? 0);
-          setAlertHasVermelho((r?.bySeverity?.error ?? 0) > 0);
-        })
-        .catch(() => {});
-    };
-    fetchAlerts();
-    const id = setInterval(fetchAlerts, 60_000);
     return () => clearInterval(id);
   }, []);
   const [profileOpen, setProfileOpen] = useState(false);
@@ -903,8 +883,9 @@ export function Header({ transparent = false }: { transparent?: boolean } = {}) 
             })()}
 
             {/* Notificações — eventos em tempo real (tarefa atribuída, comentário,
-                mudança de status, convite...). Acionador distinto de Alertas: cada
-                um abre só a própria aba, nunca marca o outro como lido. */}
+                mudança de status, convite...). Único acionador aqui no cabeçalho —
+                correção visual (ata 2026-08): Alertas saiu daqui e foi para a barra
+                vertical direita (ver AlertsFloatingIcon), com painel próprio. */}
             <div className="relative">
               <Button
                 variant="ghost"
@@ -918,34 +899,6 @@ export function Header({ transparent = false }: { transparent?: boolean } = {}) 
                 {bellUnreadCount > 0 && (
                   <span className="absolute top-1 right-1 h-4 w-4 flex items-center justify-center rounded-full bg-blue-500 text-white text-[9px] font-bold leading-none pointer-events-none">
                     {bellUnreadCount > 99 ? "99+" : bellUnreadCount}
-                  </span>
-                )}
-              </Button>
-            </div>
-
-            {/* Alertas — situações críticas/prazos/pendências, com criticidade
-                (verde/amarelo/vermelho). Separado da caixa de notificações, mas
-                próximo dela no header, como pedido na reunião. */}
-            <div className="relative">
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => { setNotifTab("alertas"); setNotifOpen(true); }}
-                className="p-0 h-9 w-9 relative text-white/80 hover:bg-white/20 hover:text-white rounded-xl bg-white/10 border border-white/15"
-                aria-label={`Alertas${alertUnreadCount > 0 ? ` — ${alertUnreadCount} ativo${alertUnreadCount === 1 ? "" : "s"}${alertHasVermelho ? ", incluindo crítico" : ""}` : ""}`}
-                title="Alertas"
-              >
-                {/* motion-safe: respeita prefers-reduced-motion — só pisca pra
-                    quem não pediu redução de movimento no sistema. */}
-                <AlertTriangle className={cn("h-4 w-4", alertHasVermelho && "motion-safe:animate-pulse")} />
-                {alertUnreadCount > 0 && (
-                  <span
-                    className={cn(
-                      "absolute top-1 right-1 h-4 w-4 flex items-center justify-center rounded-full text-white text-[9px] font-bold leading-none pointer-events-none",
-                      alertHasVermelho ? "bg-red-500" : "bg-amber-500",
-                    )}
-                  >
-                    {alertUnreadCount > 99 ? "99+" : alertUnreadCount}
                   </span>
                 )}
               </Button>
@@ -1179,7 +1132,7 @@ export function Header({ transparent = false }: { transparent?: boolean } = {}) 
         )}
       </header>
 
-      <NotificationPreferencesPanel
+      <NotificationsPanel
         open={notifOpen}
         onClose={() => setNotifOpen(false)}
         initialTab={notifTab}

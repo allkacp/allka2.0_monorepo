@@ -124,9 +124,13 @@ export function HeaderSlideScreen({
                   }}
                 >
                   <div className="min-w-0 flex-1 truncate">
-                    <div className="text-base font-semibold text-white truncate flex items-center gap-3">
+                    {/* h2 (não div): título acessível de verdade — cada
+                        painel que usa esta Tela Slide (Notificações,
+                        Alertas, Cesta, Ajuda...) precisa de um título
+                        identificável por leitor de tela, não só visual. */}
+                    <h2 className="text-base font-semibold text-white truncate flex items-center gap-3 m-0">
                       {title}
-                    </div>
+                    </h2>
                     {subtitle && (
                       <p className="text-xs font-normal text-white/70 mt-1 truncate">
                         {subtitle}
