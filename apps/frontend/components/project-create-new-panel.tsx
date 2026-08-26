@@ -213,6 +213,8 @@ interface ProjectCreateNewPanelProps {
     sincronizadoBitrix: boolean;
     descricao: string;
     status: ProjectStatus;
+    admin_responsible_user_id: string;
+    admin_responsible_label: string;
   }>;
   cloneMode?: boolean;
   /** When set, empresa field is shown as read-only with this name (company-modal mode) */
@@ -260,6 +262,12 @@ interface FormData {
   sincronizadoBitrix: boolean;
   descricao: string;
   status: ProjectStatus;
+  // Admin responsável da Allka (ata 2026-08) — id + label separados porque o
+  // SearchableSelect precisa de um "value" estável (o id) mas exibe o nome;
+  // o label é guardado à parte só pra não precisar refazer a busca da lista
+  // de admins toda vez que o painel reabre em modo edição.
+  adminResponsavel: string;
+  adminResponsavelLabel: string;
 }
 
 interface FormErrors {
@@ -283,6 +291,8 @@ const EMPTY_FORM: FormData = {
   sincronizadoBitrix: true,
   descricao: "",
   status: "draft",
+  adminResponsavel: "",
+  adminResponsavelLabel: "",
 };
 
 // ── Component ──────────────────────────────────────────────────────────────────
@@ -351,6 +361,13 @@ export function ProjectCreateNewPanel({
   >([]);
   const [loadingConsultants, setLoadingConsultants] = useState(false);
   const [showCreateConsultant, setShowCreateConsultant] = useState(false);
+
+  // Admin responsável da Allka (ata 2026-08) — Admins internos ativos,
+  // carregado só pra quem é Admin (o próprio endpoint já é admin-only).
+  const [adminResponsibleOptions, setAdminResponsibleOptions] = useState<
+    { id: string; name: string; email: string }[]
+  >([]);
+  const [loadingAdminResponsible, setLoadingAdminResponsible] = useState(false);
 
   // Company creation
   const [showCreateCompany, setShowCreateCompany] = useState(false);
@@ -438,6 +455,8 @@ export function ProjectCreateNewPanel({
     sincronizadoBitrix: isAdmin
       ? initialData?.sincronizadoBitrix ?? true
       : true,
+    adminResponsavel: initialData?.admin_responsible_user_id ?? "",
+    adminResponsavelLabel: initialData?.admin_responsible_label ?? "",
   });
 
   const [formData, setFormData] = useState<FormData>(buildFormFromInitial);
@@ -755,6 +774,30 @@ export function ProjectCreateNewPanel({
     };
   }, [open, resolvedCompanyId, resolvedCompanyType, allowCompanySelect, selectedAccountTypeFilter]);
 
+  // Admin responsável da Allka (ata 2026-08) — não depende de empresa/
+  // agência selecionada (é uma escolha independente do escopo comercial do
+  // projeto), só de o painel estar aberto e de quem está logado ser Admin
+  // (o endpoint em si já é admin-only; nem tenta buscar se não for).
+  useEffect(() => {
+    if (!open || !isAdmin) return;
+    let cancelled = false;
+    setLoadingAdminResponsible(true);
+    apiClient
+      .getAdminResponsibleOptions()
+      .then((res: any) => {
+        if (!cancelled) setAdminResponsibleOptions(res?.data ?? []);
+      })
+      .catch(() => {
+        if (!cancelled) setAdminResponsibleOptions([]);
+      })
+      .finally(() => {
+        if (!cancelled) setLoadingAdminResponsible(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [open, isAdmin]);
+
   // Fetch the Clients (entidade Client real, via ClientLink) linked to the
   // resolved Agency/Company — não os USERS dela (staff), que é o que a
   // Consultor Responsável já usa. Sem escopo aqui o Admin via TODOS os
@@ -965,6 +1008,9 @@ export function ProjectCreateNewPanel({
           formData.companyType === "all" ? undefined : formData.companyType,
         consultant: formData.consultor || undefined,
         consultant_email: formData.emailConsultor || undefined,
+        // Admin responsável (ata 2026-08) — só Admin envia isto; string
+        // seleciona, "" vira null (deixar sem responsável é permitido).
+        ...(isAdmin ? { admin_responsible_user_id: formData.adminResponsavel || null } : {}),
         start_date: toISODate(formData.dataInicio),
         end_date: toISODate(formData.prazo),
         budget: budgetValue,
@@ -1241,6 +1287,7 @@ export function ProjectCreateNewPanel({
           agency: effectiveAgencyName || undefined,
           consultant: formData.consultor || undefined,
           consultant_email: formData.emailConsultor || undefined,
+          ...(isAdmin ? { admin_responsible_user_id: formData.adminResponsavel || null } : {}),
           start_date: toISODate(formData.dataInicio),
           end_date: toISODate(formData.prazo),
           budget: budgetValue,
@@ -1665,6 +1712,7 @@ export function ProjectCreateNewPanel({
         agency: effectiveAgencyName || undefined,
         consultant: formData.consultor || undefined,
         consultant_email: formData.emailConsultor || undefined,
+        ...(isAdmin ? { admin_responsible_user_id: formData.adminResponsavel || null } : {}),
         start_date: toISODate(formData.dataInicio),
         end_date: toISODate(formData.prazo),
         budget: budgetValue,
@@ -2380,6 +2428,47 @@ export function ProjectCreateNewPanel({
                           </p>
                         )}
                       </div>
+
+                      {/* Admin responsável da Allka (ata 2026-08) — só pra
+                          Admin; escolhido explicitamente por projeto, nunca
+                          herdado automaticamente da Company/Agency. */}
+                      {isAdmin && (
+                        <div className="col-span-2 space-y-1">
+                          <Label className="text-xs font-medium text-slate-600">
+                            Admin responsável
+                          </Label>
+                          {loadingAdminResponsible ? (
+                            <div className="h-8 flex items-center px-3 rounded-md border border-slate-200 bg-slate-50 text-xs text-slate-400 gap-2">
+                              <Loader2 className="h-3 w-3 animate-spin" />
+                              Carregando administradores...
+                            </div>
+                          ) : (
+                            <SearchableSelect
+                              items={adminResponsibleOptions.map((u) => ({
+                                value: u.id,
+                                label: u.name,
+                                sublabel: u.email,
+                              }))}
+                              value={formData.adminResponsavel}
+                              onValueChange={(v) => {
+                                const u = adminResponsibleOptions.find((u) => u.id === v);
+                                updateField("adminResponsavel", v);
+                                updateField("adminResponsavelLabel", u?.name ?? "");
+                              }}
+                              placeholder="Pesquisar admin..."
+                              searchPlaceholder="Digite para buscar..."
+                              emptyMessage="Nenhum administrador encontrado."
+                              className="h-8 text-xs"
+                            />
+                          )}
+                          {!formData.adminResponsavel && (
+                            <p className="text-xs text-amber-600 flex items-center gap-1">
+                              <AlertCircle className="h-3 w-3 flex-shrink-0" />
+                              Admin responsável não definido — alertas de atraso não avisarão nenhum admin deste projeto.
+                            </p>
+                          )}
+                        </div>
+                      )}
 
                       {/* Cliente */}
                       <div className="col-span-2 space-y-1">
@@ -3240,6 +3329,17 @@ export function ProjectCreateNewPanel({
                               {formData.cliente || "—"}
                             </p>
                           </div>
+                          {/* Admin responsável (ata 2026-08) — discreto, só pra Admin */}
+                          {isAdmin && (
+                            <div>
+                              <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider mb-0.5">
+                                Admin responsável
+                              </p>
+                              <p className="text-sm font-semibold text-slate-800 truncate">
+                                {formData.adminResponsavelLabel || "Admin responsável não definido"}
+                              </p>
+                            </div>
+                          )}
                           {/* CNPJ */}
                           {formData.clienteCnpj && (
                             <div>

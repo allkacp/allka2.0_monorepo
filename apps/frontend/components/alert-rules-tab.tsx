@@ -66,6 +66,7 @@ function formatDate(dateStr: string | null): string {
 export function AlertRulesTab() {
   const [rules, setRules] = useState<AlertRule[]>([]);
   const [categoryOptions, setCategoryOptions] = useState<RecipientCategoryOption[]>([]);
+  const [projectsMissingAdmin, setProjectsMissingAdmin] = useState(0);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(false);
   const [editing, setEditing] = useState<AlertRule | null>(null);
@@ -77,6 +78,7 @@ export function AlertRulesTab() {
       const res = await apiClient.getAdminAlertRules();
       setRules(res?.data ?? []);
       setCategoryOptions(res?.recipient_category_options ?? []);
+      setProjectsMissingAdmin(res?.projects_missing_admin_responsavel ?? 0);
     } catch {
       setError(true);
     } finally {
@@ -99,6 +101,11 @@ export function AlertRulesTab() {
         {error && <p className="text-sm text-red-500 text-center py-10">Não foi possível carregar as regras agora.</p>}
         {!error && loading && rules.length === 0 && <p className="text-sm text-slate-400 text-center py-10">Carregando...</p>}
         {!error && !loading && rules.length === 0 && <p className="text-sm text-slate-400 text-center py-10">Nenhuma regra cadastrada.</p>}
+        {!error && projectsMissingAdmin > 0 && rules.some((r) => r.recipient_roles.includes("admin_responsavel")) && (
+          <p className="text-xs text-amber-700 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded-lg px-3 py-2 mb-2">
+            {projectsMissingAdmin} projeto(s) com tarefas/etapas ativas ainda não têm Admin responsável definido — essas entidades não avisam nenhum admin em caso de atraso.
+          </p>
+        )}
         {!error && (
           <div className="space-y-2">
             {rules.map((rule) => {
@@ -237,7 +244,7 @@ function EditRuleModal({
                 />
                 {option.label}
                 {option.value === "admin_responsavel" && (
-                  <span className="text-[10px] text-amber-600">(ainda não implementado — nenhum vínculo confiável de admin responsável existe hoje)</span>
+                  <span className="text-[10px] text-slate-400">— envia ao Admin da Allka definido no projeto</span>
                 )}
               </label>
             ))}

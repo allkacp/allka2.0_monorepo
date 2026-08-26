@@ -455,6 +455,47 @@ describe("AlertRulesTab — Regras", () => {
     expect(screen.queryByPlaceholderText(/buscar usuário/i)).not.toBeInTheDocument();
     expect(screen.getByText(/Aplica-se a todas as etapas com prazo/)).toBeInTheDocument();
   });
+
+  it("admin_responsavel não é mais rotulado como 'não implementado' — explica que envia ao Admin do projeto", async () => {
+    (apiClient.getAdminAlertRules as any).mockResolvedValue({
+      data: [rule({ trigger_type: "task.overdue", recipient_roles: ["responsavel", "admin_responsavel"] })],
+      recipient_category_options: CATEGORY_OPTIONS,
+    });
+    const user = userEvent.setup();
+    renderCenter();
+    await user.click(screen.getByRole("tab", { name: "Regras" }));
+
+    await user.click(await screen.findByTitle("Editar"));
+    expect(await screen.findByText(/envia ao Admin da Allka definido no projeto/)).toBeInTheDocument();
+    expect(screen.queryByText(/ainda não implementado/)).not.toBeInTheDocument();
+  });
+
+  it("mostra aviso quando há projetos ativos sem Admin responsável definido", async () => {
+    (apiClient.getAdminAlertRules as any).mockResolvedValue({
+      data: [rule({ trigger_type: "task.overdue", recipient_roles: ["responsavel", "admin_responsavel"] })],
+      recipient_category_options: CATEGORY_OPTIONS,
+      projects_missing_admin_responsavel: 3,
+    });
+    const user = userEvent.setup();
+    renderCenter();
+    await user.click(screen.getByRole("tab", { name: "Regras" }));
+
+    expect(await screen.findByText(/3 projeto\(s\) com tarefas\/etapas ativas ainda não têm Admin responsável/)).toBeInTheDocument();
+  });
+
+  it("não mostra aviso de admin responsável quando nenhuma regra usa essa categoria", async () => {
+    (apiClient.getAdminAlertRules as any).mockResolvedValue({
+      data: [rule({ trigger_type: "task.due_soon", recipient_roles: ["responsavel"] })],
+      recipient_category_options: CATEGORY_OPTIONS,
+      projects_missing_admin_responsavel: 5,
+    });
+    const user = userEvent.setup();
+    renderCenter();
+    await user.click(screen.getByRole("tab", { name: "Regras" }));
+    await screen.findByText("Tarefa próxima do prazo (24h)");
+
+    expect(screen.queryByText(/ainda não têm Admin responsável/)).not.toBeInTheDocument();
+  });
 });
 
 describe("AlertsAdminCenter — Notificações não recebe estas regras", () => {

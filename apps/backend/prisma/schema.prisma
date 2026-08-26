@@ -85,6 +85,7 @@ model User {
   created_clients                    Client[]                           @relation("ClientCreatedBy")
   created_projects                   Project[]                          @relation("ProjectCreatedBy")
   archived_projects                  Project[]                          @relation("ProjectArchivedBy")
+  admin_responsible_projects         Project[]                          @relation("ProjectAdminResponsible")
   profile                            UserProfile?
   deleted_company_archives           CompanyArchive[]                   @relation("CompanyArchiveDeletedBy")
   product_feedback_override          ProductFeedbackUserOverride?
@@ -729,6 +730,15 @@ model Project {
   archived_by_user_id  String?
   archived_by          User?           @relation("ProjectArchivedBy", fields: [archived_by_user_id], references: [id], onDelete: SetNull)
 
+  // ── Admin responsável da Allka (ata 2026-08, reparo "categoria sem
+  // efeito") — escolhido explicitamente no projeto, nunca inferido do dono
+  // da Company/Agency nem de qualquer Admin global. Tarefas e etapas deste
+  // projeto herdam este destinatário pra categoria "admin_responsavel" do
+  // motor de alertas (ver alert-engine.ts). Opcional — projeto antigo/sem
+  // escolha explícita fica nulo, sem escolher substituto automático.
+  admin_responsible_user_id String?
+  admin_responsible         User?     @relation("ProjectAdminResponsible", fields: [admin_responsible_user_id], references: [id], onDelete: SetNull)
+
   task_executions TaskExecution[]
   invoices        Invoice[]
   products        ProjectProduct[]
@@ -753,6 +763,7 @@ model Project {
   @@index([created_by_user_id])
   @@index([archived_by_user_id])
   @@index([archived_at])
+  @@index([admin_responsible_user_id])
   @@map("projects")
 }
 

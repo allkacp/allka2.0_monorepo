@@ -911,6 +911,12 @@ class ApiClient {
     return this.put(`/projects/${id}`, data);
   }
 
+  // Admin-only — Admins internos ativos elegíveis pra "Admin responsável"
+  // do projeto (ata 2026-08).
+  async getAdminResponsibleOptions() {
+    return this.get("/projects/admin-responsible-options");
+  }
+
   // Admin-only — define/troca/remove o vínculo NOVO do Project com
   // Agency/Company/Partner (agency_id/company_id/partner_id). Não mexe no
   // vínculo legado (agency/client_id). Envie { agency_id } ou { company_id }

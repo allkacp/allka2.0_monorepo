@@ -8,6 +8,7 @@ import { validate, parsePagination } from "../middleware/validate";
 import { gerarTarefasDoProjeto } from "../lib/generate-tasks";
 import { withProjectCode } from "../lib/create-project";
 import { writeAccessAudit } from "../lib/product-feedback-service";
+import { validateAdminResponsibleUserId } from "../lib/admin-responsible";
 import { ensureUploadDir, generateStoredFileName, uploadedFilePath, deleteUploadedFile } from "../lib/file-storage";
 import {
   getProjectScope,
@@ -32,6 +33,10 @@ const createSchema = z.object({
   agency_id: z.string().optional(),
   company_id: z.string().optional(),
   partner_id: z.string().optional(),
+  // Admin responsável da Allka (ata 2026-08) — só honrado quando o
+  // chamador é Admin (ver handlers abaixo); ignorado do mesmo jeito que
+  // agency_id/company_id/partner_id são pra quem não é Admin.
+  admin_responsible_user_id: z.string().nullable().optional(),
   status: z
     .enum([
       "draft",
@@ -74,6 +79,26 @@ const createSchema = z.object({
 });
 
 const updateSchema = createSchema.partial();
+
+// GET /api/projects/admin-responsible-options — Admins internos ativos
+// elegíveis pra "Admin responsável" (ata 2026-08). Admin-only: expõe o
+// roster administrativo interno, não é uma lista pública de usuários.
+router.get("/admin-responsible-options", verifyToken, async (req, res, next) => {
+  try {
+    if (!isAdminUser(req.user)) {
+      res.status(403).json({ error: "Somente administradores podem consultar esta lista" });
+      return;
+    }
+    const users = await prisma.user.findMany({
+      where: { account_type: "admin", is_active: true },
+      select: { id: true, name: true, email: true },
+      orderBy: { name: "asc" },
+    });
+    res.json({ data: users });
+  } catch (err) {
+    next(err);
+  }
+});
 
 // GET /api/projects/check-name — check if a project name is already in use
 router.get("/check-name", verifyToken, async (req, res, next) => {
@@ -1370,6 +1395,21 @@ router.post(
       // intenção e protege caso o schema mude no futuro.
       delete (rest as Record<string, unknown>).created_by_user_id;
 
+      // Admin responsável só é honrado se quem está criando é Admin —
+      // mesmo tratamento de agency_id/company_id/partner_id acima. Vazio
+      // ("sem responsável") é permitido; string precisa ser um Admin
+      // interno ativo de verdade, nunca Company/Agency/Nômade/comum.
+      let adminResponsibleData: { admin_responsible_user_id?: string | null } = {};
+      if (isAdminUser(req.user) && rest.admin_responsible_user_id !== undefined) {
+        const validated = await validateAdminResponsibleUserId(rest.admin_responsible_user_id);
+        if (!validated.ok) {
+          res.status(400).json({ error: validated.error });
+          return;
+        }
+        adminResponsibleData = { admin_responsible_user_id: validated.value ?? null };
+      }
+      delete (rest as Record<string, unknown>).admin_responsible_user_id;
+
       // Autoria + código sequencial persistente na mesma transação da
       // criação — se qualquer um falhar, nenhum dos dois fica parcialmente
       // aplicado.
@@ -1379,6 +1419,7 @@ router.post(
             ...rest,
             agency: agencyName || rest.agency,
             ...newScopeData,
+            ...adminResponsibleData,
             start_date: toDate(start_date),
             end_date: toDate(end_date),
             created_by_user_id: req.user!.id,
@@ -1427,7 +1468,7 @@ router.put(
       // Capture previous status and validate scope before update
       const before = await prisma.project.findUnique({
         where: { id },
-        select: { status: true, agency: true, client_id: true, agency_id: true, company_id: true, partner_id: true },
+        select: { status: true, agency: true, client_id: true, agency_id: true, company_id: true, partner_id: true, admin_responsible_user_id: true },
       });
 
       if (!before) {
@@ -1452,6 +1493,24 @@ router.put(
         }
       }
 
+      // Admin responsável só é editável por Admin — mesma regra do POST /.
+      // Erro aqui não pode apagar a seleção anterior: `return` antes de
+      // qualquer `update()`, então o projeto não muda de estado nenhum.
+      let adminResponsibleChanged = false;
+      if (rest.admin_responsible_user_id !== undefined) {
+        if (!isAdminUser(req.user)) {
+          delete rest.admin_responsible_user_id;
+        } else {
+          const validated = await validateAdminResponsibleUserId(rest.admin_responsible_user_id);
+          if (!validated.ok) {
+            res.status(400).json({ error: validated.error });
+            return;
+          }
+          rest.admin_responsible_user_id = validated.value ?? null;
+          adminResponsibleChanged = rest.admin_responsible_user_id !== before.admin_responsible_user_id;
+        }
+      }
+
       const project = await prisma.project.update({
         where: { id },
         data: {
@@ -1461,6 +1520,15 @@ router.put(
         },
         include: { client: { select: { id: true, name: true, cnpj: true } } },
       });
+
+      if (adminResponsibleChanged) {
+        await writeAccessAudit({
+          actorId: req.user!.id,
+          action: "project.admin_responsible_changed",
+          before: { project_id: id, admin_responsible_user_id: before.admin_responsible_user_id },
+          after: { project_id: id, admin_responsible_user_id: project.admin_responsible_user_id },
+        });
+      }
 
       // Mudar o status do projeto (inclusive para "planning") NUNCA gera
       // tarefas sozinho — a única origem permitida de geração automática

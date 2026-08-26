@@ -775,11 +775,39 @@ router.get(
       });
       const lastRunByRule = new Map(lastRuns.map((r) => [r.rule_id, r._max.created_at]));
 
+      // "algumas entidades estão sem responsável" (ata 2026-08) — só
+      // calculado quando alguma regra ativa realmente usa a categoria
+      // admin_responsavel, pra não fazer a contagem à toa.
+      const usesAdminResponsavel = rules.some((r) => (parseRecipientRoles(r.recipient_roles_json) ?? []).includes("admin_responsavel"));
+      let projectsMissingAdminResponsavel = 0;
+      if (usesAdminResponsavel) {
+        const [tasks, stages] = await Promise.all([
+          prisma.projectTask.findMany({
+            where: { due_date: { not: null }, status: { notIn: ["CONCLUIDA", "CANCELADA"] } },
+            select: { project_id: true },
+          }),
+          prisma.projectTaskStage.findMany({
+            where: { prazo_execucao: { not: null }, status: { notIn: ["CONCLUIDA", "BLOQUEADA"] } },
+            select: { project_task: { select: { project_id: true } } },
+          }),
+        ]);
+        const activeProjectIds = new Set<string>([
+          ...tasks.map((t) => t.project_id),
+          ...stages.map((s) => s.project_task?.project_id).filter((id): id is string => !!id),
+        ]);
+        if (activeProjectIds.size > 0) {
+          projectsMissingAdminResponsavel = await prisma.project.count({
+            where: { id: { in: [...activeProjectIds] }, admin_responsible_user_id: null },
+          });
+        }
+      }
+
       res.json({
         // "regra geral" nunca é opcional na resposta — toda regra sempre se
         // aplica a TODOS os registros do entity_type do gatilho, nunca a um
         // registro específico (não existe seletor de tarefa/etapa aqui).
         recipient_category_options: RECIPIENT_CATEGORIES.map((value) => ({ value, label: RECIPIENT_CATEGORY_LABELS[value] })),
+        projects_missing_admin_responsavel: projectsMissingAdminResponsavel,
         data: rules.map((r) => ({
           ...r,
           entity_type: TRIGGER_ENTITY_TYPE[r.trigger_type] ?? null,

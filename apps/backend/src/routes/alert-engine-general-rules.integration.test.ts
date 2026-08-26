@@ -396,7 +396,7 @@ describe("Motor de alertas — regra geral + etapas reais (ata 2026-08, 3º lote
 
     const oldAlertReloaded = await prisma.systemAlert.findUniqueOrThrow({ where: { id: oldAlert.id } });
     assert.ok(oldAlertReloaded.resolved_at, "o nômade antigo não participa mais — a ocorrência dele é encerrada");
-    assert.equal(oldAlertReloaded.resolution_reason, "condition_cleared");
+    assert.equal(oldAlertReloaded.resolution_reason, "recipient_changed");
     const newAlert = await prisma.systemAlert.findFirst({ where: { entity_id: stage.id, user_id: userNew, resolved_at: null } });
     assert.ok(newAlert, "o novo nômade recebe sua própria ocorrência");
   });

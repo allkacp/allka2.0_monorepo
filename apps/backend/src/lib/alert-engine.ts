@@ -22,6 +22,7 @@
  */
 import { prisma } from "./prisma";
 import { writeAccessAudit } from "./product-feedback-service";
+import { isEligibleAdminResponsible } from "./admin-responsible";
 
 export const STANDARD_KEYS = {
   DUE_SOON: "task.due_soon",
@@ -65,13 +66,14 @@ export const ALLOWED_VARIABLES: Record<string, string[]> = {
 // ── Categorias de destinatário ───────────────────────────────────────────
 // Papéis/relações, nunca pessoas — a regra escolhe QUAIS categorias
 // participam; o motor resolve a pessoa real de cada categoria pra cada
-// registro elegível, a cada execução. "admin_responsavel" é exposta porque a
-// ata pede explicitamente a opção, mas hoje não existe no modelo nenhum
-// vínculo confiável de "admin dono deste projeto/empresa/agência" (auditado
-// antes de implementar: Company.owner_user_id e Agency.owner_user_id são o
-// usuário dono do LADO da empresa/agência, não um admin da Allka; não existe
-// account_manager_id nem equivalente) — resolve sempre vazio e conta a
-// lacuna em `skippedNoAdminResponsavel`, nunca "todos os administradores".
+// registro elegível, a cada execução. "admin_responsavel" resolve via
+// Project.admin_responsible_user_id (ata 2026-08, reparo "categoria sem
+// efeito") — escolhido explicitamente no projeto pelo Admin Master/Admin,
+// nunca inferido do dono da Company/Agency nem de qualquer Admin global.
+// Projeto sem Admin responsável definido (ou apontando pra alguém que
+// deixou de ser Admin ativo) continua resolvendo vazio — conta a lacuna em
+// `skippedNoAdminResponsavel`, nunca escolhe substituto ("todos os
+// administradores" nunca é o comportamento).
 export const RECIPIENT_CATEGORIES = ["responsavel", "nomade", "lider", "admin_responsavel"] as const;
 export type RecipientCategory = (typeof RECIPIENT_CATEGORIES)[number];
 
@@ -246,6 +248,29 @@ export async function ensureDefaultAlertStandardsAndRules(): Promise<void> {
       }
     }
   }
+
+  await ensureAdminResponsavelOnOverdueRules();
+}
+
+/**
+ * Repara regras de atraso já existentes (do 2º/3º lote, criadas antes da
+ * categoria "admin_responsavel" resolver alguém de verdade — ver
+ * Project.admin_responsible_user_id) pra incluir essa categoria — sem
+ * jamais duplicar nem remover categorias que o Admin Master já tenha
+ * configurado. Roda a cada boot; idempotente (add-if-missing).
+ */
+async function ensureAdminResponsavelOnOverdueRules(): Promise<void> {
+  const overdueRules = await prisma.alertRule.findMany({
+    where: { trigger_type: { in: [STANDARD_KEYS.OVERDUE, STANDARD_KEYS.STAGE_OVERDUE] } },
+  });
+  for (const rule of overdueRules) {
+    const categories = parseRecipientRoles(rule.recipient_roles_json) ?? [];
+    if (categories.includes("admin_responsavel")) continue;
+    await prisma.alertRule.update({
+      where: { id: rule.id },
+      data: { recipient_roles_json: JSON.stringify([...categories, "admin_responsavel"]) },
+    });
+  }
 }
 
 // ── Resolução de destinatários ───────────────────────────────────────────
@@ -276,12 +301,28 @@ type TaskRecipientFields = {
   lider_responsavel_id: string | null;
   responsavel_agencia_id: string | null;
   assignee_id: string | null;
+  project: { admin_responsible_user_id: string | null } | null;
 };
 
 type StageRecipientFields = {
   nomade_id: string | null;
   lider_id: string | null;
+  project_task: { project: { admin_responsible_user_id: string | null } | null } | null;
 };
+
+/**
+ * "Admin responsável" — herda de `Project.admin_responsible_user_id`, nunca
+ * de tarefa/etapa individual (ata 2026-08: "Não crie um Admin diferente
+ * para cada tarefa ou etapa"). Revalida no momento da resolução (não confia
+ * só no valor gravado no projeto) — se o Admin foi desativado ou deixou de
+ * ser Admin desde a atribuição, resolve vazio em vez de enviar pra quem não
+ * é mais elegível.
+ */
+async function resolveAdminResponsavel(projectAdminResponsibleId: string | null): Promise<string | null> {
+  if (!projectAdminResponsibleId) return null;
+  const eligible = await isEligibleAdminResponsible(projectAdminResponsibleId);
+  return eligible ? projectAdminResponsibleId : null;
+}
 
 /**
  * "Responsável" da tarefa — prioridade: nômade responsável (resolvido via
@@ -320,8 +361,7 @@ async function resolveCategoryForTask(category: RecipientCategory, task: TaskRec
     case "lider":
       return resolveDirectUser(task.lider_responsavel_id);
     case "admin_responsavel":
-      // Lacuna registrada — ver comentário de RECIPIENT_CATEGORIES.
-      return null;
+      return resolveAdminResponsavel(task.project?.admin_responsible_user_id ?? null);
   }
 }
 
@@ -334,7 +374,7 @@ async function resolveCategoryForStage(category: RecipientCategory, stage: Stage
     case "lider":
       return resolveDirectUser(stage.lider_id);
     case "admin_responsavel":
-      return null;
+      return resolveAdminResponsavel(stage.project_task?.project?.admin_responsible_user_id ?? null);
   }
 }
 
@@ -431,7 +471,7 @@ const TASK_SELECT = {
   lider_responsavel_id: true,
   responsavel_agencia_id: true,
   assignee_id: true,
-  project: { select: { title: true } },
+  project: { select: { title: true, admin_responsible_user_id: true } },
 } as const;
 
 async function processTasks(
@@ -494,7 +534,7 @@ const STAGE_SELECT = {
   prazo_execucao: true,
   nomade_id: true,
   lider_id: true,
-  project_task: { select: { title: true, project: { select: { title: true } } } },
+  project_task: { select: { title: true, project: { select: { title: true, admin_responsible_user_id: true } } } },
 } as const;
 
 async function processStages(
@@ -802,9 +842,14 @@ async function evaluateAndMaybeResolve(
     return;
   }
 
+  // Destinatário não é mais elegível pra nenhuma categoria da regra —
+  // "recipient_changed" cobre tanto "trocou pra outra pessoa" (nômade
+  // trocado, Admin responsável do projeto trocado) quanto "trocou pra
+  // ninguém" (Admin desativado): em ambos os casos, ESTA pessoa deixou de
+  // ser quem deve receber, e é isso que o motivo registra.
   const recipients = await resolveRuleRecipients(rule, entityType, entity, result);
   if (!recipients.includes(userId)) {
-    await resolveOccurrence(alert.id, "condition_cleared");
+    await resolveOccurrence(alert.id, "recipient_changed");
     result.resolved++;
     return;
   }
