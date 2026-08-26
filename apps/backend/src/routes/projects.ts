@@ -305,6 +305,9 @@ router.get("/:id", verifyToken, async (req, res, next) => {
         agency_owner: { select: { id: true, name: true } },
         company_owner: { select: { id: true, name: true } },
         archived_by: { select: { id: true, name: true } },
+        // Admin responsável (ata 2026-08) — devolve nome/e-mail/perfil já
+        // resolvidos, sem exigir um segundo fetch no frontend.
+        admin_responsible: { select: { id: true, name: true, email: true, admin_profile: { select: { is_master: true } } } },
         products: {
           include: {
             product: {
@@ -1425,7 +1428,12 @@ router.post(
             created_by_user_id: req.user!.id,
             project_code: projectCode,
           },
-          include: { client: { select: { id: true, name: true, cnpj: true } } },
+          include: {
+            client: { select: { id: true, name: true, cnpj: true } },
+            // Admin responsável (ata 2026-08) — devolve nome/e-mail/perfil
+            // já resolvidos, sem exigir um segundo fetch no frontend.
+            admin_responsible: { select: { id: true, name: true, email: true, admin_profile: { select: { is_master: true } } } },
+          },
         }),
       );
       res.status(201).json(project);
@@ -1496,6 +1504,16 @@ router.put(
       // Admin responsável só é editável por Admin — mesma regra do POST /.
       // Erro aqui não pode apagar a seleção anterior: `return` antes de
       // qualquer `update()`, então o projeto não muda de estado nenhum.
+      //
+      // Reparo "editar Admin responsável de projeto já existente" (ata
+      // 2026-08): auditado antes de implementar — este PUT já aceita
+      // atualização parcial com segurança (updateSchema é createSchema
+      // .partial(); campos ausentes do body viram `undefined` em `rest` e o
+      // Prisma nunca escreve `undefined`, só o que foi de fato enviado), e
+      // já tinha essa validação inteira desde o lote anterior. Por isso a
+      // nova seção "Admin responsável" do frontend reaproveita esta MESMA
+      // rota, enviando só `{ admin_responsible_user_id }` — nenhuma rota
+      // nova foi necessária.
       let adminResponsibleChanged = false;
       if (rest.admin_responsible_user_id !== undefined) {
         if (!isAdminUser(req.user)) {
@@ -1518,7 +1536,10 @@ router.put(
           start_date: toDate(start_date),
           end_date: toDate(end_date),
         },
-        include: { client: { select: { id: true, name: true, cnpj: true } } },
+        include: {
+          client: { select: { id: true, name: true, cnpj: true } },
+          admin_responsible: { select: { id: true, name: true, email: true, admin_profile: { select: { is_master: true } } } },
+        },
       });
 
       if (adminResponsibleChanged) {

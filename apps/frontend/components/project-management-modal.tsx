@@ -1,4 +1,5 @@
 import { CopyLinkButton } from "@/components/copy-link-button";
+import { ProjectAdminResponsibleSection } from "@/components/project-admin-responsible-section";
 import type { FrontendProject } from "@/lib/project-adapter";
 import { Textarea } from "@/components/ui/textarea";
 import { RichTextEditor } from "@/components/ui/rich-text-editor";
@@ -2272,6 +2273,20 @@ export function ProjectManagementModal({
                         )}
                       </div>
                     </div>
+
+                    {/* Admin responsável da Allka (ata 2026-08) — seção
+                        FUNCIONAL e isolada, com salvamento próprio; nunca
+                        depende do botão "Salvar" decorativo desta aba (ver
+                        comentário no topo do arquivo do componente). */}
+                    {project && (
+                      <ProjectAdminResponsibleSection
+                        projectId={project.id}
+                        adminResponsibleId={project.adminResponsibleId}
+                        adminResponsibleName={project.adminResponsibleName}
+                        adminResponsibleEmail={project.adminResponsibleEmail}
+                        adminResponsibleIsMaster={project.adminResponsibleIsMaster}
+                      />
+                    )}
 
                     <Accordion
                       type="multiple"

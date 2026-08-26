@@ -50,6 +50,12 @@ export interface FrontendProject {
   archivedAtDate?: string; // formatado DD/MM/YYYY, "" se não arquivado
   archiveReason?: string | null;
   archivedByName?: string | null;
+  /** Admin responsável da Allka (ata 2026-08) — nulo = "não definido", nunca
+   * inferido automaticamente. Ver components/project-admin-responsible-section.tsx. */
+  adminResponsibleId?: string | null;
+  adminResponsibleName?: string | null;
+  adminResponsibleEmail?: string | null;
+  adminResponsibleIsMaster?: boolean;
 }
 
 function formatDateBR(dateStr?: string | null): string {
@@ -165,6 +171,10 @@ export function adaptApiProject(api: any): FrontendProject {
     archivedAtDate: formatDateBR(api.archived_at),
     archiveReason: api.archive_reason || null,
     archivedByName: api.archived_by?.name || null,
+    adminResponsibleId: api.admin_responsible_user_id ?? null,
+    adminResponsibleName: api.admin_responsible?.name ?? null,
+    adminResponsibleEmail: api.admin_responsible?.email ?? null,
+    adminResponsibleIsMaster: api.admin_responsible?.admin_profile?.is_master ?? false,
   };
 }
 
