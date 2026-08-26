@@ -2,7 +2,8 @@ import { Router } from "express";
 import type { Request, Response, NextFunction } from "express";
 import { z } from "zod";
 import { prisma } from "../lib/prisma";
-import { verifyToken } from "../middleware/auth";
+import { verifyToken, requireAdminMaster } from "../middleware/auth";
+import { writeAccessAudit } from "../lib/product-feedback-service";
 
 const router = Router();
 
@@ -270,6 +271,353 @@ router.delete(
       }
       await prisma.systemAlert.delete({ where: { id: alert.id } });
       res.status(204).send();
+    } catch (err) {
+      next(err);
+    }
+  },
+);
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Central de Alertas (ata 2026-08: "criar uma central para o cadastro e
+// gestão de alertas... Admin Master deve ter a capacidade de criar,
+// modificar ou reclassificar alertas... sem depender de alterações no
+// código"). Gerencia os mesmos SystemAlert de sempre — nenhuma tabela nova,
+// nenhum motor de regras/templates. Tudo abaixo exige requireAdminMaster
+// (estritamente is_master, sem a regra do avô de requirePermission — ver
+// comentário em middleware/auth.ts) e opera SEM o escopoDoUsuario de cima:
+// o Admin Master administra qualquer alerta, endereçado a quem for, não só
+// o que já era visível pra ele.
+// ═══════════════════════════════════════════════════════════════════════════
+
+const CRITICALITY_TYPE = "alerta_admin_manual";
+
+// SystemAlert.user_id é um escalar solto, sem relação Prisma pro lado do
+// User (nenhum @relation declarado) — criar uma exigiria migration (FK
+// nova numa coluna que já existe sem constraint) só pra poder usar
+// `include`. Mais simples e sem tocar no schema: buscar os usuários à parte
+// e anexar como "destinatario" na resposta.
+type DestinatarioInfo = { id: string; name: string; email: string } | null;
+
+async function attachDestinatario<T extends { user_id: string | null }>(
+  alert: T,
+): Promise<T & { destinatario: DestinatarioInfo }> {
+  if (!alert.user_id) return { ...alert, destinatario: null };
+  const user = await prisma.user.findUnique({
+    where: { id: alert.user_id },
+    select: { id: true, name: true, email: true },
+  });
+  return { ...alert, destinatario: user ?? null };
+}
+
+async function attachDestinatarioMany<T extends { user_id: string | null }>(
+  alerts: T[],
+): Promise<(T & { destinatario: DestinatarioInfo })[]> {
+  const ids = [...new Set(alerts.map((a) => a.user_id).filter((id): id is string => !!id))];
+  if (ids.length === 0) return alerts.map((a) => ({ ...a, destinatario: null }));
+  const users = await prisma.user.findMany({
+    where: { id: { in: ids } },
+    select: { id: true, name: true, email: true },
+  });
+  const byId = new Map(users.map((u) => [u.id, u]));
+  return alerts.map((a) => ({ ...a, destinatario: a.user_id ? (byId.get(a.user_id) ?? null) : null }));
+}
+
+async function auditSystemAlert(input: {
+  actorId: string;
+  action: string;
+  alertId: string;
+  before?: unknown;
+  after?: unknown;
+}) {
+  await writeAccessAudit({
+    actorId: input.actorId,
+    action: input.action,
+    before: input.before !== undefined ? { system_alert_id: input.alertId, ...(input.before as object) } : { system_alert_id: input.alertId },
+    after: input.after !== undefined ? { system_alert_id: input.alertId, ...(input.after as object) } : undefined,
+  });
+}
+
+// ── GET /api/system-alerts/admin — lista completa pra central administrativa
+
+const adminListSchema = z.object({
+  search: z.string().trim().max(200).optional(),
+  severity: z.enum(["info", "warning", "error"]).optional(),
+  is_archived: z.enum(["true", "false", "all"]).default("false"),
+  limit: z.coerce.number().int().min(1).max(200).default(50),
+  offset: z.coerce.number().int().min(0).default(0),
+});
+
+router.get(
+  "/admin",
+  verifyToken,
+  requireAdminMaster,
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const query = adminListSchema.safeParse(req.query);
+      if (!query.success) {
+        res.status(400).json({ error: "Parâmetros inválidos", details: query.error.flatten() });
+        return;
+      }
+      const { search, severity, is_archived, limit, offset } = query.data;
+
+      const filtros: Record<string, unknown> = { category: "alerta" };
+      if (severity) filtros.severity = severity;
+      if (is_archived === "true") filtros.is_archived = true;
+      else if (is_archived === "false") filtros.is_archived = false;
+      // "all" → sem filtro de arquivado.
+      if (search) {
+        filtros.OR = [
+          { title: { contains: search } },
+          { message: { contains: search } },
+        ];
+      }
+
+      const [total, alerts] = await Promise.all([
+        prisma.systemAlert.count({ where: filtros }),
+        prisma.systemAlert.findMany({
+          where: filtros,
+          orderBy: { created_at: "desc" },
+          take: limit,
+          skip: offset,
+        }),
+      ]);
+
+      res.json({ data: await attachDestinatarioMany(alerts), total });
+    } catch (err) {
+      next(err);
+    }
+  },
+);
+
+// ── POST /api/system-alerts/admin — criação manual ───────────────────────────
+
+const createAdminAlertSchema = z.object({
+  title: z.string().trim().min(3, "Título deve ter no mínimo 3 caracteres").max(200, "Título deve ter no máximo 200 caracteres"),
+  message: z.string().trim().min(3, "Mensagem deve ter no mínimo 3 caracteres").max(2000, "Mensagem deve ter no máximo 2000 caracteres"),
+  severity: z.enum(["info", "warning", "error"], { errorMap: () => ({ message: "Criticidade inválida" }) }),
+  // Ausente/null = alerta geral (visível a todo Admin) — conceito que já
+  // existia (user_id nulo), não inventado aqui. Presente = destinatário
+  // específico, validado abaixo (precisa existir e estar ativo).
+  user_id: z.string().trim().min(1).nullable().optional(),
+});
+
+router.post(
+  "/admin",
+  verifyToken,
+  requireAdminMaster,
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const body = createAdminAlertSchema.safeParse(req.body);
+      if (!body.success) {
+        res.status(400).json({ error: "Dados inválidos", details: body.error.flatten() });
+        return;
+      }
+      const { title, message, severity, user_id } = body.data;
+
+      // Destinatário nunca aceito só porque o frontend mandou um id — tem
+      // que existir de verdade e estar ativo, igual a qualquer outro fluxo
+      // administrativo desta plataforma.
+      if (user_id) {
+        const destinatario = await prisma.user.findUnique({
+          where: { id: user_id },
+          select: { id: true, is_active: true },
+        });
+        if (!destinatario || !destinatario.is_active) {
+          res.status(400).json({ error: "Destinatário inválido ou inexistente" });
+          return;
+        }
+      }
+
+      const created = await prisma.systemAlert.create({
+        data: {
+          type: CRITICALITY_TYPE,
+          title,
+          message,
+          severity,
+          category: "alerta",
+          user_id: user_id ?? null,
+        },
+      });
+
+      await auditSystemAlert({
+        actorId: req.user!.id,
+        action: "system_alert.created",
+        alertId: created.id,
+        after: { title, severity, user_id: user_id ?? null },
+      });
+
+      res.status(201).json(await attachDestinatario(created));
+    } catch (err) {
+      next(err);
+    }
+  },
+);
+
+// ── PATCH /api/system-alerts/admin/:id — editar título/mensagem ──────────────
+
+const editAdminAlertSchema = z.object({
+  title: z.string().trim().min(3, "Título deve ter no mínimo 3 caracteres").max(200, "Título deve ter no máximo 200 caracteres").optional(),
+  message: z.string().trim().min(3, "Mensagem deve ter no mínimo 3 caracteres").max(2000, "Mensagem deve ter no máximo 2000 caracteres").optional(),
+});
+
+router.patch(
+  "/admin/:id",
+  verifyToken,
+  requireAdminMaster,
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const body = editAdminAlertSchema.safeParse(req.body);
+      if (!body.success) {
+        res.status(400).json({ error: "Dados inválidos", details: body.error.flatten() });
+        return;
+      }
+      if (Object.keys(body.data).length === 0) {
+        res.status(400).json({ error: "Informe título e/ou mensagem para editar" });
+        return;
+      }
+
+      const before = await prisma.systemAlert.findFirst({
+        where: { id: req.params.id as string, category: "alerta" },
+        select: { id: true, title: true, message: true },
+      });
+      if (!before) {
+        res.status(404).json({ error: "Alerta não encontrado" });
+        return;
+      }
+
+      const updated = await prisma.systemAlert.update({
+        where: { id: before.id },
+        data: body.data,
+      });
+
+      await auditSystemAlert({
+        actorId: req.user!.id,
+        action: "system_alert.updated",
+        alertId: before.id,
+        before: { title: before.title, message: before.message },
+        after: body.data,
+      });
+
+      res.json(await attachDestinatario(updated));
+    } catch (err) {
+      next(err);
+    }
+  },
+);
+
+// ── PATCH /api/system-alerts/admin/:id/severity — reclassificar criticidade ──
+
+const reclassifySchema = z.object({
+  severity: z.enum(["info", "warning", "error"], { errorMap: () => ({ message: "Criticidade inválida" }) }),
+});
+
+router.patch(
+  "/admin/:id/severity",
+  verifyToken,
+  requireAdminMaster,
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const body = reclassifySchema.safeParse(req.body);
+      if (!body.success) {
+        res.status(400).json({ error: "Dados inválidos", details: body.error.flatten() });
+        return;
+      }
+
+      const before = await prisma.systemAlert.findFirst({
+        where: { id: req.params.id as string, category: "alerta" },
+        select: { id: true, severity: true },
+      });
+      if (!before) {
+        res.status(404).json({ error: "Alerta não encontrado" });
+        return;
+      }
+
+      // Mesmo registro, sempre — reclassificar nunca cria uma ocorrência
+      // nova nem duplica: é um único UPDATE no id já existente.
+      const updated = await prisma.systemAlert.update({
+        where: { id: before.id },
+        data: { severity: body.data.severity },
+      });
+
+      await auditSystemAlert({
+        actorId: req.user!.id,
+        action: "system_alert.severity_changed",
+        alertId: before.id,
+        before: { severity: before.severity },
+        after: { severity: body.data.severity },
+      });
+
+      res.json(await attachDestinatario(updated));
+    } catch (err) {
+      next(err);
+    }
+  },
+);
+
+// ── PATCH /api/system-alerts/admin/:id/archive|unarchive — arquivamento ──────
+// administrativo. Distinto do /:id/archive de cima: aquele é escopoDoUsuario
+// (só o que já é visível pra quem chama); este é Admin Master administrando
+// QUALQUER alerta, endereçado a quem for. Mesmo soft-delete de sempre —
+// nunca physical delete.
+
+router.patch(
+  "/admin/:id/archive",
+  verifyToken,
+  requireAdminMaster,
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const before = await prisma.systemAlert.findFirst({
+        where: { id: req.params.id as string, category: "alerta" },
+        select: { id: true, is_archived: true },
+      });
+      if (!before) {
+        res.status(404).json({ error: "Alerta não encontrado" });
+        return;
+      }
+      const updated = await prisma.systemAlert.update({
+        where: { id: before.id },
+        data: { is_archived: true, archived_at: new Date() },
+      });
+      await auditSystemAlert({
+        actorId: req.user!.id,
+        action: "system_alert.archived",
+        alertId: before.id,
+        before: { is_archived: before.is_archived },
+        after: { is_archived: true },
+      });
+      res.json(await attachDestinatario(updated));
+    } catch (err) {
+      next(err);
+    }
+  },
+);
+
+router.patch(
+  "/admin/:id/unarchive",
+  verifyToken,
+  requireAdminMaster,
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const before = await prisma.systemAlert.findFirst({
+        where: { id: req.params.id as string, category: "alerta" },
+        select: { id: true, is_archived: true },
+      });
+      if (!before) {
+        res.status(404).json({ error: "Alerta não encontrado" });
+        return;
+      }
+      const updated = await prisma.systemAlert.update({
+        where: { id: before.id },
+        data: { is_archived: false, archived_at: null },
+      });
+      await auditSystemAlert({
+        actorId: req.user!.id,
+        action: "system_alert.unarchived",
+        alertId: before.id,
+        before: { is_archived: before.is_archived },
+        after: { is_archived: false },
+      });
+      res.json(await attachDestinatario(updated));
     } catch (err) {
       next(err);
     }

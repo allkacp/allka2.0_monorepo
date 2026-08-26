@@ -234,6 +234,60 @@ export function requireAnyPermission(checks: Array<[string, PermissionAction]>) 
   };
 }
 
+/**
+ * Decisão pura para "quem pode abrir a Central de Alertas" (ata 2026-08:
+ * "criar uma central para o cadastro e gestão de alertas... Admin Master
+ * deve ter a capacidade de criar, modificar ou reclassificar alertas").
+ *
+ * Deliberadamente NÃO usa a regra do avô de requirePermission() (perfil não
+ * atribuído → libera) nem aceita uma permissão granular no lugar de
+ * is_master — mesmo raciocínio de evaluateRoadmapSsoAccess() pra módulo
+ * novo: "Somente Admin Master" na ata é uma restrição estrita, e "outros
+ * administradores não recebem automaticamente acesso de escrita" descarta
+ * de propósito tanto o avô quanto uma permissão explícita de outro perfil.
+ * Só passa quem realmente tem admin_profile.is_master === true.
+ */
+export function evaluateAdminMasterAccess(
+  accountType: string,
+  perfil: AdminProfileLike,
+): boolean {
+  if (accountType !== "admin") return false;
+  return !!perfil && perfil.is_active && perfil.is_master === true;
+}
+
+export function requireAdminMaster(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+): void {
+  if (!req.user) {
+    res.status(401).json({ error: "Não autenticado" });
+    return;
+  }
+
+  prisma.user
+    .findUnique({
+      where: { id: req.user.id },
+      select: {
+        admin_profile: {
+          select: {
+            is_master: true,
+            is_active: true,
+            permissions: { select: { module: true, action: true } },
+          },
+        },
+      },
+    })
+    .then((user) => {
+      if (!evaluateAdminMasterAccess(req.user!.account_type, user?.admin_profile)) {
+        res.status(403).json({ error: "Somente o Admin Master pode gerenciar a central de alertas." });
+        return;
+      }
+      next();
+    })
+    .catch(next);
+}
+
 export function requireRole(...roles: string[]) {
   return (req: Request, res: Response, next: NextFunction): void => {
     if (!req.user) {

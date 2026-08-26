@@ -23,6 +23,11 @@ vi.mock("@/lib/api-client", () => ({
     unarchiveSystemAlert: vi.fn(),
     markAllSystemAlertsRead: vi.fn(),
     getAgencyAlerts: vi.fn(),
+    // Default: não-Master, pra não expor a área "Gerenciar" nos testes do
+    // feed comum — os testes da central administrativa ficam em
+    // alerts-admin-center.test.tsx, com o mock ajustado pra is_master true.
+    getCurrentUser: vi.fn().mockResolvedValue({ admin_profile: null }),
+    getAdminSystemAlerts: vi.fn().mockResolvedValue({ data: [], total: 0 }),
   },
 }));
 
@@ -176,5 +181,57 @@ describe("AlertsPanel — estados e ações independentes de Notificações", ()
     await screen.findByText("Alerta de teste");
     await user.click(screen.getByTitle("Marcar como lido"));
     await waitFor(() => expect(apiClient.markSystemAlertRead).toHaveBeenCalledWith("al-x"));
+  });
+});
+
+// Lote "Central de Alertas" (ata 2026-08) — a área "Gerenciar" só pode
+// aparecer pra Admin Master de verdade, nunca por manipulação de estado
+// (ex.: forçar a aba via devtools) — o backend é sempre a autoridade final,
+// mas a UI também não deve nem oferecer o botão pra quem não tem acesso.
+describe("AlertsPanel — 'Gerenciar' é exclusivo de Admin Master", () => {
+  it("24. Admin Master vê a aba 'Gerenciar'", async () => {
+    (apiClient.getCurrentUser as any).mockResolvedValue({
+      admin_profile: { is_active: true, is_master: true, permissions: [] },
+    });
+    renderPanel();
+    expect(await screen.findByRole("tab", { name: "Gerenciar" })).toBeInTheDocument();
+  });
+
+  it("25. usuário comum (sem perfil admin) NÃO vê a aba 'Gerenciar'", async () => {
+    (apiClient.getCurrentUser as any).mockResolvedValue({ admin_profile: null });
+    renderPanel();
+    await screen.findByText("Nenhum alerta ativo no momento.");
+    expect(screen.queryByRole("tab", { name: "Gerenciar" })).not.toBeInTheDocument();
+  });
+
+  it("admin com perfil ativo mas is_master=false NÃO vê a aba 'Gerenciar'", async () => {
+    (apiClient.getCurrentUser as any).mockResolvedValue({
+      admin_profile: { is_active: true, is_master: false, permissions: [{ module: "alertas", action: "create" }] },
+    });
+    renderPanel();
+    await screen.findByText("Nenhum alerta ativo no momento.");
+    expect(screen.queryByRole("tab", { name: "Gerenciar" })).not.toBeInTheDocument();
+  });
+
+  it("26. mesmo se a aba não existe na tela, o painel nunca renderiza a central administrativa sem isMaster confirmado (não há como 'forçar' via clique num elemento que não existe)", async () => {
+    (apiClient.getCurrentUser as any).mockResolvedValue({ admin_profile: null });
+    renderPanel();
+    await screen.findByText("Nenhum alerta ativo no momento.");
+    // getAdminSystemAlerts (usado só pela central) nunca é chamado quando
+    // não há tab/botão algum pra abri-la.
+    expect(apiClient.getAdminSystemAlerts).not.toHaveBeenCalled();
+  });
+
+  it("Admin Master consegue trocar para 'Gerenciar' e ver a central (getAdminSystemAlerts é chamado só então)", async () => {
+    (apiClient.getCurrentUser as any).mockResolvedValue({
+      admin_profile: { is_active: true, is_master: true, permissions: [] },
+    });
+    const user = userEvent.setup();
+    renderPanel();
+
+    const manageTab = await screen.findByRole("tab", { name: "Gerenciar" });
+    expect(apiClient.getAdminSystemAlerts).not.toHaveBeenCalled();
+    await user.click(manageTab);
+    await waitFor(() => expect(apiClient.getAdminSystemAlerts).toHaveBeenCalled());
   });
 });

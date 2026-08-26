@@ -48,3 +48,20 @@ export function canOpenRoadmapPanel(accountType: string, profile: AdminProfileLi
   if (profile.is_master === true) return true;
   return (profile.permissions ?? []).some((p) => p.module === "central_chamados" && p.action === "view");
 }
+
+/**
+ * Mirrors the backend's evaluateAdminMasterAccess() exactly (see
+ * apps/backend/src/middleware/auth.ts) — for the Central de Alertas (ata
+ * 2026-08). Deliberately NOT hasAdminModulePermission()'s grandfather rule:
+ * "Somente Admin Master" in the ata is a strict restriction — an admin with
+ * no profile assigned, or with an explicit permission row but not
+ * is_master, must NOT see the "Gerenciar" tab. Only a true
+ * admin_profile.is_master === true passes. This is only ever a UI signal —
+ * every route it gates (POST/PATCH /system-alerts/admin/*) re-checks the
+ * identical rule server-side via requireAdminMaster, which stays the real
+ * authority.
+ */
+export function canManageAlertsAdmin(accountType: string, profile: AdminProfileLike): boolean {
+  if (accountType !== "admin") return false;
+  return !!profile && profile.is_active !== false && profile.is_master === true;
+}

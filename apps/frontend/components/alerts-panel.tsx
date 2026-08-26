@@ -20,6 +20,8 @@ import {
   criticalityIcon, criticalityBadgeColor, criticalityAccentBorder, type Criticality,
 } from "@/components/alerts-header-icon"
 import { useAccountType } from "@/contexts/account-type-context"
+import { canManageAlertsAdmin } from "@/lib/admin-permissions"
+import { AlertsAdminCenter } from "@/components/alerts-admin-center"
 import { cn } from "@/lib/utils"
 
 interface AlertsPanelProps {
@@ -31,6 +33,33 @@ export function AlertsPanel({ open = false, onClose }: AlertsPanelProps) {
   const { accountType } = useAccountType()
   const navigate = useNavigate()
   const isAgency = accountType === "agencias"
+
+  // Central de Alertas (ata 2026-08) — "Gerenciar" só existe pra Admin
+  // Master de verdade (nunca a regra do avô de requirePermission, nunca
+  // manipulando estado/aba: a visibilidade aqui é só sinal de UI, o backend
+  // reaplica a mesma regra estrita via requireAdminMaster em toda rota
+  // /system-alerts/admin/*). Volta pra "feed" sempre que o painel fecha, pra
+  // nunca reabrir direto na área administrativa por engano.
+  const [isMaster, setIsMaster] = useState(false)
+  const [view, setView] = useState<"feed" | "manage">("feed")
+  useEffect(() => {
+    if (!open) {
+      setView("feed")
+      return
+    }
+    let cancelled = false
+    apiClient
+      .getCurrentUser()
+      .then((me: any) => {
+        if (!cancelled) setIsMaster(canManageAlertsAdmin(accountType, me?.admin_profile))
+      })
+      .catch(() => {
+        if (!cancelled) setIsMaster(false)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [open, accountType])
 
   const [alerts, setAlerts] = useState<DisplayAlert[]>([])
   const [loading, setLoading] = useState(false)
@@ -138,6 +167,46 @@ export function AlertsPanel({ open = false, onClose }: AlertsPanelProps) {
       }}
     >
       <div className="flex flex-col flex-1 min-h-0 w-full">
+        {/* "Gerenciar" só aparece pra Admin Master de verdade — nunca uma
+            segunda fonte de verdade: é a mesma checagem (canManageAlertsAdmin)
+            usada pra travar a área inteira, não um estado independente que
+            alguém pudesse manipular via devtools pra "ver" o botão sem ter
+            a permissão real (o backend re-checa tudo de qualquer forma). */}
+        {isMaster && (
+          <div className="flex items-center gap-1.5 px-5 pt-3 pb-1 shrink-0" role="tablist" aria-label="Áreas do painel de Alertas">
+            <button
+              role="tab"
+              aria-selected={view === "feed"}
+              onClick={() => setView("feed")}
+              className={cn(
+                "text-xs px-3 py-1.5 rounded-lg font-medium transition-colors",
+                view === "feed"
+                  ? "bg-slate-100 dark:bg-slate-800 text-slate-900 dark:text-white"
+                  : "text-slate-500 hover:text-slate-700 dark:text-slate-400",
+              )}
+            >
+              Alertas
+            </button>
+            <button
+              role="tab"
+              aria-selected={view === "manage"}
+              onClick={() => setView("manage")}
+              className={cn(
+                "text-xs px-3 py-1.5 rounded-lg font-medium transition-colors",
+                view === "manage"
+                  ? "bg-slate-100 dark:bg-slate-800 text-slate-900 dark:text-white"
+                  : "text-slate-500 hover:text-slate-700 dark:text-slate-400",
+              )}
+            >
+              Gerenciar
+            </button>
+          </div>
+        )}
+
+        {view === "manage" && isMaster ? (
+          <AlertsAdminCenter />
+        ) : (
+        <>
         <div className="flex items-center justify-between px-5 pt-3 gap-2 shrink-0">
           {!isAgency ? (
             <div className="flex items-center gap-1.5">
@@ -266,6 +335,8 @@ export function AlertsPanel({ open = false, onClose }: AlertsPanelProps) {
             </div>
           )}
         </div>
+        </>
+        )}
       </div>
     </HeaderSlideScreen>
   )

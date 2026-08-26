@@ -2056,6 +2056,31 @@ class ApiClient {
     return this.patch(`/system-alerts/${id}/unarchive`, {});
   }
 
+  // ─── Central de Alertas (Admin Master) — ata 2026-08 ───────────────────────
+  async getAdminSystemAlerts(filters?: Record<string, any>) {
+    return this.get("/system-alerts/admin", filters);
+  }
+
+  async createAdminSystemAlert(data: { title: string; message: string; severity: "info" | "warning" | "error"; user_id?: string | null }) {
+    return this.post("/system-alerts/admin", data);
+  }
+
+  async updateAdminSystemAlert(id: string, data: { title?: string; message?: string }) {
+    return this.patch(`/system-alerts/admin/${id}`, data);
+  }
+
+  async reclassifyAdminSystemAlert(id: string, severity: "info" | "warning" | "error") {
+    return this.patch(`/system-alerts/admin/${id}/severity`, { severity });
+  }
+
+  async archiveAdminSystemAlert(id: string) {
+    return this.patch(`/system-alerts/admin/${id}/archive`, {});
+  }
+
+  async unarchiveAdminSystemAlert(id: string) {
+    return this.patch(`/system-alerts/admin/${id}/unarchive`, {});
+  }
+
   // ─── Preferências pessoais de notificação (evento × canal) ────────────────
   async getNotificationPreferences() {
     return this.get<{

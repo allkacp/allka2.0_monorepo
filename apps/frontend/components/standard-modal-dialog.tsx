@@ -69,7 +69,15 @@ export function StandardModalDialog({
     <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
       <DialogContent
         showCloseButton={false}
-        className="p-0 gap-0 overflow-hidden rounded-2xl border-0 shadow-2xl flex flex-col w-[calc(100%-64px)]"
+        // z-70: precisa ficar acima de qualquer HeaderSlideScreen (z-60,
+        // ver header-slide-screen.tsx) — descoberto neste lote (Central de
+        // Alertas) ao abrir "Novo alerta" de dentro do AlertsPanel: sem
+        // isso, o painel atrás intercepta os cliques do formulário (o
+        // z-50 padrão do Dialog base ficava abaixo do z-60 do painel).
+        // Afeta qualquer StandardModalDialog aberto de dentro de um painel
+        // slide — ex.: "Novo Grupo" dentro do painel de Notificações, que
+        // tinha o mesmo problema latente.
+        className="p-0 gap-0 overflow-hidden rounded-2xl border-0 shadow-2xl flex flex-col w-[calc(100%-64px)] z-70"
         style={{
           // Centralizado na área de conteúdo (exclui a sidebar), não no
           // viewport inteiro — por isso não usamos left-1/2 padrão.
