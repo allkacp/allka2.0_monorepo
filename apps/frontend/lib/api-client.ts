@@ -2114,9 +2114,11 @@ class ApiClient {
     return `${origin}${url}`;
   }
 
-  // A rota que serve a imagem exige Bearer token (qualquer usuário logado,
-  // não só Admin Master — ver GET /system-alerts/admin/images/:fileName) —
-  // uma tag <img src="..."> comum não tem como mandar esse header. Cross-origin
+  // A rota que serve a imagem exige Bearer token E autorização por recurso
+  // (ver GET /system-alerts/:id/image, /admin/standards/:id/image e
+  // /admin/schedules/:id/image no backend — cada uma amarrada ao dono do
+  // recurso, nunca um nome de arquivo solto) — uma tag <img src="..."> comum
+  // não tem como mandar esse header. Cross-origin
   // (frontend:8081 x backend:3001 neste dev, ou domínios diferentes em
   // produção) isso derruba a imagem com ERR_BLOCKED_BY_ORB: o navegador
   // recebe um 401 (corpo JSON) onde esperava bytes de imagem e bloqueia a

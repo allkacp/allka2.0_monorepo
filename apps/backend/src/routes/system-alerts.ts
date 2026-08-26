@@ -69,25 +69,78 @@ router.post(
   },
 );
 
-// GET .../images/:fileName — serve a imagem pra QUALQUER usuário autenticado
-// (não só Admin Master): o destinatário de um alerta com imagem também
-// precisa conseguir vê-la. Nunca público sem sessão — nome físico aleatório
-// já impede adivinhação, isto some com a última brecha (sessão zero).
-router.get("/admin/images/:fileName", verifyToken, async (req: Request, res: Response, next: NextFunction) => {
+// ── Servir imagem — autorização por RECURSO, nunca por nome de arquivo ────
+//
+// Correção de segurança (ata 2026-08, reparo pós-4º lote): a versão
+// anterior servia qualquer imagem pra QUALQUER usuário autenticado que
+// soubesse/adivinhasse o nome físico — nome aleatório não é controle de
+// acesso. Agora cada tipo de imagem tem sua própria rota, amarrada ao
+// registro dono (ocorrência/Padrão/Programação), e a checagem de permissão
+// acontece ANTES de tocar no disco — nunca aceita um nome de arquivo vindo
+// direto da URL pra decidir o que servir.
+//
+// `sendAlertImageFile` é o único ponto que efetivamente lê do disco — os
+// chamadores já validaram permissão e já sabem o nome físico exato (nunca
+// um parâmetro de URL). Path traversal fica estruturalmente impossível: o
+// nome nunca vem do cliente aqui.
+function sendAlertImageFile(res: Response, fileName: string): boolean {
+  const filePath = alertImagePath(fileName);
+  if (!fs.existsSync(filePath)) return false;
+  // nosniff: o navegador nunca deve tentar "adivinhar" um tipo diferente do
+  // Content-Type que a gente manda (mime da extensão que o próprio backend
+  // escolheu ao validar o upload por assinatura de bytes).
+  res.set("X-Content-Type-Options", "nosniff");
+  // Cache privado, nunca compartilhado: a mesma URL pode ter dono diferente
+  // dependendo de QUEM pergunta (ex.: dois destinatários de um alerta geral
+  // usando o mesmo computador) — nunca cache de proxy/CDN, nunca reuso entre
+  // sessões.
+  res.set("Cache-Control", "private, no-store");
+  res.sendFile(filePath);
+  return true;
+}
+
+// GET .../admin/images/:fileName — SOMENTE Admin Master, e SOMENTE como
+// prévia de um upload ainda não salvo em nenhum Padrão/Programação/Avulso
+// (a tela de edição mostra a miniatura antes de clicar em Salvar). Depois
+// de salvo, ninguém mais usa esta rota pra exibir a imagem — cada entidade
+// passa a ter sua própria rota com dono e checagem de permissão (ver
+// abaixo). Nunca é a rota usada pelo destinatário de um alerta.
+router.get("/admin/images/:fileName", verifyToken, requireAdminMaster, async (req: Request, res: Response, next: NextFunction) => {
   try {
-    // fileName vem só do generateStoredFileName do backend (uuid + extensão
-    // curta fixa) — mesmo assim, nunca resolve caminho fora da pasta.
     const fileName = req.params.fileName as string;
     if (!/^[a-zA-Z0-9-]+\.(jpg|png|webp)$/.test(fileName)) {
       res.status(400).json({ error: "Nome de arquivo inválido" });
       return;
     }
-    const filePath = alertImagePath(fileName);
-    if (!fs.existsSync(filePath)) {
+    if (!sendAlertImageFile(res, fileName)) {
+      res.status(404).json({ error: "Imagem não encontrada" });
+    }
+  } catch (err) {
+    next(err);
+  }
+});
+
+// GET /:id/image — imagem de uma OCORRÊNCIA (SystemAlert): Avulso, ou
+// gerada a partir de um Padrão/Programação (sempre um snapshot próprio,
+// nunca o arquivo administrativo do Padrão/Programação). Autorização:
+// EXATAMENTE a mesma regra usada pra abrir o próprio alerta
+// (`escopoDoUsuario`) — destinatário direto, ou alerta geral dentro do
+// escopo de quem já pode ver alerta geral (Admin), nunca uma regra nova só
+// pra imagem. 404 (não 403) quando não autorizado — não revela se o alerta
+// existe pra quem não tem acesso a ele.
+router.get("/:id/image", verifyToken, async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const alert = await prisma.systemAlert.findFirst({
+      where: { AND: [{ id: req.params.id as string }, escopoDoUsuario(req)] },
+      select: { image_file_name: true },
+    });
+    if (!alert || !alert.image_file_name) {
       res.status(404).json({ error: "Imagem não encontrada" });
       return;
     }
-    res.sendFile(filePath);
+    if (!sendAlertImageFile(res, alert.image_file_name)) {
+      res.status(404).json({ error: "Imagem não encontrada" });
+    }
   } catch (err) {
     next(err);
   }
@@ -386,11 +439,14 @@ type DestinatarioInfo = { id: string; name: string; email: string } | null;
 
 // Deriva a URL servível a partir do nome físico — nunca expõe caminho de
 // disco, nunca base64.
-function withImageUrl<T extends { image_file_name?: string | null }>(alert: T): T & { image_url: string | null } {
-  return { ...alert, image_url: alert.image_file_name ? `/api/system-alerts/admin/images/${alert.image_file_name}` : null };
+function withImageUrl<T extends { id: string; image_file_name?: string | null }>(alert: T): T & { image_url: string | null } {
+  // Rota amarrada ao ID da ocorrência, não ao nome do arquivo — quem pedir
+  // precisa passar pela MESMA checagem de escopo usada pra abrir o alerta
+  // (ver GET /:id/image acima). Nunca a rota administrativa de imagem.
+  return { ...alert, image_url: alert.image_file_name ? `/api/system-alerts/${alert.id}/image` : null };
 }
 
-async function attachDestinatario<T extends { user_id: string | null; image_file_name?: string | null }>(
+async function attachDestinatario<T extends { id: string; user_id: string | null; image_file_name?: string | null }>(
   alert: T,
 ): Promise<T & { destinatario: DestinatarioInfo; image_url: string | null }> {
   const withImg = withImageUrl(alert);
@@ -402,7 +458,7 @@ async function attachDestinatario<T extends { user_id: string | null; image_file
   return { ...withImg, destinatario: user ?? null };
 }
 
-async function attachDestinatarioMany<T extends { user_id: string | null; image_file_name?: string | null }>(
+async function attachDestinatarioMany<T extends { id: string; user_id: string | null; image_file_name?: string | null }>(
   alerts: T[],
 ): Promise<(T & { destinatario: DestinatarioInfo; image_url: string | null })[]> {
   const ids = [...new Set(alerts.map((a) => a.user_id).filter((id): id is string => !!id))];
@@ -797,7 +853,7 @@ router.get(
         data: standards.map((s) => ({
           ...s,
           allowed_variables: JSON.parse(s.allowed_variables_json) as string[],
-          image_url: s.image_file_name ? `/api/system-alerts/admin/images/${s.image_file_name}` : null,
+          image_url: s.image_file_name ? `/api/system-alerts/admin/standards/${s.id}/image` : null,
         })),
       });
     } catch (err) {
@@ -926,10 +982,38 @@ router.post(
         title: renderTemplate(standard.title, fixture, allowed),
         message: renderTemplate(standard.message, fixture, allowed),
         severity: standard.default_severity,
-        image_url: standard.image_file_name ? `/api/system-alerts/admin/images/${standard.image_file_name}` : null,
+        image_url: standard.image_file_name ? `/api/system-alerts/admin/standards/${standard.id}/image` : null,
         image_alt: standard.image_alt,
         fictitious: true,
       });
+    } catch (err) {
+      next(err);
+    }
+  },
+);
+
+// GET /admin/standards/:id/image — arquivo ADMINISTRATIVO do Padrão. Só
+// Admin Master (mesma checagem de quem edita/visualiza o Padrão) — usuário
+// comum nunca chega aqui, mesmo sabendo o id. Uma ocorrência gerada a
+// partir deste Padrão usa seu PRÓPRIO snapshot (GET /:id/image), nunca
+// esta rota.
+router.get(
+  "/admin/standards/:id/image",
+  verifyToken,
+  requireAdminMaster,
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const standard = await prisma.alertStandard.findUnique({
+        where: { id: req.params.id as string },
+        select: { image_file_name: true },
+      });
+      if (!standard || !standard.image_file_name) {
+        res.status(404).json({ error: "Imagem não encontrada" });
+        return;
+      }
+      if (!sendAlertImageFile(res, standard.image_file_name)) {
+        res.status(404).json({ error: "Imagem não encontrada" });
+      }
     } catch (err) {
       next(err);
     }
@@ -1083,8 +1167,12 @@ router.patch(
 // tarefa/etapa — programação é por data/horário, regra é por gatilho.
 // ═══════════════════════════════════════════════════════════════════════════
 
-function scheduleWithImageUrl<T extends { image_file_name: string | null }>(schedule: T) {
-  return { ...schedule, image_url: schedule.image_file_name ? `/api/system-alerts/admin/images/${schedule.image_file_name}` : null };
+function scheduleWithImageUrl<T extends { id: string; image_file_name: string | null }>(schedule: T) {
+  // Arquivo ADMINISTRATIVO da Programação — só Admin Master (ver GET
+  // /admin/schedules/:id/image abaixo). O destinatário de uma ocorrência
+  // gerada por esta Programação nunca vê esta URL; ele recebe a URL do
+  // PRÓPRIO snapshot da ocorrência, via withImageUrl.
+  return { ...schedule, image_url: schedule.image_file_name ? `/api/system-alerts/admin/schedules/${schedule.id}/image` : null };
 }
 
 router.get(
@@ -1391,10 +1479,37 @@ router.post(
         title: schedule.title,
         message: schedule.message,
         severity: schedule.severity,
-        image_url: schedule.image_file_name ? `/api/system-alerts/admin/images/${schedule.image_file_name}` : null,
+        image_url: schedule.image_file_name ? `/api/system-alerts/admin/schedules/${schedule.id}/image` : null,
         image_alt: schedule.image_alt,
         fictitious: true,
       });
+    } catch (err) {
+      next(err);
+    }
+  },
+);
+
+// GET /admin/schedules/:id/image — arquivo ADMINISTRATIVO da Programação.
+// Só Admin Master. O destinatário de uma ocorrência gerada por esta
+// Programação acessa o PRÓPRIO snapshot da ocorrência (GET /:id/image),
+// nunca este arquivo administrativo.
+router.get(
+  "/admin/schedules/:id/image",
+  verifyToken,
+  requireAdminMaster,
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const schedule = await prisma.alertSchedule.findUnique({
+        where: { id: req.params.id as string },
+        select: { image_file_name: true },
+      });
+      if (!schedule || !schedule.image_file_name) {
+        res.status(404).json({ error: "Imagem não encontrada" });
+        return;
+      }
+      if (!sendAlertImageFile(res, schedule.image_file_name)) {
+        res.status(404).json({ error: "Imagem não encontrada" });
+      }
     } catch (err) {
       next(err);
     }
