@@ -99,6 +99,136 @@ describe("NotificationPreferencesPanel — Inbox (real data, not mock)", () => {
   });
 });
 
+// Lote "separar alertas de notificações" (ata 2026-08) — a aba Alertas
+// nunca tinha teste dedicado (gap confirmado em auditoria). Cobre a
+// criticidade verde/amarelo/vermelho (derivada de `severity`, sem coluna
+// nova), o filtro por criticidade, e o isolamento de erro/estado entre as
+// duas abas.
+describe("NotificationPreferencesPanel — Alertas (criticidade verde/amarelo/vermelho)", () => {
+  function alertaRow(overrides: Partial<{ id: string; severity: "info" | "warning" | "error"; title: string }> = {}) {
+    return {
+      id: overrides.id ?? "al1",
+      type: "tarefa_atrasada",
+      title: overrides.title ?? "Alerta de teste",
+      message: "Detalhe do alerta",
+      severity: overrides.severity ?? "warning",
+      entity_type: null,
+      entity_id: null,
+      is_read: false,
+      created_at: new Date().toISOString(),
+    };
+  }
+
+  it("19. alerta com severity 'info' mostra criticidade Verde (texto + ícone + cor), não só cor", async () => {
+    (apiClient.getSystemAlerts as any).mockResolvedValue({ data: [alertaRow({ severity: "info" })] });
+    renderPanel({ initialTab: "alertas" });
+
+    await screen.findByText("Alerta de teste");
+    // aria-label distingue do botão de filtro "Verde", que também tem esse texto.
+    const badge = await screen.findByLabelText(/Criticidade: Verde/);
+    expect(badge.textContent).toContain("Verde");
+    // Texto explícito visível (não só cor) — e o ícone acompanha (svg irmão).
+    expect(badge.querySelector("svg")).toBeTruthy();
+  });
+
+  it("20. alerta com severity 'warning' mostra criticidade Amarelo", async () => {
+    (apiClient.getSystemAlerts as any).mockResolvedValue({ data: [alertaRow({ severity: "warning" })] });
+    renderPanel({ initialTab: "alertas" });
+
+    await screen.findByText("Alerta de teste");
+    expect(await screen.findByLabelText(/Criticidade: Amarelo/)).toBeInTheDocument();
+  });
+
+  it("21. alerta com severity 'error' mostra criticidade Vermelho", async () => {
+    (apiClient.getSystemAlerts as any).mockResolvedValue({ data: [alertaRow({ severity: "error" })] });
+    renderPanel({ initialTab: "alertas" });
+
+    await screen.findByText("Alerta de teste");
+    expect(await screen.findByLabelText(/Criticidade: Vermelho/)).toBeInTheDocument();
+  });
+
+  it("22. filtro por criticidade esconde alertas de outras cores", async () => {
+    (apiClient.getSystemAlerts as any).mockResolvedValue({
+      data: [
+        alertaRow({ id: "a-verde", severity: "info", title: "Alerta Verde Teste" }),
+        alertaRow({ id: "a-vermelho", severity: "error", title: "Alerta Vermelho Teste" }),
+      ],
+    });
+    const user = userEvent.setup();
+    renderPanel({ initialTab: "alertas" });
+
+    await screen.findByText("Alerta Verde Teste");
+    await screen.findByText("Alerta Vermelho Teste");
+
+    await user.click(screen.getByRole("button", { name: "Vermelho" }));
+
+    expect(screen.queryByText("Alerta Verde Teste")).not.toBeInTheDocument();
+    expect(await screen.findByText("Alerta Vermelho Teste")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Todos" }));
+    expect(await screen.findByText("Alerta Verde Teste")).toBeInTheDocument();
+  });
+
+  it("18. notificações comuns (aba Inbox) não recebem badge de criticidade", async () => {
+    (apiClient.getSystemAlerts as any).mockResolvedValue({
+      data: [{ id: "n1", type: "sistema", title: "Notificação comum", message: "Sem urgência", created_at: new Date().toISOString(), is_read: false }],
+    });
+    renderPanel({ initialTab: "inbox" });
+
+    await screen.findByText("Notificação comum");
+    expect(screen.queryByText("Verde")).not.toBeInTheDocument();
+    expect(screen.queryByText("Amarelo")).not.toBeInTheDocument();
+    expect(screen.queryByText("Vermelho")).not.toBeInTheDocument();
+  });
+
+  it("23. estado vazio de alertas é uma mensagem própria, distinta da de notificações", async () => {
+    (apiClient.getSystemAlerts as any).mockResolvedValue({ data: [] });
+    renderPanel({ initialTab: "alertas" });
+
+    expect(await screen.findByText("Nenhum alerta ativo no momento.")).toBeInTheDocument();
+  });
+
+  it("26. erro ao buscar alertas não derruba a aba de notificações", async () => {
+    (apiClient.getSystemAlerts as any).mockImplementation((filters: any) => {
+      if (filters?.category === "alerta") return Promise.reject(new Error("falhou"));
+      return Promise.resolve({
+        data: [{ id: "n1", type: "sistema", title: "Notificação ainda funciona", message: "ok", created_at: new Date().toISOString(), is_read: false }],
+      });
+    });
+    renderPanel({ initialTab: "inbox" });
+
+    expect(await screen.findByText("Notificação ainda funciona")).toBeInTheDocument();
+  });
+
+  it("27. erro ao buscar notificações não derruba a aba de alertas", async () => {
+    (apiClient.getSystemAlerts as any).mockImplementation((filters: any) => {
+      if (filters?.category === "notificacao") return Promise.reject(new Error("falhou"));
+      return Promise.resolve({ data: [alertaRow({ title: "Alerta ainda funciona" })] });
+    });
+    renderPanel({ initialTab: "alertas" });
+
+    expect(await screen.findByText("Alerta ainda funciona")).toBeInTheDocument();
+  });
+
+  it("marcar uma notificação como lida não chama nenhuma operação de alerta", async () => {
+    (apiClient.getSystemAlerts as any).mockImplementation((filters: any) =>
+      Promise.resolve({
+        data:
+          filters?.category === "alerta"
+            ? [alertaRow({ id: "al-x" })]
+            : [{ id: "n1", type: "sistema", title: "Notificação clicável", message: "ok", created_at: new Date().toISOString(), is_read: false }],
+      }),
+    );
+    const user = userEvent.setup();
+    renderPanel({ initialTab: "inbox" });
+
+    await user.click(await screen.findByText("Notificação clicável"));
+
+    await waitFor(() => expect(apiClient.markSystemAlertRead).toHaveBeenCalledWith("n1"));
+    expect(apiClient.markSystemAlertRead).not.toHaveBeenCalledWith("al-x");
+  });
+});
+
 describe("NotificationPreferencesPanel — Preferências (real, per event x channel)", () => {
   it("toggling a non-in_app channel switch calls updateNotificationPreference with that event and channel", async () => {
     const user = userEvent.setup();

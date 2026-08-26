@@ -123,10 +123,25 @@ router.get(
       const filtros: Record<string, unknown> = {};
       if (query.data.category) filtros.category = query.data.category;
 
-      const count = await prisma.systemAlert.count({
-        where: { AND: [filtros, { is_read: false }, { is_archived: false }, escopoDoUsuario(req)] },
-      });
-      res.json({ count });
+      const baseWhere = [filtros, { is_read: false }, { is_archived: false }, escopoDoUsuario(req)];
+      const count = await prisma.systemAlert.count({ where: { AND: baseWhere } });
+
+      // Quebra por severidade só faz sentido pra alerta (é o que a reunião
+      // chama de "criticidade": info→verde, warning→amarelo, error→vermelho
+      // — reaproveita o campo já existente, não cria um novo). Some no
+      // corpo só quando o pedido já filtrou por category=alerta, pra não
+      // sugerir esse conceito pra notificação comum.
+      let bySeverity: { info: number; warning: number; error: number } | undefined;
+      if (query.data.category === "alerta") {
+        const [info, warning, error] = await Promise.all([
+          prisma.systemAlert.count({ where: { AND: [...baseWhere, { severity: "info" }] } }),
+          prisma.systemAlert.count({ where: { AND: [...baseWhere, { severity: "warning" }] } }),
+          prisma.systemAlert.count({ where: { AND: [...baseWhere, { severity: "error" }] } }),
+        ]);
+        bySeverity = { info, warning, error };
+      }
+
+      res.json(bySeverity ? { count, bySeverity } : { count });
     } catch (err) {
       next(err);
     }

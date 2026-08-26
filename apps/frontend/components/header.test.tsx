@@ -13,8 +13,9 @@ import { MemoryRouter } from "react-router-dom";
 // header.tsx (com o bug real "/admin/dashboard" pro Admin) nunca era lido
 // em lugar nenhum: dado morto, removido neste lote por ser enganoso.
 
-const { accountConfig, apiClientMock } = vi.hoisted(() => ({
+const { accountConfig, apiClientMock, notifPanelMock } = vi.hoisted(() => ({
   accountConfig: { accountType: "admin" as string, isPartnerActive: false },
+  notifPanelMock: { open: false, setOpen: vi.fn(), tab: "prefs" as string, setTab: vi.fn() },
   apiClientMock: {
     getCurrentUser: vi.fn().mockResolvedValue({
       id: 1,
@@ -89,13 +90,13 @@ vi.mock("@/contexts/project-basket-context", () => ({
 }));
 
 vi.mock("@/contexts/notifications-panel-context", () => ({
-  useNotificationsPanel: () => ({ open: false, setOpen: vi.fn(), tab: "prefs", setTab: vi.fn() }),
+  useNotificationsPanel: () => notifPanelMock,
 }));
 
 vi.mock("@/lib/api-client", () => ({ apiClient: apiClientMock }));
 
 vi.mock("@/components/notification-preferences-panel", () => ({
-  NotificationPreferencesPanel: () => null,
+  NotificationPreferencesPanel: () => <div data-testid="notif-panel-mock" />,
 }));
 
 vi.mock("@/components/project-basket-drawer", () => ({
@@ -204,5 +205,101 @@ describe("Header — 'Meu Perfil' abre o painel compartilhado, nunca o dashboard
     await openMeuPerfil(user);
     const panel = await screen.findByTestId("profile-panel");
     expect(panel).toBeInTheDocument();
+  });
+});
+
+// Lote "separar alertas de notificações" (ata 2026-08) — o header tinha um
+// único sino cobrindo os dois conceitos (contador somava notificação +
+// alerta junto, violando a regra de contadores independentes). Cobre os
+// dois acionadores distintos, tooltips, contadores independentes e o pulso
+// com prefers-reduced-motion.
+describe("Header — Notificações e Alertas são dois acionadores distintos", () => {
+  beforeEach(() => {
+    accountConfig.accountType = "admin";
+    accountConfig.isPartnerActive = false;
+    vi.clearAllMocks();
+    apiClientMock.getCurrentUser.mockResolvedValue({
+      id: 1, name: "Vinicius Guardia", email: "cp@lamego.com.vc", role: "admin", account_type: "admin",
+    });
+  });
+
+  it("13. existem dois ícones distintos (Bell e AlertTriangle), não um só", () => {
+    renderHeader();
+    expect(document.querySelector("header button svg.lucide-bell")).toBeTruthy();
+    expect(document.querySelector("header button svg.lucide-triangle-alert")).toBeTruthy();
+  });
+
+  it("14. cada ícone tem um tooltip/aria-label próprio ('Notificações' e 'Alertas')", () => {
+    renderHeader();
+    const bellButton = document.querySelector("header button svg.lucide-bell")?.closest("button");
+    const alertButton = document.querySelector("header button svg.lucide-triangle-alert")?.closest("button");
+    expect(bellButton).toHaveAttribute("title", "Notificações");
+    expect(alertButton).toHaveAttribute("title", "Alertas");
+    expect(bellButton?.getAttribute("aria-label")).toMatch(/^Notificações/);
+    expect(alertButton?.getAttribute("aria-label")).toMatch(/^Alertas/);
+  });
+
+  it("15. clicar no sino define a aba 'inbox' e abre o painel; clicar no triângulo define 'alertas' — cada um só define sua própria aba", async () => {
+    const user = userEvent.setup();
+    renderHeader();
+
+    const bellButton = document.querySelector("header button svg.lucide-bell")?.closest("button") as HTMLElement;
+    const alertButton = document.querySelector("header button svg.lucide-triangle-alert")?.closest("button") as HTMLElement;
+
+    await user.click(bellButton);
+    expect(notifPanelMock.setTab).toHaveBeenLastCalledWith("inbox");
+    expect(notifPanelMock.setOpen).toHaveBeenLastCalledWith(true);
+
+    await user.click(alertButton);
+    expect(notifPanelMock.setTab).toHaveBeenLastCalledWith("alertas");
+    expect(notifPanelMock.setOpen).toHaveBeenLastCalledWith(true);
+  });
+
+  it("16. os dois acionadores compartilham o mesmo painel — nunca dois paineis que poderiam ficar sobrepostos", async () => {
+    const user = userEvent.setup();
+    renderHeader();
+
+    const bellButton = document.querySelector("header button svg.lucide-bell")?.closest("button") as HTMLElement;
+    const alertButton = document.querySelector("header button svg.lucide-triangle-alert")?.closest("button") as HTMLElement;
+    await user.click(bellButton);
+    await user.click(alertButton);
+
+    // Um único NotificationPreferencesPanel é montado por Header,
+    // independentemente de qual dos dois ícones foi clicado.
+    expect(screen.getAllByTestId("notif-panel-mock")).toHaveLength(1);
+  });
+
+  it("17. contadores são independentes: notificações usa category=notificacao, alertas usa category=alerta", async () => {
+    apiClientMock.getUnreadSystemAlertsCount = vi.fn((filters?: any) => {
+      if (filters?.category === "notificacao") return Promise.resolve({ count: 3 });
+      if (filters?.category === "alerta") return Promise.resolve({ count: 5, bySeverity: { info: 2, warning: 2, error: 1 } });
+      return Promise.resolve({ count: 999 }); // nunca deveria ser chamado sem categoria
+    });
+    renderHeader();
+
+    expect(await screen.findByText("3")).toBeInTheDocument();
+    expect(await screen.findByText("5")).toBeInTheDocument();
+    // Nunca chamado sem filtro de categoria — cada acionador pede só o seu.
+    expect(apiClientMock.getUnreadSystemAlertsCount).not.toHaveBeenCalledWith(undefined);
+    expect(apiClientMock.getUnreadSystemAlertsCount).not.toHaveBeenCalledWith({});
+  });
+
+  it("29. o pulso de urgência usa motion-safe (respeita prefers-reduced-motion, nunca 'animate-pulse' puro)", async () => {
+    apiClientMock.getUnreadSystemAlertsCount = vi.fn((filters?: any) => {
+      if (filters?.category === "alerta") return Promise.resolve({ count: 1, bySeverity: { info: 0, warning: 0, error: 1 } });
+      return Promise.resolve({ count: 0 });
+    });
+    renderHeader();
+
+    const alertIcon = await screen.findByText("1");
+    await vi.waitFor(() => {
+      const svg = document.querySelector("header button svg.lucide-triangle-alert");
+      expect(svg?.getAttribute("class")).toMatch(/motion-safe:animate-pulse/);
+    });
+    const svg = document.querySelector("header button svg.lucide-triangle-alert");
+    // Nunca "animate-pulse" puro (sem o prefixo motion-safe:), que ignora
+    // prefers-reduced-motion.
+    expect(svg?.getAttribute("class")?.split(" ")).not.toContain("animate-pulse");
+    expect(alertIcon).toBeInTheDocument();
   });
 });

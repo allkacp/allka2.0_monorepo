@@ -5,7 +5,7 @@
 // componente AlertasTab). Este arquivo agora só guarda os helpers puros que
 // aquela aba (e o resto da plataforma) reaproveita — nenhum componente aqui
 // é mais renderizado diretamente.
-import { CheckSquare, Briefcase, DollarSign, Settings, Info, Clock, AlertCircle } from "lucide-react"
+import { CheckSquare, Briefcase, DollarSign, Settings, Info, Clock, AlertCircle, CheckCircle2, AlertTriangle, AlertOctagon } from "lucide-react"
 import type { AccountType } from "@/contexts/account-type-context"
 
 // Unified display alert — normalized from both ApiAlert and AgencyAlert
@@ -118,5 +118,57 @@ export const severityLabel: Record<DisplayAlert["severity"], string> = {
   error: "Crítico",
   warning: "Atenção",
   info: "Info",
+}
+
+// ─── Criticidade (ata 2026-08: "separar alertas de notificações") ──────────
+//
+// A reunião pediu literalmente verde/amarelo/vermelho para a criticidade do
+// ALERTA — distinto de `severity` (info/warning/error), que já existe no
+// banco mas comunica o "tom" da mensagem (inclusive de notificações comuns)
+// e é colorido vermelho/âmbar/azul, não verde/amarelo/vermelho. Em vez de
+// criar uma coluna nova só pra isso, `criticality` é derivado
+// determinísticamente do `severity` já existente — vale só para alertas
+// (a aba Alertas usa isso; a de Notificações nunca chama estes helpers),
+// nunca para notificação comum, e nunca precisa de migration/backfill:
+// todo SystemAlert (antigo ou novo) já tem `severity`.
+export type Criticality = "verde" | "amarelo" | "vermelho"
+
+export const criticalityFromSeverity: Record<DisplayAlert["severity"], Criticality> = {
+  info: "verde",
+  warning: "amarelo",
+  error: "vermelho",
+}
+
+export const criticalityLabel: Record<Criticality, string> = {
+  verde: "Verde",
+  amarelo: "Amarelo",
+  vermelho: "Vermelho",
+}
+
+// Texto de apoio pro tooltip de cada nível — nunca comunique só pela cor.
+export const criticalityDescription: Record<Criticality, string> = {
+  verde: "Informativo ou atenção leve, sem urgência imediata.",
+  amarelo: "Requer atenção — prazo próximo ou pendência relevante.",
+  vermelho: "Crítico — vencido, bloqueador ou exige intervenção rápida.",
+}
+
+export const criticalityIcon: Record<Criticality, React.ElementType> = {
+  verde: CheckCircle2,
+  amarelo: AlertTriangle,
+  vermelho: AlertOctagon,
+}
+
+// Chip sólido — cor própria de criticidade, para não confundir com o azul
+// de `severityBadgeColor` (que significa outra coisa).
+export const criticalityBadgeColor: Record<Criticality, string> = {
+  verde: "bg-emerald-600 text-white border-transparent dark:bg-emerald-500",
+  amarelo: "bg-amber-600 text-white border-transparent dark:bg-amber-500",
+  vermelho: "bg-red-600 text-white border-transparent dark:bg-red-500",
+}
+
+export const criticalityCardColor: Record<Criticality, string> = {
+  verde: "text-emerald-700 bg-emerald-50 border-emerald-200 dark:bg-emerald-950/30 dark:border-emerald-800 dark:text-emerald-300",
+  amarelo: "text-amber-700 bg-amber-50 border-amber-200 dark:bg-amber-950/30 dark:border-amber-800 dark:text-amber-300",
+  vermelho: "text-red-700 bg-red-50 border-red-200 dark:bg-red-950/30 dark:border-red-800 dark:text-red-300",
 }
 

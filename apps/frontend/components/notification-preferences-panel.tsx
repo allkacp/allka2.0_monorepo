@@ -10,6 +10,7 @@ import { Badge } from "@/components/ui/badge"
 import { HeaderSlideScreen } from "@/components/header-slide-screen"
 import { Switch } from "@/components/ui/switch"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 import { ConfirmationDialog } from "@/components/confirmation-dialog"
 import {
   NotificationGroupFormModal,
@@ -17,8 +18,10 @@ import {
 } from "@/components/modals/notification-group-form-modal"
 import { apiClient } from "@/lib/api-client"
 import {
-  alertIcon, systemAlertLink, severityColor, severityBadgeColor, severityLabel,
+  alertIcon, systemAlertLink,
   TASKS_ROUTE_BY_ACCOUNT_TYPE, type DisplayAlert,
+  criticalityFromSeverity, criticalityLabel, criticalityDescription,
+  criticalityIcon, criticalityBadgeColor, criticalityCardColor, type Criticality,
 } from "@/components/alerts-header-icon"
 import { useAccountType } from "@/contexts/account-type-context"
 import { cn } from "@/lib/utils"
@@ -109,6 +112,16 @@ export function NotificationPreferencesPanel({
   // abrir "rules" cai em "Preferências" em vez de deixar a tela em branco
   // (Tabs não acha TabsTrigger/TabsContent nenhum pra um value inexistente).
   const resolvedInitialTab = initialTab === "rules" ? "prefs" : initialTab
+
+  // Tabs controlado (não mais defaultValue): os dois acionadores do header
+  // (Notificações/Alertas) só conseguem "abrir sempre na aba certa" se o
+  // painel de verdade trocar de aba quando já está aberto noutra — com
+  // defaultValue isso só valia no primeiro mount. Reaplica a aba pedida
+  // sempre que o painel abre OU quando o pedido muda enquanto já está aberto.
+  const [activeTab, setActiveTab] = useState(resolvedInitialTab)
+  useEffect(() => {
+    if (open) setActiveTab(resolvedInitialTab)
+  }, [open, resolvedInitialTab])
 
   /* ── Inbox — mesma fonte real (SystemAlert) que o triângulo de alertas,
      nunca um segundo inbox paralelo. ────────────────────────────────────── */
@@ -411,7 +424,7 @@ export function NotificationPreferencesPanel({
     >
       <div className="flex flex-col flex-1 min-h-0 w-full">
         {/* Tabs — flex-1 min-h-0 so it shrinks properly */}
-        <Tabs defaultValue={resolvedInitialTab} className="flex-1 min-h-0 flex flex-col">
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 min-h-0 flex flex-col">
           <div className="px-5 pt-4 pb-1 shrink-0">
             <TabsList className="w-full bg-slate-100 dark:bg-slate-800 p-1 rounded-xl h-auto gap-1">
               <TabsTrigger value="inbox"
@@ -640,6 +653,21 @@ function AlertasTab({
   onToggleArchive: (alert: DisplayAlert) => void
   onDismissAll: () => void
 }) {
+  // Filtro por criticidade (Todos/Verde/Amarelo/Vermelho) — client-side,
+  // sobre o que já foi carregado; cobre tanto SystemAlert quanto o alerta
+  // sintético de agência de forma uniforme, já que os dois têm `severity`.
+  const [criticalityFilter, setCriticalityFilter] = useState<"all" | Criticality>("all")
+  const visibleAlerts = criticalityFilter === "all"
+    ? alerts
+    : alerts.filter((a) => criticalityFromSeverity[a.severity] === criticalityFilter)
+
+  const FILTER_OPTIONS: { value: "all" | Criticality; label: string }[] = [
+    { value: "all", label: "Todos" },
+    { value: "verde", label: "Verde" },
+    { value: "amarelo", label: "Amarelo" },
+    { value: "vermelho", label: "Vermelho" },
+  ]
+
   return (
     <div>
       <div className="flex items-center justify-between px-5 pt-3 gap-2">
@@ -660,8 +688,31 @@ function AlertasTab({
           </button>
         )}
       </div>
+
+      {/* Filtro por criticidade — nunca só cor: cada opção já é texto. */}
+      <div className="flex items-center gap-1.5 px-5 pt-2.5" role="group" aria-label="Filtrar alertas por criticidade">
+        {FILTER_OPTIONS.map(({ value, label }) => (
+          <button
+            key={value}
+            onClick={() => setCriticalityFilter(value)}
+            aria-pressed={criticalityFilter === value}
+            className={cn(
+              "text-[11px] px-2.5 py-1 rounded-full border transition-colors",
+              criticalityFilter === value
+                ? "bg-slate-800 text-white border-slate-800 dark:bg-white dark:text-slate-900"
+                : "bg-white text-slate-600 border-slate-200 hover:border-slate-300 dark:bg-slate-900 dark:text-slate-300 dark:border-slate-700",
+            )}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+
       {loading && alerts.length === 0 && (
         <p className="text-sm text-slate-400 text-center py-10">Carregando...</p>
+      )}
+      {!loading && alerts.length > 0 && visibleAlerts.length === 0 && (
+        <p className="text-sm text-slate-400 text-center py-10">Nenhum alerta com essa criticidade.</p>
       )}
       {!loading && alerts.length === 0 && (
         <p className="text-sm text-slate-400 text-center py-10">
@@ -669,11 +720,13 @@ function AlertasTab({
         </p>
       )}
       <div className="px-5 pt-3 pb-4 space-y-3">
-        {alerts.map((alert) => {
+        {visibleAlerts.map((alert) => {
           const Icon = alertIcon(alert.type)
+          const criticality = criticalityFromSeverity[alert.severity]
+          const CriticalityIcon = criticalityIcon[criticality]
           return (
             <div key={alert.id}
-              className={cn("flex items-start gap-3 p-3 rounded-xl border-2 transition-all shadow-sm hover:shadow-md", severityColor[alert.severity])}>
+              className={cn("flex items-start gap-3 p-3 rounded-xl border-2 transition-all shadow-sm hover:shadow-md", criticalityCardColor[criticality])}>
               <Icon className="h-4 w-4 mt-0.5 shrink-0" />
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2 flex-wrap">
@@ -681,9 +734,22 @@ function AlertasTab({
                   {alert.count !== undefined && alert.count > 1 && (
                     <Badge variant="outline" className="text-[10px] h-4 px-1.5">{alert.count}</Badge>
                   )}
-                  <Badge className={cn("text-xs ml-auto", severityBadgeColor[alert.severity])}>
-                    {severityLabel[alert.severity]}
-                  </Badge>
+                  <TooltipProvider delayDuration={300}>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Badge
+                          className={cn("text-xs ml-auto gap-1", criticalityBadgeColor[criticality])}
+                          aria-label={`Criticidade: ${criticalityLabel[criticality]} — ${criticalityDescription[criticality]}`}
+                        >
+                          <CriticalityIcon className="h-3 w-3" aria-hidden="true" />
+                          {criticalityLabel[criticality]}
+                        </Badge>
+                      </TooltipTrigger>
+                      <TooltipContent className="text-xs max-w-[220px]">
+                        {criticalityDescription[criticality]}
+                      </TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
                 </div>
                 <p className="text-xs mt-1 opacity-80">{alert.message}</p>
                 {alert.created_at && (

@@ -2040,7 +2040,12 @@ class ApiClient {
   }
 
   async getUnreadSystemAlertsCount(filters?: Record<string, any>) {
-    return this.get<{ count: number }>("/system-alerts/unread-count", filters);
+    // bySeverity só vem preenchido quando filters.category === "alerta" — é
+    // a quebra por criticidade (info→verde, warning→amarelo, error→vermelho).
+    return this.get<{ count: number; bySeverity?: { info: number; warning: number; error: number } }>(
+      "/system-alerts/unread-count",
+      filters,
+    );
   }
 
   async archiveSystemAlert(id: string) {
