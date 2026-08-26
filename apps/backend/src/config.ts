@@ -27,6 +27,12 @@ const baseEnvSchema = z.object({
   ROADMAP_HMAC_SECRET: z.string().optional(),
   ROADMAP_REQUEST_TIMEOUT_MS: z.coerce.number().int().positive().default(5000),
   ROADMAP_INTERNAL_URL: z.string().optional(),
+
+  // ── Motor de alertas automáticos (Padrão → Regra → Ocorrência) ──────────
+  // Intervalo do job que varre tarefas ativas em busca de prazo próximo/
+  // atrasado. Desligado em testes (o job só é registrado a partir de
+  // src/index.ts — nunca importado pelos testes, ver run-db-tests.ts).
+  ALERT_ENGINE_INTERVAL_MS: z.coerce.number().int().positive().default(300000),
   // Purpose-separated from ROADMAP_HMAC_* — only ever signs the SSO
   // handoff (POST .../allka/sso/tickets on the Roadmap), never ticket
   // creation/lookup. Deliberately optional: lib/roadmap-client.ts falls

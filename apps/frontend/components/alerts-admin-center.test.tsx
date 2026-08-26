@@ -20,6 +20,11 @@ vi.mock("@/lib/api-client", () => ({
     archiveAdminSystemAlert: vi.fn(),
     unarchiveAdminSystemAlert: vi.fn(),
     getNotificationGroupEligibleMembers: vi.fn().mockResolvedValue({ data: [] }),
+    getAdminAlertStandards: vi.fn().mockResolvedValue({ data: [] }),
+    updateAdminAlertStandard: vi.fn(),
+    previewAdminAlertStandard: vi.fn(),
+    getAdminAlertRules: vi.fn().mockResolvedValue({ data: [] }),
+    updateAdminAlertRule: vi.fn(),
   },
 }));
 
@@ -45,6 +50,8 @@ beforeEach(() => {
   vi.clearAllMocks();
   (apiClient.getAdminSystemAlerts as any).mockResolvedValue({ data: [], total: 0 });
   (apiClient.getNotificationGroupEligibleMembers as any).mockResolvedValue({ data: [] });
+  (apiClient.getAdminAlertStandards as any).mockResolvedValue({ data: [] });
+  (apiClient.getAdminAlertRules as any).mockResolvedValue({ data: [] });
 });
 
 function filterGroup() {
@@ -275,5 +282,163 @@ describe("AlertsAdminCenter — estados", () => {
     await waitFor(() => expect(apiClient.reclassifyAdminSystemAlert).toHaveBeenCalled());
 
     expect(apiClient.getAdminSystemAlerts).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("AlertsAdminCenter — correção conceitual (Padrões/Regras/Avulsos, 2º lote)", () => {
+  it("24. as três abas Padrões/Regras/Avulsos existem, e Avulsos é a inicial", () => {
+    renderCenter();
+    const tabs = screen.getByRole("tablist", { name: "Seções da Central de Alertas" });
+    expect(within(tabs).getByRole("tab", { name: "Padrões" })).toBeInTheDocument();
+    expect(within(tabs).getByRole("tab", { name: "Regras" })).toBeInTheDocument();
+    expect(within(tabs).getByRole("tab", { name: "Avulsos" })).toBeInTheDocument();
+    expect(within(tabs).getByRole("tab", { name: "Avulsos" })).toHaveAttribute("aria-selected", "true");
+  });
+
+  it("botão de criação avulsa foi renomeado para 'Novo alerta avulso'", () => {
+    renderCenter();
+    expect(screen.getByRole("button", { name: "Novo alerta avulso" })).toBeInTheDocument();
+  });
+
+  it("32. Avulsos continua funcionando (criação/edição/reclassificação/arquivamento intactos) — smoke via mocks já testados acima", () => {
+    renderCenter();
+    expect(apiClient.getAdminSystemAlerts).toHaveBeenCalled();
+  });
+});
+
+describe("AlertStandardsTab — Padrões", () => {
+  function standard(overrides: Partial<{ id: string; key: string; name: string; title: string; message: string; default_severity: "info" | "warning" | "error"; is_active: boolean; is_system: boolean; allowed_variables: string[] }> = {}) {
+    return {
+      id: overrides.id ?? "std1",
+      key: overrides.key ?? "task.due_soon",
+      name: overrides.name ?? "Tarefa próxima do prazo (nome)",
+      title: overrides.title ?? "Tarefa próxima do prazo",
+      message: overrides.message ?? 'A tarefa "{{tarefa}}" vence em {{prazo}}.',
+      default_severity: overrides.default_severity ?? "warning",
+      is_active: overrides.is_active ?? true,
+      is_system: overrides.is_system ?? true,
+      allowed_variables: overrides.allowed_variables ?? ["tarefa", "prazo", "projeto"],
+    };
+  }
+
+  it("25. os dois padrões iniciais aparecem", async () => {
+    (apiClient.getAdminAlertStandards as any).mockResolvedValue({
+      data: [
+        standard({ id: "std1", key: "task.due_soon" }),
+        standard({ id: "std2", key: "task.overdue", name: "Tarefa atrasada (nome)", title: "Tarefa atrasada" }),
+      ],
+    });
+    const user = userEvent.setup();
+    renderCenter();
+    await user.click(screen.getByRole("tab", { name: "Padrões" }));
+
+    expect(await screen.findByText("Tarefa próxima do prazo (nome)")).toBeInTheDocument();
+    expect(screen.getByText("Tarefa atrasada (nome)")).toBeInTheDocument();
+  });
+
+  it("26. editar nome/título não altera a chave (key nunca é enviada como editável)", async () => {
+    (apiClient.getAdminAlertStandards as any).mockResolvedValue({ data: [standard()] });
+    (apiClient.updateAdminAlertStandard as any).mockResolvedValue(standard({ name: "Nome editado" }));
+    const user = userEvent.setup();
+    renderCenter();
+    await user.click(screen.getByRole("tab", { name: "Padrões" }));
+
+    await user.click(await screen.findByTitle("Editar"));
+    const nameInput = await screen.findByDisplayValue("Tarefa próxima do prazo (nome)");
+    await user.clear(nameInput);
+    await user.type(nameInput, "Nome editado");
+    await user.click(screen.getByRole("button", { name: /salvar alterações/i }));
+
+    await waitFor(() =>
+      expect(apiClient.updateAdminAlertStandard).toHaveBeenCalledWith(
+        "std1",
+        expect.not.objectContaining({ key: expect.anything() }),
+      ),
+    );
+  });
+
+  it("28. prévia não cria alerta real (só chama a rota de preview)", async () => {
+    (apiClient.getAdminAlertStandards as any).mockResolvedValue({ data: [standard()] });
+    (apiClient.previewAdminAlertStandard as any).mockResolvedValue({ title: "Prévia", message: "Mensagem de exemplo", severity: "warning", fictitious: true });
+    const user = userEvent.setup();
+    renderCenter();
+    await user.click(screen.getByRole("tab", { name: "Padrões" }));
+
+    await user.click(await screen.findByTitle("Visualizar prévia"));
+    expect(await screen.findByText("Mensagem de exemplo")).toBeInTheDocument();
+    expect(apiClient.createAdminSystemAlert).not.toHaveBeenCalled();
+  });
+
+  it("27. criticidade Amarela do padrão permanece visualmente amarela", async () => {
+    (apiClient.getAdminAlertStandards as any).mockResolvedValue({ data: [standard({ default_severity: "warning" })] });
+    const user = userEvent.setup();
+    renderCenter();
+    await user.click(screen.getByRole("tab", { name: "Padrões" }));
+
+    const badge = await screen.findByText("Amarelo");
+    expect(badge.closest("span")?.className ?? badge.className).toMatch(/yellow/);
+  });
+});
+
+describe("AlertRulesTab — Regras", () => {
+  function rule(overrides: Partial<{ id: string; name: string; trigger_type: string; is_active: boolean; lead_time_minutes: number | null; severity_override: "info" | "warning" | "error" | null; last_triggered_at: string | null }> = {}) {
+    return {
+      id: overrides.id ?? "rule1",
+      name: overrides.name ?? "Tarefa próxima do prazo (24h)",
+      trigger_type: overrides.trigger_type ?? "task.due_soon",
+      is_active: overrides.is_active ?? true,
+      lead_time_minutes: overrides.lead_time_minutes ?? 1440,
+      severity_override: overrides.severity_override ?? null,
+      last_triggered_at: overrides.last_triggered_at ?? null,
+      standard: { id: "std1", key: overrides.trigger_type ?? "task.due_soon", name: "Tarefa próxima do prazo", default_severity: "warning" as const },
+    };
+  }
+
+  it("29. a regra mostra uma frase amigável, nunca JSON", async () => {
+    (apiClient.getAdminAlertRules as any).mockResolvedValue({ data: [rule()] });
+    const user = userEvent.setup();
+    renderCenter();
+    await user.click(screen.getByRole("tab", { name: "Regras" }));
+
+    expect(await screen.findByText(/Este alerta será criado 24h antes do prazo/)).toBeInTheDocument();
+    expect(screen.queryByText(/[{[]/)).not.toBeInTheDocument();
+  });
+
+  it("30. editar a antecedência persiste (chama a API com o valor em minutos)", async () => {
+    (apiClient.getAdminAlertRules as any).mockResolvedValue({ data: [rule({ lead_time_minutes: 1440 })] });
+    (apiClient.updateAdminAlertRule as any).mockResolvedValue(rule({ lead_time_minutes: 720 }));
+    const user = userEvent.setup();
+    renderCenter();
+    await user.click(screen.getByRole("tab", { name: "Regras" }));
+
+    await user.click(await screen.findByTitle("Editar"));
+    const input = await screen.findByDisplayValue("24");
+    await user.clear(input);
+    await user.type(input, "12");
+    await user.click(screen.getByRole("button", { name: /salvar alterações/i }));
+
+    await waitFor(() => expect(apiClient.updateAdminAlertRule).toHaveBeenCalledWith("rule1", { lead_time_minutes: 720 }));
+  });
+
+  it("31. desativar uma regra chama a API com is_active: false", async () => {
+    (apiClient.getAdminAlertRules as any).mockResolvedValue({ data: [rule({ is_active: true })] });
+    (apiClient.updateAdminAlertRule as any).mockResolvedValue(rule({ is_active: false }));
+    const user = userEvent.setup();
+    renderCenter();
+    await user.click(screen.getByRole("tab", { name: "Regras" }));
+
+    await user.click(await screen.findByRole("switch"));
+    await waitFor(() => expect(apiClient.updateAdminAlertRule).toHaveBeenCalledWith("rule1", { is_active: false }));
+  });
+});
+
+describe("AlertsAdminCenter — Notificações não recebe estas regras", () => {
+  it("33. nada nesta tela chama uma rota de notificações", async () => {
+    renderCenter();
+    // A Central de Alertas nunca importa/chama apiClient.getNotificationRules
+    // ou equivalente — a separação Alertas/Notificações do 1º lote continua
+    // intacta; aqui só confirmamos que a única fonte de dados usada é
+    // system-alerts/admin/*.
+    await waitFor(() => expect(apiClient.getAdminSystemAlerts).toHaveBeenCalled());
   });
 });

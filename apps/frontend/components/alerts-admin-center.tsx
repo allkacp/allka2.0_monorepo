@@ -1,8 +1,16 @@
 /**
  * Central de Alertas (ata 2026-08) — área "Gerenciar", só pra Admin Master.
- * Cria/edita/reclassifica/arquiva SystemAlert reais (category="alerta")
- * pela interface, sem depender de alteração de código. Nenhuma tabela nova,
- * nenhum motor de regras — os mesmos alertas que já existem.
+ *
+ * Estrutura correta (2º lote, correção conceitual): Padrão → Regra →
+ * Verificação automática → Ocorrência. Três abas internas:
+ *  - "Padrões": conteúdo/aparência dos alertas automáticos (editável).
+ *  - "Regras": quando cada padrão dispara (editável, gatilhos fixos).
+ *  - "Avulsos": criação/edição/reclassificação/arquivamento manual — é a
+ *    Central original do 1º lote, preservada aqui sem alteração de
+ *    comportamento (só renomeada "Novo alerta" → "Novo alerta avulso").
+ *
+ * A ocorrência automática continua sendo um SystemAlert comum — nenhuma
+ * tabela paralela, ver src/lib/alert-engine.ts no backend.
  */
 import { useCallback, useEffect, useState } from "react";
 import { Archive, ArchiveRestore, Pencil, Plus, Search } from "lucide-react";
@@ -16,7 +24,16 @@ import {
   type Criticality,
 } from "@/components/alerts-header-icon";
 import { AlertAdminFormModal, type AlertAdminDraft } from "@/components/modals/alert-admin-form-modal";
+import { AlertStandardsTab } from "@/components/alert-standards-tab";
+import { AlertRulesTab } from "@/components/alert-rules-tab";
 import { cn } from "@/lib/utils";
+
+type AdminSubview = "padroes" | "regras" | "avulsos";
+const SUBVIEWS: { value: AdminSubview; label: string }[] = [
+  { value: "padroes", label: "Padrões" },
+  { value: "regras", label: "Regras" },
+  { value: "avulsos", label: "Avulsos" },
+];
 
 interface AdminAlertItem {
   id: string;
@@ -47,6 +64,7 @@ function formatDate(dateStr: string): string {
 }
 
 export function AlertsAdminCenter() {
+  const [subview, setSubview] = useState<AdminSubview>("avulsos");
   const [alerts, setAlerts] = useState<AdminAlertItem[]>([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(false);
@@ -157,7 +175,31 @@ export function AlertsAdminCenter() {
 
   return (
     <div className="flex flex-col h-full min-h-0">
-      <div className="flex items-center gap-2 px-5 pt-3 pb-2 flex-wrap shrink-0">
+      <div className="flex items-center gap-1.5 px-5 pt-3 pb-2 flex-wrap shrink-0" role="tablist" aria-label="Seções da Central de Alertas">
+        {SUBVIEWS.map(({ value, label }) => (
+          <button
+            key={value}
+            role="tab"
+            aria-selected={subview === value}
+            onClick={() => setSubview(value)}
+            className={cn(
+              "text-xs font-medium px-3 py-1.5 rounded-lg transition-colors",
+              subview === value
+                ? "bg-slate-800 text-white dark:bg-white dark:text-slate-900"
+                : "text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800",
+            )}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+
+      {subview === "padroes" && <AlertStandardsTab />}
+      {subview === "regras" && <AlertRulesTab />}
+
+      {subview === "avulsos" && (
+        <>
+      <div className="flex items-center gap-2 px-5 pt-1 pb-2 flex-wrap shrink-0">
         <div className="relative flex-1 min-w-40">
           <Search className="h-3.5 w-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
           <Input
@@ -169,7 +211,7 @@ export function AlertsAdminCenter() {
         </div>
         <Button size="sm" className="h-8 text-xs gap-1.5 btn-brand border-0" onClick={() => { setEditingDraft(null); setFormOpen(true); }}>
           <Plus className="h-3.5 w-3.5" />
-          Novo alerta
+          Novo alerta avulso
         </Button>
       </div>
 
@@ -337,6 +379,8 @@ export function AlertsAdminCenter() {
         confirmText={archiving?.is_archived ? "Desarquivar" : "Arquivar"}
         destructive={false}
       />
+        </>
+      )}
     </div>
   );
 }

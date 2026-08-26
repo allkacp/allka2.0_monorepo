@@ -2081,6 +2081,29 @@ class ApiClient {
     return this.patch(`/system-alerts/admin/${id}/unarchive`, {});
   }
 
+  // ─── Padrões e Regras (ata 2026-08, 2º lote) ───────────────────────────────
+  async getAdminAlertStandards() {
+    return this.get("/system-alerts/admin/standards");
+  }
+  async updateAdminAlertStandard(
+    id: string,
+    data: { name?: string; title?: string; message?: string; default_severity?: "info" | "warning" | "error"; is_active?: boolean },
+  ) {
+    return this.patch(`/system-alerts/admin/standards/${id}`, data);
+  }
+  async previewAdminAlertStandard(id: string) {
+    return this.post(`/system-alerts/admin/standards/${id}/preview`, {});
+  }
+  async getAdminAlertRules() {
+    return this.get("/system-alerts/admin/rules");
+  }
+  async updateAdminAlertRule(
+    id: string,
+    data: { is_active?: boolean; lead_time_minutes?: number | null; severity_override?: "info" | "warning" | "error" | null },
+  ) {
+    return this.patch(`/system-alerts/admin/rules/${id}`, data);
+  }
+
   // ─── Preferências pessoais de notificação (evento × canal) ────────────────
   async getNotificationPreferences() {
     return this.get<{

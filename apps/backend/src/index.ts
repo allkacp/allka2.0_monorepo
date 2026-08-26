@@ -7,6 +7,7 @@ import { ensureDefaultKnowledgeCategories } from "./lib/ai-knowledge-base";
 import { ensureDefaultAIServices } from "./lib/ai-usage-tracker";
 import { isMetaIntegrationConfigured } from "./lib/meta-ads-client";
 import { runDailySyncForAllConnections } from "./lib/meta-ads-sync";
+import { ensureDefaultAlertStandardsAndRules, runAlertEngineOnceGuarded } from "./lib/alert-engine";
 
 // Mascara a URL do banco: mantém apenas o caminho do arquivo, omite credenciais
 function maskDatabaseUrl(url: string): string {
@@ -75,6 +76,9 @@ async function main() {
   // Registro de custo de IA (AIServiceConfig "gemini" + preço de partida dos
   // modelos) — ver Configurações > Uso e Custos de IA.
   await ensureDefaultAIServices();
+  // Padrões/Regras obrigatórios da Central de Alertas (tarefa próxima do
+  // prazo / tarefa atrasada) — idempotente por `key`, ver alert-engine.ts.
+  await ensureDefaultAlertStandardsAndRules();
 
   await logStartupState();
 
@@ -92,6 +96,18 @@ async function main() {
   } else {
     console.log("ℹ️  Integração Meta Ads não configurada — sincronização diária desativada.");
   }
+
+  // Motor de alertas automáticos (tarefa próxima do prazo/atrasada) — varre
+  // em intervalo fixo, configurável via ALERT_ENGINE_INTERVAL_MS (padrão
+  // 5 min). Registrado só aqui — nunca em módulo importado pelos testes —
+  // pra ficar naturalmente desligado em test:* sem precisar de guarda por
+  // NODE_ENV (mesmo raciocínio do cron do Meta Ads acima).
+  setInterval(() => {
+    runAlertEngineOnceGuarded().catch((err) =>
+      console.error("❌ Falha na varredura do motor de alertas:", err),
+    );
+  }, config.ALERT_ENGINE_INTERVAL_MS).unref();
+  console.log(`🔔 Motor de alertas automáticos ativo (intervalo: ${config.ALERT_ENGINE_INTERVAL_MS}ms).`);
 
   // Passenger/cPanel sets PORT as a socket path or port number
   // Use process.env.PORT directly to support both TCP and Unix socket

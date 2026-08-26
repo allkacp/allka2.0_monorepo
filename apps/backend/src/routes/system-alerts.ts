@@ -4,6 +4,7 @@ import { z } from "zod";
 import { prisma } from "../lib/prisma";
 import { verifyToken, requireAdminMaster } from "../middleware/auth";
 import { writeAccessAudit } from "../lib/product-feedback-service";
+import { findUnknownVariables, renderTemplate, TRIGGER_TYPES } from "../lib/alert-engine";
 
 const router = Router();
 
@@ -618,6 +619,212 @@ router.patch(
         after: { is_archived: false },
       });
       res.json(await attachDestinatario(updated));
+    } catch (err) {
+      next(err);
+    }
+  },
+);
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Padrões e Regras (ata 2026-08, 2º lote) — Padrão → Regra → Verificação
+// automática → Ocorrência. As ocorrências continuam sendo criadas só pelo
+// motor (src/lib/alert-engine.ts); estas rotas só administram o CONTEÚDO
+// (Padrão) e o COMPORTAMENTO (Regra), nunca criam SystemAlert diretamente.
+// ═══════════════════════════════════════════════════════════════════════════
+
+// ── GET /api/system-alerts/admin/standards ────────────────────────────────
+
+router.get(
+  "/admin/standards",
+  verifyToken,
+  requireAdminMaster,
+  async (_req: Request, res: Response, next: NextFunction) => {
+    try {
+      const standards = await prisma.alertStandard.findMany({ orderBy: { created_at: "asc" } });
+      res.json({
+        data: standards.map((s) => ({
+          ...s,
+          allowed_variables: JSON.parse(s.allowed_variables_json) as string[],
+        })),
+      });
+    } catch (err) {
+      next(err);
+    }
+  },
+);
+
+// ── PATCH /api/system-alerts/admin/standards/:id — nunca a key ───────────
+
+const editStandardSchema = z.object({
+  name: z.string().trim().min(3).max(200).optional(),
+  title: z.string().trim().min(3).max(200).optional(),
+  message: z.string().trim().min(3).max(2000).optional(),
+  default_severity: z.enum(["info", "warning", "error"]).optional(),
+  is_active: z.boolean().optional(),
+});
+
+router.patch(
+  "/admin/standards/:id",
+  verifyToken,
+  requireAdminMaster,
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const body = editStandardSchema.safeParse(req.body);
+      if (!body.success) {
+        res.status(400).json({ error: "Dados inválidos", details: body.error.flatten() });
+        return;
+      }
+      if (Object.keys(body.data).length === 0) {
+        res.status(400).json({ error: "Informe ao menos um campo para editar" });
+        return;
+      }
+
+      const before = await prisma.alertStandard.findUnique({ where: { id: req.params.id as string } });
+      if (!before) {
+        res.status(404).json({ error: "Padrão não encontrado" });
+        return;
+      }
+
+      // Variável fora da allowlist deste padrão nunca é aceita em título/
+      // mensagem — nunca texto livre representando código.
+      const allowed = JSON.parse(before.allowed_variables_json) as string[];
+      const titleToCheck = body.data.title ?? before.title;
+      const messageToCheck = body.data.message ?? before.message;
+      const unknown = [...findUnknownVariables(titleToCheck, allowed), ...findUnknownVariables(messageToCheck, allowed)];
+      if (unknown.length > 0) {
+        res.status(400).json({ error: `Variável não permitida: ${[...new Set(unknown)].join(", ")}` });
+        return;
+      }
+
+      const updated = await prisma.alertStandard.update({
+        where: { id: before.id },
+        data: { ...body.data, updated_by_id: req.user!.id },
+      });
+
+      await writeAccessAudit({
+        actorId: req.user!.id,
+        action: "alert_standard.updated",
+        before: { alert_standard_id: before.id, name: before.name, title: before.title, message: before.message, default_severity: before.default_severity, is_active: before.is_active },
+        after: { alert_standard_id: before.id, ...body.data },
+      });
+
+      res.json({ ...updated, allowed_variables: allowed });
+    } catch (err) {
+      next(err);
+    }
+  },
+);
+
+// ── POST /api/system-alerts/admin/standards/:id/preview — nunca cria alerta
+
+router.post(
+  "/admin/standards/:id/preview",
+  verifyToken,
+  requireAdminMaster,
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const standard = await prisma.alertStandard.findUnique({ where: { id: req.params.id as string } });
+      if (!standard) {
+        res.status(404).json({ error: "Padrão não encontrado" });
+        return;
+      }
+      const allowed = JSON.parse(standard.allowed_variables_json) as string[];
+      // Dados fictícios claramente identificados — nunca lê tarefa real.
+      const fixture: Record<string, string> = {
+        tarefa: "[EXEMPLO] Tarefa de demonstração",
+        prazo: "31/12/2026",
+        projeto: "[EXEMPLO] Projeto de demonstração",
+      };
+      res.json({
+        title: renderTemplate(standard.title, fixture, allowed),
+        message: renderTemplate(standard.message, fixture, allowed),
+        severity: standard.default_severity,
+        fictitious: true,
+      });
+    } catch (err) {
+      next(err);
+    }
+  },
+);
+
+// ── GET /api/system-alerts/admin/rules ────────────────────────────────────
+
+router.get(
+  "/admin/rules",
+  verifyToken,
+  requireAdminMaster,
+  async (_req: Request, res: Response, next: NextFunction) => {
+    try {
+      const rules = await prisma.alertRule.findMany({
+        orderBy: { created_at: "asc" },
+        include: { standard: { select: { id: true, key: true, name: true, default_severity: true } } },
+      });
+      const lastRuns = await prisma.systemAlert.groupBy({
+        by: ["rule_id"],
+        where: { rule_id: { in: rules.map((r) => r.id) } },
+        _max: { created_at: true },
+      });
+      const lastRunByRule = new Map(lastRuns.map((r) => [r.rule_id, r._max.created_at]));
+
+      res.json({
+        data: rules.map((r) => ({ ...r, last_triggered_at: lastRunByRule.get(r.id) ?? null })),
+      });
+    } catch (err) {
+      next(err);
+    }
+  },
+);
+
+// ── PATCH /api/system-alerts/admin/rules/:id ──────────────────────────────
+
+const editRuleSchema = z.object({
+  is_active: z.boolean().optional(),
+  lead_time_minutes: z.number().int().min(1).max(30 * 24 * 60).optional().nullable(),
+  severity_override: z.enum(["info", "warning", "error"]).nullable().optional(),
+});
+
+router.patch(
+  "/admin/rules/:id",
+  verifyToken,
+  requireAdminMaster,
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const body = editRuleSchema.safeParse(req.body);
+      if (!body.success) {
+        res.status(400).json({ error: "Dados inválidos", details: body.error.flatten() });
+        return;
+      }
+      if (Object.keys(body.data).length === 0) {
+        res.status(400).json({ error: "Informe ao menos um campo para editar" });
+        return;
+      }
+
+      const before = await prisma.alertRule.findUnique({ where: { id: req.params.id as string } });
+      if (!before) {
+        res.status(404).json({ error: "Regra não encontrada" });
+        return;
+      }
+
+      // Antecedência só faz sentido pra task.due_soon — não deixa configurar
+      // à toa num gatilho que nunca a usa.
+      if (body.data.lead_time_minutes !== undefined && before.trigger_type !== TRIGGER_TYPES[0]) {
+        res.status(400).json({ error: "Este gatilho não usa antecedência" });
+        return;
+      }
+
+      const updated = await prisma.alertRule.update({
+        where: { id: before.id },
+        data: { ...body.data, updated_by_id: req.user!.id },
+      });
+
+      await writeAccessAudit({
+        actorId: req.user!.id,
+        action: "alert_rule.updated",
+        before: { alert_rule_id: before.id, is_active: before.is_active, lead_time_minutes: before.lead_time_minutes, severity_override: before.severity_override },
+        after: { alert_rule_id: before.id, ...body.data },
+      });
+
+      res.json(updated);
     } catch (err) {
       next(err);
     }

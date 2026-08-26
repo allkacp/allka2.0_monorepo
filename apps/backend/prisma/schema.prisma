@@ -1454,6 +1454,9 @@ model ProjectTask {
   @@index([nomade_responsavel_id])
   @@index([responsavel_agencia_id])
   @@index([lider_responsavel_id])
+  // Usado pelo motor de alertas automáticos (src/lib/alert-engine.ts) pra
+  // varrer tarefas ativas com prazo sem full scan.
+  @@index([status, due_date])
   @@map("project_tasks")
 }
 
@@ -1743,6 +1746,73 @@ model TaskAssignmentHistory {
 
 // ─── SystemAlert ──────────────────────────────────────────────────────────────
 
+// ─── Motor de alertas automáticos (ata 2026-08, 2º lote) ────────────────────
+// Padrão → Regra → Verificação automática → Ocorrência (SystemAlert). Um
+// Padrão define conteúdo/aparência (reaproveitável), uma Regra define quando
+// disparar (usa um Padrão), e cada disparo real vira um SystemAlert comum —
+// não há tabela paralela de "ocorrências". Ver src/lib/alert-engine.ts.
+model AlertStandard {
+  id         String   @id @default(cuid())
+  // Chave estável — nunca editável pela interface, é o que a Regra e o motor
+  // usam para reconhecer o padrão (ex.: "task.due_soon", "task.overdue").
+  key        String   @unique
+  name       String
+  // Título/mensagem-modelo, com variáveis entre chaves duplas — ver
+  // `allowed_variables_json` (lista fechada; nunca código executável).
+  title      String
+  message    String   @db.LongText
+  default_severity String @default("warning")
+  // "info" | "warning" | "error"
+  is_active  Boolean  @default(true)
+  // Padrão nascido do bootstrap do sistema (task.due_soon/task.overdue) —
+  // não pode ser excluído fisicamente, só desativado.
+  is_system  Boolean  @default(false)
+  // JSON array de strings — nomes de variáveis aceitas na mensagem deste
+  // padrão (ex.: ["tarefa","prazo","projeto"]). Validado no backend a cada
+  // gravação; nunca interpretado como código.
+  allowed_variables_json String @db.LongText
+
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+  created_by_id String?
+  updated_by_id String?
+
+  rules AlertRule[]
+  alerts SystemAlert[]
+
+  @@map("alert_standards")
+}
+
+model AlertRule {
+  id         String        @id @default(cuid())
+  standard_id String
+  standard   AlertStandard @relation(fields: [standard_id], references: [id])
+  name       String
+  // Único construtor aceito nesta fase — não é um DSL genérico:
+  // "task.due_soon" | "task.overdue".
+  trigger_type String
+  is_active  Boolean       @default(true)
+  // Antecedência em minutos (só usado por task.due_soon).
+  lead_time_minutes Int?
+  // Sobrescreve a criticidade padrão do Padrão, quando preenchido.
+  severity_override String?
+  // JSON com parâmetros seguros do gatilho (ex.: {}) — nunca código/SQL.
+  // Reservado para parâmetros futuros deste mesmo conjunto fechado de
+  // gatilhos; validado com allowlist no backend.
+  config_json String?      @db.LongText
+
+  created_at DateTime      @default(now())
+  updated_at DateTime      @updatedAt
+  created_by_id String?
+  updated_by_id String?
+
+  alerts SystemAlert[]
+
+  @@index([standard_id])
+  @@index([trigger_type])
+  @@map("alert_rules")
+}
+
 model SystemAlert {
   id          String    @id @default(cuid())
   type        String
@@ -1780,10 +1850,28 @@ model SystemAlert {
   notification_message_id String?
   notification_message    NotificationMessage? @relation(fields: [notification_message_id], references: [id], onDelete: SetNull)
 
+  // ── Motor automático (ata 2026-08, 2º lote) — todos opcionais/nulos em
+  // registros antigos, que continuam funcionando sem eles. ──────────────
+  standard_id      String?
+  standard         AlertStandard? @relation(fields: [standard_id], references: [id])
+  rule_id          String?
+  rule             AlertRule?     @relation(fields: [rule_id], references: [id])
+  // Chave determinística (regra+tarefa+gatilho) usada só para checar
+  // duplicidade antes de criar — não tem constraint único porque históricos
+  // resolvidos com a mesma chave podem coexistir.
+  dedupe_key       String?
+  resolved_at      DateTime?
+  // "condition_cleared" | "task_completed" | "task_cancelled" | "superseded"
+  // — motivo controlado, nunca texto livre do administrador.
+  resolution_reason String?
+
   @@index([user_id, is_read])
   @@index([user_id, is_archived])
   @@index([user_id, category, is_read])
   @@index([notification_message_id])
+  @@index([dedupe_key])
+  @@index([rule_id])
+  @@index([standard_id])
   @@map("system_alerts")
 }
 
