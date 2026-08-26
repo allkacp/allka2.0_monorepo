@@ -13,7 +13,7 @@
  * tabela paralela, ver src/lib/alert-engine.ts no backend.
  */
 import { useCallback, useEffect, useState } from "react";
-import { Archive, ArchiveRestore, Pencil, Plus, Search } from "lucide-react";
+import { Archive, ArchiveRestore, Clock, Pencil, Plus, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -26,12 +26,15 @@ import {
 import { AlertAdminFormModal, type AlertAdminDraft } from "@/components/modals/alert-admin-form-modal";
 import { AlertStandardsTab } from "@/components/alert-standards-tab";
 import { AlertRulesTab } from "@/components/alert-rules-tab";
+import { AlertSchedulesTab } from "@/components/alert-schedules-tab";
+import { AlertImageThumbnail } from "@/components/alert-image-lightbox";
 import { cn } from "@/lib/utils";
 
-type AdminSubview = "padroes" | "regras" | "avulsos";
+type AdminSubview = "padroes" | "regras" | "programados" | "avulsos";
 const SUBVIEWS: { value: AdminSubview; label: string }[] = [
   { value: "padroes", label: "Padrões" },
   { value: "regras", label: "Regras" },
+  { value: "programados", label: "Programados" },
   { value: "avulsos", label: "Avulsos" },
 ];
 
@@ -44,6 +47,11 @@ interface AdminAlertItem {
   created_at: string;
   user_id: string | null;
   destinatario: { id: string; name: string; email: string } | null;
+  image_file_name?: string | null;
+  image_alt?: string | null;
+  image_url?: string | null;
+  expires_at?: string | null;
+  resolution_reason?: string | null;
 }
 
 const SEVERITY_BY_CRITICALITY: Record<Criticality, "info" | "warning" | "error"> = {
@@ -121,7 +129,15 @@ export function AlertsAdminCenter() {
     setTotal((t) => Math.max(0, t - 1));
   }
 
-  async function handleCreate(draft: { title: string; message: string; severity: "info" | "warning" | "error"; user_id: string | null }) {
+  async function handleCreate(draft: {
+    title: string;
+    message: string;
+    severity: "info" | "warning" | "error";
+    user_id: string | null;
+    image_file_name?: string | null;
+    image_alt?: string | null;
+    expires_at?: string | null;
+  }) {
     const created = await apiClient.createAdminSystemAlert(draft);
     // Só insere na visão atual se ainda bate com os filtros (ex.: se o
     // filtro de arquivados está em "true", um alerta recém-criado — sempre
@@ -132,8 +148,17 @@ export function AlertsAdminCenter() {
     }
   }
 
-  async function handleEdit(id: string, draft: { title: string; message: string }) {
-    const updated = await apiClient.updateAdminSystemAlert(id, { title: draft.title, message: draft.message });
+  async function handleEdit(
+    id: string,
+    draft: { title: string; message: string; image_file_name?: string | null; image_alt?: string | null; expires_at?: string | null },
+  ) {
+    const updated = await apiClient.updateAdminSystemAlert(id, {
+      title: draft.title,
+      message: draft.message,
+      image_file_name: draft.image_file_name,
+      image_alt: draft.image_alt,
+      expires_at: draft.expires_at,
+    });
     patchLocalAlert(updated);
   }
 
@@ -196,6 +221,7 @@ export function AlertsAdminCenter() {
 
       {subview === "padroes" && <AlertStandardsTab />}
       {subview === "regras" && <AlertRulesTab />}
+      {subview === "programados" && <AlertSchedulesTab />}
 
       {subview === "avulsos" && (
         <>
@@ -260,6 +286,9 @@ export function AlertsAdminCenter() {
               const CriticalityIcon = criticalityIcon[criticality];
               return (
                 <div key={alert.id} className="flex items-start gap-3 p-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900">
+                  {alert.image_url && (
+                    <AlertImageThumbnail src={apiClient.resolveAlertImageUrl(alert.image_url)} alt={alert.image_alt} />
+                  )}
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 flex-wrap">
                       <p className="text-sm font-medium text-slate-800 dark:text-white truncate">{alert.title}</p>
@@ -267,7 +296,13 @@ export function AlertsAdminCenter() {
                         <CriticalityIcon className="h-3 w-3" aria-hidden="true" />
                         {criticalityLabel[criticality]}
                       </Badge>
-                      {alert.is_archived && (
+                      {alert.is_archived && alert.resolution_reason === "expired" && (
+                        <Badge variant="outline" className="text-[10px] gap-1 text-slate-500">
+                          <Clock className="h-2.5 w-2.5" />
+                          Expirado
+                        </Badge>
+                      )}
+                      {alert.is_archived && alert.resolution_reason !== "expired" && (
                         <Badge variant="outline" className="text-[10px] gap-1">
                           <Archive className="h-2.5 w-2.5" />
                           Arquivado
@@ -322,6 +357,10 @@ export function AlertsAdminCenter() {
                           severity: alert.severity,
                           user_id: alert.user_id,
                           destinatarioLabel: alert.destinatario?.name ?? null,
+                          image_file_name: alert.image_file_name ?? null,
+                          image_alt: alert.image_alt ?? null,
+                          image_url: apiClient.resolveAlertImageUrl(alert.image_url),
+                          expires_at: alert.expires_at ?? null,
                         });
                         setFormOpen(true);
                       }}

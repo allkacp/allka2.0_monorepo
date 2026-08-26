@@ -25,6 +25,13 @@ vi.mock("@/lib/api-client", () => ({
     previewAdminAlertStandard: vi.fn(),
     getAdminAlertRules: vi.fn().mockResolvedValue({ data: [] }),
     updateAdminAlertRule: vi.fn(),
+    getAdminAlertSchedules: vi.fn().mockResolvedValue({ data: [] }),
+    createAdminAlertSchedule: vi.fn(),
+    updateAdminAlertSchedule: vi.fn(),
+    archiveAdminAlertSchedule: vi.fn(),
+    previewAdminAlertSchedule: vi.fn(),
+    resolveAlertImageUrl: vi.fn((url: string | null) => url),
+    fetchAlertImageBlobUrl: vi.fn(() => Promise.resolve("blob:mock-url")),
   },
 }));
 
@@ -86,6 +93,9 @@ describe("AlertsAdminCenter — criação", () => {
         message: "Mensagem do alerta novo",
         severity: "info",
         user_id: null,
+        image_file_name: null,
+        image_alt: null,
+        expires_at: null,
       }),
     );
     expect(await screen.findByText("Alerta Novo")).toBeInTheDocument();

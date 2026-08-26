@@ -18,6 +18,8 @@ import {
   criticalityFromSeverity, criticalityLabel, criticalityIcon, criticalityBadgeColor,
   type Criticality,
 } from "@/components/alerts-header-icon";
+import { AlertImageThumbnail } from "@/components/alert-image-lightbox";
+import { AlertImageField, isAlertImageFieldValid, type AlertImageFieldValue } from "@/components/alert-image-field";
 import { cn } from "@/lib/utils";
 
 interface AlertStandard {
@@ -30,6 +32,9 @@ interface AlertStandard {
   is_active: boolean;
   is_system: boolean;
   allowed_variables: string[];
+  image_file_name?: string | null;
+  image_alt?: string | null;
+  image_url?: string | null;
 }
 
 const SEVERITY_OPTIONS: { value: "info" | "warning" | "error"; criticality: Criticality }[] = [
@@ -48,7 +53,7 @@ export function AlertStandardsTab() {
 
   const [editing, setEditing] = useState<AlertStandard | null>(null);
   const [previewing, setPreviewing] = useState<AlertStandard | null>(null);
-  const [previewData, setPreviewData] = useState<{ title: string; message: string; severity: string } | null>(null);
+  const [previewData, setPreviewData] = useState<{ title: string; message: string; severity: string; image_url?: string | null; image_alt?: string | null } | null>(null);
   const [previewLoading, setPreviewLoading] = useState(false);
 
   const fetchStandards = useCallback(async () => {
@@ -98,6 +103,9 @@ export function AlertStandardsTab() {
               const Icon = criticalityIcon[criticality];
               return (
                 <div key={standard.id} className="flex items-start gap-3 p-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900">
+                  {standard.image_url && (
+                    <AlertImageThumbnail src={apiClient.resolveAlertImageUrl(standard.image_url)} alt={standard.image_alt} />
+                  )}
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 flex-wrap">
                       <p className="text-sm font-medium text-slate-800 dark:text-white truncate">{standard.name}</p>
@@ -147,6 +155,13 @@ export function AlertStandardsTab() {
           {!previewLoading && previewData && (
             <>
               <p className="text-[10px] uppercase tracking-wide text-amber-600 font-medium">Exemplo — dados fictícios</p>
+              {previewData.image_url && (
+                <AlertImageThumbnail
+                  src={apiClient.resolveAlertImageUrl(previewData.image_url)}
+                  alt={previewData.image_alt}
+                  className="h-24 w-24"
+                />
+              )}
               <p className="text-sm font-medium text-slate-800 dark:text-white">{previewData.title}</p>
               <p className="text-sm text-slate-600 dark:text-slate-300">{previewData.message}</p>
             </>
@@ -172,11 +187,20 @@ function EditStandardModal({
   const [severity, setSeverity] = useState(standard.default_severity);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [image, setImage] = useState<AlertImageFieldValue>({
+    image_file_name: standard.image_file_name ?? null,
+    image_alt: standard.image_alt ?? null,
+    image_url: apiClient.resolveAlertImageUrl(standard.image_url),
+  });
 
   async function handleSave() {
     if (saving) return;
     if (!name.trim() || !title.trim() || !message.trim()) {
       setError("Nome, título e mensagem são obrigatórios.");
+      return;
+    }
+    if (!isAlertImageFieldValid(image)) {
+      setError("Texto alternativo é obrigatório quando há imagem.");
       return;
     }
     setSaving(true);
@@ -187,6 +211,8 @@ function EditStandardModal({
         title: title.trim(),
         message: message.trim(),
         default_severity: severity,
+        image_file_name: image.image_file_name,
+        image_alt: image.image_file_name ? image.image_alt : null,
       });
       onSaved(updated);
     } catch (err: any) {
@@ -235,6 +261,7 @@ function EditStandardModal({
             })}
           </div>
         </div>
+        <AlertImageField value={image} onChange={setImage} disabled={saving} />
         {error && <p className="text-xs text-red-500">{error}</p>}
         <div className="flex justify-end gap-2 pt-2">
           <Button variant="outline" size="sm" onClick={onClose} disabled={saving}>Cancelar</Button>

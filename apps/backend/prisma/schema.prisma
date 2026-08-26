@@ -1782,6 +1782,17 @@ model AlertStandard {
   // padrão (ex.: ["tarefa","prazo","projeto"]). Validado no backend a cada
   // gravação; nunca interpretado como código.
   allowed_variables_json String @db.LongText
+  // Imagem opcional do padrão (ata 2026-08, 4º lote) — nome físico gerado
+  // (nunca o nome enviado pelo usuário), servido via rota autenticada, nunca
+  // caminho no disco aceito do cliente. Quando uma ocorrência é criada a
+  // partir deste padrão, o arquivo é COPIADO fisicamente pra um nome novo e
+  // gravado na própria ocorrência — nunca uma referência viva a este campo
+  // — pra que substituir/remover a imagem do padrão depois nunca quebre uma
+  // ocorrência histórica.
+  image_file_name String?
+  // Obrigatório sempre que image_file_name estiver preenchido — validado no
+  // backend, nunca só no frontend.
+  image_alt       String?
 
   created_at DateTime @default(now())
   updated_at DateTime @updatedAt
@@ -1882,8 +1893,24 @@ model SystemAlert {
   dedupe_key       String?        @unique
   resolved_at      DateTime?
   // "condition_cleared" | "task_completed" | "task_cancelled" | "superseded"
-  // — motivo controlado, nunca texto livre do administrador.
+  // | "expired" — motivo controlado, nunca texto livre do administrador.
   resolution_reason String?
+
+  // ── Imagem, expiração e Programados (ata 2026-08, 4º lote) ─────────────
+  // Snapshot próprio da ocorrência — nunca uma referência viva ao Padrão
+  // (ver comentário em AlertStandard.image_file_name). Alerta Avulso com
+  // imagem também usa este mesmo par de campos, upload direto.
+  image_file_name String?
+  image_alt       String?
+  // Expiração da OCORRÊNCIA (distinta do fim da programação, que é
+  // AlertSchedule.ends_at — depois dele a programação para de CRIAR novas
+  // ocorrências; isto aqui é sobre UMA ocorrência já criada deixar de ser
+  // "ativa"). Nulo = nunca expira sozinha. Só usado por Avulsos e
+  // Programados — o motor nunca aplica isto a ocorrências de Regra de
+  // tarefa/etapa (elas não têm este campo preenchido).
+  expires_at       DateTime?
+  schedule_id      String?
+  schedule         AlertSchedule? @relation(fields: [schedule_id], references: [id])
 
   @@index([user_id, is_read])
   @@index([user_id, is_archived])
@@ -1891,7 +1918,73 @@ model SystemAlert {
   @@index([notification_message_id])
   @@index([rule_id])
   @@index([standard_id])
+  @@index([schedule_id])
+  @@index([expires_at])
   @@map("system_alerts")
+}
+
+// ─── AlertSchedule ──────────────────────────────────────────────────────────
+// Alerta Programado (ata 2026-08, 4º lote) — estrutura própria e explícita
+// (nunca cron livre digitado pelo Admin). Cada disparo vira um SystemAlert
+// comum (ver SystemAlert.schedule_id) — não existe tabela paralela de
+// "ocorrência de programação".
+model AlertSchedule {
+  id      String  @id @default(cuid())
+  // Nome administrativo — nunca aparece pro destinatário.
+  name    String
+  title   String
+  message String  @db.LongText
+  severity String @default("warning")
+  // "info" | "warning" | "error"
+  image_file_name String?
+  image_alt       String?
+  // Nulo = alerta Geral (mesmo significado já usado em Avulsos); preenchido
+  // = um usuário específico. Nunca grupo — fora de escopo deste lote.
+  user_id String?
+
+  // "once" | "daily" | "weekly"
+  recurrence_type String
+  // JSON array de inteiros 0-6 (0=domingo), só relevante quando
+  // recurrence_type === "weekly".
+  weekdays_json   String? @db.LongText
+  // "HH:MM" em 24h, no horário local do campo `timezone` abaixo — nunca
+  // interpretado no horário do servidor.
+  time_of_day     String
+  // IANA (ex.: "America/Sao_Paulo") — nunca inferido do servidor.
+  timezone        String  @default("America/Sao_Paulo")
+  // Para "once": o instante exato do envio, já resolvido em UTC no momento
+  // da criação (a partir de data+hora+timezone informados). Para
+  // daily/weekly: a partir de quando a programação passa a valer.
+  starts_at DateTime
+  // Fim da PROGRAMAÇÃO — depois desta data, nenhuma ocorrência nova é
+  // criada (distinto de SystemAlert.expires_at, que é sobre uma ocorrência
+  // já criada). Nulo = sem data de término.
+  ends_at   DateTime?
+  // Expiração aplicada a CADA ocorrência criada por esta programação
+  // (minutos após a criação) — copiado pro SystemAlert.expires_at de cada
+  // disparo. Nulo = ocorrências desta programação não expiram sozinhas.
+  occurrence_expires_minutes Int?
+
+  is_active   Boolean   @default(true)
+  is_archived Boolean   @default(false)
+  archived_at DateTime?
+
+  last_run_at DateTime?
+  // Próximo instante (UTC) em que esta programação deve disparar — nulo
+  // quando não há próxima execução (programação "once" já disparada, ou
+  // passou de `ends_at`). Recalculado a cada execução e a cada edição de
+  // horário/dias/timezone.
+  next_run_at DateTime?
+
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+  created_by_id String?
+  updated_by_id String?
+
+  alerts SystemAlert[]
+
+  @@index([is_active, next_run_at])
+  @@map("alert_schedules")
 }
 
 // ─── Notificacoes ─────────────────────────────────────────────────────────────

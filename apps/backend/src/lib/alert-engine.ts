@@ -23,6 +23,8 @@
 import { prisma } from "./prisma";
 import { writeAccessAudit } from "./product-feedback-service";
 import { isEligibleAdminResponsible } from "./admin-responsible";
+import { getZonedParts, zonedTimeToUtc } from "./timezone";
+import { snapshotAlertImage } from "./alert-image-storage";
 
 export const STANDARD_KEYS = {
   DUE_SOON: "task.due_soon",
@@ -421,6 +423,10 @@ export interface AlertEngineRunResult {
   skippedNoResponsavel: number;
   skippedNoAdminResponsavel: number;
   errors: number;
+  // ── Programados (ata 2026-08, 4º lote) ──────────────────────────────────
+  schedulesFired: number;
+  schedulesSkippedStale: number;
+  expired: number;
 }
 
 /**
@@ -437,6 +443,9 @@ export async function runAlertEngineOnce(): Promise<AlertEngineRunResult> {
     skippedNoResponsavel: 0,
     skippedNoAdminResponsavel: 0,
     errors: 0,
+    schedulesFired: 0,
+    schedulesSkippedStale: 0,
+    expired: 0,
   };
   const now = new Date();
 
@@ -457,6 +466,8 @@ export async function runAlertEngineOnce(): Promise<AlertEngineRunResult> {
     now,
     result,
   );
+  await processSchedules(now, result);
+  await resolveExpiredOccurrences(now, result);
 
   return result;
 }
@@ -867,6 +878,178 @@ async function evaluateAndMaybeResolve(
       await resolveOccurrence(alert.id, "condition_cleared");
       result.resolved++;
     }
+  }
+}
+
+// ── Alertas Programados (ata 2026-08, 4º lote) ───────────────────────────
+// Reaproveita o mesmo ciclo/trava do motor (ver runAlertEngineOnce) — não é
+// um segundo timer. Cada disparo vira um SystemAlert comum, com
+// `schedule_id` marcando a origem, igual `standard_id`/`rule_id` já fazem
+// pras Regras.
+
+// Janela de tolerância: se o servidor ficou desligado durante um ou mais
+// horários programados, só o disparo mais recente dentro desta janela é
+// processado ao voltar — nunca um backlog de dezenas de mensagens atrasadas.
+// Documentado explicitamente porque é uma decisão de produto, não só técnica.
+export const SCHEDULE_CATCH_UP_TOLERANCE_MS = 60 * 60 * 1000; // 1 hora
+
+const CRITICALITY_TYPE_SCHEDULE = "alerta_programado";
+
+type ScheduleRecord = {
+  id: string;
+  title: string;
+  message: string;
+  severity: string;
+  image_file_name: string | null;
+  image_alt: string | null;
+  user_id: string | null;
+  recurrence_type: string;
+  weekdays_json: string | null;
+  time_of_day: string;
+  timezone: string;
+  starts_at: Date;
+  ends_at: Date | null;
+  occurrence_expires_minutes: number | null;
+  is_active: boolean;
+  next_run_at: Date | null;
+};
+
+/**
+ * Calcula o próximo instante (UTC) em que a programação deve disparar, a
+ * partir de `from` (exclusive — sempre estritamente depois). `null` quando
+ * não há próxima execução (ex.: "once" já disparada, ou passou de `ends_at`).
+ */
+export function computeNextRun(schedule: ScheduleRecord, from: Date): Date | null {
+  if (schedule.recurrence_type === "once") {
+    return schedule.starts_at.getTime() > from.getTime() ? schedule.starts_at : null;
+  }
+
+  const [hh, mm] = schedule.time_of_day.split(":").map(Number);
+  const weekdays: number[] = schedule.recurrence_type === "weekly" ? JSON.parse(schedule.weekdays_json ?? "[]") : [];
+
+  let cursor = new Date(Math.max(from.getTime(), schedule.starts_at.getTime() - 24 * 60 * 60 * 1000));
+  for (let i = 0; i < 400; i++) {
+    const zoned = getZonedParts(cursor, schedule.timezone);
+    const candidate = zonedTimeToUtc(zoned.year, zoned.month, zoned.day, hh, mm, schedule.timezone);
+
+    if (schedule.ends_at && candidate.getTime() > schedule.ends_at.getTime()) return null;
+
+    const dayMatches = schedule.recurrence_type === "daily" || weekdays.includes(zoned.weekday);
+    if (
+      dayMatches &&
+      candidate.getTime() > from.getTime() &&
+      candidate.getTime() >= schedule.starts_at.getTime()
+    ) {
+      return candidate;
+    }
+    cursor = new Date(cursor.getTime() + 24 * 60 * 60 * 1000);
+  }
+  return null;
+}
+
+async function processSchedules(now: Date, result: AlertEngineRunResult): Promise<void> {
+  const schedules = await prisma.alertSchedule.findMany({
+    where: { is_active: true, is_archived: false, next_run_at: { lte: now } },
+  });
+
+  for (const schedule of schedules) {
+    try {
+      const scheduledFor = schedule.next_run_at!;
+      const isStale = now.getTime() - scheduledFor.getTime() > SCHEDULE_CATCH_UP_TOLERANCE_MS;
+
+      if (!isStale) {
+        const recipients = schedule.user_id ? [schedule.user_id] : [null];
+        for (const userId of recipients) {
+          await createScheduleOccurrence(schedule, scheduledFor, userId, result);
+        }
+        result.schedulesFired++;
+      } else {
+        result.schedulesSkippedStale++;
+        await writeAccessAudit({
+          actorId: null,
+          action: "alert_schedule.execution_skipped_stale",
+          after: { alert_schedule_id: schedule.id, scheduled_for: scheduledFor, now },
+        });
+      }
+
+      const nextRun = computeNextRun(schedule, isStale ? now : scheduledFor);
+      await prisma.alertSchedule.update({
+        where: { id: schedule.id },
+        data: { last_run_at: scheduledFor, next_run_at: nextRun },
+      });
+    } catch (err) {
+      result.errors++;
+      console.error(`❌ alert-engine: falha ao processar programação ${schedule.id}:`, err);
+    }
+  }
+}
+
+async function createScheduleOccurrence(
+  schedule: ScheduleRecord,
+  scheduledFor: Date,
+  userId: string | null,
+  result: AlertEngineRunResult,
+): Promise<void> {
+  if (userId) {
+    const active = await prisma.user.findUnique({ where: { id: userId }, select: { is_active: true } });
+    if (!active?.is_active) return; // usuário removido/desativado depois de criar a programação — não inventa destinatário
+  }
+  const dedupeKey = `schedule:${schedule.id}:${scheduledFor.toISOString()}:${userId ?? "geral"}`;
+  const existing = await prisma.systemAlert.findFirst({ where: { dedupe_key: dedupeKey, resolved_at: null }, select: { id: true } });
+  if (existing) return;
+
+  const imageFileName = schedule.image_file_name ? snapshotAlertImage(schedule.image_file_name) : null;
+  const expiresAt = schedule.occurrence_expires_minutes
+    ? new Date(scheduledFor.getTime() + schedule.occurrence_expires_minutes * 60 * 1000)
+    : null;
+
+  try {
+    const created = await prisma.systemAlert.create({
+      data: {
+        type: CRITICALITY_TYPE_SCHEDULE,
+        title: schedule.title,
+        message: schedule.message,
+        severity: schedule.severity,
+        category: "alerta",
+        user_id: userId,
+        image_file_name: imageFileName,
+        image_alt: imageFileName ? schedule.image_alt : null,
+        expires_at: expiresAt,
+        schedule_id: schedule.id,
+        entity_type: "alert_schedule",
+        entity_id: schedule.id,
+        dedupe_key: dedupeKey,
+      },
+    });
+    result.created++;
+    await writeAccessAudit({
+      actorId: null,
+      action: "alert_occurrence.auto_created",
+      after: { system_alert_id: created.id, schedule_id: schedule.id, scheduled_for: scheduledFor, user_id: userId },
+    });
+  } catch (err) {
+    if (isUniqueConstraintError(err)) return;
+    throw err;
+  }
+}
+
+// ── Expiração de ocorrência (ata 2026-08, 4º lote) ────────────────────────
+// Distinta do fim da PROGRAMAÇÃO (ends_at, que só impede criar novas
+// ocorrências) — isto encerra ocorrências JÁ CRIADAS (Avulso ou
+// Programado) cujo prazo passou. Nunca toca ocorrência de Regra de tarefa/
+// etapa (elas nunca têm expires_at preenchido).
+async function resolveExpiredOccurrences(now: Date, result: AlertEngineRunResult): Promise<void> {
+  const expired = await prisma.systemAlert.findMany({
+    where: { expires_at: { lte: now }, resolved_at: null, is_archived: false },
+    select: { id: true },
+  });
+  for (const alert of expired) {
+    await prisma.systemAlert.update({
+      where: { id: alert.id },
+      data: { resolved_at: now, resolution_reason: "expired", is_archived: true, archived_at: now, dedupe_key: null },
+    });
+    await writeAccessAudit({ actorId: null, action: "alert_occurrence.expired", after: { system_alert_id: alert.id } });
+    result.expired++;
   }
 }
 

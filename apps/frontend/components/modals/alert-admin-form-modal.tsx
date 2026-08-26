@@ -16,6 +16,7 @@ import {
   criticalityLabel, criticalityIcon, criticalityBadgeColor,
   type Criticality,
 } from "@/components/alerts-header-icon";
+import { AlertImageField, isAlertImageFieldValid, type AlertImageFieldValue } from "@/components/alert-image-field";
 import { cn } from "@/lib/utils";
 
 const TITLE_MAX = 200;
@@ -34,13 +35,43 @@ export interface AlertAdminDraft {
   severity: "info" | "warning" | "error";
   user_id: string | null;
   destinatarioLabel?: string | null;
+  image_file_name?: string | null;
+  image_alt?: string | null;
+  image_url?: string | null;
+  expires_at?: string | null;
 }
 
 interface AlertAdminFormModalProps {
   open: boolean;
   onClose: () => void;
   initial: AlertAdminDraft | null;
-  onSave: (draft: { title: string; message: string; severity: "info" | "warning" | "error"; user_id: string | null }) => Promise<void>;
+  onSave: (draft: {
+    title: string;
+    message: string;
+    severity: "info" | "warning" | "error";
+    user_id: string | null;
+    image_file_name?: string | null;
+    image_alt?: string | null;
+    expires_at?: string | null;
+  }) => Promise<void>;
+}
+
+// datetime-local <-> ISO — o input só entende "YYYY-MM-DDTHH:mm" (hora
+// local do navegador, sem timezone explícita); convertemos pra ISO só na
+// hora de enviar.
+function isoToDatetimeLocal(iso: string | null | undefined): string {
+  if (!iso) return "";
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "";
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+function datetimeLocalToIso(local: string): string | null {
+  if (!local) return null;
+  const d = new Date(local);
+  if (Number.isNaN(d.getTime())) return null;
+  return d.toISOString();
 }
 
 export function AlertAdminFormModal({ open, onClose, initial, onSave }: AlertAdminFormModalProps) {
@@ -55,6 +86,8 @@ export function AlertAdminFormModal({ open, onClose, initial, onSave }: AlertAdm
   const [loadingMembers, setLoadingMembers] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  const [image, setImage] = useState<AlertImageFieldValue>({ image_file_name: null, image_alt: null, image_url: null });
+  const [expiresAtLocal, setExpiresAtLocal] = useState("");
 
   useEffect(() => {
     if (!open) return;
@@ -66,6 +99,12 @@ export function AlertAdminFormModal({ open, onClose, initial, onSave }: AlertAdm
     );
     setRecipientMode(initial?.user_id ? "especifico" : "geral");
     setRecipientId(initial?.user_id ?? "");
+    setImage({
+      image_file_name: initial?.image_file_name ?? null,
+      image_alt: initial?.image_alt ?? null,
+      image_url: initial?.image_url ?? null,
+    });
+    setExpiresAtLocal(isoToDatetimeLocal(initial?.expires_at));
     setError("");
     if (!isEdit) {
       setLoadingMembers(true);
@@ -97,6 +136,15 @@ export function AlertAdminFormModal({ open, onClose, initial, onSave }: AlertAdm
       setError("Selecione um destinatário ou escolha \"Geral\".");
       return;
     }
+    if (!isAlertImageFieldValid(image)) {
+      setError("Texto alternativo é obrigatório quando há imagem.");
+      return;
+    }
+    const expiresAtIso = datetimeLocalToIso(expiresAtLocal);
+    if (expiresAtLocal && (!expiresAtIso || new Date(expiresAtIso).getTime() <= Date.now())) {
+      setError("A expiração precisa ser no futuro.");
+      return;
+    }
     setSaving(true);
     setError("");
     try {
@@ -105,6 +153,9 @@ export function AlertAdminFormModal({ open, onClose, initial, onSave }: AlertAdm
         message: trimmedMessage,
         severity: SEVERITY_BY_CRITICALITY[criticality],
         user_id: recipientMode === "especifico" ? recipientId : null,
+        image_file_name: image.image_file_name,
+        image_alt: image.image_file_name ? image.image_alt : null,
+        expires_at: expiresAtIso,
       });
       onClose();
     } catch (err) {
@@ -235,6 +286,22 @@ export function AlertAdminFormModal({ open, onClose, initial, onSave }: AlertAdm
               )}
             </>
           )}
+        </div>
+
+        <AlertImageField value={image} onChange={setImage} disabled={saving} />
+
+        <div>
+          <label className="text-xs font-medium text-slate-600 dark:text-slate-400 mb-1.5 block">
+            Expira em (opcional)
+          </label>
+          <input
+            type="datetime-local"
+            value={expiresAtLocal}
+            onChange={(e) => setExpiresAtLocal(e.target.value)}
+            disabled={saving}
+            className="flex h-9 w-full rounded-md border border-slate-200 dark:border-slate-700 bg-transparent px-3 py-1 text-sm shadow-sm transition-colors placeholder:text-slate-400 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-slate-400 disabled:cursor-not-allowed disabled:opacity-50"
+          />
+          <p className="text-[10px] text-slate-400 mt-1">Depois desse horário, a ocorrência expira automaticamente.</p>
         </div>
 
         {error && <p className="text-xs text-red-600 dark:text-red-400">{error}</p>}

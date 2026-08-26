@@ -1,10 +1,13 @@
 import { Router } from "express";
 import type { Request, Response, NextFunction } from "express";
+import multer from "multer";
+import fs from "fs";
 import { z } from "zod";
 import { prisma } from "../lib/prisma";
 import { verifyToken, requireAdminMaster } from "../middleware/auth";
 import { writeAccessAudit } from "../lib/product-feedback-service";
 import {
+  computeNextRun,
   findUnknownVariables,
   isDueSoonTrigger,
   parseRecipientRoles,
@@ -13,8 +16,82 @@ import {
   renderTemplate,
   TRIGGER_ENTITY_TYPE,
 } from "../lib/alert-engine";
+import {
+  MAX_ALERT_IMAGE_BYTES,
+  alertImagePath,
+  deleteAlertImage,
+  detectImageFormat,
+  storeAlertImageBuffer,
+} from "../lib/alert-image-storage";
+import { isValidIanaTimeZone, isValidTimeOfDay, zonedTimeToUtc } from "../lib/timezone";
 
 const router = Router();
+
+// ── Imagem de Alerta (ata 2026-08, 4º lote) ───────────────────────────────
+// Upload é Admin Master only (mesmo escopo de quem cria Padrão/Programação/
+// Avulso com imagem); a validação real é por CONTEÚDO (assinatura de bytes
+// em alert-image-storage.ts), nunca por extensão/Content-Type do
+// multipart — protege contra arquivo disfarçado. multer em memória (não
+// disco) porque o arquivo só é gravado DEPOIS de confirmado o formato real.
+const alertImageUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: MAX_ALERT_IMAGE_BYTES },
+});
+
+router.post(
+  "/admin/images",
+  verifyToken,
+  requireAdminMaster,
+  alertImageUpload.single("file"),
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      if (!req.file) {
+        res.status(400).json({ error: "Nenhum arquivo enviado" });
+        return;
+      }
+      const detected = detectImageFormat(req.file.buffer);
+      if (!detected) {
+        res.status(400).json({ error: "Formato de imagem inválido — envie JPEG, PNG ou WebP" });
+        return;
+      }
+      const fileName = storeAlertImageBuffer(req.file.buffer, detected.ext);
+      await writeAccessAudit({
+        actorId: req.user!.id,
+        action: "alert_image.uploaded",
+        after: { file_name: fileName, mime: detected.mime, size: req.file.buffer.length },
+      });
+      // Nunca base64 dentro do alerta — só o nome físico, resolvido pra URL
+      // pela rota de servir abaixo.
+      res.status(201).json({ file_name: fileName, url: `/api/system-alerts/admin/images/${fileName}` });
+    } catch (err) {
+      next(err);
+    }
+  },
+);
+
+// GET .../images/:fileName — serve a imagem pra QUALQUER usuário autenticado
+// (não só Admin Master): o destinatário de um alerta com imagem também
+// precisa conseguir vê-la. Nunca público sem sessão — nome físico aleatório
+// já impede adivinhação, isto some com a última brecha (sessão zero).
+router.get("/admin/images/:fileName", verifyToken, async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    // fileName vem só do generateStoredFileName do backend (uuid + extensão
+    // curta fixa) — mesmo assim, nunca resolve caminho fora da pasta.
+    const fileName = req.params.fileName as string;
+    if (!/^[a-zA-Z0-9-]+\.(jpg|png|webp)$/.test(fileName)) {
+      res.status(400).json({ error: "Nome de arquivo inválido" });
+      return;
+    }
+    const filePath = alertImagePath(fileName);
+    if (!fs.existsSync(filePath)) {
+      res.status(404).json({ error: "Imagem não encontrada" });
+      return;
+    }
+    res.sendFile(filePath);
+  } catch (err) {
+    next(err);
+  }
+});
 
 // ── Escopo por destinatário ───────────────────────────────────────────────────
 //
@@ -307,28 +384,36 @@ const CRITICALITY_TYPE = "alerta_admin_manual";
 // e anexar como "destinatario" na resposta.
 type DestinatarioInfo = { id: string; name: string; email: string } | null;
 
-async function attachDestinatario<T extends { user_id: string | null }>(
+// Deriva a URL servível a partir do nome físico — nunca expõe caminho de
+// disco, nunca base64.
+function withImageUrl<T extends { image_file_name?: string | null }>(alert: T): T & { image_url: string | null } {
+  return { ...alert, image_url: alert.image_file_name ? `/api/system-alerts/admin/images/${alert.image_file_name}` : null };
+}
+
+async function attachDestinatario<T extends { user_id: string | null; image_file_name?: string | null }>(
   alert: T,
-): Promise<T & { destinatario: DestinatarioInfo }> {
-  if (!alert.user_id) return { ...alert, destinatario: null };
+): Promise<T & { destinatario: DestinatarioInfo; image_url: string | null }> {
+  const withImg = withImageUrl(alert);
+  if (!alert.user_id) return { ...withImg, destinatario: null };
   const user = await prisma.user.findUnique({
     where: { id: alert.user_id },
     select: { id: true, name: true, email: true },
   });
-  return { ...alert, destinatario: user ?? null };
+  return { ...withImg, destinatario: user ?? null };
 }
 
-async function attachDestinatarioMany<T extends { user_id: string | null }>(
+async function attachDestinatarioMany<T extends { user_id: string | null; image_file_name?: string | null }>(
   alerts: T[],
-): Promise<(T & { destinatario: DestinatarioInfo })[]> {
+): Promise<(T & { destinatario: DestinatarioInfo; image_url: string | null })[]> {
   const ids = [...new Set(alerts.map((a) => a.user_id).filter((id): id is string => !!id))];
-  if (ids.length === 0) return alerts.map((a) => ({ ...a, destinatario: null }));
+  const withImgs = alerts.map(withImageUrl);
+  if (ids.length === 0) return withImgs.map((a) => ({ ...a, destinatario: null }));
   const users = await prisma.user.findMany({
     where: { id: { in: ids } },
     select: { id: true, name: true, email: true },
   });
   const byId = new Map(users.map((u) => [u.id, u]));
-  return alerts.map((a) => ({ ...a, destinatario: a.user_id ? (byId.get(a.user_id) ?? null) : null }));
+  return withImgs.map((a) => ({ ...a, destinatario: a.user_id ? (byId.get(a.user_id) ?? null) : null }));
 }
 
 async function auditSystemAlert(input: {
@@ -400,15 +485,26 @@ router.get(
 
 // ── POST /api/system-alerts/admin — criação manual ───────────────────────────
 
-const createAdminAlertSchema = z.object({
-  title: z.string().trim().min(3, "Título deve ter no mínimo 3 caracteres").max(200, "Título deve ter no máximo 200 caracteres"),
-  message: z.string().trim().min(3, "Mensagem deve ter no mínimo 3 caracteres").max(2000, "Mensagem deve ter no máximo 2000 caracteres"),
-  severity: z.enum(["info", "warning", "error"], { errorMap: () => ({ message: "Criticidade inválida" }) }),
-  // Ausente/null = alerta geral (visível a todo Admin) — conceito que já
-  // existia (user_id nulo), não inventado aqui. Presente = destinatário
-  // específico, validado abaixo (precisa existir e estar ativo).
-  user_id: z.string().trim().min(1).nullable().optional(),
-});
+const createAdminAlertSchema = z
+  .object({
+    title: z.string().trim().min(3, "Título deve ter no mínimo 3 caracteres").max(200, "Título deve ter no máximo 200 caracteres"),
+    message: z.string().trim().min(3, "Mensagem deve ter no mínimo 3 caracteres").max(2000, "Mensagem deve ter no máximo 2000 caracteres"),
+    severity: z.enum(["info", "warning", "error"], { errorMap: () => ({ message: "Criticidade inválida" }) }),
+    // Ausente/null = alerta geral (visível a todo Admin) — conceito que já
+    // existia (user_id nulo), não inventado aqui. Presente = destinatário
+    // específico, validado abaixo (precisa existir e estar ativo).
+    user_id: z.string().trim().min(1).nullable().optional(),
+    // Imagem opcional (ata 2026-08, 4º lote) — `image_file_name` só aceita o
+    // nome devolvido por POST /admin/images (nunca um caminho arbitrário);
+    // validado contra o disco abaixo, além do formato aqui.
+    image_file_name: z.string().trim().min(1).nullable().optional(),
+    image_alt: z.string().trim().max(300).nullable().optional(),
+    expires_at: z.string().datetime().nullable().optional(),
+  })
+  .refine((data) => !data.image_file_name || !!data.image_alt, {
+    message: "Texto alternativo é obrigatório quando há imagem",
+    path: ["image_alt"],
+  });
 
 router.post(
   "/admin",
@@ -421,7 +517,7 @@ router.post(
         res.status(400).json({ error: "Dados inválidos", details: body.error.flatten() });
         return;
       }
-      const { title, message, severity, user_id } = body.data;
+      const { title, message, severity, user_id, image_file_name, image_alt, expires_at } = body.data;
 
       // Destinatário nunca aceito só porque o frontend mandou um id — tem
       // que existir de verdade e estar ativo, igual a qualquer outro fluxo
@@ -437,6 +533,19 @@ router.post(
         }
       }
 
+      // Mesma regra do upload: o nome só é aceito se realmente existir em
+      // disco (não confia cegamente no que veio no corpo).
+      if (image_file_name && !fs.existsSync(alertImagePath(image_file_name))) {
+        res.status(400).json({ error: "Imagem inválida — envie novamente" });
+        return;
+      }
+
+      const expiresAtDate = expires_at ? new Date(expires_at) : null;
+      if (expiresAtDate && expiresAtDate.getTime() <= Date.now()) {
+        res.status(400).json({ error: "Expiração precisa ser no futuro" });
+        return;
+      }
+
       const created = await prisma.systemAlert.create({
         data: {
           type: CRITICALITY_TYPE,
@@ -445,6 +554,9 @@ router.post(
           severity,
           category: "alerta",
           user_id: user_id ?? null,
+          image_file_name: image_file_name ?? null,
+          image_alt: image_file_name ? (image_alt ?? null) : null,
+          expires_at: expiresAtDate,
         },
       });
 
@@ -452,7 +564,7 @@ router.post(
         actorId: req.user!.id,
         action: "system_alert.created",
         alertId: created.id,
-        after: { title, severity, user_id: user_id ?? null },
+        after: { title, severity, user_id: user_id ?? null, has_image: !!image_file_name, expires_at: expiresAtDate },
       });
 
       res.status(201).json(await attachDestinatario(created));
@@ -464,10 +576,19 @@ router.post(
 
 // ── PATCH /api/system-alerts/admin/:id — editar título/mensagem ──────────────
 
-const editAdminAlertSchema = z.object({
-  title: z.string().trim().min(3, "Título deve ter no mínimo 3 caracteres").max(200, "Título deve ter no máximo 200 caracteres").optional(),
-  message: z.string().trim().min(3, "Mensagem deve ter no mínimo 3 caracteres").max(2000, "Mensagem deve ter no máximo 2000 caracteres").optional(),
-});
+const editAdminAlertSchema = z
+  .object({
+    title: z.string().trim().min(3, "Título deve ter no mínimo 3 caracteres").max(200, "Título deve ter no máximo 200 caracteres").optional(),
+    message: z.string().trim().min(3, "Mensagem deve ter no mínimo 3 caracteres").max(2000, "Mensagem deve ter no máximo 2000 caracteres").optional(),
+    // Presente = trocar/definir imagem; null explícito = remover; ausente =
+    // não mexer na imagem atual.
+    image_file_name: z.string().trim().min(1).nullable().optional(),
+    image_alt: z.string().trim().max(300).nullable().optional(),
+  })
+  .refine((data) => data.image_file_name === undefined || !data.image_file_name || !!data.image_alt, {
+    message: "Texto alternativo é obrigatório quando há imagem",
+    path: ["image_alt"],
+  });
 
 router.patch(
   "/admin/:id",
@@ -481,23 +602,46 @@ router.patch(
         return;
       }
       if (Object.keys(body.data).length === 0) {
-        res.status(400).json({ error: "Informe título e/ou mensagem para editar" });
+        res.status(400).json({ error: "Informe título, mensagem e/ou imagem para editar" });
         return;
       }
 
       const before = await prisma.systemAlert.findFirst({
         where: { id: req.params.id as string, category: "alerta" },
-        select: { id: true, title: true, message: true },
+        select: { id: true, title: true, message: true, image_file_name: true },
       });
       if (!before) {
         res.status(404).json({ error: "Alerta não encontrado" });
         return;
       }
 
+      const { image_file_name, image_alt, ...rest } = body.data;
+      const imageChanging = image_file_name !== undefined;
+      if (imageChanging && image_file_name && !fs.existsSync(alertImagePath(image_file_name))) {
+        res.status(400).json({ error: "Imagem inválida — envie novamente" });
+        return;
+      }
+
       const updated = await prisma.systemAlert.update({
         where: { id: before.id },
-        data: body.data,
+        data: {
+          ...rest,
+          ...(imageChanging
+            ? { image_file_name: image_file_name ?? null, image_alt: image_file_name ? (image_alt ?? null) : null }
+            : {}),
+        },
       });
+
+      // Substituição/remoção — o arquivo antigo (se havia um e mudou) some
+      // do disco só DEPOIS do banco confirmar a troca, nunca antes.
+      if (imageChanging && before.image_file_name && before.image_file_name !== image_file_name) {
+        deleteAlertImage(before.image_file_name);
+        await writeAccessAudit({
+          actorId: req.user!.id,
+          action: image_file_name ? "alert_image.replaced" : "alert_image.removed",
+          after: { system_alert_id: before.id },
+        });
+      }
 
       await auditSystemAlert({
         actorId: req.user!.id,
@@ -653,6 +797,7 @@ router.get(
         data: standards.map((s) => ({
           ...s,
           allowed_variables: JSON.parse(s.allowed_variables_json) as string[],
+          image_url: s.image_file_name ? `/api/system-alerts/admin/images/${s.image_file_name}` : null,
         })),
       });
     } catch (err) {
@@ -663,13 +808,20 @@ router.get(
 
 // ── PATCH /api/system-alerts/admin/standards/:id — nunca a key ───────────
 
-const editStandardSchema = z.object({
-  name: z.string().trim().min(3).max(200).optional(),
-  title: z.string().trim().min(3).max(200).optional(),
-  message: z.string().trim().min(3).max(2000).optional(),
-  default_severity: z.enum(["info", "warning", "error"]).optional(),
-  is_active: z.boolean().optional(),
-});
+const editStandardSchema = z
+  .object({
+    name: z.string().trim().min(3).max(200).optional(),
+    title: z.string().trim().min(3).max(200).optional(),
+    message: z.string().trim().min(3).max(2000).optional(),
+    default_severity: z.enum(["info", "warning", "error"]).optional(),
+    is_active: z.boolean().optional(),
+    image_file_name: z.string().trim().min(1).nullable().optional(),
+    image_alt: z.string().trim().max(300).nullable().optional(),
+  })
+  .refine((data) => data.image_file_name === undefined || !data.image_file_name || !!data.image_alt, {
+    message: "Texto alternativo é obrigatório quando há imagem",
+    path: ["image_alt"],
+  });
 
 router.patch(
   "/admin/standards/:id",
@@ -704,16 +856,42 @@ router.patch(
         return;
       }
 
+      const { image_file_name, image_alt, ...rest } = body.data;
+      const imageChanging = image_file_name !== undefined;
+      if (imageChanging && image_file_name && !fs.existsSync(alertImagePath(image_file_name))) {
+        res.status(400).json({ error: "Imagem inválida — envie novamente" });
+        return;
+      }
+
       const updated = await prisma.alertStandard.update({
         where: { id: before.id },
-        data: { ...body.data, updated_by_id: req.user!.id },
+        data: {
+          ...rest,
+          ...(imageChanging
+            ? { image_file_name: image_file_name ?? null, image_alt: image_file_name ? (image_alt ?? null) : null }
+            : {}),
+          updated_by_id: req.user!.id,
+        },
       });
+
+      // Trocar/remover a imagem do Padrão nunca apaga o arquivo de uma
+      // Ocorrência já criada — cada Ocorrência tem sua PRÓPRIA cópia física
+      // (ver snapshotAlertImage em alert-engine.ts), então só o arquivo do
+      // próprio Padrão é removido aqui.
+      if (imageChanging && before.image_file_name && before.image_file_name !== image_file_name) {
+        deleteAlertImage(before.image_file_name);
+        await writeAccessAudit({
+          actorId: req.user!.id,
+          action: image_file_name ? "alert_image.replaced" : "alert_image.removed",
+          after: { alert_standard_id: before.id },
+        });
+      }
 
       await writeAccessAudit({
         actorId: req.user!.id,
         action: "alert_standard.updated",
         before: { alert_standard_id: before.id, name: before.name, title: before.title, message: before.message, default_severity: before.default_severity, is_active: before.is_active },
-        after: { alert_standard_id: before.id, ...body.data },
+        after: { alert_standard_id: before.id, ...rest },
       });
 
       res.json({ ...updated, allowed_variables: allowed });
@@ -748,6 +926,8 @@ router.post(
         title: renderTemplate(standard.title, fixture, allowed),
         message: renderTemplate(standard.message, fixture, allowed),
         severity: standard.default_severity,
+        image_url: standard.image_file_name ? `/api/system-alerts/admin/images/${standard.image_file_name}` : null,
+        image_alt: standard.image_alt,
         fictitious: true,
       });
     } catch (err) {
@@ -889,6 +1069,331 @@ router.patch(
         ...updated,
         entity_type: TRIGGER_ENTITY_TYPE[updated.trigger_type] ?? null,
         recipient_roles: parseRecipientRoles(updated.recipient_roles_json) ?? [],
+      });
+    } catch (err) {
+      next(err);
+    }
+  },
+);
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Alertas Programados (ata 2026-08, 4º lote) — estrutura própria e explícita
+// (nunca cron livre digitado pelo Admin). Cada disparo vira um SystemAlert
+// comum (ver src/lib/alert-engine.ts). Nunca misturado com Regras de
+// tarefa/etapa — programação é por data/horário, regra é por gatilho.
+// ═══════════════════════════════════════════════════════════════════════════
+
+function scheduleWithImageUrl<T extends { image_file_name: string | null }>(schedule: T) {
+  return { ...schedule, image_url: schedule.image_file_name ? `/api/system-alerts/admin/images/${schedule.image_file_name}` : null };
+}
+
+router.get(
+  "/admin/schedules",
+  verifyToken,
+  requireAdminMaster,
+  async (_req: Request, res: Response, next: NextFunction) => {
+    try {
+      const schedules = await prisma.alertSchedule.findMany({ orderBy: { created_at: "desc" } });
+      const userIds = [...new Set(schedules.map((s) => s.user_id).filter((id): id is string => !!id))];
+      const users = userIds.length
+        ? await prisma.user.findMany({ where: { id: { in: userIds } }, select: { id: true, name: true, email: true } })
+        : [];
+      const byId = new Map(users.map((u) => [u.id, u]));
+      res.json({
+        data: schedules.map((s) => ({
+          ...scheduleWithImageUrl(s),
+          weekdays: s.weekdays_json ? JSON.parse(s.weekdays_json) : [],
+          destinatario: s.user_id ? (byId.get(s.user_id) ?? null) : null,
+        })),
+      });
+    } catch (err) {
+      next(err);
+    }
+  },
+);
+
+const scheduleObjectSchema = z.object({
+  name: z.string().trim().min(3).max(200),
+  title: z.string().trim().min(3).max(200),
+  message: z.string().trim().min(3).max(2000),
+  severity: z.enum(["info", "warning", "error"]),
+  user_id: z.string().trim().min(1).nullable().optional(),
+  image_file_name: z.string().trim().min(1).nullable().optional(),
+  image_alt: z.string().trim().max(300).nullable().optional(),
+  recurrence_type: z.enum(["once", "daily", "weekly"]),
+  weekdays: z.array(z.number().int().min(0).max(6)).optional(),
+  time_of_day: z.string().refine(isValidTimeOfDay, "Horário inválido — use HH:MM"),
+  timezone: z.string().refine(isValidIanaTimeZone, "Timezone inválida"),
+  start_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Data inicial inválida"),
+  end_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable().optional(),
+  occurrence_expires_minutes: z.number().int().positive().max(30 * 24 * 60).nullable().optional(),
+});
+
+const scheduleBaseSchema = scheduleObjectSchema
+  .refine((d) => !d.image_file_name || !!d.image_alt, { message: "Texto alternativo é obrigatório quando há imagem", path: ["image_alt"] })
+  .refine((d) => d.recurrence_type !== "weekly" || (d.weekdays && d.weekdays.length > 0), {
+    message: "Selecione ao menos um dia da semana",
+    path: ["weekdays"],
+  });
+
+async function validateScheduleRecipientAndImage(body: {
+  user_id?: string | null;
+  image_file_name?: string | null;
+}): Promise<string | null> {
+  if (body.user_id) {
+    const user = await prisma.user.findUnique({ where: { id: body.user_id }, select: { is_active: true } });
+    if (!user || !user.is_active) return "Destinatário inválido ou inexistente";
+  }
+  if (body.image_file_name && !fs.existsSync(alertImagePath(body.image_file_name))) {
+    return "Imagem inválida — envie novamente";
+  }
+  return null;
+}
+
+function buildScheduleDates(data: z.infer<typeof scheduleBaseSchema>) {
+  const [y, m, d] = data.start_date.split("-").map(Number);
+  const [hh, mm] = data.time_of_day.split(":").map(Number);
+  const startsAt = zonedTimeToUtc(y!, m!, d!, hh!, mm!, data.timezone);
+  let endsAt: Date | null = null;
+  if (data.end_date) {
+    const [ey, em, ed] = data.end_date.split("-").map(Number);
+    endsAt = zonedTimeToUtc(ey!, em!, ed!, 23, 59, data.timezone);
+  }
+  return { startsAt, endsAt };
+}
+
+router.post(
+  "/admin/schedules",
+  verifyToken,
+  requireAdminMaster,
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const body = scheduleBaseSchema.safeParse(req.body);
+      if (!body.success) {
+        res.status(400).json({ error: "Dados inválidos", details: body.error.flatten() });
+        return;
+      }
+      const validationError = await validateScheduleRecipientAndImage(body.data);
+      if (validationError) {
+        res.status(400).json({ error: validationError });
+        return;
+      }
+
+      const { startsAt, endsAt } = buildScheduleDates(body.data);
+      if (endsAt && endsAt.getTime() <= startsAt.getTime()) {
+        res.status(400).json({ error: "Data final precisa ser depois da inicial" });
+        return;
+      }
+
+      const scheduleForCalc = {
+        id: "pending",
+        recurrence_type: body.data.recurrence_type,
+        weekdays_json: body.data.weekdays ? JSON.stringify(body.data.weekdays) : null,
+        time_of_day: body.data.time_of_day,
+        timezone: body.data.timezone,
+        starts_at: startsAt,
+        ends_at: endsAt,
+      } as Parameters<typeof computeNextRun>[0];
+      const nextRun = computeNextRun(scheduleForCalc, new Date(Date.now() - 1));
+
+      const created = await prisma.alertSchedule.create({
+        data: {
+          name: body.data.name,
+          title: body.data.title,
+          message: body.data.message,
+          severity: body.data.severity,
+          image_file_name: body.data.image_file_name ?? null,
+          image_alt: body.data.image_file_name ? (body.data.image_alt ?? null) : null,
+          user_id: body.data.user_id ?? null,
+          recurrence_type: body.data.recurrence_type,
+          weekdays_json: body.data.weekdays ? JSON.stringify(body.data.weekdays) : null,
+          time_of_day: body.data.time_of_day,
+          timezone: body.data.timezone,
+          starts_at: startsAt,
+          ends_at: endsAt,
+          occurrence_expires_minutes: body.data.occurrence_expires_minutes ?? null,
+          next_run_at: nextRun,
+          created_by_id: req.user!.id,
+        },
+      });
+
+      await writeAccessAudit({ actorId: req.user!.id, action: "alert_schedule.created", after: { alert_schedule_id: created.id, name: created.name } });
+
+      res.status(201).json({ ...scheduleWithImageUrl(created), weekdays: body.data.weekdays ?? [] });
+    } catch (err) {
+      next(err);
+    }
+  },
+);
+
+const editScheduleSchema = scheduleObjectSchema.partial().extend({
+  is_active: z.boolean().optional(),
+});
+
+router.patch(
+  "/admin/schedules/:id",
+  verifyToken,
+  requireAdminMaster,
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const body = editScheduleSchema.safeParse(req.body);
+      if (!body.success) {
+        res.status(400).json({ error: "Dados inválidos", details: body.error.flatten() });
+        return;
+      }
+      if (Object.keys(body.data).length === 0) {
+        res.status(400).json({ error: "Informe ao menos um campo para editar" });
+        return;
+      }
+
+      const before = await prisma.alertSchedule.findUnique({ where: { id: req.params.id as string } });
+      if (!before) {
+        res.status(404).json({ error: "Programação não encontrada" });
+        return;
+      }
+
+      const validationError = await validateScheduleRecipientAndImage(body.data);
+      if (validationError) {
+        res.status(400).json({ error: validationError });
+        return;
+      }
+
+      const { is_active, weekdays, start_date, end_date, image_file_name, image_alt, ...rest } = body.data;
+      const imageChanging = image_file_name !== undefined;
+
+      // Recalcula a próxima execução sempre que horário/dias/timezone/
+      // recorrência/datas mudarem — nunca duplica a execução anterior
+      // (last_run_at fica intocado; ocorrências já geradas não são tocadas).
+      const scheduleChanged =
+        rest.recurrence_type !== undefined || weekdays !== undefined || rest.time_of_day !== undefined ||
+        rest.timezone !== undefined || start_date !== undefined || end_date !== undefined;
+
+      let starts_at = before.starts_at;
+      let ends_at = before.ends_at;
+      if (scheduleChanged) {
+        const merged = {
+          recurrence_type: rest.recurrence_type ?? before.recurrence_type,
+          time_of_day: rest.time_of_day ?? before.time_of_day,
+          timezone: rest.timezone ?? before.timezone,
+          start_date: start_date ?? null,
+          end_date: end_date === undefined ? null : end_date,
+          weekdays: weekdays ?? (before.weekdays_json ? JSON.parse(before.weekdays_json) : []),
+        };
+        if (start_date) {
+          const dates = buildScheduleDates({ ...merged, start_date: merged.start_date! } as z.infer<typeof scheduleBaseSchema>);
+          starts_at = dates.startsAt;
+          if (end_date !== undefined) ends_at = dates.endsAt;
+        } else if (end_date !== undefined) {
+          if (end_date === null) {
+            ends_at = null;
+          } else {
+            const [ey, em, ed] = end_date.split("-").map(Number);
+            ends_at = zonedTimeToUtc(ey!, em!, ed!, 23, 59, merged.timezone);
+          }
+        }
+      }
+
+      const updated = await prisma.alertSchedule.update({
+        where: { id: before.id },
+        data: {
+          ...rest,
+          ...(weekdays !== undefined ? { weekdays_json: JSON.stringify(weekdays) } : {}),
+          ...(scheduleChanged ? { starts_at, ends_at } : {}),
+          ...(is_active !== undefined ? { is_active } : {}),
+          ...(imageChanging ? { image_file_name: image_file_name ?? null, image_alt: image_file_name ? (image_alt ?? null) : null } : {}),
+          updated_by_id: req.user!.id,
+        },
+      });
+
+      if (imageChanging && before.image_file_name && before.image_file_name !== image_file_name) {
+        deleteAlertImage(before.image_file_name);
+      }
+
+      // Reativar (is_active volta a true) ou qualquer mudança de padrão
+      // sempre recalcula next_run_at a partir de agora — nunca reaproveita
+      // um valor congelado de quando estava pausada/desatualizada.
+      if (scheduleChanged || is_active === true) {
+        const nextRun = updated.is_active
+          ? computeNextRun(
+              {
+                id: updated.id,
+                recurrence_type: updated.recurrence_type,
+                weekdays_json: updated.weekdays_json,
+                time_of_day: updated.time_of_day,
+                timezone: updated.timezone,
+                starts_at: updated.starts_at,
+                ends_at: updated.ends_at,
+              } as Parameters<typeof computeNextRun>[0],
+              new Date(),
+            )
+          : null;
+        await prisma.alertSchedule.update({ where: { id: updated.id }, data: { next_run_at: nextRun } });
+        updated.next_run_at = nextRun;
+      } else if (is_active === false) {
+        await prisma.alertSchedule.update({ where: { id: updated.id }, data: { next_run_at: null } });
+        updated.next_run_at = null;
+      }
+
+      await writeAccessAudit({
+        actorId: req.user!.id,
+        action: is_active !== undefined ? (is_active ? "alert_schedule.activated" : "alert_schedule.deactivated") : "alert_schedule.updated",
+        before: { alert_schedule_id: before.id, is_active: before.is_active, next_run_at: before.next_run_at },
+        after: { alert_schedule_id: before.id, is_active: updated.is_active, next_run_at: updated.next_run_at },
+      });
+
+      res.json({ ...scheduleWithImageUrl(updated), weekdays: updated.weekdays_json ? JSON.parse(updated.weekdays_json) : [] });
+    } catch (err) {
+      next(err);
+    }
+  },
+);
+
+router.patch(
+  "/admin/schedules/:id/archive",
+  verifyToken,
+  requireAdminMaster,
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const before = await prisma.alertSchedule.findUnique({ where: { id: req.params.id as string } });
+      if (!before) {
+        res.status(404).json({ error: "Programação não encontrada" });
+        return;
+      }
+      const updated = await prisma.alertSchedule.update({
+        where: { id: before.id },
+        data: { is_archived: true, is_active: false, archived_at: new Date(), next_run_at: null },
+      });
+      await writeAccessAudit({
+        actorId: req.user!.id,
+        action: "alert_schedule.archived",
+        before: { alert_schedule_id: before.id },
+        after: { alert_schedule_id: before.id },
+      });
+      res.json({ ...scheduleWithImageUrl(updated), weekdays: updated.weekdays_json ? JSON.parse(updated.weekdays_json) : [] });
+    } catch (err) {
+      next(err);
+    }
+  },
+);
+
+router.post(
+  "/admin/schedules/:id/preview",
+  verifyToken,
+  requireAdminMaster,
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const schedule = await prisma.alertSchedule.findUnique({ where: { id: req.params.id as string } });
+      if (!schedule) {
+        res.status(404).json({ error: "Programação não encontrada" });
+        return;
+      }
+      res.json({
+        title: schedule.title,
+        message: schedule.message,
+        severity: schedule.severity,
+        image_url: schedule.image_file_name ? `/api/system-alerts/admin/images/${schedule.image_file_name}` : null,
+        image_alt: schedule.image_alt,
+        fictitious: true,
       });
     } catch (err) {
       next(err);

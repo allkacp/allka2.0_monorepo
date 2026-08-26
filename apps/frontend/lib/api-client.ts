@@ -2067,12 +2067,71 @@ class ApiClient {
     return this.get("/system-alerts/admin", filters);
   }
 
-  async createAdminSystemAlert(data: { title: string; message: string; severity: "info" | "warning" | "error"; user_id?: string | null }) {
+  async createAdminSystemAlert(data: {
+    title: string;
+    message: string;
+    severity: "info" | "warning" | "error";
+    user_id?: string | null;
+    image_file_name?: string | null;
+    image_alt?: string | null;
+    expires_at?: string | null;
+  }) {
     return this.post("/system-alerts/admin", data);
   }
 
-  async updateAdminSystemAlert(id: string, data: { title?: string; message?: string }) {
+  async updateAdminSystemAlert(
+    id: string,
+    data: {
+      title?: string;
+      message?: string;
+      image_file_name?: string | null;
+      image_alt?: string | null;
+      expires_at?: string | null;
+    },
+  ) {
     return this.patch(`/system-alerts/admin/${id}`, data);
+  }
+
+  // Upload de imagem de alerta (Padrão/Avulso/Programado — ata 2026-08, 4º
+  // lote). Retorna { file_name, url } — `file_name` é o que se manda de
+  // volta pros endpoints de criação/edição, `url` já vem com o prefixo
+  // "/api/..." do backend (ver resolveAlertImageUrl abaixo pra montar o
+  // <img src> correto).
+  async uploadAlertImage(file: File): Promise<{ file_name: string; url: string }> {
+    return this.uploadFile("/system-alerts/admin/images", file);
+  }
+
+  // O backend devolve `image_url` já prefixado com "/api/..." (mesmo
+  // prefixo que API_BASE_URL normalmente inclui — ver VITE_API_URL nos
+  // .env.example, sempre termina em "/api"). Prependar API_BASE_URL direto
+  // duplicaria o "/api". Em vez disso, tira o "/api" final de API_BASE_URL
+  // (sobra a origem: "" no dev com proxy, ou "https://host" em produção) e
+  // prependa só isso.
+  resolveAlertImageUrl(url: string | null | undefined): string | null {
+    if (!url) return null;
+    if (/^https?:\/\//.test(url)) return url;
+    const origin = API_BASE_URL.replace(/\/api\/?$/, "");
+    return `${origin}${url}`;
+  }
+
+  // A rota que serve a imagem exige Bearer token (qualquer usuário logado,
+  // não só Admin Master — ver GET /system-alerts/admin/images/:fileName) —
+  // uma tag <img src="..."> comum não tem como mandar esse header. Cross-origin
+  // (frontend:8081 x backend:3001 neste dev, ou domínios diferentes em
+  // produção) isso derruba a imagem com ERR_BLOCKED_BY_ORB: o navegador
+  // recebe um 401 (corpo JSON) onde esperava bytes de imagem e bloqueia a
+  // resposta opaca. Mesmo problema que anexos de projeto já tinham (ver
+  // `downloadBlob` acima) — a solução é a mesma: buscar com fetch()
+  // autenticado e converter pra Object URL, nunca um <img src> direto pra
+  // uma rota protegida por header.
+  async fetchAlertImageBlobUrl(resolvedUrl: string): Promise<string> {
+    const token = this.getToken();
+    const res = await fetch(resolvedUrl, {
+      headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+    });
+    if (!res.ok) throw new ApiError(`HTTP ${res.status}`, res.status);
+    const blob = await res.blob();
+    return URL.createObjectURL(blob);
   }
 
   async reclassifyAdminSystemAlert(id: string, severity: "info" | "warning" | "error") {
@@ -2093,7 +2152,15 @@ class ApiClient {
   }
   async updateAdminAlertStandard(
     id: string,
-    data: { name?: string; title?: string; message?: string; default_severity?: "info" | "warning" | "error"; is_active?: boolean },
+    data: {
+      name?: string;
+      title?: string;
+      message?: string;
+      default_severity?: "info" | "warning" | "error";
+      is_active?: boolean;
+      image_file_name?: string | null;
+      image_alt?: string | null;
+    },
   ) {
     return this.patch(`/system-alerts/admin/standards/${id}`, data);
   }
@@ -2113,6 +2180,61 @@ class ApiClient {
     },
   ) {
     return this.patch(`/system-alerts/admin/rules/${id}`, data);
+  }
+
+  // ─── Alertas Programados (Admin Master) — ata 2026-08, 4º lote ─────────────
+  async getAdminAlertSchedules() {
+    return this.get("/system-alerts/admin/schedules");
+  }
+
+  async createAdminAlertSchedule(data: {
+    name: string;
+    title: string;
+    message: string;
+    severity: "info" | "warning" | "error";
+    user_id?: string | null;
+    image_file_name?: string | null;
+    image_alt?: string | null;
+    recurrence_type: "once" | "daily" | "weekly";
+    weekdays?: number[];
+    time_of_day: string;
+    timezone: string;
+    start_date: string;
+    end_date?: string | null;
+    occurrence_expires_minutes?: number | null;
+  }) {
+    return this.post("/system-alerts/admin/schedules", data);
+  }
+
+  async updateAdminAlertSchedule(
+    id: string,
+    data: Partial<{
+      name: string;
+      title: string;
+      message: string;
+      severity: "info" | "warning" | "error";
+      user_id: string | null;
+      image_file_name: string | null;
+      image_alt: string | null;
+      recurrence_type: "once" | "daily" | "weekly";
+      weekdays: number[];
+      time_of_day: string;
+      timezone: string;
+      start_date: string;
+      end_date: string | null;
+      occurrence_expires_minutes: number | null;
+      is_active: boolean;
+    }>,
+  ) {
+    return this.patch(`/system-alerts/admin/schedules/${id}`, data);
+  }
+
+  async archiveAdminAlertSchedule(id: string) {
+    return this.patch(`/system-alerts/admin/schedules/${id}/archive`, {});
+  }
+
+  async previewAdminAlertSchedule(id: string) {
+    return this.post(`/system-alerts/admin/schedules/${id}/preview`, {});
   }
 
   // ─── Preferências pessoais de notificação (evento × canal) ────────────────
