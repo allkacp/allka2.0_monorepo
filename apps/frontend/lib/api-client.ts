@@ -2099,7 +2099,12 @@ class ApiClient {
   }
   async updateAdminAlertRule(
     id: string,
-    data: { is_active?: boolean; lead_time_minutes?: number | null; severity_override?: "info" | "warning" | "error" | null },
+    data: {
+      is_active?: boolean;
+      lead_time_minutes?: number | null;
+      severity_override?: "info" | "warning" | "error" | null;
+      recipient_roles?: string[];
+    },
   ) {
     return this.patch(`/system-alerts/admin/rules/${id}`, data);
   }

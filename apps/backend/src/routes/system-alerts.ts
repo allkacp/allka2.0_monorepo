@@ -4,7 +4,15 @@ import { z } from "zod";
 import { prisma } from "../lib/prisma";
 import { verifyToken, requireAdminMaster } from "../middleware/auth";
 import { writeAccessAudit } from "../lib/product-feedback-service";
-import { findUnknownVariables, renderTemplate, TRIGGER_TYPES } from "../lib/alert-engine";
+import {
+  findUnknownVariables,
+  isDueSoonTrigger,
+  parseRecipientRoles,
+  RECIPIENT_CATEGORIES,
+  RECIPIENT_CATEGORY_LABELS,
+  renderTemplate,
+  TRIGGER_ENTITY_TYPE,
+} from "../lib/alert-engine";
 
 const router = Router();
 
@@ -731,6 +739,7 @@ router.post(
       const allowed = JSON.parse(standard.allowed_variables_json) as string[];
       // Dados fictícios claramente identificados — nunca lê tarefa real.
       const fixture: Record<string, string> = {
+        etapa: "[EXEMPLO] Etapa de demonstração",
         tarefa: "[EXEMPLO] Tarefa de demonstração",
         prazo: "31/12/2026",
         projeto: "[EXEMPLO] Projeto de demonstração",
@@ -767,7 +776,16 @@ router.get(
       const lastRunByRule = new Map(lastRuns.map((r) => [r.rule_id, r._max.created_at]));
 
       res.json({
-        data: rules.map((r) => ({ ...r, last_triggered_at: lastRunByRule.get(r.id) ?? null })),
+        // "regra geral" nunca é opcional na resposta — toda regra sempre se
+        // aplica a TODOS os registros do entity_type do gatilho, nunca a um
+        // registro específico (não existe seletor de tarefa/etapa aqui).
+        recipient_category_options: RECIPIENT_CATEGORIES.map((value) => ({ value, label: RECIPIENT_CATEGORY_LABELS[value] })),
+        data: rules.map((r) => ({
+          ...r,
+          entity_type: TRIGGER_ENTITY_TYPE[r.trigger_type] ?? null,
+          recipient_roles: parseRecipientRoles(r.recipient_roles_json) ?? [],
+          last_triggered_at: lastRunByRule.get(r.id) ?? null,
+        })),
       });
     } catch (err) {
       next(err);
@@ -781,6 +799,10 @@ const editRuleSchema = z.object({
   is_active: z.boolean().optional(),
   lead_time_minutes: z.number().int().min(1).max(30 * 24 * 60).optional().nullable(),
   severity_override: z.enum(["info", "warning", "error"]).nullable().optional(),
+  // Categorias (papéis/relações) — nunca um id de usuário individual. Isso é
+  // exclusivo do Alerta Avulso; uma regra geral escolhe QUEM PODE receber,
+  // nunca UMA pessoa específica.
+  recipient_roles: z.array(z.enum(RECIPIENT_CATEGORIES)).min(1, "Selecione ao menos uma categoria de destinatário").optional(),
 });
 
 router.patch(
@@ -805,26 +827,41 @@ router.patch(
         return;
       }
 
-      // Antecedência só faz sentido pra task.due_soon — não deixa configurar
-      // à toa num gatilho que nunca a usa.
-      if (body.data.lead_time_minutes !== undefined && before.trigger_type !== TRIGGER_TYPES[0]) {
+      // Antecedência só faz sentido pra gatilhos "due_soon" — não deixa
+      // configurar à toa num gatilho de atraso, que nunca a usa.
+      if (body.data.lead_time_minutes !== undefined && !isDueSoonTrigger(before.trigger_type)) {
         res.status(400).json({ error: "Este gatilho não usa antecedência" });
         return;
       }
 
+      const { recipient_roles, ...rest } = body.data;
       const updated = await prisma.alertRule.update({
         where: { id: before.id },
-        data: { ...body.data, updated_by_id: req.user!.id },
+        data: {
+          ...rest,
+          ...(recipient_roles ? { recipient_roles_json: JSON.stringify([...new Set(recipient_roles)]) } : {}),
+          updated_by_id: req.user!.id,
+        },
       });
 
       await writeAccessAudit({
         actorId: req.user!.id,
         action: "alert_rule.updated",
-        before: { alert_rule_id: before.id, is_active: before.is_active, lead_time_minutes: before.lead_time_minutes, severity_override: before.severity_override },
-        after: { alert_rule_id: before.id, ...body.data },
+        before: {
+          alert_rule_id: before.id,
+          is_active: before.is_active,
+          lead_time_minutes: before.lead_time_minutes,
+          severity_override: before.severity_override,
+          recipient_roles: parseRecipientRoles(before.recipient_roles_json),
+        },
+        after: { alert_rule_id: before.id, ...rest, ...(recipient_roles ? { recipient_roles } : {}) },
       });
 
-      res.json(updated);
+      res.json({
+        ...updated,
+        entity_type: TRIGGER_ENTITY_TYPE[updated.trigger_type] ?? null,
+        recipient_roles: parseRecipientRoles(updated.recipient_roles_json) ?? [],
+      });
     } catch (err) {
       next(err);
     }

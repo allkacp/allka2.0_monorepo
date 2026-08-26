@@ -381,31 +381,42 @@ describe("AlertStandardsTab — Padrões", () => {
 });
 
 describe("AlertRulesTab — Regras", () => {
-  function rule(overrides: Partial<{ id: string; name: string; trigger_type: string; is_active: boolean; lead_time_minutes: number | null; severity_override: "info" | "warning" | "error" | null; last_triggered_at: string | null }> = {}) {
+  const CATEGORY_OPTIONS = [
+    { value: "responsavel", label: "Responsável" },
+    { value: "nomade", label: "Nômade executor" },
+    { value: "lider", label: "Líder" },
+    { value: "admin_responsavel", label: "Admin responsável" },
+  ];
+
+  function rule(overrides: Partial<{ id: string; name: string; trigger_type: string; entity_type: "project_task" | "project_task_stage"; is_active: boolean; lead_time_minutes: number | null; severity_override: "info" | "warning" | "error" | null; recipient_roles: string[]; last_triggered_at: string | null }> = {}) {
     return {
       id: overrides.id ?? "rule1",
       name: overrides.name ?? "Tarefa próxima do prazo (24h)",
       trigger_type: overrides.trigger_type ?? "task.due_soon",
+      entity_type: overrides.entity_type ?? "project_task",
       is_active: overrides.is_active ?? true,
       lead_time_minutes: overrides.lead_time_minutes ?? 1440,
       severity_override: overrides.severity_override ?? null,
+      recipient_roles: overrides.recipient_roles ?? ["responsavel"],
       last_triggered_at: overrides.last_triggered_at ?? null,
       standard: { id: "std1", key: overrides.trigger_type ?? "task.due_soon", name: "Tarefa próxima do prazo", default_severity: "warning" as const },
     };
   }
 
   it("29. a regra mostra uma frase amigável, nunca JSON", async () => {
-    (apiClient.getAdminAlertRules as any).mockResolvedValue({ data: [rule()] });
+    (apiClient.getAdminAlertRules as any).mockResolvedValue({ data: [rule()], recipient_category_options: CATEGORY_OPTIONS });
     const user = userEvent.setup();
     renderCenter();
     await user.click(screen.getByRole("tab", { name: "Regras" }));
 
     expect(await screen.findByText(/Este alerta será criado 24h antes do prazo/)).toBeInTheDocument();
+    expect(screen.getByText("Regra geral")).toBeInTheDocument();
+    expect(screen.getByText(/Aplica-se a todas as tarefas ativas/)).toBeInTheDocument();
     expect(screen.queryByText(/[{[]/)).not.toBeInTheDocument();
   });
 
-  it("30. editar a antecedência persiste (chama a API com o valor em minutos)", async () => {
-    (apiClient.getAdminAlertRules as any).mockResolvedValue({ data: [rule({ lead_time_minutes: 1440 })] });
+  it("26/30. editar a antecedência persiste (chama a API com o valor em minutos, preservando as categorias já escolhidas)", async () => {
+    (apiClient.getAdminAlertRules as any).mockResolvedValue({ data: [rule({ lead_time_minutes: 1440 })], recipient_category_options: CATEGORY_OPTIONS });
     (apiClient.updateAdminAlertRule as any).mockResolvedValue(rule({ lead_time_minutes: 720 }));
     const user = userEvent.setup();
     renderCenter();
@@ -417,11 +428,11 @@ describe("AlertRulesTab — Regras", () => {
     await user.type(input, "12");
     await user.click(screen.getByRole("button", { name: /salvar alterações/i }));
 
-    await waitFor(() => expect(apiClient.updateAdminAlertRule).toHaveBeenCalledWith("rule1", { lead_time_minutes: 720 }));
+    await waitFor(() => expect(apiClient.updateAdminAlertRule).toHaveBeenCalledWith("rule1", { lead_time_minutes: 720, recipient_roles: ["responsavel"] }));
   });
 
   it("31. desativar uma regra chama a API com is_active: false", async () => {
-    (apiClient.getAdminAlertRules as any).mockResolvedValue({ data: [rule({ is_active: true })] });
+    (apiClient.getAdminAlertRules as any).mockResolvedValue({ data: [rule({ is_active: true })], recipient_category_options: CATEGORY_OPTIONS });
     (apiClient.updateAdminAlertRule as any).mockResolvedValue(rule({ is_active: false }));
     const user = userEvent.setup();
     renderCenter();
@@ -429,6 +440,20 @@ describe("AlertRulesTab — Regras", () => {
 
     await user.click(await screen.findByRole("switch"));
     await waitFor(() => expect(apiClient.updateAdminAlertRule).toHaveBeenCalledWith("rule1", { is_active: false }));
+  });
+
+  it("26. destinatários exibidos são categorias (papéis), nunca um id de pessoa — não existe seletor de registro individual", async () => {
+    (apiClient.getAdminAlertRules as any).mockResolvedValue({
+      data: [rule({ trigger_type: "stage.due_soon", entity_type: "project_task_stage", recipient_roles: ["nomade", "lider"] })],
+      recipient_category_options: CATEGORY_OPTIONS,
+    });
+    const user = userEvent.setup();
+    renderCenter();
+    await user.click(screen.getByRole("tab", { name: "Regras" }));
+
+    expect(await screen.findByText(/Nômade executor, Líder/)).toBeInTheDocument();
+    expect(screen.queryByPlaceholderText(/buscar usuário/i)).not.toBeInTheDocument();
+    expect(screen.getByText(/Aplica-se a todas as etapas com prazo/)).toBeInTheDocument();
   });
 });
 

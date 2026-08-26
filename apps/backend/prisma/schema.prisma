@@ -1789,10 +1789,10 @@ model AlertRule {
   standard   AlertStandard @relation(fields: [standard_id], references: [id])
   name       String
   // Único construtor aceito nesta fase — não é um DSL genérico:
-  // "task.due_soon" | "task.overdue".
+  // "task.due_soon" | "task.overdue" | "stage.due_soon" | "stage.overdue".
   trigger_type String
   is_active  Boolean       @default(true)
-  // Antecedência em minutos (só usado por task.due_soon).
+  // Antecedência em minutos (só usado por gatilhos "due_soon").
   lead_time_minutes Int?
   // Sobrescreve a criticidade padrão do Padrão, quando preenchido.
   severity_override String?
@@ -1800,6 +1800,12 @@ model AlertRule {
   // Reservado para parâmetros futuros deste mesmo conjunto fechado de
   // gatilhos; validado com allowlist no backend.
   config_json String?      @db.LongText
+  // JSON array de categorias de destinatário (papéis/relações, nunca IDs de
+  // usuário individuais) — ex.: ["responsavel","nomade"]. A regra continua
+  // única e geral; o motor resolve a pessoa real de cada categoria pra cada
+  // registro elegível no momento da execução. Ver ALERT_RECIPIENT_CATEGORIES
+  // em alert-engine.ts.
+  recipient_roles_json String @db.LongText
 
   created_at DateTime      @default(now())
   updated_at DateTime      @updatedAt
@@ -1826,7 +1832,7 @@ model SystemAlert {
   // decisão/prioridade) — separa a aba Notificações da aba Alertas no sino
   // do header, que hoje mostravam exatamente o mesmo feed sem distinção.
   entity_type String?
-  // "project_task" | "project" | etc.
+  // "project_task" | "project_task_stage" | "project" | etc.
   entity_id   String?
   // Destinatário. Nulo = alerta geral do sistema (comportamento original,
   // visível ao Admin); preenchido = aviso de uma pessoa só, como "a etapa X
@@ -1856,10 +1862,13 @@ model SystemAlert {
   standard         AlertStandard? @relation(fields: [standard_id], references: [id])
   rule_id          String?
   rule             AlertRule?     @relation(fields: [rule_id], references: [id])
-  // Chave determinística (regra+tarefa+gatilho) usada só para checar
-  // duplicidade antes de criar — não tem constraint único porque históricos
-  // resolvidos com a mesma chave podem coexistir.
-  dedupe_key       String?
+  // Chave determinística regra+tipo_entidade+entidade+destinatário+prazo
+  // (ex.: "ruleId:project_task_stage:stageId:userId:2026-08-30") — única
+  // por linha ATIVA (constraint de banco, não só trava em memória; protege
+  // mesmo com mais de uma instância do backend). Zerada em registros já
+  // resolvidos (ver migration) pra não colidir com um ciclo futuro que
+  // reaproveite o mesmo prazo depois de resolvido.
+  dedupe_key       String?        @unique
   resolved_at      DateTime?
   // "condition_cleared" | "task_completed" | "task_cancelled" | "superseded"
   // — motivo controlado, nunca texto livre do administrador.
@@ -1869,7 +1878,6 @@ model SystemAlert {
   @@index([user_id, is_archived])
   @@index([user_id, category, is_read])
   @@index([notification_message_id])
-  @@index([dedupe_key])
   @@index([rule_id])
   @@index([standard_id])
   @@map("system_alerts")
