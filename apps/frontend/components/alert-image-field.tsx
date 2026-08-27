@@ -1,14 +1,16 @@
 /**
  * Campo reutilizável "imagem do alerta" — usado no formulário de Avulso, na
  * edição de Padrão e no formulário de Programado (ata 2026-08, 4º lote;
- * upgrade visual/UX no 5º lote). Mostra o preview completo em proporção 3:1
- * (AlertBannerImage, `object-contain`, nunca cortado) ou uma moldura vazia
- * 3:1 antes da seleção, um texto de orientação fixo (1200×400/3:1/formatos/
- * 5MB), input de texto alternativo (obrigatório quando há imagem — mesma
- * regra do backend, reforçada aqui só como UX, o servidor é a autoridade
- * real) e os botões Selecionar/Substituir/Remover.
+ * upgrade visual/UX no 5º lote; padrão de dimensão corrigido de 1200×400
+ * pra 1200×200 num lote seguinte — 6:1, achado alto demais na revisão do
+ * responsável). Mostra o preview completo em proporção 6:1 (AlertBannerImage,
+ * `object-contain`, nunca cortado) ou uma moldura vazia 6:1 antes da
+ * seleção, um texto de orientação fixo (1200×200/6:1/formatos/5MB), input
+ * de texto alternativo (obrigatório quando há imagem — mesma regra do
+ * backend, reforçada aqui só como UX, o servidor é a autoridade real) e os
+ * botões Selecionar/Substituir/Remover.
  *
- * Validação client-side (tipo/tamanho/dimensão exata 1200×400 via
+ * Validação client-side (tipo/tamanho/dimensão exata 1200×200 via
  * readImageDimensions) é só feedback rápido — o backend valida por
  * CONTEÚDO real do arquivo (assinatura de bytes + dimensão decodificada de
  * verdade), não confia em nada calculado aqui. Se o upload falhar (incluindo
@@ -26,7 +28,7 @@ import { apiClient } from "@/lib/api-client";
 const ACCEPTED_TYPES = ["image/jpeg", "image/png", "image/webp"];
 const MAX_BYTES = 5 * 1024 * 1024; // 5MB — mesmo limite do backend (MAX_ALERT_IMAGE_BYTES)
 const REQUIRED_WIDTH = 1200;
-const REQUIRED_HEIGHT = 400;
+const REQUIRED_HEIGHT = 200;
 
 // Lê as dimensões reais do arquivo selecionado ANTES de chamar o upload —
 // puro ganho de UX (feedback imediato, sem round-trip de rede). O backend
@@ -92,7 +94,7 @@ export function AlertImageField({ value, onChange, disabled }: AlertImageFieldPr
       const { width, height } = await readImageDimensions(file);
       if (width !== REQUIRED_WIDTH || height !== REQUIRED_HEIGHT) {
         setError(
-          `A imagem selecionada possui ${width} × ${height} px. Selecione uma imagem de exatamente 1200 × 400 px.`,
+          `A imagem selecionada possui ${width} × ${height} px. Selecione uma imagem de exatamente ${REQUIRED_WIDTH} × ${REQUIRED_HEIGHT} px.`,
         );
         if (inputRef.current) inputRef.current.value = "";
         return;
@@ -131,11 +133,12 @@ export function AlertImageField({ value, onChange, disabled }: AlertImageFieldPr
     <div>
       <label className="text-xs font-medium text-slate-600 dark:text-slate-400 mb-1.5 block">Imagem (opcional)</label>
 
-      {/* Texto de orientação (ata 2026-08, 5º lote) — verbatim, exibido
-          sempre, antes e depois da seleção, pra deixar claro o formato
-          exigido pelo backend (1200×400 exato em upload novo). */}
+      {/* Texto de orientação (ata 2026-08, 5º lote; padrão corrigido pra
+          1200×200/6:1 num lote seguinte) — verbatim, exibido sempre, antes e
+          depois da seleção, pra deixar claro o formato exigido pelo backend
+          (1200×200 exato em upload novo). */}
       <p className="text-[11px] text-slate-500 dark:text-slate-400 mb-2">
-        Use um banner de 1200 × 400 px (proporção 3:1), em JPG, PNG ou WebP, com até 5 MB.
+        Use um banner de 1200 × 200 px (proporção 6:1), em JPG, PNG ou WebP, com até 5 MB.
       </p>
 
       <div className="mb-3">
@@ -143,7 +146,7 @@ export function AlertImageField({ value, onChange, disabled }: AlertImageFieldPr
           <AlertBannerImage src={value.image_url} alt={value.image_alt} />
         ) : (
           <div
-            className="w-full aspect-[3/1] rounded-lg flex items-center justify-center bg-slate-50 dark:bg-slate-800/50 border border-dashed border-slate-200 dark:border-slate-700 text-xs text-slate-400 text-center leading-tight"
+            className="w-full aspect-[6/1] rounded-lg flex items-center justify-center bg-slate-50 dark:bg-slate-800/50 border border-dashed border-slate-200 dark:border-slate-700 text-xs text-slate-400 text-center leading-tight"
             data-testid="alert-image-empty-frame"
           >
             Sem imagem

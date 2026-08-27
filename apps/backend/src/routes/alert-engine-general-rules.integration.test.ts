@@ -239,6 +239,29 @@ describe("Motor de alertas — regra geral + etapas reais (ata 2026-08, 3º lote
     assert.deepEqual(recipients, [lider.id, nomadeUserId].sort());
   });
 
+  it("reparo 'Ver alerta': ocorrência de etapa grava entity_parent_id = id da TAREFA que contém a etapa (a plataforma não tem tela exclusiva de etapa)", async () => {
+    const { nomadeId } = await createNomade();
+    const soon = new Date(Date.now() + 3 * 60 * 60 * 1000);
+    const { task, stage } = await createStageFixture({ prazo_execucao: soon, nomade_id: nomadeId });
+
+    await runAlertEngineOnce();
+
+    const alert = await prisma.systemAlert.findFirstOrThrow({ where: { entity_id: stage.id } });
+    assert.equal(alert.entity_type, "project_task_stage");
+    assert.equal(alert.entity_parent_id, task.id, "entity_parent_id aponta pra tarefa-mãe, nunca null quando a tarefa existe");
+  });
+
+  it("reparo 'Ver alerta': ocorrência de TAREFA (não etapa) nunca grava entity_parent_id — entity_id já é suficiente", async () => {
+    const soon = new Date(Date.now() + 3 * 60 * 60 * 1000);
+    const assignee = await createUser();
+    const { task } = await createTaskFixture({ due_date: soon, assignee_id: assignee.id });
+
+    await runAlertEngineOnce();
+
+    const alert = await prisma.systemAlert.findFirstOrThrow({ where: { entity_id: task.id, entity_type: "project_task" } });
+    assert.equal(alert.entity_parent_id, null);
+  });
+
   it("9. usuário sem nenhuma relação com a tarefa/etapa não recebe alerta", async () => {
     const semRelacao = await createUser();
     const soon = new Date(Date.now() + 3 * 60 * 60 * 1000);

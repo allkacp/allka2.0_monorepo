@@ -44,9 +44,13 @@ export function detectImageFormat(buffer: Buffer): ValidatedImage | null {
 
 // ── Dimensões reais do banner (ata 2026-08, reparo "banner visual") ───────
 //
-// Formato obrigatório pra banner NOVO: exatamente 1200×400 (3:1). Lido do
-// CONTEÚDO decodificado (cabeçalho estrutural do próprio formato), nunca de
-// metadado que o cliente poderia inventar.
+// Formato obrigatório pra banner NOVO: exatamente 1200×200 (6:1) — padrão
+// DEFINITIVO (correção de um lote anterior que exigia 1200×400/3:1, achado
+// alto demais na revisão do responsável; banners já salvos em 1200×400
+// nunca são apagados/migrados/revalidados, continuam servidos e exibidos
+// normalmente, só um upload NOVO passa a exigir 1200×200). Lido do CONTEÚDO
+// decodificado (cabeçalho estrutural do próprio formato), nunca de metadado
+// que o cliente poderia inventar.
 //
 // Deliberadamente NÃO usa a lib `image-size`: na auditoria ela apareceu com
 // duas vulnerabilidades de DoS (loop infinito) sem correção disponível nos
@@ -60,7 +64,7 @@ export function detectImageFormat(buffer: Buffer): ValidatedImage | null {
 // laço sem limite; WebP: os três sub-formatos VP8/VP8L/VP8X, campos de
 // tamanho fixo, sem laço) — mesmo espírito de `detectImageFormat` acima.
 export const BANNER_WIDTH = 1200;
-export const BANNER_HEIGHT = 400;
+export const BANNER_HEIGHT = 200;
 
 export interface ImageDimensions {
   width: number;
@@ -159,10 +163,10 @@ export function readImageDimensions(buffer: Buffer, format: ValidatedImage): Ima
 }
 
 /**
- * Banner NOVO precisa ser exatamente 1200×400 — nunca corta, redimensiona
- * ou distorce silenciosamente; se não bater, rejeita com mensagem amigável
- * mostrando o que foi enviado e o que era esperado. Retorna a mensagem de
- * erro, ou null se a dimensão está correta.
+ * Banner NOVO precisa ser exatamente 1200×200 (6:1) — nunca corta,
+ * redimensiona ou distorce silenciosamente; se não bater, rejeita com
+ * mensagem amigável mostrando o que foi enviado e o que era esperado.
+ * Retorna a mensagem de erro, ou null se a dimensão está correta.
  */
 export function validateBannerDimensions(buffer: Buffer, format: ValidatedImage): string | null {
   const dimensions = readImageDimensions(buffer, format);

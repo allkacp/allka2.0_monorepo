@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { systemAlertLink } from "@/components/alerts-header-icon";
+import { systemAlertLink, isSafeInternalPath } from "@/components/alerts-header-icon";
 
 // Regression tests for a real bug: this function used to hardcode
 // "/agency/tarefas" for any project_task alert regardless of the logged-in
@@ -35,9 +35,35 @@ describe("systemAlertLink", () => {
     expect(systemAlertLink("project", null, "empresas")).toBe("/company/tarefas");
   });
 
-  it("falls back to /admin/alertas for an unknown entity_type", () => {
-    expect(systemAlertLink("something_else", "x", "admin")).toBe("/admin/alertas");
-    expect(systemAlertLink(null, null, "admin")).toBe("/admin/alertas");
+  // Reparo "Ver alerta" (ata 2026-08): "/admin/alertas" como resposta
+  // genérica pra "não sei o destino" era o bug real reportado — essa rota
+  // só existe dentro do portal admin, então pra qualquer outro account_type
+  // o botão "não abria lugar nenhum". Agora null: sem destino conhecido,
+  // sem botão funcional (nunca abre em branco, nunca navega pra undefined).
+  it("devolve null (sem destino) pra um entity_type desconhecido — nunca /admin/alertas", () => {
+    expect(systemAlertLink("something_else", "x", "admin")).toBeNull();
+    expect(systemAlertLink("something_else", "x", "empresas")).toBeNull();
+  });
+
+  it("Avulso sem referência (entity_type null) devolve null — nunca um destino inventado", () => {
+    expect(systemAlertLink(null, null, "admin")).toBeNull();
+    expect(systemAlertLink(null, null, "empresas")).toBeNull();
+  });
+
+  it("ocorrência de Alerta Programado (entity_type 'alert_schedule') devolve null — nunca teve tela própria", () => {
+    expect(systemAlertLink("alert_schedule", "schedule-1", "admin")).toBeNull();
+    expect(systemAlertLink("alert_schedule", "schedule-1", "empresas")).toBeNull();
+  });
+
+  it("etapa (project_task_stage) abre a TAREFA-mãe via entity_parent_id, nunca inventa página de etapa", () => {
+    expect(systemAlertLink("project_task_stage", "stage-1", "agencias", "task-parent-1")).toBe("/agency/tarefas/task-parent-1");
+    expect(systemAlertLink("project_task_stage", "stage-1", "admin", "task-parent-1")).toBe("/admin/tarefas/task-parent-1");
+    expect(systemAlertLink("project_task_stage", "stage-1", "lider", "task-parent-1")).toBe("/leader/tarefas?tarefaId=task-parent-1");
+  });
+
+  it("etapa sem entity_parent_id conhecido (ocorrência anterior ao reparo) cai na lista geral — nunca em branco", () => {
+    expect(systemAlertLink("project_task_stage", "stage-1", "empresas", null)).toBe("/company/tarefas");
+    expect(systemAlertLink("project_task_stage", "stage-1", "admin", undefined)).toBe("/admin/tarefas");
   });
 
   it("never returns a route starting with /agency for a non-agency account_type", () => {
@@ -48,5 +74,25 @@ describe("systemAlertLink", () => {
         expect(systemAlertLink("project", entity_id, accountType)).not.toMatch(/^\/agency/);
       }
     }
+  });
+});
+
+describe("isSafeInternalPath", () => {
+  it("aceita caminho interno relativo", () => {
+    expect(isSafeInternalPath("/admin/tarefas/123")).toBe(true);
+    expect(isSafeInternalPath("/leader/tarefas?tarefaId=123")).toBe(true);
+  });
+
+  it("rejeita javascript:, data:, protocolo desconhecido e URL absoluta/protocol-relative", () => {
+    expect(isSafeInternalPath("javascript:alert(1)")).toBe(false);
+    expect(isSafeInternalPath("data:text/html,<script>alert(1)</script>")).toBe(false);
+    expect(isSafeInternalPath("https://evil.example.com")).toBe(false);
+    expect(isSafeInternalPath("//evil.example.com")).toBe(false);
+    expect(isSafeInternalPath("mailto:x@example.com")).toBe(false);
+  });
+
+  it("rejeita caminho que não começa com /", () => {
+    expect(isSafeInternalPath("admin/tarefas")).toBe(false);
+    expect(isSafeInternalPath("")).toBe(false);
   });
 });

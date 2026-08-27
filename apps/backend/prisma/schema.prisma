@@ -1856,6 +1856,14 @@ model SystemAlert {
   entity_type String?
   // "project_task" | "project_task_stage" | "project" | etc.
   entity_id   String?
+  // "Pai" navegável, só usado quando entity_id sozinho não é suficiente pra
+  // montar o destino do botão "Ver" (ata 2026-08, reparo "Ver alerta"): pra
+  // entity_type="project_task_stage", entity_id é o id da ETAPA e este
+  // campo é o id da TAREFA que contém a etapa — a plataforma não tem rota
+  // exclusiva de etapa, então "Ver" abre a tarefa. Nulo pros demais tipos
+  // (entity_id já é suficiente, ou não existe destino nenhum). Nunca usado
+  // pra nada além de montar o link — não afeta dedupe/regra/resolução.
+  entity_parent_id String?
   // Destinatário. Nulo = alerta geral do sistema (comportamento original,
   // visível ao Admin); preenchido = aviso de uma pessoa só, como "a etapa X
   // abriu para você".

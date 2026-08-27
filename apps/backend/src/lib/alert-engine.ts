@@ -545,7 +545,10 @@ const STAGE_SELECT = {
   prazo_execucao: true,
   nomade_id: true,
   lider_id: true,
-  project_task: { select: { title: true, project: { select: { title: true, admin_responsible_user_id: true } } } },
+  // `project_task.id` (reparo "Ver alerta") vira `entity_parent_id` na
+  // ocorrência — a plataforma não tem rota exclusiva de etapa, então "Ver"
+  // precisa saber qual TAREFA abrir.
+  project_task: { select: { id: true, title: true, project: { select: { title: true, admin_responsible_user_id: true } } } },
 } as const;
 
 async function processStages(
@@ -584,6 +587,7 @@ async function processStages(
             vars,
             stage.prazo_execucao,
             result,
+            stage.project_task?.id,
           );
           if (created) {
             await resolveMatchingOccurrences({
@@ -603,7 +607,7 @@ async function processStages(
           const recipients = await resolveRuleRecipients(dueSoonRule, "project_task_stage", stage, result);
           if (recipients.length === 0) result.skippedNoResponsavel++;
           for (const userId of recipients) {
-            await createOccurrenceIfNeeded(dueSoonRule, "project_task_stage", stage.id, userId, vars, stage.prazo_execucao, result);
+            await createOccurrenceIfNeeded(dueSoonRule, "project_task_stage", stage.id, userId, vars, stage.prazo_execucao, result, stage.project_task?.id);
           }
         }
       }
@@ -632,6 +636,9 @@ async function createOccurrenceIfNeeded(
   vars: Record<string, string>,
   dueDate: Date,
   result: AlertEngineRunResult,
+  // Só preenchido pra "project_task_stage" (id da tarefa que contém a
+  // etapa) — reparo "Ver alerta", ver comentário no schema.
+  entityParentId?: string,
 ): Promise<boolean> {
   const dedupeKey = `${rule.id}:${entityType}:${entityId}:${userId}:${dedupeCycleKey(dueDate)}`;
 
@@ -656,6 +663,7 @@ async function createOccurrenceIfNeeded(
         category: "alerta",
         entity_type: entityType,
         entity_id: entityId,
+        entity_parent_id: entityParentId ?? null,
         user_id: userId,
         standard_id: rule.standard.id,
         rule_id: rule.id,

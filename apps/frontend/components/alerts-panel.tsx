@@ -7,7 +7,6 @@
 // EXCLUSIVO de alertas: fonte de dados, loading, erro e filtros próprios —
 // nenhuma aba pra Notificações aqui.
 import { useCallback, useEffect, useState } from "react"
-import { useNavigate } from "react-router-dom"
 import { AlertTriangle, Archive, ArchiveRestore, ArrowRight, X } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -16,7 +15,7 @@ import { AlertBannerImage } from "@/components/alert-banner-image"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 import { apiClient } from "@/lib/api-client"
 import {
-  alertIcon, systemAlertLink, TASKS_ROUTE_BY_ACCOUNT_TYPE, type DisplayAlert,
+  alertIcon, systemAlertLink, isSafeInternalPath, TASKS_ROUTE_BY_ACCOUNT_TYPE, type DisplayAlert,
   criticalityFromSeverity, criticalityLabel, criticalityDescription,
   criticalityIcon, criticalityBadgeColor, criticalityAccentBorder, type Criticality,
 } from "@/components/alerts-header-icon"
@@ -32,7 +31,6 @@ interface AlertsPanelProps {
 
 export function AlertsPanel({ open = false, onClose }: AlertsPanelProps) {
   const { accountType } = useAccountType()
-  const navigate = useNavigate()
   const isAgency = accountType === "agencias"
 
   // Central de Alertas (ata 2026-08) — "Gerenciar" só existe pra Admin
@@ -77,7 +75,11 @@ export function AlertsPanel({ open = false, onClose }: AlertsPanelProps) {
         const raw: any[] = res?.data ?? []
         setAlerts(raw.map((a) => ({
           id: a.id, type: a.type, severity: a.severity, title: a.title,
-          message: a.description, link: a.link, count: a.count, isSystemAlert: false,
+          // Mesma barreira de destino interno aplicada aqui — `a.link` vem
+          // de um sistema separado (alertas de agência), nunca confiado
+          // sem passar pela mesma validação (reparo "Ver alerta").
+          message: a.description, link: typeof a.link === "string" && isSafeInternalPath(a.link) ? a.link : null,
+          count: a.count, isSystemAlert: false,
         })))
       } else {
         const res = await apiClient.getSystemAlerts({
@@ -89,7 +91,7 @@ export function AlertsPanel({ open = false, onClose }: AlertsPanelProps) {
         const raw: any[] = res?.data ?? []
         setAlerts(raw.map((a) => ({
           id: a.id, type: a.type, severity: a.severity, title: a.title,
-          message: a.message, link: systemAlertLink(a.entity_type, a.entity_id, accountType),
+          message: a.message, link: systemAlertLink(a.entity_type, a.entity_id, accountType, a.entity_parent_id),
           created_at: a.created_at, isSystemAlert: true,
           has_image: a.has_image, image_url: a.image_url, image_alt: a.image_alt,
         })))
@@ -149,10 +151,6 @@ export function AlertsPanel({ open = false, onClose }: AlertsPanelProps) {
     { value: "vermelho", label: "Vermelho" },
   ]
 
-  function handleView(link: string) {
-    onClose?.()
-    navigate(link)
-  }
 
   return (
     <HeaderSlideScreen
@@ -314,10 +312,41 @@ export function AlertsPanel({ open = false, onClose }: AlertsPanelProps) {
                       )}
                     </div>
                     <div className="flex items-center gap-1 shrink-0">
-                      <Button size="sm" variant="ghost" className="gap-1 text-xs h-7 px-2" onClick={() => handleView(alert.link)}>
-                        Ver
-                        <ArrowRight className="h-3 w-3" />
-                      </Button>
+                      {/* Reparo "Ver alerta" (ata 2026-08): link real <a>,
+                          nunca navigate()/onClose() — abre em nova aba,
+                          mantém a Central aberta na aba original, sem
+                          loading (destino já é conhecido antes do clique),
+                          sem depender de pop-up assíncrono. Alerta sem
+                          destino conhecido (Avulso sem referência,
+                          ocorrência de Programação) nunca mostra um botão
+                          funcional — desabilitado, com explicação. */}
+                      {alert.link ? (
+                        <a
+                          href={alert.link}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center gap-1 text-xs h-7 px-2 rounded-md text-slate-700 hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-slate-800 transition-colors"
+                        >
+                          Ver
+                          <ArrowRight className="h-3 w-3" />
+                        </a>
+                      ) : (
+                        <TooltipProvider delayDuration={300}>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <span>
+                                <Button size="sm" variant="ghost" className="gap-1 text-xs h-7 px-2 opacity-50 cursor-not-allowed" disabled>
+                                  Ver
+                                  <ArrowRight className="h-3 w-3" />
+                                </Button>
+                              </span>
+                            </TooltipTrigger>
+                            <TooltipContent className="text-xs max-w-55">
+                              Este alerta não possui uma tela vinculada.
+                            </TooltipContent>
+                          </Tooltip>
+                        </TooltipProvider>
+                      )}
                       {alert.isSystemAlert && (
                         <Button
                           size="sm"

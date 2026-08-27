@@ -1,13 +1,15 @@
 /**
  * Banner completo de imagem de alerta (ata 2026-08, 5º lote — correção de
- * UX). Diferente de AlertImageThumbnail (miniatura compacta h-12 w-12,
- * `object-cover`, usada nas listas administrativas — nunca mexer nisso
- * aqui), este componente mostra a imagem INTEIRA, sem cortar: proporção
- * fixa 3:1 (o formato exigido no upload, 1200×400), `object-fit: contain`
- * — nunca `cover`. Precisa continuar funcionando pra imagens antigas que
- * não são 3:1 (pré-existentes ao lote que passou a exigir 1200×400 exato
- * em upload novo, nunca migradas): a proporção real da imagem é preservada
- * dentro do quadro 3:1, com barras neutras (letterboxing) se for diferente.
+ * UX; padrão de dimensão corrigido de 1200×400/3:1 pra 1200×200/6:1 num
+ * lote seguinte, achado alto demais na revisão do responsável). Diferente
+ * de AlertImageThumbnail (miniatura compacta h-12 w-12, `object-cover`,
+ * usada nas listas administrativas — nunca mexer nisso aqui), este
+ * componente mostra a imagem INTEIRA, sem cortar: proporção fixa 6:1 (o
+ * formato exigido no upload, 1200×200), `object-fit: contain` — nunca
+ * `cover`. Precisa continuar funcionando pra imagens antigas fora de 6:1
+ * (inclusive as 1200×400/3:1 de um lote anterior, nunca migradas): a
+ * proporção real da imagem é preservada dentro do quadro 6:1, com barras
+ * neutras (letterboxing) se for diferente.
  *
  * Usado em dois lugares: dentro do preview dos 3 formulários (Avulso,
  * Padrão, Programado — ver alert-image-field.tsx) e no feed pessoal de
@@ -38,7 +40,7 @@ export function AlertBannerImage({ src, alt, className }: AlertBannerImageProps)
     return (
       <div
         className={cn(
-          "w-full aspect-[3/1] rounded-lg flex items-center justify-center bg-slate-100 dark:bg-slate-800 text-slate-400 border border-slate-200 dark:border-slate-700",
+          "w-full aspect-[6/1] rounded-lg flex items-center justify-center bg-slate-100 dark:bg-slate-800 text-slate-400 border border-slate-200 dark:border-slate-700",
           className,
         )}
         title="Imagem indisponível"
@@ -53,7 +55,7 @@ export function AlertBannerImage({ src, alt, className }: AlertBannerImageProps)
     // visual de "indisponível" por uma fração de segundo.
     return (
       <div
-        className={cn("w-full aspect-[3/1] rounded-lg bg-slate-100 dark:bg-slate-800 animate-pulse", className)}
+        className={cn("w-full aspect-[6/1] rounded-lg bg-slate-100 dark:bg-slate-800 animate-pulse", className)}
         aria-hidden="true"
       />
     );
@@ -65,7 +67,7 @@ export function AlertBannerImage({ src, alt, className }: AlertBannerImageProps)
         type="button"
         onClick={() => setOpen(true)}
         className={cn(
-          "relative w-full aspect-[3/1] rounded-lg overflow-hidden border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50 group block",
+          "relative w-full aspect-[6/1] rounded-lg overflow-hidden border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50 group block",
           className,
         )}
         title="Ampliar imagem"

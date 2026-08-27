@@ -55,10 +55,10 @@ async function uploadImage(token: string, buffer: Buffer, filename: string) {
   return { status: res.status, json };
 }
 
-// Banner real 1200×400 (reparo "banner visual" — todo upload novo exige
-// essa dimensão exata a partir de agora). O antigo fixture 1x1 (assinatura
-// válida, mas dimensão nenhuma) passou a ser rejeitado pelo endpoint.
-const REAL_PNG = fs.readFileSync(path.join(__dirname, "../test-support/fixtures/alert-banner-1200x400.png"));
+// Banner real 1200×200 (padrão definitivo — corrigido de 1200×400 num lote
+// seguinte). O antigo fixture 1x1 (assinatura válida, mas dimensão
+// nenhuma) passou a ser rejeitado pelo endpoint.
+const REAL_PNG = fs.readFileSync(path.join(__dirname, "../test-support/fixtures/alert-banner-1200x200.png"));
 
 const createdUserIds: string[] = [];
 const createdProfileIds: string[] = [];

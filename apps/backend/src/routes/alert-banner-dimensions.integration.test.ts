@@ -10,14 +10,17 @@ import app from "../app";
 import { prisma } from "../lib/prisma";
 import { config } from "../config";
 import { ensureDefaultAlertStandardsAndRules } from "../lib/alert-engine";
-import { deleteAlertImage } from "../lib/alert-image-storage";
+import { deleteAlertImage, storeAlertImageBuffer } from "../lib/alert-image-storage";
 
 // Reparo "banner visual" (ata 2026-08, pós-4º lote/pós-reparo de
-// autorização): todo banner NOVO precisa ser exatamente 1200×400 (3:1) —
-// lido do conteúdo real decodificado, nunca confiado ao cliente. Imagens já
-// existentes (fora do padrão) nunca são apagadas/migradas — só um upload
-// NOVO passa por esta checagem. Este arquivo cobre os itens 1-11 (dimensão)
-// e 20 (feed não expõe arquivo físico) da lista de testes da ata.
+// autorização) — padrão DEFINITIVO atualizado num lote seguinte: todo
+// banner NOVO precisa ser exatamente 1200×200 (6:1), não mais 1200×400
+// (3:1, achado alto demais na revisão do responsável) — lido do conteúdo
+// real decodificado, nunca confiado ao cliente. Imagens já existentes fora
+// do padrão atual (inclusive as 1200×400 do lote anterior) nunca são
+// apagadas/migradas — só um upload NOVO passa por esta checagem. Este
+// arquivo cobre os itens 1-13 (dimensão) e 20 (feed não expõe arquivo
+// físico) da lista de testes da ata.
 
 const FIXTURES_DIR = path.resolve(__dirname, "../test-support/fixtures");
 function fixture(name: string): Buffer {
@@ -119,76 +122,97 @@ describe("Dimensão exata do banner de Alerta (reparo 'banner visual')", () => {
     }
   });
 
-  it("1. JPEG 1200×400 é aceito", async () => {
-    const res = await uploadImage(masterToken, fixture("alert-banner-1200x400.jpg"), "banner.jpg");
+  it("1. JPEG 1200×200 é aceito", async () => {
+    const res = await uploadImage(masterToken, fixture("alert-banner-1200x200.jpg"), "banner.jpg");
     assert.equal(res.status, 201);
     createdImageFileNames.push(res.json.file_name);
   });
 
-  it("2. PNG 1200×400 é aceito", async () => {
-    const res = await uploadImage(masterToken, fixture("alert-banner-1200x400.png"), "banner.png");
+  it("2. PNG 1200×200 é aceito", async () => {
+    const res = await uploadImage(masterToken, fixture("alert-banner-1200x200.png"), "banner.png");
     assert.equal(res.status, 201);
     createdImageFileNames.push(res.json.file_name);
   });
 
-  it("3. WebP 1200×400 é aceito", async () => {
-    const res = await uploadImage(masterToken, fixture("alert-banner-1200x400.webp"), "banner.webp");
+  it("3. WebP 1200×200 é aceito", async () => {
+    const res = await uploadImage(masterToken, fixture("alert-banner-1200x200.webp"), "banner.webp");
     assert.equal(res.status, 201);
     createdImageFileNames.push(res.json.file_name);
   });
 
-  it("4. 1080×1080 é rejeitado", async () => {
+  it("4. 1200×400 (padrão antigo) é rejeitado em upload NOVO", async () => {
+    const res = await uploadImage(masterToken, fixture("alert-banner-1200x400.png"), "old-banner.png");
+    assert.equal(res.status, 400);
+    assert.match(res.json.error, /1200 × 400/);
+  });
+
+  it("5. 1080×1080 é rejeitado", async () => {
     const res = await uploadImage(masterToken, fixture("alert-square-1080x1080.png"), "square.png");
     assert.equal(res.status, 400);
     assert.match(res.json.error, /1080 × 1080/);
   });
 
-  it("5. 400×1200 é rejeitado", async () => {
-    const res = await uploadImage(masterToken, fixture("alert-portrait-400x1200.png"), "portrait.png");
+  it("6. 1200×199 é rejeitado", async () => {
+    const res = await uploadImage(masterToken, fixture("alert-offbyone-1200x199.png"), "offbyone.png");
     assert.equal(res.status, 400);
-    assert.match(res.json.error, /400 × 1200/);
+    assert.match(res.json.error, /1200 × 199/);
   });
 
-  it("6. 1200×399 é rejeitado", async () => {
-    const res = await uploadImage(masterToken, fixture("alert-offbyone-1200x399.png"), "offbyone.png");
+  it("7. 2400×400 é rejeitado (mesma proporção 6:1, mas fora do tamanho exato)", async () => {
+    const res = await uploadImage(masterToken, fixture("alert-double-2400x400.jpg"), "double.jpg");
     assert.equal(res.status, 400);
-    assert.match(res.json.error, /1200 × 399/);
+    assert.match(res.json.error, /2400 × 400/);
   });
 
-  it("7. 2400×800 é rejeitado (mesma proporção 3:1, mas fora do tamanho exato)", async () => {
-    const res = await uploadImage(masterToken, fixture("alert-double-2400x800.jpg"), "double.jpg");
+  it("8. mensagem informa a dimensão recebida e a exigida (1200 × 200)", async () => {
+    const res = await uploadImage(masterToken, fixture("alert-square-1080x1080.png"), "square2.png");
     assert.equal(res.status, 400);
-    assert.match(res.json.error, /2400 × 800/);
+    assert.equal(res.json.error, "A imagem enviada possui 1080 × 1080 px. O banner precisa ter exatamente 1200 × 200 px.");
   });
 
-  it("8. arquivo acima de 5MB é rejeitado", async () => {
-    const big = Buffer.concat([fixture("alert-banner-1200x400.png"), Buffer.alloc(6 * 1024 * 1024)]);
+  it("arquivo acima de 5MB é rejeitado", async () => {
+    const big = Buffer.concat([fixture("alert-banner-1200x200.png"), Buffer.alloc(6 * 1024 * 1024)]);
     const res = await uploadImage(masterToken, big, "grande.png");
     assert.equal(res.status, 400);
   });
 
-  it("9. arquivo disfarçado (conteúdo não é imagem de verdade) é rejeitado", async () => {
+  it("arquivo disfarçado (conteúdo não é imagem de verdade) é rejeitado", async () => {
     const fake = Buffer.from("isto nao e uma imagem de verdade, so texto simulando um upload");
     const res = await uploadImage(masterToken, fake, "disfarcado.png");
     assert.equal(res.status, 400);
   });
 
-  it("10. SVG é rejeitado (nunca aceito, independente de dimensão)", async () => {
-    const svg = Buffer.from('<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="400"></svg>');
+  it("SVG é rejeitado (nunca aceito, independente de dimensão)", async () => {
+    const svg = Buffer.from('<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="200"></svg>');
     const res = await uploadImage(masterToken, svg, "banner.svg");
     assert.equal(res.status, 400);
   });
 
-  it("11. mensagem de erro mostra a dimensão recebida e a esperada", async () => {
-    const res = await uploadImage(masterToken, fixture("alert-square-1080x1080.png"), "square2.png");
-    assert.equal(res.status, 400);
-    assert.equal(res.json.error, "A imagem enviada possui 1080 × 1080 px. O banner precisa ter exatamente 1200 × 400 px.");
+  it("13. banner legado (1200×400, padrão de um lote anterior) continua servido/exibível — nunca migrado ou apagado", async () => {
+    // Simula uma ocorrência antiga que já tinha uma imagem 1200×400 salva
+    // ANTES deste lote — nunca passa pela checagem de upload de novo (só o
+    // endpoint de upload valida dimensão; uma linha já existente no banco
+    // referenciando um arquivo físico já existente nunca é revalidada).
+    const legacyFileName = storeAlertImageBuffer(fixture("alert-banner-1200x400.png"), ".png");
+    createdImageFileNames.push(legacyFileName);
+
+    const recipient = await createUser();
+    const created = await api("/api/system-alerts/admin", {
+      method: "POST",
+      token: masterToken,
+      body: { title: "Alerta com banner legado 1200x400", message: "Mensagem de teste", severity: "info", user_id: recipient.id, image_file_name: legacyFileName, image_alt: "Banner legado" },
+    });
+    createdAlertIds.push(created.json.id);
+    assert.equal(created.status, 201, "criar uma ocorrência REFERENCIANDO um arquivo já existente nunca revalida dimensão");
+
+    const imgRes = await fetch(`${baseUrl}${created.json.image_url}`, { headers: { authorization: `Bearer ${tokenFor(recipient)}` } });
+    assert.equal(imgRes.status, 200, "o banner legado continua sendo servido normalmente");
   });
 
   // ── Feed pessoal (item 20) ────────────────────────────────────────────
 
   it("20. GET /api/system-alerts informa has_image/image_url sem expor o nome físico do arquivo", async () => {
-    const uploaded = await uploadImage(masterToken, fixture("alert-banner-1200x400.png"), "banner-feed.png");
+    const uploaded = await uploadImage(masterToken, fixture("alert-banner-1200x200.png"), "banner-feed.png");
     createdImageFileNames.push(uploaded.json.file_name);
 
     const recipient = await createUser();

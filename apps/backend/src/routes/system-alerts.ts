@@ -37,12 +37,14 @@ const router = Router();
 // multipart — protege contra arquivo disfarçado. multer em memória (não
 // disco) porque o arquivo só é gravado DEPOIS de confirmado o formato real.
 //
-// Dimensão exata 1200×400 (3:1) é exigida SÓ em upload NOVO — uma imagem já
-// salva antes deste reparo (fora do padrão) nunca é apagada, revalidada nem
-// migrada; continua sendo servida e exibida normalmente (com `contain`),
-// só não é possível re-selecioná-la como se fosse nova (o upload em si é
-// sempre o mesmo endpoint, então qualquer envio — inclusive substituição —
-// passa pela mesma checagem de dimensão a partir de agora).
+// Dimensão exata 1200×200 (6:1) é exigida SÓ em upload NOVO — padrão
+// definitivo (corrige o 1200×400/3:1 de um lote anterior, achado alto
+// demais). Uma imagem já salva fora do padrão atual (1200×400 do lote
+// anterior, ou qualquer outra) nunca é apagada, revalidada nem migrada;
+// continua sendo servida e exibida normalmente (com `contain`), só não é
+// possível re-selecioná-la como se fosse nova (o upload em si é sempre o
+// mesmo endpoint, então qualquer envio — inclusive substituição — passa
+// pela mesma checagem de dimensão a partir de agora).
 const alertImageUpload = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: MAX_ALERT_IMAGE_BYTES },

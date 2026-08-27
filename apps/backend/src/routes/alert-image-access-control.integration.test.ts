@@ -62,9 +62,10 @@ async function uploadImage(token: string, buffer: Buffer, filename: string) {
   return { status: res.status, json };
 }
 
-// Banner real 1200×400 — a fixture 1x1 antiga passou a ser rejeitada pelo
-// endpoint depois do reparo "banner visual" (dimensão exata exigida).
-const REAL_PNG = fs.readFileSync(path.join(__dirname, "../test-support/fixtures/alert-banner-1200x400.png"));
+// Banner real 1200×200 (padrão definitivo) — a fixture 1x1 antiga passou a
+// ser rejeitada pelo endpoint depois do reparo "banner visual" (dimensão
+// exata exigida).
+const REAL_PNG = fs.readFileSync(path.join(__dirname, "../test-support/fixtures/alert-banner-1200x200.png"));
 
 const createdUserIds: string[] = [];
 const createdProfileIds: string[] = [];

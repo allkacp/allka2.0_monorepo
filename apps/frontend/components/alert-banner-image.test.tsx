@@ -6,7 +6,7 @@ import { AlertBannerImage } from "@/components/alert-banner-image";
 // Banner completo de imagem de alerta (ata 2026-08, 5º lote) — mesma
 // disciplina de busca autenticada + Object URL do AlertImageThumbnail
 // (ver alert-image-lightbox.test.tsx), mas em modo "contain" de página
-// inteira (proporção 3:1), usado no preview dos formulários e no feed
+// inteira (proporção 6:1), usado no preview dos formulários e no feed
 // pessoal de alertas (AlertsPanel).
 
 vi.mock("@/lib/api-client", () => ({
@@ -45,15 +45,15 @@ describe("AlertBannerImage", () => {
     await waitFor(() => expect(screen.getByAltText("Banner de teste")).toBeInTheDocument());
   });
 
-  it("busca a imagem autenticada e renderiza com object-contain em proporção 3:1", async () => {
+  it("busca a imagem autenticada e renderiza com object-contain em proporção 6:1", async () => {
     (apiClient.fetchAlertImageBlobUrl as any).mockResolvedValue("blob:mock-url-1");
     render(<AlertBannerImage src="/api/system-alerts/abc/image" alt="Banner de teste" />);
     const img = await screen.findByAltText("Banner de teste");
     expect(apiClient.fetchAlertImageBlobUrl).toHaveBeenCalledWith("/api/system-alerts/abc/image");
     expect(img.className).toMatch(/object-contain/);
     expect(img.className).not.toMatch(/object-cover/);
-    // O botão que envolve a imagem carrega a moldura 3:1 de largura total.
-    expect(img.closest("button")?.className).toMatch(/aspect-\[3\/1\]/);
+    // O botão que envolve a imagem carrega a moldura 6:1 de largura total.
+    expect(img.closest("button")?.className).toMatch(/aspect-\[6\/1\]/);
     expect(img.closest("button")?.className).toMatch(/w-full/);
   });
 

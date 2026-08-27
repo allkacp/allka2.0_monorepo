@@ -1,5 +1,6 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
 import { render, screen, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { AlertsPanel } from "@/components/alerts-panel";
 
 // Feed pessoal de alertas (ata 2026-08, 5º lote) — cobre a lacuna principal
@@ -88,5 +89,79 @@ describe("AlertsPanel — banner de imagem no feed pessoal", () => {
     await waitFor(() => expect(screen.getByText("Aviso importante")).toBeInTheDocument());
     expect(apiClient.fetchAlertImageBlobUrl).not.toHaveBeenCalled();
     expect(screen.queryByTitle("Ampliar imagem")).not.toBeInTheDocument();
+  });
+});
+
+// Reparo "Ver alerta" (ata 2026-08): "Ver" costumava fechar o painel e
+// navegar na mesma aba (às vezes pra um destino inexistente, "não abria
+// lugar nenhum"). Agora é sempre um <a target="_blank"> quando o destino já
+// é conhecido (sem loading, sem chamada assíncrona) — ou desabilitado com
+// explicação quando não há destino (Avulso sem referência).
+describe("AlertsPanel — botão 'Ver' (link real, nova aba, Central preservada)", () => {
+  it("15/16/23/32. alerta com entity_type reconhecido vira um <a> real, nova aba, com noopener/noreferrer — Central nunca fecha/navega", async () => {
+    (apiClient.getSystemAlerts as any).mockResolvedValue({
+      data: [{ ...baseAlert, entity_type: "project_task", entity_id: "task-1" }],
+    });
+    const onClose = vi.fn();
+    render(<AlertsPanel open onClose={onClose} />);
+
+    await waitFor(() => expect(screen.getByText("Aviso importante")).toBeInTheDocument());
+    const link = screen.getByText("Ver").closest("a");
+    expect(link).not.toBeNull();
+    expect(link).toHaveAttribute("target", "_blank");
+    expect(link).toHaveAttribute("rel", expect.stringContaining("noopener"));
+    expect(link).toHaveAttribute("rel", expect.stringContaining("noreferrer"));
+    // company_user (accountType "empresas" mockado) sem deep-link de tarefa
+    // por id — cai na lista própria, nunca em branco.
+    expect(link).toHaveAttribute("href", "/company/tarefas");
+    expect(onClose).not.toHaveBeenCalled();
+  });
+
+  it("18/19. Avulso sem referência (entity_type null) NÃO mostra link funcional — desabilitado, com explicação, sem loading", async () => {
+    (apiClient.getSystemAlerts as any).mockResolvedValue({
+      data: [{ ...baseAlert, entity_type: null, entity_id: null }],
+    });
+    const user = userEvent.setup();
+    render(<AlertsPanel open onClose={() => {}} />);
+
+    await waitFor(() => expect(screen.getByText("Aviso importante")).toBeInTheDocument());
+    expect(screen.queryByText("Ver")?.closest("a")).toBeFalsy();
+    const disabledBtn = screen.getByText("Ver").closest("button");
+    expect(disabledBtn).toBeDisabled();
+    // Clicar num botão desabilitado não deve acionar nenhuma chamada.
+    await user.click(disabledBtn!).catch(() => {});
+    expect(apiClient.archiveSystemAlert).not.toHaveBeenCalled();
+    expect(apiClient.markSystemAlertRead).not.toHaveBeenCalled();
+  });
+
+  it("19. ocorrência de Programação (entity_type 'alert_schedule') também não mostra link funcional", async () => {
+    (apiClient.getSystemAlerts as any).mockResolvedValue({
+      data: [{ ...baseAlert, entity_type: "alert_schedule", entity_id: "schedule-1" }],
+    });
+    render(<AlertsPanel open onClose={() => {}} />);
+    await waitFor(() => expect(screen.getByText("Aviso importante")).toBeInTheDocument());
+    expect(screen.getByText("Ver").closest("button")).toBeDisabled();
+  });
+
+  it("17. etapa (project_task_stage) com entity_parent_id abre a tarefa-mãe", async () => {
+    (apiClient.getSystemAlerts as any).mockResolvedValue({
+      data: [{ ...baseAlert, entity_type: "project_task_stage", entity_id: "stage-1", entity_parent_id: "task-parent-1" }],
+    });
+    render(<AlertsPanel open onClose={() => {}} />);
+    await waitFor(() => expect(screen.getByText("Aviso importante")).toBeInTheDocument());
+    const link = screen.getByText("Ver").closest("a");
+    expect(link).toHaveAttribute("href", "/company/tarefas");
+  });
+
+  it("26/27. clicar em 'Ver' nunca chama archive/read — o link não resolve nem arquiva o alerta", async () => {
+    (apiClient.getSystemAlerts as any).mockResolvedValue({
+      data: [{ ...baseAlert, entity_type: "project_task", entity_id: "task-1" }],
+    });
+    render(<AlertsPanel open onClose={() => {}} />);
+    await waitFor(() => expect(screen.getByText("Aviso importante")).toBeInTheDocument());
+    // O <a> em si não dispara nenhum handler de arquivar/ler — só os botões
+    // dedicados (arquivar/dispensar) fazem isso, nunca "Ver".
+    expect(apiClient.archiveSystemAlert).not.toHaveBeenCalled();
+    expect(apiClient.markSystemAlertRead).not.toHaveBeenCalled();
   });
 });

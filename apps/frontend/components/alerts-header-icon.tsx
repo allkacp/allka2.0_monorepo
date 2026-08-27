@@ -17,7 +17,12 @@ export interface DisplayAlert {
   severity: "error" | "warning" | "info"
   title: string
   message: string
-  link: string
+  // Reparo "Ver alerta" (ata 2026-08): null = sem destino conhecido (Avulso
+  // sem referência, ocorrência de Programação, tipo não reconhecido) — o
+  // botão "Ver" não deve existir/deve aparecer desabilitado, nunca navegar
+  // pra undefined nem abrir aba vazia. Sempre um caminho interno seguro
+  // (nunca javascript:/data:/URL externa) — ver systemAlertLink abaixo.
+  link: string | null
   count?: number
   created_at?: string
   isSystemAlert: boolean
@@ -39,6 +44,10 @@ interface ApiAlert {
   severity: "info" | "warning" | "error"
   entity_type: string | null
   entity_id: string | null
+  // Reparo "Ver alerta": "pai" navegável (ex.: id da tarefa que contém uma
+  // etapa) — só preenchido quando entity_id sozinho não basta pra montar o
+  // destino. Ver systemAlertLink.
+  entity_parent_id?: string | null
   is_read: boolean
   created_at: string
 }
@@ -92,20 +101,53 @@ const PROJECT_LINK_BUILDERS: Partial<Record<AccountType, (id: string) => string>
   agencias: (id) => `/agency/projetos/${id}`,
 }
 
+// Reparo "Ver alerta" (ata 2026-08) — só caminho interno relativo, montado
+// exclusivamente pelos builders fechados acima (nunca texto livre/dado do
+// usuário). Barreira extra mesmo assim: nunca aceita `javascript:`,
+// `data:`, protocolo (`algo:`), URL absoluta (`http://…`) nem
+// protocol-relative (`//host`) — só `/algo`.
+export function isSafeInternalPath(path: string): boolean {
+  if (!path.startsWith("/")) return false
+  if (path.startsWith("//")) return false
+  if (path.includes(":")) return false
+  return true
+}
+
+// Só os tipos abaixo têm uma tela real associada — qualquer outro
+// (Avulso sem referência, ocorrência de Alerta Programado — `entity_type`
+// "alert_schedule", nunca uma tela própria — ou um tipo desconhecido)
+// devolve null: o botão "Ver" não deve existir/deve ficar desabilitado,
+// nunca navegar pra undefined nem abrir aba vazia. Nunca "/admin/alertas"
+// como resposta genérica pra "não sei" — essa rota só existe dentro do
+// portal admin; pra qualquer outro account_type ela nem carrega.
 export function systemAlertLink(
   entity_type: string | null,
   entity_id: string | null,
   accountType: AccountType,
-): string {
+  entity_parent_id?: string | null,
+): string | null {
+  let path: string | null = null
+
   if (entity_type === "project_task") {
-    if (entity_id && TASK_LINK_BUILDERS[accountType]) return TASK_LINK_BUILDERS[accountType]!(entity_id)
-    return TASKS_ROUTE_BY_ACCOUNT_TYPE[accountType]
+    path = entity_id && TASK_LINK_BUILDERS[accountType] ? TASK_LINK_BUILDERS[accountType]!(entity_id) : TASKS_ROUTE_BY_ACCOUNT_TYPE[accountType]
+  } else if (entity_type === "project_task_stage") {
+    // Etapa: a plataforma não tem tela exclusiva de etapa — abre a TAREFA
+    // que contém a etapa (entity_parent_id, resolvido no backend na hora
+    // de criar a ocorrência), nunca inventa uma página. Sem parent id
+    // conhecido (ocorrência antiga, anterior a este reparo), cai na lista
+    // geral de tarefas do próprio portal — nunca em branco.
+    path = entity_parent_id && TASK_LINK_BUILDERS[accountType]
+      ? TASK_LINK_BUILDERS[accountType]!(entity_parent_id)
+      : TASKS_ROUTE_BY_ACCOUNT_TYPE[accountType]
+  } else if (entity_type === "project") {
+    path = entity_id && PROJECT_LINK_BUILDERS[accountType] ? PROJECT_LINK_BUILDERS[accountType]!(entity_id) : TASKS_ROUTE_BY_ACCOUNT_TYPE[accountType]
   }
-  if (entity_type === "project") {
-    if (entity_id && PROJECT_LINK_BUILDERS[accountType]) return PROJECT_LINK_BUILDERS[accountType]!(entity_id)
-    return TASKS_ROUTE_BY_ACCOUNT_TYPE[accountType]
-  }
-  return "/admin/alertas"
+  // entity_type null (Avulso sem referência), "alert_schedule" (ocorrência
+  // de Programação — nunca teve tela própria) ou qualquer tipo não
+  // reconhecido: sem destino, `path` continua null.
+
+  if (!path || !isSafeInternalPath(path)) return null
+  return path
 }
 
 export const severityColor: Record<DisplayAlert["severity"], string> = {
