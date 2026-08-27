@@ -158,6 +158,7 @@ class ApiClient {
     path: string,
     body?: unknown,
     params?: Record<string, any>,
+    signal?: AbortSignal,
   ): Promise<T> {
     let url = `${API_BASE_URL}${path}`;
     if (params) {
@@ -181,6 +182,7 @@ class ApiClient {
       method,
       headers,
       body: body !== undefined ? JSON.stringify(body) : undefined,
+      signal,
     });
 
     if (!res.ok) {
@@ -214,8 +216,8 @@ class ApiClient {
     return res.json();
   }
 
-  private get<T = any>(path: string, params?: Record<string, any>) {
-    return this.request<T>("GET", path, undefined, params);
+  private get<T = any>(path: string, params?: Record<string, any>, signal?: AbortSignal) {
+    return this.request<T>("GET", path, undefined, params, signal);
   }
   private post<T = any>(path: string, body?: unknown) {
     return this.request<T>("POST", path, body);
@@ -1796,8 +1798,8 @@ class ApiClient {
   // Item único — mesmo modelo/include rico usado pela listagem (project,
   // project_product, stages, briefing_answers, attachments). Nunca usar
   // getTask() (rota /tasks/:id, outro model/router mais pobre) aqui.
-  async getOperationalTask(id: string) {
-    return this.get(`/project-tasks/${id}`);
+  async getOperationalTask(id: string, signal?: AbortSignal) {
+    return this.get(`/project-tasks/${id}`, undefined, signal);
   }
   async launchProjectTask(id: string) {
     return this.patch(`/project-tasks/${id}/launch`, {});
@@ -2075,8 +2077,17 @@ class ApiClient {
     image_file_name?: string | null;
     image_alt?: string | null;
     expires_at?: string | null;
+    destination_type?: "none" | "project" | "task";
+    destination_id?: string | null;
   }) {
     return this.post("/system-alerts/admin", data);
+  }
+
+  // Seletor buscável de "Destino opcional" do Avulso (ata 2026-08, 6º lote)
+  // — nunca URL/id digitado, só busca por nome/código entre registros
+  // reais. Leve e paginado (20 no backend) de propósito.
+  async getAlertDestinationOptions(type: "project" | "task", search?: string) {
+    return this.get("/system-alerts/admin/destination-options", { type, search });
   }
 
   async updateAdminSystemAlert(

@@ -27,6 +27,8 @@ import {
   validateBannerDimensions,
 } from "../lib/alert-image-storage";
 import { isValidIanaTimeZone, isValidTimeOfDay, zonedTimeToUtc } from "../lib/timezone";
+import { combinedProjectWhere } from "../lib/project-scope";
+import { getTaskScopeWhere, applyScope } from "./project-tasks";
 
 const router = Router();
 
@@ -570,6 +572,80 @@ router.get(
   },
 );
 
+// ── GET /api/system-alerts/admin/destination-options — busca pro seletor ─────
+// "Destino opcional" do Avulso (ata 2026-08, 6º lote): a pessoa nunca digita
+// URL/id técnico, só busca por nome/código entre registros reais. Leve e
+// paginado de propósito — o próprio Bug 1 deste lote nasceu de uma listagem
+// sem paginação, não repete o erro aqui. Sempre Admin Master (mesmo escopo
+// de quem cria o Avulso), então busca sem filtro de escopo — a validação de
+// que o DESTINATÁRIO final consegue acessar o registro acontece em POST
+// /admin, não aqui (aqui é só a busca pra popular o combobox).
+const destinationOptionsSchema = z.object({
+  type: z.enum(["project", "task"]),
+  search: z.string().trim().max(200).optional(),
+});
+
+router.get(
+  "/admin/destination-options",
+  verifyToken,
+  requireAdminMaster,
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const query = destinationOptionsSchema.safeParse(req.query);
+      if (!query.success) {
+        res.status(400).json({ error: "Parâmetros inválidos", details: query.error.flatten() });
+        return;
+      }
+      const { type, search } = query.data;
+
+      if (type === "project") {
+        const projects = await prisma.project.findMany({
+          where: search ? { title: { contains: search } } : {},
+          select: { id: true, title: true, project_code: true },
+          orderBy: { created_at: "desc" },
+          take: 20,
+        });
+        res.json({
+          data: projects.map((p) => ({
+            id: p.id,
+            label: p.title,
+            sublabel: p.project_code,
+          })),
+        });
+        return;
+      }
+
+      const tasks = await prisma.projectTask.findMany({
+        where: search
+          ? {
+              OR: [
+                { title: { contains: search } },
+                { task_code: { contains: search } },
+              ],
+            }
+          : {},
+        select: {
+          id: true,
+          title: true,
+          task_code: true,
+          project: { select: { title: true } },
+        },
+        orderBy: { created_at: "desc" },
+        take: 20,
+      });
+      res.json({
+        data: tasks.map((t) => ({
+          id: t.id,
+          label: t.title,
+          sublabel: [t.task_code, t.project?.title].filter(Boolean).join(" — "),
+        })),
+      });
+    } catch (err) {
+      next(err);
+    }
+  },
+);
+
 // ── POST /api/system-alerts/admin — criação manual ───────────────────────────
 
 const createAdminAlertSchema = z
@@ -587,10 +663,21 @@ const createAdminAlertSchema = z
     image_file_name: z.string().trim().min(1).nullable().optional(),
     image_alt: z.string().trim().max(300).nullable().optional(),
     expires_at: z.string().datetime().nullable().optional(),
+    // Destino opcional (ata 2026-08, 6º lote — reparo "Ver alerta" no
+    // Avulso): "none" (padrão) = alerta informativo, sem botão "Ver".
+    // "project"/"task" exigem destination_id, sempre um id real escolhido
+    // no seletor buscável acima — nunca URL/id técnico digitado à mão.
+    // Nunca "stage" aqui: etapa continua exclusiva do motor automático.
+    destination_type: z.enum(["none", "project", "task"]).default("none"),
+    destination_id: z.string().trim().min(1).nullable().optional(),
   })
   .refine((data) => !data.image_file_name || !!data.image_alt, {
     message: "Texto alternativo é obrigatório quando há imagem",
     path: ["image_alt"],
+  })
+  .refine((data) => data.destination_type === "none" || !!data.destination_id, {
+    message: "Selecione um registro para o destino escolhido",
+    path: ["destination_id"],
   });
 
 router.post(
@@ -604,15 +691,16 @@ router.post(
         res.status(400).json({ error: "Dados inválidos", details: body.error.flatten() });
         return;
       }
-      const { title, message, severity, user_id, image_file_name, image_alt, expires_at } = body.data;
+      const { title, message, severity, user_id, image_file_name, image_alt, expires_at, destination_type, destination_id } = body.data;
 
       // Destinatário nunca aceito só porque o frontend mandou um id — tem
       // que existir de verdade e estar ativo, igual a qualquer outro fluxo
       // administrativo desta plataforma.
+      let destinatario: { id: string; is_active: boolean; account_type: string; role: string } | null = null;
       if (user_id) {
-        const destinatario = await prisma.user.findUnique({
+        destinatario = await prisma.user.findUnique({
           where: { id: user_id },
-          select: { id: true, is_active: true },
+          select: { id: true, is_active: true, account_type: true, role: true },
         });
         if (!destinatario || !destinatario.is_active) {
           res.status(400).json({ error: "Destinatário inválido ou inexistente" });
@@ -633,6 +721,67 @@ router.post(
         return;
       }
 
+      // Destino opcional (ata 2026-08, 6º lote): revalidado no servidor,
+      // nunca confia no que o formulário mandou. "none" = alerta
+      // informativo (entity_type/entity_id ficam nulos, comportamento já
+      // existente). "project"/"task" exigem que o registro exista de
+      // verdade e, quando há um destinatário específico (não "Geral"), que
+      // ELE consiga acessá-lo — nunca um alerta cujo botão "Ver" leva a
+      // tela sem permissão pra quem recebeu.
+      let entityType: string | null = null;
+      let entityId: string | null = null;
+      if (destination_type === "project") {
+        const project = await prisma.project.findUnique({
+          where: { id: destination_id! },
+          select: { id: true },
+        });
+        if (!project) {
+          res.status(400).json({ error: "Projeto selecionado não existe" });
+          return;
+        }
+        if (destinatario) {
+          const { where: scopeWhere } = await combinedProjectWhere(prisma, destinatario.id, destinatario.account_type);
+          if (scopeWhere === null) {
+            res.status(400).json({ error: "O destinatário selecionado não tem acesso a este projeto" });
+            return;
+          }
+          const accessible = Object.keys(scopeWhere).length === 0
+            ? true
+            : !!(await prisma.project.findFirst({ where: { AND: [{ id: destination_id! }, scopeWhere] }, select: { id: true } }));
+          if (!accessible) {
+            res.status(400).json({ error: "O destinatário selecionado não tem acesso a este projeto" });
+            return;
+          }
+        }
+        entityType = "project";
+        entityId = destination_id!;
+      } else if (destination_type === "task") {
+        const task = await prisma.projectTask.findUnique({
+          where: { id: destination_id! },
+          select: { id: true },
+        });
+        if (!task) {
+          res.status(400).json({ error: "Tarefa selecionada não existe" });
+          return;
+        }
+        if (destinatario) {
+          const scopeWhere = await getTaskScopeWhere(destinatario.id, destinatario.account_type, destinatario.role);
+          if (scopeWhere === null) {
+            res.status(400).json({ error: "O destinatário selecionado não tem acesso a esta tarefa" });
+            return;
+          }
+          const accessible = Object.keys(scopeWhere).length === 0
+            ? true
+            : !!(await prisma.projectTask.findFirst({ where: applyScope({ id: destination_id! }, scopeWhere), select: { id: true } }));
+          if (!accessible) {
+            res.status(400).json({ error: "O destinatário selecionado não tem acesso a esta tarefa" });
+            return;
+          }
+        }
+        entityType = "project_task";
+        entityId = destination_id!;
+      }
+
       const created = await prisma.systemAlert.create({
         data: {
           type: CRITICALITY_TYPE,
@@ -644,6 +793,8 @@ router.post(
           image_file_name: image_file_name ?? null,
           image_alt: image_file_name ? (image_alt ?? null) : null,
           expires_at: expiresAtDate,
+          entity_type: entityType,
+          entity_id: entityId,
         },
       });
 
@@ -651,7 +802,7 @@ router.post(
         actorId: req.user!.id,
         action: "system_alert.created",
         alertId: created.id,
-        after: { title, severity, user_id: user_id ?? null, has_image: !!image_file_name, expires_at: expiresAtDate },
+        after: { title, severity, user_id: user_id ?? null, has_image: !!image_file_name, expires_at: expiresAtDate, entity_type: entityType, entity_id: entityId },
       });
 
       res.status(201).json(await attachDestinatario(created));

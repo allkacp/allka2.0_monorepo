@@ -54,7 +54,7 @@ import {
   Hash,
   Check,
 } from "lucide-react";
-import { apiClient } from "@/lib/api-client";
+import { apiClient, ApiError } from "@/lib/api-client";
 import { LegacyIdBadge } from "@/components/legacy-id-badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -1148,29 +1148,85 @@ export default function AdminTarefasPage({
   const { toast } = useToast();
   const { tarefaId: urlTarefaId } = useParams<{ tarefaId?: string }>();
 
+  // Estado dedicado do deep-link (independente do `loading`/`error` da
+  // listagem completa, que antes bloqueava a tela inteira — inclusive o
+  // drawer de uma tarefa específica — até a listagem sem paginação
+  // terminar). "idle": sem urlTarefaId. "loading": buscando.
+  // "success": drawer pode abrir. "not_found"/"forbidden"/"error"/
+  // "timeout": estados finais com UI própria, nunca um spinner infinito.
+  const [deepLinkStatus, setDeepLinkStatus] = useState<
+    "idle" | "loading" | "success" | "not_found" | "forbidden" | "error" | "timeout"
+  >(urlTarefaId ? "loading" : "idle");
+  const [deepLinkError, setDeepLinkError] = useState<string | null>(null);
+  // Incrementado por "Tentar novamente" pra reexecutar o efeito abaixo sem
+  // duplicar a lógica de fetch em uma segunda função.
+  const [deepLinkRetryNonce, setDeepLinkRetryNonce] = useState(0);
+  const retryDeepLink = useCallback(() => setDeepLinkRetryNonce((n) => n + 1), []);
+
   // Deep-link: open task drawer from URL param. Só busca da API quando a
   // URL muda por navegação externa (ex.: link direto) — os cliques nas
   // linhas da tabela já chamam navigate() com os mesmos dados que a lista
   // trouxe, e antes esse efeito disparava de novo por causa disso,
   // sobrescrevendo a tarefa completa por uma versão mais pobre (ou vazia,
   // se a chamada falhasse) vinda de getTask().
+  //
+  // Nunca finge sucesso no catch (como antes, abrindo o drawer com um
+  // objeto fake `{ id: urlTarefaId }`): 404/403/rede/timeout ganham estados
+  // finais próprios (ver render abaixo), sempre terminando o loading —
+  // nunca deixa o usuário preso em "Carregando tarefas operacionais...".
   useEffect(() => {
-    if (!urlTarefaId) return;
-    if (drawerOpen && selectedTarefa?.id === urlTarefaId) return;
+    if (!urlTarefaId) {
+      setDeepLinkStatus("idle");
+      return;
+    }
+    if (drawerOpen && selectedTarefa?.id === urlTarefaId) {
+      setDeepLinkStatus("success");
+      return;
+    }
+
+    let cancelled = false;
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 15000);
+
+    setDeepLinkStatus("loading");
+    setDeepLinkError(null);
+
     apiClient
-      .getOperationalTask(urlTarefaId)
+      .getOperationalTask(urlTarefaId, controller.signal)
       .then((task: any) => {
+        if (cancelled) return;
         setSelectedTarefa(task);
         setDrawerStartInEditMode(false);
         setDrawerOpen(true);
+        setDeepLinkStatus("success");
       })
-      .catch(() => {
-        setSelectedTarefa({ id: urlTarefaId } as any);
-        setDrawerStartInEditMode(false);
-        setDrawerOpen(true);
+      .catch((err: any) => {
+        if (cancelled) return;
+        if (err?.name === "AbortError") {
+          setDeepLinkStatus("timeout");
+          return;
+        }
+        const status = err instanceof ApiError ? err.status : undefined;
+        if (status === 404) {
+          setDeepLinkStatus("not_found");
+        } else if (status === 401 || status === 403) {
+          setDeepLinkStatus("forbidden");
+        } else {
+          setDeepLinkError(err?.message || "Não foi possível carregar a tarefa.");
+          setDeepLinkStatus("error");
+        }
+      })
+      .finally(() => {
+        clearTimeout(timeoutId);
       });
+
+    return () => {
+      cancelled = true;
+      clearTimeout(timeoutId);
+      controller.abort();
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [urlTarefaId]);
+  }, [urlTarefaId, deepLinkRetryNonce]);
   const [updatingId, setUpdatingId] = useState<string | null>(null);
   const [launchTask, setLaunchTask] = useState<TarefaOperacional | null>(null);
   const [launchDrawerOpen, setLaunchDrawerOpen] = useState(false);
@@ -1767,9 +1823,88 @@ export default function AdminTarefasPage({
 
   // ── Render ───────────────────────────────────────────────────────────────────
 
-  if (loading) return <PageLoader text="Carregando tarefas operacionais..." />;
+  // Deep-link (/admin/tarefas/:tarefaId): estados finais próprios,
+  // desacoplados do loading/error da listagem completa (que antes travava
+  // a tela em "Carregando tarefas operacionais..." indefinidamente pra
+  // quem só queria ver UMA tarefa). Nunca cai no `if (loading)` genérico
+  // abaixo enquanto isso não resolver, e nunca fica preso: todo estado aqui
+  // é final (sucesso segue pro render normal; os demais têm ação própria).
+  if (urlTarefaId) {
+    if (deepLinkStatus === "loading") {
+      return <PageLoader text="Carregando tarefa..." />;
+    }
+    if (deepLinkStatus === "not_found") {
+      return (
+        <div className="flex flex-col items-center justify-center min-h-105 gap-6 text-center px-6">
+          <div className="rounded-full bg-red-50 dark:bg-red-950/40 p-4">
+            <AlertTriangle className="h-8 w-8 text-red-500" />
+          </div>
+          <div className="space-y-1.5">
+            <h2 className="text-base font-semibold text-slate-800 dark:text-slate-200">
+              Tarefa não encontrada
+            </h2>
+            <p className="text-sm text-slate-500 dark:text-slate-400 max-w-sm">
+              Esta tarefa pode ter sido removida ou não existe mais.
+            </p>
+          </div>
+          <Button onClick={() => navigate(routeBase)} className="btn-brand">
+            Voltar para tarefas
+          </Button>
+        </div>
+      );
+    }
+    if (deepLinkStatus === "forbidden") {
+      return (
+        <div className="flex flex-col items-center justify-center min-h-105 gap-6 text-center px-6">
+          <div className="rounded-full bg-red-50 dark:bg-red-950/40 p-4">
+            <AlertTriangle className="h-8 w-8 text-red-500" />
+          </div>
+          <div className="space-y-1.5">
+            <h2 className="text-base font-semibold text-slate-800 dark:text-slate-200">
+              Você não possui acesso a esta tarefa
+            </h2>
+          </div>
+          <Button onClick={() => navigate(routeBase)} className="btn-brand">
+            Voltar para tarefas
+          </Button>
+        </div>
+      );
+    }
+    if (deepLinkStatus === "timeout" || deepLinkStatus === "error") {
+      return (
+        <div className="flex flex-col items-center justify-center min-h-105 gap-6 text-center px-6">
+          <div className="rounded-full bg-red-50 dark:bg-red-950/40 p-4">
+            <AlertTriangle className="h-8 w-8 text-red-500" />
+          </div>
+          <div className="space-y-1.5">
+            <h2 className="text-base font-semibold text-slate-800 dark:text-slate-200">
+              Não foi possível carregar a tarefa
+            </h2>
+            <p className="text-sm text-slate-500 dark:text-slate-400 max-w-sm">
+              {deepLinkStatus === "timeout"
+                ? "A operação demorou demais. Verifique sua conexão e tente novamente."
+                : deepLinkError || "Ocorreu um erro de rede ou no servidor."}
+            </p>
+          </div>
+          <div className="flex items-center gap-3">
+            <Button variant="outline" onClick={() => navigate(routeBase)}>
+              Voltar para tarefas
+            </Button>
+            <Button onClick={retryDeepLink} className="btn-brand">
+              Tentar novamente
+            </Button>
+          </div>
+        </div>
+      );
+    }
+    // deepLinkStatus === "success" segue direto pro render normal abaixo
+    // (drawer já populado), sem esperar a listagem completa carregar.
+  }
 
-  if (error)
+  if (loading && !urlTarefaId)
+    return <PageLoader text="Carregando tarefas operacionais..." />;
+
+  if (error && !urlTarefaId)
     return (
       <div className="flex flex-col items-center justify-center min-h-105 gap-6 text-center px-6">
         <div className="rounded-full bg-red-50 dark:bg-red-950/40 p-4">

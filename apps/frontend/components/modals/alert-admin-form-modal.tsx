@@ -39,7 +39,13 @@ export interface AlertAdminDraft {
   image_alt?: string | null;
   image_url?: string | null;
   expires_at?: string | null;
+  // Só pra exibição em modo edição (read-only, ver render abaixo) — nunca
+  // reenviado: o destino não pode mudar depois de criado, mesma regra do
+  // destinatário.
+  entity_type?: string | null;
 }
+
+type DestinationType = "none" | "project" | "task";
 
 interface AlertAdminFormModalProps {
   open: boolean;
@@ -53,8 +59,15 @@ interface AlertAdminFormModalProps {
     image_file_name?: string | null;
     image_alt?: string | null;
     expires_at?: string | null;
+    destination_type?: DestinationType;
+    destination_id?: string | null;
   }) => Promise<void>;
 }
+
+const DESTINATION_ENTITY_LABEL: Record<string, string> = {
+  project: "Projeto",
+  project_task: "Tarefa",
+};
 
 // datetime-local <-> ISO — o input só entende "YYYY-MM-DDTHH:mm" (hora
 // local do navegador, sem timezone explícita); convertemos pra ISO só na
@@ -89,6 +102,16 @@ export function AlertAdminFormModal({ open, onClose, initial, onSave }: AlertAdm
   const [image, setImage] = useState<AlertImageFieldValue>({ image_file_name: null, image_alt: null, image_url: null });
   const [expiresAtLocal, setExpiresAtLocal] = useState("");
 
+  // Destino opcional (ata 2026-08, 6º lote) — "none" (padrão) = alerta
+  // informativo, sem botão "Ver". Nunca aceita URL/id digitado: o único
+  // jeito de escolher é o seletor buscável abaixo, sobre registros reais.
+  const [destinationType, setDestinationType] = useState<DestinationType>("none");
+  const [destinationId, setDestinationId] = useState("");
+  const [destinationLabel, setDestinationLabel] = useState<string | null>(null);
+  const [destinationOptions, setDestinationOptions] = useState<SearchableSelectItem[]>([]);
+  const [destinationSearch, setDestinationSearch] = useState("");
+  const [loadingDestinations, setLoadingDestinations] = useState(false);
+
   useEffect(() => {
     if (!open) return;
     setTitle(initial?.title ?? "");
@@ -106,6 +129,13 @@ export function AlertAdminFormModal({ open, onClose, initial, onSave }: AlertAdm
     });
     setExpiresAtLocal(isoToDatetimeLocal(initial?.expires_at));
     setError("");
+    // Destino nunca é reconstruído em modo edição (não é reenviado — ver
+    // comentário no onSave/AlertAdminDraft), só limpo em modo criação.
+    setDestinationType("none");
+    setDestinationId("");
+    setDestinationLabel(null);
+    setDestinationOptions([]);
+    setDestinationSearch("");
     if (!isEdit) {
       setLoadingMembers(true);
       apiClient
@@ -119,6 +149,38 @@ export function AlertAdminFormModal({ open, onClose, initial, onSave }: AlertAdm
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, initial?.id]);
+
+  // Busca as opções do seletor de destino no servidor (nunca lista tudo:
+  // GET /system-alerts/admin/destination-options é sempre paginado/leve —
+  // o próprio Bug 1 deste lote nasceu de uma listagem sem paginação).
+  // Refaz a cada troca de tipo e a cada termo digitado (debounced).
+  useEffect(() => {
+    if (!open || isEdit || destinationType === "none") {
+      setDestinationOptions([]);
+      return;
+    }
+    let cancelled = false;
+    setLoadingDestinations(true);
+    const t = setTimeout(() => {
+      apiClient
+        .getAlertDestinationOptions(destinationType, destinationSearch.trim() || undefined)
+        .then((res) => {
+          if (cancelled) return;
+          const data: { id: string; label: string; sublabel: string | null }[] = res?.data ?? [];
+          setDestinationOptions(data.map((d) => ({ value: d.id, label: d.label, sublabel: d.sublabel ?? undefined })));
+        })
+        .catch(() => {
+          if (!cancelled) setDestinationOptions([]);
+        })
+        .finally(() => {
+          if (!cancelled) setLoadingDestinations(false);
+        });
+    }, 300);
+    return () => {
+      cancelled = true;
+      clearTimeout(t);
+    };
+  }, [open, isEdit, destinationType, destinationSearch]);
 
   async function handleSave() {
     if (saving) return; // clique duplo bloqueado
@@ -134,6 +196,10 @@ export function AlertAdminFormModal({ open, onClose, initial, onSave }: AlertAdm
     }
     if (!isEdit && recipientMode === "especifico" && !recipientId) {
       setError("Selecione um destinatário ou escolha \"Geral\".");
+      return;
+    }
+    if (!isEdit && destinationType !== "none" && !destinationId) {
+      setError("Selecione um registro para o destino escolhido, ou volte para \"Nenhum\".");
       return;
     }
     if (!isAlertImageFieldValid(image)) {
@@ -156,6 +222,8 @@ export function AlertAdminFormModal({ open, onClose, initial, onSave }: AlertAdm
         image_file_name: image.image_file_name,
         image_alt: image.image_file_name ? image.image_alt : null,
         expires_at: expiresAtIso,
+        destination_type: isEdit ? undefined : destinationType,
+        destination_id: isEdit ? undefined : destinationType === "none" ? null : destinationId,
       });
       onClose();
     } catch (err) {
@@ -283,6 +351,66 @@ export function AlertAdminFormModal({ open, onClose, initial, onSave }: AlertAdm
                   emptyMessage="Nenhum usuário encontrado."
                   loading={loadingMembers}
                 />
+              )}
+            </>
+          )}
+        </div>
+
+        <div>
+          <label className="text-xs font-medium text-slate-600 dark:text-slate-400 mb-1.5 block">
+            Destino opcional
+          </label>
+          {isEdit ? (
+            <p className="text-xs text-slate-500 dark:text-slate-400 px-3 py-2 rounded-lg bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-800">
+              {initial?.entity_type ? DESTINATION_ENTITY_LABEL[initial.entity_type] ?? "Vinculado" : "Nenhum (alerta informativo)"}
+              {" — não pode ser alterado depois de criado."}
+            </p>
+          ) : (
+            <>
+              <div className="flex items-center gap-1.5 mb-2">
+                {(["none", "project", "task"] as const).map((t) => (
+                  <Button
+                    key={t}
+                    type="button"
+                    size="sm"
+                    variant={destinationType === t ? "secondary" : "ghost"}
+                    className="h-7 text-xs px-2.5"
+                    onClick={() => {
+                      setDestinationType(t);
+                      setDestinationId("");
+                      setDestinationLabel(null);
+                      setDestinationSearch("");
+                    }}
+                  >
+                    {t === "none" ? "Nenhum" : t === "project" ? "Projeto" : "Tarefa"}
+                  </Button>
+                ))}
+              </div>
+              {destinationType === "none" ? (
+                <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                  Este alerta é informativo e não possui uma tela vinculada. O botão "Ver" não aparecerá.
+                </p>
+              ) : (
+                <>
+                  <SearchableSelect
+                    items={destinationOptions}
+                    value={destinationId}
+                    onValueChange={(v) => {
+                      setDestinationId(v);
+                      setDestinationLabel(destinationOptions.find((o) => o.value === v)?.label ?? null);
+                    }}
+                    onSearchChange={setDestinationSearch}
+                    placeholder={destinationType === "project" ? "Buscar projeto por nome..." : "Buscar tarefa por nome ou código..."}
+                    searchPlaceholder="Digite para buscar"
+                    emptyMessage="Nenhum registro encontrado."
+                    loading={loadingDestinations}
+                  />
+                  {destinationId && (
+                    <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-1.5">
+                      Ao clicar em Ver, o usuário abrirá: {destinationLabel ?? "registro selecionado"} ({destinationType === "project" ? "projeto" : "tarefa"})
+                    </p>
+                  )}
+                </>
               )}
             </>
           )}

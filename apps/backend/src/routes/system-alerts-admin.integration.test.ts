@@ -42,6 +42,45 @@ async function api(path: string, options: { method?: string; token?: string; bod
 const createdUserIds: string[] = [];
 const createdProfileIds: string[] = [];
 const createdAlertIds: string[] = [];
+const createdProjectIds: string[] = [];
+const createdProductIds: string[] = [];
+const createdTaskIds: string[] = [];
+
+// Fixture mínima de projeto+tarefa reais (mesmo padrão de
+// alert-engine.integration.test.ts) — usada pelos testes de "Destino
+// opcional" do Avulso (ata 2026-08, 6º lote), que precisam de um registro
+// de verdade pra validar contra.
+async function createProjectAndTask(overrides: { title?: string } = {}) {
+  const code = `dest-${crypto.randomBytes(4).toString("hex")}`;
+  const project = await prisma.project.create({
+    data: { title: `Projeto teste destino ${code}`, project_code: `proj_${code}`, status: "in-progress" },
+  });
+  createdProjectIds.push(project.id);
+  const product = await prisma.product.create({
+    data: { name: `Produto teste destino ${code}`, category: "teste" },
+  });
+  createdProductIds.push(product.id);
+  const projectProduct = await prisma.projectProduct.create({
+    data: {
+      project_id: project.id,
+      product_id: product.id,
+      product_name_snapshot: product.name,
+      product_category_snapshot: product.category,
+    },
+  });
+  const task = await prisma.projectTask.create({
+    data: {
+      project_id: project.id,
+      project_product_id: projectProduct.id,
+      product_id: product.id,
+      name_snapshot: product.name,
+      title: overrides.title ?? `Tarefa teste destino ${code}`,
+      status: "EM_EXECUCAO",
+    },
+  });
+  createdTaskIds.push(task.id);
+  return { project, task };
+}
 
 async function createUser(overrides: Partial<{
   role: string;
@@ -122,6 +161,10 @@ describe("Central de Alertas — /api/system-alerts/admin (ata 2026-08)", () => 
   after(async () => {
     await prisma.productFeedbackAccessAudit.deleteMany({ where: { action: { startsWith: "system_alert." } } });
     await prisma.systemAlert.deleteMany({ where: { id: { in: createdAlertIds } } });
+    await prisma.projectTask.deleteMany({ where: { id: { in: createdTaskIds } } });
+    await prisma.projectProduct.deleteMany({ where: { project_id: { in: createdProjectIds } } });
+    await prisma.project.deleteMany({ where: { id: { in: createdProjectIds } } });
+    await prisma.product.deleteMany({ where: { id: { in: createdProductIds } } });
     await prisma.user.deleteMany({ where: { id: { in: createdUserIds } } });
     await prisma.adminProfile.deleteMany({ where: { id: { in: createdProfileIds } } });
     await new Promise<void>((resolve, reject) => server.close((err) => (err ? reject(err) : resolve())));
@@ -424,5 +467,143 @@ describe("Central de Alertas — /api/system-alerts/admin (ata 2026-08)", () => 
     assert.equal(res.json.title, payload.title);
     assert.equal(res.json.message, payload.message);
     createdAlertIds.push(res.json.id);
+  });
+
+  // ── Destino opcional do Avulso (ata 2026-08, 6º lote — reparo "Ver alerta") ──
+
+  it("24. destination_type ausente (padrão 'none') não grava entity_type/entity_id", async () => {
+    const master = await masterAdmin();
+    const res = await api("/api/system-alerts/admin", {
+      method: "POST",
+      token: tokenFor(master),
+      body: { title: "Avulso sem destino", message: "Mensagem de teste", severity: "info" },
+    });
+    assert.equal(res.status, 201);
+    assert.equal(res.json.entity_type, null);
+    assert.equal(res.json.entity_id, null);
+    createdAlertIds.push(res.json.id);
+  });
+
+  it("25. destination_type='task' com destination_id real -> 201 com entity_type/entity_id gravados", async () => {
+    const master = await masterAdmin();
+    const { task } = await createProjectAndTask();
+    const res = await api("/api/system-alerts/admin", {
+      method: "POST",
+      token: tokenFor(master),
+      body: { title: "Avulso com tarefa", message: "Mensagem de teste", severity: "error", destination_type: "task", destination_id: task.id },
+    });
+    assert.equal(res.status, 201);
+    assert.equal(res.json.entity_type, "project_task");
+    assert.equal(res.json.entity_id, task.id);
+    createdAlertIds.push(res.json.id);
+  });
+
+  it("26. destination_type='project' com destination_id real -> 201 com entity_type='project'", async () => {
+    const master = await masterAdmin();
+    const { project } = await createProjectAndTask();
+    const res = await api("/api/system-alerts/admin", {
+      method: "POST",
+      token: tokenFor(master),
+      body: { title: "Avulso com projeto", message: "Mensagem de teste", severity: "warning", destination_type: "project", destination_id: project.id },
+    });
+    assert.equal(res.status, 201);
+    assert.equal(res.json.entity_type, "project");
+    assert.equal(res.json.entity_id, project.id);
+    createdAlertIds.push(res.json.id);
+  });
+
+  it("27. destination_type='task' com id inexistente -> 400, nunca cria o alerta", async () => {
+    const master = await masterAdmin();
+    const res = await api("/api/system-alerts/admin", {
+      method: "POST",
+      token: tokenFor(master),
+      body: { title: "Avulso tarefa inválida", message: "Mensagem de teste", severity: "warning", destination_type: "task", destination_id: "tarefa-que-nao-existe" },
+    });
+    assert.equal(res.status, 400);
+  });
+
+  it("28. destination_type='project' com id inexistente -> 400", async () => {
+    const master = await masterAdmin();
+    const res = await api("/api/system-alerts/admin", {
+      method: "POST",
+      token: tokenFor(master),
+      body: { title: "Avulso projeto inválido", message: "Mensagem de teste", severity: "warning", destination_type: "project", destination_id: "projeto-que-nao-existe" },
+    });
+    assert.equal(res.status, 400);
+  });
+
+  it("29. destination_type='task' sem destination_id -> 400 (nunca aceita destino sem registro escolhido)", async () => {
+    const master = await masterAdmin();
+    const res = await api("/api/system-alerts/admin", {
+      method: "POST",
+      token: tokenFor(master),
+      body: { title: "Avulso sem id", message: "Mensagem de teste", severity: "warning", destination_type: "task" },
+    });
+    assert.equal(res.status, 400);
+  });
+
+  it("30. destinatário específico SEM acesso à tarefa escolhida -> 400 (nunca cria alerta cujo Ver falha pro destinatário)", async () => {
+    const master = await masterAdmin();
+    const { task } = await createProjectAndTask();
+    // Empresa nunca vinculada a este projeto — sem escopo nenhum sobre ele.
+    const unrelatedCompanyUser = await createUser({ role: "company_user", account_type: "empresas" });
+    const res = await api("/api/system-alerts/admin", {
+      method: "POST",
+      token: tokenFor(master),
+      body: {
+        title: "Avulso destinatário sem acesso",
+        message: "Mensagem de teste",
+        severity: "warning",
+        user_id: unrelatedCompanyUser.id,
+        destination_type: "task",
+        destination_id: task.id,
+      },
+    });
+    assert.equal(res.status, 400);
+  });
+
+  it("31. destinatário Geral (user_id nulo) com destino de tarefa -> 201 (Admin sempre tem acesso a tudo)", async () => {
+    const master = await masterAdmin();
+    const { task } = await createProjectAndTask();
+    const res = await api("/api/system-alerts/admin", {
+      method: "POST",
+      token: tokenFor(master),
+      body: { title: "Avulso geral com tarefa", message: "Mensagem de teste", severity: "warning", destination_type: "task", destination_id: task.id },
+    });
+    assert.equal(res.status, 201);
+    createdAlertIds.push(res.json.id);
+  });
+
+  it("32. GET /admin/destination-options busca projeto por nome (só Admin Master)", async () => {
+    const master = await masterAdmin();
+    const { project } = await createProjectAndTask({ title: "Tarefa alvo busca 32" });
+    const res = await api(`/api/system-alerts/admin/destination-options?type=project&search=${encodeURIComponent(project.title.slice(0, 10))}`, {
+      token: tokenFor(master),
+    });
+    assert.equal(res.status, 200);
+    assert.ok(res.json.data.some((d: any) => d.id === project.id));
+  });
+
+  it("33. GET /admin/destination-options busca tarefa por nome, devolve o título real (não o snapshot do produto)", async () => {
+    const master = await masterAdmin();
+    const { task } = await createProjectAndTask({ title: "Tarefa alvo busca 33 exclusiva" });
+    const res = await api(`/api/system-alerts/admin/destination-options?type=task&search=${encodeURIComponent("busca 33 exclusiva")}`, {
+      token: tokenFor(master),
+    });
+    assert.equal(res.status, 200);
+    const found = res.json.data.find((d: any) => d.id === task.id);
+    assert.ok(found, "tarefa deveria aparecer na busca");
+    assert.equal(found.label, task.title);
+  });
+
+  it("34. GET /admin/destination-options sem sessão -> 401", async () => {
+    const res = await api("/api/system-alerts/admin/destination-options?type=project");
+    assert.equal(res.status, 401);
+  });
+
+  it("35. GET /admin/destination-options como usuário comum -> 403", async () => {
+    const user = await createUser({ role: "company_user", account_type: "empresas" });
+    const res = await api("/api/system-alerts/admin/destination-options?type=project", { token: tokenFor(user) });
+    assert.equal(res.status, 403);
   });
 });

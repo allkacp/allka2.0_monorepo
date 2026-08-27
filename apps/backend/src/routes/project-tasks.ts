@@ -175,7 +175,7 @@ function buildStatusSideEffects(
 
 type ScopeWhere = Record<string, unknown>;
 
-async function getTaskScopeWhere(
+export async function getTaskScopeWhere(
   userId: string,
   accountType: string,
   role: string,
@@ -210,7 +210,7 @@ async function getTaskScopeWhere(
 
 // Merges a base `where` with the scope filter using Prisma AND so neither
 // overwrites the other (important when both have a `project` key).
-function applyScope(
+export function applyScope(
   base: Record<string, unknown>,
   scope: ScopeWhere,
 ): Record<string, unknown> {

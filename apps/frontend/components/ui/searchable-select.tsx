@@ -37,6 +37,15 @@ interface SearchableSelectProps {
   loadingMessage?: string;
   /** Show an error message inside the dropdown instead of the empty message */
   errorMessage?: string;
+  /**
+   * Opcional: quando presente, cada tecla digitada é repassada aqui (pro
+   * chamador buscar no servidor, ex.: destino do Avulso — ata 2026-08, 6º
+   * lote) ALÉM do filtro client-side padrão do cmdk continuar rodando sobre
+   * `items` — então o chamador deve devolver via `items` só os resultados
+   * já relevantes pro termo (ou aceitar o filtro extra do cmdk por cima).
+   * Sem isso, comportamento idêntico ao anterior (só filtro local).
+   */
+  onSearchChange?: (query: string) => void;
 }
 
 export function SearchableSelect({
@@ -52,6 +61,7 @@ export function SearchableSelect({
   loading = false,
   loadingMessage = "Carregando...",
   errorMessage,
+  onSearchChange,
 }: SearchableSelectProps) {
   const [open, setOpen] = React.useState(false);
 
@@ -88,6 +98,7 @@ export function SearchableSelect({
             <Search className="mr-2 h-4 w-4 shrink-0 opacity-50" />
             <CommandPrimitive.Input
               placeholder={searchPlaceholder}
+              onValueChange={onSearchChange}
               className="placeholder:text-muted-foreground flex h-9 w-full rounded-md bg-transparent py-3 text-sm outline-hidden disabled:cursor-not-allowed disabled:opacity-50"
             />
             {onAddNew && (

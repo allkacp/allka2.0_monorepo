@@ -99,6 +99,9 @@ const TASK_LINK_BUILDERS: Partial<Record<AccountType, (id: string) => string>> =
 
 const PROJECT_LINK_BUILDERS: Partial<Record<AccountType, (id: string) => string>> = {
   agencias: (id) => `/agency/projetos/${id}`,
+  // Admin (ata 2026-08, 6º lote — destino "Projeto" do Avulso): rota real
+  // já existe (/admin/projetos/:projectId, ver App.tsx), só faltava aqui.
+  admin: (id) => `/admin/projetos/${id}`,
 }
 
 // Reparo "Ver alerta" (ata 2026-08) — só caminho interno relativo, montado

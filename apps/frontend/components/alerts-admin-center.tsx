@@ -52,6 +52,8 @@ interface AdminAlertItem {
   image_url?: string | null;
   expires_at?: string | null;
   resolution_reason?: string | null;
+  entity_type?: string | null;
+  entity_id?: string | null;
 }
 
 const SEVERITY_BY_CRITICALITY: Record<Criticality, "info" | "warning" | "error"> = {
@@ -137,6 +139,8 @@ export function AlertsAdminCenter() {
     image_file_name?: string | null;
     image_alt?: string | null;
     expires_at?: string | null;
+    destination_type?: "none" | "project" | "task";
+    destination_id?: string | null;
   }) {
     const created = await apiClient.createAdminSystemAlert(draft);
     // Só insere na visão atual se ainda bate com os filtros (ex.: se o
@@ -361,6 +365,7 @@ export function AlertsAdminCenter() {
                           image_alt: alert.image_alt ?? null,
                           image_url: apiClient.resolveAlertImageUrl(alert.image_url),
                           expires_at: alert.expires_at ?? null,
+                          entity_type: alert.entity_type ?? null,
                         });
                         setFormOpen(true);
                       }}

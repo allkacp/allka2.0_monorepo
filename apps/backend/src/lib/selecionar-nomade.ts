@@ -233,17 +233,38 @@ export async function selecionarNomadeParaTarefa(
       },
     });
 
-    await prisma.systemAlert.create({
-      data: {
+    // Dedupe (ata 2026-08, reparo "Ver alerta" — duplicidade em "Tarefa
+    // aguardando nômade"): esta função roda uma vez por ETAPA da tarefa que
+    // precisa de executor (ver stage-engine.ts, atribuirExecutorDaEtapa),
+    // então uma tarefa com várias etapas de nômade sem candidato disponível
+    // ao mesmo tempo chamava isto várias vezes SEGUIDAS pro MESMO taskId —
+    // cada chamada criava um SystemAlert novo, idêntico (mesmo type +
+    // entity_type + entity_id), sem checar se já existia um ativo. Chave
+    // determinística = (type, entity_type, entity_id) ainda ativo
+    // (is_archived=false); só cria se não houver um igual já aberto — nunca
+    // apaga histórico, só evita criar mais um em cima do que já existe.
+    const existingActive = await prisma.systemAlert.findFirst({
+      where: {
         type: "nomade_nao_encontrado",
-        title: "Tarefa aguardando nômade",
-        message: `Nenhum nômade habilitado encontrado para "${task.title}"${category ? ` (categoria: ${category})` : ""}. A tarefa foi movida para AGUARDANDO_NOMADE.`,
-        severity: "warning",
-        category: "alerta",
         entity_type: "project_task",
         entity_id: taskId,
+        is_archived: false,
       },
+      select: { id: true },
     });
+    if (!existingActive) {
+      await prisma.systemAlert.create({
+        data: {
+          type: "nomade_nao_encontrado",
+          title: "Tarefa aguardando nômade",
+          message: `Nenhum nômade habilitado encontrado para "${task.title}"${category ? ` (categoria: ${category})` : ""}. A tarefa foi movida para AGUARDANDO_NOMADE.`,
+          severity: "warning",
+          category: "alerta",
+          entity_type: "project_task",
+          entity_id: taskId,
+        },
+      });
+    }
 
     return {
       status: "sem_nomade_disponivel",

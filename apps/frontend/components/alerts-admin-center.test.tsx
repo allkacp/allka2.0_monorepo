@@ -20,6 +20,7 @@ vi.mock("@/lib/api-client", () => ({
     archiveAdminSystemAlert: vi.fn(),
     unarchiveAdminSystemAlert: vi.fn(),
     getNotificationGroupEligibleMembers: vi.fn().mockResolvedValue({ data: [] }),
+    getAlertDestinationOptions: vi.fn().mockResolvedValue({ data: [] }),
     getAdminAlertStandards: vi.fn().mockResolvedValue({ data: [] }),
     updateAdminAlertStandard: vi.fn(),
     previewAdminAlertStandard: vi.fn(),
@@ -96,9 +97,113 @@ describe("AlertsAdminCenter — criação", () => {
         image_file_name: null,
         image_alt: null,
         expires_at: null,
+        destination_type: "none",
+        destination_id: null,
       }),
     );
     expect(await screen.findByText("Alerta Novo")).toBeInTheDocument();
+  });
+
+  // ── Destino opcional (ata 2026-08, 6º lote — reparo "Ver alerta") ──────────
+
+  it("Destino: por padrão é 'Nenhum' e mostra o texto informativo, sem seletor", async () => {
+    const user = userEvent.setup();
+    renderCenter();
+    await user.click(screen.getByRole("button", { name: /novo alerta/i }));
+
+    expect(screen.getByText(/este alerta é informativo e não possui uma tela vinculada/i)).toBeInTheDocument();
+    expect(apiClient.getAlertDestinationOptions).not.toHaveBeenCalled();
+  });
+
+  it("Destino: escolher 'Tarefa' busca opções no servidor e mostra a prévia 'Ao clicar em Ver'", async () => {
+    (apiClient.getAlertDestinationOptions as any).mockResolvedValue({
+      data: [{ id: "t1", label: "Tarefa de teste", sublabel: "T000123 — Projeto X" }],
+    });
+    const user = userEvent.setup();
+    renderCenter();
+    await user.click(screen.getByRole("button", { name: /novo alerta/i }));
+    await user.click(screen.getByRole("button", { name: "Tarefa" }));
+
+    await waitFor(() => expect(apiClient.getAlertDestinationOptions).toHaveBeenCalledWith("task", undefined));
+
+    await user.click(screen.getByRole("combobox"));
+    expect(await screen.findByText("Tarefa de teste")).toBeInTheDocument();
+    await user.click(screen.getByText("Tarefa de teste"));
+
+    expect(await screen.findByText(/ao clicar em ver, o usuário abrirá: tarefa de teste/i)).toBeInTheDocument();
+  });
+
+  it("Destino: criar com Tarefa selecionada envia destination_type/destination_id corretos", async () => {
+    (apiClient.getAlertDestinationOptions as any).mockResolvedValue({
+      data: [{ id: "t1", label: "Tarefa de teste", sublabel: null }],
+    });
+    (apiClient.createAdminSystemAlert as any).mockResolvedValue(adminAlert({ id: "novo2", title: "Alerta com tarefa" }));
+    const user = userEvent.setup();
+    renderCenter();
+    await user.click(screen.getByRole("button", { name: /novo alerta/i }));
+    await user.type(screen.getByPlaceholderText(/pagamento pendente/i), "Alerta com tarefa");
+    await user.type(screen.getByPlaceholderText(/detalhe o que precisa/i), "Mensagem");
+    await user.click(screen.getByRole("button", { name: "Tarefa" }));
+    await user.click(screen.getByRole("combobox"));
+    await user.click(await screen.findByText("Tarefa de teste"));
+    await user.click(screen.getByRole("button", { name: /criar alerta/i }));
+
+    await waitFor(() =>
+      expect(apiClient.createAdminSystemAlert).toHaveBeenCalledWith(
+        expect.objectContaining({ destination_type: "task", destination_id: "t1" }),
+      ),
+    );
+  });
+
+  it("Destino: tipo 'Tarefa'/'Projeto' sem selecionar um registro bloqueia o salvamento com mensagem clara", async () => {
+    const user = userEvent.setup();
+    renderCenter();
+    await user.click(screen.getByRole("button", { name: /novo alerta/i }));
+    await user.type(screen.getByPlaceholderText(/pagamento pendente/i), "Alerta incompleto");
+    await user.type(screen.getByPlaceholderText(/detalhe o que precisa/i), "Mensagem");
+    await user.click(screen.getByRole("button", { name: "Projeto" }));
+    await user.click(screen.getByRole("button", { name: /criar alerta/i }));
+
+    expect(await screen.findByText(/selecione um registro para o destino escolhido/i)).toBeInTheDocument();
+    expect(apiClient.createAdminSystemAlert).not.toHaveBeenCalled();
+  });
+
+  it("Destino: trocar de tipo limpa a seleção anterior", async () => {
+    (apiClient.getAlertDestinationOptions as any).mockResolvedValue({
+      data: [{ id: "t1", label: "Tarefa de teste", sublabel: null }],
+    });
+    const user = userEvent.setup();
+    renderCenter();
+    await user.click(screen.getByRole("button", { name: /novo alerta/i }));
+    await user.click(screen.getByRole("button", { name: "Tarefa" }));
+    await user.click(screen.getByRole("combobox"));
+    await user.click(await screen.findByText("Tarefa de teste"));
+    expect(screen.getByText(/ao clicar em ver, o usuário abrirá/i)).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Projeto" }));
+    expect(screen.queryByText(/ao clicar em ver, o usuário abrirá/i)).not.toBeInTheDocument();
+  });
+
+  it("Destino: em modo edição, mostra só leitura ('não pode ser alterado depois de criado') e nunca reenvia destination_type/destination_id", async () => {
+    (apiClient.getAdminSystemAlerts as any).mockResolvedValue({
+      data: [adminAlert({ id: "e1", title: "Alerta com destino existente" })],
+      total: 1,
+    });
+    (apiClient.updateAdminSystemAlert as any).mockResolvedValue(
+      adminAlert({ id: "e1", title: "Alerta com destino existente" }),
+    );
+    const user = userEvent.setup();
+    renderCenter();
+    await user.click(await screen.findByTitle("Editar"));
+
+    expect(screen.getByText(/nenhum \(alerta informativo\)/i)).toBeInTheDocument();
+    expect(apiClient.getAlertDestinationOptions).not.toHaveBeenCalled();
+
+    await user.click(screen.getByRole("button", { name: /salvar alterações/i }));
+    await waitFor(() => expect(apiClient.updateAdminSystemAlert).toHaveBeenCalled());
+    const [, payload] = (apiClient.updateAdminSystemAlert as any).mock.calls[0];
+    expect(payload).not.toHaveProperty("destination_type");
+    expect(payload).not.toHaveProperty("destination_id");
   });
 
   it("28. erro na criação mantém o formulário aberto com a mensagem visível", async () => {

@@ -31,7 +31,10 @@ describe("systemAlertLink", () => {
 
   it("routes a project alert to the account's own project list, deep-linking only where supported", () => {
     expect(systemAlertLink("project", "proj-1", "agencias")).toBe("/agency/projetos/proj-1");
-    expect(systemAlertLink("project", "proj-1", "admin")).toBe("/admin/tarefas");
+    // Admin (ata 2026-08, 6º lote — destino "Projeto" do Avulso): rota
+    // real /admin/projetos/:projectId já existia, só faltava o builder.
+    expect(systemAlertLink("project", "proj-1", "admin")).toBe("/admin/projetos/proj-1");
+    expect(systemAlertLink("project", null, "admin")).toBe("/admin/tarefas");
     expect(systemAlertLink("project", null, "empresas")).toBe("/company/tarefas");
   });
 
