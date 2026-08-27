@@ -1,7 +1,16 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
-import { render, screen, waitFor } from "@testing-library/react";
+import { render as rtlRender, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { AlertsPanel } from "@/components/alerts-panel";
+import { SidebarProvider } from "@/contexts/sidebar-context";
+
+// AlertDetailDrawer (ata 2026-08, 8º lote) usa StandardModalDialog, que
+// depende de useAppFrameMetrics -> useSidebar — precisa de um
+// SidebarProvider ancestral mesmo com o painel fechado (o Dialog existe na
+// árvore, só não está aberto).
+function render(ui: React.ReactElement) {
+  return rtlRender(<SidebarProvider>{ui}</SidebarProvider>);
+}
 
 // Feed pessoal de alertas (ata 2026-08, 5º lote) — cobre a lacuna principal
 // da correção: GET /api/system-alerts já manda has_image/image_url/image_alt
@@ -40,6 +49,8 @@ vi.mock("@/lib/api-client", () => ({
     markAllSystemAlertsRead: vi.fn(),
     resolveAlertImageUrl: vi.fn((url: string | null) => url),
     fetchAlertImageBlobUrl: vi.fn(),
+    getSystemAlertDetail: vi.fn(),
+    recordSystemAlertEvent: vi.fn().mockResolvedValue({ ok: true }),
   },
 }));
 
@@ -106,7 +117,7 @@ describe("AlertsPanel — botão 'Ver' (link real, nova aba, Central preservada)
     render(<AlertsPanel open onClose={onClose} />);
 
     await waitFor(() => expect(screen.getByText("Aviso importante")).toBeInTheDocument());
-    const link = screen.getByText("Ver").closest("a");
+    const link = screen.getByText("Ver origem").closest("a");
     expect(link).not.toBeNull();
     expect(link).toHaveAttribute("target", "_blank");
     expect(link).toHaveAttribute("rel", expect.stringContaining("noopener"));
@@ -204,7 +215,7 @@ describe("AlertsPanel — botão 'Ver' (link real, nova aba, Central preservada)
     });
     render(<AlertsPanel open onClose={() => {}} />);
     await waitFor(() => expect(screen.getByText("Aviso importante")).toBeInTheDocument());
-    const link = screen.getByText("Ver").closest("a");
+    const link = screen.getByText("Ver origem").closest("a");
     expect(link).toHaveAttribute("href", "/company/tarefas");
   });
 
@@ -218,5 +229,55 @@ describe("AlertsPanel — botão 'Ver' (link real, nova aba, Central preservada)
     // dedicados (arquivar/dispensar) fazem isso, nunca "Ver".
     expect(apiClient.archiveSystemAlert).not.toHaveBeenCalled();
     expect(apiClient.markSystemAlertRead).not.toHaveBeenCalled();
+  });
+
+  // "Detalhes" (ata 2026-08, 8º lote) — separado de "Ver origem": abre um
+  // painel próprio SEM fechar a Central, buscando GET /system-alerts/:id.
+  it("1/6. clicar em 'Detalhes' abre o painel de detalhes sem fechar a Central", async () => {
+    (apiClient.getSystemAlerts as any).mockResolvedValue({
+      data: [{ ...baseAlert, entity_type: "project_task", entity_id: "task-1" }],
+    });
+    (apiClient.getSystemAlertDetail as any).mockResolvedValue({
+      id: "alert-1",
+      title: "Aviso importante",
+      message: "Mensagem do alerta",
+      severity: "info",
+      situacao: "ativo",
+      created_at: new Date().toISOString(),
+      expires_at: null,
+      has_image: false,
+      image_url: null,
+      image_alt: null,
+      origin: { type: "automatico" },
+      destinatario: { kind: "geral" },
+      entity_type: "project_task",
+      entity_id: "task-1",
+      entity_parent_id: null,
+      destination: { entity_type: "project_task", label: "Tarefa", name: "Tarefa real", code: null, status: "disponivel" },
+      events: [],
+    });
+    const onClose = vi.fn();
+    const user = userEvent.setup();
+    render(<AlertsPanel open onClose={onClose} />);
+
+    await waitFor(() => expect(screen.getByText("Aviso importante")).toBeInTheDocument());
+    await user.click(screen.getByRole("button", { name: "Detalhes" }));
+
+    expect(await screen.findByText("Detalhes do alerta")).toBeInTheDocument();
+    // "Aviso importante" continua na lista de trás — a Central nunca fecha.
+    expect(screen.getAllByText("Aviso importante").length).toBeGreaterThan(0);
+    expect(onClose).not.toHaveBeenCalled();
+  });
+
+  it("10. clicar em 'Ver origem' na lista registra o evento origin_clicked", async () => {
+    (apiClient.getSystemAlerts as any).mockResolvedValue({
+      data: [{ ...baseAlert, entity_type: "project_task", entity_id: "task-1" }],
+    });
+    const user = userEvent.setup();
+    render(<AlertsPanel open onClose={() => {}} />);
+    await waitFor(() => expect(screen.getByText("Aviso importante")).toBeInTheDocument());
+
+    await user.click(screen.getByText("Ver origem"));
+    expect(apiClient.recordSystemAlertEvent).toHaveBeenCalledWith("alert-1", "origin_clicked");
   });
 });

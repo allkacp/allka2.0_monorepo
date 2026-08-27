@@ -1,0 +1,288 @@
+/**
+ * "Detalhes" de uma ocorrência de alerta (ata 2026-08, 8º lote —
+ * "visualização detalhada e histórico real"). Distinto de "Ver origem":
+ * este painel abre DENTRO da Central de Alertas (StandardModalDialog, que
+ * já empilha corretamente sobre o HeaderSlideScreen do AlertsPanel, sem
+ * fechá-lo), enquanto "Ver origem" é um <a target="_blank"> que leva pra
+ * tela real da tarefa/projeto numa aba nova.
+ *
+ * Busca GET /system-alerts/:id sob demanda (nunca reaproveita dados do
+ * feed, que não tem histórico/origem/destino resolvidos) — com timeout,
+ * cancelamento no unmount e estados 404/403/erro/timeout próprios, mesmo
+ * padrão já estabelecido pro deep-link de tarefa.
+ */
+import { useEffect, useRef, useState } from "react";
+import { AlertTriangle, ExternalLink, Loader2 } from "lucide-react";
+import { StandardModalDialog } from "@/components/standard-modal-dialog";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { AlertBannerImage } from "@/components/alert-banner-image";
+import { AlertTimeline, type AlertTimelineEvent } from "@/components/alert-timeline";
+import { apiClient, ApiError } from "@/lib/api-client";
+import {
+  criticalityFromSeverity, criticalityLabel, criticalityIcon, criticalityBadgeColor,
+  systemAlertLink, isSafeInternalPath,
+} from "@/components/alerts-header-icon";
+import type { AccountType } from "@/contexts/account-type-context";
+
+export interface AlertDetailDrawerProps {
+  alertId: string | null;
+  open: boolean;
+  onClose: () => void;
+  accountType: AccountType;
+}
+
+interface AlertDetail {
+  id: string;
+  title: string;
+  message: string;
+  severity: "info" | "warning" | "error";
+  situacao: "ativo" | "arquivado" | "expirado" | "resolvido";
+  created_at: string;
+  expires_at: string | null;
+  has_image: boolean;
+  image_url: string | null;
+  image_alt: string | null;
+  origin:
+    | { type: "automatico" }
+    | { type: "padrao_regra"; rule_name: string | null; standard_name: string | null }
+    | { type: "programado"; schedule_name: string | null }
+    | { type: "avulso"; created_by: { id: string; name: string } | null };
+  destinatario: { kind: "geral" } | { kind: "pessoa"; id: string; name: string; email: string } | { kind: "indisponivel" };
+  entity_type: string | null;
+  entity_id: string | null;
+  entity_parent_id: string | null;
+  destination: { entity_type: string; label: string; name: string | null; code: string | null; status: "disponivel" | "removido" | "sem_acesso" } | null;
+  events: AlertTimelineEvent[];
+}
+
+const SITUACAO_LABEL: Record<AlertDetail["situacao"], string> = {
+  ativo: "Ativo",
+  arquivado: "Arquivado",
+  expirado: "Expirado",
+  resolvido: "Resolvido",
+};
+
+const ORIGIN_LABEL: Record<AlertDetail["origin"]["type"], string> = {
+  automatico: "Automático",
+  padrao_regra: "Padrão/Regra",
+  programado: "Programado",
+  avulso: "Avulso",
+};
+
+const DESTINATION_STATUS_LABEL: Record<NonNullable<AlertDetail["destination"]>["status"], string> = {
+  disponivel: "Disponível",
+  removido: "Removido",
+  sem_acesso: "Sem acesso",
+};
+
+export function AlertDetailDrawer({ alertId, open, onClose, accountType }: AlertDetailDrawerProps) {
+  const [status, setStatus] = useState<"loading" | "success" | "not_found" | "forbidden" | "error" | "timeout">("loading");
+  const [detail, setDetail] = useState<AlertDetail | null>(null);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  // Uma abertura intencional grava NO MÁXIMO um evento "details_opened" —
+  // este ref (não state, pra não disparar re-render/reagendar o efeito)
+  // controla isso por alertId, resetado só quando o painel realmente fecha.
+  const openedEventSentFor = useRef<string | null>(null);
+  const [retryNonce, setRetryNonce] = useState(0);
+
+  useEffect(() => {
+    if (!open || !alertId) return;
+    let cancelled = false;
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 15000);
+    setStatus("loading");
+    setErrorMsg(null);
+
+    apiClient
+      .getSystemAlertDetail(alertId, controller.signal)
+      .then((data: AlertDetail) => {
+        if (cancelled) return;
+        setDetail(data);
+        setStatus("success");
+        if (openedEventSentFor.current !== alertId) {
+          openedEventSentFor.current = alertId;
+          apiClient.recordSystemAlertEvent(alertId, "details_opened").catch(() => {});
+        }
+      })
+      .catch((err: any) => {
+        if (cancelled) return;
+        if (err?.name === "AbortError") {
+          setStatus("timeout");
+          return;
+        }
+        const httpStatus = err instanceof ApiError ? err.status : undefined;
+        if (httpStatus === 404) setStatus("not_found");
+        else if (httpStatus === 401 || httpStatus === 403) setStatus("forbidden");
+        else {
+          setErrorMsg(err?.message || "Não foi possível carregar os detalhes.");
+          setStatus("error");
+        }
+      })
+      .finally(() => clearTimeout(timeoutId));
+
+    return () => {
+      cancelled = true;
+      clearTimeout(timeoutId);
+      controller.abort();
+    };
+  }, [open, alertId, retryNonce]);
+
+  useEffect(() => {
+    if (!open) {
+      setDetail(null);
+      openedEventSentFor.current = null;
+    }
+  }, [open]);
+
+  const criticality = detail ? criticalityFromSeverity[detail.severity] : "amarelo";
+  const CriticalityIcon = criticalityIcon[criticality];
+
+  const originLink =
+    detail?.entity_type && detail.entity_id
+      ? systemAlertLink(detail.entity_type, detail.entity_id, accountType, detail.entity_parent_id)
+      : null;
+
+  function handleOriginClick() {
+    if (!alertId) return;
+    apiClient.recordSystemAlertEvent(alertId, "origin_clicked").catch(() => {});
+  }
+
+  return (
+    <StandardModalDialog open={open} onClose={onClose} title="Detalhes do alerta" size="large">
+      <div className="p-5 space-y-5">
+        {status === "loading" && (
+          <div className="flex flex-col items-center justify-center min-h-60 gap-3 text-center" role="status" aria-label="Carregando detalhes">
+            <Loader2 className="h-6 w-6 animate-spin text-slate-400" aria-hidden="true" />
+            <p className="text-sm text-slate-500 dark:text-slate-400">Carregando detalhes...</p>
+          </div>
+        )}
+
+        {status === "not_found" && (
+          <DetailErrorState
+            title="Alerta não encontrado"
+            message="Este alerta não existe mais ou você não possui acesso a ele."
+          />
+        )}
+        {status === "forbidden" && (
+          <DetailErrorState
+            title="Você não possui acesso a este alerta"
+            message="Fale com o responsável se acredita que deveria ter acesso."
+          />
+        )}
+        {(status === "timeout" || status === "error") && (
+          <DetailErrorState
+            title="Não foi possível carregar os detalhes"
+            message={status === "timeout" ? "O carregamento demorou demais. Tente novamente." : errorMsg || "Ocorreu um erro de rede ou no servidor."}
+            onRetry={() => setRetryNonce((n) => n + 1)}
+          />
+        )}
+
+        {status === "success" && detail && (
+          <>
+            <div className="flex items-start justify-between gap-3 flex-wrap">
+              <h3 className="text-base font-semibold text-slate-800 dark:text-slate-100">{detail.title}</h3>
+              <Badge className={`text-xs gap-1 ${criticalityBadgeColor[criticality]}`}>
+                <CriticalityIcon className="h-3 w-3" aria-hidden="true" />
+                {criticalityLabel[criticality]}
+              </Badge>
+            </div>
+
+            <p className="text-sm text-slate-600 dark:text-slate-300 whitespace-pre-wrap">{detail.message}</p>
+
+            {detail.has_image && detail.image_url && (
+              <AlertBannerImage src={apiClient.resolveAlertImageUrl(detail.image_url)} alt={detail.image_alt} />
+            )}
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+              <Field label="Situação" value={SITUACAO_LABEL[detail.situacao]} />
+              <Field label="Criado em" value={new Date(detail.created_at).toLocaleString("pt-BR")} />
+              {detail.expires_at && <Field label="Expira em" value={new Date(detail.expires_at).toLocaleString("pt-BR")} />}
+              <Field label="Origem" value={ORIGIN_LABEL[detail.origin.type]} />
+              {detail.origin.type === "padrao_regra" && (
+                <Field label="Regra/Padrão" value={[detail.origin.rule_name, detail.origin.standard_name].filter(Boolean).join(" — ") || "—"} />
+              )}
+              {detail.origin.type === "programado" && detail.origin.schedule_name && (
+                <Field label="Programação" value={detail.origin.schedule_name} />
+              )}
+              {detail.origin.type === "avulso" && detail.origin.created_by && (
+                <Field label="Criado por" value={detail.origin.created_by.name} />
+              )}
+              <Field
+                label="Destinatário"
+                value={
+                  detail.destinatario.kind === "geral"
+                    ? "Geral (público)"
+                    : detail.destinatario.kind === "pessoa"
+                      ? detail.destinatario.name
+                      : "Indisponível"
+                }
+              />
+              <Field
+                label="Entidade vinculada"
+                value={detail.destination ? [detail.destination.label, detail.destination.name].filter(Boolean).join(": ") : "Sem destino"}
+              />
+              {detail.destination && (
+                <Field label="Situação do destino" value={DESTINATION_STATUS_LABEL[detail.destination.status]} />
+              )}
+            </div>
+
+            {originLink && isSafeInternalPath(originLink) ? (
+              <a
+                href={originLink}
+                target="_blank"
+                rel="noopener noreferrer"
+                onClick={handleOriginClick}
+                className="inline-flex items-center gap-1.5 text-sm h-9 px-3 rounded-md border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors w-fit"
+              >
+                Ver origem
+                <ExternalLink className="h-3.5 w-3.5" aria-hidden="true" />
+              </a>
+            ) : (
+              <p className="text-xs text-slate-400">
+                {detail.destination?.status === "removido"
+                  ? "A tela vinculada não está mais disponível."
+                  : detail.destination?.status === "sem_acesso"
+                    ? "Você não tem acesso à tela vinculada."
+                    : "Este alerta é informativo e não possui uma tela vinculada."}
+              </p>
+            )}
+
+            <div>
+              <h4 className="text-xs font-semibold text-slate-600 dark:text-slate-400 mb-2">Histórico</h4>
+              <AlertTimeline events={detail.events} />
+            </div>
+          </>
+        )}
+      </div>
+    </StandardModalDialog>
+  );
+}
+
+function Field({ label, value }: { label: string; value: string }) {
+  return (
+    <div>
+      <div className="text-[10px] uppercase tracking-wide text-slate-400">{label}</div>
+      <div className="text-slate-700 dark:text-slate-200 mt-0.5">{value}</div>
+    </div>
+  );
+}
+
+function DetailErrorState({ title, message, onRetry }: { title: string; message: string; onRetry?: () => void }) {
+  return (
+    <div className="flex flex-col items-center justify-center min-h-60 gap-4 text-center px-6">
+      <div className="rounded-full bg-red-50 dark:bg-red-950/40 p-4">
+        <AlertTriangle className="h-6 w-6 text-red-500" />
+      </div>
+      <div className="space-y-1">
+        <h3 className="text-sm font-semibold text-slate-800 dark:text-slate-200">{title}</h3>
+        <p className="text-xs text-slate-500 dark:text-slate-400 max-w-sm">{message}</p>
+      </div>
+      {onRetry && (
+        <Button size="sm" onClick={onRetry} className="btn-brand">
+          Tentar novamente
+        </Button>
+      )}
+    </div>
+  );
+}

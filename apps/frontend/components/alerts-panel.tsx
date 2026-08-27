@@ -12,6 +12,7 @@ import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { HeaderSlideScreen } from "@/components/header-slide-screen"
 import { AlertBannerImage } from "@/components/alert-banner-image"
+import { AlertDetailDrawer } from "@/components/alert-detail-drawer"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 import { apiClient } from "@/lib/api-client"
 import {
@@ -65,6 +66,13 @@ export function AlertsPanel({ open = false, onClose }: AlertsPanelProps) {
   const [error, setError] = useState(false)
   const [showArchived, setShowArchived] = useState(false)
   const [dismissed, setDismissed] = useState<string[]>([])
+
+  // "Detalhes" (ata 2026-08, 8º lote) — painel próprio, separado de "Ver
+  // origem". Abre por CIMA da Central (StandardModalDialog já cuida do
+  // z-index) sem fechá-la, restaura o foco ao elemento que abriu ao
+  // fechar (comportamento padrão do Dialog/Radix).
+  const [detailAlertId, setDetailAlertId] = useState<string | null>(null)
+  const [detailOpen, setDetailOpen] = useState(false)
 
   const fetchAlerts = useCallback(async () => {
     setLoading(true)
@@ -153,6 +161,7 @@ export function AlertsPanel({ open = false, onClose }: AlertsPanelProps) {
 
 
   return (
+    <>
     <HeaderSlideScreen
       open={open}
       onClose={onClose}
@@ -312,22 +321,48 @@ export function AlertsPanel({ open = false, onClose }: AlertsPanelProps) {
                       )}
                     </div>
                     <div className="flex items-center gap-1 shrink-0">
+                      {/* "Detalhes" (ata 2026-08, 8º lote) — separado de
+                          "Ver origem": abre a visualização completa (com
+                          histórico) SEM sair da Central, num painel por
+                          cima (StandardModalDialog). Só pra SystemAlert de
+                          verdade — alertas de agência (getAgencyAlerts,
+                          outro subsistema) não têm detalhe/histórico
+                          próprios ainda. */}
+                      {alert.isSystemAlert && (
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="text-xs h-7 px-2"
+                          onClick={() => {
+                            setDetailAlertId(alert.id)
+                            setDetailOpen(true)
+                          }}
+                        >
+                          Detalhes
+                        </Button>
+                      )}
                       {/* Reparo "Ver alerta" (ata 2026-08): link real <a>,
                           nunca navigate()/onClose() — abre em nova aba,
                           mantém a Central aberta na aba original, sem
                           loading (destino já é conhecido antes do clique),
-                          sem depender de pop-up assíncrono. Alerta sem
-                          destino conhecido (Avulso sem referência,
-                          ocorrência de Programação) nunca mostra um botão
-                          funcional — desabilitado, com explicação. */}
+                          sem depender de pop-up assíncrono. Renomeado pra
+                          "Ver origem" (8º lote) — "Ver" sozinho ficou
+                          ambíguo depois de "Detalhes" existir ao lado.
+                          Alerta sem destino conhecido (Avulso sem
+                          referência, ocorrência de Programação) nunca
+                          mostra um botão funcional — desabilitado, com
+                          explicação. */}
                       {alert.link ? (
                         <a
                           href={alert.link}
                           target="_blank"
                           rel="noopener noreferrer"
+                          onClick={() => {
+                            if (alert.isSystemAlert) apiClient.recordSystemAlertEvent(alert.id, "origin_clicked").catch(() => {})
+                          }}
                           className="inline-flex items-center gap-1 text-xs h-7 px-2 rounded-md text-slate-700 hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-slate-800 transition-colors"
                         >
-                          Ver
+                          Ver origem
                           <ArrowRight className="h-3 w-3" />
                         </a>
                       ) : (
@@ -393,5 +428,12 @@ export function AlertsPanel({ open = false, onClose }: AlertsPanelProps) {
         )}
       </div>
     </HeaderSlideScreen>
+    <AlertDetailDrawer
+      alertId={detailAlertId}
+      open={detailOpen}
+      onClose={() => setDetailOpen(false)}
+      accountType={accountType}
+    />
+    </>
   )
 }

@@ -13,6 +13,7 @@
 //   4b. Not found → create SystemAlert and log.
 
 import { prisma } from "./prisma";
+import { nestedAlertEventCreate } from "./alert-events";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -206,6 +207,10 @@ export async function atribuirLiderParaTarefa(
         category: "alerta",
         entity_type: "project_task",
         entity_id: taskId,
+        events: nestedAlertEventCreate({
+          eventType: "created",
+          description: "Ocorrência gerada automaticamente — nenhum líder habilitado encontrado.",
+        }),
       },
     });
 

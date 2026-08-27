@@ -25,6 +25,7 @@ import { writeAccessAudit } from "./product-feedback-service";
 import { isEligibleAdminResponsible } from "./admin-responsible";
 import { getZonedParts, zonedTimeToUtc } from "./timezone";
 import { snapshotAlertImage } from "./alert-image-storage";
+import { nestedAlertEventCreate } from "./alert-events";
 
 export const STANDARD_KEYS = {
   DUE_SOON: "task.due_soon",
@@ -620,12 +621,13 @@ async function processStages(
 
 type RuleWithStandard = {
   id: string;
+  name: string;
   trigger_type: string;
   severity_override: string | null;
   lead_time_minutes: number | null;
   is_active: boolean;
   recipient_roles_json: string;
-  standard: { id: string; key: string; title: string; message: string; default_severity: string };
+  standard: { id: string; key: string; name: string; title: string; message: string; default_severity: string };
 };
 
 async function createOccurrenceIfNeeded(
@@ -668,6 +670,10 @@ async function createOccurrenceIfNeeded(
         standard_id: rule.standard.id,
         rule_id: rule.id,
         dedupe_key: dedupeKey,
+        events: nestedAlertEventCreate({
+          eventType: "created",
+          description: `Ocorrência gerada automaticamente pela regra "${rule.name}" (padrão "${rule.standard.name}").`,
+        }),
       },
     });
     result.created++;
@@ -905,6 +911,7 @@ const CRITICALITY_TYPE_SCHEDULE = "alerta_programado";
 
 type ScheduleRecord = {
   id: string;
+  name: string;
   title: string;
   message: string;
   severity: string;
@@ -1027,6 +1034,10 @@ async function createScheduleOccurrence(
         entity_type: "alert_schedule",
         entity_id: schedule.id,
         dedupe_key: dedupeKey,
+        events: nestedAlertEventCreate({
+          eventType: "created",
+          description: `Ocorrência criada pela programação "${schedule.name}".`,
+        }),
       },
     });
     result.created++;
@@ -1054,7 +1065,17 @@ async function resolveExpiredOccurrences(now: Date, result: AlertEngineRunResult
   for (const alert of expired) {
     await prisma.systemAlert.update({
       where: { id: alert.id },
-      data: { resolved_at: now, resolution_reason: "expired", is_archived: true, archived_at: now, dedupe_key: null },
+      data: {
+        resolved_at: now,
+        resolution_reason: "expired",
+        is_archived: true,
+        archived_at: now,
+        dedupe_key: null,
+        events: nestedAlertEventCreate({
+          eventType: "expired_by_engine",
+          description: "Ocorrência expirada automaticamente pelo motor.",
+        }),
+      },
     });
     await writeAccessAudit({ actorId: null, action: "alert_occurrence.expired", after: { system_alert_id: alert.id } });
     result.expired++;

@@ -13,6 +13,7 @@
 //   6. Always write TaskAssignmentHistory.
 
 import { prisma } from "./prisma";
+import { nestedAlertEventCreate } from "./alert-events";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -262,6 +263,10 @@ export async function selecionarNomadeParaTarefa(
           category: "alerta",
           entity_type: "project_task",
           entity_id: taskId,
+          events: nestedAlertEventCreate({
+            eventType: "created",
+            description: "Ocorrência gerada automaticamente — nenhum nômade habilitado encontrado.",
+          }),
         },
       });
     }

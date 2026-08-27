@@ -2064,6 +2064,18 @@ class ApiClient {
     return this.patch(`/system-alerts/${id}/unarchive`, {});
   }
 
+  // ─── Detalhes e histórico (ata 2026-08, 8º lote) ───────────────────────────
+  async getSystemAlertDetail(id: string, signal?: AbortSignal) {
+    return this.get(`/system-alerts/${id}`, undefined, signal);
+  }
+
+  // "detalhes abertos"/"origem clicada" — eventos de visualização, nunca
+  // disparados por polling/re-render (ver AlertDetailDrawer: gravados uma
+  // única vez por abertura intencional, via ref de controle no componente).
+  async recordSystemAlertEvent(id: string, eventType: "details_opened" | "origin_clicked") {
+    return this.post(`/system-alerts/${id}/events`, { event_type: eventType });
+  }
+
   // ─── Central de Alertas (Admin Master) — ata 2026-08 ───────────────────────
   async getAdminSystemAlerts(filters?: Record<string, any>) {
     return this.get("/system-alerts/admin", filters);

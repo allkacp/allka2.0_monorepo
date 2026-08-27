@@ -29,6 +29,7 @@ import {
 import { isValidIanaTimeZone, isValidTimeOfDay, zonedTimeToUtc } from "../lib/timezone";
 import { combinedProjectWhere } from "../lib/project-scope";
 import { getTaskScopeWhere, applyScope } from "./project-tasks";
+import { nestedAlertEventCreate, recordAlertEvent } from "../lib/alert-events";
 
 const router = Router();
 
@@ -337,9 +338,24 @@ router.patch(
         res.status(404).json({ error: "Alerta não encontrado" });
         return;
       }
+      // Já lido -> não regrava evento (clique duplo/re-render não pode
+      // duplicar "dispensado" na linha do tempo).
+      const jaLido = alert.is_read;
       const updated = await prisma.systemAlert.update({
         where: { id: alert.id },
-        data: { is_read: true, read_at: new Date() },
+        data: {
+          is_read: true,
+          read_at: new Date(),
+          ...(jaLido
+            ? {}
+            : {
+                events: nestedAlertEventCreate({
+                  eventType: "dismissed",
+                  description: "Alerta dispensado pelo destinatário.",
+                  actorUserId: req.user!.id,
+                }),
+              }),
+        },
       });
       res.json(updated);
     } catch (err) {
@@ -364,9 +380,22 @@ router.patch(
         res.status(404).json({ error: "Alerta não encontrado" });
         return;
       }
+      const jaArquivado = alert.is_archived;
       const updated = await prisma.systemAlert.update({
         where: { id: alert.id },
-        data: { is_archived: true, archived_at: new Date() },
+        data: {
+          is_archived: true,
+          archived_at: new Date(),
+          ...(jaArquivado
+            ? {}
+            : {
+                events: nestedAlertEventCreate({
+                  eventType: "archived",
+                  description: "Alerta arquivado pelo destinatário.",
+                  actorUserId: req.user!.id,
+                }),
+              }),
+        },
       });
       res.json(updated);
     } catch (err) {
@@ -389,9 +418,22 @@ router.patch(
         res.status(404).json({ error: "Alerta não encontrado" });
         return;
       }
+      const jaAtivo = !alert.is_archived;
       const updated = await prisma.systemAlert.update({
         where: { id: alert.id },
-        data: { is_archived: false, archived_at: null },
+        data: {
+          is_archived: false,
+          archived_at: null,
+          ...(jaAtivo
+            ? {}
+            : {
+                events: nestedAlertEventCreate({
+                  eventType: "unarchived",
+                  description: "Alerta restaurado pelo destinatário.",
+                  actorUserId: req.user!.id,
+                }),
+              }),
+        },
       });
       res.json(updated);
     } catch (err) {
@@ -795,6 +837,12 @@ router.post(
           expires_at: expiresAtDate,
           entity_type: entityType,
           entity_id: entityId,
+          created_by_user_id: req.user!.id,
+          events: nestedAlertEventCreate({
+            eventType: "created",
+            description: "Alerta avulso criado manualmente.",
+            actorUserId: req.user!.id,
+          }),
         },
       });
 
@@ -867,6 +915,11 @@ router.patch(
           ...(imageChanging
             ? { image_file_name: image_file_name ?? null, image_alt: image_file_name ? (image_alt ?? null) : null }
             : {}),
+          events: nestedAlertEventCreate({
+            eventType: "admin_updated",
+            description: "Título/mensagem/imagem alterados por um administrador.",
+            actorUserId: req.user!.id,
+          }),
         },
       });
 
@@ -927,7 +980,15 @@ router.patch(
       // nova nem duplica: é um único UPDATE no id já existente.
       const updated = await prisma.systemAlert.update({
         where: { id: before.id },
-        data: { severity: body.data.severity },
+        data: {
+          severity: body.data.severity,
+          events: nestedAlertEventCreate({
+            eventType: "admin_updated",
+            description: `Criticidade alterada de ${before.severity} para ${body.data.severity} por um administrador.`,
+            actorUserId: req.user!.id,
+            metadata: { from_severity: before.severity, to_severity: body.data.severity },
+          }),
+        },
       });
 
       await auditSystemAlert({
@@ -967,7 +1028,19 @@ router.patch(
       }
       const updated = await prisma.systemAlert.update({
         where: { id: before.id },
-        data: { is_archived: true, archived_at: new Date() },
+        data: {
+          is_archived: true,
+          archived_at: new Date(),
+          ...(before.is_archived
+            ? {}
+            : {
+                events: nestedAlertEventCreate({
+                  eventType: "archived",
+                  description: "Alerta arquivado por um administrador.",
+                  actorUserId: req.user!.id,
+                }),
+              }),
+        },
       });
       await auditSystemAlert({
         actorId: req.user!.id,
@@ -999,7 +1072,19 @@ router.patch(
       }
       const updated = await prisma.systemAlert.update({
         where: { id: before.id },
-        data: { is_archived: false, archived_at: null },
+        data: {
+          is_archived: false,
+          archived_at: null,
+          ...(before.is_archived
+            ? {
+                events: nestedAlertEventCreate({
+                  eventType: "unarchived",
+                  description: "Alerta restaurado por um administrador.",
+                  actorUserId: req.user!.id,
+                }),
+              }
+            : {}),
+        },
       });
       await auditSystemAlert({
         actorId: req.user!.id,
@@ -1692,6 +1777,247 @@ router.get(
       if (!sendAlertImageFile(res, schedule.image_file_name)) {
         res.status(404).json({ error: "Imagem não encontrada" });
       }
+    } catch (err) {
+      next(err);
+    }
+  },
+);
+
+// ── GET /api/system-alerts/:id — visualização detalhada + histórico ─────────
+// (ata 2026-08, 8º lote: "Detalhes" na Central de Alertas). Mesmo escopo de
+// isolamento do feed pessoal (escopoDoUsuario) — um usuário não consegue
+// consultar o histórico de outro alterando o ID na URL; 404 tanto pra
+// inexistente quanto pra fora de escopo, nunca revelando qual dos dois é.
+// Nunca expõe token/segredo — IDs técnicos só aparecem em campos próprios
+// (`_debug_ids`), nunca como o rótulo principal de nada.
+
+function isAdminReq(req: Request): boolean {
+  return req.user!.role === "admin" || req.user!.account_type === "admin";
+}
+
+async function resolveDestinatario(userId: string | null): Promise<
+  | { kind: "geral" }
+  | { kind: "pessoa"; id: string; name: string; email: string }
+  | { kind: "indisponivel" }
+> {
+  if (!userId) return { kind: "geral" };
+  const user = await prisma.user.findUnique({ where: { id: userId }, select: { id: true, name: true, email: true } });
+  return user ? { kind: "pessoa", ...user } : { kind: "indisponivel" };
+}
+
+type DestinationInfo = {
+  entity_type: string;
+  label: string;
+  name: string | null;
+  code: string | null;
+  status: "disponivel" | "removido" | "sem_acesso";
+};
+
+// Reaproveita os MESMOS helpers de escopo já usados pra validar o destino
+// do Avulso na criação (getTaskScopeWhere/combinedProjectWhere) — nunca uma
+// checagem de acesso paralela e potencialmente divergente.
+async function resolveDestinationForDetail(
+  entityType: string,
+  entityId: string,
+  entityParentId: string | null,
+  viewer: { id: string; account_type: string; role: string },
+): Promise<DestinationInfo | null> {
+  if (entityType === "project_task" || entityType === "project_task_stage") {
+    const taskId = entityType === "project_task_stage" ? entityParentId : entityId;
+    if (!taskId) return null;
+    const scopeWhere = await getTaskScopeWhere(viewer.id, viewer.account_type, viewer.role);
+    if (scopeWhere === null) {
+      return { entity_type: entityType, label: entityType === "project_task_stage" ? "Etapa" : "Tarefa", name: null, code: null, status: "sem_acesso" };
+    }
+    const task = await prisma.projectTask.findFirst({
+      where: Object.keys(scopeWhere).length === 0 ? { id: taskId } : applyScope({ id: taskId }, scopeWhere),
+      select: { id: true, title: true, task_code: true },
+    });
+    if (!task) {
+      // Existe mas fora de escopo, ou realmente não existe — mesma
+      // checagem de existência bruta (sem escopo) só pra escolher a
+      // mensagem certa, nunca pra revelar dado de outro escopo.
+      const existsAnywhere = await prisma.projectTask.findUnique({ where: { id: taskId }, select: { id: true } });
+      return {
+        entity_type: entityType,
+        label: entityType === "project_task_stage" ? "Etapa" : "Tarefa",
+        name: null,
+        code: null,
+        status: existsAnywhere ? "sem_acesso" : "removido",
+      };
+    }
+    return {
+      entity_type: entityType,
+      label: entityType === "project_task_stage" ? "Etapa (tarefa vinculada)" : "Tarefa",
+      name: task.title,
+      code: task.task_code,
+      status: "disponivel",
+    };
+  }
+
+  if (entityType === "project") {
+    const { where: scopeWhere } = await combinedProjectWhere(prisma, viewer.id, viewer.account_type);
+    if (scopeWhere === null) {
+      return { entity_type: "project", label: "Projeto", name: null, code: null, status: "sem_acesso" };
+    }
+    const project = await prisma.project.findFirst({
+      where: Object.keys(scopeWhere).length === 0 ? { id: entityId } : { AND: [{ id: entityId }, scopeWhere] },
+      select: { id: true, title: true, project_code: true },
+    });
+    if (!project) {
+      const existsAnywhere = await prisma.project.findUnique({ where: { id: entityId }, select: { id: true } });
+      return { entity_type: "project", label: "Projeto", name: null, code: null, status: existsAnywhere ? "sem_acesso" : "removido" };
+    }
+    return { entity_type: "project", label: "Projeto", name: project.title, code: project.project_code, status: "disponivel" };
+  }
+
+  // Tipo não reconhecido (ex.: "alert_schedule" — nunca teve tela própria)
+  // — não é "destino", é só metadado de origem; ver origin_type.
+  return null;
+}
+
+router.get(
+  "/:id",
+  verifyToken,
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const alert = await prisma.systemAlert.findFirst({
+        where: { AND: [{ id: req.params.id as string }, escopoDoUsuario(req)] },
+      });
+      if (!alert) {
+        res.status(404).json({ error: "Alerta não encontrado" });
+        return;
+      }
+
+      const viewer = { id: req.user!.id, account_type: req.user!.account_type, role: req.user!.role };
+      const isAdmin = isAdminReq(req);
+
+      const [destinatario, destination, events] = await Promise.all([
+        resolveDestinatario(alert.user_id),
+        alert.entity_type && alert.entity_id
+          ? resolveDestinationForDetail(alert.entity_type, alert.entity_id, alert.entity_parent_id, viewer)
+          : Promise.resolve(null),
+        prisma.systemAlertEvent.findMany({
+          where: { alert_id: alert.id },
+          orderBy: { created_at: "asc" },
+        }),
+      ]);
+
+      // Origem: derivada só de campos reais, nunca adivinhada (ver
+      // comentário no schema — as 4 origens são mutuamente exclusivas na
+      // prática de como cada uma é criada).
+      let origin: Record<string, unknown>;
+      if (alert.schedule_id) {
+        const schedule = await prisma.alertSchedule.findUnique({
+          where: { id: alert.schedule_id },
+          select: { id: true, name: true },
+        });
+        origin = {
+          type: "programado",
+          // Nome administrativo da programação nunca aparece pro
+          // destinatário (mesma regra já estabelecida no schema) — só
+          // visível pra quem administra a Central.
+          schedule_name: isAdmin ? (schedule?.name ?? null) : null,
+        };
+      } else if (alert.rule_id || alert.standard_id) {
+        const [rule, standard] = await Promise.all([
+          alert.rule_id ? prisma.alertRule.findUnique({ where: { id: alert.rule_id }, select: { name: true } }) : null,
+          alert.standard_id ? prisma.alertStandard.findUnique({ where: { id: alert.standard_id }, select: { name: true } }) : null,
+        ]);
+        origin = { type: "padrao_regra", rule_name: rule?.name ?? null, standard_name: standard?.name ?? null };
+      } else if (alert.type === CRITICALITY_TYPE) {
+        const criador = alert.created_by_user_id
+          ? await prisma.user.findUnique({ where: { id: alert.created_by_user_id }, select: { id: true, name: true } })
+          : null;
+        origin = { type: "avulso", created_by: criador };
+      } else {
+        origin = { type: "automatico" };
+      }
+
+      // Situação atual em texto — a interface nunca decide isto sozinha a
+      // partir de booleanos soltos.
+      const situacao = alert.resolved_at
+        ? "resolvido"
+        : alert.is_archived
+          ? "arquivado"
+          : alert.expires_at && alert.expires_at.getTime() <= Date.now()
+            ? "expirado"
+            : "ativo";
+
+      res.json({
+        id: alert.id,
+        title: alert.title,
+        message: alert.message,
+        severity: alert.severity,
+        category: alert.category,
+        situacao,
+        created_at: alert.created_at,
+        expires_at: alert.expires_at,
+        has_image: !!alert.image_file_name,
+        image_url: alert.image_file_name ? `/api/system-alerts/${alert.id}/image` : null,
+        image_alt: alert.image_alt,
+        origin,
+        destinatario,
+        // entity_type/entity_id/entity_parent_id crus — só pra montar o
+        // link de "Ver origem" no frontend, reaproveitando o MESMO
+        // systemAlertLink() já usado no feed (nunca uma segunda lógica de
+        // link). `destination` acima é a versão pra EXIBIÇÃO (nome/status).
+        entity_type: alert.entity_type,
+        entity_id: alert.entity_id,
+        entity_parent_id: alert.entity_parent_id,
+        destination,
+        events: events.map((e) => ({
+          id: e.id,
+          event_type: e.event_type,
+          description: e.description,
+          created_at: e.created_at,
+          // actor_user_id nunca exposto direto — só pra Admin, resolvido
+          // adiante se algum dia for preciso mostrar "por quem"; por ora a
+          // `description` já é gerada no servidor com o suficiente.
+        })),
+      });
+    } catch (err) {
+      next(err);
+    }
+  },
+);
+
+// ── POST /api/system-alerts/:id/events — eventos de visualização ────────────
+// "detalhes abertos" e "origem clicada" não mudam estado nenhum da
+// ocorrência — são ações do destinatário que só fazem sentido registradas
+// quando o próprio destinatário as realiza intencionalmente (nunca
+// disparadas por polling, pré-carregamento ou re-render). O corpo aceita só
+// os dois tipos abaixo — nunca um event_type arbitrário vindo do cliente
+// (os demais tipos da linha do tempo só nascem no servidor, amarrados a uma
+// mudança de estado real).
+const postEventSchema = z.object({
+  event_type: z.enum(["details_opened", "origin_clicked"]),
+});
+
+router.post(
+  "/:id/events",
+  verifyToken,
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const body = postEventSchema.safeParse(req.body);
+      if (!body.success) {
+        res.status(400).json({ error: "Dados inválidos", details: body.error.flatten() });
+        return;
+      }
+      const alert = await prisma.systemAlert.findFirst({
+        where: { AND: [{ id: req.params.id as string }, escopoDoUsuario(req)] },
+        select: { id: true },
+      });
+      if (!alert) {
+        res.status(404).json({ error: "Alerta não encontrado" });
+        return;
+      }
+      await recordAlertEvent(alert.id, {
+        eventType: body.data.event_type,
+        description: body.data.event_type === "details_opened" ? "Detalhes abertos." : "Origem acessada (\"Ver origem\").",
+        actorUserId: req.user!.id,
+      });
+      res.status(201).json({ ok: true });
     } catch (err) {
       next(err);
     }

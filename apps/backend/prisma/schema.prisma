@@ -1920,6 +1920,14 @@ model SystemAlert {
   schedule_id      String?
   schedule         AlertSchedule? @relation(fields: [schedule_id], references: [id])
 
+  // ── Visualização detalhada e histórico (ata 2026-08, 8º lote) ───────────
+  // Quem criou manualmente (Avulso, POST /admin) — nulo em qualquer origem
+  // automática (regra/padrão/programado/motor) e também nulo em Avulsos
+  // criados ANTES deste lote (nunca inferido por backfill; a interface
+  // simplesmente não mostra "responsável pela criação" quando isto é nulo).
+  created_by_user_id String?
+  events             SystemAlertEvent[]
+
   @@index([user_id, is_read])
   @@index([user_id, is_archived])
   @@index([user_id, category, is_read])
@@ -1929,6 +1937,46 @@ model SystemAlert {
   @@index([schedule_id])
   @@index([expires_at])
   @@map("system_alerts")
+}
+
+// ─── SystemAlertEvent ───────────────────────────────────────────────────────
+// Linha do tempo real de UMA ocorrência de alerta (ata 2026-08, 8º lote —
+// "visualização detalhada e histórico real"). Auditado antes de criar: a
+// única estrutura de auditoria existente (ProductFeedbackAccessAudit, via
+// writeAccessAudit) é genérica, sem índice por alerta, pensada só pra ações
+// ADMINISTRATIVAS da Central (criar/editar/reclassificar/arquivar Avulso) —
+// nunca cobriu ações do destinatário (abrir detalhes, clicar em Ver origem,
+// dispensar) nem é praticamente consultável "todos os eventos do alerta X"
+// sem varrer texto. Por isso uma tabela própria, imutável (nunca
+// UPDATE/DELETE por esta feature — só INSERT), com o mínimo necessário.
+model SystemAlertEvent {
+  id       String      @id @default(cuid())
+  alert_id String
+  alert    SystemAlert @relation(fields: [alert_id], references: [id], onDelete: Cascade)
+
+  // "created" | "details_opened" | "origin_clicked" | "archived" |
+  // "unarchived" | "dismissed" | "expired_by_engine" | "admin_updated"
+  event_type String
+
+  // Quem realizou a ação — nulo pra eventos do motor (criação automática,
+  // expiração). Escalar solto (mesmo padrão de SystemAlert.user_id): não
+  // precisa de FK Prisma pra isto ser útil, e evita mais uma relação sem
+  // `onDelete` definido de propósito.
+  actor_user_id String?
+
+  // Texto legível gerado no SERVIDOR (nunca no frontend, nunca digitado
+  // por humano) — o que aparece na linha do tempo.
+  description String @db.Text
+
+  // Metadados mínimos e seguros (ex.: severidade antiga/nova numa
+  // reclassificação). Nunca token, cookie, senha, URL assinada ou payload
+  // completo da requisição.
+  metadata_json String? @db.Text
+
+  created_at DateTime @default(now())
+
+  @@index([alert_id, created_at])
+  @@map("system_alert_events")
 }
 
 // ─── AlertSchedule ──────────────────────────────────────────────────────────

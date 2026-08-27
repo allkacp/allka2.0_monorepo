@@ -34,6 +34,7 @@ import type { Prisma, PrismaClient } from "@prisma/client";
 import { prisma } from "./prisma";
 import { selecionarNomadeParaTarefa } from "./selecionar-nomade";
 import { atribuirLiderParaTarefa } from "./atribuir-lider";
+import { nestedAlertEventCreate } from "./alert-events";
 
 type Db = PrismaClient | Prisma.TransactionClient;
 
@@ -384,6 +385,10 @@ async function avisarReprovacao(
         entity_id: stageId,
         user_id: userId,
         action_url: destino,
+        events: nestedAlertEventCreate({
+          eventType: "created",
+          description: "Ocorrência gerada automaticamente — ajuste solicitado numa etapa.",
+        }),
       },
     });
   } catch (err) {
