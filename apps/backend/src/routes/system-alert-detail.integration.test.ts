@@ -317,9 +317,10 @@ describe("Visualização detalhada e histórico — /api/system-alerts/:id (ata 
     const res = await api(`/api/system-alerts/${alert.id}/events`, {
       method: "POST",
       token: tokenFor(master),
-      body: { event_type: "details_opened" },
+      body: { event_type: "details_opened", client_event_id: crypto.randomUUID() },
     });
     assert.equal(res.status, 201);
+    assert.equal(res.json.duplicate, false);
 
     const detail = await api(`/api/system-alerts/${alert.id}`, { token: tokenFor(master) });
     assert.deepEqual(detail.json.events.map((e: any) => e.event_type), ["details_opened"]);
@@ -331,7 +332,7 @@ describe("Visualização detalhada e histórico — /api/system-alerts/:id (ata 
     const res = await api(`/api/system-alerts/${alert.id}/events`, {
       method: "POST",
       token: tokenFor(master),
-      body: { event_type: "origin_clicked" },
+      body: { event_type: "origin_clicked", client_event_id: crypto.randomUUID() },
     });
     assert.equal(res.status, 201);
   });
@@ -342,20 +343,118 @@ describe("Visualização detalhada e histórico — /api/system-alerts/:id (ata 
     const res = await api(`/api/system-alerts/${alert.id}/events`, {
       method: "POST",
       token: tokenFor(master),
-      body: { event_type: "archived" },
+      body: { event_type: "archived", client_event_id: crypto.randomUUID() },
     });
     assert.equal(res.status, 400);
   });
 
-  it("2. POST /:id/events pra alerta de outro usuário -> 404 (mesmo isolamento do GET)", async () => {
+  it("20. sem client_event_id -> 400 (obrigatório, nunca opcional — é a garantia real de idempotência)", async () => {
+    const master = await masterAdmin();
+    const alert = await createLegacyAlert();
+    const res = await api(`/api/system-alerts/${alert.id}/events`, {
+      method: "POST",
+      token: tokenFor(master),
+      body: { event_type: "details_opened" },
+    });
+    assert.equal(res.status, 400);
+  });
+
+  it("2/19. POST /:id/events pra alerta de outro usuário -> 404 (mesmo isolamento do GET) — não registra evento", async () => {
     const owner = await createUser();
     const stranger = await createUser();
     const alert = await createLegacyAlert({ user_id: owner.id });
     const res = await api(`/api/system-alerts/${alert.id}/events`, {
       method: "POST",
       token: tokenFor(stranger),
-      body: { event_type: "details_opened" },
+      body: { event_type: "details_opened", client_event_id: crypto.randomUUID() },
     });
     assert.equal(res.status, 404);
+
+    const detail = await api(`/api/system-alerts/${alert.id}`, { token: tokenFor(owner) });
+    assert.deepEqual(detail.json.events, []);
+  });
+
+  it("16. repetir a MESMA requisição (mesmo client_event_id) grava só 1 evento — retry de rede/clique duplo", async () => {
+    const master = await masterAdmin();
+    const alert = await createLegacyAlert();
+    const clientEventId = crypto.randomUUID();
+
+    const first = await api(`/api/system-alerts/${alert.id}/events`, {
+      method: "POST",
+      token: tokenFor(master),
+      body: { event_type: "details_opened", client_event_id: clientEventId },
+    });
+    assert.equal(first.status, 201);
+    assert.equal(first.json.duplicate, false);
+
+    const retry = await api(`/api/system-alerts/${alert.id}/events`, {
+      method: "POST",
+      token: tokenFor(master),
+      body: { event_type: "details_opened", client_event_id: clientEventId },
+    });
+    assert.equal(retry.status, 200);
+    assert.equal(retry.json.duplicate, true);
+
+    const detail = await api(`/api/system-alerts/${alert.id}`, { token: tokenFor(master) });
+    assert.equal(detail.json.events.length, 1);
+  });
+
+  it("16b. duas requisições CONCORRENTES com o mesmo client_event_id (corrida real) gravam só 1 evento", async () => {
+    const master = await masterAdmin();
+    const alert = await createLegacyAlert();
+    const clientEventId = crypto.randomUUID();
+    const token = tokenFor(master);
+
+    const post = () =>
+      api(`/api/system-alerts/${alert.id}/events`, {
+        method: "POST",
+        token,
+        body: { event_type: "origin_clicked", client_event_id: clientEventId },
+      });
+    const results = await Promise.all([post(), post(), post()]);
+    assert.ok(results.every((r) => r.status === 200 || r.status === 201));
+
+    const detail = await api(`/api/system-alerts/${alert.id}`, { token });
+    assert.equal(detail.json.events.length, 1);
+  });
+
+  it("17. um client_event_id DIFERENTE (nova abertura legítima) grava um evento novo, distinto", async () => {
+    const master = await masterAdmin();
+    const alert = await createLegacyAlert();
+
+    await api(`/api/system-alerts/${alert.id}/events`, {
+      method: "POST",
+      token: tokenFor(master),
+      body: { event_type: "details_opened", client_event_id: crypto.randomUUID() },
+    });
+    await api(`/api/system-alerts/${alert.id}/events`, {
+      method: "POST",
+      token: tokenFor(master),
+      body: { event_type: "details_opened", client_event_id: crypto.randomUUID() },
+    });
+
+    const detail = await api(`/api/system-alerts/${alert.id}`, { token: tokenFor(master) });
+    assert.equal(detail.json.events.length, 2);
+  });
+
+  it("18. origin_clicked segue a mesma proteção de idempotência que details_opened", async () => {
+    const master = await masterAdmin();
+    const alert = await createLegacyAlert();
+    const clientEventId = crypto.randomUUID();
+
+    await api(`/api/system-alerts/${alert.id}/events`, {
+      method: "POST",
+      token: tokenFor(master),
+      body: { event_type: "origin_clicked", client_event_id: clientEventId },
+    });
+    const retry = await api(`/api/system-alerts/${alert.id}/events`, {
+      method: "POST",
+      token: tokenFor(master),
+      body: { event_type: "origin_clicked", client_event_id: clientEventId },
+    });
+    assert.equal(retry.json.duplicate, true);
+
+    const detail = await api(`/api/system-alerts/${alert.id}`, { token: tokenFor(master) });
+    assert.equal(detail.json.events.filter((e: any) => e.event_type === "origin_clicked").length, 1);
   });
 });

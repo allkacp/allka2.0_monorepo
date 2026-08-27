@@ -47,15 +47,21 @@ function DialogOverlay({
 
 function DialogContent({
   className,
+  overlayClassName,
   children,
   showCloseButton = true,
   ...props
 }: React.ComponentProps<typeof DialogPrimitive.Content> & {
   showCloseButton?: boolean
+  /** Sobrescreve o z-index/estilo padrão (z-50, bg-black/50) do overlay —
+   * necessário quando o Dialog abre por CIMA de algo que já usa z maior
+   * que 50 (ex.: HeaderSlideScreen, z-60 — ver standard-modal-dialog.tsx),
+   * senão o overlay some visualmente atrás do painel que deveria escurecer. */
+  overlayClassName?: string
 }) {
   return (
     <DialogPortal data-slot="dialog-portal">
-      <DialogOverlay />
+      <DialogOverlay className={overlayClassName} />
       <DialogPrimitive.Content
         data-slot="dialog-content"
         className={cn(

@@ -278,6 +278,6 @@ describe("AlertsPanel — botão 'Ver' (link real, nova aba, Central preservada)
     await waitFor(() => expect(screen.getByText("Aviso importante")).toBeInTheDocument());
 
     await user.click(screen.getByText("Ver origem"));
-    expect(apiClient.recordSystemAlertEvent).toHaveBeenCalledWith("alert-1", "origin_clicked");
+    expect(apiClient.recordSystemAlertEvent).toHaveBeenCalledWith("alert-1", "origin_clicked", expect.any(String));
   });
 });

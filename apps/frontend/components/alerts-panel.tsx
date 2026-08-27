@@ -358,7 +358,11 @@ export function AlertsPanel({ open = false, onClose }: AlertsPanelProps) {
                           target="_blank"
                           rel="noopener noreferrer"
                           onClick={() => {
-                            if (alert.isSystemAlert) apiClient.recordSystemAlertEvent(alert.id, "origin_clicked").catch(() => {})
+                            // clientEventId novo por clique — a garantia
+                            // real contra clique duplo é o índice único no
+                            // servidor (ver AlertDetailDrawer/ata 2026-08,
+                            // 9º lote), não uma checagem local.
+                            if (alert.isSystemAlert) apiClient.recordSystemAlertEvent(alert.id, "origin_clicked", crypto.randomUUID()).catch(() => {})
                           }}
                           className="inline-flex items-center gap-1 text-xs h-7 px-2 rounded-md text-slate-700 hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-slate-800 transition-colors"
                         >

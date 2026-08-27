@@ -2069,11 +2069,14 @@ class ApiClient {
     return this.get(`/system-alerts/${id}`, undefined, signal);
   }
 
-  // "detalhes abertos"/"origem clicada" — eventos de visualização, nunca
-  // disparados por polling/re-render (ver AlertDetailDrawer: gravados uma
-  // única vez por abertura intencional, via ref de controle no componente).
-  async recordSystemAlertEvent(id: string, eventType: "details_opened" | "origin_clicked") {
-    return this.post(`/system-alerts/${id}/events`, { event_type: eventType });
+  // "detalhes abertos"/"origem clicada" — eventos de visualização. Nunca
+  // disparados por polling/re-render (ver AlertDetailDrawer). A garantia
+  // real contra duplicação é o `clientEventId` (ver
+  // recordClientTriggeredEventIdempotent no backend, protegido por índice
+  // único) — obrigatório aqui, nunca opcional (ata 2026-08, 9º lote:
+  // "a proteção não pode depender somente de useRef").
+  async recordSystemAlertEvent(id: string, eventType: "details_opened" | "origin_clicked", clientEventId: string) {
+    return this.post(`/system-alerts/${id}/events`, { event_type: eventType, client_event_id: clientEventId });
   }
 
   // ─── Central de Alertas (Admin Master) — ata 2026-08 ───────────────────────

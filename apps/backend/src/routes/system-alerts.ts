@@ -29,7 +29,7 @@ import {
 import { isValidIanaTimeZone, isValidTimeOfDay, zonedTimeToUtc } from "../lib/timezone";
 import { combinedProjectWhere } from "../lib/project-scope";
 import { getTaskScopeWhere, applyScope } from "./project-tasks";
-import { nestedAlertEventCreate, recordAlertEvent } from "../lib/alert-events";
+import { nestedAlertEventCreate, recordAlertEvent, recordClientTriggeredEventIdempotent } from "../lib/alert-events";
 
 const router = Router();
 
@@ -1990,8 +1990,17 @@ router.get(
 // os dois tipos abaixo — nunca um event_type arbitrário vindo do cliente
 // (os demais tipos da linha do tempo só nascem no servidor, amarrados a uma
 // mudança de estado real).
+//
+// client_event_id (ata 2026-08, 9º lote — reparo idempotência): obrigatório
+// aqui, nunca opcional — é a garantia REAL contra clique duplo, retry de
+// rede, Strict Mode e efeitos concorrentes (ver
+// recordClientTriggeredEventIdempotent, protegida por índice único no
+// banco). Um `useRef` no frontend continua existindo como otimização (evita
+// a chamada de rede na maioria dos casos), mas nunca é a única linha de
+// defesa.
 const postEventSchema = z.object({
   event_type: z.enum(["details_opened", "origin_clicked"]),
+  client_event_id: z.string().trim().min(8).max(100),
 });
 
 router.post(
@@ -2012,12 +2021,13 @@ router.post(
         res.status(404).json({ error: "Alerta não encontrado" });
         return;
       }
-      await recordAlertEvent(alert.id, {
+      const { duplicate } = await recordClientTriggeredEventIdempotent(alert.id, {
         eventType: body.data.event_type,
         description: body.data.event_type === "details_opened" ? "Detalhes abertos." : "Origem acessada (\"Ver origem\").",
         actorUserId: req.user!.id,
+        clientEventId: body.data.client_event_id,
       });
-      res.status(201).json({ ok: true });
+      res.status(duplicate ? 200 : 201).json({ ok: true, duplicate });
     } catch (err) {
       next(err);
     }

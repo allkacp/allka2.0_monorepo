@@ -1973,6 +1973,18 @@ model SystemAlertEvent {
   // completo da requisição.
   metadata_json String? @db.Text
 
+  // Idempotência de eventos de visualização (ata 2026-08, 9º lote —
+  // "details_opened"/"origin_clicked", os únicos gravados a partir de uma
+  // ação do CLIENTE, não de uma mudança de estado no servidor). Gerado no
+  // frontend por ação intencional (uma abertura do painel, um clique) e
+  // protegido por índice único de verdade — nunca só um `useRef` do lado
+  // do cliente, que não sobrevive a Strict Mode/efeitos concorrentes/
+  // retry de rede. Nulo nos demais eventos (criados/arquivados/etc.),
+  // todos originados de uma mudança de estado já idempotente por natureza
+  // (guardada por `is_archived`/`is_read` antes de gravar — ver
+  // system-alerts.ts). Mesmo padrão de SystemAlert.dedupe_key.
+  client_event_id String? @unique
+
   created_at DateTime @default(now())
 
   @@index([alert_id, created_at])

@@ -141,7 +141,7 @@ describe("AlertDetailDrawer", () => {
     const { rerender } = renderDrawer();
     await screen.findByText("Alerta de teste");
     await waitFor(() => expect(apiClient.recordSystemAlertEvent).toHaveBeenCalledTimes(1));
-    expect(apiClient.recordSystemAlertEvent).toHaveBeenCalledWith("alert-1", "details_opened");
+    expect(apiClient.recordSystemAlertEvent).toHaveBeenCalledWith("alert-1", "details_opened", expect.any(String));
 
     // Re-render (ex.: o pai re-renderiza por outro motivo) não deve
     // disparar uma segunda chamada — mesmo alertId, mesmo open.
@@ -161,7 +161,7 @@ describe("AlertDetailDrawer", () => {
     renderDrawer();
     const link = await screen.findByText(/ver origem/i);
     await user.click(link);
-    expect(apiClient.recordSystemAlertEvent).toHaveBeenCalledWith("alert-1", "origin_clicked");
+    expect(apiClient.recordSystemAlertEvent).toHaveBeenCalledWith("alert-1", "origin_clicked", expect.any(String));
   });
 
   it("2. 404 mostra estado de erro seguro, sem loading residual", async () => {
@@ -188,5 +188,136 @@ describe("AlertDetailDrawer", () => {
   it("não busca nada quando fechado", () => {
     renderDrawer({ open: false });
     expect(apiClient.getSystemAlertDetail).not.toHaveBeenCalled();
+  });
+
+  // ── Reparo overlay/rolagem/idempotência (ata 2026-08, 9º lote) ────────────
+
+  it("1. overlay aparece ao abrir detalhes, acima do container de trás (z-65, entre a Central z-60 e o painel z-70)", async () => {
+    (apiClient.getSystemAlertDetail as any).mockResolvedValue(fullDetail);
+    renderDrawer();
+    await screen.findByText("Alerta de teste");
+    const overlay = document.querySelector('[data-slot="dialog-overlay"]');
+    expect(overlay).toBeInTheDocument();
+    expect(overlay?.className).toMatch(/z-65/);
+    expect(overlay?.className).toMatch(/backdrop-blur/);
+  });
+
+  it("4. Escape fecha o painel", async () => {
+    (apiClient.getSystemAlertDetail as any).mockResolvedValue(fullDetail);
+    const onClose = vi.fn();
+    const { default: userEvent } = await import("@testing-library/user-event");
+    const user = userEvent.setup();
+    renderDrawer({ onClose });
+    await screen.findByText("Alerta de teste");
+    await user.keyboard("{Escape}");
+    await waitFor(() => expect(onClose).toHaveBeenCalled());
+  });
+
+  it("5. botão X fecha o painel", async () => {
+    (apiClient.getSystemAlertDetail as any).mockResolvedValue(fullDetail);
+    const onClose = vi.fn();
+    const { default: userEvent } = await import("@testing-library/user-event");
+    const user = userEvent.setup();
+    renderDrawer({ onClose });
+    await screen.findByText("Alerta de teste");
+    // O X do StandardModalDialog não tem texto acessível próprio — é o
+    // único <button> fora dos botões de conteúdo, localizado no cabeçalho.
+    const closeButtons = screen.getAllByRole("button").filter((b) => b.querySelector("svg") && !b.textContent?.trim());
+    expect(closeButtons.length).toBeGreaterThan(0);
+    await user.click(closeButtons[0]);
+    await waitFor(() => expect(onClose).toHaveBeenCalled());
+  });
+
+  it("8/9. abre sempre no topo — inclusive ao trocar de alerta com o painel já aberto", async () => {
+    (apiClient.getSystemAlertDetail as any).mockResolvedValue(fullDetail);
+    const scrollToSpy = vi.spyOn(Element.prototype, "scrollTo").mockImplementation(() => {});
+    const { rerender } = renderDrawer({ alertId: "alert-1" });
+    await screen.findByText("Alerta de teste");
+    await waitFor(() => expect(scrollToSpy).toHaveBeenCalledWith({ top: 0 }));
+    scrollToSpy.mockClear();
+
+    rerender(
+      <SidebarProvider>
+        <AlertDetailDrawer alertId="alert-2" open onClose={() => {}} accountType="admin" />
+      </SidebarProvider>,
+    );
+    await waitFor(() => expect(scrollToSpy).toHaveBeenCalledWith({ top: 0 }));
+  });
+
+  it("retry (Tentar novamente) NÃO reseta a rolagem — só uma abertura real reseta", async () => {
+    (apiClient.getSystemAlertDetail as any).mockRejectedValue(new Error("Network failure"));
+    const scrollToSpy = vi.spyOn(Element.prototype, "scrollTo").mockImplementation(() => {});
+    const { default: userEvent } = await import("@testing-library/user-event");
+    const user = userEvent.setup();
+    renderDrawer();
+    await screen.findByText("Não foi possível carregar os detalhes");
+    scrollToSpy.mockClear();
+
+    await user.click(screen.getByRole("button", { name: /tentar novamente/i }));
+    await new Promise((r) => setTimeout(r, 20));
+    expect(scrollToSpy).not.toHaveBeenCalled();
+  });
+
+  it("13. português com acentos aparece corretamente (Histórico, criação, destinatário, não, alteração, restauração), nunca com �", async () => {
+    (apiClient.getSystemAlertDetail as any).mockResolvedValue({
+      ...fullDetail,
+      title: "[TESTE LOCAL] Histórico de alerta",
+      message: "Criação, destinatário, alteração e restauração — não deve corromper.",
+      events: [
+        { id: "e1", event_type: "created", description: "Alerta criado com sucesso.", created_at: "2026-08-27T10:00:00.000Z" },
+      ],
+    });
+    renderDrawer();
+    expect(await screen.findByText("[TESTE LOCAL] Histórico de alerta")).toBeInTheDocument();
+    expect(screen.getByText(/Criação, destinatário, alteração e restauração — não deve corromper\./)).toBeInTheDocument();
+    expect(document.body.textContent).not.toMatch(/�/);
+  });
+
+  it("15/16. clientEventId gerado é estável durante a mesma abertura (envia 1 chamada mesmo remontando o efeito)", async () => {
+    (apiClient.getSystemAlertDetail as any).mockResolvedValue(fullDetail);
+    renderDrawer();
+    await waitFor(() => expect(apiClient.recordSystemAlertEvent).toHaveBeenCalledTimes(1));
+    const [, , firstId] = (apiClient.recordSystemAlertEvent as any).mock.calls[0];
+    expect(typeof firstId).toBe("string");
+    expect(firstId.length).toBeGreaterThan(8);
+  });
+
+  it("17. reabrir gera um clientEventId DIFERENTE (nova abertura legítima = novo evento)", async () => {
+    (apiClient.getSystemAlertDetail as any).mockResolvedValue(fullDetail);
+    const { rerender } = renderDrawer({ open: true });
+    await waitFor(() => expect(apiClient.recordSystemAlertEvent).toHaveBeenCalledTimes(1));
+    const [, , firstId] = (apiClient.recordSystemAlertEvent as any).mock.calls[0];
+
+    rerender(<SidebarProvider><AlertDetailDrawer alertId="alert-1" open={false} onClose={() => {}} accountType="admin" /></SidebarProvider>);
+    rerender(<SidebarProvider><AlertDetailDrawer alertId="alert-1" open onClose={() => {}} accountType="admin" /></SidebarProvider>);
+
+    await waitFor(() => expect(apiClient.recordSystemAlertEvent).toHaveBeenCalledTimes(2));
+    const [, , secondId] = (apiClient.recordSystemAlertEvent as any).mock.calls[1];
+    expect(secondId).not.toBe(firstId);
+  });
+
+  it("18. clique em 'Ver origem' também usa um clientEventId novo por clique", async () => {
+    (apiClient.getSystemAlertDetail as any).mockResolvedValue(fullDetail);
+    const { default: userEvent } = await import("@testing-library/user-event");
+    const user = userEvent.setup();
+    renderDrawer();
+    const link = await screen.findByText(/ver origem/i);
+    await user.click(link);
+    await waitFor(() => expect(apiClient.recordSystemAlertEvent).toHaveBeenCalledTimes(2));
+    const calls = (apiClient.recordSystemAlertEvent as any).mock.calls;
+    const originCall = calls.find((c: any[]) => c[1] === "origin_clicked");
+    expect(originCall).toBeTruthy();
+    expect(typeof originCall[2]).toBe("string");
+  });
+
+  it("6. falha ao gravar o evento não trava a interface nem mostra erro técnico bruto", async () => {
+    (apiClient.getSystemAlertDetail as any).mockResolvedValue(fullDetail);
+    (apiClient.recordSystemAlertEvent as any).mockRejectedValue(new Error("network down"));
+    renderDrawer();
+    // Nunca deve aparecer o texto de erro cru na tela — a chamada é
+    // fire-and-forget, silenciosa pro usuário.
+    await screen.findByText("Alerta de teste");
+    await new Promise((r) => setTimeout(r, 20));
+    expect(screen.queryByText(/network down/i)).not.toBeInTheDocument();
   });
 });

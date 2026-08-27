@@ -102,6 +102,11 @@ if (!window.HTMLElement.prototype.releasePointerCapture) {
 if (!window.HTMLElement.prototype.scrollIntoView) {
   window.HTMLElement.prototype.scrollIntoView = () => {};
 }
+// jsdom also has no scrollTo on Element — AlertDetailDrawer (ata 2026-08,
+// 9º lote) calls it to reset a scrollable panel to the top on open.
+if (!window.Element.prototype.scrollTo) {
+  window.Element.prototype.scrollTo = () => {};
+}
 
 /** Test helper: resize jsdom's window and fire matchMedia change listeners,
  * mirroring what a real browser does when crossing a breakpoint. */

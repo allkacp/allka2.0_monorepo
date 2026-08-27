@@ -11,7 +11,7 @@
  * cancelamento no unmount e estados 404/403/erro/timeout próprios, mesmo
  * padrão já estabelecido pro deep-link de tarefa.
  */
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { AlertTriangle, ExternalLink, Loader2 } from "lucide-react";
 import { StandardModalDialog } from "@/components/standard-modal-dialog";
 import { Button } from "@/components/ui/button";
@@ -80,14 +80,60 @@ export function AlertDetailDrawer({ alertId, open, onClose, accountType }: Alert
   const [status, setStatus] = useState<"loading" | "success" | "not_found" | "forbidden" | "error" | "timeout">("loading");
   const [detail, setDetail] = useState<AlertDetail | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
-  // Uma abertura intencional grava NO MÁXIMO um evento "details_opened" —
-  // este ref (não state, pra não disparar re-render/reagendar o efeito)
-  // controla isso por alertId, resetado só quando o painel realmente fecha.
-  const openedEventSentFor = useRef<string | null>(null);
   const [retryNonce, setRetryNonce] = useState(0);
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
+
+  // clientEventId de "details_opened" (ata 2026-08, 9º lote — reparo
+  // idempotência): useMemo, não useRef solto — precisa ser o MESMO valor
+  // durante toda uma abertura (inclusive na dupla invocação do efeito que
+  // o Strict Mode do React faz de propósito em dev), e um valor NOVO
+  // sempre que `open`/`alertId` mudam (fechar+reabrir de propósito, ou
+  // trocar de alerta = nova abertura legítima = novo evento). A garantia
+  // de não duplicar é do SERVIDOR (índice único em client_event_id) — o
+  // `sentRef` abaixo é só otimização pra não repetir a chamada de rede à
+  // toa, nunca a única linha de defesa.
+  const detailsOpenedEventId = useMemo(
+    () => (open && alertId ? crypto.randomUUID() : null),
+    [open, alertId],
+  );
+  const sentDetailsOpenedFor = useRef<string | null>(null);
+  // Debounce simples de clique duplo em "Ver origem" — puramente uma
+  // conveniência de UX (evita o segundo POST na maioria dos casos); a
+  // garantia real contra duplicar continua sendo o índice único do
+  // client_event_id gerado a cada clique, protegido no servidor mesmo se
+  // este debounce falhar (StrictMode, corrida, retry de rede).
+  const originClickLockRef = useRef(false);
+
+  // Reseta a rolagem pro topo só numa abertura REAL — abrir (open
+  // false->true) ou trocar de alerta (alertId muda) enquanto aberto. Nunca
+  // no retry (retryNonce não está nas deps) nem numa atualização dos MESMOS
+  // dados — que atrapalharia a leitura em andamento (ata 2026-08, 9º lote).
+  // O Dialog (Radix Presence) pode montar o nó real um ou dois quadros
+  // DEPOIS do commit deste efeito — por isso o retry via rAF em vez de um
+  // scrollContainerRef.current?.scrollTo(...) direto, que perderia a
+  // primeira abertura sempre que o nó ainda não existisse no momento exato
+  // em que este efeito roda.
+  useEffect(() => {
+    if (!open) return;
+    let rafId: number;
+    let cancelled = false;
+    function tryScroll() {
+      if (cancelled) return;
+      if (scrollContainerRef.current) {
+        scrollContainerRef.current.scrollTo({ top: 0 });
+      } else {
+        rafId = requestAnimationFrame(tryScroll);
+      }
+    }
+    tryScroll();
+    return () => {
+      cancelled = true;
+      cancelAnimationFrame(rafId);
+    };
+  }, [open, alertId]);
 
   useEffect(() => {
-    if (!open || !alertId) return;
+    if (!open || !alertId || !detailsOpenedEventId) return;
     let cancelled = false;
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 15000);
@@ -100,9 +146,9 @@ export function AlertDetailDrawer({ alertId, open, onClose, accountType }: Alert
         if (cancelled) return;
         setDetail(data);
         setStatus("success");
-        if (openedEventSentFor.current !== alertId) {
-          openedEventSentFor.current = alertId;
-          apiClient.recordSystemAlertEvent(alertId, "details_opened").catch(() => {});
+        if (sentDetailsOpenedFor.current !== detailsOpenedEventId) {
+          sentDetailsOpenedFor.current = detailsOpenedEventId;
+          apiClient.recordSystemAlertEvent(alertId, "details_opened", detailsOpenedEventId).catch(() => {});
         }
       })
       .catch((err: any) => {
@@ -126,12 +172,11 @@ export function AlertDetailDrawer({ alertId, open, onClose, accountType }: Alert
       clearTimeout(timeoutId);
       controller.abort();
     };
-  }, [open, alertId, retryNonce]);
+  }, [open, alertId, retryNonce, detailsOpenedEventId]);
 
   useEffect(() => {
     if (!open) {
       setDetail(null);
-      openedEventSentFor.current = null;
     }
   }, [open]);
 
@@ -145,11 +190,35 @@ export function AlertDetailDrawer({ alertId, open, onClose, accountType }: Alert
 
   function handleOriginClick() {
     if (!alertId) return;
-    apiClient.recordSystemAlertEvent(alertId, "origin_clicked").catch(() => {});
+    // Debounce de UX (não é a garantia de correção — ver comentário no
+    // useRef acima). "Ver origem" é um <a target="_blank"> de verdade —
+    // a navegação em si nunca é bloqueada por isto nem pela chamada de
+    // evento, que é fire-and-forget e nunca mostra erro técnico ao
+    // usuário se falhar.
+    if (originClickLockRef.current) return;
+    originClickLockRef.current = true;
+    setTimeout(() => {
+      originClickLockRef.current = false;
+    }, 800);
+    apiClient.recordSystemAlertEvent(alertId, "origin_clicked", crypto.randomUUID()).catch(() => {});
   }
 
   return (
-    <StandardModalDialog open={open} onClose={onClose} title="Detalhes do alerta" size="large">
+    <StandardModalDialog
+      open={open}
+      onClose={onClose}
+      title="Detalhes do alerta"
+      size="large"
+      // Reparo "overlay ausente sobre a Central de Alertas" (ata 2026-08,
+      // 9º lote): o overlay padrão do Dialog (z-50, ver ui/dialog.tsx) fica
+      // ABAIXO do HeaderSlideScreen que hospeda a Central (z-60) — sem
+      // isso, o overlay ficava visualmente invisível atrás do painel que
+      // deveria escurecer, e o conteúdo de trás (abas/filtros/cards)
+      // continuava nítido e clicável. z-65 fica entre a Central (z-60) e
+      // este painel (z-70, ver standard-modal-dialog.tsx).
+      overlayClassName="z-65 bg-slate-900/40 backdrop-blur-[2px]"
+      scrollRef={scrollContainerRef}
+    >
       <div className="p-5 space-y-5">
         {status === "loading" && (
           <div className="flex flex-col items-center justify-center min-h-60 gap-3 text-center" role="status" aria-label="Carregando detalhes">

@@ -29,7 +29,7 @@
  * ajustada ao conteúdo (sem forçar 68vh) e largura menor — pra confirmações
  * curtas (Bloquear/Deletar) — mantém a mesma centralização/cabeçalho recuado.
  */
-import type { ReactNode } from "react";
+import type { ReactNode, Ref } from "react";
 import { X } from "lucide-react";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { useAppFrameMetrics } from "@/hooks/useAppFrameMetrics";
@@ -46,6 +46,16 @@ interface StandardModalDialogProps {
   /** "large" = popup 1 (1090px x 68vh, formulários). "compact" = altura
    * ajustada ao conteúdo, largura menor (confirmações). */
   size?: "large" | "compact";
+  /** Repassado ao overlay do Dialog (ver comentário em ui/dialog.tsx) —
+   * necessário quando este popup abre de dentro de um painel que já usa
+   * z acima do z-50 padrão do overlay (ex.: AlertDetailDrawer dentro da
+   * Central de Alertas, HeaderSlideScreen z-60). */
+  overlayClassName?: string;
+  /** Ref pro container com rolagem interna (`overflow-y-auto`) — permite
+   * ao chamador resetar a posição de rolagem pra 0 numa abertura nova
+   * (ver AlertDetailDrawer: sem isso, o mesmo nó DOM persiste entre
+   * aberturas e reaproveita o scrollTop do alerta anterior). */
+  scrollRef?: Ref<HTMLDivElement>;
 }
 
 export function StandardModalDialog({
@@ -57,6 +67,8 @@ export function StandardModalDialog({
   children,
   maxWidthPx,
   size = "large",
+  overlayClassName,
+  scrollRef,
 }: StandardModalDialogProps) {
   const { sidebarWidth } = useAppFrameMetrics();
   const sidebarWidthPx =
@@ -69,6 +81,7 @@ export function StandardModalDialog({
     <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
       <DialogContent
         showCloseButton={false}
+        overlayClassName={overlayClassName}
         // z-70: precisa ficar acima de qualquer HeaderSlideScreen (z-60,
         // ver header-slide-screen.tsx) — descoberto neste lote (Central de
         // Alertas) ao abrir "Novo alerta" de dentro do AlertsPanel: sem
@@ -118,7 +131,7 @@ export function StandardModalDialog({
           </div>
         </div>
 
-        <div className="flex flex-col flex-1 min-h-0 overflow-y-auto">{children}</div>
+        <div ref={scrollRef} className="flex flex-col flex-1 min-h-0 overflow-y-auto">{children}</div>
 
         {footer && (
           <div className="shrink-0 border-t border-slate-200/80 dark:border-slate-700/80 bg-white/50 dark:bg-slate-900/50 backdrop-blur-sm px-6 py-4">
