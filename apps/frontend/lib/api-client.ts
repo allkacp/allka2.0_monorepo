@@ -2079,6 +2079,24 @@ class ApiClient {
     return this.post(`/system-alerts/${id}/events`, { event_type: eventType, client_event_id: clientEventId });
   }
 
+  // Resolução formal de alerta crítico (ata 2026-08, 10º lote). Mesma
+  // garantia de idempotência dos eventos: clientActionId obrigatório,
+  // gerado uma vez por submissão intencional do formulário — repetir com o
+  // MESMO valor (retry, clique duplo) devolve o resultado já existente sem
+  // duplicar. Erros usam o corpo da resposta (400/403/404/409) pra
+  // mensagens amigáveis — nunca só "request failed".
+  async resolveSystemAlert(
+    id: string,
+    data: { action: string; description: string },
+    clientActionId: string,
+  ) {
+    return this.post(`/system-alerts/${id}/resolve`, {
+      action: data.action,
+      description: data.description,
+      client_action_id: clientActionId,
+    });
+  }
+
   // ─── Central de Alertas (Admin Master) — ata 2026-08 ───────────────────────
   async getAdminSystemAlerts(filters?: Record<string, any>) {
     return this.get("/system-alerts/admin", filters);

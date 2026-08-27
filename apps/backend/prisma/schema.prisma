@@ -1928,6 +1928,31 @@ model SystemAlert {
   created_by_user_id String?
   events             SystemAlertEvent[]
 
+  // ── Resolução formal de alerta crítico (ata 2026-08, 10º lote) ──────────
+  // Campos NOVOS e DISTINTOS de resolved_at/resolution_reason acima —
+  // aqueles são do motor automático (regra/padrão, expiração; nunca texto
+  // livre, nunca autor humano) e continuam intocados, com seu próprio
+  // significado (dedupe_key zerado, permite um ciclo futuro reabrir a
+  // condição). Isto aqui é a resolução MANUAL de um alerta vermelho/crítico
+  // pelo destinatário/admin autorizado — histórico permanente, nunca
+  // reaproveitado como sinônimo de "expirado" ou "arquivado". Auditoria
+  // prévia confirmou que reaproveitar resolved_at/resolution_reason
+  // conflitaria com a semântica já estabelecida do motor (um alerta
+  // expirado passava a aparecer como "resolvido" no detalhe — bug real
+  // encontrado e corrigido neste lote).
+  manual_resolved_at DateTime?
+  resolved_by_user_id String?
+  // "correcao_aplicada" | "responsavel_acionado" | "processo_ajustado" |
+  // "falso_positivo" | "outra_acao" — enumeração fechada, nunca texto
+  // livre pra este campo (a explicação vai em resolution_description).
+  resolution_action String?
+  resolution_description String? @db.Text
+  // Idempotência da resolução (mesmo padrão de SystemAlertEvent.client_event_id
+  // — ata 2026-08, 9º lote): gerado no frontend por clique intencional em
+  // "Confirmar resolução", único no banco. Retry/corrida com o MESMO valor
+  // nunca cria uma segunda resolução nem sobrescreve a original.
+  resolution_client_action_id String? @unique
+
   @@index([user_id, is_read])
   @@index([user_id, is_archived])
   @@index([user_id, category, is_read])

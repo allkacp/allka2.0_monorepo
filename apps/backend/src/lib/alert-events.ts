@@ -18,6 +18,10 @@ export const ALERT_EVENT_TYPES = [
   "dismissed",
   "expired_by_engine",
   "admin_updated",
+  // Resolução formal de alerta crítico (ata 2026-08, 10º lote) — distinto
+  // de "expired_by_engine"/"archived": só existe por ação humana explícita
+  // via POST /:id/resolve, nunca automático.
+  "resolved",
 ] as const;
 
 export type AlertEventType = (typeof ALERT_EVENT_TYPES)[number];

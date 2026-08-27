@@ -3,8 +3,9 @@ import type { Request, Response, NextFunction } from "express";
 import multer from "multer";
 import fs from "fs";
 import { z } from "zod";
+import { Prisma } from "@prisma/client";
 import { prisma } from "../lib/prisma";
-import { verifyToken, requireAdminMaster } from "../middleware/auth";
+import { verifyToken, requireAdminMaster, evaluateAdminMasterAccess } from "../middleware/auth";
 import { writeAccessAudit } from "../lib/product-feedback-service";
 import {
   computeNextRun,
@@ -189,6 +190,16 @@ function escopoDoUsuario(req: Request): Record<string, unknown> {
     : { user_id: user.id };
 }
 
+// Regra principal do 10º lote: um alerta vermelho/crítico não pode
+// desaparecer só porque alguém dispensou/arquivou — precisa passar por
+// "Resolver alerta" primeiro (POST /:id/resolve). Aplicada no BACKEND
+// (nunca só escondendo botão no frontend) — a mesma checagem vale pra
+// qualquer chamada direta à API, inclusive as rotas administrativas.
+function precisaResolverAntes(alert: { severity: string; manual_resolved_at: Date | null }): boolean {
+  return alert.severity === "error" && !alert.manual_resolved_at;
+}
+const MENSAGEM_PRECISA_RESOLVER = "Este alerta crítico precisa ser resolvido antes de ser arquivado ou dispensado.";
+
 // ── Schemas ───────────────────────────────────────────────────────────────────
 
 const listSchema = z.object({
@@ -204,6 +215,10 @@ const listSchema = z.object({
   // Ausente = só ativos (comportamento padrão, "o que precisa resolver").
   // "true"/"false" filtram explicitamente; "all" traz os dois.
   is_archived: z.enum(["true", "false", "all"]).optional(),
+  // Resolução formal (ata 2026-08, 10º lote) — filtra por
+  // manual_resolved_at, NUNCA pelo resolved_at do motor automático (ver
+  // comentário no schema). Ausente = sem filtro por resolução.
+  resolved: z.enum(["true", "false"]).optional(),
   entity_type: z.string().optional(),
   entity_id: z.string().optional(),
   limit: z.coerce.number().int().min(1).max(200).default(50),
@@ -240,7 +255,7 @@ router.get(
         return;
       }
 
-      const { type, severity, category, is_read, is_archived, entity_type, entity_id, limit, offset } =
+      const { type, severity, category, is_read, is_archived, resolved, entity_type, entity_id, limit, offset } =
         query.data;
 
       const filtros: Record<string, unknown> = {};
@@ -253,6 +268,9 @@ router.get(
       if (is_archived === "true") filtros.is_archived = true;
       else if (is_archived === "false" || is_archived === undefined) filtros.is_archived = false;
       // is_archived === "all" → sem filtro, traz os dois.
+      if (resolved === "true") filtros.manual_resolved_at = { not: null };
+      else if (resolved === "false") filtros.manual_resolved_at = null;
+      // resolved ausente → sem filtro por resolução.
 
       // AND explícito: o escopo usa OR internamente (admin vê geral + os seus),
       // e espalhar as duas coisas no mesmo objeto faria um sobrescrever o outro.
@@ -271,7 +289,24 @@ router.get(
         }),
       ]);
 
-      res.json({ data: alerts.map(withPublicImage), total, unread });
+      // "Resolvidos" (ata 2026-08, 10º lote) mostra "quem resolveu" na
+      // própria listagem, compacto — resolvido em lote (nunca N+1), mesmo
+      // padrão de attachDestinatarioMany mais abaixo (a Central de
+      // Alertas).
+      const resolverIds = [...new Set(alerts.map((a) => a.resolved_by_user_id).filter((id): id is string => !!id))];
+      const resolvers = resolverIds.length
+        ? await prisma.user.findMany({ where: { id: { in: resolverIds } }, select: { id: true, name: true } })
+        : [];
+      const resolverById = new Map(resolvers.map((u) => [u.id, u]));
+
+      res.json({
+        data: alerts.map((a) => ({
+          ...withPublicImage(a),
+          resolved_by: a.resolved_by_user_id ? (resolverById.get(a.resolved_by_user_id) ?? null) : null,
+        })),
+        total,
+        unread,
+      });
     } catch (err) {
       next(err);
     }
@@ -338,6 +373,10 @@ router.patch(
         res.status(404).json({ error: "Alerta não encontrado" });
         return;
       }
+      if (precisaResolverAntes(alert)) {
+        res.status(409).json({ error: MENSAGEM_PRECISA_RESOLVER, requires_resolution: true });
+        return;
+      }
       // Já lido -> não regrava evento (clique duplo/re-render não pode
       // duplicar "dispensado" na linha do tempo).
       const jaLido = alert.is_read;
@@ -378,6 +417,10 @@ router.patch(
       });
       if (!alert) {
         res.status(404).json({ error: "Alerta não encontrado" });
+        return;
+      }
+      if (precisaResolverAntes(alert)) {
+        res.status(409).json({ error: MENSAGEM_PRECISA_RESOLVER, requires_resolution: true });
         return;
       }
       const jaArquivado = alert.is_archived;
@@ -442,6 +485,190 @@ router.patch(
   },
 );
 
+// ── POST /api/system-alerts/:id/resolve — resolução formal (ata 2026-08,
+// 10º lote) ───────────────────────────────────────────────────────────────
+// Só alertas vermelhos/críticos passam por isto (severity="error") — verde
+// e amarelo continuam usando dispensar/arquivar normalmente. Enumeração
+// fechada de ação: nenhuma enumeração equivalente já existia no sistema
+// (auditado antes de criar esta). "responsavel_acionado" é tratado aqui
+// como resolução CONCLUÍDA do ponto de vista do Alerta (a atenção humana
+// pedida pelo alerta aconteceu) — se esse significado for só encaminhamento
+// e não conclusão de verdade, é uma descoberta registrada no relatório de
+// encerramento, não implementada aqui.
+const RESOLUTION_ACTIONS = [
+  "correcao_aplicada",
+  "responsavel_acionado",
+  "processo_ajustado",
+  "falso_positivo",
+  "outra_acao",
+] as const;
+
+const RESOLUTION_ACTION_LABEL: Record<(typeof RESOLUTION_ACTIONS)[number], string> = {
+  correcao_aplicada: "Correção aplicada",
+  responsavel_acionado: "Responsável acionado",
+  processo_ajustado: "Processo ajustado",
+  falso_positivo: "Alerta identificado como falso positivo",
+  outra_acao: "Outra ação",
+};
+
+const resolveAlertSchema = z.object({
+  action: z.enum(RESOLUTION_ACTIONS, { errorMap: () => ({ message: "Selecione uma ação realizada" }) }),
+  // min(10) depois do trim — nunca aceita só espaços contando pro mínimo.
+  description: z
+    .string()
+    .trim()
+    .min(10, "A descrição precisa ter pelo menos 10 caracteres")
+    .max(2000, "A descrição pode ter no máximo 2000 caracteres"),
+  client_action_id: z.string().trim().min(8).max(100),
+});
+
+function serializeResolution(alert: {
+  manual_resolved_at: Date | null;
+  resolution_action: string | null;
+  resolution_description: string | null;
+}) {
+  return {
+    manual_resolved_at: alert.manual_resolved_at,
+    resolution_action: alert.resolution_action,
+    resolution_description: alert.resolution_description,
+    situacao: "resolvido" as const,
+  };
+}
+
+router.post(
+  "/:id/resolve",
+  verifyToken,
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const body = resolveAlertSchema.safeParse(req.body);
+      if (!body.success) {
+        res.status(400).json({ error: "Dados inválidos", details: body.error.flatten() });
+        return;
+      }
+      const { action, description, client_action_id } = body.data;
+
+      // Autorização calculada ANTES da busca do alerta: Admin Master
+      // administra QUALQUER alerta endereçado a quem for (mesma regra já
+      // estabelecida na Central — GET/PATCH /admin/:id/* nunca usam
+      // escopoDoUsuario) — então a própria busca precisa ignorar o escopo
+      // pessoal pra Master, senão um alerta endereçado a OUTRA pessoa
+      // específica (não "Geral") ficaria invisível pra ele aqui mesmo
+      // sendo administrável em qualquer outra rota da Central.
+      const perfil = await prisma.user
+        .findUnique({ where: { id: req.user!.id }, select: { admin_profile: { select: { is_master: true, is_active: true, permissions: { select: { module: true, action: true } } } } } })
+        .then((u) => u?.admin_profile ?? null);
+      const isMaster = evaluateAdminMasterAccess(req.user!.account_type, perfil);
+
+      const alert = await prisma.systemAlert.findFirst({
+        where: isMaster
+          ? { id: req.params.id as string, category: "alerta" }
+          : { AND: [{ id: req.params.id as string }, escopoDoUsuario(req)] },
+      });
+      if (!alert) {
+        res.status(404).json({ error: "Alerta não encontrado" });
+        return;
+      }
+
+      if (alert.severity !== "error") {
+        res.status(400).json({ error: "Somente alertas de criticidade vermelha passam por resolução formal." });
+        return;
+      }
+
+      // Fora de Master, só o destinatário direto do próprio alerta
+      // resolve (alertas "Geral", user_id nulo, exigem Master — não há
+      // hoje uma permissão granular de "Alertas" pra um admin comum
+      // resolver um alerta geral; auditado, não existe, não inventada
+      // aqui).
+      const isDestinatarioDireto = !!alert.user_id && alert.user_id === req.user!.id;
+      if (!isMaster && !isDestinatarioDireto) {
+        res.status(403).json({ error: "Você não tem autorização para resolver este alerta." });
+        return;
+      }
+
+      // Idempotência (fast-path): repetir a MESMA requisição (mesmo
+      // client_action_id) devolve o resultado já existente, sem duplicar.
+      const existingByClientId = await prisma.systemAlert.findUnique({
+        where: { resolution_client_action_id: client_action_id },
+        select: { id: true, manual_resolved_at: true, resolution_action: true, resolution_description: true },
+      });
+      if (existingByClientId) {
+        res.status(200).json({ ok: true, duplicate: true, ...serializeResolution(existingByClientId) });
+        return;
+      }
+
+      // Já resolvido por outra requisição (client_action_id diferente) —
+      // nunca sobrescreve a resolução original.
+      if (alert.manual_resolved_at) {
+        res.status(409).json({
+          error: "Este alerta já foi resolvido.",
+          already_resolved: true,
+          ...serializeResolution(alert),
+        });
+        return;
+      }
+
+      const now = new Date();
+      let raceLost = false;
+      let finalAlert: Awaited<ReturnType<typeof prisma.systemAlert.findUnique>> = null;
+      try {
+        finalAlert = await prisma.$transaction(async (tx) => {
+          // Compare-and-swap real: só grava se AINDA não resolvido nesse
+          // exato momento — protege contra duas requisições concorrentes
+          // com client_action_id DIFERENTES resolvendo o mesmo alerta ao
+          // mesmo tempo (o findFirst acima sozinho não bastaria).
+          const cas = await tx.systemAlert.updateMany({
+            where: { id: alert.id, manual_resolved_at: null },
+            data: {
+              manual_resolved_at: now,
+              resolved_by_user_id: req.user!.id,
+              resolution_action: action,
+              resolution_description: description,
+              resolution_client_action_id: client_action_id,
+            },
+          });
+          if (cas.count === 0) return null;
+          await tx.systemAlertEvent.create({
+            data: {
+              alert_id: alert.id,
+              event_type: "resolved",
+              description: `Alerta resolvido. Ação: ${RESOLUTION_ACTION_LABEL[action]}.`,
+              actor_user_id: req.user!.id,
+              metadata_json: JSON.stringify({ action }),
+            },
+          });
+          return tx.systemAlert.findUnique({ where: { id: alert.id } });
+        });
+        if (!finalAlert) raceLost = true;
+      } catch (err) {
+        if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2002") {
+          raceLost = true;
+        } else {
+          throw err;
+        }
+      }
+
+      if (raceLost) {
+        const current = await prisma.systemAlert.findUnique({ where: { id: alert.id } });
+        const mesmoClientId = current?.resolution_client_action_id === client_action_id;
+        res
+          .status(mesmoClientId ? 200 : 409)
+          .json({
+            ok: mesmoClientId,
+            duplicate: mesmoClientId,
+            already_resolved: !mesmoClientId,
+            ...(current ? serializeResolution(current) : {}),
+            ...(mesmoClientId ? {} : { error: "Este alerta já foi resolvido." }),
+          });
+        return;
+      }
+
+      res.status(201).json({ ok: true, duplicate: false, ...serializeResolution(finalAlert!) });
+    } catch (err) {
+      next(err);
+    }
+  },
+);
+
 // ── PATCH /api/system-alerts/read-all ────────────────────────────────────────
 
 router.patch(
@@ -457,8 +684,14 @@ router.patch(
       const filtros: Record<string, unknown> = {};
       if (query.data.category) filtros.category = query.data.category;
 
+      // Mesma regra de "vermelho sem resolução não dispensa" (ata 2026-08,
+      // 10º lote) — sem isto, "Dispensar todos" seria uma brecha real pra
+      // pular a checagem que PATCH /:id/read já aplica um por um.
+      const naoExigeResolucao = {
+        OR: [{ severity: { not: "error" } }, { manual_resolved_at: { not: null } }],
+      };
       const result = await prisma.systemAlert.updateMany({
-        where: { AND: [filtros, { is_read: false }, escopoDoUsuario(req)] },
+        where: { AND: [filtros, { is_read: false }, naoExigeResolucao, escopoDoUsuario(req)] },
         data: { is_read: true, read_at: new Date() },
       });
       res.json({ updated: result.count });
@@ -1020,10 +1253,14 @@ router.patch(
     try {
       const before = await prisma.systemAlert.findFirst({
         where: { id: req.params.id as string, category: "alerta" },
-        select: { id: true, is_archived: true },
+        select: { id: true, is_archived: true, severity: true, manual_resolved_at: true },
       });
       if (!before) {
         res.status(404).json({ error: "Alerta não encontrado" });
+        return;
+      }
+      if (precisaResolverAntes(before)) {
+        res.status(409).json({ error: MENSAGEM_PRECISA_RESOLVER, requires_resolution: true });
         return;
       }
       const updated = await prisma.systemAlert.update({
@@ -1935,14 +2172,33 @@ router.get(
       }
 
       // Situação atual em texto — a interface nunca decide isto sozinha a
-      // partir de booleanos soltos.
-      const situacao = alert.resolved_at
+      // partir de booleanos soltos. Reparo (ata 2026-08, 10º lote):
+      // `resolved_at` é do MOTOR automático (expiração/regra, ver schema) —
+      // usá-lo aqui fazia um alerta EXPIRADO aparecer como "resolvido" no
+      // detalhe, um bug real. `manual_resolved_at` é a resolução humana
+      // deste lote, campo novo e distinto. "dispensado" é novo aqui
+      // também (is_read=true, nem resolvido nem arquivado) — antes não
+      // tinha rótulo próprio nenhum.
+      const situacao = alert.manual_resolved_at
         ? "resolvido"
         : alert.is_archived
           ? "arquivado"
           : alert.expires_at && alert.expires_at.getTime() <= Date.now()
             ? "expirado"
-            : "ativo";
+            : alert.is_read
+              ? "dispensado"
+              : "ativo";
+
+      const resolution = alert.manual_resolved_at
+        ? {
+            resolved_at: alert.manual_resolved_at,
+            action: alert.resolution_action,
+            description: alert.resolution_description,
+            resolved_by: alert.resolved_by_user_id
+              ? await prisma.user.findUnique({ where: { id: alert.resolved_by_user_id }, select: { id: true, name: true } })
+              : null,
+          }
+        : null;
 
       res.json({
         id: alert.id,
@@ -1951,6 +2207,7 @@ router.get(
         severity: alert.severity,
         category: alert.category,
         situacao,
+        resolution,
         created_at: alert.created_at,
         expires_at: alert.expires_at,
         has_image: !!alert.image_file_name,

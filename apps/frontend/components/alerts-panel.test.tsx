@@ -51,10 +51,20 @@ vi.mock("@/lib/api-client", () => ({
     fetchAlertImageBlobUrl: vi.fn(),
     getSystemAlertDetail: vi.fn(),
     recordSystemAlertEvent: vi.fn().mockResolvedValue({ ok: true }),
+    resolveSystemAlert: vi.fn(),
+  },
+  ApiError: class ApiError extends Error {
+    status: number;
+    data?: Record<string, any>;
+    constructor(message: string, status: number, data?: Record<string, any>) {
+      super(message);
+      this.status = status;
+      this.data = data;
+    }
   },
 }));
 
-import { apiClient } from "@/lib/api-client";
+import { apiClient, ApiError } from "@/lib/api-client";
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -279,5 +289,121 @@ describe("AlertsPanel — botão 'Ver' (link real, nova aba, Central preservada)
 
     await user.click(screen.getByText("Ver origem"));
     expect(apiClient.recordSystemAlertEvent).toHaveBeenCalledWith("alert-1", "origin_clicked", expect.any(String));
+  });
+});
+
+// ── Resolução formal de alerta crítico (ata 2026-08, 10º lote) ─────────────
+describe("AlertsPanel — resolução de alerta crítico", () => {
+  const redAlert = { ...baseAlert, severity: "error" as const };
+
+  it("3. vermelho sem resolução mostra 'Resolver alerta' no lugar de arquivar/dispensar", async () => {
+    (apiClient.getSystemAlerts as any).mockResolvedValue({ data: [redAlert] });
+    render(<AlertsPanel open onClose={() => {}} />);
+    await waitFor(() => expect(screen.getByText("Aviso importante")).toBeInTheDocument());
+
+    expect(screen.getByRole("button", { name: "Resolver alerta" })).toBeInTheDocument();
+    expect(screen.queryByTitle("Arquivar")).not.toBeInTheDocument();
+    expect(screen.queryByTitle("Marcar como lido")).not.toBeInTheDocument();
+  });
+
+  it("22. verde/amarelo mantêm dispensar/arquivar normalmente (sem 'Resolver alerta')", async () => {
+    (apiClient.getSystemAlerts as any).mockResolvedValue({ data: [{ ...baseAlert, severity: "warning" }] });
+    render(<AlertsPanel open onClose={() => {}} />);
+    await waitFor(() => expect(screen.getByText("Aviso importante")).toBeInTheDocument());
+
+    expect(screen.queryByRole("button", { name: "Resolver alerta" })).not.toBeInTheDocument();
+    expect(screen.getByTitle("Arquivar")).toBeInTheDocument();
+    expect(screen.getByTitle("Marcar como lido")).toBeInTheDocument();
+  });
+
+  it("4. clicar em 'Resolver alerta' abre o formulário", async () => {
+    (apiClient.getSystemAlerts as any).mockResolvedValue({ data: [redAlert] });
+    const user = userEvent.setup();
+    render(<AlertsPanel open onClose={() => {}} />);
+    await waitFor(() => expect(screen.getByText("Aviso importante")).toBeInTheDocument());
+
+    await user.click(screen.getByRole("button", { name: "Resolver alerta" }));
+    expect(await screen.findByText("Resolver alerta", { selector: "div" })).toBeInTheDocument();
+  });
+
+  it("1/2. chamar a API diretamente (arquivar/dispensar) num vermelho sem resolução — 409 abre o formulário em vez de travar", async () => {
+    (apiClient.getSystemAlerts as any).mockResolvedValue({ data: [{ ...baseAlert, severity: "warning" }] });
+    (apiClient.archiveSystemAlert as any).mockRejectedValue(new ApiError("precisa resolver", 409, { requires_resolution: true }));
+    const user = userEvent.setup();
+    render(<AlertsPanel open onClose={() => {}} />);
+    await waitFor(() => expect(screen.getByText("Aviso importante")).toBeInTheDocument());
+
+    await user.click(screen.getByTitle("Arquivar"));
+    expect(await screen.findByText("Resolver alerta", { selector: "div" })).toBeInTheDocument();
+  });
+
+  it("16. resolver com sucesso remove o card de Ativos e mostra o toast", async () => {
+    (apiClient.getSystemAlerts as any).mockResolvedValue({ data: [redAlert] });
+    (apiClient.resolveSystemAlert as any).mockResolvedValue({
+      ok: true, duplicate: false, manual_resolved_at: "2026-08-27T10:00:00Z",
+      resolution_action: "correcao_aplicada", resolution_description: "Descrição de teste válida.",
+    });
+    const user = userEvent.setup();
+    render(<AlertsPanel open onClose={() => {}} />);
+    await waitFor(() => expect(screen.getByText("Aviso importante")).toBeInTheDocument());
+
+    await user.click(screen.getByRole("button", { name: "Resolver alerta" }));
+    await screen.findByText("Resolver alerta", { selector: "div" });
+    await user.click(screen.getByRole("button", { name: "Correção aplicada" }));
+    await user.type(screen.getByPlaceholderText(/descreva o que foi feito/i), "Descrição de teste válida.");
+    await user.click(screen.getByRole("button", { name: /confirmar resolução/i }));
+
+    await waitFor(() => expect(screen.queryByText("Aviso importante")).not.toBeInTheDocument());
+  });
+
+  it("6. entidade fora do escopo (via 404) não permite resolver — tratado como erro amigável no modal, sem travar", async () => {
+    (apiClient.getSystemAlerts as any).mockResolvedValue({ data: [redAlert] });
+    (apiClient.resolveSystemAlert as any).mockRejectedValue(new ApiError("Alerta não encontrado", 404));
+    const user = userEvent.setup();
+    render(<AlertsPanel open onClose={() => {}} />);
+    await waitFor(() => expect(screen.getByText("Aviso importante")).toBeInTheDocument());
+
+    await user.click(screen.getByRole("button", { name: "Resolver alerta" }));
+    await screen.findByText("Resolver alerta", { selector: "div" });
+    await user.click(screen.getByRole("button", { name: "Correção aplicada" }));
+    await user.type(screen.getByPlaceholderText(/descreva o que foi feito/i), "Descrição de teste válida.");
+    await user.click(screen.getByRole("button", { name: /confirmar resolução/i }));
+
+    expect(await screen.findByText("Alerta não encontrado")).toBeInTheDocument();
+  });
+
+  it("aba Resolvidos mostra badge com data, quem resolveu e a ação — sem a descrição completa", async () => {
+    (apiClient.getSystemAlerts as any).mockResolvedValue({
+      data: [{
+        ...redAlert,
+        manual_resolved_at: "2026-08-27T10:00:00Z",
+        resolution_action: "correcao_aplicada",
+        resolved_by: { id: "u1", name: "Fulano Admin" },
+      }],
+    });
+    const user = userEvent.setup();
+    render(<AlertsPanel open onClose={() => {}} />);
+    await waitFor(() => expect(screen.getByText("Aviso importante")).toBeInTheDocument());
+
+    await user.click(screen.getByRole("tab", { name: /resolvidos/i }));
+    await waitFor(() => expect(screen.getByText(/por Fulano Admin/)).toBeInTheDocument());
+    expect(screen.getByText(/Correção aplicada/)).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Resolver alerta" })).not.toBeInTheDocument();
+  });
+
+  it("18. resolver não manda automaticamente pra Arquivados — troca de aba confirma", async () => {
+    (apiClient.getSystemAlerts as any).mockImplementation((filters: any) => {
+      if (filters.resolved === "true") {
+        return Promise.resolve({ data: [{ ...redAlert, id: "resolved-1", manual_resolved_at: "2026-08-27T10:00:00Z", resolution_action: "correcao_aplicada" }] });
+      }
+      if (filters.is_archived === "true") return Promise.resolve({ data: [] });
+      return Promise.resolve({ data: [redAlert] });
+    });
+    const user = userEvent.setup();
+    render(<AlertsPanel open onClose={() => {}} />);
+    await waitFor(() => expect(screen.getByText("Aviso importante")).toBeInTheDocument());
+
+    await user.click(screen.getByRole("tab", { name: /arquivados/i }));
+    await waitFor(() => expect(screen.getByText("Nenhum alerta arquivado.")).toBeInTheDocument());
   });
 });

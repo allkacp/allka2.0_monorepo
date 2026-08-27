@@ -12,7 +12,7 @@
  * padrão já estabelecido pro deep-link de tarefa.
  */
 import { useEffect, useMemo, useRef, useState } from "react";
-import { AlertTriangle, ExternalLink, Loader2 } from "lucide-react";
+import { AlertTriangle, CheckCircle2, ExternalLink, Loader2 } from "lucide-react";
 import { StandardModalDialog } from "@/components/standard-modal-dialog";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -21,7 +21,7 @@ import { AlertTimeline, type AlertTimelineEvent } from "@/components/alert-timel
 import { apiClient, ApiError } from "@/lib/api-client";
 import {
   criticalityFromSeverity, criticalityLabel, criticalityIcon, criticalityBadgeColor,
-  systemAlertLink, isSafeInternalPath,
+  systemAlertLink, isSafeInternalPath, RESOLUTION_ACTION_LABEL,
 } from "@/components/alerts-header-icon";
 import type { AccountType } from "@/contexts/account-type-context";
 
@@ -37,7 +37,18 @@ interface AlertDetail {
   title: string;
   message: string;
   severity: "info" | "warning" | "error";
-  situacao: "ativo" | "arquivado" | "expirado" | "resolvido";
+  situacao: "ativo" | "arquivado" | "expirado" | "dispensado" | "resolvido";
+  // Resolução formal (ata 2026-08, 10º lote) — null quando não resolvido.
+  // Alertas antigos que eventualmente tenham situacao "resolvido" por
+  // outro caminho (não deveria acontecer com o campo novo, mas tratado
+  // honestamente mesmo assim) vêm com este objeto ausente/incompleto —
+  // ver renderização abaixo, nunca inventa autor/ação/data.
+  resolution: {
+    resolved_at: string;
+    action: string | null;
+    description: string | null;
+    resolved_by: { id: string; name: string } | null;
+  } | null;
   created_at: string;
   expires_at: string | null;
   has_image: boolean;
@@ -60,6 +71,7 @@ const SITUACAO_LABEL: Record<AlertDetail["situacao"], string> = {
   ativo: "Ativo",
   arquivado: "Arquivado",
   expirado: "Expirado",
+  dispensado: "Dispensado",
   resolvido: "Resolvido",
 };
 
@@ -315,6 +327,39 @@ export function AlertDetailDrawer({ alertId, open, onClose, accountType }: Alert
                     ? "Você não tem acesso à tela vinculada."
                     : "Este alerta é informativo e não possui uma tela vinculada."}
               </p>
+            )}
+
+            {/* Bloco "Resolução" (ata 2026-08, 10º lote) — só quando
+                situacao é "resolvido". Alerta antigo que eventualmente
+                tenha essa situação sem os dados novos (não deveria
+                acontecer com o campo dedicado deste lote, mas tratado
+                honestamente mesmo assim) mostra o aviso explicativo, nunca
+                inventa autor/ação/data. */}
+            {detail.situacao === "resolvido" && (
+              <div className="rounded-lg border border-emerald-200 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-950/30 p-3.5 space-y-2">
+                <div className="flex items-center gap-1.5 text-emerald-800 dark:text-emerald-300">
+                  <CheckCircle2 className="h-4 w-4" aria-hidden="true" />
+                  <h4 className="text-xs font-semibold">Resolução</h4>
+                </div>
+                {detail.resolution && detail.resolution.action && detail.resolution.resolved_by ? (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
+                    <Field label="Situação" value="Resolvido" />
+                    <Field label="Ação realizada" value={RESOLUTION_ACTION_LABEL[detail.resolution.action as keyof typeof RESOLUTION_ACTION_LABEL] ?? detail.resolution.action} />
+                    <Field label="Resolvido por" value={detail.resolution.resolved_by.name} />
+                    <Field label="Data e hora" value={new Date(detail.resolution.resolved_at).toLocaleString("pt-BR")} />
+                    {detail.resolution.description && (
+                      <div className="sm:col-span-2">
+                        <div className="text-[10px] uppercase tracking-wide text-slate-400">Descrição</div>
+                        <p className="text-slate-700 dark:text-slate-200 mt-0.5 whitespace-pre-wrap">{detail.resolution.description}</p>
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <p className="text-xs text-emerald-800/80 dark:text-emerald-300/80">
+                    Este alerta foi marcado como resolvido antes do registro detalhado de resoluções.
+                  </p>
+                )}
+              </div>
             )}
 
             <div>

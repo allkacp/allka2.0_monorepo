@@ -7,22 +7,25 @@
 // EXCLUSIVO de alertas: fonte de dados, loading, erro e filtros próprios —
 // nenhuma aba pra Notificações aqui.
 import { useCallback, useEffect, useState } from "react"
-import { AlertTriangle, Archive, ArchiveRestore, ArrowRight, Info, X } from "lucide-react"
+import { AlertTriangle, Archive, ArchiveRestore, ArrowRight, CheckCircle2, Info, X } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { HeaderSlideScreen } from "@/components/header-slide-screen"
 import { AlertBannerImage } from "@/components/alert-banner-image"
 import { AlertDetailDrawer } from "@/components/alert-detail-drawer"
+import { AlertResolveModal, type AlertResolveTarget } from "@/components/alert-resolve-modal"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
-import { apiClient } from "@/lib/api-client"
+import { apiClient, ApiError } from "@/lib/api-client"
 import {
   alertIcon, systemAlertLink, isSafeInternalPath, TASKS_ROUTE_BY_ACCOUNT_TYPE, type DisplayAlert,
   criticalityFromSeverity, criticalityLabel, criticalityDescription,
   criticalityIcon, criticalityBadgeColor, criticalityAccentBorder, type Criticality,
+  RESOLUTION_ACTION_LABEL, type ResolutionAction,
 } from "@/components/alerts-header-icon"
 import { useAccountType } from "@/contexts/account-type-context"
 import { canManageAlertsAdmin } from "@/lib/admin-permissions"
 import { AlertsAdminCenter } from "@/components/alerts-admin-center"
+import { useToast } from "@/hooks/use-toast"
 import { cn } from "@/lib/utils"
 
 interface AlertsPanelProps {
@@ -64,8 +67,15 @@ export function AlertsPanel({ open = false, onClose }: AlertsPanelProps) {
   const [alerts, setAlerts] = useState<DisplayAlert[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(false)
-  const [showArchived, setShowArchived] = useState(false)
+  // Ativos/Resolvidos/Arquivados (ata 2026-08, 10º lote) — antes só havia
+  // Ativos/Arquivados (showArchived: boolean); "Resolvidos" é uma
+  // categoria própria, nunca sinônimo de arquivado (um alerta resolvido
+  // NÃO vai automaticamente pra Arquivados).
+  const [tab, setTab] = useState<"ativos" | "resolvidos" | "arquivados">("ativos")
   const [dismissed, setDismissed] = useState<string[]>([])
+  const [resolveTarget, setResolveTarget] = useState<AlertResolveTarget | null>(null)
+  const [resolveModalOpen, setResolveModalOpen] = useState(false)
+  const { toast } = useToast()
 
   // "Detalhes" (ata 2026-08, 8º lote) — painel próprio, separado de "Ver
   // origem". Abre por CIMA da Central (StandardModalDialog já cuida do
@@ -90,10 +100,20 @@ export function AlertsPanel({ open = false, onClose }: AlertsPanelProps) {
           count: a.count, isSystemAlert: false,
         })))
       } else {
+        // Ativos/Resolvidos/Arquivados (ata 2026-08, 10º lote) — cada aba é
+        // uma combinação própria de is_archived/resolved, nunca sobreposta:
+        // Resolvidos ignora is_archived (mostra mesmo se depois arquivado —
+        // resolvido é a situação PRIMÁRIA, ver prioridade no backend);
+        // Arquivados exclui resolvidos pra não duplicar a mesma linha nas
+        // duas abas.
+        const filtersByTab = {
+          ativos: { is_read: false, is_archived: "false", resolved: "false" },
+          resolvidos: { is_archived: "all", resolved: "true" },
+          arquivados: { is_archived: "true", resolved: "false" },
+        } as const
         const res = await apiClient.getSystemAlerts({
           category: "alerta",
-          is_read: showArchived ? undefined : false,
-          is_archived: showArchived ? "true" : "false",
+          ...filtersByTab[tab],
           limit: 50,
         })
         const raw: any[] = res?.data ?? []
@@ -102,6 +122,10 @@ export function AlertsPanel({ open = false, onClose }: AlertsPanelProps) {
           message: a.message, link: systemAlertLink(a.entity_type, a.entity_id, accountType, a.entity_parent_id),
           created_at: a.created_at, isSystemAlert: true,
           has_image: a.has_image, image_url: a.image_url, image_alt: a.image_alt,
+          manual_resolved_at: a.manual_resolved_at ?? null,
+          resolution_action: a.resolution_action ?? null,
+          resolvedByName: a.resolved_by?.name ?? null,
+          is_archived: !!a.is_archived,
         })))
       }
     } catch {
@@ -110,7 +134,7 @@ export function AlertsPanel({ open = false, onClose }: AlertsPanelProps) {
     } finally {
       setLoading(false)
     }
-  }, [isAgency, accountType, showArchived])
+  }, [isAgency, accountType, tab])
 
   useEffect(() => {
     if (open) void fetchAlerts()
@@ -118,27 +142,82 @@ export function AlertsPanel({ open = false, onClose }: AlertsPanelProps) {
 
   useEffect(() => {
     setDismissed([])
-  }, [showArchived])
+  }, [tab])
 
   const activeAlerts = alerts.filter((a) => !dismissed.includes(a.id))
 
+  // Regra principal do 10º lote: um alerta vermelho/crítico ainda sem
+  // resolução formal nunca oferece dispensar/arquivar (nem no frontend,
+  // nem só escondendo — o backend recusa a mesma coisa com 409, essa
+  // função só evita a viagem de rede na maioria dos casos e mostra
+  // "Resolver alerta" no lugar).
+  function precisaResolverAntes(alert: DisplayAlert): boolean {
+    return alert.severity === "error" && !alert.manual_resolved_at
+  }
+
+  function openResolveModal(alert: DisplayAlert) {
+    setResolveTarget({
+      id: alert.id,
+      title: alert.title,
+      message: alert.message,
+      originLink: alert.link,
+    })
+    setResolveModalOpen(true)
+  }
+
+  function handleResolved(alertId: string) {
+    // Sai de Ativos sem reload — se a aba atual for Resolvidos, o item some
+    // até o próximo fetch (comportamento aceitável: quem resolveu está na
+    // aba Ativos no fluxo normal). Preserva filtro/rolagem/Central aberta.
+    setDismissed((prev) => [...prev, alertId])
+    toast({ title: "Alerta resolvido e registrado no histórico." })
+  }
+
   async function dismiss(alert: DisplayAlert) {
+    if (alert.isSystemAlert && precisaResolverAntes(alert)) {
+      openResolveModal(alert)
+      return
+    }
     setDismissed((prev) => [...prev, alert.id])
     if (alert.isSystemAlert) {
-      try { await apiClient.markSystemAlertRead(alert.id) } catch {}
+      try {
+        await apiClient.markSystemAlertRead(alert.id)
+      } catch (err) {
+        setDismissed((prev) => prev.filter((id) => id !== alert.id))
+        if (err instanceof ApiError && err.status === 409 && err.data?.requires_resolution) {
+          openResolveModal(alert)
+        } else {
+          toast({ title: "Não foi possível dispensar este alerta.", variant: "destructive" })
+        }
+      }
     }
   }
 
   async function toggleArchive(alert: DisplayAlert) {
+    if (tab !== "arquivados" && precisaResolverAntes(alert)) {
+      openResolveModal(alert)
+      return
+    }
     setDismissed((prev) => [...prev, alert.id])
     try {
-      if (showArchived) await apiClient.unarchiveSystemAlert(alert.id)
+      if (tab === "arquivados") await apiClient.unarchiveSystemAlert(alert.id)
       else await apiClient.archiveSystemAlert(alert.id)
-    } catch {}
+    } catch (err) {
+      setDismissed((prev) => prev.filter((id) => id !== alert.id))
+      if (err instanceof ApiError && err.status === 409 && err.data?.requires_resolution) {
+        openResolveModal(alert)
+      } else {
+        toast({ title: "Não foi possível arquivar este alerta.", variant: "destructive" })
+      }
+    }
   }
 
   async function dismissAll() {
-    setDismissed(alerts.map((a) => a.id))
+    // Vermelho sem resolução nunca é dispensado em lote — mesma regra do
+    // dispensar individual (o backend também exclui isso do PATCH
+    // /read-all, essa filtragem aqui só evita esconder localmente algo que
+    // o servidor não vai realmente marcar como lido).
+    setDismissed(alerts.filter((a) => !precisaResolverAntes(a)).map((a) => a.id))
     if (!isAgency) {
       try { await apiClient.markAllSystemAlertsRead({ category: "alerta" }) } catch {}
     }
@@ -218,11 +297,15 @@ export function AlertsPanel({ open = false, onClose }: AlertsPanelProps) {
         <>
         <div className="flex items-center justify-between px-5 pt-3 gap-2 shrink-0">
           {!isAgency ? (
-            <div className="flex items-center gap-1.5">
-              <Button size="sm" variant={showArchived ? "ghost" : "secondary"} className="h-7 text-xs px-2.5" onClick={() => setShowArchived(false)}>
+            <div className="flex items-center gap-1.5" role="tablist" aria-label="Situação dos alertas">
+              <Button size="sm" variant={tab === "ativos" ? "secondary" : "ghost"} className="h-7 text-xs px-2.5" onClick={() => setTab("ativos")} role="tab" aria-selected={tab === "ativos"}>
                 Ativos
               </Button>
-              <Button size="sm" variant={showArchived ? "secondary" : "ghost"} className="h-7 text-xs px-2.5 gap-1" onClick={() => setShowArchived(true)}>
+              <Button size="sm" variant={tab === "resolvidos" ? "secondary" : "ghost"} className="h-7 text-xs px-2.5 gap-1" onClick={() => setTab("resolvidos")} role="tab" aria-selected={tab === "resolvidos"}>
+                <CheckCircle2 className="h-3 w-3" />
+                Resolvidos
+              </Button>
+              <Button size="sm" variant={tab === "arquivados" ? "secondary" : "ghost"} className="h-7 text-xs px-2.5 gap-1" onClick={() => setTab("arquivados")} role="tab" aria-selected={tab === "arquivados"}>
                 <Archive className="h-3 w-3" />
                 Arquivados
               </Button>
@@ -266,7 +349,11 @@ export function AlertsPanel({ open = false, onClose }: AlertsPanelProps) {
           )}
           {!error && !loading && alerts.length === 0 && (
             <p className="text-sm text-slate-400 text-center py-10">
-              {showArchived ? "Nenhum alerta arquivado." : "Nenhum alerta ativo no momento."}
+              {tab === "arquivados"
+                ? "Nenhum alerta arquivado."
+                : tab === "resolvidos"
+                  ? "Nenhum alerta resolvido ainda."
+                  : "Nenhum alerta ativo no momento."}
             </p>
           )}
           {!error && (
@@ -305,6 +392,24 @@ export function AlertsPanel({ open = false, onClose }: AlertsPanelProps) {
                           </Tooltip>
                         </TooltipProvider>
                       </div>
+                      {/* Badge "Resolvido" com data (ata 2026-08, 10º
+                          lote) — a severidade original (vermelho) continua
+                          visível acima; resolvido nunca esconde/troca a
+                          criticidade, só adiciona esta informação. */}
+                      {alert.manual_resolved_at && (
+                        <div className="flex items-center gap-1.5 flex-wrap mt-1">
+                          <Badge variant="outline" className="text-[10px] gap-1 border-emerald-300 text-emerald-700 dark:border-emerald-700 dark:text-emerald-400">
+                            <CheckCircle2 className="h-3 w-3" />
+                            Resolvido em {new Date(alert.manual_resolved_at).toLocaleDateString("pt-BR", { day: "2-digit", month: "short", year: "numeric" })}
+                          </Badge>
+                          {alert.resolvedByName && (
+                            <span className="text-[10px] text-slate-400">por {alert.resolvedByName}</span>
+                          )}
+                          {alert.resolution_action && (
+                            <span className="text-[10px] text-slate-400">— {RESOLUTION_ACTION_LABEL[alert.resolution_action as ResolutionAction] ?? alert.resolution_action}</span>
+                          )}
+                        </div>
+                      )}
                       <p className="text-xs text-slate-600 dark:text-slate-300 mt-1">{alert.message}</p>
                       {alert.isSystemAlert && alert.has_image && alert.image_url && (
                         <div className="mt-2 rounded-lg overflow-hidden">
@@ -401,26 +506,43 @@ export function AlertsPanel({ open = false, onClose }: AlertsPanelProps) {
                           </Tooltip>
                         </TooltipProvider>
                       )}
-                      {alert.isSystemAlert && (
+                      {/* Regra principal do 10º lote: vermelho ainda sem
+                          resolução mostra a AÇÃO PRINCIPAL "Resolver
+                          alerta" no lugar de arquivar/dispensar — nunca os
+                          dois lado a lado (evita sugerir um atalho que o
+                          backend vai recusar de qualquer forma). */}
+                      {alert.isSystemAlert && precisaResolverAntes(alert) ? (
                         <Button
                           size="sm"
-                          variant="ghost"
-                          onClick={() => toggleArchive(alert)}
-                          className="h-7 w-7 p-0 opacity-60 hover:opacity-100"
-                          title={showArchived ? "Desarquivar" : "Arquivar"}
+                          className="h-7 text-xs px-2.5 gap-1 bg-red-600 hover:bg-red-700 text-white border-0"
+                          onClick={() => openResolveModal(alert)}
                         >
-                          {showArchived ? <ArchiveRestore className="h-3 w-3" /> : <Archive className="h-3 w-3" />}
+                          Resolver alerta
                         </Button>
+                      ) : (
+                        <>
+                          {alert.isSystemAlert && (
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              onClick={() => toggleArchive(alert)}
+                              className="h-7 w-7 p-0 opacity-60 hover:opacity-100"
+                              title={tab === "arquivados" ? "Desarquivar" : "Arquivar"}
+                            >
+                              {tab === "arquivados" ? <ArchiveRestore className="h-3 w-3" /> : <Archive className="h-3 w-3" />}
+                            </Button>
+                          )}
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => dismiss(alert)}
+                            className="h-7 w-7 p-0 opacity-60 hover:opacity-100"
+                            title={alert.isSystemAlert ? "Marcar como lido" : "Dispensar"}
+                          >
+                            <X className="h-3 w-3" />
+                          </Button>
+                        </>
                       )}
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        onClick={() => dismiss(alert)}
-                        className="h-7 w-7 p-0 opacity-60 hover:opacity-100"
-                        title={alert.isSystemAlert ? "Marcar como lido" : "Dispensar"}
-                      >
-                        <X className="h-3 w-3" />
-                      </Button>
                     </div>
                   </div>
                 )
@@ -437,6 +559,12 @@ export function AlertsPanel({ open = false, onClose }: AlertsPanelProps) {
       open={detailOpen}
       onClose={() => setDetailOpen(false)}
       accountType={accountType}
+    />
+    <AlertResolveModal
+      open={resolveModalOpen}
+      onClose={() => setResolveModalOpen(false)}
+      target={resolveTarget}
+      onResolved={(alertId) => handleResolved(alertId)}
     />
     </>
   )

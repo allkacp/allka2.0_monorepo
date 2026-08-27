@@ -34,6 +34,16 @@ export interface DisplayAlert {
   has_image?: boolean
   image_url?: string | null
   image_alt?: string | null
+  // Resolução formal de alerta crítico (ata 2026-08, 10º lote) — só o feed
+  // pessoal preenche isto. `manual_resolved_at` nulo = não resolvido
+  // (nunca confundir com o `resolved_at` do motor automático, que este
+  // tipo nem expõe). `resolution_action` é a chave fechada
+  // ("correcao_aplicada" etc.), `resolvedByName` já vem resolvido em lote
+  // pelo backend — nunca um segundo fetch por item.
+  manual_resolved_at?: string | null
+  resolution_action?: string | null
+  resolvedByName?: string | null
+  is_archived?: boolean
 }
 
 interface ApiAlert {
@@ -225,6 +235,26 @@ export const criticalityBadgeColor: Record<Criticality, string> = {
   verde: "bg-emerald-600 text-white border-transparent dark:bg-emerald-500",
   amarelo: "bg-yellow-400 text-yellow-900 border-transparent dark:bg-yellow-500 dark:text-yellow-950",
   vermelho: "bg-red-600 text-white border-transparent dark:bg-red-500",
+}
+
+// Resolução formal de alerta crítico (ata 2026-08, 10º lote) — espelha
+// EXATAMENTE RESOLUTION_ACTIONS/RESOLUTION_ACTION_LABEL do backend
+// (system-alerts.ts). Única fonte de rótulos — nunca duplicar strings
+// soltas no formulário/lista.
+export const RESOLUTION_ACTIONS = [
+  "correcao_aplicada",
+  "responsavel_acionado",
+  "processo_ajustado",
+  "falso_positivo",
+  "outra_acao",
+] as const
+export type ResolutionAction = (typeof RESOLUTION_ACTIONS)[number]
+export const RESOLUTION_ACTION_LABEL: Record<ResolutionAction, string> = {
+  correcao_aplicada: "Correção aplicada",
+  responsavel_acionado: "Responsável acionado",
+  processo_ajustado: "Processo ajustado",
+  falso_positivo: "Alerta identificado como falso positivo",
+  outra_acao: "Outra ação",
 }
 
 // Faixa lateral (borda esquerda) — identifica a criticidade sem pintar o
