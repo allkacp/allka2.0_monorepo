@@ -7,7 +7,7 @@
 // EXCLUSIVO de alertas: fonte de dados, loading, erro e filtros próprios —
 // nenhuma aba pra Notificações aqui.
 import { useCallback, useEffect, useState } from "react"
-import { AlertTriangle, Archive, ArchiveRestore, ArrowRight, X } from "lucide-react"
+import { AlertTriangle, Archive, ArchiveRestore, ArrowRight, Info, X } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { HeaderSlideScreen } from "@/components/header-slide-screen"
@@ -331,18 +331,33 @@ export function AlertsPanel({ open = false, onClose }: AlertsPanelProps) {
                           <ArrowRight className="h-3 w-3" />
                         </a>
                       ) : (
+                        // Reparo "Ver desabilitado sem explicação" (ata
+                        // 2026-08, 7º lote): antes era um <Button disabled>
+                        // — HTML nativo remove elementos disabled da ordem
+                        // de tabulação, então quem navega por teclado nunca
+                        // conseguia focar isto pra revelar o tooltip (e
+                        // parecia um botão "Ver" quebrado). Agora é um
+                        // elemento de verdade FOCÁVEL (tabIndex, sem
+                        // `disabled`), com o texto "Sem destino" sempre
+                        // visível (nunca depende de hover — funciona igual
+                        // no mobile, onde não existe hover) e a explicação
+                        // completa acessível via Tooltip (mouse/teclado) E
+                        // via aria-describedby (leitor de tela), que o
+                        // Radix conecta automaticamente ao focar o trigger.
                         <TooltipProvider delayDuration={300}>
                           <Tooltip>
                             <TooltipTrigger asChild>
-                              <span>
-                                <Button size="sm" variant="ghost" className="gap-1 text-xs h-7 px-2 opacity-50 cursor-not-allowed" disabled>
-                                  Ver
-                                  <ArrowRight className="h-3 w-3" />
-                                </Button>
+                              <span
+                                tabIndex={0}
+                                aria-disabled="true"
+                                className="inline-flex items-center gap-1 text-xs h-7 px-2 rounded-md text-slate-400 dark:text-slate-500 cursor-default select-none outline-none focus-visible:ring-2 focus-visible:ring-slate-300 dark:focus-visible:ring-slate-600"
+                              >
+                                <Info className="h-3 w-3" aria-hidden="true" />
+                                Sem destino
                               </span>
                             </TooltipTrigger>
                             <TooltipContent className="text-xs max-w-55">
-                              Este alerta não possui uma tela vinculada.
+                              Este alerta é informativo e não possui uma tela vinculada.
                             </TooltipContent>
                           </Tooltip>
                         </TooltipProvider>

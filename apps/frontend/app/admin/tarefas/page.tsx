@@ -1834,65 +1834,84 @@ export default function AdminTarefasPage({
       return <PageLoader text="Carregando tarefa..." />;
     }
     if (deepLinkStatus === "not_found") {
+      // Reparo "tela de destino indisponível com baixo contraste" (ata
+      // 2026-08, 7º lote): esta é uma rota do padrão "Tela Global com
+      // tabela principal" (ver isStandardShellRoute/AppLayout em App.tsx)
+      // — o layout pai já pinta um fundo em gradiente escuro/roxo por trás
+      // de QUALQUER conteúdo retornado aqui, e cada página é responsável
+      // por desenhar o próprio painel branco por cima (ver
+      // STANDARD_SHELL_PANEL_CLASS, usado no return normal mais abaixo).
+      // Sem esse wrapper, o texto (ajustado pra contraste sobre branco)
+      // ficava direto sobre o gradiente escuro — exatamente o "texto
+      // escuro sobre fundo institucional escuro/roxo" relatado.
       return (
-        <div className="flex flex-col items-center justify-center min-h-105 gap-6 text-center px-6">
-          <div className="rounded-full bg-red-50 dark:bg-red-950/40 p-4">
-            <AlertTriangle className="h-8 w-8 text-red-500" />
+        <div className={STANDARD_SHELL_PANEL_CLASS}>
+          <div className="flex flex-col items-center justify-center min-h-105 gap-6 text-center px-6">
+            <div className="rounded-full bg-red-50 dark:bg-red-950/40 p-4">
+              <AlertTriangle className="h-8 w-8 text-red-500" />
+            </div>
+            <div className="space-y-1.5">
+              <h2 className="text-base font-semibold text-slate-800 dark:text-slate-200">
+                Tarefa não encontrada
+              </h2>
+              <p className="text-sm text-slate-500 dark:text-slate-400 max-w-sm">
+                Esta tarefa não existe mais ou você não possui acesso a ela.
+              </p>
+            </div>
+            <Button onClick={() => navigate(routeBase)} className="btn-brand">
+              Voltar para tarefas
+            </Button>
           </div>
-          <div className="space-y-1.5">
-            <h2 className="text-base font-semibold text-slate-800 dark:text-slate-200">
-              Tarefa não encontrada
-            </h2>
-            <p className="text-sm text-slate-500 dark:text-slate-400 max-w-sm">
-              Esta tarefa pode ter sido removida ou não existe mais.
-            </p>
-          </div>
-          <Button onClick={() => navigate(routeBase)} className="btn-brand">
-            Voltar para tarefas
-          </Button>
         </div>
       );
     }
     if (deepLinkStatus === "forbidden") {
       return (
-        <div className="flex flex-col items-center justify-center min-h-105 gap-6 text-center px-6">
-          <div className="rounded-full bg-red-50 dark:bg-red-950/40 p-4">
-            <AlertTriangle className="h-8 w-8 text-red-500" />
+        <div className={STANDARD_SHELL_PANEL_CLASS}>
+          <div className="flex flex-col items-center justify-center min-h-105 gap-6 text-center px-6">
+            <div className="rounded-full bg-red-50 dark:bg-red-950/40 p-4">
+              <AlertTriangle className="h-8 w-8 text-red-500" />
+            </div>
+            <div className="space-y-1.5">
+              <h2 className="text-base font-semibold text-slate-800 dark:text-slate-200">
+                Você não possui acesso a esta tarefa
+              </h2>
+              <p className="text-sm text-slate-500 dark:text-slate-400 max-w-sm">
+                A tarefa existe, mas sua conta não tem permissão para abri-la.
+              </p>
+            </div>
+            <Button onClick={() => navigate(routeBase)} className="btn-brand">
+              Voltar para tarefas
+            </Button>
           </div>
-          <div className="space-y-1.5">
-            <h2 className="text-base font-semibold text-slate-800 dark:text-slate-200">
-              Você não possui acesso a esta tarefa
-            </h2>
-          </div>
-          <Button onClick={() => navigate(routeBase)} className="btn-brand">
-            Voltar para tarefas
-          </Button>
         </div>
       );
     }
     if (deepLinkStatus === "timeout" || deepLinkStatus === "error") {
       return (
-        <div className="flex flex-col items-center justify-center min-h-105 gap-6 text-center px-6">
-          <div className="rounded-full bg-red-50 dark:bg-red-950/40 p-4">
-            <AlertTriangle className="h-8 w-8 text-red-500" />
-          </div>
-          <div className="space-y-1.5">
-            <h2 className="text-base font-semibold text-slate-800 dark:text-slate-200">
-              Não foi possível carregar a tarefa
-            </h2>
-            <p className="text-sm text-slate-500 dark:text-slate-400 max-w-sm">
-              {deepLinkStatus === "timeout"
-                ? "A operação demorou demais. Verifique sua conexão e tente novamente."
-                : deepLinkError || "Ocorreu um erro de rede ou no servidor."}
-            </p>
-          </div>
-          <div className="flex items-center gap-3">
-            <Button variant="outline" onClick={() => navigate(routeBase)}>
-              Voltar para tarefas
-            </Button>
-            <Button onClick={retryDeepLink} className="btn-brand">
-              Tentar novamente
-            </Button>
+        <div className={STANDARD_SHELL_PANEL_CLASS}>
+          <div className="flex flex-col items-center justify-center min-h-105 gap-6 text-center px-6">
+            <div className="rounded-full bg-red-50 dark:bg-red-950/40 p-4">
+              <AlertTriangle className="h-8 w-8 text-red-500" />
+            </div>
+            <div className="space-y-1.5">
+              <h2 className="text-base font-semibold text-slate-800 dark:text-slate-200">
+                Não foi possível carregar a tarefa
+              </h2>
+              <p className="text-sm text-slate-500 dark:text-slate-400 max-w-sm">
+                {deepLinkStatus === "timeout"
+                  ? "O carregamento demorou demais. Verifique sua conexão e tente novamente."
+                  : deepLinkError || "Não foi possível carregar a tarefa — falha de conexão com o servidor."}
+              </p>
+            </div>
+            <div className="flex items-center gap-3">
+              <Button variant="outline" onClick={() => navigate(routeBase)}>
+                Voltar para tarefas
+              </Button>
+              <Button onClick={retryDeepLink} className="btn-brand">
+                Tentar novamente
+              </Button>
+            </div>
           </div>
         </div>
       );

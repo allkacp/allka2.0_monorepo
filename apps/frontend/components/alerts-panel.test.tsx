@@ -117,7 +117,14 @@ describe("AlertsPanel — botão 'Ver' (link real, nova aba, Central preservada)
     expect(onClose).not.toHaveBeenCalled();
   });
 
-  it("18/19. Avulso sem referência (entity_type null) NÃO mostra link funcional — desabilitado, com explicação, sem loading", async () => {
+  // Reparo "Ver desabilitado sem explicação" (ata 2026-08, 7º lote): o
+  // <Button disabled> antigo saía da ordem de tabulação (HTML nativo remove
+  // elementos disabled do foco), então ninguém navegando por teclado
+  // conseguia revelar a explicação — e visualmente parecia um "Ver"
+  // quebrado. Agora é texto "Sem destino" sempre visível (funciona igual
+  // sem hover, inclusive no mobile) com tooltip acessível por mouse E
+  // teclado.
+  it("2/18/19. Avulso sem referência (entity_type null) NÃO mostra link clicável — texto 'Sem destino', sem loading", async () => {
     (apiClient.getSystemAlerts as any).mockResolvedValue({
       data: [{ ...baseAlert, entity_type: null, entity_id: null }],
     });
@@ -125,13 +132,60 @@ describe("AlertsPanel — botão 'Ver' (link real, nova aba, Central preservada)
     render(<AlertsPanel open onClose={() => {}} />);
 
     await waitFor(() => expect(screen.getByText("Aviso importante")).toBeInTheDocument());
-    expect(screen.queryByText("Ver")?.closest("a")).toBeFalsy();
-    const disabledBtn = screen.getByText("Ver").closest("button");
-    expect(disabledBtn).toBeDisabled();
-    // Clicar num botão desabilitado não deve acionar nenhuma chamada.
-    await user.click(disabledBtn!).catch(() => {});
+    expect(screen.queryByText("Ver")).not.toBeInTheDocument();
+    expect(screen.queryByRole("link")).not.toBeInTheDocument();
+    const semDestino = screen.getByText("Sem destino");
+    expect(semDestino.closest("a")).toBeFalsy();
+    expect(semDestino.closest("button")).toBeFalsy();
+    // Não deve existir clique/navegação/chamada nenhuma associada.
+    await user.click(semDestino).catch(() => {});
     expect(apiClient.archiveSystemAlert).not.toHaveBeenCalled();
     expect(apiClient.markSystemAlertRead).not.toHaveBeenCalled();
+  });
+
+  it("3. alerta sem destino explica o motivo por tooltip ao passar o mouse", async () => {
+    const user = userEvent.setup();
+    (apiClient.getSystemAlerts as any).mockResolvedValue({
+      data: [{ ...baseAlert, entity_type: null, entity_id: null }],
+    });
+    render(<AlertsPanel open onClose={() => {}} />);
+    await waitFor(() => expect(screen.getByText("Aviso importante")).toBeInTheDocument());
+
+    expect(screen.queryByText(/este alerta é informativo/i)).not.toBeInTheDocument();
+    await user.hover(screen.getByText("Sem destino"));
+    // Radix renderiza o tooltip em dois nós (bolha visível + cópia
+    // visually-hidden com role="tooltip" pra leitor de tela) — por isso
+    // findAllByText, nunca findByText (que quebra com múltiplos matches).
+    const matches = await screen.findAllByText("Este alerta é informativo e não possui uma tela vinculada.");
+    expect(matches.length).toBeGreaterThan(0);
+  });
+
+  it("3. a mesma explicação é acessível por foco de teclado (elemento é focável, ao contrário de um botão disabled)", async () => {
+    const user = userEvent.setup();
+    (apiClient.getSystemAlerts as any).mockResolvedValue({
+      data: [{ ...baseAlert, entity_type: null, entity_id: null }],
+    });
+    render(<AlertsPanel open onClose={() => {}} />);
+    await waitFor(() => expect(screen.getByText("Aviso importante")).toBeInTheDocument());
+
+    const semDestino = screen.getByText("Sem destino").closest("span")!;
+    expect(semDestino).toHaveAttribute("tabIndex", "0");
+    semDestino.focus();
+    expect(semDestino).toHaveFocus();
+    const matches = await screen.findAllByText("Este alerta é informativo e não possui uma tela vinculada.");
+    expect(matches.length).toBeGreaterThan(0);
+  });
+
+  it("4. no mobile (sem hover) o texto 'Sem destino' já está visível sem precisar de interação", async () => {
+    (apiClient.getSystemAlerts as any).mockResolvedValue({
+      data: [{ ...baseAlert, entity_type: null, entity_id: null }],
+    });
+    render(<AlertsPanel open onClose={() => {}} />);
+    await waitFor(() => expect(screen.getByText("Aviso importante")).toBeInTheDocument());
+
+    // Sem nenhum hover/focus disparado — o rótulo em si já é visível, não
+    // depende de tooltip pra transmitir "isto não tem destino".
+    expect(screen.getByText("Sem destino")).toBeVisible();
   });
 
   it("19. ocorrência de Programação (entity_type 'alert_schedule') também não mostra link funcional", async () => {
@@ -140,7 +194,8 @@ describe("AlertsPanel — botão 'Ver' (link real, nova aba, Central preservada)
     });
     render(<AlertsPanel open onClose={() => {}} />);
     await waitFor(() => expect(screen.getByText("Aviso importante")).toBeInTheDocument());
-    expect(screen.getByText("Ver").closest("button")).toBeDisabled();
+    expect(screen.getByText("Sem destino")).toBeInTheDocument();
+    expect(screen.queryByRole("link")).not.toBeInTheDocument();
   });
 
   it("17. etapa (project_task_stage) com entity_parent_id abre a tarefa-mãe", async () => {
