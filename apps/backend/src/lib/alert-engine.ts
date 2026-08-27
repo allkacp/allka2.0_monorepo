@@ -108,6 +108,31 @@ const TERMINAL_STAGE_STATUSES = ["CONCLUIDA", "BLOQUEADA"];
 
 const DEFAULT_LEAD_TIME_MINUTES = 24 * 60;
 
+// ── Resolução automática de ocorrência de TAREFA (ata 2026-08, bloco 1/2) ──
+// Só `task.due_soon` / `task.overdue`. Etapas continuam no caminho legado
+// (`resolveOccurrence`, campos `resolved_at`/`resolution_reason`) até o bloco
+// 2. O autor de toda resolução automática é apresentado como este rótulo,
+// nunca uma pessoa real.
+export const MOTOR_LABEL = "Motor da Allka";
+
+// Motivo técnico padronizado → mensagem legível (pt-BR). O motivo é gravado
+// em `automatic_resolution_reason` (enum fechado, nunca texto livre); a
+// mensagem em `automatic_resolution_message`. Nunca "Resolvido
+// automaticamente" genérico — cada motivo diz o que realmente aconteceu.
+export const AUTO_RESOLUTION_REASON_MESSAGES = {
+  task_completed: "A tarefa foi concluída.",
+  task_cancelled: "A tarefa foi cancelada.",
+  task_removed: "A tarefa foi removida e a condição deixou de existir.",
+  deadline_changed_not_overdue: "O prazo foi alterado e a tarefa não está mais atrasada.",
+  deadline_out_of_window: "O prazo foi alterado para fora da janela de alerta.",
+  deadline_changed: "O prazo da tarefa foi alterado.",
+  superseded_by_overdue: "O prazo venceu e a tarefa passou para a condição de atraso.",
+  recipient_changed: "O destinatário deixou de ser responsável por esta tarefa.",
+  rule_disabled: "A regra que gerava este alerta foi desativada.",
+} as const;
+
+export type AutoResolutionReason = keyof typeof AUTO_RESOLUTION_REASON_MESSAGES;
+
 /** Substitui só variáveis da allowlist — nunca avalia código. */
 export function renderTemplate(template: string, vars: Record<string, string>, allowed: string[]): string {
   return template.replace(/\{\{\s*(\w+)\s*\}\}/g, (match, name: string) => {
@@ -511,14 +536,17 @@ async function processTasks(
         for (const userId of recipients) {
           const created = await createOccurrenceIfNeeded(overdueRule, "project_task", task.id, userId, vars, task.due_date, result);
           if (created) {
-            await resolveMatchingOccurrences({
-              entityType: "project_task",
-              entityId: task.id,
-              userId,
-              standardKey: STANDARD_KEYS.DUE_SOON,
-              reason: "superseded",
-              result,
-            });
+            // Transição "próxima do prazo" → "atrasada": encerra AUTOMATICAMENTE
+            // a(s) ocorrência(s) amarela(s) do MESMO destinatário/tarefa. A
+            // ordem é resistente a falha: o vermelho já foi criado acima; se
+            // este encerramento falhar num ciclo, o próximo ciclo o refaz
+            // (resolveStaleOccurrences reavalia o amarelo e chega ao mesmo
+            // "superseded_by_overdue"). Nunca ficam os dois ativos por muito
+            // tempo, nunca fica nenhum quando a tarefa está de fato atrasada.
+            const amarelos = await findActiveTaskOccurrences(task.id, userId, STANDARD_KEYS.DUE_SOON);
+            for (const amarelo of amarelos) {
+              await autoResolveTaskOccurrence(amarelo, "superseded_by_overdue", now, result);
+            }
           }
         }
       } else if (!isOverdue && dueSoonRule) {
@@ -744,6 +772,98 @@ async function resolveOccurrence(alertId: string, reason: string): Promise<void>
   });
 }
 
+// ── Resolução automática de ocorrência de TAREFA (ata 2026-08, bloco 1/2) ──
+// Só o motor chama isto — não há rota pública. Distinta de `resolveOccurrence`
+// (etapas/legado, ainda usa `resolved_at`/`resolution_reason`) e da resolução
+// manual/expiração. Idempotente e resistente a dois ciclos concorrentes: a
+// gravação é um compare-and-swap transacional em `condition_cleared_at` (só
+// entra quem achar o campo ainda nulo) e o evento de histórico nasce na MESMA
+// transação. Nunca sobrescreve uma resolução manual já registrada — nesse
+// caso só encerra o EPISÓDIO (marca `condition_cleared_at`, zera `dedupe_key`,
+// grava um evento "condition_cleared") sem tocar em `automatic_resolved_at`.
+
+type StaleTaskAlertRow = {
+  id: string;
+  manual_resolved_at: Date | null;
+};
+
+async function findActiveTaskOccurrences(
+  entityId: string,
+  userId: string,
+  standardKey: string,
+): Promise<StaleTaskAlertRow[]> {
+  return prisma.systemAlert.findMany({
+    where: {
+      entity_type: "project_task",
+      entity_id: entityId,
+      user_id: userId,
+      condition_cleared_at: null,
+      dedupe_key: { not: null },
+      standard: { key: standardKey },
+    },
+    select: { id: true, manual_resolved_at: true },
+  });
+}
+
+async function autoResolveTaskOccurrence(
+  alert: StaleTaskAlertRow,
+  reason: AutoResolutionReason,
+  now: Date,
+  result: AlertEngineRunResult,
+): Promise<void> {
+  const message = AUTO_RESOLUTION_REASON_MESSAGES[reason];
+  const preResolvedManually = alert.manual_resolved_at != null;
+
+  const data: Record<string, unknown> = {
+    condition_cleared_at: now,
+    // Zera a chave: o episódio acabou. Um episódio futuro (mesma tarefa,
+    // mesmo prazo) recria a chave idêntica e, como nenhuma linha ativa a
+    // segura mais, uma ocorrência NOVA é criada — nunca a antiga reaproveitada.
+    dedupe_key: null,
+  };
+  if (!preResolvedManually) {
+    // Resolução automática de verdade — a pessoa não chegou a resolver.
+    data.automatic_resolved_at = now;
+    data.automatic_resolution_reason = reason;
+    data.automatic_resolution_message = message;
+    data.is_archived = true;
+    data.archived_at = now;
+  }
+
+  let applied = false;
+  await prisma.$transaction(async (tx) => {
+    const cas = await tx.systemAlert.updateMany({
+      // Só quem encontrar o episódio ainda aberto grava — dois ciclos
+      // simultâneos: um vence o CAS, o outro vê count=0 e não faz nada
+      // (nem duplica evento).
+      where: { id: alert.id, condition_cleared_at: null },
+      data,
+    });
+    if (cas.count === 0) return;
+    applied = true;
+    await tx.systemAlertEvent.create({
+      data: {
+        alert_id: alert.id,
+        event_type: preResolvedManually ? "condition_cleared" : "auto_resolved",
+        // actor_user_id sempre nulo — autor é "Motor da Allka", nunca pessoa.
+        actor_user_id: null,
+        description: preResolvedManually
+          ? "A condição que originou este alerta deixou de existir."
+          : "Alerta resolvido automaticamente pelo Motor da Allka.",
+        metadata_json: JSON.stringify({ reason, message }),
+      },
+    });
+  });
+
+  if (!applied) return;
+  await writeAccessAudit({
+    actorId: null,
+    action: "alert_occurrence.auto_resolved",
+    after: { system_alert_id: alert.id, reason, pre_resolved_manually: preResolvedManually },
+  });
+  result.resolved++;
+}
+
 // ── Encerramento automático ──────────────────────────────────────────────
 // Varre toda ocorrência automática ainda ativa e confirma se ela continua
 // válida: entidade ainda existe e não está concluída/cancelada, condição de
@@ -764,12 +884,35 @@ async function resolveStaleOccurrences(
   const activeAutoAlerts = await prisma.systemAlert.findMany({
     where: {
       standard_id: { not: null },
-      resolved_at: null,
-      is_archived: false,
       entity_type: { in: ["project_task", "project_task_stage"] },
       user_id: { not: null },
+      // Episódio já encerrado (resolução automática de tarefa) nunca volta a
+      // ser avaliado — sempre nulo em ocorrências de etapa (bloco 2).
+      condition_cleared_at: null,
+      // Ativa OU ainda "no episódio": a segunda condição do OR pega uma
+      // ocorrência de TAREFA resolvida MANUALMENTE cuja condição continua
+      // viva (`dedupe_key` preenchido, mas `is_archived`/`resolved_at`
+      // poderiam já ter mudado) — é isso que permite ao motor encerrar o
+      // episódio quando a condição enfim terminar, sem recriar nada nem
+      // sobrescrever a resolução manual.
+      OR: [
+        { resolved_at: null, is_archived: false },
+        { dedupe_key: { not: null } },
+      ],
     },
-    select: { id: true, entity_type: true, entity_id: true, user_id: true, dedupe_key: true, rule_id: true, standard: { select: { key: true } } },
+    select: {
+      id: true,
+      entity_type: true,
+      entity_id: true,
+      user_id: true,
+      dedupe_key: true,
+      rule_id: true,
+      resolved_at: true,
+      is_archived: true,
+      manual_resolved_at: true,
+      condition_cleared_at: true,
+      standard: { select: { key: true } },
+    },
   });
   if (activeAutoAlerts.length === 0) return;
 
@@ -794,18 +937,21 @@ async function resolveStaleOccurrences(
         // mais no mapa (que só cobre "id não existe de verdade").
         const task = taskById.get(alert.entity_id) ?? (await prisma.projectTask.findUnique({ where: { id: alert.entity_id }, select: TASK_SELECT }));
         if (!task) {
-          await resolveOccurrence(alert.id, "condition_cleared");
-          result.resolved++;
+          await autoResolveTaskOccurrence(alert, "task_removed", now, result);
           continue;
         }
         if (task.status === "CONCLUIDA" || task.status === "CANCELADA") {
-          await resolveOccurrence(alert.id, task.status === "CONCLUIDA" ? "task_completed" : "task_cancelled");
-          result.resolved++;
+          await autoResolveTaskOccurrence(alert, task.status === "CONCLUIDA" ? "task_completed" : "task_cancelled", now, result);
           continue;
         }
         const rule = alert.standard.key === STANDARD_KEYS.DUE_SOON ? rules.dueSoonTaskRule : rules.overdueTaskRule;
-        await evaluateAndMaybeResolve(alert, task, "project_task", rule, now, result);
+        await evaluateAndMaybeResolveTask(alert, task, alert.user_id, rule, now, result);
       } else if (alert.entity_type === "project_task_stage") {
+        // Etapas ficam no caminho legado até o bloco 2. O scan foi alargado
+        // (OR com `dedupe_key`) só pra alcançar ocorrências de TAREFA
+        // resolvidas manualmente — uma linha de etapa que não seja
+        // estritamente ativa não deve ser reprocessada aqui.
+        if (alert.resolved_at || alert.is_archived) continue;
         const stage = stageById.get(alert.entity_id) ?? (await prisma.projectTaskStage.findUnique({ where: { id: alert.entity_id }, select: STAGE_SELECT }));
         if (!stage) {
           await resolveOccurrence(alert.id, "condition_cleared");
@@ -893,6 +1039,85 @@ async function evaluateAndMaybeResolve(
       result.resolved++;
     }
   }
+}
+
+// Versão TAREFA do encerramento automático (ata 2026-08, bloco 1/2) — usa os
+// campos novos (`automatic_*`/`condition_cleared_at`) via
+// `autoResolveTaskOccurrence`, com motivo técnico específico por causa. Se a
+// condição ainda vale, retorna sem gravar nada (nenhum evento novo a cada
+// ciclo — requisito "condição continua encerrada → não cria nem resolve
+// novamente" na direção oposta: condição continua ABERTA → não faz nada).
+async function evaluateAndMaybeResolveTask(
+  alert: {
+    id: string;
+    dedupe_key: string | null;
+    rule_id: string | null;
+    manual_resolved_at: Date | null;
+    standard: { key: string } | null;
+  },
+  task: { id: string; due_date: Date | null } & TaskRecipientFields,
+  userId: string,
+  rule: RuleWithStandard | undefined,
+  now: Date,
+  result: AlertEngineRunResult,
+): Promise<void> {
+  const standardKey = alert.standard!.key;
+  const isDueSoon = standardKey === STANDARD_KEYS.DUE_SOON;
+
+  if (!rule?.is_active) {
+    await autoResolveTaskOccurrence(alert, "rule_disabled", now, result);
+    return;
+  }
+  const dueDate = task.due_date;
+  if (!dueDate) {
+    // Prazo removido da tarefa — a condição de prazo deixou de existir.
+    await autoResolveTaskOccurrence(alert, "deadline_changed", now, result);
+    return;
+  }
+
+  // Destinatário deixou de ser responsável (troca de nômade/líder/agência/
+  // assignee ou Admin responsável do projeto). Só a ocorrência DESTA pessoa
+  // é encerrada — as das outras seguem seu próprio ciclo.
+  const recipients = await resolveRuleRecipients(rule, "project_task", task, result);
+  if (!recipients.includes(userId)) {
+    await autoResolveTaskOccurrence(alert, "recipient_changed", now, result);
+    return;
+  }
+
+  const nowMs = now.getTime();
+  const dueMs = dueDate.getTime();
+  const isOverdue = dueMs <= nowMs;
+  const leadMs = (rule.lead_time_minutes ?? DEFAULT_LEAD_TIME_MINUTES) * 60 * 1000;
+  const withinWindow = !isOverdue && dueMs - nowMs <= leadMs;
+  const currentKey = `${rule.id}:project_task:${task.id}:${userId}:${dedupeCycleKey(dueDate)}`;
+  const reKeyed = rule.id !== alert.rule_id || currentKey !== alert.dedupe_key;
+
+  if (isDueSoon) {
+    if (isOverdue) {
+      // Passou pra "atrasada": encerra a amarela; processTasks (que já rodou
+      // neste mesmo ciclo) criou/mantém a única vermelha.
+      await autoResolveTaskOccurrence(alert, "superseded_by_overdue", now, result);
+      return;
+    }
+    if (!withinWindow) {
+      await autoResolveTaskOccurrence(alert, "deadline_out_of_window", now, result);
+      return;
+    }
+    // Ainda dentro da janela. Se o dia do prazo mudou, esta ocorrência é a
+    // "antiga" (chave diferente) e processTasks já recria com a chave certa
+    // — encerra como "prazo alterado". Senão, condição viva: nada a fazer.
+    if (reKeyed) await autoResolveTaskOccurrence(alert, "deadline_changed", now, result);
+    return;
+  }
+
+  // OVERDUE
+  if (!isOverdue) {
+    await autoResolveTaskOccurrence(alert, "deadline_changed_not_overdue", now, result);
+    return;
+  }
+  // Ainda atrasada. Mantém a MESMA ocorrência, a menos que o dia do prazo
+  // tenha mudado (aí a antiga é re-chaveada e processTasks cria a nova).
+  if (reKeyed) await autoResolveTaskOccurrence(alert, "deadline_changed", now, result);
 }
 
 // ── Alertas Programados (ata 2026-08, 4º lote) ───────────────────────────

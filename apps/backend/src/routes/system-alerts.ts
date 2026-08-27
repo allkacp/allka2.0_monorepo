@@ -11,6 +11,7 @@ import {
   computeNextRun,
   findUnknownVariables,
   isDueSoonTrigger,
+  MOTOR_LABEL,
   parseRecipientRoles,
   RECIPIENT_CATEGORIES,
   RECIPIENT_CATEGORY_LABELS,
@@ -195,8 +196,15 @@ function escopoDoUsuario(req: Request): Record<string, unknown> {
 // "Resolver alerta" primeiro (POST /:id/resolve). Aplicada no BACKEND
 // (nunca só escondendo botão no frontend) — a mesma checagem vale pra
 // qualquer chamada direta à API, inclusive as rotas administrativas.
-function precisaResolverAntes(alert: { severity: string; manual_resolved_at: Date | null }): boolean {
-  return alert.severity === "error" && !alert.manual_resolved_at;
+function precisaResolverAntes(alert: {
+  severity: string;
+  manual_resolved_at: Date | null;
+  automatic_resolved_at?: Date | null;
+}): boolean {
+  // Um vermelho já resolvido — pela pessoa (manual) OU pelo motor, quando a
+  // condição real deixou de existir (ata 2026-08, bloco 1/2) — não precisa
+  // mais passar por "Resolver alerta" pra ser arquivado/dispensado.
+  return alert.severity === "error" && !alert.manual_resolved_at && !alert.automatic_resolved_at;
 }
 const MENSAGEM_PRECISA_RESOLVER = "Este alerta crítico precisa ser resolvido antes de ser arquivado ou dispensado.";
 
@@ -268,8 +276,16 @@ router.get(
       if (is_archived === "true") filtros.is_archived = true;
       else if (is_archived === "false" || is_archived === undefined) filtros.is_archived = false;
       // is_archived === "all" → sem filtro, traz os dois.
-      if (resolved === "true") filtros.manual_resolved_at = { not: null };
-      else if (resolved === "false") filtros.manual_resolved_at = null;
+      // "Resolvido" abrange as DUAS resoluções que a aba "Resolvidos" mostra:
+      // a manual formal (`manual_resolved_at`) e a automática do motor
+      // (`automatic_resolved_at`, ata 2026-08 bloco 1/2). NUNCA `resolved_at`,
+      // que é da expiração/motor legado de etapas — expiração não é resolução.
+      if (resolved === "true") {
+        filtros.OR = [{ manual_resolved_at: { not: null } }, { automatic_resolved_at: { not: null } }];
+      } else if (resolved === "false") {
+        filtros.manual_resolved_at = null;
+        filtros.automatic_resolved_at = null;
+      }
       // resolved ausente → sem filtro por resolução.
 
       // AND explícito: o escopo usa OR internamente (admin vê geral + os seus),
@@ -714,7 +730,12 @@ router.patch(
       // 10º lote) — sem isto, "Dispensar todos" seria uma brecha real pra
       // pular a checagem que PATCH /:id/read já aplica um por um.
       const naoExigeResolucao = {
-        OR: [{ severity: { not: "error" } }, { manual_resolved_at: { not: null } }],
+        OR: [
+          { severity: { not: "error" } },
+          { manual_resolved_at: { not: null } },
+          // Resolvido pelo motor (condição real acabou) — ata 2026-08, bloco 1/2.
+          { automatic_resolved_at: { not: null } },
+        ],
       };
       const result = await prisma.systemAlert.updateMany({
         where: { AND: [filtros, { is_read: false }, naoExigeResolucao, escopoDoUsuario(req)] },
@@ -2205,15 +2226,23 @@ router.get(
       // deste lote, campo novo e distinto. "dispensado" é novo aqui
       // também (is_read=true, nem resolvido nem arquivado) — antes não
       // tinha rótulo próprio nenhum.
+      // Resolução AUTOMÁTICA (ata 2026-08, bloco 1/2) tem prioridade sobre
+      // "arquivado"/"expirado": ela também arquiva a ocorrência, mas a
+      // situação primária é "resolvido automaticamente", nunca "arquivado".
+      // Continua ABAIXO da resolução manual (uma resolução humana explícita
+      // é a palavra final). Expiração (`resolved_at` + `expires_at`) segue
+      // caindo em "expirado" — nunca é apresentada como resolução automática.
       const situacao = alert.manual_resolved_at
         ? "resolvido"
-        : alert.is_archived
-          ? "arquivado"
-          : alert.expires_at && alert.expires_at.getTime() <= Date.now()
-            ? "expirado"
-            : alert.is_read
-              ? "dispensado"
-              : "ativo";
+        : alert.automatic_resolved_at
+          ? "resolvido_automaticamente"
+          : alert.is_archived
+            ? "arquivado"
+            : alert.expires_at && alert.expires_at.getTime() <= Date.now()
+              ? "expirado"
+              : alert.is_read
+                ? "dispensado"
+                : "ativo";
 
       const resolution = alert.manual_resolved_at
         ? {
@@ -2226,6 +2255,18 @@ router.get(
           }
         : null;
 
+      // Bloco distinto do `resolution` manual — o frontend renderiza um ou
+      // outro. Autor SEMPRE o rótulo "Motor da Allka", nunca um usuário
+      // (não existe `resolved_by_user_id` numa resolução automática).
+      const automatic_resolution = alert.automatic_resolved_at
+        ? {
+            resolved_at: alert.automatic_resolved_at,
+            reason: alert.automatic_resolution_reason,
+            message: alert.automatic_resolution_message,
+            resolved_by_label: MOTOR_LABEL,
+          }
+        : null;
+
       res.json({
         id: alert.id,
         title: alert.title,
@@ -2234,6 +2275,7 @@ router.get(
         category: alert.category,
         situacao,
         resolution,
+        automatic_resolution,
         created_at: alert.created_at,
         expires_at: alert.expires_at,
         has_image: !!alert.image_file_name,

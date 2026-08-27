@@ -391,6 +391,46 @@ describe("AlertsPanel — resolução de alerta crítico", () => {
     expect(screen.queryByRole("button", { name: "Resolver alerta" })).not.toBeInTheDocument();
   });
 
+  it("resolução automática (motor): badge própria 'Resolvido automaticamente', autor 'Motor da Allka' e motivo legível — severidade original preservada", async () => {
+    (apiClient.getSystemAlerts as any).mockResolvedValue({
+      data: [{
+        ...redAlert,
+        automatic_resolved_at: "2026-08-27T10:00:00Z",
+        automatic_resolution_reason: "task_completed",
+        automatic_resolution_message: "A tarefa foi concluída.",
+      }],
+    });
+    const user = userEvent.setup();
+    render(<AlertsPanel open onClose={() => {}} />);
+    await waitFor(() => expect(screen.getByText("Aviso importante")).toBeInTheDocument());
+
+    await user.click(screen.getByRole("tab", { name: /resolvidos/i }));
+    await waitFor(() => expect(screen.getByText(/Resolvido automaticamente em/)).toBeInTheDocument());
+    expect(screen.getByText(/por Motor da Allka/)).toBeInTheDocument();
+    expect(screen.getByText(/A tarefa foi concluída\./)).toBeInTheDocument();
+    // Nunca oferece "Resolver alerta" pra algo já resolvido pelo motor.
+    expect(screen.queryByRole("button", { name: "Resolver alerta" })).not.toBeInTheDocument();
+  });
+
+  it("resolução manual tem prioridade sobre a automática na exibição (nunca as duas badges juntas)", async () => {
+    (apiClient.getSystemAlerts as any).mockResolvedValue({
+      data: [{
+        ...redAlert,
+        automatic_resolved_at: "2026-08-27T10:00:00Z",
+        automatic_resolution_message: "A tarefa foi concluída.",
+        manual_resolved_at: "2026-08-27T12:00:00Z",
+        resolution_action: "correcao_aplicada",
+        resolved_by: { id: "u1", name: "Fulano Admin" },
+      }],
+    });
+    const user = userEvent.setup();
+    render(<AlertsPanel open onClose={() => {}} />);
+    await waitFor(() => expect(screen.getByText("Aviso importante")).toBeInTheDocument());
+    await user.click(screen.getByRole("tab", { name: /resolvidos/i }));
+    await waitFor(() => expect(screen.getByText(/por Fulano Admin/)).toBeInTheDocument());
+    expect(screen.queryByText(/Resolvido automaticamente em/)).not.toBeInTheDocument();
+  });
+
   it("18. resolver não manda automaticamente pra Arquivados — troca de aba confirma", async () => {
     (apiClient.getSystemAlerts as any).mockImplementation((filters: any) => {
       if (filters.resolved === "true") {

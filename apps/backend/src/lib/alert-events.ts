@@ -22,6 +22,18 @@ export const ALERT_EVENT_TYPES = [
   // de "expired_by_engine"/"archived": só existe por ação humana explícita
   // via POST /:id/resolve, nunca automático.
   "resolved",
+  // Resolução AUTOMÁTICA pelo motor (ata 2026-08, bloco 1/2 "resolução
+  // automática de alertas de tarefa"): a condição real que criou o alerta
+  // deixou de existir. `actor_user_id` sempre nulo — o autor é apresentado
+  // como "Motor da Allka" na interface, nunca uma pessoa. Distinto de
+  // "expired_by_engine" (perda de validade por tempo) e de "resolved" (ação
+  // humana).
+  "auto_resolved",
+  // Encerramento do EPISÓDIO da condição num alerta que JÁ havia sido
+  // resolvido manualmente antes de a condição terminar — não é uma segunda
+  // resolução, só marca que aquele episódio se encerrou (libera um episódio
+  // futuro se a condição voltar).
+  "condition_cleared",
 ] as const;
 
 export type AlertEventType = (typeof ALERT_EVENT_TYPES)[number];

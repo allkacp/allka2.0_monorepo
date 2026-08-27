@@ -369,8 +369,13 @@ describe("Motor de alertas automáticos — Padrões/Regras/Ocorrências (ata 20
     await prisma.projectTask.update({ where: { id: task.id }, data: { status: "CONCLUIDA" } });
     await runAlertEngineOnce();
     const alert = await prisma.systemAlert.findFirstOrThrow({ where: { entity_id: task.id } });
-    assert.ok(alert.resolved_at, "deve ter data de resolução");
-    assert.equal(alert.resolution_reason, "task_completed");
+    // Resolução AUTOMÁTICA de tarefa (bloco 1/2) usa os campos novos —
+    // `resolved_at`/`resolution_reason` ficam pra expiração/etapas.
+    assert.ok(alert.automatic_resolved_at, "deve ter data de resolução automática");
+    assert.equal(alert.resolved_at, null, "resolução automática nunca preenche resolved_at (campo da expiração)");
+    assert.equal(alert.automatic_resolution_reason, "task_completed");
+    assert.equal(alert.automatic_resolution_message, "A tarefa foi concluída.");
+    assert.ok(alert.condition_cleared_at, "episódio encerrado");
     assert.equal(alert.is_archived, true, "não é exclusão física — só some da visão ativa");
   });
 
@@ -382,7 +387,8 @@ describe("Motor de alertas automáticos — Padrões/Regras/Ocorrências (ata 20
     await prisma.projectTask.update({ where: { id: task.id }, data: { status: "CANCELADA" } });
     await runAlertEngineOnce();
     const alert = await prisma.systemAlert.findFirstOrThrow({ where: { entity_id: task.id } });
-    assert.equal(alert.resolution_reason, "task_cancelled");
+    assert.equal(alert.automatic_resolution_reason, "task_cancelled");
+    assert.equal(alert.automatic_resolution_message, "A tarefa foi cancelada.");
   });
 
   it("20. mudança de prazo pra fora da janela limpa a condição (Amarelo resolvido)", async () => {
@@ -394,7 +400,8 @@ describe("Motor de alertas automáticos — Padrões/Regras/Ocorrências (ata 20
     await prisma.projectTask.update({ where: { id: task.id }, data: { due_date: farFuture } });
     await runAlertEngineOnce();
     const alert = await prisma.systemAlert.findFirstOrThrow({ where: { entity_id: task.id, type: STANDARD_KEYS.DUE_SOON } });
-    assert.equal(alert.resolution_reason, "condition_cleared");
+    assert.equal(alert.automatic_resolution_reason, "deadline_out_of_window");
+    assert.equal(alert.automatic_resolution_message, "O prazo foi alterado para fora da janela de alerta.");
   });
 
   it("21. transição de prazo próximo para atrasada encerra o Amarelo e cria o Vermelho, sem duplicar", async () => {
@@ -403,7 +410,7 @@ describe("Motor de alertas automáticos — Padrões/Regras/Ocorrências (ata 20
     const { task } = await createTaskFixture({ due_date: soon, assignee_id: responsavel.id });
     await runAlertEngineOnce();
     const amareloBefore = await prisma.systemAlert.findFirstOrThrow({ where: { entity_id: task.id, type: STANDARD_KEYS.DUE_SOON } });
-    assert.equal(amareloBefore.resolved_at, null);
+    assert.equal(amareloBefore.automatic_resolved_at, null);
 
     const past = new Date(Date.now() - 60 * 60 * 1000);
     await prisma.projectTask.update({ where: { id: task.id }, data: { due_date: past } });
@@ -411,10 +418,12 @@ describe("Motor de alertas automáticos — Padrões/Regras/Ocorrências (ata 20
     await runAlertEngineOnce();
 
     const amareloAfter = await prisma.systemAlert.findUniqueOrThrow({ where: { id: amareloBefore.id } });
-    assert.ok(amareloAfter.resolved_at, "amarelo deve ter sido encerrado na transição");
+    assert.ok(amareloAfter.automatic_resolved_at, "amarelo deve ter sido encerrado na transição");
+    assert.equal(amareloAfter.automatic_resolution_reason, "superseded_by_overdue");
 
     const vermelhos = await prisma.systemAlert.findMany({ where: { entity_id: task.id, type: STANDARD_KEYS.OVERDUE } });
     assert.equal(vermelhos.length, 1, "vermelho não pode duplicar em execuções repetidas");
+    assert.equal(vermelhos[0]?.automatic_resolved_at, null, "o vermelho da tarefa realmente atrasada continua ativo");
   });
 
   it("22. alerta avulso (manual) não é resolvido pela automação", async () => {

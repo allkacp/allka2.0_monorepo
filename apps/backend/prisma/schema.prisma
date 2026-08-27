@@ -1953,6 +1953,34 @@ model SystemAlert {
   // nunca cria uma segunda resolução nem sobrescreve a original.
   resolution_client_action_id String? @unique
 
+  // ── Resolução AUTOMÁTICA de ocorrência de TAREFA (ata 2026-08, bloco 1/2
+  // "resolução automática de alertas de tarefa") ────────────────────────────
+  // A condição real que criou o alerta (tarefa próxima do prazo / tarefa
+  // atrasada) deixou de existir. Campos NOVOS e distintos dos dois pares
+  // acima — nunca conflatados:
+  //   - `resolved_at`/`resolution_reason`  = motor legado de etapas + EXPIRAÇÃO
+  //     (Avulso/Programado). Continua sendo o campo da expiração; a interface
+  //     nunca deve apresentar expiração como resolução automática.
+  //   - `manual_resolved_at`/`resolution_*` = resolução HUMANA formal.
+  // Só o motor grava estes campos — não existe rota pública que aceite
+  // "resolver automaticamente". Nunca sobrescreve uma resolução manual já
+  // gravada.
+  automatic_resolved_at DateTime?
+  // Enum fechado no código (AUTO_RESOLUTION_REASON_MESSAGES em
+  // alert-engine.ts): task_completed | task_cancelled | task_removed |
+  // deadline_changed_not_overdue | deadline_out_of_window | deadline_changed |
+  // superseded_by_overdue | recipient_changed | rule_disabled. Nunca texto livre.
+  automatic_resolution_reason String?
+  // Mensagem legível (pt-BR) derivada do motivo — gerada no servidor.
+  automatic_resolution_message String? @db.Text
+  // Fim do EPISÓDIO da condição (regra+tarefa+destinatário). Gravado pelo
+  // motor quando a condição termina, MESMO que o alerta já tenha sido
+  // resolvido manualmente antes disso. Enquanto uma ocorrência está "no
+  // episódio" ela mantém `dedupe_key`; ao encerrar, o motor zera `dedupe_key`
+  // e grava aqui. É o que impede a recriação a cada ciclo depois de uma
+  // resolução manual e o que libera um episódio novo quando a condição volta.
+  condition_cleared_at DateTime?
+
   @@index([user_id, is_read])
   @@index([user_id, is_archived])
   @@index([user_id, category, is_read])
@@ -1961,6 +1989,7 @@ model SystemAlert {
   @@index([standard_id])
   @@index([schedule_id])
   @@index([expires_at])
+  @@index([automatic_resolved_at])
   @@map("system_alerts")
 }
 

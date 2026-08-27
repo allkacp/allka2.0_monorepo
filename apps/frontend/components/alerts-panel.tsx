@@ -7,7 +7,7 @@
 // EXCLUSIVO de alertas: fonte de dados, loading, erro e filtros próprios —
 // nenhuma aba pra Notificações aqui.
 import { useCallback, useEffect, useState } from "react"
-import { AlertTriangle, Archive, ArchiveRestore, ArrowRight, CheckCircle2, Info, X } from "lucide-react"
+import { AlertTriangle, Archive, ArchiveRestore, ArrowRight, Bot, CheckCircle2, Info, X } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { HeaderSlideScreen } from "@/components/header-slide-screen"
@@ -126,6 +126,9 @@ export function AlertsPanel({ open = false, onClose }: AlertsPanelProps) {
           resolution_action: a.resolution_action ?? null,
           resolvedByName: a.resolved_by?.name ?? null,
           is_archived: !!a.is_archived,
+          automatic_resolved_at: a.automatic_resolved_at ?? null,
+          automatic_resolution_reason: a.automatic_resolution_reason ?? null,
+          automatic_resolution_message: a.automatic_resolution_message ?? null,
         })))
       }
     } catch {
@@ -152,7 +155,10 @@ export function AlertsPanel({ open = false, onClose }: AlertsPanelProps) {
   // função só evita a viagem de rede na maioria dos casos e mostra
   // "Resolver alerta" no lugar).
   function precisaResolverAntes(alert: DisplayAlert): boolean {
-    return alert.severity === "error" && !alert.manual_resolved_at
+    // Vermelho já resolvido — manualmente OU pelo motor (condição real
+    // deixou de existir, ata 2026-08 bloco 1/2) — não oferece mais
+    // "Resolver alerta".
+    return alert.severity === "error" && !alert.manual_resolved_at && !alert.automatic_resolved_at
   }
 
   function openResolveModal(alert: DisplayAlert) {
@@ -396,6 +402,24 @@ export function AlertsPanel({ open = false, onClose }: AlertsPanelProps) {
                           lote) — a severidade original (vermelho) continua
                           visível acima; resolvido nunca esconde/troca a
                           criticidade, só adiciona esta informação. */}
+                      {/* Resolução automática pelo motor (ata 2026-08, bloco
+                          1/2) — badge própria "Resolvido automaticamente" +
+                          autor "Motor da Allka" + motivo legível. A
+                          severidade original (acima) nunca é escondida. Só
+                          aparece quando NÃO houve resolução manual (a humana
+                          tem prioridade e usa o bloco abaixo). */}
+                      {alert.automatic_resolved_at && !alert.manual_resolved_at && (
+                        <div className="flex items-center gap-1.5 flex-wrap mt-1">
+                          <Badge variant="outline" className="text-[10px] gap-1 border-sky-300 text-sky-700 dark:border-sky-700 dark:text-sky-400">
+                            <Bot className="h-3 w-3" />
+                            Resolvido automaticamente em {new Date(alert.automatic_resolved_at).toLocaleDateString("pt-BR", { day: "2-digit", month: "short", year: "numeric" })}
+                          </Badge>
+                          <span className="text-[10px] text-slate-400">por Motor da Allka</span>
+                          {alert.automatic_resolution_message && (
+                            <span className="text-[10px] text-slate-400">— {alert.automatic_resolution_message}</span>
+                          )}
+                        </div>
+                      )}
                       {alert.manual_resolved_at && (
                         <div className="flex items-center gap-1.5 flex-wrap mt-1">
                           <Badge variant="outline" className="text-[10px] gap-1 border-emerald-300 text-emerald-700 dark:border-emerald-700 dark:text-emerald-400">

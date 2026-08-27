@@ -12,7 +12,7 @@
  * padrão já estabelecido pro deep-link de tarefa.
  */
 import { useEffect, useMemo, useRef, useState } from "react";
-import { AlertTriangle, CheckCircle2, ExternalLink, Loader2 } from "lucide-react";
+import { AlertTriangle, Bot, CheckCircle2, ExternalLink, Loader2 } from "lucide-react";
 import { StandardModalDialog } from "@/components/standard-modal-dialog";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -37,7 +37,7 @@ interface AlertDetail {
   title: string;
   message: string;
   severity: "info" | "warning" | "error";
-  situacao: "ativo" | "arquivado" | "expirado" | "dispensado" | "resolvido";
+  situacao: "ativo" | "arquivado" | "expirado" | "dispensado" | "resolvido" | "resolvido_automaticamente";
   // Resolução formal (ata 2026-08, 10º lote) — null quando não resolvido.
   // Alertas antigos que eventualmente tenham situacao "resolvido" por
   // outro caminho (não deveria acontecer com o campo novo, mas tratado
@@ -48,6 +48,15 @@ interface AlertDetail {
     action: string | null;
     description: string | null;
     resolved_by: { id: string; name: string } | null;
+  } | null;
+  // Resolução AUTOMÁTICA pelo motor (ata 2026-08, bloco 1/2) — a condição
+  // real deixou de existir. Distinta de `resolution` (humana). Autor sempre
+  // o rótulo, nunca um usuário.
+  automatic_resolution: {
+    resolved_at: string;
+    reason: string | null;
+    message: string | null;
+    resolved_by_label: string;
   } | null;
   created_at: string;
   expires_at: string | null;
@@ -73,6 +82,7 @@ const SITUACAO_LABEL: Record<AlertDetail["situacao"], string> = {
   expirado: "Expirado",
   dispensado: "Dispensado",
   resolvido: "Resolvido",
+  resolvido_automaticamente: "Resolvido automaticamente",
 };
 
 const ORIGIN_LABEL: Record<AlertDetail["origin"]["type"], string> = {
@@ -359,6 +369,33 @@ export function AlertDetailDrawer({ alertId, open, onClose, accountType }: Alert
                     Este alerta foi marcado como resolvido antes do registro detalhado de resoluções.
                   </p>
                 )}
+              </div>
+            )}
+
+            {/* Bloco "Resolução automática" (ata 2026-08, bloco 1/2) — a
+                condição real que criou o alerta deixou de existir. Sem
+                formulário nem comentário humano: o motivo é gerado pelo
+                servidor e o autor é o Motor da Allka, nunca uma pessoa. */}
+            {detail.situacao === "resolvido_automaticamente" && detail.automatic_resolution && (
+              <div className="rounded-lg border border-sky-200 dark:border-sky-800 bg-sky-50 dark:bg-sky-950/30 p-3.5 space-y-2">
+                <div className="flex items-center gap-1.5 text-sky-800 dark:text-sky-300">
+                  <Bot className="h-4 w-4" aria-hidden="true" />
+                  <h4 className="text-xs font-semibold">Resolução automática</h4>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
+                  <Field label="Tipo" value="Resolução automática" />
+                  <Field label="Responsável" value={detail.automatic_resolution.resolved_by_label} />
+                  <Field label="Data e hora" value={new Date(detail.automatic_resolution.resolved_at).toLocaleString("pt-BR")} />
+                  {/* A condição/regra que originou o alerta já aparece no
+                      bloco "Origem" acima ("Regra/Padrão") — não repetimos
+                      aqui pra não duplicar a mesma informação. */}
+                  {detail.automatic_resolution.message && (
+                    <div className="sm:col-span-2">
+                      <div className="text-[10px] uppercase tracking-wide text-slate-400">Motivo</div>
+                      <p className="text-slate-700 dark:text-slate-200 mt-0.5">{detail.automatic_resolution.message}</p>
+                    </div>
+                  )}
+                </div>
               </div>
             )}
 

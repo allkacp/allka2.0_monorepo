@@ -107,6 +107,34 @@ describe("AlertDetailDrawer", () => {
     expect(screen.queryByText(/ver origem/i)).not.toBeInTheDocument();
   });
 
+  it("resolução automática: bloco próprio com Tipo, Responsável 'Motor da Allka', motivo e regra — sem formulário humano", async () => {
+    (apiClient.getSystemAlertDetail as any).mockResolvedValue({
+      ...fullDetail,
+      severity: "error",
+      situacao: "resolvido_automaticamente",
+      origin: { type: "padrao_regra", rule_name: "Tarefa atrasada (regra geral)", standard_name: "Tarefa atrasada" },
+      resolution: null,
+      automatic_resolution: {
+        resolved_at: "2026-08-27T12:00:00.000Z",
+        reason: "task_completed",
+        message: "A tarefa foi concluída.",
+        resolved_by_label: "Motor da Allka",
+      },
+      events: [
+        { id: "e1", event_type: "created", description: "Ocorrência gerada automaticamente pela regra.", created_at: "2026-08-27T10:00:00.000Z" },
+        { id: "e2", event_type: "auto_resolved", description: "Alerta resolvido automaticamente pelo Motor da Allka.", created_at: "2026-08-27T12:00:00.000Z" },
+      ],
+    });
+    renderDrawer();
+    await screen.findByText("Alerta de teste");
+    expect(screen.getByRole("heading", { name: "Resolução automática" })).toBeInTheDocument();
+    expect(screen.getByText("Motor da Allka")).toBeInTheDocument();
+    expect(screen.getByText("A tarefa foi concluída.")).toBeInTheDocument();
+    // A condição/regra de origem aparece no bloco "Origem" (não duplicada no bloco de resolução).
+    expect(screen.getAllByText(/Tarefa atrasada \(regra geral\)/).length).toBeGreaterThan(0);
+    expect(screen.getByText("Alerta resolvido automaticamente pelo Motor da Allka.")).toBeInTheDocument();
+  });
+
   it("5/6. destino disponível mostra 'Ver origem' como link real, nova aba, com noopener/noreferrer", async () => {
     (apiClient.getSystemAlertDetail as any).mockResolvedValue(fullDetail);
     renderDrawer();

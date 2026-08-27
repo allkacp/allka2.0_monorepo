@@ -44,6 +44,14 @@ export interface DisplayAlert {
   resolution_action?: string | null
   resolvedByName?: string | null
   is_archived?: boolean
+  // Resolução AUTOMÁTICA pelo motor (ata 2026-08, bloco 1/2 — "resolução
+  // automática de alertas de tarefa"): a condição real que criou o alerta
+  // deixou de existir. Distinta de `manual_resolved_at` (ação humana) e de
+  // expiração. `automatic_resolution_message` já vem legível do backend; o
+  // autor é sempre "Motor da Allka", nunca uma pessoa.
+  automatic_resolved_at?: string | null
+  automatic_resolution_reason?: string | null
+  automatic_resolution_message?: string | null
 }
 
 interface ApiAlert {
