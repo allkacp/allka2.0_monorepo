@@ -376,7 +376,9 @@ describe("Motor de alertas automáticos — Padrões/Regras/Ocorrências (ata 20
     assert.equal(alert.automatic_resolution_reason, "task_completed");
     assert.equal(alert.automatic_resolution_message, "A tarefa foi concluída.");
     assert.ok(alert.condition_cleared_at, "episódio encerrado");
-    assert.equal(alert.is_archived, true, "não é exclusão física — só some da visão ativa");
+    // Reparo semântico: resolver ≠ arquivar — sai da visão ativa por estar
+    // resolvido (filtro `resolved`), não por arquivamento.
+    assert.equal(alert.is_archived, false, "resolução automática não arquiva");
   });
 
   it("19. tarefa cancelada resolve a ocorrência automática", async () => {

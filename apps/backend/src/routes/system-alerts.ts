@@ -348,7 +348,18 @@ router.get(
       const filtros: Record<string, unknown> = {};
       if (query.data.category) filtros.category = query.data.category;
 
-      const baseWhere = [filtros, { is_read: false }, { is_archived: false }, escopoDoUsuario(req)];
+      // Resolvido (manual OU automático) sai de "Ativos" — inclusive do
+      // contador do sino — porque está resolvido, não porque foi arquivado
+      // (ata 2026-08, reparo semântico: resolver ≠ arquivar). Expiração
+      // continua contando via `is_archived`.
+      const baseWhere = [
+        filtros,
+        { is_read: false },
+        { is_archived: false },
+        { manual_resolved_at: null },
+        { automatic_resolved_at: null },
+        escopoDoUsuario(req),
+      ];
       const count = await prisma.systemAlert.count({ where: { AND: baseWhere } });
 
       // Quebra por severidade só faz sentido pra alerta (é o que a reunião

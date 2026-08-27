@@ -202,7 +202,9 @@ describe("Motor de alertas — resolução automática de tarefa (ata 2026-08, b
     assert.equal(alert.automatic_resolution_message, "A tarefa foi concluída.");
     assert.ok(alert.condition_cleared_at, "episódio encerrado");
     assert.equal(alert.dedupe_key, null, "chave liberada pra um episódio futuro");
-    assert.equal(alert.is_archived, true);
+    // Reparo semântico: resolver ≠ arquivar — a resolução automática NÃO arquiva.
+    assert.equal(alert.is_archived, false, "resolução automática não arquiva");
+    assert.equal(alert.archived_at, null);
     // Distinção de expiração/manual: os campos legados/humanos ficam nulos.
     assert.equal(alert.resolved_at, null);
     assert.equal(alert.resolution_reason, null);
@@ -514,5 +516,8 @@ describe("Motor de alertas — resolução automática de tarefa (ata 2026-08, b
     assert.ok(list.json.data.some((a: any) => a.id === alerta.id), "aparece na aba Resolvidos");
     const notInAtivos = await api("/api/system-alerts?category=alerta&resolved=false&is_archived=false", { token: tokenFor(user) });
     assert.ok(!notInAtivos.json.data.some((a: any) => a.id === alerta.id), "não aparece mais em Ativos");
+    // Reparo semântico: NÃO aparece em Arquivados até alguém arquivar.
+    const arquivados = await api("/api/system-alerts?category=alerta&resolved=false&is_archived=true", { token: tokenFor(user) });
+    assert.ok(!arquivados.json.data.some((a: any) => a.id === alerta.id), "não aparece em Arquivados");
   });
 });

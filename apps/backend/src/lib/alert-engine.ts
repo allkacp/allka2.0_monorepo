@@ -119,16 +119,25 @@ export const MOTOR_LABEL = "Motor da Allka";
 // em `automatic_resolution_reason` (enum fechado, nunca texto livre); a
 // mensagem em `automatic_resolution_message`. Nunca "Resolvido
 // automaticamente" genérico — cada motivo diz o que realmente aconteceu.
+//
+// Reparo semântico (ata 2026-08): TODO motivo aqui afirma que a condição
+// terminou por um FATO COMPROVÁVEL. Foram removidos:
+//   - `deadline_changed` ("O prazo da tarefa foi alterado.") — mudar a data
+//     mantendo a MESMA condição (segue atrasada / segue na janela) não é
+//     fim do problema; a ocorrência é mantida, sem resolução nem evento.
+//   - `rule_disabled` — desativar a regra não comprova que a tarefa foi
+//     corrigida; a ocorrência existente permanece no seu estado verdadeiro
+//     (encerrar em massa ao desativar uma regra seria uma AÇÃO
+//     ADMINISTRATIVA explícita futura, com outro estado/motivo — pendência
+//     registrada, não implementada).
 export const AUTO_RESOLUTION_REASON_MESSAGES = {
   task_completed: "A tarefa foi concluída.",
   task_cancelled: "A tarefa foi cancelada.",
   task_removed: "A tarefa foi removida e a condição deixou de existir.",
   deadline_changed_not_overdue: "O prazo foi alterado e a tarefa não está mais atrasada.",
   deadline_out_of_window: "O prazo foi alterado para fora da janela de alerta.",
-  deadline_changed: "O prazo da tarefa foi alterado.",
   superseded_by_overdue: "O prazo venceu e a tarefa passou para a condição de atraso.",
   recipient_changed: "O destinatário deixou de ser responsável por esta tarefa.",
-  rule_disabled: "A regra que gerava este alerta foi desativada.",
 } as const;
 
 export type AutoResolutionReason = keyof typeof AUTO_RESOLUTION_REASON_MESSAGES;
@@ -439,8 +448,18 @@ function formatPrazo(due: Date): string {
   return due.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric" });
 }
 
+// Só ETAPAS ainda usam o dia do prazo na chave (caminho legado, bloco 2).
 function dedupeCycleKey(due: Date): string {
   return due.toISOString().slice(0, 10);
+}
+
+// Identidade ESTÁVEL do episódio de uma ocorrência de TAREFA: regra +
+// tarefa + destinatário. NÃO inclui o dia do prazo (ata 2026-08, reparo
+// semântico) — mudar a data mantendo a mesma condição não pode fingir um
+// episódio novo. Um episódio novo só nasce depois que `condition_cleared_at`
+// é gravado e a chave é liberada (zerada) pelo encerramento.
+function taskEpisodeKey(ruleId: string, taskId: string, userId: string): string {
+  return `${ruleId}:project_task:${taskId}:${userId}`;
 }
 
 export interface AlertEngineRunResult {
@@ -670,6 +689,38 @@ async function createOccurrenceIfNeeded(
   // etapa) — reparo "Ver alerta", ver comentário no schema.
   entityParentId?: string,
 ): Promise<boolean> {
+  if (entityType === "project_task") {
+    const dedupeKey = taskEpisodeKey(rule.id, entityId, userId);
+    // Episódio aberto = a ÚNICA linha com `dedupe_key` preenchido pra esta
+    // combinação (regra+tarefa+destinatário). `dedupe_key` só é zerado quando
+    // o episódio encerra (autoResolveTaskOccurrence / resolveOccurrence /
+    // expiração) — uma resolução MANUAL o mantém, então continua sendo o
+    // episódio aberto. Buscar pela identidade (e não pela chave exata) é o
+    // que dá compatibilidade com ocorrências locais gravadas no formato
+    // antigo `...:userId:AAAA-MM-DD`.
+    const open = await prisma.systemAlert.findFirst({
+      where: {
+        rule_id: rule.id,
+        entity_type: "project_task",
+        entity_id: entityId,
+        user_id: userId,
+        dedupe_key: { not: null },
+      },
+      select: { id: true, dedupe_key: true },
+    });
+    if (open) {
+      if (open.dedupe_key !== dedupeKey) {
+        // Normalização segura: reescreve SÓ a chave da ocorrência aberta pro
+        // formato estável. Nenhum outro campo, nenhum evento, nenhuma data —
+        // não é uma atualização ampla, é o mesmo episódio com a chave certa.
+        await prisma.systemAlert.update({ where: { id: open.id }, data: { dedupe_key: dedupeKey } });
+      }
+      return false; // segunda execução / episódio já aberto não duplica
+    }
+    return createOccurrenceRow(rule, "project_task", entityId, userId, vars, dedupeKey, result, entityParentId);
+  }
+
+  // Etapas (caminho legado, bloco 2) — chave com o dia do prazo, inalterada.
   const dedupeKey = `${rule.id}:${entityType}:${entityId}:${userId}:${dedupeCycleKey(dueDate)}`;
 
   const existing = await prisma.systemAlert.findFirst({
@@ -678,6 +729,19 @@ async function createOccurrenceIfNeeded(
   });
   if (existing) return false; // segunda execução não duplica
 
+  return createOccurrenceRow(rule, entityType, entityId, userId, vars, dedupeKey, result, entityParentId);
+}
+
+async function createOccurrenceRow(
+  rule: RuleWithStandard,
+  entityType: EntityType,
+  entityId: string,
+  userId: string,
+  vars: Record<string, string>,
+  dedupeKey: string,
+  result: AlertEngineRunResult,
+  entityParentId?: string,
+): Promise<boolean> {
   const allowed = ALLOWED_VARIABLES[rule.standard.key] ?? [];
   const title = renderTemplate(rule.standard.title, vars, allowed);
   const message = renderTemplate(rule.standard.message, vars, allowed);
@@ -816,18 +880,23 @@ async function autoResolveTaskOccurrence(
 
   const data: Record<string, unknown> = {
     condition_cleared_at: now,
-    // Zera a chave: o episódio acabou. Um episódio futuro (mesma tarefa,
-    // mesmo prazo) recria a chave idêntica e, como nenhuma linha ativa a
-    // segura mais, uma ocorrência NOVA é criada — nunca a antiga reaproveitada.
+    // Zera a chave: o episódio acabou. Um episódio futuro (mesma
+    // regra+tarefa+destinatário) recria a chave idêntica e, como nenhuma
+    // linha ativa a segura mais, uma ocorrência NOVA é criada — nunca a
+    // antiga reaproveitada.
     dedupe_key: null,
   };
   if (!preResolvedManually) {
     // Resolução automática de verdade — a pessoa não chegou a resolver.
+    // NÃO arquiva (ata 2026-08, reparo semântico): resolver ≠ arquivar. O
+    // alerta sai de "Ativos" porque está resolvido (filtro `resolved`),
+    // aparece em "Resolvidos" e só entra em "Arquivados" por uma ação
+    // explícita e autorizada depois. O histórico distingue "Resolvido
+    // automaticamente" (evento abaixo) de "Arquivado" (evento próprio, só
+    // quando alguém arquiva).
     data.automatic_resolved_at = now;
     data.automatic_resolution_reason = reason;
     data.automatic_resolution_message = message;
-    data.is_archived = true;
-    data.archived_at = now;
   }
 
   let applied = false;
@@ -1041,17 +1110,16 @@ async function evaluateAndMaybeResolve(
   }
 }
 
-// Versão TAREFA do encerramento automático (ata 2026-08, bloco 1/2) — usa os
-// campos novos (`automatic_*`/`condition_cleared_at`) via
-// `autoResolveTaskOccurrence`, com motivo técnico específico por causa. Se a
-// condição ainda vale, retorna sem gravar nada (nenhum evento novo a cada
-// ciclo — requisito "condição continua encerrada → não cria nem resolve
-// novamente" na direção oposta: condição continua ABERTA → não faz nada).
+// Versão TAREFA do encerramento automático (ata 2026-08, bloco 1/2 + reparo
+// semântico). Só encerra a ocorrência quando há um FATO que comprova o fim
+// da condição — nunca por "o prazo mudou de dia" nem por "a regra foi
+// desativada". Enquanto a condição continua verdadeira E DO MESMO TIPO
+// (segue atrasada / segue na janela), a MESMA ocorrência é mantida: sem
+// `automatic_resolved_at`, sem `condition_cleared_at`, sem zerar a chave,
+// sem evento, sem nova ocorrência, sem mexer na data de criação.
 async function evaluateAndMaybeResolveTask(
   alert: {
     id: string;
-    dedupe_key: string | null;
-    rule_id: string | null;
     manual_resolved_at: Date | null;
     standard: { key: string } | null;
   },
@@ -1064,14 +1132,23 @@ async function evaluateAndMaybeResolveTask(
   const standardKey = alert.standard!.key;
   const isDueSoon = standardKey === STANDARD_KEYS.DUE_SOON;
 
-  if (!rule?.is_active) {
-    await autoResolveTaskOccurrence(alert, "rule_disabled", now, result);
-    return;
-  }
+  // Regra desativada NÃO comprova que a tarefa foi corrigida: a ocorrência
+  // fica no seu estado verdadeiro. `processTasks` já para de criar novas
+  // ocorrências (só recebe regras ativas). Encerrar em massa ao desativar
+  // uma regra seria uma ação administrativa explícita futura (outro
+  // estado/motivo), não "resolução automática" — pendência registrada.
+  if (!rule?.is_active) return;
+
   const dueDate = task.due_date;
   if (!dueDate) {
-    // Prazo removido da tarefa — a condição de prazo deixou de existir.
-    await autoResolveTaskOccurrence(alert, "deadline_changed", now, result);
+    // Prazo removido da tarefa: a tarefa não está mais atrasada nem na
+    // janela de proximidade — fato real, motivo coerente com o tipo.
+    await autoResolveTaskOccurrence(
+      alert,
+      isDueSoon ? "deadline_out_of_window" : "deadline_changed_not_overdue",
+      now,
+      result,
+    );
     return;
   }
 
@@ -1089,35 +1166,32 @@ async function evaluateAndMaybeResolveTask(
   const isOverdue = dueMs <= nowMs;
   const leadMs = (rule.lead_time_minutes ?? DEFAULT_LEAD_TIME_MINUTES) * 60 * 1000;
   const withinWindow = !isOverdue && dueMs - nowMs <= leadMs;
-  const currentKey = `${rule.id}:project_task:${task.id}:${userId}:${dedupeCycleKey(dueDate)}`;
-  const reKeyed = rule.id !== alert.rule_id || currentKey !== alert.dedupe_key;
 
   if (isDueSoon) {
     if (isOverdue) {
-      // Passou pra "atrasada": encerra a amarela; processTasks (que já rodou
-      // neste mesmo ciclo) criou/mantém a única vermelha.
+      // Transição real "próxima do prazo" → "atrasada": encerra a amarela;
+      // processTasks (já rodou neste ciclo) criou/mantém a única vermelha.
       await autoResolveTaskOccurrence(alert, "superseded_by_overdue", now, result);
       return;
     }
     if (!withinWindow) {
+      // Saiu da janela de proximidade (prazo empurrado pra longe).
       await autoResolveTaskOccurrence(alert, "deadline_out_of_window", now, result);
       return;
     }
-    // Ainda dentro da janela. Se o dia do prazo mudou, esta ocorrência é a
-    // "antiga" (chave diferente) e processTasks já recria com a chave certa
-    // — encerra como "prazo alterado". Senão, condição viva: nada a fazer.
-    if (reKeyed) await autoResolveTaskOccurrence(alert, "deadline_changed", now, result);
+    // Continua próxima do prazo (o prazo pode ter mudado de dia, mas segue
+    // na janela) — mesma ocorrência, nada a fazer.
     return;
   }
 
   // OVERDUE
   if (!isOverdue) {
+    // Deixou de estar atrasada (prazo corrigido pra frente).
     await autoResolveTaskOccurrence(alert, "deadline_changed_not_overdue", now, result);
     return;
   }
-  // Ainda atrasada. Mantém a MESMA ocorrência, a menos que o dia do prazo
-  // tenha mudado (aí a antiga é re-chaveada e processTasks cria a nova).
-  if (reKeyed) await autoResolveTaskOccurrence(alert, "deadline_changed", now, result);
+  // Continua atrasada (o prazo pode ter mudado pra outra data ainda vencida)
+  // — mesma ocorrência, nada a fazer.
 }
 
 // ── Alertas Programados (ata 2026-08, 4º lote) ───────────────────────────
