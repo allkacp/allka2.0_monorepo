@@ -237,24 +237,35 @@ export const criticalityBadgeColor: Record<Criticality, string> = {
   vermelho: "bg-red-600 text-white border-transparent dark:bg-red-500",
 }
 
-// Resolução formal de alerta crítico (ata 2026-08, 10º lote) — espelha
-// EXATAMENTE RESOLUTION_ACTIONS/RESOLUTION_ACTION_LABEL do backend
+// Resolução formal de alerta crítico (ata 2026-08, 10º lote; reparo "ações
+// conclusivas" no 11º) — espelha EXATAMENTE RESOLUTION_ACTIONS/
+// LEGACY_RESOLUTION_ACTIONS/RESOLUTION_ACTION_LABEL do backend
 // (system-alerts.ts). Única fonte de rótulos — nunca duplicar strings
 // soltas no formulário/lista.
+//
+// "responsavel_acionado" foi REMOVIDA de RESOLUTION_ACTIONS (11º lote):
+// acionar alguém é encaminhar, não comprova que o problema terminou — só
+// ações conclusivas ficam no formulário de NOVAS resoluções. O valor
+// continua em LEGACY_RESOLUTION_ACTIONS só pra rótulo de leitura
+// histórica — nunca oferecido de novo, nunca removido do mapa de labels
+// (senão um registro antigo perderia o texto).
 export const RESOLUTION_ACTIONS = [
   "correcao_aplicada",
-  "responsavel_acionado",
   "processo_ajustado",
   "falso_positivo",
   "outra_acao",
 ] as const
 export type ResolutionAction = (typeof RESOLUTION_ACTIONS)[number]
-export const RESOLUTION_ACTION_LABEL: Record<ResolutionAction, string> = {
+
+export const LEGACY_RESOLUTION_ACTIONS = ["responsavel_acionado"] as const
+export type LegacyResolutionAction = (typeof LEGACY_RESOLUTION_ACTIONS)[number]
+
+export const RESOLUTION_ACTION_LABEL: Record<ResolutionAction | LegacyResolutionAction, string> = {
   correcao_aplicada: "Correção aplicada",
-  responsavel_acionado: "Responsável acionado",
   processo_ajustado: "Processo ajustado",
   falso_positivo: "Alerta identificado como falso positivo",
-  outra_acao: "Outra ação",
+  outra_acao: "Outra ação concluída",
+  responsavel_acionado: "Responsável acionado — registro anterior à atualização do fluxo",
 }
 
 // Faixa lateral (borda esquerda) — identifica a criticidade sem pintar o

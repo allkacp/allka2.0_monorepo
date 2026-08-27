@@ -486,29 +486,42 @@ router.patch(
 );
 
 // ── POST /api/system-alerts/:id/resolve — resolução formal (ata 2026-08,
-// 10º lote) ───────────────────────────────────────────────────────────────
+// 10º lote; reparo "ações conclusivas" no 11º) ─────────────────────────────
 // Só alertas vermelhos/críticos passam por isto (severity="error") — verde
 // e amarelo continuam usando dispensar/arquivar normalmente. Enumeração
 // fechada de ação: nenhuma enumeração equivalente já existia no sistema
-// (auditado antes de criar esta). "responsavel_acionado" é tratado aqui
-// como resolução CONCLUÍDA do ponto de vista do Alerta (a atenção humana
-// pedida pelo alerta aconteceu) — se esse significado for só encaminhamento
-// e não conclusão de verdade, é uma descoberta registrada no relatório de
-// encerramento, não implementada aqui.
+// (auditado antes de criar a original).
+//
+// "responsavel_acionado" foi REMOVIDA das ações aceitas em novas
+// resoluções (11º lote): acionar alguém é encaminhar, não comprova que o
+// problema terminou — só ações realmente conclusivas podem fechar um
+// alerta crítico. O valor técnico continua em LEGACY_RESOLUTION_ACTIONS só
+// pra permitir LER registros antigos (nenhum encontrado localmente na
+// auditoria deste lote, mas a estrutura precisa suportar caso exista em
+// outro ambiente) — nunca migrado/apagado, nunca aceito de novo em
+// POST /:id/resolve. "Encaminhado" como estado próprio é uma descoberta
+// registrada pra um lote futuro, não implementada aqui.
 const RESOLUTION_ACTIONS = [
   "correcao_aplicada",
-  "responsavel_acionado",
   "processo_ajustado",
   "falso_positivo",
   "outra_acao",
 ] as const;
 
-const RESOLUTION_ACTION_LABEL: Record<(typeof RESOLUTION_ACTIONS)[number], string> = {
+// Só pra rótulo de leitura histórica — nunca aceitos em novas resoluções
+// (ver checagem explícita logo abaixo do parse do schema).
+const LEGACY_RESOLUTION_ACTIONS = ["responsavel_acionado"] as const;
+
+const RESOLUTION_ACTION_LABEL: Record<(typeof RESOLUTION_ACTIONS)[number] | (typeof LEGACY_RESOLUTION_ACTIONS)[number], string> = {
   correcao_aplicada: "Correção aplicada",
-  responsavel_acionado: "Responsável acionado",
   processo_ajustado: "Processo ajustado",
   falso_positivo: "Alerta identificado como falso positivo",
-  outra_acao: "Outra ação",
+  // "concluída" no rótulo (11º lote) — deixa explícito que "outra_acao"
+  // também precisa representar uma resolução DE VERDADE, não um
+  // encaminhamento (a descrição obrigatória é quem prova qual foi essa
+  // ação concluída).
+  outra_acao: "Outra ação concluída",
+  responsavel_acionado: "Responsável acionado — registro anterior à atualização do fluxo",
 };
 
 const resolveAlertSchema = z.object({
@@ -540,6 +553,19 @@ router.post(
   verifyToken,
   async (req: Request, res: Response, next: NextFunction) => {
     try {
+      // Checagem explícita ANTES do schema (11º lote): "responsavel_acionado"
+      // não está mais em RESOLUTION_ACTIONS, então o z.enum já rejeitaria —
+      // mas com a mensagem genérica "Selecione uma ação realizada", que não
+      // explica O PORQUÊ. Uma versão antiga de frontend (ou chamada direta
+      // à API) que ainda mande esse valor específico merece a mensagem
+      // amigável pedida, não um erro genérico de enum inválido.
+      if (req.body?.action === "responsavel_acionado") {
+        res.status(400).json({
+          error: 'A opção "Responsável acionado" representa apenas um encaminhamento e não pode concluir o alerta.',
+        });
+        return;
+      }
+
       const body = resolveAlertSchema.safeParse(req.body);
       if (!body.success) {
         res.status(400).json({ error: "Dados inválidos", details: body.error.flatten() });

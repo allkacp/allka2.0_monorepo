@@ -409,4 +409,98 @@ describe("Resolução formal de alerta crítico — POST /:id/resolve (ata 2026-
     assert.ok(resolvedEvent);
     assert.match(resolvedEvent.description, /Correção aplicada/);
   });
+
+  // ── Reparo "ações conclusivas" (ata 2026-08, 11º lote) ────────────────────
+  // "Responsável acionado" é encaminhamento, não conclusão — removida das
+  // ações aceitas em NOVAS resoluções, mas registros históricos que já a
+  // usem continuam legíveis (não migrados, não apagados).
+
+  it("4. API rejeita diretamente 'responsavel_acionado' com mensagem amigável (chamada direta, sem depender do frontend)", async () => {
+    const master = await masterAdmin();
+    const alert = await createAlert({ user_id: master.id });
+    const res = await api(`/api/system-alerts/${alert.id}/resolve`, {
+      method: "POST", token: tokenFor(master),
+      body: { action: "responsavel_acionado", description: "Descrição de teste com mais de dez caracteres.", client_action_id: crypto.randomUUID() },
+    });
+    assert.equal(res.status, 400);
+    assert.match(res.json.error, /representa apenas um encaminhamento/i);
+
+    const stored = await prisma.systemAlert.findUnique({ where: { id: alert.id } });
+    assert.equal(stored?.manual_resolved_at, null, "nunca deve resolver com a ação removida");
+  });
+
+  it("5. resolução válida (ação conclusiva) continua funcionando normalmente", async () => {
+    const master = await masterAdmin();
+    const alert = await createAlert({ user_id: master.id });
+    const res = await api(`/api/system-alerts/${alert.id}/resolve`, {
+      method: "POST", token: tokenFor(master),
+      body: { action: "processo_ajustado", description: "Processo revisado e corrigido com sucesso.", client_action_id: crypto.randomUUID() },
+    });
+    assert.equal(res.status, 201);
+  });
+
+  it("6. registro histórico com 'responsavel_acionado' continua sendo exibido normalmente (nunca apagado/alterado)", async () => {
+    const master = await masterAdmin();
+    // Simula um registro ANTERIOR a este lote — inserido direto, nunca via
+    // POST /:id/resolve (que já rejeita o valor).
+    const legacyAlert = await prisma.systemAlert.create({
+      data: {
+        type: "alerta_admin_manual",
+        title: `Alerta legado responsavel_acionado ${suffix}`,
+        message: "Mensagem de teste",
+        severity: "error",
+        category: "alerta",
+        user_id: master.id,
+        manual_resolved_at: new Date(),
+        resolved_by_user_id: master.id,
+        resolution_action: "responsavel_acionado",
+        resolution_description: "Resolução legada de teste.",
+      },
+    });
+    createdAlertIds.push(legacyAlert.id);
+
+    const detail = await api(`/api/system-alerts/${legacyAlert.id}`, { token: tokenFor(master) });
+    assert.equal(detail.status, 200);
+    assert.equal(detail.json.situacao, "resolvido");
+    assert.equal(detail.json.resolution.action, "responsavel_acionado");
+    assert.equal(detail.json.resolution.description, "Resolução legada de teste.");
+
+    const list = await api("/api/system-alerts?category=alerta&resolved=true&is_archived=all", { token: tokenFor(master) });
+    assert.ok(list.json.data.some((a: any) => a.id === legacyAlert.id), "registro legado precisa continuar aparecendo em Resolvidos");
+  });
+
+  it("7. descrição continua obrigatória mesmo tentando usar a ação removida", async () => {
+    const master = await masterAdmin();
+    const alert = await createAlert({ user_id: master.id });
+    const res = await api(`/api/system-alerts/${alert.id}/resolve`, {
+      method: "POST", token: tokenFor(master),
+      body: { action: "responsavel_acionado", description: "  ", client_action_id: crypto.randomUUID() },
+    });
+    // A checagem da ação removida roda ANTES da validação de schema — mas
+    // o resultado final continua sendo uma rejeição segura (400), nunca
+    // uma resolução parcial.
+    assert.equal(res.status, 400);
+  });
+
+  it("8. isolamento e idempotência continuam intactos com a lista de ações reduzida", async () => {
+    const owner = await createUser();
+    const stranger = await createUser();
+    const alert = await createAlert({ severity: "error", user_id: owner.id });
+
+    const strangerAttempt = await api(`/api/system-alerts/${alert.id}/resolve`, { method: "POST", token: tokenFor(stranger), body: validBody() });
+    assert.equal(strangerAttempt.status, 404);
+
+    const clientActionId = crypto.randomUUID();
+    const first = await api(`/api/system-alerts/${alert.id}/resolve`, {
+      method: "POST", token: tokenFor(owner),
+      body: { action: "correcao_aplicada", description: "Descrição de teste com mais de dez caracteres.", client_action_id: clientActionId },
+    });
+    assert.equal(first.status, 201);
+    const retry = await api(`/api/system-alerts/${alert.id}/resolve`, {
+      method: "POST", token: tokenFor(owner),
+      body: { action: "correcao_aplicada", description: "Descrição de teste com mais de dez caracteres.", client_action_id: clientActionId },
+    });
+    assert.equal(retry.status, 200);
+    assert.equal(retry.json.duplicate, true);
+  });
 });

@@ -145,4 +145,36 @@ describe("AlertResolveModal", () => {
     await user.type(screen.getByPlaceholderText(/descreva o que foi feito/i), "abc");
     expect(screen.getByText("3/2000")).toBeInTheDocument();
   });
+
+  // ── Reparo "ações conclusivas" (ata 2026-08, 11º lote) ────────────────────
+  // "Responsável acionado" foi removida: acionar alguém é encaminhar, não
+  // comprova que o problema terminou.
+  it("1. 'Responsável acionado' não aparece mais como opção", () => {
+    renderModal();
+    expect(screen.queryByRole("button", { name: "Responsável acionado" })).not.toBeInTheDocument();
+  });
+
+  it("2. as ações conclusivas continuam disponíveis", () => {
+    renderModal();
+    expect(screen.getByRole("button", { name: "Correção aplicada" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Processo ajustado" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Alerta identificado como falso positivo" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Outra ação concluída" })).toBeInTheDocument();
+  });
+
+  it("3. frontend nunca envia 'responsavel_acionado' — só as 4 ações restantes existem no DOM pra clicar", async () => {
+    (apiClient.resolveSystemAlert as any).mockResolvedValue({
+      ok: true, duplicate: false, manual_resolved_at: "2026-08-27T10:00:00Z",
+      resolution_action: "processo_ajustado", resolution_description: "Descrição de teste válida.",
+    });
+    const user = userEvent.setup();
+    renderModal();
+    await user.click(screen.getByRole("button", { name: "Processo ajustado" }));
+    await user.type(screen.getByPlaceholderText(/descreva o que foi feito/i), "Descrição de teste válida.");
+    await user.click(screen.getByRole("button", { name: /confirmar resolução/i }));
+
+    await waitFor(() => expect(apiClient.resolveSystemAlert).toHaveBeenCalledTimes(1));
+    const [, data] = (apiClient.resolveSystemAlert as any).mock.calls[0];
+    expect(data.action).not.toBe("responsavel_acionado");
+  });
 });

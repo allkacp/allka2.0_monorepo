@@ -20,7 +20,7 @@ import {
   alertIcon, systemAlertLink, isSafeInternalPath, TASKS_ROUTE_BY_ACCOUNT_TYPE, type DisplayAlert,
   criticalityFromSeverity, criticalityLabel, criticalityDescription,
   criticalityIcon, criticalityBadgeColor, criticalityAccentBorder, type Criticality,
-  RESOLUTION_ACTION_LABEL, type ResolutionAction,
+  RESOLUTION_ACTION_LABEL,
 } from "@/components/alerts-header-icon"
 import { useAccountType } from "@/contexts/account-type-context"
 import { canManageAlertsAdmin } from "@/lib/admin-permissions"
@@ -406,7 +406,13 @@ export function AlertsPanel({ open = false, onClose }: AlertsPanelProps) {
                             <span className="text-[10px] text-slate-400">por {alert.resolvedByName}</span>
                           )}
                           {alert.resolution_action && (
-                            <span className="text-[10px] text-slate-400">— {RESOLUTION_ACTION_LABEL[alert.resolution_action as ResolutionAction] ?? alert.resolution_action}</span>
+                            // keyof typeof (nunca "as ResolutionAction"):
+                            // um registro histórico pode ter uma ação que
+                            // não está mais em RESOLUTION_ACTIONS (ex.:
+                            // "responsavel_acionado", removida das opções
+                            // de NOVAS resoluções no 11º lote) — o rótulo
+                            // ainda precisa ser lido corretamente.
+                            <span className="text-[10px] text-slate-400">— {RESOLUTION_ACTION_LABEL[alert.resolution_action as keyof typeof RESOLUTION_ACTION_LABEL] ?? alert.resolution_action}</span>
                           )}
                         </div>
                       )}
