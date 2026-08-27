@@ -17,22 +17,32 @@ import {
   TRIGGER_ENTITY_TYPE,
 } from "../lib/alert-engine";
 import {
+  BANNER_HEIGHT,
+  BANNER_WIDTH,
   MAX_ALERT_IMAGE_BYTES,
   alertImagePath,
   deleteAlertImage,
   detectImageFormat,
   storeAlertImageBuffer,
+  validateBannerDimensions,
 } from "../lib/alert-image-storage";
 import { isValidIanaTimeZone, isValidTimeOfDay, zonedTimeToUtc } from "../lib/timezone";
 
 const router = Router();
 
-// ── Imagem de Alerta (ata 2026-08, 4º lote) ───────────────────────────────
+// ── Imagem/banner de Alerta (ata 2026-08, 4º lote + reparo "banner visual")
 // Upload é Admin Master only (mesmo escopo de quem cria Padrão/Programação/
 // Avulso com imagem); a validação real é por CONTEÚDO (assinatura de bytes
 // em alert-image-storage.ts), nunca por extensão/Content-Type do
 // multipart — protege contra arquivo disfarçado. multer em memória (não
 // disco) porque o arquivo só é gravado DEPOIS de confirmado o formato real.
+//
+// Dimensão exata 1200×400 (3:1) é exigida SÓ em upload NOVO — uma imagem já
+// salva antes deste reparo (fora do padrão) nunca é apagada, revalidada nem
+// migrada; continua sendo servida e exibida normalmente (com `contain`),
+// só não é possível re-selecioná-la como se fosse nova (o upload em si é
+// sempre o mesmo endpoint, então qualquer envio — inclusive substituição —
+// passa pela mesma checagem de dimensão a partir de agora).
 const alertImageUpload = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: MAX_ALERT_IMAGE_BYTES },
@@ -54,11 +64,16 @@ router.post(
         res.status(400).json({ error: "Formato de imagem inválido — envie JPEG, PNG ou WebP" });
         return;
       }
+      const dimensionError = validateBannerDimensions(req.file.buffer, detected);
+      if (dimensionError) {
+        res.status(400).json({ error: dimensionError });
+        return;
+      }
       const fileName = storeAlertImageBuffer(req.file.buffer, detected.ext);
       await writeAccessAudit({
         actorId: req.user!.id,
         action: "alert_image.uploaded",
-        after: { file_name: fileName, mime: detected.mime, size: req.file.buffer.length },
+        after: { file_name: fileName, mime: detected.mime, size: req.file.buffer.length, width: BANNER_WIDTH, height: BANNER_HEIGHT },
       });
       // Nunca base64 dentro do alerta — só o nome físico, resolvido pra URL
       // pela rota de servir abaixo.
@@ -190,6 +205,20 @@ const listSchema = z.object({
   offset: z.coerce.number().int().min(0).default(0),
 });
 
+// Feed pessoal (reparo "banner visual" — ata 2026-08): informa que existe
+// imagem SEM expor o nome físico do arquivo nem o caminho em disco — só
+// `has_image` (booleano) e uma URL LÓGICA baseada no id da própria
+// ocorrência (`/api/system-alerts/:id/image`, a mesma rota já autorizada
+// por `escopoDoUsuario` — ver a rota de imagem mais abaixo). O frontend
+// busca essa URL com fetch autenticado, nunca um <img src> direto.
+function withPublicImage<T extends { id: string; image_file_name?: string | null }>(
+  alert: T,
+): Omit<T, "image_file_name"> & { has_image: boolean; image_url: string | null } {
+  const { image_file_name, ...rest } = alert;
+  const has_image = !!image_file_name;
+  return { ...rest, has_image, image_url: has_image ? `/api/system-alerts/${alert.id}/image` : null };
+}
+
 // ── GET /api/system-alerts ────────────────────────────────────────────────────
 
 router.get(
@@ -237,7 +266,7 @@ router.get(
         }),
       ]);
 
-      res.json({ data: alerts, total, unread });
+      res.json({ data: alerts.map(withPublicImage), total, unread });
     } catch (err) {
       next(err);
     }

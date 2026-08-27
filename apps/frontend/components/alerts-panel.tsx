@@ -12,6 +12,7 @@ import { AlertTriangle, Archive, ArchiveRestore, ArrowRight, X } from "lucide-re
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { HeaderSlideScreen } from "@/components/header-slide-screen"
+import { AlertBannerImage } from "@/components/alert-banner-image"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 import { apiClient } from "@/lib/api-client"
 import {
@@ -90,6 +91,7 @@ export function AlertsPanel({ open = false, onClose }: AlertsPanelProps) {
           id: a.id, type: a.type, severity: a.severity, title: a.title,
           message: a.message, link: systemAlertLink(a.entity_type, a.entity_id, accountType),
           created_at: a.created_at, isSystemAlert: true,
+          has_image: a.has_image, image_url: a.image_url, image_alt: a.image_alt,
         })))
       }
     } catch {
@@ -297,6 +299,14 @@ export function AlertsPanel({ open = false, onClose }: AlertsPanelProps) {
                         </TooltipProvider>
                       </div>
                       <p className="text-xs text-slate-600 dark:text-slate-300 mt-1">{alert.message}</p>
+                      {alert.isSystemAlert && alert.has_image && alert.image_url && (
+                        <div className="mt-2 rounded-lg overflow-hidden">
+                          <AlertBannerImage
+                            src={apiClient.resolveAlertImageUrl(alert.image_url)}
+                            alt={alert.image_alt}
+                          />
+                        </div>
+                      )}
                       {alert.created_at && (
                         <p className="text-[10px] text-slate-400 mt-0.5">
                           {new Date(alert.created_at).toLocaleDateString("pt-BR", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" })}

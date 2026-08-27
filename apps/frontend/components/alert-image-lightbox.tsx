@@ -10,10 +10,10 @@
  * (404/rede), mostra um estado de placeholder, nunca o ícone quebrado do
  * navegador.
  */
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { ImageOff, ZoomIn } from "lucide-react";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
-import { apiClient } from "@/lib/api-client";
+import { useAuthenticatedImageBlob } from "@/lib/use-authenticated-image-blob";
 import { cn } from "@/lib/utils";
 
 interface AlertImageThumbnailProps {
@@ -24,37 +24,10 @@ interface AlertImageThumbnailProps {
 
 export function AlertImageThumbnail({ src, alt, className }: AlertImageThumbnailProps) {
   const [open, setOpen] = useState(false);
-  const [broken, setBroken] = useState(false);
-  const [objectUrl, setObjectUrl] = useState<string | null>(null);
-
-  // A rota de imagem exige Bearer token — um <img src> direto pra ela
-  // apanha (ERR_BLOCKED_BY_ORB) porque a tag não manda o header de auth.
-  // Busca autenticada + Object URL, mesmo padrão já usado pra anexos de
-  // projeto (ver apiClient.fetchAlertImageBlobUrl).
-  useEffect(() => {
-    setBroken(false);
-    setObjectUrl(null);
-    if (!src) return;
-    let cancelled = false;
-    let created: string | null = null;
-    apiClient
-      .fetchAlertImageBlobUrl(src)
-      .then((url) => {
-        if (cancelled) {
-          URL.revokeObjectURL(url);
-          return;
-        }
-        created = url;
-        setObjectUrl(url);
-      })
-      .catch(() => {
-        if (!cancelled) setBroken(true);
-      });
-    return () => {
-      cancelled = true;
-      if (created) URL.revokeObjectURL(created);
-    };
-  }, [src]);
+  // Busca autenticada + Object URL (a rota de imagem exige Bearer token —
+  // um <img src> direto pra ela apanha com ERR_BLOCKED_BY_ORB). Lógica
+  // compartilhada com AlertBannerImage via useAuthenticatedImageBlob.
+  const { objectUrl, broken, setBroken } = useAuthenticatedImageBlob(src);
 
   if (!src) return null;
 

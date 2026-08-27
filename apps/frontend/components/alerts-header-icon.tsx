@@ -21,6 +21,14 @@ export interface DisplayAlert {
   count?: number
   created_at?: string
   isSystemAlert: boolean
+  // Banner de imagem (ata 2026-08, 5º lote) — só o feed pessoal
+  // (GET /api/system-alerts) preenche isso; alertas de agência nunca têm
+  // essas propriedades. `image_url` já vem como caminho relativo
+  // "/api/system-alerts/:id/image" — resolver com
+  // apiClient.resolveAlertImageUrl antes de buscar o blob autenticado.
+  has_image?: boolean
+  image_url?: string | null
+  image_alt?: string | null
 }
 
 interface ApiAlert {

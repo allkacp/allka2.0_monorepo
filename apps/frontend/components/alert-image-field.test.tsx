@@ -29,8 +29,43 @@ function Harness() {
   return <AlertImageField value={value} onChange={setValue} />;
 }
 
+// jsdom não decodifica bytes reais de imagem — new Image() nunca dispara
+// onload/onerror sozinho. O componente usa isso só pra ler
+// naturalWidth/naturalHeight ANTES do upload (pré-checagem client-side de
+// 1200×400 px), então mockamos o construtor global pra simular a decodificação
+// com dimensões controláveis por teste (padrão: exatamente 1200×400, o caso
+// "feliz" que a maioria dos testes preexistentes assume).
+let mockImageDims = { width: 1200, height: 400 };
+
+class MockImage {
+  onload: (() => void) | null = null;
+  onerror: (() => void) | null = null;
+  naturalWidth = 0;
+  naturalHeight = 0;
+  private _src = "";
+  set src(value: string) {
+    this._src = value;
+    this.naturalWidth = mockImageDims.width;
+    this.naturalHeight = mockImageDims.height;
+    queueMicrotask(() => this.onload?.());
+  }
+  get src() {
+    return this._src;
+  }
+}
+
 beforeEach(() => {
   vi.clearAllMocks();
+  mockImageDims = { width: 1200, height: 400 };
+  vi.stubGlobal("Image", MockImage as unknown as typeof Image);
+  if (!("createObjectURL" in URL)) {
+    (URL as unknown as { createObjectURL: (b: Blob) => string }).createObjectURL = () => "blob:temp-dims-check";
+  }
+  if (!("revokeObjectURL" in URL)) {
+    (URL as unknown as { revokeObjectURL: (u: string) => void }).revokeObjectURL = () => {};
+  }
+  vi.spyOn(URL, "createObjectURL").mockReturnValue("blob:temp-dims-check");
+  vi.spyOn(URL, "revokeObjectURL").mockImplementation(() => {});
 });
 
 describe("AlertImageField", () => {
@@ -102,5 +137,66 @@ describe("AlertImageField", () => {
     await user.upload(input, makeFile("photo.png", "image/png", 1000));
 
     expect(await screen.findByText(/texto alternativo é obrigatório/i)).toBeInTheDocument();
+  });
+
+  // ─── ata 2026-08, 5º lote (correção visual/UX) ───────────────────────────
+
+  it("mostra o texto de orientação (1200×400, 3:1, formatos, 5MB) antes de qualquer seleção", () => {
+    render(<Harness />);
+    expect(
+      screen.getByText("Use um banner de 1200 × 400 px (proporção 3:1), em JPG, PNG ou WebP, com até 5 MB."),
+    ).toBeInTheDocument();
+  });
+
+  it("mostra a moldura vazia em proporção 3:1 antes de qualquer seleção", () => {
+    render(<Harness />);
+    const frame = screen.getByTestId("alert-image-empty-frame");
+    expect(frame.className).toMatch(/aspect-\[3\/1\]/);
+    expect(frame.className).toMatch(/w-full/);
+  });
+
+  it("pré-checagem client-side rejeita imagem com dimensões diferentes de 1200×400 SEM chamar o upload", async () => {
+    mockImageDims = { width: 800, height: 600 };
+    const user = userEvent.setup();
+    render(<Harness />);
+    const input = document.querySelector('input[type="file"]') as HTMLInputElement;
+    await user.upload(input, makeFile("wrong-size.png", "image/png", 1000));
+
+    expect(
+      await screen.findByText("A imagem selecionada possui 800 × 600 px. Selecione uma imagem de exatamente 1200 × 400 px."),
+    ).toBeInTheDocument();
+    expect(apiClient.uploadAlertImage).not.toHaveBeenCalled();
+    expect(screen.getByTestId("alert-image-empty-frame")).toBeInTheDocument();
+  });
+
+  it("seleção válida (1200×400 exato) chama o upload e mostra o banner completo (não a miniatura pequena)", async () => {
+    (apiClient.uploadAlertImage as any).mockResolvedValue({ file_name: "banner.png", url: "/api/system-alerts/admin/images/banner.png" });
+    (apiClient.fetchAlertImageBlobUrl as any).mockResolvedValue("blob:banner-preview");
+    const user = userEvent.setup();
+    render(<Harness />);
+    const input = document.querySelector('input[type="file"]') as HTMLInputElement;
+    await user.upload(input, makeFile("banner.png", "image/png", 1000));
+
+    await waitFor(() => expect(apiClient.uploadAlertImage).toHaveBeenCalled());
+    // O botão "Ampliar imagem" só existe no AlertBannerImage (moldura 3:1
+    // completa), nunca na miniatura compacta h-12 w-12.
+    const trigger = await screen.findByTitle("Ampliar imagem");
+    expect(trigger.className).toMatch(/aspect-\[3\/1\]/);
+    expect(screen.queryByTestId("alert-image-empty-frame")).not.toBeInTheDocument();
+  });
+
+  it("rejeição do backend (dimensão incorreta detectada no servidor) exibe a mensagem exata de erro", async () => {
+    (apiClient.uploadAlertImage as any).mockRejectedValue(
+      new Error("A imagem enviada possui 1000 × 400 px. O banner precisa ter exatamente 1200 × 400 px."),
+    );
+    const user = userEvent.setup();
+    render(<Harness />);
+    const input = document.querySelector('input[type="file"]') as HTMLInputElement;
+    await user.upload(input, makeFile("photo.png", "image/png", 1000));
+
+    expect(
+      await screen.findByText("A imagem enviada possui 1000 × 400 px. O banner precisa ter exatamente 1200 × 400 px."),
+    ).toBeInTheDocument();
+    expect(screen.getByTestId("alert-image-empty-frame")).toBeInTheDocument();
   });
 });

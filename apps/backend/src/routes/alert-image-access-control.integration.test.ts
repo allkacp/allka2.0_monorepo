@@ -2,6 +2,8 @@ import assert from "node:assert/strict";
 import { after, before, describe, it } from "node:test";
 import type { AddressInfo } from "node:net";
 import crypto from "node:crypto";
+import fs from "node:fs";
+import path from "node:path";
 import jwt from "jsonwebtoken";
 import { requireTestDatabaseUrl } from "../test-support/require-test-database";
 import app from "../app";
@@ -60,11 +62,9 @@ async function uploadImage(token: string, buffer: Buffer, filename: string) {
   return { status: res.status, json };
 }
 
-const REAL_PNG = Buffer.from(
-  "89504e470d0a1a0a0000000d49484452000000010000000108020000009077" +
-    "3df40000000c4944415408d763f8cfc0c0c0000004010102cd1cf6c50000000049454e44ae426082",
-  "hex",
-);
+// Banner real 1200×400 — a fixture 1x1 antiga passou a ser rejeitada pelo
+// endpoint depois do reparo "banner visual" (dimensão exata exigida).
+const REAL_PNG = fs.readFileSync(path.join(__dirname, "../test-support/fixtures/alert-banner-1200x400.png"));
 
 const createdUserIds: string[] = [];
 const createdProfileIds: string[] = [];
