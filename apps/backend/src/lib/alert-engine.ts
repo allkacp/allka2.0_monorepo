@@ -134,6 +134,7 @@ export const AUTO_RESOLUTION_REASON_MESSAGES = {
   task_completed: "A tarefa foi concluída.",
   task_cancelled: "A tarefa foi cancelada.",
   task_removed: "A tarefa foi removida e a condição deixou de existir.",
+  task_delivered: "A tarefa foi entregue pelo responsável.",
   deadline_changed_not_overdue: "O prazo foi alterado e a tarefa não está mais atrasada.",
   deadline_out_of_window: "O prazo foi alterado para fora da janela de alerta.",
   superseded_by_overdue: "O prazo venceu e a tarefa passou para a condição de atraso.",
@@ -141,6 +142,52 @@ export const AUTO_RESOLUTION_REASON_MESSAGES = {
 } as const;
 
 export type AutoResolutionReason = keyof typeof AUTO_RESOLUTION_REASON_MESSAGES;
+
+// ── Alerta automático de tarefa "controlado por condição" (ata 2026-08) ────
+// Uma ocorrência automática de tarefa é governada PELA CONDIÇÃO REAL que a
+// criou — nunca por comentário, por abrir a tarefa, por marcar como lido nem
+// por "Resolver alerta" (nem pelo Admin Master). O formulário de resolução
+// humana continua valendo só para alertas manuais/avulsos críticos.
+//
+// Predicado server-side (NUNCA por texto de título/mensagem): origem
+// automática por Padrão+Regra (`standard_id`/`rule_id` preenchidos),
+// `entity_type = "project_task"`, e tipo técnico numa das duas regras de
+// tarefa (`task.due_soon` / `task.overdue`).
+export function isConditionControlledTaskAlert(alert: {
+  category?: string | null;
+  entity_type?: string | null;
+  standard_id?: string | null;
+  rule_id?: string | null;
+  type?: string | null;
+}): boolean {
+  return (
+    alert.entity_type === "project_task" &&
+    !!alert.standard_id &&
+    !!alert.rule_id &&
+    (alert.type === STANDARD_KEYS.DUE_SOON || alert.type === STANDARD_KEYS.OVERDUE)
+  );
+}
+
+// "Entrega da tarefa INTEIRA pelo responsável" — condição inequívoca
+// auditada no código (ver stage-engine.ts `concluirEtapa`): quando NÃO
+// sobra nenhuma etapa obrigatória em aberto, a plataforma move a tarefa
+// para EM_APROVACAO/`data_conclusao` e a obrigação do executor terminou.
+// É o MESMO gatilho que o motor de etapas usa pra decidir que a execução
+// acabou — não é "uma etapa", é o conjunto obrigatório completo.
+// Tarefa sem etapas (ou `legacy_model`) não tem sinal de entrega — segue
+// só resolvendo por conclusão/cancelamento (lacuna documentada, nunca
+// inventada).
+export function isTaskDeliveredByExecutor(task: {
+  legacy_model?: boolean | null;
+  stages?: { status: string; obrigatoria: boolean }[] | null;
+}): boolean {
+  if (task.legacy_model) return false;
+  const stages = task.stages ?? [];
+  if (stages.length === 0) return false;
+  const obrigatorias = stages.filter((s) => s.obrigatoria);
+  if (obrigatorias.length === 0) return false;
+  return obrigatorias.every((s) => s.status === "CONCLUIDA");
+}
 
 /** Substitui só variáveis da allowlist — nunca avalia código. */
 export function renderTemplate(template: string, vars: Record<string, string>, allowed: string[]): string {
@@ -523,11 +570,15 @@ const TASK_SELECT = {
   status: true,
   due_date: true,
   project_id: true,
+  legacy_model: true,
   nomade_responsavel_id: true,
   lider_responsavel_id: true,
   responsavel_agencia_id: true,
   assignee_id: true,
   project: { select: { title: true, admin_responsible_user_id: true } },
+  // Só pra decidir "entrega da tarefa inteira" (isTaskDeliveredByExecutor) —
+  // nunca pra gerar alerta de etapa (fora de escopo).
+  stages: { select: { status: true, obrigatoria: true } },
 } as const;
 
 async function processTasks(
@@ -546,6 +597,11 @@ async function processTasks(
   for (const task of tasks) {
     try {
       if (!task.due_date) continue;
+      // Executor já entregou a tarefa inteira (todas as etapas obrigatórias
+      // concluídas) — a condição de prazo não se aplica mais a ele. Não cria
+      // ocorrência nova; resolveStaleOccurrences encerra as abertas como
+      // `task_delivered`.
+      if (isTaskDeliveredByExecutor(task)) continue;
       const isOverdue = task.due_date.getTime() <= now.getTime();
       const vars = { tarefa: task.title, prazo: formatPrazo(task.due_date), projeto: task.project?.title ?? "—" };
 
@@ -1123,7 +1179,12 @@ async function evaluateAndMaybeResolveTask(
     manual_resolved_at: Date | null;
     standard: { key: string } | null;
   },
-  task: { id: string; due_date: Date | null } & TaskRecipientFields,
+  task: {
+    id: string;
+    due_date: Date | null;
+    legacy_model?: boolean | null;
+    stages?: { status: string; obrigatoria: boolean }[] | null;
+  } & TaskRecipientFields,
   userId: string,
   rule: RuleWithStandard | undefined,
   now: Date,
@@ -1138,6 +1199,15 @@ async function evaluateAndMaybeResolveTask(
   // uma regra seria uma ação administrativa explícita futura (outro
   // estado/motivo), não "resolução automática" — pendência registrada.
   if (!rule?.is_active) return;
+
+  // Entrega real da tarefa inteira pelo responsável (todas as etapas
+  // obrigatórias concluídas — mesmo gatilho do motor de etapas). Fato
+  // comprovável: encerra a ocorrência. Não confundir com aprovação/
+  // conclusão administrativa posterior (essas continuam por `task_completed`).
+  if (isTaskDeliveredByExecutor(task)) {
+    await autoResolveTaskOccurrence(alert, "task_delivered", now, result);
+    return;
+  }
 
   const dueDate = task.due_date;
   if (!dueDate) {

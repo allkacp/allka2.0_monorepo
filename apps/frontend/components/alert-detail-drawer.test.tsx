@@ -107,6 +107,24 @@ describe("AlertDetailDrawer", () => {
     expect(screen.queryByText(/ver origem/i)).not.toBeInTheDocument();
   });
 
+  it("alerta automático de tarefa AINDA ATIVO (condition_controlled): bloco 'Resolução automática' explica como encerra, sem formulário de resolução", async () => {
+    (apiClient.getSystemAlertDetail as any).mockResolvedValue({
+      ...fullDetail,
+      severity: "error",
+      situacao: "ativo",
+      condition_controlled: true,
+      type: "task.overdue",
+      resolution: null,
+      automatic_resolution: null,
+      origin: { type: "padrao_regra", rule_name: "Tarefa atrasada", standard_name: "Tarefa atrasada" },
+    });
+    renderDrawer();
+    await screen.findByText("Alerta de teste");
+    expect(screen.getByRole("heading", { name: "Resolução automática" })).toBeInTheDocument();
+    expect(screen.getByText(/será resolvido quando a situação real da tarefa deixar de atender à regra/)).toBeInTheDocument();
+    expect(screen.getByText(/Conclua ou entregue a tarefa, cancele-a ou regularize o prazo\./)).toBeInTheDocument();
+  });
+
   it("resolução automática: bloco próprio com Tipo, Responsável 'Motor da Allka', motivo e regra — sem formulário humano", async () => {
     (apiClient.getSystemAlertDetail as any).mockResolvedValue({
       ...fullDetail,

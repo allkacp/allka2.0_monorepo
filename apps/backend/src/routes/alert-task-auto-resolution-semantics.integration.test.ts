@@ -207,20 +207,26 @@ describe("Motor — reparo semântico da resolução automática de tarefa (ata 
     assert.ok(types.includes("archived"));
   });
 
-  it("resolução MANUAL também não arquiva automaticamente", async () => {
+  it("resolução MANUAL de um alerta AVULSO vermelho também não arquiva automaticamente", async () => {
     const user = await createUser();
-    const { task } = await createTaskFixture({ due_date: new Date(Date.now() - 2 * HOUR), assignee_id: user.id });
-    await runAlertEngineOnce();
-    const alerta = await prisma.systemAlert.findFirstOrThrow({ where: { entity_id: task.id } });
-    const r = await api(`/api/system-alerts/${alerta.id}/resolve`, {
+    // Avulso (sem standard_id/rule_id) — este SIM passa por resolução manual.
+    const avulso = await prisma.systemAlert.create({
+      data: {
+        type: "alerta_admin_manual", title: "[teste] avulso vermelho", message: "requer resolução manual",
+        severity: "error", category: "alerta", user_id: user.id,
+      },
+    });
+    const r = await api(`/api/system-alerts/${avulso.id}/resolve`, {
       method: "POST",
       token: tokenFor(user),
       body: { action: "correcao_aplicada", description: "Resolvido manualmente no teste.", client_action_id: `cli-${crypto.randomBytes(6).toString("hex")}` },
     });
     assert.equal(r.status, 201);
-    const reloaded = await prisma.systemAlert.findUniqueOrThrow({ where: { id: alerta.id } });
+    const reloaded = await prisma.systemAlert.findUniqueOrThrow({ where: { id: avulso.id } });
     assert.ok(reloaded.manual_resolved_at);
     assert.equal(reloaded.is_archived, false);
+    await prisma.systemAlertEvent.deleteMany({ where: { alert_id: avulso.id } });
+    await prisma.systemAlert.delete({ where: { id: avulso.id } });
   });
 
   // ── 2. prazo alterado, condição continua ─────────────────────────────
@@ -368,20 +374,21 @@ describe("Motor — reparo semântico da resolução automática de tarefa (ata 
     assert.equal((await eventsFor(alerta.id, "auto_resolved")).length, 1);
   });
 
-  it("16. resolução manual durante condição ativa continua sem recriação", async () => {
+  it("16. tentativa de resolução manual (recusada com 409) não recria nem altera a ocorrência a cada ciclo", async () => {
     const user = await createUser();
     const { task } = await createTaskFixture({ due_date: new Date(Date.now() - 2 * HOUR), assignee_id: user.id });
     await runAlertEngineOnce();
     const alerta = await prisma.systemAlert.findFirstOrThrow({ where: { entity_id: task.id } });
-    await api(`/api/system-alerts/${alerta.id}/resolve`, {
+    const r = await api(`/api/system-alerts/${alerta.id}/resolve`, {
       method: "POST", token: tokenFor(user),
-      body: { action: "correcao_aplicada", description: "Resolvido manualmente, condição segue.", client_action_id: `cli-${crypto.randomBytes(6).toString("hex")}` },
+      body: { action: "correcao_aplicada", description: "Tentativa recusada, condição segue.", client_action_id: `cli-${crypto.randomBytes(6).toString("hex")}` },
     });
+    assert.equal(r.status, 409);
     await runAlertEngineOnce();
     await runAlertEngineOnce();
     const todas = await prisma.systemAlert.findMany({ where: { entity_id: task.id } });
     assert.equal(todas.length, 1);
-    assert.ok(todas[0]?.manual_resolved_at);
+    assert.equal(todas[0]?.manual_resolved_at, null);
     assert.equal(todas[0]?.automatic_resolved_at, null);
     assert.ok(todas[0]?.dedupe_key, "chave mantida");
   });

@@ -52,6 +52,10 @@ export interface DisplayAlert {
   automatic_resolved_at?: string | null
   automatic_resolution_reason?: string | null
   automatic_resolution_message?: string | null
+  // Alerta automático de tarefa controlado pela condição real (ata 2026-08):
+  // sem botão "Resolver alerta" — o card explica que a resolução é
+  // automática. Derivado no backend (isConditionControlledTaskAlert).
+  condition_controlled?: boolean
 }
 
 interface ApiAlert {

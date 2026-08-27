@@ -10,6 +10,7 @@ import { writeAccessAudit } from "../lib/product-feedback-service";
 import {
   computeNextRun,
   findUnknownVariables,
+  isConditionControlledTaskAlert,
   isDueSoonTrigger,
   MOTOR_LABEL,
   parseRecipientRoles,
@@ -200,7 +201,17 @@ function precisaResolverAntes(alert: {
   severity: string;
   manual_resolved_at: Date | null;
   automatic_resolved_at?: Date | null;
+  category?: string | null;
+  entity_type?: string | null;
+  standard_id?: string | null;
+  rule_id?: string | null;
+  type?: string | null;
 }): boolean {
+  // Alerta automático de tarefa é controlado pela condição real — NÃO tem
+  // resolução formal (ata 2026-08): não faz sentido exigir "Resolver alerta"
+  // antes de arquivar/dispensar. Marcar como visto/arquivar não resolve, só
+  // esconde da visão; o motor segue acompanhando a condição.
+  if (isConditionControlledTaskAlert(alert)) return false;
   // Um vermelho já resolvido — pela pessoa (manual) OU pelo motor, quando a
   // condição real deixou de existir (ata 2026-08, bloco 1/2) — não precisa
   // mais passar por "Resolver alerta" pra ser arquivado/dispensado.
@@ -319,6 +330,10 @@ router.get(
         data: alerts.map((a) => ({
           ...withPublicImage(a),
           resolved_by: a.resolved_by_user_id ? (resolverById.get(a.resolved_by_user_id) ?? null) : null,
+          // Alerta automático de tarefa (controlado pela condição real) —
+          // o card não oferece "Resolver alerta" e explica a resolução
+          // automática. Derivado no servidor, nunca inferido pelo frontend.
+          condition_controlled: isConditionControlledTaskAlert(a),
         })),
         total,
         unread,
@@ -619,6 +634,21 @@ router.post(
       });
       if (!alert) {
         res.status(404).json({ error: "Alerta não encontrado" });
+        return;
+      }
+
+      // Alerta automático de tarefa é controlado PELA CONDIÇÃO REAL — não
+      // pode ser resolvido manualmente, nem pelo Admin Master (checado ANTES
+      // de qualquer escrita, idempotência ou verificação de severidade).
+      // Nenhum campo manual_resolved_*, nenhum evento `resolved`, nada
+      // arquivado/dispensado. Não confia no frontend: a mesma recusa vale
+      // pra chamada direta à API.
+      if (isConditionControlledTaskAlert(alert)) {
+        res.status(409).json({
+          error: "Este alerta é controlado automaticamente pela situação da tarefa e não pode ser resolvido manualmente.",
+          detail: "Conclua ou entregue a tarefa, cancele-a ou regularize o prazo para que o sistema atualize o alerta.",
+          condition_controlled: true,
+        });
         return;
       }
 
@@ -2287,6 +2317,10 @@ router.get(
         situacao,
         resolution,
         automatic_resolution,
+        // Controlado pela condição real da tarefa: sem "Resolver alerta",
+        // encerra sozinho quando a situação da tarefa deixa de atender à regra.
+        condition_controlled: isConditionControlledTaskAlert(alert),
+        type: alert.type,
         created_at: alert.created_at,
         expires_at: alert.expires_at,
         has_image: !!alert.image_file_name,

@@ -129,6 +129,7 @@ export function AlertsPanel({ open = false, onClose }: AlertsPanelProps) {
           automatic_resolved_at: a.automatic_resolved_at ?? null,
           automatic_resolution_reason: a.automatic_resolution_reason ?? null,
           automatic_resolution_message: a.automatic_resolution_message ?? null,
+          condition_controlled: !!a.condition_controlled,
         })))
       }
     } catch {
@@ -155,10 +156,23 @@ export function AlertsPanel({ open = false, onClose }: AlertsPanelProps) {
   // função só evita a viagem de rede na maioria dos casos e mostra
   // "Resolver alerta" no lugar).
   function precisaResolverAntes(alert: DisplayAlert): boolean {
+    // Alerta automático de tarefa é controlado pela condição real — nunca
+    // oferece "Resolver alerta" (ata 2026-08): o backend recusa a resolução
+    // manual com 409, e o card mostra a orientação de resolução automática.
+    if (alert.condition_controlled) return false
     // Vermelho já resolvido — manualmente OU pelo motor (condição real
     // deixou de existir, ata 2026-08 bloco 1/2) — não oferece mais
     // "Resolver alerta".
     return alert.severity === "error" && !alert.manual_resolved_at && !alert.automatic_resolved_at
+  }
+
+  // Orientação compacta de como o alerta automático de tarefa será
+  // encerrado — visível sempre (não depende de hover, funciona no mobile).
+  function orientacaoResolucaoAutomatica(alert: DisplayAlert): string {
+    if (alert.type === "task.due_soon") {
+      return "O alerta será encerrado quando a tarefa for entregue/concluída, cancelada, sair da janela de aviso ou passar para atraso."
+    }
+    return "Conclua ou entregue a tarefa, cancele-a ou regularize o prazo."
   }
 
   function openResolveModal(alert: DisplayAlert) {
@@ -441,6 +455,19 @@ export function AlertsPanel({ open = false, onClose }: AlertsPanelProps) {
                         </div>
                       )}
                       <p className="text-xs text-slate-600 dark:text-slate-300 mt-1">{alert.message}</p>
+                      {/* Alerta automático de tarefa ainda ativo (ata
+                          2026-08): explica que a resolução é automática —
+                          nunca há "Resolver alerta". Texto sempre visível
+                          (sem hover), essencial no mobile. */}
+                      {alert.isSystemAlert && alert.condition_controlled && !alert.automatic_resolved_at && !alert.manual_resolved_at && (
+                        <div className="mt-1.5 flex items-start gap-1.5 rounded-md bg-sky-50 dark:bg-sky-950/30 border border-sky-200 dark:border-sky-800 px-2 py-1.5">
+                          <Bot className="h-3 w-3 mt-0.5 shrink-0 text-sky-600 dark:text-sky-400" aria-hidden="true" />
+                          <div className="min-w-0">
+                            <p className="text-[11px] font-medium text-sky-800 dark:text-sky-300">Resolução automática</p>
+                            <p className="text-[10px] text-sky-700/90 dark:text-sky-300/80">{orientacaoResolucaoAutomatica(alert)}</p>
+                          </div>
+                        </div>
+                      )}
                       {alert.isSystemAlert && alert.has_image && alert.image_url && (
                         <div className="mt-2 rounded-lg overflow-hidden">
                           <AlertBannerImage

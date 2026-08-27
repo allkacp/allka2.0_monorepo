@@ -305,9 +305,9 @@ describe("Motor de alertas — resolução automática de tarefa (ata 2026-08, b
     assert.notEqual(todas[1]?.id, primeira.id);
   });
 
-  // ── Resolução manual enquanto a condição ainda existe ──────────────────
+  // ── Resolução manual bloqueada (ata 2026-08, controle por condição) ────
 
-  it("12. resolução manual com a condição ainda ativa não faz o motor recriar a ocorrência a cada ciclo", async () => {
+  it("12. alerta automático de tarefa NÃO pode ser resolvido manualmente (409) e continua em Ativos", async () => {
     const user = await createUser();
     const { task } = await createTaskFixture({ due_date: overdueDate(), assignee_id: user.id });
     await runAlertEngineOnce();
@@ -316,23 +316,27 @@ describe("Motor de alertas — resolução automática de tarefa (ata 2026-08, b
     const resolve = await api(`/api/system-alerts/${alerta.id}/resolve`, {
       method: "POST",
       token: tokenFor(user),
-      body: { action: "correcao_aplicada", description: "Ajuste aplicado manualmente no teste.", client_action_id: `cli-${crypto.randomBytes(6).toString("hex")}` },
+      body: { action: "correcao_aplicada", description: "Tentativa de resolução manual.", client_action_id: `cli-${crypto.randomBytes(6).toString("hex")}` },
     });
-    assert.equal(resolve.status, 201);
+    assert.equal(resolve.status, 409);
+    assert.equal(resolve.json.condition_controlled, true);
+    assert.match(resolve.json.error, /controlado automaticamente/i);
 
     await runAlertEngineOnce();
     await runAlertEngineOnce();
 
     const todas = await prisma.systemAlert.findMany({ where: { entity_id: task.id } });
-    assert.equal(todas.length, 1, "nenhuma ocorrência nova criada enquanto a condição segue verdadeira");
+    assert.equal(todas.length, 1);
     const only = todas[0]!;
-    assert.ok(only.manual_resolved_at, "resolução manual preservada");
-    assert.equal(only.automatic_resolved_at, null, "motor não sobrescreve a resolução manual");
-    assert.equal(only.condition_cleared_at, null, "episódio ainda aberto (condição viva)");
-    assert.ok(only.dedupe_key, "chave mantida — é o que bloqueia a recriação");
+    assert.equal(only.manual_resolved_at, null, "nenhum campo manual gravado");
+    assert.equal(only.resolution_action, null);
+    assert.equal(only.automatic_resolved_at, null, "condição ainda ativa — segue em Ativos");
+    assert.equal(only.condition_cleared_at, null);
+    assert.ok(only.dedupe_key);
+    assert.equal(await prisma.systemAlertEvent.count({ where: { alert_id: alerta.id, event_type: "resolved" } }), 0);
   });
 
-  it("13. após a resolução manual: quando a condição termina o episódio é encerrado (sem sobrescrever a manual) e, se voltar, cria nova ocorrência", async () => {
+  it("13. depois do 409, concluir a tarefa encerra o alerta pela via automática normal (auto_resolved)", async () => {
     const user = await createUser();
     const { task } = await createTaskFixture({ due_date: overdueDate(), assignee_id: user.id });
     await runAlertEngineOnce();
@@ -340,25 +344,17 @@ describe("Motor de alertas — resolução automática de tarefa (ata 2026-08, b
     await api(`/api/system-alerts/${alerta.id}/resolve`, {
       method: "POST",
       token: tokenFor(user),
-      body: { action: "correcao_aplicada", description: "Resolvido manualmente no teste 13.", client_action_id: `cli-${crypto.randomBytes(6).toString("hex")}` },
+      body: { action: "correcao_aplicada", description: "Tentativa que deve ser recusada.", client_action_id: `cli-${crypto.randomBytes(6).toString("hex")}` },
     });
 
-    // condição termina
     await prisma.projectTask.update({ where: { id: task.id }, data: { status: "CONCLUIDA" } });
     await runAlertEngineOnce();
     const encerrado = await prisma.systemAlert.findUniqueOrThrow({ where: { id: alerta.id } });
-    assert.ok(encerrado.condition_cleared_at, "episódio encerrado");
-    assert.equal(encerrado.automatic_resolved_at, null, "resolução automática nunca sobrescreve a manual");
-    assert.ok(encerrado.manual_resolved_at, "manual preservada");
-    const ccEvents = await eventsFor(alerta.id, "condition_cleared");
-    assert.equal(ccEvents.length, 1);
-    assert.equal(ccEvents[0]?.actor_user_id, null);
-
-    // condição volta
-    await prisma.projectTask.update({ where: { id: task.id }, data: { status: "EM_EXECUCAO" } });
-    await runAlertEngineOnce();
-    const todas = await prisma.systemAlert.findMany({ where: { entity_id: task.id } });
-    assert.equal(todas.length, 2, "novo episódio = ocorrência nova");
+    assert.ok(encerrado.automatic_resolved_at, "resolvido pela condição real");
+    assert.equal(encerrado.automatic_resolution_reason, "task_completed");
+    assert.equal(encerrado.manual_resolved_at, null, "nunca houve resolução manual");
+    assert.equal((await eventsFor(alerta.id, "auto_resolved")).length, 1);
+    assert.equal(encerrado.is_archived, false);
   });
 
   // ── Concorrência / idempotência ───────────────────────────────────────
@@ -463,7 +459,7 @@ describe("Motor de alertas — resolução automática de tarefa (ata 2026-08, b
     assert.notEqual(doNovo!.id, doAntigo.id);
   });
 
-  it("22. não existe rota pública que force uma resolução automática; POST /:id/resolve nunca grava os campos automatic_*", async () => {
+  it("22. nenhuma rota pública força resolução de um alerta automático de tarefa (rota inventada 404; POST /:id/resolve 409, nada gravado)", async () => {
     const user = await createUser();
     const { task } = await createTaskFixture({ due_date: overdueDate(), assignee_id: user.id });
     await runAlertEngineOnce();
@@ -473,7 +469,7 @@ describe("Motor de alertas — resolução automática de tarefa (ata 2026-08, b
     const forged = await api(`/api/system-alerts/${alerta.id}/auto-resolve`, { method: "POST", token: tokenFor(user), body: { reason: "task_completed" } });
     assert.equal(forged.status, 404);
 
-    // A resolução manual legítima ignora qualquer tentativa de injetar automatic_*.
+    // Resolução manual recusada — nem campos manuais nem campos do motor.
     const resolve = await api(`/api/system-alerts/${alerta.id}/resolve`, {
       method: "POST",
       token: tokenFor(user),
@@ -485,9 +481,9 @@ describe("Motor de alertas — resolução automática de tarefa (ata 2026-08, b
         automatic_resolution_reason: "task_completed",
       },
     });
-    assert.equal(resolve.status, 201);
+    assert.equal(resolve.status, 409);
     const reloaded = await prisma.systemAlert.findUniqueOrThrow({ where: { id: alerta.id } });
-    assert.ok(reloaded.manual_resolved_at);
+    assert.equal(reloaded.manual_resolved_at, null);
     assert.equal(reloaded.automatic_resolved_at, null, "campos do motor nunca aceitos via payload");
     assert.equal(reloaded.automatic_resolution_reason, null);
   });

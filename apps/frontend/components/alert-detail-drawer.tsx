@@ -58,6 +58,11 @@ interface AlertDetail {
     message: string | null;
     resolved_by_label: string;
   } | null;
+  // Alerta automático de tarefa controlado pela condição real (ata 2026-08):
+  // não tem "Resolver alerta"; encerra sozinho quando a situação da tarefa
+  // deixa de atender à regra.
+  condition_controlled?: boolean;
+  type?: string | null;
   created_at: string;
   expires_at: string | null;
   has_image: boolean;
@@ -337,6 +342,26 @@ export function AlertDetailDrawer({ alertId, open, onClose, accountType }: Alert
                     ? "Você não tem acesso à tela vinculada."
                     : "Este alerta é informativo e não possui uma tela vinculada."}
               </p>
+            )}
+
+            {/* Alerta automático de tarefa AINDA ATIVO (ata 2026-08) — não
+                tem "Resolver alerta": explica que a resolução é controlada
+                pela condição real da tarefa. Texto sempre visível. */}
+            {detail.condition_controlled && detail.situacao !== "resolvido" && detail.situacao !== "resolvido_automaticamente" && (
+              <div className="rounded-lg border border-sky-200 dark:border-sky-800 bg-sky-50 dark:bg-sky-950/30 p-3.5 space-y-1.5">
+                <div className="flex items-center gap-1.5 text-sky-800 dark:text-sky-300">
+                  <Bot className="h-4 w-4" aria-hidden="true" />
+                  <h4 className="text-xs font-semibold">Resolução automática</h4>
+                </div>
+                <p className="text-xs text-sky-800/90 dark:text-sky-300/80">
+                  Este alerta será resolvido quando a situação real da tarefa deixar de atender à regra que o criou.
+                </p>
+                <p className="text-xs text-sky-800/90 dark:text-sky-300/80">
+                  {detail.type === "task.due_soon"
+                    ? "O alerta será encerrado quando a tarefa for entregue/concluída, cancelada, sair da janela de aviso ou passar para atraso."
+                    : "Conclua ou entregue a tarefa, cancele-a ou regularize o prazo."}
+                </p>
+              </div>
             )}
 
             {/* Bloco "Resolução" (ata 2026-08, 10º lote) — só quando

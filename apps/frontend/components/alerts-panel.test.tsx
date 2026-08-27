@@ -306,6 +306,30 @@ describe("AlertsPanel — resolução de alerta crítico", () => {
     expect(screen.queryByTitle("Marcar como lido")).not.toBeInTheDocument();
   });
 
+  it("alerta automático de tarefa (condition_controlled): NUNCA mostra 'Resolver alerta' — mostra 'Resolução automática' + orientação, sempre visível", async () => {
+    (apiClient.getSystemAlerts as any).mockResolvedValue({
+      data: [{ ...redAlert, type: "task.overdue", condition_controlled: true, entity_type: "project_task", entity_id: "t1" }],
+    });
+    render(<AlertsPanel open onClose={() => {}} />)
+    await waitFor(() => expect(screen.getByText("Aviso importante")).toBeInTheDocument())
+
+    expect(screen.queryByRole("button", { name: "Resolver alerta" })).not.toBeInTheDocument()
+    expect(screen.getByText("Resolução automática")).toBeInTheDocument()
+    // orientação essencial visível sem hover (texto no DOM, não só tooltip)
+    expect(screen.getByText(/Conclua ou entregue a tarefa, cancele-a ou regularize o prazo\./)).toBeInTheDocument()
+    expect(screen.getByText("Detalhes")).toBeInTheDocument()
+  })
+
+  it("automático 'próxima do prazo' (condition_controlled): orientação específica de due_soon", async () => {
+    (apiClient.getSystemAlerts as any).mockResolvedValue({
+      data: [{ ...baseAlert, severity: "warning" as const, type: "task.due_soon", condition_controlled: true, entity_type: "project_task", entity_id: "t2" }],
+    })
+    render(<AlertsPanel open onClose={() => {}} />)
+    await waitFor(() => expect(screen.getByText("Aviso importante")).toBeInTheDocument())
+    expect(screen.getByText(/entregue\/concluída, cancelada, sair da janela de aviso ou passar para atraso/)).toBeInTheDocument()
+    expect(screen.queryByRole("button", { name: "Resolver alerta" })).not.toBeInTheDocument()
+  })
+
   it("22. verde/amarelo mantêm dispensar/arquivar normalmente (sem 'Resolver alerta')", async () => {
     (apiClient.getSystemAlerts as any).mockResolvedValue({ data: [{ ...baseAlert, severity: "warning" }] });
     render(<AlertsPanel open onClose={() => {}} />);
