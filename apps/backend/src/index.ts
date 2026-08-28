@@ -10,6 +10,7 @@ import { runDailySyncForAllConnections } from "./lib/meta-ads-sync";
 import { ensureDefaultAlertStandardsAndRules, runAlertEngineOnceGuarded } from "./lib/alert-engine";
 import { runTaskRotationOnceGuarded } from "./lib/task-rotation-engine";
 import { runCommsSchedulerOnceGuarded } from "./lib/comms";
+import { ensureCatalog2Foundation } from "./lib/catalog2-foundation";
 
 // Mascara a URL do banco: mantém apenas o caminho do arquivo, omite credenciais
 function maskDatabaseUrl(url: string): string {
@@ -81,6 +82,10 @@ async function main() {
   // Padrões/Regras obrigatórios da Central de Alertas (tarefa próxima do
   // prazo / tarefa atrasada) — idempotente por `key`, ver alert-engine.ts.
   await ensureDefaultAlertStandardsAndRules();
+  // Fundação do novo catálogo (sprint de produtos, bloco 2/6) — só as
+  // classificações reutilizáveis (pilares/4Fs/categorias/especialidades),
+  // nunca produtos. Idempotente por `key`.
+  await ensureCatalog2Foundation();
 
   await logStartupState();
 

@@ -133,10 +133,15 @@ const AdminNotificationsPage = React.lazy(
 const AdminComunicacaoPage = React.lazy(
   () => import("@/app/admin/comunicacao/page"),
 );
-// Consulta da Plataforma Anterior — somente leitura, somente Admin Master
-// (sprint de produtos, bloco 1/6).
-const AdminConsultaLegadoPage = React.lazy(
-  () => import("@/app/admin/consulta-legado/page"),
+// Legacy — Plataforma Anterior: consulta somente leitura, somente Admin Master
+// (sprint de produtos, bloco 1/6; renomeada de "Consulta da Plataforma
+// Anterior" no bloco 2/6). Endereço principal /admin/legacy;
+// /admin/consulta-legado redireciona para cá.
+const AdminLegacyPage = React.lazy(() => import("@/app/admin/legacy/page"));
+// Fundação do novo catálogo — tela de validação, só Admin Master
+// (sprint de produtos, bloco 2/6).
+const AdminNovoCatalogoPage = React.lazy(
+  () => import("@/app/admin/produtos/novo-catalogo/page"),
 );
 const AdminClientesPage = React.lazy(() => import("@/app/admin/clientes/page"));
 // Lista de agências no Admin — a pasta existia vazia até 2026-08-04.
@@ -898,9 +903,15 @@ export default function App() {
                     path="/admin/comunicacao"
                     element={<AdminComunicacaoPage />}
                   />
+                  <Route path="/admin/legacy" element={<AdminLegacyPage />} />
+                  {/* Compatibilidade com favoritos/links salvos do bloco 1. */}
                   <Route
                     path="/admin/consulta-legado"
-                    element={<AdminConsultaLegadoPage />}
+                    element={<Navigate to="/admin/legacy" replace />}
+                  />
+                  <Route
+                    path="/admin/produtos/novo-catalogo"
+                    element={<AdminNovoCatalogoPage />}
                   />
                   <Route
                     path="/admin/clientes"

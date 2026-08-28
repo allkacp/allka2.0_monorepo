@@ -2906,6 +2906,16 @@ export default function AdminProdutosPage() {
                 <TooltipContent side="bottom" sideOffset={6}>Criar novo produto</TooltipContent>
               </Tooltip>
             </TooltipProvider>
+            {/* Acesso à fundação do NOVO catálogo — só Admin Master (o backend
+                reaplica a checagem). Não substitui o catálogo atual. */}
+            {adminProfile?.is_master === true && adminProfile?.is_active !== false && (
+              <button
+                onClick={() => navigate("/admin/produtos/novo-catalogo")}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-white/70 text-white bg-white/10 hover:bg-white/20 transition-colors text-xs font-semibold whitespace-nowrap"
+              >
+                Novo catálogo (fundação)
+              </button>
+            )}
             <PinToTrayButton id="page-produtos" label="Cadastro de Produtos" icon={Package} path="/admin/produtos" />
           </>
         }

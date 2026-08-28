@@ -66,11 +66,17 @@ export default function AdminConsultaLegadoPage() {
   return (
     <div className="mx-auto max-w-5xl space-y-5 p-4 md:p-6">
       <header className="space-y-1">
-        <h1 className="flex items-center gap-2 text-xl font-semibold text-neutral-900 dark:text-neutral-50">
-          <History className="h-5 w-5" /> Consulta da Plataforma Anterior
-        </h1>
+        <div className="flex items-center gap-2">
+          <h1 className="flex items-center gap-2 text-xl font-semibold text-neutral-900 dark:text-neutral-50">
+            <History className="h-5 w-5" /> Legacy — Plataforma Anterior
+          </h1>
+          <span className="rounded-full bg-neutral-200 px-2 py-0.5 text-[11px] font-medium text-neutral-600 dark:bg-neutral-700 dark:text-neutral-300">
+            Somente consulta
+          </span>
+        </div>
         <p className="text-sm text-neutral-500">
-          Área histórica <strong>somente para consulta</strong>. Nenhuma alteração feita aqui modifica a plataforma atual.
+          Consulta somente leitura dos dados preservados da versão anterior da plataforma. Nenhuma alteração feita aqui
+          modifica a plataforma atual.
         </p>
       </header>
 

@@ -1,7 +1,7 @@
 import { describe, expect, it, vi, beforeEach } from "vitest"
 import { render, screen, waitFor } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
-import AdminConsultaLegadoPage from "@/app/admin/consulta-legado/page"
+import AdminConsultaLegadoPage from "@/app/admin/legacy/page"
 
 // Consulta da Plataforma Anterior (sprint de produtos, bloco 1/6).
 
@@ -110,6 +110,13 @@ it("legado não configurado (503) → mensagem honesta", async () => {
   api.getLegacySummary.mockRejectedValue(Object.assign(new Error("x"), { status: 503, data: { code: "legacy_not_configured" } }))
   render(<AdminConsultaLegadoPage />)
   expect(await screen.findByText(/não está configurada neste ambiente/i)).toBeInTheDocument()
+})
+
+it("cabeçalho: título Legacy — Plataforma Anterior + aviso Somente consulta", async () => {
+  render(<AdminConsultaLegadoPage />)
+  expect(await screen.findByText("Legacy — Plataforma Anterior")).toBeInTheDocument()
+  expect(screen.getByText(/Somente consulta/i)).toBeInTheDocument()
+  expect(screen.getByText(/Consulta somente leitura dos dados preservados/i)).toBeInTheDocument()
 })
 
 it("Resumo: lote, prévia local, data da fotografia, quantidades e conferência", async () => {

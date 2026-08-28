@@ -522,10 +522,11 @@ const navigationConfig = {
           current: false,
         },
         {
-          // Sprint de produtos, bloco 1/6 — somente Admin Master (filtrado
-          // abaixo por `masterOnly`; o backend reaplica a checagem).
-          name: "Consulta da Plataforma Anterior",
-          href: "/admin/consulta-legado",
+          // Sprint de produtos — somente Admin Master (filtrado abaixo por
+          // `masterOnly`; o backend reaplica a checagem). Renomeado de
+          // "Consulta da Plataforma Anterior" para "Legacy" no bloco 2/6.
+          name: "Legacy",
+          href: "/admin/legacy",
           icon: History,
           current: false,
           masterOnly: true,

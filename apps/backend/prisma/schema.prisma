@@ -3877,3 +3877,328 @@ model UserCommunicationChannelPref {
 
   @@map("user_communication_channel_prefs")
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// NOVO CATÁLOGO ("catalog2") — sprint de produtos, bloco 2/6.
+//
+// Arquitetura LIMPA e VERSIONADA que recebera os 36 produtos definitivos num
+// bloco futuro. Coexiste com: (1) o catalogo operacional atual (models
+// Product/ProductVariation/CatalogTask — INTOCADOS), (2) o banco Legacy
+// (separado). Tabelas proprias com prefixo `catalog2_` — nada e renomeado nem
+// reaproveitado do catalogo antigo.
+//
+// NAO copia os 162 produtos atuais. NAO grava os 36 produtos da planilha
+// neste lote. Sem precificacao, sem checkout, sem execucao, sem IA real.
+// ─────────────────────────────────────────────────────────────────────────────
+
+// Pilar interno (ex.: "A. Presenca Digital e Conversao"). Reutilizavel — o
+// produto referencia por FK, nunca repete o texto.
+model Catalog2Pillar {
+  id          String  @id @default(cuid())
+  key         String  @unique
+  name        String
+  description String? @db.Text
+  sort_order  Int     @default(0)
+  is_active   Boolean @default(true)
+
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  products Catalog2Product[]
+
+  @@map("catalog2_pillars")
+}
+
+// Fase da metodologia 4Fs (Fundacao / Fluxo / Forca / Fidelizacao).
+model Catalog2FourF {
+  id         String @id @default(cuid())
+  key        String @unique
+  name       String
+  sort_order Int    @default(0)
+
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  product_links Catalog2ProductFourF[]
+
+  @@map("catalog2_four_f")
+}
+
+// Categoria padrao do produto (ex.: "Performance", "Design"). Reutilizavel.
+model Catalog2Category {
+  id          String  @id @default(cuid())
+  key         String  @unique
+  name        String
+  description String? @db.Text
+  sort_order  Int     @default(0)
+  is_active   Boolean @default(true)
+
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  products Catalog2Product[]
+
+  @@map("catalog2_categories")
+}
+
+// Especialidade / perfil profissional. Reutilizavel, associada PRINCIPALMENTE
+// as tarefas que exigem determinado perfil (Catalog2Task.specialty_id).
+model Catalog2Specialty {
+  id          String  @id @default(cuid())
+  key         String  @unique
+  name        String
+  description String? @db.Text
+  sort_order  Int     @default(0)
+  is_active   Boolean @default(true)
+
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  tasks Catalog2Task[]
+
+  @@map("catalog2_specialties")
+}
+
+// Identidade ESTAVEL do produto — nao muda entre versoes. O conteudo
+// (descricao, tarefas, variacoes...) vive nas versoes.
+model Catalog2Product {
+  id            String @id @default(cuid())
+  slug          String @unique
+  internal_name String
+
+  pillar_id   String?
+  pillar      Catalog2Pillar?   @relation(fields: [pillar_id], references: [id], onDelete: SetNull)
+  category_id String?
+  category    Catalog2Category? @relation(fields: [category_id], references: [id], onDelete: SetNull)
+
+  // Estado do PRODUTO (nao da versao):
+  //   "em_preparacao"            = sem versao publicada; nao aparece pro cliente.
+  //   "disponivel"               = tem versao publicada e esta ofertavel.
+  //   "temporariamente_inativo"  = tem versao publicada, oferta suspensa
+  //                                (volta sem nova versao).
+  //   "arquivado"                = fora do catalogo; historico preservado.
+  status String @default("em_preparacao")
+
+  // "existente" | "novo" | "reativado" — informativo (relatorio), sem regra.
+  origin String?
+
+  // Versao PUBLICADA atual (nula enquanto "em_preparacao"). A etiqueta
+  // "Novo por 3 meses" e DERIVADA de published_version.published_at.
+  published_version_id String?                 @unique
+  published_version    Catalog2ProductVersion? @relation("Catalog2PublishedVersion", fields: [published_version_id], references: [id], onDelete: SetNull)
+
+  created_by_user_id String?
+  created_at         DateTime @default(now())
+  updated_at         DateTime @updatedAt
+
+  versions Catalog2ProductVersion[] @relation("Catalog2ProductVersions")
+  four_f   Catalog2ProductFourF[]
+
+  @@index([status])
+  @@index([pillar_id])
+  @@index([category_id])
+  @@map("catalog2_products")
+}
+
+model Catalog2ProductFourF {
+  id         String          @id @default(cuid())
+  product_id String
+  product    Catalog2Product @relation(fields: [product_id], references: [id], onDelete: Cascade)
+  four_f_id  String
+  four_f     Catalog2FourF   @relation(fields: [four_f_id], references: [id], onDelete: Cascade)
+
+  @@unique([product_id, four_f_id])
+  @@index([four_f_id])
+  @@map("catalog2_product_four_f")
+}
+
+// Versao de um produto. Rascunho e editavel; publicada e IMUTAVEL (a API
+// recusa edicao — 409). Publicar cria uma versao NOVA e nunca apaga a
+// anterior; versoes antigas continuam consultaveis.
+model Catalog2ProductVersion {
+  id             String          @id @default(cuid())
+  product_id     String
+  product        Catalog2Product @relation("Catalog2ProductVersions", fields: [product_id], references: [id], onDelete: Restrict)
+  version_number Int
+
+  // "rascunho" | "publicada"
+  state String @default("rascunho")
+
+  title            String
+  summary          String? @db.Text
+  full_description String? @db.LongText
+
+  published_at         DateTime?
+  published_by_user_id String?
+
+  created_by_user_id String?
+  created_at         DateTime @default(now())
+  updated_at         DateTime @updatedAt
+
+  published_of Catalog2Product? @relation("Catalog2PublishedVersion")
+
+  variations Catalog2Variation[]
+  addons     Catalog2Addon[]
+  tasks      Catalog2Task[]
+  conditions Catalog2Condition[]
+
+  @@unique([product_id, version_number])
+  @@index([state])
+  @@map("catalog2_product_versions")
+}
+
+// VARIACAO = escolha OBRIGATORIA da contratacao (formato, quantidade, tamanho,
+// modalidade). Entidade DISTINTA de Adicional. Pertence a uma versao.
+model Catalog2Variation {
+  id         String                 @id @default(cuid())
+  version_id String
+  version    Catalog2ProductVersion @relation(fields: [version_id], references: [id], onDelete: Cascade)
+
+  key            String
+  name           String
+  selection_type String  @default("single")
+  is_required    Boolean @default(true)
+  sort_order     Int     @default(0)
+  notes          String? @db.Text
+
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  options Catalog2VariationOption[]
+
+  @@index([version_id, sort_order])
+  @@map("catalog2_variations")
+}
+
+model Catalog2VariationOption {
+  id           String            @id @default(cuid())
+  variation_id String
+  variation    Catalog2Variation @relation(fields: [variation_id], references: [id], onDelete: Cascade)
+
+  key        String
+  label      String
+  sort_order Int    @default(0)
+
+  // Placeholders para custo/prazo/condicoes FUTUROS (nunca calculados aqui).
+  deadline_delta_days      Int?
+  price_delta_hint         String? @db.Text
+  client_info_requirements String? @db.Text
+
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  @@index([variation_id, sort_order])
+  @@map("catalog2_variation_options")
+}
+
+// ADICIONAL = escolha OPCIONAL (add-on), diferente da variacao obrigatoria.
+model Catalog2Addon {
+  id         String                 @id @default(cuid())
+  version_id String
+  version    Catalog2ProductVersion @relation(fields: [version_id], references: [id], onDelete: Cascade)
+
+  key                 String
+  name                String
+  description         String? @db.Text
+  sort_order          Int     @default(0)
+  is_default_selected Boolean @default(false)
+
+  deadline_delta_days Int?
+  price_delta_hint    String? @db.Text
+  adds_deliverables   String? @db.Text
+
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  @@index([version_id, sort_order])
+  @@map("catalog2_addons")
+}
+
+// Tarefa do produto (modelo de catalogo — NAO e a execucao de uma compra).
+model Catalog2Task {
+  id         String                 @id @default(cuid())
+  version_id String
+  version    Catalog2ProductVersion @relation(fields: [version_id], references: [id], onDelete: Cascade)
+
+  key         String
+  name        String
+  description String? @db.Text
+  objective   String? @db.Text
+  sort_order  Int     @default(0)
+
+  specialty_id String?
+  specialty    Catalog2Specialty? @relation(fields: [specialty_id], references: [id], onDelete: SetNull)
+
+  // "humano" | "ia" | "hibrido"
+  execution_mode String @default("humano")
+
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  steps Catalog2TaskStep[]
+  ai    Catalog2TaskAI?
+
+  @@index([version_id, sort_order])
+  @@index([specialty_id])
+  @@map("catalog2_tasks")
+}
+
+// Etapa de UMA tarefa especifica. Ordenada.
+model Catalog2TaskStep {
+  id      String       @id @default(cuid())
+  task_id String
+  task    Catalog2Task @relation(fields: [task_id], references: [id], onDelete: Cascade)
+
+  key         String
+  name        String
+  description String? @db.Text
+  sort_order  Int     @default(0)
+
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  @@index([task_id, sort_order])
+  @@map("catalog2_task_steps")
+}
+
+// Preparacao para custo de IA — so campos, sem integracao nem calculo.
+model Catalog2TaskAI {
+  id      String       @id @default(cuid())
+  task_id String       @unique
+  task    Catalog2Task @relation(fields: [task_id], references: [id], onDelete: Cascade)
+
+  provider              String?
+  model                 String?
+  est_input_tokens      Int?
+  est_output_tokens     Int?
+  cost_note             String? @db.Text
+  human_review_required Boolean @default(true)
+
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  @@map("catalog2_task_ai")
+}
+
+// FUNDACAO MINIMA de condicoes (regras que poderao alterar prazo/custo/
+// execucao). NAO e um motor: so um registro parqueado para o Bloco 3 dar
+// forma real, sem exigir migration nova. Sem avaliacao, sem regra de negocio.
+model Catalog2Condition {
+  id         String                 @id @default(cuid())
+  version_id String
+  version    Catalog2ProductVersion @relation(fields: [version_id], references: [id], onDelete: Cascade)
+
+  key          String
+  name         String
+  description  String? @db.Text
+  // "prazo" | "custo" | "execucao"
+  applies_to   String
+  trigger_note String? @db.Text
+  effect_note  String? @db.Text
+
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  @@index([version_id])
+  @@map("catalog2_conditions")
+}

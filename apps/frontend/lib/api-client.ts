@@ -778,6 +778,29 @@ class ApiClient {
   async getLegacyRecord(id: string) {
     return this.get<any>(`/admin/legacy/records/${id}`);
   }
+
+  // ── Novo catálogo — fundação (sprint de produtos, bloco 2/6) ───────────
+  async getCatalog2Overview() {
+    return this.get<any>("/admin/catalog2/overview");
+  }
+  async getCatalog2Pillars() {
+    return this.get<{ data: any[] }>("/admin/catalog2/pillars");
+  }
+  async getCatalog2FourF() {
+    return this.get<{ data: any[] }>("/admin/catalog2/four-f");
+  }
+  async getCatalog2Categories() {
+    return this.get<{ data: any[] }>("/admin/catalog2/categories");
+  }
+  async getCatalog2Specialties() {
+    return this.get<{ data: any[] }>("/admin/catalog2/specialties");
+  }
+  async getCatalog2Products(status?: string) {
+    return this.get<{ data: any[] }>(`/admin/catalog2/products${status ? `?status=${encodeURIComponent(status)}` : ""}`);
+  }
+  async getCatalog2Product(id: string) {
+    return this.get<any>(`/admin/catalog2/products/${id}`);
+  }
   /** URL autenticada da imagem de um banner obrigatório (uso admin). */
   mandatoryBannerImageUrl(id: string): string {
     return `${API_BASE_URL}/admin/comms/banners/${id}/image`;

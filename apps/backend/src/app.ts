@@ -63,6 +63,7 @@ import centralChamadosAdminRouter from "./routes/central-chamados-admin";
 import commsRouter from "./routes/comms";
 import commsAdminRouter from "./routes/comms-admin";
 import legacyConsultationRouter from "./routes/legacy-consultation";
+import catalog2AdminRouter from "./routes/catalog2-admin";
 import { prisma } from "./lib/prisma";
 import { errorHandler } from "./middleware/error";
 
@@ -238,6 +239,8 @@ app.use("/api/admin/comms", commsAdminRouter);
 // Consulta da Plataforma Anterior — somente leitura, somente Admin Master
 // (sprint de produtos, bloco 1/6).
 app.use("/api/admin/legacy", legacyConsultationRouter);
+// Fundação do novo catálogo — somente Admin Master (sprint de produtos, bloco 2/6).
+app.use("/api/admin/catalog2", catalog2AdminRouter);
 
 // ─── 404 Handler ──────────────────────────────────────────────────────────────
 
