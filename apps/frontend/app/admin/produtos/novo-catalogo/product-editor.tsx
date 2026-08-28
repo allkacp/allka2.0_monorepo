@@ -101,6 +101,7 @@ export function ProductEditor({ productId, onBack }: { productId: string; onBack
             <TabsTrigger value="custo">7. Custos e preço</TabsTrigger>
             <TabsTrigger value="preview">8. Pré-visualização</TabsTrigger>
             <TabsTrigger value="hist">9. Versões e histórico</TabsTrigger>
+            <TabsTrigger value="origem">10. Origem e revisão</TabsTrigger>
           </TabsList>
 
           <TabsContent value="geral"><GeneralTab version={version} readOnly={readOnly} onSave={(b) => act(() => apiClient.updateCatalog2VersionInfo(version.id, b), "Salvo.")} product={product} onStatus={(s) => act(() => apiClient.setCatalog2ProductStatus(productId, s), "Situação atualizada.")} /></TabsContent>
@@ -112,6 +113,7 @@ export function ProductEditor({ productId, onBack }: { productId: string; onBack
           <TabsContent value="custo"><CostTab version={version} refs={refs} act={act} onReloadRefs={load} /></TabsContent>
           <TabsContent value="preview"><PreviewTab version={version} /></TabsContent>
           <TabsContent value="hist"><HistoryTab version={version} readOnly={readOnly} act={act} /></TabsContent>
+          <TabsContent value="origem"><OriginReviewTab productId={productId} onChanged={load} /></TabsContent>
         </Tabs>
       )}
     </div>
@@ -486,12 +488,28 @@ function PricingResultView({ r }: { r: any }) {
       <Row k={r.lines.variation_impacts.label} v={money(r.lines.variation_impacts.amount)} />
       <Row k="Impactos de condições" v={r.lines.condition_impacts.detail} />
       <Row k={r.lines.subtotal_cost.label} v={money(r.lines.subtotal_cost.amount)} />
+      <Row k="Custo direto (humano + IA)" v={money(r.lines.direct_cost?.amount ?? null)} />
+      {!r.order_defined && <p className="text-[11px] text-amber-600">Ordem de incidência das taxas não confirmada — usando a ordem-padrão (imposto → comissão → operacional → margem). Confirme no módulo de precificação.</p>}
       {r.lines.taxes_and_margins.map((t: any, i: number) => <Row key={i} k={t.label} v={t.amount == null ? <span className="text-amber-600">{t.detail}</span> : money(t.amount)} />)}
       <div className="my-1 border-t border-neutral-200 dark:border-neutral-700" />
-      <Row k={<strong>Preço final</strong>} v={<strong>{money(r.lines.final_price.amount)}</strong>} />
-      <Row k="Preço mínimo (custo direto)" v={money(r.lines.minimum_price.amount)} />
-      <Row k="Prazo estimado" v={r.estimated_deadline_days == null ? <span className="text-amber-600">não calculável</span> : `${r.estimated_deadline_days} dia(s)`} />
+      <Row k="Preço mínimo permitido (= custo direto)" v={money(r.lines.minimum_price.amount)} />
+      <Row k={<strong>Preço comercial final</strong>} v={<strong>{money((r.lines.commercial_final_price ?? r.lines.final_price).amount)}</strong>} />
+      <div className="my-1 border-t border-neutral-200 dark:border-neutral-700" />
+      <Row k="Esforço interno estimado" v={`${r.deadline?.effort_days ?? "—"} dia(s) úteis`} />
+      <Row
+        k="Prazo comercial"
+        v={r.deadline?.commercial_deadline_pending
+          ? <span className="text-amber-600">aguardando definição comercial</span>
+          : `${r.deadline?.commercial_deadline_days} dia(s)`}
+      />
+      <p className="mt-1 text-[11px] text-neutral-400">
+        O esforço é planejamento interno (min ÷ {480}) e <strong>não</strong> é promessa de entrega ao cliente. O prazo
+        comercial é definido à parte (base + dias de variações/condições/adicionais).
+      </p>
       <p className="mt-1 text-xs text-neutral-400">{r.deadline_detail}</p>
+      {r.pending_info?.length > 0 && (
+        <p className="mt-1 text-xs text-amber-600">Aguardando definição comercial: {r.pending_info.join("; ")}.</p>
+      )}
       {r.warnings.length > 0 && <ul className="mt-1 list-inside list-disc text-xs text-amber-600">{r.warnings.map((w: any, i: number) => <li key={i}>{w.message}</li>)}</ul>}
     </div>
   );
@@ -514,10 +532,14 @@ function PreviewTab({ version }: any) {
       {p.variations.length > 0 && <div className="mt-3 text-sm"><strong>Variações:</strong> {p.variations.map((v: any) => `${v.name} (${v.options.join("/")})`).join(" · ")}</div>}
       {p.addons.length > 0 && <div className="mt-1 text-sm"><strong>Adicionais:</strong> {p.addons.map((a: any) => a.name).join(", ")}</div>}
       <div className="mt-3 flex items-center justify-between">
-        <span className="text-sm">Prazo: {p.estimated_deadline_days == null ? "—" : `${p.estimated_deadline_days} dia(s)`}</span>
+        <span className="text-sm">
+          Prazo comercial: {p.commercial_deadline_pending || p.estimated_deadline_days == null ? "a definir" : `${p.estimated_deadline_days} dia(s)`}
+          {p.effort_days != null && <span className="text-neutral-400"> · esforço interno {p.effort_days} d</span>}
+        </span>
         <span className="text-lg font-semibold">{p.price_pending ? "Preço: a definir" : `${p.currency} ${Number(p.price).toFixed(2)}`}</span>
       </div>
-      <p className="mt-2 text-[10px] text-neutral-400">A pré-visualização usa exatamente o mesmo cálculo do backend (seleção padrão).</p>
+      {p.pending_info?.length > 0 && <p className="mt-1 text-[10px] text-amber-600">Aguardando definição comercial: {p.pending_info.join("; ")}.</p>}
+      <p className="mt-2 text-[10px] text-neutral-400">A pré-visualização usa exatamente o mesmo cálculo do backend (seleção padrão). Esforço interno ≠ promessa de entrega.</p>
     </div>
   );
 }
@@ -570,6 +592,182 @@ function PublishBtn({ versionId, canPublish, pending, summary, act }: any) {
       />
     </>
   );
+}
+
+// ── 10. Origem e revisão (importação dos 36 — bloco 4/6) ────────────
+const PENDENCY_LABEL: Record<string, string> = {
+  content_review_pending: "Revisar conteúdo preservado",
+  classification_decision_pending: "Decidir classificação (categoria × área)",
+  price_pending: "Definir preço comercial",
+  deadline_pending: "Definir prazo comercial",
+  portfolio_pending: "Anexar portfólio",
+  rose_review_pending: "Revisão da Rose pendente",
+};
+
+function OriginReviewTab({ productId, onChanged }: { productId: string; onChanged: () => void }) {
+  const [data, setData] = useState<any>(null);
+  const [state, setState] = useState<"loading" | "ready" | "not_imported" | "error">("loading");
+  const [decisions, setDecisions] = useState<Record<string, string>>({});
+  const [msg, setMsg] = useState<string | null>(null);
+
+  const reload = useCallback(() => {
+    setState("loading");
+    apiClient
+      .getCatalog2ProductOrigin(productId)
+      .then((d: any) => { setData(d); setState("ready"); })
+      .catch((e: any) => setState(e?.status === 404 ? "not_imported" : "error"));
+  }, [productId]);
+  useEffect(() => { reload(); }, [reload]);
+
+  if (state === "loading") return <div className="mt-3 flex items-center gap-2 text-sm text-neutral-500"><Loader2 className="h-4 w-4 animate-spin" /> Carregando…</div>;
+  if (state === "not_imported") return <p className="mt-3 rounded bg-neutral-100 px-3 py-2 text-sm text-neutral-500 dark:bg-neutral-800">Este produto não veio da importação dos 36 — foi criado manualmente no construtor.</p>;
+  if (state === "error" || !data) return <p className="mt-3 text-sm text-red-600">Não foi possível carregar a origem.</p>;
+
+  const hp = data.historical_price ?? {};
+  async function resolve(key: string) {
+    const decision = (decisions[key] ?? "").trim();
+    if (!decision) { setMsg("Descreva a decisão antes de concluir a pendência."); return; }
+    setMsg(null);
+    try {
+      await apiClient.resolveCatalog2Pendency(productId, { pendency_key: key, decision });
+      setDecisions((d) => ({ ...d, [key]: "" }));
+      reload();
+      onChanged();
+    } catch (e: any) {
+      setMsg(e?.message ?? "Falha ao concluir a pendência.");
+    }
+  }
+
+  return (
+    <div className="mt-3 space-y-4 text-sm">
+      {msg && <p className="text-blue-600">{msg}</p>}
+
+      <section className="rounded-lg border border-neutral-200 p-3 dark:border-neutral-800">
+        <h3 className="font-semibold">Planilha principal (fonte da identidade)</h3>
+        <p className="text-xs text-neutral-500">#{data.source.index} · {data.source.name} · chave <code>{data.source.key}</code></p>
+        <dl className="mt-2 grid grid-cols-2 gap-x-4 gap-y-1 text-xs">
+          {Object.entries(data.main_fields ?? {}).map(([k, v]) => (
+            <div key={k} className="contents"><dt className="text-neutral-400">{k}</dt><dd className="truncate">{fmt(v)}</dd></div>
+          ))}
+        </dl>
+      </section>
+
+      <section className="rounded-lg border border-neutral-200 p-3 dark:border-neutral-800">
+        <h3 className="font-semibold">Revisão da Rose</h3>
+        {data.rose_reviewed ? (
+          <>
+            <p className="text-xs text-neutral-500">
+              Casada com a planilha principal. Área sugerida pela Rose: <strong>{data.area_rose ?? "—"}</strong>{" "}
+              <span className="text-neutral-400">(nunca substitui a categoria automaticamente)</span>
+            </p>
+            {data.rose_changed_fields?.length > 0 ? (
+              <div className="mt-2">
+                <div className="text-xs font-medium text-neutral-500">Campos que a Rose alterou:</div>
+                <ul className="list-inside list-disc text-xs">
+                  {data.rose_changed_fields.map((k: string) => (
+                    <li key={k}><span className="text-neutral-400">{k}:</span> {fmt(data.rose_fields?.[k])}</li>
+                  ))}
+                </ul>
+              </div>
+            ) : <p className="mt-1 text-xs text-neutral-400">Nenhum campo textual da Rose foi aplicado (campos vazios não apagam a principal).</p>}
+          </>
+        ) : (
+          <p className="text-xs text-amber-600">Sem revisão da Rose para este produto — dado da planilha principal + pendência "Revisão da Rose pendente".</p>
+        )}
+      </section>
+
+      {data.divergences?.length > 0 && (
+        <section className="rounded-lg border border-orange-200 bg-orange-50/50 p-3 dark:border-orange-900 dark:bg-orange-950/20">
+          <h3 className="font-semibold text-orange-800 dark:text-orange-300">Divergências registradas (nunca ocultadas)</h3>
+          <ul className="mt-1 space-y-1 text-xs">
+            {data.divergences.map((d: any, i: number) => (
+              <li key={i}>
+                <Badge className="mr-1 bg-orange-100 text-orange-700">{d.type}</Badge>
+                {d.detail} {d.decision_pending && <span className="font-medium text-orange-700">— decisão pendente</span>}
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+
+      <section className="rounded-lg border border-neutral-200 p-3 dark:border-neutral-800">
+        <h3 className="font-semibold">Referência histórica de preço</h3>
+        <p className="text-xs">
+          {hp.min == null && hp.max == null
+            ? "Sem referência na planilha."
+            : `${hp.min ?? "?"} – ${hp.max ?? "?"}`}{" "}
+          <span className="text-neutral-400">— {hp.note}</span>
+        </p>
+        <p className="text-[11px] text-amber-600">Não é o preço final e não é usada automaticamente no cálculo.</p>
+      </section>
+
+      {data.original_texts && Object.keys(data.original_texts).length > 0 && (
+        <section className="rounded-lg border border-neutral-200 p-3 dark:border-neutral-800">
+          <h3 className="font-semibold">Textos originais preservados</h3>
+          <p className="text-[11px] text-neutral-400">Preservados na íntegra quando não puderam ser estruturados com segurança. Nada foi inventado.</p>
+          <dl className="mt-2 space-y-1 text-xs">
+            {Object.entries(data.original_texts).map(([k, v]) => v ? (
+              <div key={k}><dt className="text-neutral-400">{k}</dt><dd className="whitespace-pre-wrap rounded bg-neutral-50 p-1.5 dark:bg-neutral-800">{fmt(v)}</dd></div>
+            ) : null)}
+          </dl>
+        </section>
+      )}
+
+      <section className="rounded-lg border border-neutral-200 p-3 dark:border-neutral-800">
+        <h3 className="font-semibold">Pendências para decisão</h3>
+        <p className="text-[11px] text-neutral-400">
+          Estado de preparo atual: <Badge className="bg-amber-100 text-amber-700">{data.review_state}</Badge>. Concluir uma
+          pendência altera só o rascunho, registra quem/quando/decisão e preserva a divergência original no histórico.
+        </p>
+        {data.pendencies.length === 0 ? (
+          <p className="mt-2 text-xs text-emerald-600">Nenhuma pendência aberta — pronto para revisão final.</p>
+        ) : (
+          <ul className="mt-2 space-y-2">
+            {data.pendencies.map((key: string) => (
+              <li key={key} className="rounded border border-neutral-200 p-2 dark:border-neutral-700">
+                <div className="text-xs font-medium">{PENDENCY_LABEL[key] ?? key}</div>
+                <Textarea
+                  rows={2}
+                  className="mt-1 text-xs"
+                  placeholder="Descreva a decisão tomada (ex.: preço comercial definido em R$ X; ou 'mantida a categoria Redação, área da Rose registrada como especialidade')."
+                  value={decisions[key] ?? ""}
+                  onChange={(e) => setDecisions((d) => ({ ...d, [key]: e.target.value }))}
+                />
+                <Button size="sm" className="mt-1" onClick={() => resolve(key)}>Concluir pendência</Button>
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
+
+      {data.resolutions?.length > 0 && (
+        <section className="rounded-lg border border-neutral-200 p-3 dark:border-neutral-800">
+          <h3 className="font-semibold">Histórico de resoluções</h3>
+          <ul className="mt-1 space-y-1 text-xs">
+            {data.resolutions.map((r: any) => (
+              <li key={r.id} className="text-neutral-500">
+                {new Date(r.resolved_at).toLocaleString("pt-BR")} — <strong>{PENDENCY_LABEL[r.pendency_key] ?? r.pendency_key}</strong>: {r.decision}
+                {r.original_divergence && <div className="text-neutral-400">divergência preservada: {JSON.stringify(r.original_divergence)}</div>}
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+
+      {data.human_edited_at && (
+        <p className="text-[11px] text-sky-600">
+          Rascunho editado por humano em {new Date(data.human_edited_at).toLocaleString("pt-BR")} — o importador não sobrescreve mais este produto.
+        </p>
+      )}
+      <p className="text-[11px] text-neutral-400">Observações da importação: {data.observations ?? "—"} · último checksum <code>{String(data.last_import_checksum ?? "").slice(0, 12)}…</code></p>
+    </div>
+  );
+}
+function fmt(v: unknown): string {
+  if (v == null) return "—";
+  if (Array.isArray(v)) return v.join(", ");
+  if (typeof v === "object") return JSON.stringify(v);
+  return String(v);
 }
 
 // ── helpers ────────────────────────────────────────────────────────

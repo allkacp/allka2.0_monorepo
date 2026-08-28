@@ -3999,8 +3999,9 @@ model Catalog2Product {
   created_at          DateTime  @default(now())
   updated_at          DateTime  @updatedAt
 
-  versions Catalog2ProductVersion[] @relation("Catalog2ProductVersions")
-  four_f   Catalog2ProductFourF[]
+  versions      Catalog2ProductVersion[]     @relation("Catalog2ProductVersions")
+  four_f        Catalog2ProductFourF[]
+  import_origin Catalog2ProductImportOrigin?
 
   @@index([status])
   @@index([pillar_id])
@@ -4035,6 +4036,12 @@ model Catalog2ProductVersion {
   title            String
   summary          String? @db.Text
   full_description String? @db.LongText
+
+  // PRAZO COMERCIAL base (dias) prometido ao cliente — NUNCA derivado do
+  // esforco (bloco 4, reparo 2.1). Nulo = "prazo comercial aguardando
+  // definicao"; o esforco calculado continua servindo so para planejamento
+  // interno e nao vira promessa de entrega.
+  base_commercial_deadline_days Int?
 
   published_at             DateTime?
   published_by_user_id     String?
@@ -4346,6 +4353,14 @@ model Catalog2PricingSettings {
   // Percentual do custo humano reservado para revisao humana (linha separada
   // no resumo). Nulo = aguardando definicao.
   human_review_percent    Float?
+  // Ordem de incidencia das taxas/margem (bloco 4, reparo 2.2). JSON string[]
+  // de "tax"|"commission"|"operational"|"margin". Nulo = ordem NAO definida:
+  // o motor marca `order_not_defined` e NAO calcula o preco comercial final.
+  component_order_json    String?  @db.Text
+  // Base de calculo por componente. JSON { "<comp>": "running"|"subtotal"|
+  // "direct_cost" }. Ausente = "running" (acumulado ate ali), mas sinalizado
+  // como nao explicitamente definido.
+  component_base_json     String?  @db.Text
   currency                String   @default("BRL")
   notes                   String?  @db.Text
   updated_by_user_id      String?
@@ -4353,4 +4368,130 @@ model Catalog2PricingSettings {
   created_at              DateTime @default(now())
 
   @@map("catalog2_pricing_settings")
+}
+
+// ─── Importacao dos 36 produtos definitivos (bloco 4/6) ──────────────────────
+// Cada `--apply` = um lote. Auditavel, repetivel, NUNCA sobrescreve edicao
+// humana. Fonte principal = Allka_Proposta_Catalogo_Produtos_v9.xlsx;
+// revisao = Review Rose.xlsx. As planilhas NAO sao copiadas para o repo.
+model Catalog2ImportBatch {
+  id                   String    @id @default(cuid())
+  // "dry_run" | "apply"
+  mode                 String
+  rule_version         String
+  source_main_name     String
+  source_main_checksum String
+  source_rose_name     String
+  source_rose_checksum String
+  source_ata_checksum  String?
+  row_count_main       Int       @default(0)
+  row_count_rose       Int       @default(0)
+  expected_products    Int       @default(36)
+  created_count        Int       @default(0)
+  updated_count        Int       @default(0)
+  unchanged_count      Int       @default(0)
+  divergence_count     Int       @default(0)
+  // "completed" | "completed_with_divergences" | "failed" | "dry_run"
+  status               String    @default("dry_run")
+  report_json          String?   @db.LongText
+  notes                String?   @db.Text
+  actor_user_id        String?
+  started_at           DateTime  @default(now())
+  finished_at          DateTime?
+
+  records Catalog2ImportRecord[]
+
+  @@index([mode, started_at])
+  @@map("catalog2_import_batches")
+}
+
+// Resultado por LINHA de produto num lote (historico completo, imutavel).
+model Catalog2ImportRecord {
+  id                    String              @id @default(cuid())
+  batch_id              String
+  batch                 Catalog2ImportBatch @relation(fields: [batch_id], references: [id], onDelete: Cascade)
+  // Chave estavel da linha na fonte: "catalogo_v9:<indice>".
+  source_key            String
+  source_index          Int
+  source_name           String
+  // Produto/versao criados ou reconhecidos (nulos em dry_run).
+  product_id            String?
+  version_id            String?
+  slug                  String?
+  // "created" | "updated" | "unchanged" | "skipped_human_edit" | "divergence" | "error"
+  outcome               String
+  checksum              String
+  fields_from_main_json String?             @db.LongText
+  fields_from_rose_json String?             @db.LongText
+  original_texts_json   String?             @db.LongText
+  divergences_json      String?             @db.Text
+  warnings_json         String?             @db.Text
+  errors_json           String?             @db.Text
+  rose_reviewed         Boolean             @default(false)
+  created_at            DateTime            @default(now())
+
+  @@unique([batch_id, source_key])
+  @@index([source_key])
+  @@map("catalog2_import_records")
+}
+
+// Origem + revisao POR PRODUTO (1:1). Idempotencia (source_key @unique) +
+// guarda de edicao humana + dados da secao "Origem e revisao" do editor.
+model Catalog2ProductImportOrigin {
+  id                      String          @id @default(cuid())
+  product_id              String          @unique
+  product                 Catalog2Product @relation(fields: [product_id], references: [id], onDelete: Cascade)
+  source_key              String          @unique
+  source_index            Int
+  source_name             String
+  rose_reviewed           Boolean         @default(false)
+  // "Area" da Rose — preservada como revisao/sugestao de especialidade,
+  // NUNCA sobrescreve a categoria.
+  area_rose               String?
+  // "importado" | "content_review_pending" | "classification_decision_pending"
+  // | "price_pending" | "deadline_pending" | "portfolio_pending"
+  // | "ready_for_final_review" | "ready_for_publication"
+  review_state            String          @default("importado")
+  // JSON string[] de todas as pendencias simultaneas.
+  pendencies_json         String?         @db.Text
+  // Ultimo checksum aplicado pelo importador (detecta mudanca da fonte).
+  last_import_checksum    String
+  last_import_batch_id    String?
+  // Marcado quando o Admin edita o rascunho depois da importacao — o
+  // importador nunca sobrescreve isto.
+  human_edited_at         DateTime?
+  human_edited_by_user_id String?
+  // Snapshots para a secao "Origem e revisao".
+  main_fields_json        String?         @db.LongText
+  rose_fields_json        String?         @db.LongText
+  original_texts_json     String?         @db.LongText
+  divergences_json        String?         @db.Text
+  observations            String?         @db.Text
+  historical_price_min    Float?
+  historical_price_max    Float?
+  historical_price_note   String?
+
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  resolutions Catalog2ReviewResolution[]
+
+  @@index([review_state])
+  @@map("catalog2_product_import_origins")
+}
+
+// Resolucao de UMA pendencia pelo Admin Master — altera so o rascunho,
+// registra quem/quando/decisao e PRESERVA a divergencia original.
+model Catalog2ReviewResolution {
+  id                       String                      @id @default(cuid())
+  origin_id                String
+  origin                   Catalog2ProductImportOrigin @relation(fields: [origin_id], references: [id], onDelete: Cascade)
+  pendency_key             String
+  decision                 String                      @db.Text
+  original_divergence_json String?                     @db.Text
+  resolved_by_user_id      String?
+  resolved_at              DateTime                    @default(now())
+
+  @@index([origin_id])
+  @@map("catalog2_review_resolutions")
 }

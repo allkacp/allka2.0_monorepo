@@ -43,22 +43,35 @@ export const CATALOG2_SPECIALTIES = [
   { key: "especialista_automacao", name: "Especialista em Automação", sort_order: 7 },
 ];
 
+// `upsert` por `key` não é atômico no MySQL: quando várias suítes de teste
+// rodam em paralelo contra o MESMO banco (node --test roda arquivos em
+// processos concorrentes), dois `create` podem colidir no índice único. O
+// seed é idempotente, então tratamos a colisão como "já existe" e seguimos.
+async function upsertTolerant(fn: () => Promise<unknown>): Promise<void> {
+  try {
+    await fn();
+  } catch (err) {
+    if (err && typeof err === "object" && (err as { code?: string }).code === "P2002") return;
+    throw err;
+  }
+}
+
 /** Só para testes: garante as 4 fases 4Fs (no ambiente real vêm da migration). */
 export async function seedCatalog2FourFForTests(db: PrismaClient): Promise<void> {
   for (const f of CATALOG2_FOUR_F) {
-    await db.catalog2FourF.upsert({ where: { key: f.key }, create: f, update: { name: f.name, sort_order: f.sort_order } });
+    await upsertTolerant(() => db.catalog2FourF.upsert({ where: { key: f.key }, create: f, update: { name: f.name, sort_order: f.sort_order } }));
   }
 }
 
 export async function seedCatalog2Classifications(db: PrismaClient): Promise<{ pillars: number; categories: number; specialties: number }> {
   for (const p of CATALOG2_PILLARS) {
-    await db.catalog2Pillar.upsert({ where: { key: p.key }, create: p, update: { name: p.name, sort_order: p.sort_order } });
+    await upsertTolerant(() => db.catalog2Pillar.upsert({ where: { key: p.key }, create: p, update: { name: p.name, sort_order: p.sort_order } }));
   }
   for (const c of CATALOG2_CATEGORIES) {
-    await db.catalog2Category.upsert({ where: { key: c.key }, create: c, update: { name: c.name, sort_order: c.sort_order } });
+    await upsertTolerant(() => db.catalog2Category.upsert({ where: { key: c.key }, create: c, update: { name: c.name, sort_order: c.sort_order } }));
   }
   for (const s of CATALOG2_SPECIALTIES) {
-    await db.catalog2Specialty.upsert({ where: { key: s.key }, create: s, update: { name: s.name, sort_order: s.sort_order } });
+    await upsertTolerant(() => db.catalog2Specialty.upsert({ where: { key: s.key }, create: s, update: { name: s.name, sort_order: s.sort_order } }));
   }
   return {
     pillars: await db.catalog2Pillar.count(),

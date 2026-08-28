@@ -4,6 +4,7 @@
 // os demais). Toda decisão — inclusive preço e prazo — é revalidada no
 // servidor. Versão publicada é imutável por qualquer chamada direta.
 
+import { AsyncLocalStorage } from "node:async_hooks";
 import { Router } from "express";
 import type { NextFunction, Request, Response } from "express";
 import { z } from "zod";
@@ -55,7 +56,14 @@ async function guardAdminMaster(req: Request, res: Response, next: NextFunction)
     next(err);
   }
 }
+// Ator da requisição atual (para carimbar "editado por humano"). Preenchido
+// pelo middleware abaixo; lido pelos helpers de edição sem precisar passar o
+// id por toda a cadeia de funções.
+const requestActor = new AsyncLocalStorage<string | null>();
+
 router.use(verifyToken, guardAdminMaster);
+// Guarda o ator da requisição para os helpers de edição (carimbo humano).
+router.use((req, _res, next) => requestActor.run(req.user?.id ?? null, () => next()));
 
 function handle(err: unknown, res: Response, next: NextFunction) {
   if (err instanceof Catalog2Error) {
@@ -69,17 +77,53 @@ function handle(err: unknown, res: Response, next: NextFunction) {
   next(err);
 }
 
+function safeJsonArray(raw: string | null | undefined): string[] {
+  if (!raw) return [];
+  try {
+    const v = JSON.parse(raw);
+    return Array.isArray(v) ? v.map(String) : [];
+  } catch {
+    return [];
+  }
+}
+function safeJson<T = unknown>(raw: string | null | undefined, fallback: T): T {
+  if (!raw) return fallback;
+  try {
+    return JSON.parse(raw) as T;
+  } catch {
+    return fallback;
+  }
+}
+
 async function audit(req: Request, action: string, after: Record<string, unknown>) {
   await writeAccessAudit({ actorId: req.user!.id, action: `catalog2.${action}`, after: { module: "catalog2", ...after } }).catch(() => {});
 }
 
-// Carrega uma versão e garante que é RASCUNHO editável.
+// Marca o produto importado como "editado por humano" — depois disso o
+// importador do bloco 4 nunca mais sobrescreve o rascunho. Idempotente:
+// só carimba a primeira vez (human_edited_at IS NULL).
+async function stampHumanEdit(versionId: string) {
+  const actorUserId = requestActor.getStore();
+  if (!actorUserId) return;
+  const v = await prisma.catalog2ProductVersion.findUnique({ where: { id: versionId }, select: { product_id: true } });
+  if (!v) return;
+  await prisma.catalog2ProductImportOrigin
+    .updateMany({
+      where: { product_id: v.product_id, human_edited_at: null },
+      data: { human_edited_at: new Date(), human_edited_by_user_id: actorUserId },
+    })
+    .catch(() => {});
+}
+
+// Carrega uma versão e garante que é RASCUNHO editável. Todo caminho que passa
+// por aqui é uma escrita no rascunho → carimba a edição humana.
 async function editableVersionOrThrow(versionId: string) {
   const v = await prisma.catalog2ProductVersion.findUnique({ where: { id: versionId } });
   if (!v) throw new Catalog2Error("Versão não encontrada.", 404);
   if (v.state === "publicada") {
     throw new Catalog2Error("Versão publicada é imutável. Crie uma nova versão.", 409, "version_published_immutable");
   }
+  await stampHumanEdit(versionId);
   return v;
 }
 async function versionOfTask(taskId: string) {
@@ -205,6 +249,14 @@ router.get("/products", async (req, res, next) => {
     const status = typeof req.query.status === "string" ? req.query.status : undefined;
     const pillar = typeof req.query.pillar_id === "string" ? req.query.pillar_id : undefined;
     const category = typeof req.query.category_id === "string" ? req.query.category_id : undefined;
+    const fourF = typeof req.query.four_f_id === "string" ? req.query.four_f_id : undefined;
+    const origin = typeof req.query.origin === "string" ? req.query.origin : undefined;
+    const execMode = typeof req.query.execution_mode === "string" ? req.query.execution_mode : undefined;
+    // Filtros da importação (bloco 4): origem/revisão da Rose/estado de preparo/tipo de pendência.
+    const roseReviewed = req.query.rose_reviewed === "true" ? true : req.query.rose_reviewed === "false" ? false : undefined;
+    const reviewState = typeof req.query.review_state === "string" ? req.query.review_state : undefined;
+    const pendency = typeof req.query.pendency === "string" ? req.query.pendency : undefined;
+    const importedOnly = req.query.imported === "true";
     const page = Math.max(1, Number(req.query.page) || 1);
     const pageSize = Math.min(100, Math.max(1, Number(req.query.page_size) || 20));
     const orderBy = SORTS[String(req.query.sort ?? "name")] ?? SORTS.name;
@@ -213,7 +265,16 @@ router.get("/products", async (req, res, next) => {
     if (status) where.status = status;
     if (pillar) where.pillar_id = pillar;
     if (category) where.category_id = category;
+    if (origin) where.origin = origin;
+    if (fourF) where.four_f = { some: { four_f_id: fourF } };
+    if (execMode) where.versions = { some: { tasks: { some: { execution_mode: execMode } } } };
     if (q) where.OR = [{ internal_name: { contains: q } }, { slug: { contains: q } }];
+
+    const originWhere: Prisma.Catalog2ProductImportOriginWhereInput = {};
+    if (roseReviewed !== undefined) originWhere.rose_reviewed = roseReviewed;
+    if (reviewState) originWhere.review_state = reviewState;
+    if (pendency) originWhere.pendencies_json = { contains: `"${pendency}"` };
+    if (importedOnly || Object.keys(originWhere).length > 0) where.import_origin = { is: originWhere };
 
     const [total, rows] = await Promise.all([
       prisma.catalog2Product.count({ where }),
@@ -223,6 +284,7 @@ router.get("/products", async (req, res, next) => {
           pillar: { select: { key: true, name: true } },
           category: { select: { key: true, name: true } },
           versions: { select: { id: true, version_number: true, state: true, published_at: true, updated_at: true } },
+          import_origin: { select: { rose_reviewed: true, review_state: true, pendencies_json: true, area_rose: true, human_edited_at: true, source_index: true } },
         },
       }),
     ]);
@@ -231,18 +293,26 @@ router.get("/products", async (req, res, next) => {
     res.json({
       data: rows.map((p) => {
         const pub = p.versions.find((v) => v.id === p.published_version_id) ?? null;
+        const io = p.import_origin;
         return {
           id: p.id,
           internal_name: p.internal_name,
           slug: p.slug,
           pillar: p.pillar,
           category: p.category,
+          origin: p.origin,
           status: p.status,
           published_version_number: pub?.version_number ?? null,
           published_at: pub?.published_at ?? null,
           has_draft: p.versions.some((v) => v.state === "rascunho"),
           is_new: !!pub?.published_at && now - new Date(pub.published_at).getTime() <= NEW_MS,
           updated_at: p.updated_at,
+          imported: !!io,
+          rose_reviewed: io?.rose_reviewed ?? null,
+          review_state: io?.review_state ?? null,
+          pendencies: io?.pendencies_json ? safeJsonArray(io.pendencies_json) : [],
+          human_edited: !!io?.human_edited_at,
+          source_index: io?.source_index ?? null,
         };
       }),
       total, page, page_size: pageSize,
@@ -704,10 +774,239 @@ router.get("/versions/:id/preview", async (req, res, next) => {
       addons: version.addons.map((a) => ({ name: a.name, description: a.description })),
       tasks: version.tasks.map((t) => ({ name: t.name, mode: t.execution_mode })),
       estimated_deadline_days: pricing.estimated_deadline_days,
-      price: pricing.lines.final_price.amount,
+      commercial_deadline_pending: pricing.deadline.commercial_deadline_pending,
+      effort_days: pricing.deadline.effort_days,
+      price: pricing.lines.commercial_final_price.amount,
       price_pending: pricing.pricing_pending,
+      pending_info: pricing.pending_info,
       currency: pricing.currency,
       default_selection: sel,
+    });
+  } catch (e) { handle(e, res, next); }
+});
+
+// ═══════════════════════════════════════════════════════════════════════
+// IMPORTAÇÃO DOS 36 PRODUTOS (sprint de produtos, bloco 4/6) — leitura,
+// painel de resumo, relatório de qualidade e resolução de pendências.
+// Tudo Admin Master (o router já garante). Nada aqui publica produto.
+// ═══════════════════════════════════════════════════════════════════════
+
+// Ordem de prioridade para recalcular o "estado de preparo" ao resolver
+// pendências — igual à do importador (import-products.ts).
+const PENDENCY_PRIORITY = [
+  "content_review_pending",
+  "classification_decision_pending",
+  "price_pending",
+  "deadline_pending",
+  "portfolio_pending",
+  "rose_review_pending",
+];
+function reviewStateFromPendencies(pendencies: string[]): string {
+  for (const p of PENDENCY_PRIORITY) if (pendencies.includes(p)) return p;
+  return "ready_for_final_review";
+}
+
+// Painel de resumo da última importação aplicada + panorama por estado.
+router.get("/import/summary", async (_req, res, next) => {
+  try {
+    const lastApply = await prisma.catalog2ImportBatch.findFirst({
+      where: { mode: "apply" },
+      orderBy: { started_at: "desc" },
+    });
+    const [totalImported, byState, origins] = await Promise.all([
+      prisma.catalog2ProductImportOrigin.count(),
+      prisma.catalog2ProductImportOrigin.groupBy({ by: ["review_state"], _count: { _all: true } }),
+      prisma.catalog2ProductImportOrigin.findMany({
+        select: { pendencies_json: true, rose_reviewed: true, divergences_json: true, human_edited_at: true, historical_price_min: true },
+      }),
+    ]);
+    const pendencyCounts: Record<string, number> = {};
+    let decisionsPending = 0;
+    for (const o of origins) {
+      for (const p of safeJsonArray(o.pendencies_json)) pendencyCounts[p] = (pendencyCounts[p] ?? 0) + 1;
+      const divs = safeJson<Array<{ decision_pending?: boolean }>>(o.divergences_json, []);
+      if (divs.some((d) => d.decision_pending)) decisionsPending++;
+    }
+    res.json({
+      has_import: !!lastApply,
+      last_batch: lastApply
+        ? {
+            id: lastApply.id,
+            mode: lastApply.mode,
+            rule_version: lastApply.rule_version,
+            status: lastApply.status,
+            started_at: lastApply.started_at,
+            finished_at: lastApply.finished_at,
+            expected_products: lastApply.expected_products,
+            created: lastApply.created_count,
+            updated: lastApply.updated_count,
+            unchanged: lastApply.unchanged_count,
+            divergences: lastApply.divergence_count,
+            source_main: { name: lastApply.source_main_name, checksum: lastApply.source_main_checksum },
+            source_rose: { name: lastApply.source_rose_name, checksum: lastApply.source_rose_checksum },
+            source_ata_checksum: lastApply.source_ata_checksum,
+          }
+        : null,
+      total_imported: totalImported,
+      expected: 36,
+      count_matches_expected: totalImported === 36,
+      rose_reviewed: origins.filter((o) => o.rose_reviewed).length,
+      not_rose_reviewed: origins.filter((o) => !o.rose_reviewed).length,
+      human_edited: origins.filter((o) => o.human_edited_at).length,
+      with_historical_price: origins.filter((o) => o.historical_price_min != null).length,
+      by_review_state: Object.fromEntries(byState.map((s) => [s.review_state, s._count._all])),
+      by_pendency: pendencyCounts,
+      decisions_pending: decisionsPending,
+      // Escopo: SÓ os produtos vindos da importação. Nenhum deles pode estar publicado.
+      published_count: await prisma.catalog2ProductVersion.count({
+        where: { state: "publicada", product: { import_origin: { isNot: null } } },
+      }),
+    });
+  } catch (e) { next(e); }
+});
+
+// Relatório de qualidade legível da última importação (report_json do lote).
+router.get("/import/quality", async (_req, res, next) => {
+  try {
+    const last = await prisma.catalog2ImportBatch.findFirst({
+      where: { mode: "apply" },
+      orderBy: { started_at: "desc" },
+      include: { records: { orderBy: { source_index: "asc" } } },
+    });
+    if (!last) {
+      res.json({ has_import: false, message: "Nenhuma importação aplicada ainda. Rode: npm run catalog2:import-products -- --apply" });
+      return;
+    }
+    const report = safeJson<Record<string, unknown>>(last.report_json, {});
+    res.json({
+      has_import: true,
+      batch_id: last.id,
+      status: last.status,
+      generated_at: last.finished_at,
+      report,
+      records: last.records.map((r) => ({
+        source_index: r.source_index,
+        source_name: r.source_name,
+        slug: r.slug,
+        outcome: r.outcome,
+        rose_reviewed: r.rose_reviewed,
+        divergences: safeJson(r.divergences_json, []),
+        warnings: safeJsonArray(r.warnings_json),
+        errors: safeJsonArray(r.errors_json),
+      })),
+    });
+  } catch (e) { next(e); }
+});
+
+router.get("/import/batches", async (_req, res, next) => {
+  try {
+    const batches = await prisma.catalog2ImportBatch.findMany({
+      orderBy: { started_at: "desc" },
+      take: 50,
+      select: {
+        id: true, mode: true, status: true, rule_version: true, started_at: true, finished_at: true,
+        created_count: true, updated_count: true, unchanged_count: true, divergence_count: true,
+        source_main_checksum: true, source_rose_checksum: true,
+      },
+    });
+    res.json({ data: batches });
+  } catch (e) { next(e); }
+});
+
+// "Origem e revisão" de um produto importado — planilha principal, revisão da
+// Rose, campos alterados pela Rose, divergências, referência histórica de
+// preço, observações, textos originais preservados, pendências e histórico
+// de resoluções. 404 se o produto não veio da importação.
+router.get("/products/:id/origin", async (req, res, next) => {
+  try {
+    const origin = await prisma.catalog2ProductImportOrigin.findUnique({
+      where: { product_id: req.params.id as string },
+      include: { resolutions: { orderBy: { resolved_at: "desc" } } },
+    });
+    if (!origin) throw new Catalog2Error("Este produto não foi criado pela importação dos 36.", 404, "not_imported");
+    res.json({
+      source: { key: origin.source_key, index: origin.source_index, name: origin.source_name },
+      rose_reviewed: origin.rose_reviewed,
+      area_rose: origin.area_rose,
+      review_state: origin.review_state,
+      pendencies: safeJsonArray(origin.pendencies_json),
+      main_fields: safeJson(origin.main_fields_json, {}),
+      rose_fields: safeJson(origin.rose_fields_json, {}),
+      rose_changed_fields: Object.keys(safeJson<Record<string, unknown>>(origin.rose_fields_json, {})),
+      divergences: safeJson(origin.divergences_json, []),
+      original_texts: safeJson(origin.original_texts_json, {}),
+      observations: origin.observations,
+      historical_price: {
+        min: origin.historical_price_min,
+        max: origin.historical_price_max,
+        note: origin.historical_price_note ?? "Referência histórica da planilha — NÃO é o preço final.",
+      },
+      human_edited_at: origin.human_edited_at,
+      human_edited_by_user_id: origin.human_edited_by_user_id,
+      last_import_checksum: origin.last_import_checksum,
+      last_import_batch_id: origin.last_import_batch_id,
+      resolutions: origin.resolutions.map((r) => ({
+        id: r.id,
+        pendency_key: r.pendency_key,
+        decision: r.decision,
+        original_divergence: safeJson(r.original_divergence_json, null),
+        resolved_by_user_id: r.resolved_by_user_id,
+        resolved_at: r.resolved_at,
+      })),
+    });
+  } catch (e) { handle(e, res, next); }
+});
+
+// Resolver UMA pendência: altera só o rascunho/estado de preparo, registra
+// quem/quando/decisão e PRESERVA a divergência original no histórico.
+router.post("/products/:id/resolve-pendency", async (req, res, next) => {
+  try {
+    const d = z.object({
+      pendency_key: z.string().min(1).max(60),
+      decision: z.string().min(1).max(4000),
+    }).parse(req.body);
+    const origin = await prisma.catalog2ProductImportOrigin.findUnique({ where: { product_id: req.params.id as string } });
+    if (!origin) throw new Catalog2Error("Este produto não foi criado pela importação dos 36.", 404, "not_imported");
+
+    const pendencies = safeJsonArray(origin.pendencies_json);
+    if (!pendencies.includes(d.pendency_key)) {
+      throw new Catalog2Error("Essa pendência não está aberta para este produto.", 422, "pendency_not_open");
+    }
+    const remaining = pendencies.filter((p) => p !== d.pendency_key);
+    // Snapshot da divergência associada (preservada intacta no histórico).
+    const divergences = safeJson<Array<{ type: string; detail: string; decision_pending?: boolean }>>(origin.divergences_json, []);
+    const relatedDivergence =
+      d.pendency_key === "classification_decision_pending"
+        ? divergences.find((x) => x.type === "area_vs_category" || x.type === "ebook_classification") ?? null
+        : null;
+
+    await prisma.$transaction(async (tx) => {
+      await tx.catalog2ReviewResolution.create({
+        data: {
+          origin_id: origin.id,
+          pendency_key: d.pendency_key,
+          decision: d.decision,
+          original_divergence_json: relatedDivergence ? JSON.stringify(relatedDivergence) : JSON.stringify(divergences),
+          resolved_by_user_id: req.user!.id,
+        },
+      });
+      await tx.catalog2ProductImportOrigin.update({
+        where: { id: origin.id },
+        data: {
+          pendencies_json: JSON.stringify(remaining),
+          review_state: reviewStateFromPendencies(remaining),
+          // decisão humana registrada → o importador não mexe mais no rascunho.
+          human_edited_at: origin.human_edited_at ?? new Date(),
+          human_edited_by_user_id: origin.human_edited_by_user_id ?? req.user!.id,
+        },
+      });
+    });
+    await audit(req, "import_pendency_resolved", { product_id: req.params.id, pendency_key: d.pendency_key });
+    res.json({
+      ok: true,
+      pendency_key: d.pendency_key,
+      remaining_pendencies: remaining,
+      review_state: reviewStateFromPendencies(remaining),
     });
   } catch (e) { handle(e, res, next); }
 });

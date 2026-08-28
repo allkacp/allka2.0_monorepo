@@ -40,6 +40,9 @@ const { api } = vi.hoisted(() => ({
     updateCatalog2Specialty: vi.fn(),
     addCatalog2Variation: vi.fn(),
     deleteCatalog2Variation: vi.fn(),
+    getCatalog2ImportSummary: vi.fn(),
+    getCatalog2ProductOrigin: vi.fn(),
+    resolveCatalog2Pendency: vi.fn(),
   },
 }))
 vi.mock("@/lib/api-client", () => ({ apiClient: api }))
@@ -57,11 +60,42 @@ const OVERVIEW = {
 }
 const LIST = {
   data: [
-    { id: "prod1", internal_name: "[TESTE LOCAL] Demo", slug: "demo", pillar: { name: "A. Presença" }, category: { name: "Performance" }, status: "disponivel", published_version_number: 1, published_at: new Date().toISOString(), has_draft: true, is_new: true, updated_at: new Date().toISOString() },
+    { id: "prod1", internal_name: "[TESTE LOCAL] Demo", slug: "demo", pillar: { name: "A. Presença" }, category: { name: "Performance" }, origin: "novo", status: "disponivel", published_version_number: 1, published_at: new Date().toISOString(), has_draft: true, is_new: true, updated_at: new Date().toISOString(), imported: true, rose_reviewed: true, review_state: "price_pending", pendencies: ["price_pending", "portfolio_pending"], human_edited: false, source_index: 3 },
   ],
   total: 1,
   page: 1,
   page_size: 15,
+}
+const IMPORT_SUMMARY = {
+  has_import: true,
+  total_imported: 36,
+  expected: 36,
+  count_matches_expected: true,
+  rose_reviewed: 21,
+  not_rose_reviewed: 15,
+  human_edited: 0,
+  decisions_pending: 5,
+  published_count: 0,
+  by_review_state: { content_review_pending: 36 },
+  by_pendency: { price_pending: 36, portfolio_pending: 36, content_review_pending: 36 },
+  last_batch: { rule_version: "36-produtos-2", status: "completed", source_main: { name: "Allka_Proposta_Catalogo_Produtos_v9.xlsx", checksum: "dc38d2e90345f32735" } },
+}
+const ORIGIN = {
+  source: { key: "catalogo_v9:3", index: 3, name: "[TESTE LOCAL] Demo" },
+  rose_reviewed: true,
+  area_rose: "Designer",
+  review_state: "price_pending",
+  pendencies: ["price_pending", "portfolio_pending"],
+  main_fields: { name: "[TESTE LOCAL] Demo", category: "Performance" },
+  rose_fields: { descricao_atualizada: "texto da Rose" },
+  rose_changed_fields: ["descricao_atualizada"],
+  divergences: [{ type: "name_updated_seo_geo", detail: "SEO → SEO + GEO", decision_pending: false }],
+  original_texts: { variations_raw: "texto livre preservado" },
+  observations: null,
+  historical_price: { min: 500, max: 900, note: "Referência histórica da planilha — NÃO é o preço final." },
+  human_edited_at: null,
+  last_import_checksum: "abc123def456",
+  resolutions: [],
 }
 
 function productDetail(over: Partial<any> = {}) {
@@ -99,10 +133,13 @@ beforeEach(() => {
   api.getCatalog2Categories.mockResolvedValue(REFS.categories)
   api.getCatalog2Specialties.mockResolvedValue(REFS.specialties)
   api.getCatalog2Products.mockResolvedValue(LIST)
+  api.getCatalog2ImportSummary.mockResolvedValue(IMPORT_SUMMARY)
+  api.getCatalog2ProductOrigin.mockResolvedValue(ORIGIN)
+  api.resolveCatalog2Pendency.mockResolvedValue({ ok: true, remaining_pendencies: ["portfolio_pending"], review_state: "portfolio_pending" })
   api.getCatalog2Product.mockResolvedValue(productDetail())
   api.validateCatalog2Version.mockResolvedValue({ ok: false, issues: ["Selecione um pilar."], pricing_pending: true })
-  api.simulateCatalog2.mockResolvedValue({ pricing: { currency: "BRL", quantity: 1, active_task_keys: ["t1"], warnings: [], applied_conditions: [], deadline_detail: "…", estimated_deadline_days: 1, pricing_pending: false, lines: { human_cost: { label: "Custo humano", amount: 90 }, ia_cost: { label: "IA", amount: 0 }, human_review_cost: { label: "Revisão humana", amount: 0 }, addons: { label: "Adicionais", amount: 0 }, variation_impacts: { label: "Impactos de variações", amount: 0 }, condition_impacts: { label: "Impactos de condições", detail: "nenhuma" }, subtotal_cost: { label: "Subtotal", amount: 90 }, taxes_and_margins: [], final_price: { label: "Preço final", amount: 90 }, minimum_price: { label: "Mínimo", amount: 90 } } } })
-  api.previewCatalog2Version.mockResolvedValue({ name: "[TESTE LOCAL] Demo", title: "Demo v1", description: "d", pillar: "A. Presença", category: "Performance", four_f: ["F1 — Fundação"], variations: [{ name: "Formato", options: ["Estático"] }], addons: [{ name: "Extra" }], tasks: [{ name: "Tarefa 1", mode: "humano" }], estimated_deadline_days: 1, price: 90, price_pending: false, currency: "BRL" })
+  api.simulateCatalog2.mockResolvedValue({ pricing: { currency: "BRL", quantity: 1, active_task_keys: ["t1"], warnings: [], applied_conditions: [], deadline_detail: "…", estimated_deadline_days: 1, order_defined: true, applied_order: ["tax", "commission", "operational", "margin"], pending_info: [], deadline: { effort_days: 1, internal_estimate_days: 1, commercial_deadline_days: 5, commercial_deadline_pending: false }, pricing_pending: false, lines: { human_cost: { label: "Custo humano", amount: 90 }, ia_cost: { label: "IA", amount: 0 }, human_review_cost: { label: "Revisão humana", amount: 0 }, addons: { label: "Adicionais", amount: 0 }, variation_impacts: { label: "Impactos de variações", amount: 0 }, condition_impacts: { label: "Impactos de condições", detail: "nenhuma" }, direct_cost: { label: "Custo direto", amount: 90 }, subtotal_cost: { label: "Subtotal", amount: 90 }, taxes_and_margins: [], commercial_final_price: { label: "Preço comercial final", amount: 90 }, final_price: { label: "Preço comercial final", amount: 90 }, minimum_price: { label: "Mínimo", amount: 90 } } } })
+  api.previewCatalog2Version.mockResolvedValue({ name: "[TESTE LOCAL] Demo", title: "Demo v1", description: "d", pillar: "A. Presença", category: "Performance", four_f: ["F1 — Fundação"], variations: [{ name: "Formato", options: ["Estático"] }], addons: [{ name: "Extra" }], tasks: [{ name: "Tarefa 1", mode: "humano" }], estimated_deadline_days: 1, commercial_deadline_pending: false, effort_days: 1, price: 90, price_pending: false, pending_info: [], currency: "BRL" })
   api.getCatalog2PricingSettings.mockResolvedValue({ id: "default", tax_percent: 6, commission_percent: 10, operational_fee_percent: 5, profit_margin_percent: 30, human_review_percent: 15, currency: "BRL" })
 })
 
@@ -155,8 +192,10 @@ it("aba Custos: simulador usa o cálculo do backend e mostra o resumo detalhado"
   await user.click(await screen.findByRole("tab", { name: /7\. Custos e preço/ }))
   await waitFor(() => expect(api.simulateCatalog2).toHaveBeenCalled())
   expect(await screen.findByText("Custo humano")).toBeInTheDocument()
-  expect(screen.getByText("Preço final")).toBeInTheDocument()
-  expect(screen.getByText(/Prazo estimado/)).toBeInTheDocument()
+  expect(screen.getByText("Preço comercial final")).toBeInTheDocument()
+  // esforço interno e prazo comercial aparecem separados (reparo 2.1)
+  expect(screen.getByText(/Esforço interno estimado/)).toBeInTheDocument()
+  expect(screen.getByText(/Prazo comercial/)).toBeInTheDocument()
 })
 
 it("aba Pré-visualização usa o mesmo endpoint do backend (não recalcula no front)", async () => {
@@ -176,4 +215,46 @@ it("aba Versões: mostra as pendências de validação antes de publicar", async
   expect(await screen.findByText("Selecione um pilar.")).toBeInTheDocument()
   expect(screen.getByText(/Validação para publicar/i)).toBeInTheDocument()
   expect(screen.getByText(/Histórico da versão/i)).toBeInTheDocument()
+})
+
+// ── Importação dos 36 (sprint de produtos, bloco 4/6) ────────────────
+
+it("painel de importação: resumo, checksum da planilha e nenhum publicado", async () => {
+  renderPage()
+  expect(await screen.findByRole("heading", { name: "Importação dos 36 produtos" })).toBeInTheDocument()
+  expect(screen.getByText(/36\/36 importados/)).toBeInTheDocument()
+  expect(screen.getByText(/nenhum publicado \(0 publicados\)/)).toBeInTheDocument()
+  expect(screen.getByText(/Allka_Proposta_Catalogo_Produtos_v9\.xlsx/)).toBeInTheDocument()
+  expect(screen.getByText(/Os 162 produtos operacionais seguem intactos/i)).toBeInTheDocument()
+})
+
+it("listagem: filtros da importação e badges de pendência por produto", async () => {
+  renderPage()
+  await screen.findByText("[TESTE LOCAL] Demo")
+  // filtro por revisão da Rose vai ao backend
+  await userEvent.selectOptions(screen.getByDisplayValue("Revisão da Rose (todas)"), "true")
+  await waitFor(() => expect(api.getCatalog2Products).toHaveBeenCalledWith(expect.objectContaining({ rose_reviewed: "true" })))
+  // filtro por tipo de pendência
+  await userEvent.selectOptions(screen.getByDisplayValue("Tipo de pendência (todas)"), "price_pending")
+  await waitFor(() => expect(api.getCatalog2Products).toHaveBeenCalledWith(expect.objectContaining({ pendency: "price_pending" })))
+  // badges na linha do produto
+  expect(screen.getByText(/#3/)).toBeInTheDocument()
+  expect(screen.getByText("Rose ✓")).toBeInTheDocument()
+  expect(screen.getAllByText("preço").length).toBeGreaterThan(0)
+})
+
+it("aba 10 Origem e revisão: planilha, Rose, divergência, preço histórico e resolver pendência", async () => {
+  const user = userEvent.setup()
+  renderPage()
+  await user.click(await screen.findByText("[TESTE LOCAL] Demo"))
+  await user.click(await screen.findByRole("tab", { name: /10\. Origem e revisão/ }))
+  expect(await screen.findByRole("heading", { name: /Planilha principal/i })).toBeInTheDocument()
+  expect(screen.getByRole("heading", { name: /Referência histórica de preço/i })).toBeInTheDocument()
+  expect(screen.getAllByText(/preço final/i).length).toBeGreaterThan(0)
+  expect(screen.getByText(/name_updated_seo_geo/)).toBeInTheDocument()
+  // resolver a pendência de preço
+  const box = screen.getAllByPlaceholderText(/Descreva a decisão tomada/i)[0]
+  await user.type(box, "Preço comercial definido em R$ 1200.")
+  await user.click(screen.getAllByRole("button", { name: /Concluir pendência/i })[0])
+  await waitFor(() => expect(api.resolveCatalog2Pendency).toHaveBeenCalledWith("prod1", expect.objectContaining({ pendency_key: "price_pending" })))
 })

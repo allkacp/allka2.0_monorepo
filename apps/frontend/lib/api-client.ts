@@ -859,6 +859,14 @@ class ApiClient {
   addCatalog2Condition(versionId: string, body: Record<string, any>) { return this.c2("POST", `/versions/${versionId}/conditions`, body); }
   updateCatalog2Condition(id: string, body: Record<string, any>) { return this.c2("PUT", `/conditions/${id}`, body); }
   deleteCatalog2Condition(id: string) { return this.c2("DELETE", `/conditions/${id}`); }
+  // importação dos 36 produtos (sprint de produtos, bloco 4/6)
+  getCatalog2ImportSummary() { return this.c2("GET", "/import/summary"); }
+  getCatalog2ImportQuality() { return this.c2("GET", "/import/quality"); }
+  getCatalog2ImportBatches() { return this.c2<{ data: any[] }>("GET", "/import/batches"); }
+  getCatalog2ProductOrigin(productId: string) { return this.c2("GET", `/products/${productId}/origin`); }
+  resolveCatalog2Pendency(productId: string, body: { pendency_key: string; decision: string }) {
+    return this.c2("POST", `/products/${productId}/resolve-pendency`, body);
+  }
   /** URL autenticada da imagem de um banner obrigatório (uso admin). */
   mandatoryBannerImageUrl(id: string): string {
     return `${API_BASE_URL}/admin/comms/banners/${id}/image`;

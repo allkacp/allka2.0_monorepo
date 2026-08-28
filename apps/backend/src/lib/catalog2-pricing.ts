@@ -39,6 +39,22 @@ export interface PricingLine {
   detail?: string;
 }
 
+export interface DeadlineResult {
+  // Esforço estimado (planejamento INTERNO) — nunca é promessa ao cliente.
+  effort_minutes: number;
+  effort_days: number;
+  // Estimativa interna total = esforço + dias de efeitos. Também interna.
+  internal_estimate_days: number;
+  // Prazo comercial: base (da versão) + dias adicionais por origem.
+  base_commercial_deadline_days: number | null;
+  days_from_variations: number;
+  days_from_conditions: number;
+  days_from_addons: number;
+  commercial_deadline_days: number | null;
+  commercial_deadline_pending: boolean;
+  detail: string;
+}
+
 export interface PricingResult {
   currency: string;
   quantity: number;
@@ -51,19 +67,33 @@ export interface PricingResult {
     addons: PricingLine;
     variation_impacts: PricingLine;
     condition_impacts: PricingLine;
+    // custo direto (humano + IA), sem revisão/adicionais/taxas.
+    direct_cost: PricingLine;
+    // preço mínimo permitido = custo direto (nunca vender abaixo).
+    minimum_price: PricingLine;
     subtotal_cost: PricingLine;
     taxes_and_margins: PricingLine[];
+    // preço comercial final (só quando taxas/ordem definidas e sem pendência).
+    commercial_final_price: PricingLine;
+    // mantido por compat — igual a commercial_final_price.
     final_price: PricingLine;
-    minimum_price: PricingLine;
   };
+  // Ordem de incidência declarada? Se não, o motor não fecha o preço final.
+  order_defined: boolean;
+  applied_order: string[];
+  deadline: DeadlineResult;
+  // compat: agora aponta para o PRAZO COMERCIAL (null se pendente), não o esforço.
   estimated_deadline_days: number | null;
   deadline_detail: string;
   pricing_pending: boolean;
+  pending_info: string[];
   warnings: PricingWarning[];
   applied_conditions: Array<{ key: string; explanation: string }>;
   human_cost_breakdown: Array<{ task_key: string; specialty: string | null; minutes: number; rate: number | null; cost: number | null }>;
   ia_cost_breakdown: Array<{ task_key: string; tokens_in: number; tokens_out: number; review_rounds: number; cost: number | null }>;
 }
+
+const DEFAULT_COMPONENT_ORDER = ["tax", "commission", "operational", "margin"] as const;
 
 type LoadedVersion = NonNullable<Awaited<ReturnType<typeof loadVersion>>>;
 
@@ -254,69 +284,122 @@ export async function computePricing(versionId: string, selection: PricingSelect
     if (ad.base_cost != null) addonsCost += ad.base_cost;
   }
 
-  // ── Impactos fixos e percentuais (variações + condições) ─────────────
+  // ── Impactos fixos/percentuais + DIAS por origem ────────────────────
   let fixedImpacts = 0;
-  let percentImpacts = 0; // aplicado sobre o subtotal
-  let deadlineDaysFromEffects = 0;
+  let percentImpacts = 0;
+  let daysFromVariations = 0;
+  let daysFromConditions = 0;
+  let daysFromAddons = 0;
   const requiredInfos: string[] = [];
   const extraDeliverables: string[] = [];
   for (const e of effects) {
     if (e.type === "add_fixed_amount") fixedImpacts += num(e.value);
     else if (e.type === "add_percent") percentImpacts += num(e.value);
-    else if (e.type === "add_deadline_days") deadlineDaysFromEffects += num(e.value);
-    else if (e.type === "require_info") requiredInfos.push(e.value);
+    else if (e.type === "add_deadline_days") {
+      const d = num(e.value);
+      if (e.from.startsWith("condição")) daysFromConditions += d;
+      else if (e.from.startsWith("adicional")) daysFromAddons += d;
+      else daysFromVariations += d;
+    } else if (e.type === "require_info") requiredInfos.push(e.value);
     else if (e.type === "add_deliverable") extraDeliverables.push(e.value);
   }
 
   const variationImpacts = round2(fixedImpacts);
   const conditionImpactsNote = appliedConditions.length ? `${appliedConditions.length} condição(ões) aplicada(s)` : "nenhuma";
 
-  const subtotalCost =
-    humanCost + iaCost + (humanReviewCost ?? 0) + addonsCost + fixedImpacts;
+  const directCost = humanCost + iaCost; // sem revisão/adicionais/taxas
+  const subtotalCost = directCost + (humanReviewCost ?? 0) + addonsCost + fixedImpacts;
   const subtotalWithPercent = subtotalCost * (1 + percentImpacts / 100);
 
-  // ── Taxas e margens ────────────────────────────────────────────────
-  const rateChain: Array<{ key: string; label: string; pct: number | null }> = [
-    { key: "tax", label: "Impostos (Simples Nacional)", pct: settings?.tax_percent ?? null },
-    { key: "commission", label: "Comissão", pct: settings?.commission_percent ?? null },
-    { key: "operational", label: "Taxa operacional", pct: settings?.operational_fee_percent ?? null },
-    { key: "margin", label: "Margem de lucro", pct: settings?.profit_margin_percent ?? null },
-  ];
+  // ── Taxas e margens — ORDEM e BASE configuráveis (reparo 2.2) ───────
+  const orderCfg = parseJsonArray(settings?.component_order_json);
+  const orderDefined = orderCfg.length > 0;
+  const appliedOrder = orderDefined ? orderCfg : [...DEFAULT_COMPONENT_ORDER];
+  const baseCfg = parseJsonObject(settings?.component_base_json); // { comp: "running"|"subtotal"|"direct_cost" }
+  const COMP: Record<string, { label: string; pct: number | null }> = {
+    tax: { label: "Impostos (Simples Nacional)", pct: settings?.tax_percent ?? null },
+    commission: { label: "Comissão", pct: settings?.commission_percent ?? null },
+    operational: { label: "Taxa operacional", pct: settings?.operational_fee_percent ?? null },
+    margin: { label: "Margem de lucro", pct: settings?.profit_margin_percent ?? null },
+  };
   let running = subtotalWithPercent;
   const taxesAndMargins: PricingLine[] = [];
   let anyRatePending = false;
-  for (const r of rateChain) {
-    if (r.pct == null) {
+  for (const key of appliedOrder) {
+    const comp = COMP[key];
+    if (!comp) continue;
+    if (comp.pct == null) {
       anyRatePending = true;
-      taxesAndMargins.push({ label: r.label, amount: null, detail: "aguardando definição comercial" });
+      taxesAndMargins.push({ label: comp.label, amount: null, detail: "aguardando definição comercial" });
       continue;
     }
-    const add = running * (r.pct / 100);
+    const baseKind = baseCfg[key] ?? "running";
+    const base = baseKind === "subtotal" ? subtotalWithPercent : baseKind === "direct_cost" ? directCost : running;
+    const add = base * (comp.pct / 100);
     running += add;
-    taxesAndMargins.push({ label: `${r.label} (${r.pct}%)`, amount: round2(add) });
+    taxesAndMargins.push({
+      label: `${comp.label} (${comp.pct}% sobre ${baseKind === "running" ? "acumulado" : baseKind === "subtotal" ? "subtotal" : "custo direto"})`,
+      amount: round2(add),
+      detail: baseCfg[key] ? undefined : "base não definida explicitamente — usando 'acumulado'",
+    });
   }
 
-  const pricingPending = humanPending || iaPending || anyRatePending || reviewPct == null;
-  const finalPrice = pricingPending ? null : round2(running);
-  const minimumPrice = round2(humanCost + iaCost); // nunca vender abaixo do custo direto
-
-  // ── Prazo ─────────────────────────────────────────────────────────
-  const totalHumanMinutes = humanBreakdown.reduce((a, b) => a + b.minutes, 0) * quantity;
-  let estimatedDeadlineDays: number | null = null;
-  let deadlineDetail: string;
-  if (totalHumanMinutes > 0) {
-    estimatedDeadlineDays = Math.ceil(totalHumanMinutes / WORKDAY_MINUTES) + deadlineDaysFromEffects;
-    deadlineDetail = `${Math.ceil(totalHumanMinutes / WORKDAY_MINUTES)} dia(s) de esforço (${totalHumanMinutes} min ÷ ${WORKDAY_MINUTES}) + ${deadlineDaysFromEffects} dia(s) de condições/variações.`;
-  } else if (deadlineDaysFromEffects > 0) {
-    estimatedDeadlineDays = deadlineDaysFromEffects;
-    deadlineDetail = `Sem durações nas tarefas; ${deadlineDaysFromEffects} dia(s) vindos de condições/variações.`;
-  } else {
-    deadlineDetail = "Prazo não calculável — nenhuma tarefa tem duração estimada.";
-    warnings.push({ code: "deadline_not_calculable", message: deadlineDetail });
+  // `pending_info` é SÓ sobre PREÇO (reparo 2.2). O prazo comercial tem
+  // pendência PRÓPRIA (`deadline.commercial_deadline_pending`) e não bloqueia
+  // o cálculo de preço.
+  const pendingInfo: string[] = [];
+  if (humanPending) pendingInfo.push("valor/hora de especialidade");
+  if (iaPending) pendingInfo.push("custo por token de IA");
+  if (reviewPct == null) pendingInfo.push("percentual de revisão humana");
+  if (anyRatePending) pendingInfo.push("percentual de imposto/comissão/taxa/margem");
+  // Ordem não confirmada: NÃO bloqueia o preço (usamos a ordem-padrão), mas
+  // fica sinalizado em `order_defined:false` + warning — nunca em silêncio.
+  if (!orderDefined) {
+    warnings.push({ code: "tax_order_not_confirmed", message: `Ordem de incidência de taxas não confirmada — usando a ordem-padrão (${DEFAULT_COMPONENT_ORDER.join(" → ")}). Confirme no módulo de precificação.` });
   }
+
+  const pricingPending = pendingInfo.length > 0;
+  const commercialFinal = pricingPending ? null : round2(running);
+  const minimumPrice = round2(directCost); // nunca vender abaixo do custo direto
+
+  // ── ESFORÇO (planejamento interno) × PRAZO COMERCIAL (reparo 2.1) ───
+  // `estimated_deadline_days` é a ESTIMATIVA INTERNA (esforço + dias de
+  // efeitos) — nunca é promessa ao cliente. O PRAZO COMERCIAL é separado:
+  // base da versão + dias de efeitos, e fica `null` (aguardando definição)
+  // enquanto a base não for informada.
+  const effortMinutes = humanBreakdown.reduce((a, b) => a + b.minutes, 0) * quantity;
+  const effortDays = effortMinutes > 0 ? Math.ceil(effortMinutes / WORKDAY_MINUTES) : 0;
+  const daysFromEffects = daysFromVariations + daysFromConditions + daysFromAddons;
+  const internalEstimateDays = effortDays + daysFromEffects;
+  const baseCommercial = version.base_commercial_deadline_days;
+  const commercialDeadline = baseCommercial != null ? baseCommercial + daysFromEffects : null;
+  const commercialPending = baseCommercial == null;
+  if (commercialPending) {
+    warnings.push({ code: "commercial_deadline_pending", message: "Prazo comercial base não definido — a estimativa interna NÃO vira promessa de entrega. Defina o prazo comercial na aba de prazos." });
+  }
+  const deadline: DeadlineResult = {
+    effort_minutes: effortMinutes,
+    effort_days: effortDays,
+    internal_estimate_days: internalEstimateDays,
+    base_commercial_deadline_days: baseCommercial,
+    days_from_variations: daysFromVariations,
+    days_from_conditions: daysFromConditions,
+    days_from_addons: daysFromAddons,
+    commercial_deadline_days: commercialDeadline,
+    commercial_deadline_pending: commercialPending,
+    detail: commercialPending
+      ? `Esforço interno estimado: ${effortDays} dia(s) útil(eis) (${effortMinutes} min ÷ ${WORKDAY_MINUTES}). Prazo comercial: AGUARDANDO DEFINIÇÃO — esforço não é promessa ao cliente. Dias adicionais de variações/condições/adicionais: ${daysFromEffects}.`
+      : `Prazo comercial: ${commercialDeadline} dia(s) = base ${baseCommercial} + ${daysFromVariations} (variações) + ${daysFromConditions} (condições) + ${daysFromAddons} (adicionais). Esforço interno: ${effortDays} dia(s).`,
+  };
 
   if (requiredInfos.length) warnings.push({ code: "extra_info_required", message: `Informações extras exigidas: ${requiredInfos.join("; ")}` });
   if (extraDeliverables.length) warnings.push({ code: "extra_deliverables", message: `Entregáveis extras: ${extraDeliverables.join("; ")}` });
+
+  const finalLine: PricingLine = {
+    label: "Preço comercial final",
+    amount: commercialFinal,
+    detail: pricingPending ? `aguardando: ${[...new Set(pendingInfo)].join("; ")}` : undefined,
+  };
 
   return {
     currency,
@@ -327,38 +410,53 @@ export async function computePricing(versionId: string, selection: PricingSelect
       human_cost: {
         label: "Custo humano",
         amount: humanPending ? null : round2(humanCost),
-        detail: humanPending ? "aguardando valor/hora de alguma especialidade" : `${round2(totalHumanMinutes)} min no total`,
+        detail: humanPending ? "aguardando valor/hora de alguma especialidade" : `${effortMinutes} min no total`,
       },
-      ia_cost: {
-        label: "Custo de IA (tokens + revisões)",
-        amount: iaPending ? null : round2(iaCost),
-        detail: iaPending ? "aguardando custo por token" : undefined,
-      },
-      human_review_cost: {
-        label: "Revisão humana",
-        amount: humanReviewCost != null ? round2(humanReviewCost) : null,
-        detail: reviewPct == null ? "aguardando definição comercial" : `${reviewPct}% do custo humano`,
-      },
+      ia_cost: { label: "Custo de IA (tokens + revisões)", amount: iaPending ? null : round2(iaCost), detail: iaPending ? "aguardando custo por token" : undefined },
+      human_review_cost: { label: "Revisão humana", amount: humanReviewCost != null ? round2(humanReviewCost) : null, detail: reviewPct == null ? "aguardando definição comercial" : `${reviewPct}% do custo humano` },
       addons: { label: "Adicionais selecionados", amount: round2(addonsCost) },
       variation_impacts: { label: "Impactos de variações", amount: variationImpacts, detail: percentImpacts ? `+ ${percentImpacts}% sobre o subtotal` : undefined },
       condition_impacts: { label: "Impactos de condições", amount: null, detail: conditionImpactsNote },
+      direct_cost: { label: "Custo direto (humano + IA)", amount: humanPending || iaPending ? null : round2(directCost) },
+      minimum_price: { label: "Preço mínimo permitido (= custo direto)", amount: humanPending || iaPending ? null : minimumPrice },
       subtotal_cost: { label: "Subtotal (custo acumulado)", amount: round2(subtotalWithPercent) },
       taxes_and_margins: taxesAndMargins,
-      final_price: {
-        label: "Preço final",
-        amount: finalPrice,
-        detail: pricingPending ? "aguardando definição comercial de taxas/margens ou valores de custo" : undefined,
-      },
-      minimum_price: { label: "Preço mínimo permitido (custo direto)", amount: minimumPrice },
+      commercial_final_price: finalLine,
+      final_price: finalLine,
     },
-    estimated_deadline_days: estimatedDeadlineDays,
-    deadline_detail: deadlineDetail,
+    order_defined: orderDefined,
+    applied_order: appliedOrder,
+    deadline,
+    // compat: ESTIMATIVA INTERNA (esforço + dias de efeitos). NÃO é o prazo
+    // comercial nem promessa ao cliente — esse fica em `deadline`.
+    estimated_deadline_days: internalEstimateDays,
+    deadline_detail: deadline.detail,
     pricing_pending: pricingPending,
+    pending_info: [...new Set(pendingInfo)],
     warnings,
     applied_conditions: appliedConditions,
     human_cost_breakdown: humanBreakdown,
     ia_cost_breakdown: iaBreakdown,
   };
+}
+
+function parseJsonArray(raw: string | null | undefined): string[] {
+  if (!raw) return [];
+  try {
+    const v = JSON.parse(raw);
+    return Array.isArray(v) ? v.map(String) : [];
+  } catch {
+    return [];
+  }
+}
+function parseJsonObject(raw: string | null | undefined): Record<string, string> {
+  if (!raw) return {};
+  try {
+    const v = JSON.parse(raw);
+    return v && typeof v === "object" && !Array.isArray(v) ? (v as Record<string, string>) : {};
+  } catch {
+    return {};
+  }
 }
 
 /** Seleção "padrão": 1ª opção de cada variação + adicionais default, quantidade 1. */
