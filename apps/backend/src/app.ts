@@ -35,6 +35,8 @@ import levelsRouter from "./routes/levels";
 import taskTemplatesRouter from "./routes/task-templates";
 import projectProductsRouter from "./routes/project-products";
 import projectTasksRouter from "./routes/project-tasks";
+import presenceRouter from "./routes/presence";
+import taskOffersRouter from "./routes/task-offers";
 import projectConnectionsRouter from "./routes/project-connections";
 import metaIntegrationRouter from "./routes/meta-integration";
 import systemAlertsRouter from "./routes/system-alerts";
@@ -179,6 +181,8 @@ app.use("/api/product-bundles", productBundlesRouter);
 app.use("/api/iallka", iallkaRouter);
 // Canonical CRUD for operational execution tasks
 app.use("/api/project-tasks", projectTasksRouter);
+app.use("/api/presence", presenceRouter);
+app.use("/api/task-offers", taskOffersRouter);
 app.use("/api/project-connections", projectConnectionsRouter);
 app.use("/api/integrations/meta", metaIntegrationRouter);
 // Admin system alerts (nomad not found, etc.)

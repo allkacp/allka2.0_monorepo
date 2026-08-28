@@ -4,7 +4,7 @@ import { z } from "zod";
 import { prisma } from "../lib/prisma";
 import { verifyToken, requireRole } from "../middleware/auth";
 import { validate } from "../middleware/validate";
-import { selecionarNomadeParaTarefa } from "../lib/selecionar-nomade";
+import { getRotationStatus, restartRotation, RotationError, startTaskRotation } from "../lib/task-rotation-engine";
 import { atribuirLiderParaTarefa } from "../lib/atribuir-lider";
 import { withZeroDateRecovery } from "../lib/clean-zero-datetimes";
 import { combinedProjectWhere } from "../lib/project-scope";
@@ -798,12 +798,13 @@ router.patch(
         );
       }
 
-      // Sem etapas, o comportamento antigo segue valendo: seleção de nômade no
-      // nível da tarefa. Fire-and-forget — a resposta sai como
-      // LIBERADA_PARA_EXECUCAO e a transição acontece em seguida.
+      // Sem etapas: a tarefa entra no RODÍZIO de ofertas de Nômade (ata
+      // 2026-08, bloco 4/5) — uma oferta individual por vez, não mais
+      // atribuição automática do "melhor". Fire-and-forget: a resposta sai
+      // como LIBERADA_PARA_EXECUCAO e o rodízio começa em seguida.
       if (!abertura) {
-        selecionarNomadeParaTarefa(updated.id).catch((err) =>
-          console.error("[selecionar-nomade] Error:", err),
+        startTaskRotation(updated.id).catch((err) =>
+          console.error("[task-rotation] start:", err),
         );
       }
 
@@ -813,6 +814,63 @@ router.patch(
     }
   },
 );
+
+// ── GET /api/project-tasks/:id/rotation ─────────────────────────────────────
+// Situação do rodízio de ofertas de Nômade — para o responsável entender por
+// que ninguém assumiu. Mesmo escopo de leitura da tarefa.
+router.get("/:id/rotation", verifyToken, async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const scopeWhere = await getTaskScopeWhere(req.user!.id, req.user!.account_type, req.user!.role);
+    if (scopeWhere === null) {
+      res.status(404).json({ error: "Tarefa não encontrada" });
+      return;
+    }
+    const task = await prisma.projectTask.findFirst({
+      where: applyScope({ id: req.params.id as string }, scopeWhere),
+      select: { id: true },
+    });
+    if (!task) {
+      res.status(404).json({ error: "Tarefa não encontrada" });
+      return;
+    }
+    const status = await getRotationStatus(task.id);
+    res.json(status);
+  } catch (err) {
+    next(err);
+  }
+});
+
+// ── POST /api/project-tasks/:id/rotation/restart ───────────────────────────
+// Reinicia o rodízio quando há candidatos de novo. Autorização REAL no
+// servidor: admin, ou Líder responsável pela tarefa, ou Admin responsável do
+// projeto (validado dentro de restartRotation).
+router.post("/:id/rotation/restart", verifyToken, async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const scopeWhere = await getTaskScopeWhere(req.user!.id, req.user!.account_type, req.user!.role);
+    if (scopeWhere === null) {
+      res.status(404).json({ error: "Tarefa não encontrada" });
+      return;
+    }
+    const task = await prisma.projectTask.findFirst({
+      where: applyScope({ id: req.params.id as string }, scopeWhere),
+      select: { id: true },
+    });
+    if (!task) {
+      res.status(404).json({ error: "Tarefa não encontrada" });
+      return;
+    }
+    const isAdmin = req.user!.account_type === "admin" || req.user!.role === "admin";
+    await restartRotation(task.id, req.user!.id, isAdmin);
+    const status = await getRotationStatus(task.id);
+    res.json({ ok: true, rotation: status });
+  } catch (err) {
+    if (err instanceof RotationError) {
+      res.status(err.httpStatus).json({ error: err.message, code: err.code });
+      return;
+    }
+    next(err);
+  }
+});
 
 // ── POST /api/project-tasks/:id/transfer ─────────────────────────────────────
 // Transfere uma tarefa PAGA e NÃO USADA pra outro projeto — o pagamento

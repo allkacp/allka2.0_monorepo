@@ -40,6 +40,7 @@ import {
 import { apiClient, ApiError } from "@/lib/api-client";
 import { Button } from "@/components/ui/button";
 import { EmbeddedSlideScreen } from "@/components/embedded-slide-screen";
+import { TaskRotationPanel } from "@/components/task-rotation-panel";
 import { CopyLinkButton } from "@/components/copy-link-button";
 import {
   Select,
@@ -1065,6 +1066,12 @@ export function TarefaDetailDrawer({
                     })()
                   )}
                 </div>
+
+                {/* Rodízio de ofertas de Nômade (ata 2026-08, bloco 4/5) —
+                    só relevante enquanto a tarefa procura executor. */}
+                {tarefa.status === "AGUARDANDO_NOMADE" && !tarefa.nomade_responsavel_id && (
+                  <TaskRotationPanel taskId={tarefa.id} />
+                )}
 
                 <div className="grid grid-cols-2 gap-4">
                   {/* Projeto */}

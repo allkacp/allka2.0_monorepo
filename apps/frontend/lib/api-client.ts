@@ -283,6 +283,9 @@ class ApiClient {
   }
 
   async logout() {
+    // Encerra a presença online imediatamente (ata 2026-08, bloco 4/5).
+    // Best-effort — nunca impede o logout.
+    await this.post("/presence/offline", {}).catch(() => {});
     const res = await this.post("/auth/logout");
     this.clearToken();
     return res;
@@ -596,6 +599,48 @@ class ApiClient {
 
   async aceitarEtapa(stageId: string) {
     return this.patch(`/nomades/me/etapas/${stageId}/aceitar`, {});
+  }
+
+  // ── Presença online + rodízio de ofertas (ata 2026-08, bloco 4/5) ──────
+  async presenceHeartbeat() {
+    return this.post<{ ok: boolean; heartbeat_ms: number; offline_after_ms: number }>("/presence/heartbeat", {});
+  }
+  async presenceOffline() {
+    return this.post("/presence/offline", {});
+  }
+  async getMyTaskOffers() {
+    return this.get<{
+      data: Array<{
+        offer_id: string;
+        rotation_order: number;
+        offered_at: string;
+        expires_at: string;
+        seconds_left: number;
+        already_taken: boolean;
+        task: {
+          id: string;
+          title: string;
+          description: string | null;
+          due_date: string | null;
+          project: { id: string; name: string } | null;
+          product: string | null;
+          category: string | null;
+        };
+      }>;
+      offer_ttl_ms: number;
+    }>("/task-offers/mine");
+  }
+  async acceptTaskOffer(offerId: string) {
+    return this.post<{ ok: boolean; task_id: string }>(`/task-offers/${offerId}/accept`, {});
+  }
+  async declineTaskOffer(offerId: string, reason?: string) {
+    return this.post(`/task-offers/${offerId}/decline`, reason ? { reason } : {});
+  }
+  async getTaskRotation(taskId: string) {
+    return this.get(`/project-tasks/${taskId}/rotation`);
+  }
+  async restartTaskRotation(taskId: string) {
+    return this.post(`/project-tasks/${taskId}/rotation/restart`, {});
   }
 
   /**

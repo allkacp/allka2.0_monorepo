@@ -33,6 +33,19 @@ const baseEnvSchema = z.object({
   // atrasado. Desligado em testes (o job só é registrado a partir de
   // src/index.ts — nunca importado pelos testes, ver run-db-tests.ts).
   ALERT_ENGINE_INTERVAL_MS: z.coerce.number().int().positive().default(300000),
+
+  // ── Presença online + rodízio de ofertas de tarefa (ata 2026-08, bloco 4/5) ──
+  // Heartbeat: o frontend chama POST /api/presence/heartbeat neste intervalo
+  // enquanto a plataforma está aberta.
+  PRESENCE_HEARTBEAT_MS: z.coerce.number().int().positive().default(30_000),
+  // Janela de presença: sem heartbeat há mais que isto → offline automático.
+  PRESENCE_OFFLINE_AFTER_MS: z.coerce.number().int().positive().default(120_000),
+  // Quanto tempo cada Nômade tem para responder a uma oferta antes de expirar.
+  // Em produção ~5 min; em dev pode-se reduzir via env SEM baixar o padrão.
+  TASK_OFFER_TTL_MS: z.coerce.number().int().positive().default(300_000),
+  // Intervalo do job que expira ofertas vencidas e avança o rodízio. Como o
+  // motor de alertas, só é registrado em src/index.ts (nunca nos testes).
+  TASK_ROTATION_INTERVAL_MS: z.coerce.number().int().positive().default(60_000),
   // Purpose-separated from ROADMAP_HMAC_* — only ever signs the SSO
   // handoff (POST .../allka/sso/tickets on the Roadmap), never ticket
   // creation/lookup. Deliberately optional: lib/roadmap-client.ts falls

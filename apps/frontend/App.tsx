@@ -35,6 +35,8 @@ import { OpenScreensProvider } from "@/contexts/open-screens-context";
 import { OpenScreensTray } from "@/components/open-screens-tray";
 import { HeaderFloatingTools } from "@/components/header-floating-tools";
 import { AlertsFloatingIcon } from "@/components/alerts-floating-icon";
+import { TaskOfferPrompt } from "@/components/task-offer-prompt";
+import { usePresenceHeartbeat } from "@/hooks/use-presence-heartbeat";
 import { PinActivationListener } from "@/components/pin-activation-listener";
 import { ProductFeedbackWidget } from "@/components/product-feedback-widget";
 import { isStandardShellRoute } from "@/components/standard-page-shell";
@@ -448,6 +450,9 @@ class PageErrorBoundary extends React.Component<
 // ─── Pending terms: loaded from API ──────────────────────────────────────────
 
 function AppLayout({ children }: { children: React.ReactNode }) {
+  // Presença online — heartbeat autenticado enquanto o shell está montado
+  // (ata 2026-08, bloco 4/5).
+  usePresenceHeartbeat();
   const [termsAccepted, setTermsAccepted] = useState<boolean>(true); // default true to avoid flash
   const [pendingTerms, setPendingTerms] = useState<PendingTerm[]>([]);
   // Fundo único contínuo do shell (ver globals.css .admin-empresas-shell-bg)
@@ -584,6 +589,8 @@ function AppLayout({ children }: { children: React.ReactNode }) {
                                 painel próprio (AlertsPanel), nunca mais uma aba do
                                 painel de Notificações. */}
                             <AlertsFloatingIcon />
+                            {/* Oferta de tarefa ao Nômade (ata 2026-08, bloco 4/5) */}
+                            <TaskOfferPrompt />
                             <PinActivationListener />
                           </NotificationsPanelProvider>
                           </ProjectBasketProvider>
