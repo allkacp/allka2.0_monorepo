@@ -1794,6 +1794,41 @@ model AlertStandard {
   // backend, nunca só no frontend.
   image_alt       String?
 
+  // ── Governança do Admin Master (ata 2026-08, bloco 2/5) ─────────────────
+  // Um padrão OBRIGATÓRIO não pode ser desativado nem ter a criticidade
+  // reduzida por Admin comum, Líder ou usuário — a proteção mora no
+  // servidor (rotas /admin/* já são requireAdminMaster; a camada de
+  // preferência pessoal reaplica a mesma regra via governed_event_types).
+  // Todos aditivos: registros antigos nascem is_mandatory=false e se
+  // comportam exatamente como antes.
+  is_mandatory Boolean @default(false)
+  // Piso de criticidade quando obrigatório ("info" | "warning" | "error").
+  // Nulo = usa default_severity como piso. O motor/regra nunca pode gravar
+  // uma severidade abaixo disto para este padrão.
+  mandatory_min_severity String?
+  // Quando obrigatório, o canal "dentro da plataforma" (in_app) dos
+  // event_types governados nunca pode ser desligado por preferência
+  // pessoal. (Hoje in_app já é global-locked em notification-preferences;
+  // este campo torna a intenção explícita e auditável por padrão.)
+  platform_channel_locked Boolean @default(true)
+  // JSON string[] — canais ADICIONAIS que Líder/usuário PODE habilitar
+  // para os event_types deste padrão (ex.: ["email"]). Só isto pode ser
+  // ligado além do in_app; qualquer canal fora desta lista é recusado.
+  additional_channels_json String? @db.LongText
+  // false = preferências pessoais NÃO podem mexer nos canais dos
+  // event_types governados por este padrão obrigatório (nem ligar extra,
+  // nem desligar). true (default) = pode ligar os additional_channels.
+  personal_prefs_allowed Boolean @default(true)
+  // JSON string[] — quais `event_type` de NotificationPreference este
+  // padrão governa (ex.: ["tarefa_prazo","tarefa_atraso"]). Vazio/nulo =
+  // não governa nenhuma preferência pessoal (só protege o próprio padrão
+  // e suas regras). Nunca IDs de usuário — sempre chaves de catálogo.
+  governed_event_types_json String? @db.LongText
+  // Histórico rápido de "quem tornou obrigatório e quando" (além do
+  // writeAccessAudit before/after, que registra toda alteração).
+  mandatory_set_by_id String?
+  mandatory_set_at    DateTime?
+
   created_at DateTime @default(now())
   updated_at DateTime @updatedAt
   created_by_id String?

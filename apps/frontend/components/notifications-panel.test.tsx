@@ -225,3 +225,55 @@ describe("NotificationsPanel — Grupos (Novo Grupo funciona)", () => {
     await waitFor(() => expect(apiClient.deleteNotificationGroup).toHaveBeenCalledWith("g1"));
   });
 });
+
+// Bloco 2/5 (ata 2026-08) — filtros/paginação server-side + preferências
+// travadas por governança do Admin Master.
+describe("NotificationsPanel — filtros e governança", () => {
+  it("31. busca e datas vão pro servidor (category=notificacao sempre)", async () => {
+    const user = userEvent.setup();
+    renderPanel();
+    await screen.findByRole("heading", { name: "Notificações" });
+    await user.type(await screen.findByRole("searchbox", { name: /buscar notificações/i }), "fatura");
+    await waitFor(() =>
+      expect(apiClient.getSystemAlerts).toHaveBeenLastCalledWith(
+        expect.objectContaining({ category: "notificacao", q: "fatura" }),
+      ),
+    );
+  });
+
+  it("35. paginação server-side aparece quando há mais de uma página", async () => {
+    (apiClient.getSystemAlerts as any).mockResolvedValue({
+      data: [{ id: "n1", type: "welcome", title: "Bem-vindo", message: "m", is_read: false, created_at: new Date().toISOString() }],
+      total: 30,
+      total_pages: 3,
+    });
+    renderPanel();
+    expect(await screen.findByText(/página 1 de 3/i)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /próxima/i })).toBeEnabled();
+    expect(screen.getByRole("button", { name: /anterior/i })).toBeDisabled();
+  });
+
+  it("32/7. preferência governada mostra o motivo e trava o canal não permitido", async () => {
+    (apiClient.getNotificationPreferences as any).mockResolvedValue({
+      data: [],
+      governance: {
+        "task-due": {
+          standard_name: "Tarefa atrasada",
+          mandatory: true,
+          personal_prefs_allowed: true,
+          locked_channels: ["in_app"],
+          toggleable_channels: ["email"],
+          min_severity: "error",
+          reason: "Definido como obrigatório pelo Admin Master.",
+        },
+      },
+    });
+    renderPanel({ initialTab: "prefs" });
+    expect(await screen.findAllByText(/Definido como obrigatório pelo Admin Master\./)).not.toHaveLength(0);
+    // A linha do evento governado ("Prazo se aproximando") tem o WhatsApp travado (só email é liberado).
+    const row = (await screen.findByText("Prazo se aproximando")).closest("div.flex.items-center.justify-between") as HTMLElement;
+    const switches = within(row).getAllByRole("switch");
+    // 3 canais: email (liberado), whatsapp e push travados → pelo menos um disabled.
+    expect(switches.some((s) => s.getAttribute("disabled") !== null || s.getAttribute("data-disabled") !== null || s.getAttribute("aria-disabled") === "true")).toBe(true);
+  });
+});

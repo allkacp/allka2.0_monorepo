@@ -24,6 +24,7 @@ vi.mock("@/lib/api-client", () => ({
     unarchiveSystemAlert: vi.fn(),
     markAllSystemAlertsRead: vi.fn(),
     getCurrentUser: vi.fn().mockResolvedValue({ admin_profile: null }),
+    getAlertMonitoringSummary: vi.fn().mockRejectedValue(new Error("403")),
   },
 }));
 

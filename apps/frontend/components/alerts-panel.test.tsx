@@ -22,8 +22,17 @@ vi.mock("@/components/header-slide-screen", () => ({
   HeaderSlideScreen: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
 }));
 
-vi.mock("react-router-dom", () => ({
-  useNavigate: () => vi.fn(),
+vi.mock("react-router-dom", () => {
+  const params = new URLSearchParams();
+  return {
+    useNavigate: () => vi.fn(),
+    useLocation: () => ({ pathname: "/", search: "", hash: "", state: null, key: "t" }),
+    useSearchParams: () => [params, vi.fn()],
+  };
+});
+
+vi.mock("@/components/alerts-monitoring-view", () => ({
+  AlertsMonitoringView: () => <div>monitoring-view</div>,
 }));
 
 vi.mock("@/contexts/account-type-context", () => ({
@@ -42,6 +51,7 @@ vi.mock("@/lib/api-client", () => ({
   apiClient: {
     getCurrentUser: vi.fn().mockResolvedValue({}),
     getSystemAlerts: vi.fn(),
+    getAlertMonitoringSummary: vi.fn().mockRejectedValue(new Error("403")),
     getAgencyAlerts: vi.fn(),
     markSystemAlertRead: vi.fn(),
     archiveSystemAlert: vi.fn(),
@@ -85,6 +95,38 @@ const baseAlert = {
   entity_id: null,
   created_at: new Date().toISOString(),
 };
+
+// Bloco 2/5 (ata 2026-08) — aba "Monitoramento" + barra de filtros do feed.
+describe("AlertsPanel — Monitoramento e filtros (bloco 2/5)", () => {
+  it("mostra a aba 'Monitoramento' só quando o backend autoriza (summary 200)", async () => {
+    (apiClient.getSystemAlerts as any).mockResolvedValue({ data: [] });
+    (apiClient.getAlertMonitoringSummary as any).mockResolvedValue({ criticos_ativos: 0 });
+    const user = userEvent.setup();
+    render(<AlertsPanel open onClose={() => {}} />);
+    const tab = await screen.findByRole("tab", { name: "Monitoramento" });
+    await user.click(tab);
+    expect(await screen.findByText("monitoring-view")).toBeInTheDocument();
+  });
+
+  it("não mostra 'Monitoramento' quando o backend nega (summary 403)", async () => {
+    (apiClient.getSystemAlerts as any).mockResolvedValue({ data: [] });
+    (apiClient.getAlertMonitoringSummary as any).mockRejectedValue(new Error("403"));
+    render(<AlertsPanel open onClose={() => {}} />);
+    await waitFor(() => expect(apiClient.getSystemAlerts).toHaveBeenCalled());
+    expect(screen.queryByRole("tab", { name: "Monitoramento" })).not.toBeInTheDocument();
+  });
+
+  it("a barra de filtros (busca) aparece no feed e o feed pede page/page_size ao servidor", async () => {
+    (apiClient.getSystemAlerts as any).mockResolvedValue({ data: [], total: 0, total_pages: 1 });
+    render(<AlertsPanel open onClose={() => {}} />);
+    await waitFor(() =>
+      expect(apiClient.getSystemAlerts).toHaveBeenLastCalledWith(
+        expect.objectContaining({ category: "alerta", page: 1, page_size: 50 }),
+      ),
+    );
+    expect(screen.getByRole("searchbox", { name: /buscar/i })).toBeInTheDocument();
+  });
+});
 
 describe("AlertsPanel — banner de imagem no feed pessoal", () => {
   it("renderiza o banner quando o alerta tem has_image/image_url", async () => {

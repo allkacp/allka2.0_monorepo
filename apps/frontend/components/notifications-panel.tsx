@@ -54,6 +54,16 @@ const PREF_GROUPS = [
     ]},
 ]
 
+interface PrefGovernanceEntry {
+  standard_name: string
+  mandatory: boolean
+  personal_prefs_allowed: boolean
+  locked_channels: string[]
+  toggleable_channels: string[]
+  min_severity: string | null
+  reason: string
+}
+
 type PrefChannel = "email" | "whatsapp" | "push"
 const PREF_CHANNELS: { key: PrefChannel; label: string; Icon: typeof Mail; color: string }[] = [
   { key: "email", label: "E-mail", Icon: Mail, color: "#3b82f6" },
@@ -121,27 +131,49 @@ export function NotificationsPanel({
   const [showArchived, setShowArchived] = useState(false)
   const unreadCount = alerts.filter((a) => !a.is_read).length
 
+  // Filtros + paginação server-side (ata 2026-08, bloco 2/5). Escopo pessoal
+  // — nunca mistura com Alertas (category="notificacao" sempre).
+  const [nq, setNq] = useState("")
+  const [nFrom, setNFrom] = useState("")
+  const [nTo, setNTo] = useState("")
+  const [nRead, setNRead] = useState<"" | "true" | "false">("")
+  const [nPage, setNPage] = useState(1)
+  const [nTotalPages, setNTotalPages] = useState(1)
+  const [nTotal, setNTotal] = useState(0)
+  const nFiltersActive = !!(nq.trim() || nFrom || nTo || nRead)
+  const clearNFilters = () => { setNq(""); setNFrom(""); setNTo(""); setNRead(""); setNPage(1) }
+
   const fetchAlerts = useCallback(async () => {
     setAlertsLoading(true)
     setAlertsError(false)
     try {
-      const res = await apiClient.getSystemAlerts({
+      const res: any = await apiClient.getSystemAlerts({
         category: "notificacao",
         is_archived: showArchived ? "true" : "false",
-        limit: 50,
+        ...(nq.trim() ? { q: nq.trim() } : {}),
+        ...(nFrom ? { date_from: nFrom } : {}),
+        ...(nTo ? { date_to: nTo } : {}),
+        ...(nRead ? { is_read: nRead } : {}),
+        page: nPage,
+        page_size: 30,
       })
       setAlerts(res?.data ?? [])
+      setNTotalPages(res?.total_pages ?? 1)
+      setNTotal(res?.total ?? 0)
     } catch {
       setAlerts([])
       setAlertsError(true)
     } finally {
       setAlertsLoading(false)
     }
-  }, [showArchived])
+  }, [showArchived, nq, nFrom, nTo, nRead, nPage])
 
   useEffect(() => {
     if (open) void fetchAlerts()
   }, [open, fetchAlerts])
+
+  // Voltar pra página 1 quando um filtro muda (evita "página 3 vazia").
+  useEffect(() => { setNPage(1) }, [nq, nFrom, nTo, nRead, showArchived])
 
   async function markRead(id: string) {
     setAlerts((prev) => prev.map((a) => (a.id === id ? { ...a, is_read: true } : a)))
@@ -169,6 +201,9 @@ export function NotificationsPanel({
 
   /* ── Preferências — tabela real NotificationPreference. ─────────────────── */
   const [prefsMap, setPrefsMap] = useState<Map<string, boolean>>(new Map())
+  // Governança do Admin Master (ata 2026-08, bloco 2/5): event_types de
+  // padrões obrigatórios com canais travados + motivo pra UI explicar.
+  const [prefsGovernance, setPrefsGovernance] = useState<Record<string, PrefGovernanceEntry>>({})
 
   const fetchPreferences = useCallback(async () => {
     try {
@@ -176,6 +211,7 @@ export function NotificationsPanel({
       const map = new Map<string, boolean>()
       for (const row of res?.data ?? []) map.set(prefsKey(row.event_type, row.channel), row.enabled)
       setPrefsMap(map)
+      setPrefsGovernance(((res as any)?.governance ?? {}) as Record<string, PrefGovernanceEntry>)
     } catch {}
   }, [])
 
@@ -303,11 +339,19 @@ export function NotificationsPanel({
                 markRead={markRead}
                 markAllRead={markAllRead}
                 toggleArchive={toggleArchive}
+                filterProps={{
+                  q: nq, setQ: setNq,
+                  from: nFrom, setFrom: setNFrom,
+                  to: nTo, setTo: setNTo,
+                  read: nRead, setRead: setNRead,
+                  active: nFiltersActive, clear: clearNFilters,
+                  page: nPage, totalPages: nTotalPages, total: nTotal, setPage: setNPage,
+                }}
               />
             </TabsContent>
 
             <TabsContent value="prefs" className="flex-1 min-h-0 overflow-y-auto mt-0">
-              <PrefsTab isChannelEnabled={isChannelEnabled} setChannel={setChannel} />
+              <PrefsTab isChannelEnabled={isChannelEnabled} setChannel={setChannel} governance={prefsGovernance} />
             </TabsContent>
 
             <TabsContent value="groups" className="flex-1 min-h-0 overflow-y-auto mt-0">
@@ -348,8 +392,17 @@ export function NotificationsPanel({
 
 /* ─── Sub-components ─────────────────────────────────────────────────────── */
 
+interface InboxFilterProps {
+  q: string; setQ: (v: string) => void
+  from: string; setFrom: (v: string) => void
+  to: string; setTo: (v: string) => void
+  read: "" | "true" | "false"; setRead: (v: "" | "true" | "false") => void
+  active: boolean; clear: () => void
+  page: number; totalPages: number; total: number; setPage: (v: number) => void
+}
+
 function InboxTab({
-  alerts, loading, error, showArchived, setShowArchived, markRead, markAllRead, toggleArchive,
+  alerts, loading, error, showArchived, setShowArchived, markRead, markAllRead, toggleArchive, filterProps,
 }: {
   alerts: SystemAlertItem[]
   loading: boolean
@@ -359,8 +412,11 @@ function InboxTab({
   markRead: (id: string) => void
   markAllRead: () => void
   toggleArchive: (id: string) => void
+  filterProps: InboxFilterProps
 }) {
   const unreadCount = alerts.filter((n) => !n.is_read).length
+  const f = filterProps
+  const inputCls = "h-8 text-xs rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-2 text-slate-700 dark:text-slate-200"
   return (
     <div>
       <div className="flex items-center gap-1.5 px-5 pt-3">
@@ -371,6 +427,36 @@ function InboxTab({
           <Archive className="h-3 w-3" />
           Arquivados
         </Button>
+      </div>
+
+      {/* Filtros — busca / data / lida-não lida. Server-side, antes da paginação. */}
+      <div className="flex flex-wrap items-end gap-2 px-5 pt-2.5">
+        <input
+          type="search"
+          aria-label="Buscar notificações"
+          placeholder="Buscar..."
+          value={f.q}
+          onChange={(e) => f.setQ(e.target.value)}
+          className={cn(inputCls, "flex-1 min-w-[130px]")}
+        />
+        <label className="flex flex-col gap-0.5">
+          <span className="text-[10px] text-slate-400">De</span>
+          <input type="date" aria-label="Data inicial" value={f.from} max={f.to || undefined} onChange={(e) => f.setFrom(e.target.value)} className={inputCls} />
+        </label>
+        <label className="flex flex-col gap-0.5">
+          <span className="text-[10px] text-slate-400">Até</span>
+          <input type="date" aria-label="Data final" value={f.to} min={f.from || undefined} onChange={(e) => f.setTo(e.target.value)} className={inputCls} />
+        </label>
+        <select aria-label="Situação de leitura" value={f.read} onChange={(e) => f.setRead(e.target.value as "" | "true" | "false")} className={inputCls}>
+          <option value="">Lidas e não lidas</option>
+          <option value="false">Só não lidas</option>
+          <option value="true">Só lidas</option>
+        </select>
+        {f.active && (
+          <Button size="sm" variant="ghost" className="h-8 text-xs" onClick={f.clear}>
+            Limpar filtros
+          </Button>
+        )}
       </div>
       <div className="flex items-center justify-between px-5 py-3 border-b border-slate-100 dark:border-slate-800 sticky top-0 bg-white dark:bg-slate-900 z-10">
         <span className="text-sm font-semibold text-slate-800 dark:text-white">
@@ -393,7 +479,9 @@ function InboxTab({
       )}
       {!error && !loading && alerts.length === 0 && (
         <p className="text-sm text-slate-400 text-center py-10">
-          {showArchived ? "Nenhuma notificação arquivada." : "Nenhuma notificação por aqui."}
+          {f.active
+            ? "Nenhuma notificação encontrada com esses filtros."
+            : showArchived ? "Nenhuma notificação arquivada." : "Nenhuma notificação por aqui."}
         </p>
       )}
       {!error && (
@@ -436,15 +524,26 @@ function InboxTab({
           })}
         </div>
       )}
+
+      {!error && f.totalPages > 1 && (
+        <div className="flex items-center justify-between px-5 py-2 border-t border-slate-100 dark:border-slate-800 text-xs text-slate-500">
+          <span>{f.total} · página {f.page} de {f.totalPages}</span>
+          <div className="flex gap-1">
+            <Button size="sm" variant="ghost" className="h-7 text-xs" disabled={f.page <= 1} onClick={() => f.setPage(f.page - 1)}>Anterior</Button>
+            <Button size="sm" variant="ghost" className="h-7 text-xs" disabled={f.page >= f.totalPages} onClick={() => f.setPage(f.page + 1)}>Próxima</Button>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
 
 function PrefsTab({
-  isChannelEnabled, setChannel,
+  isChannelEnabled, setChannel, governance,
 }: {
   isChannelEnabled: (eventType: string, channel: PrefChannel) => boolean
   setChannel: (eventType: string, channel: PrefChannel, enabled: boolean) => void
+  governance: Record<string, PrefGovernanceEntry>
 }) {
   return (
     <div className="p-5 space-y-6">
@@ -470,30 +569,50 @@ function PrefsTab({
               <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${group.color}`}>{group.label}</span>
             </div>
             <div className="space-y-1.5">
-              {group.items.map(item => (
+              {group.items.map(item => {
+                const gov = governance[item.id]
+                return (
                 <div key={item.id}
-                  className="flex items-center justify-between gap-3 px-3 py-2.5 rounded-xl border border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-800/50 hover:border-slate-200 transition-colors flex-wrap">
+                  className={cn(
+                    "flex items-center justify-between gap-3 px-3 py-2.5 rounded-xl border bg-white dark:bg-slate-800/50 transition-colors flex-wrap",
+                    gov ? "border-amber-200 dark:border-amber-900/40" : "border-slate-100 dark:border-slate-800 hover:border-slate-200",
+                  )}>
                   <div className="flex items-center gap-2.5 min-w-0">
                     <span className={cn("w-1.5 h-1.5 rounded-full shrink-0", group.dot)} />
                     <div className="min-w-0">
                       <p className="text-xs font-semibold text-slate-700 dark:text-slate-200 leading-none">{item.label}</p>
                       <p className="text-[10px] text-slate-400 mt-0.5">{item.desc}</p>
+                      {gov && (
+                        <p className="text-[10px] text-amber-600 mt-1 inline-flex items-center gap-1">
+                          <Info className="h-2.5 w-2.5" />
+                          {gov.reason}
+                        </p>
+                      )}
                     </div>
                   </div>
                   <div className="flex items-center gap-3 shrink-0">
-                    {PREF_CHANNELS.map(({ key, Icon }) => (
-                      <label key={key} className="flex items-center gap-1 cursor-pointer" title={`${key} (não enviado ainda)`}>
-                        <Icon className="h-3 w-3 text-slate-400" />
-                        <Switch
-                          checked={isChannelEnabled(item.id, key)}
-                          onCheckedChange={(v) => setChannel(item.id, key, v)}
-                          className="scale-75"
-                        />
-                      </label>
-                    ))}
+                    {PREF_CHANNELS.map(({ key, Icon }) => {
+                      const locked = gov ? !gov.toggleable_channels.includes(key) : false
+                      return (
+                        <label
+                          key={key}
+                          className={cn("flex items-center gap-1", locked ? "opacity-50 cursor-not-allowed" : "cursor-pointer")}
+                          title={locked ? gov!.reason : `${key} (não enviado ainda)`}
+                        >
+                          <Icon className="h-3 w-3 text-slate-400" />
+                          <Switch
+                            checked={isChannelEnabled(item.id, key)}
+                            onCheckedChange={(v) => setChannel(item.id, key, v)}
+                            disabled={locked}
+                            className="scale-75"
+                          />
+                        </label>
+                      )
+                    })}
                   </div>
                 </div>
-              ))}
+                )
+              })}
             </div>
           </div>
         ))}

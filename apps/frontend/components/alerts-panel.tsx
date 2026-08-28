@@ -6,7 +6,8 @@
 // direita (não mais ao lado do sino no cabeçalho). Este componente é
 // EXCLUSIVO de alertas: fonte de dados, loading, erro e filtros próprios —
 // nenhuma aba pra Notificações aqui.
-import { useCallback, useEffect, useState } from "react"
+import { useCallback, useEffect, useMemo, useState } from "react"
+import { useSearchParams } from "react-router-dom"
 import { AlertTriangle, Archive, ArchiveRestore, ArrowRight, Bot, CheckCircle2, Info, ShieldAlert, X } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -25,6 +26,14 @@ import {
 import { useAccountType } from "@/contexts/account-type-context"
 import { canManageAlertsAdmin } from "@/lib/admin-permissions"
 import { AlertsAdminCenter } from "@/components/alerts-admin-center"
+import { AlertsMonitoringView } from "@/components/alerts-monitoring-view"
+import {
+  AlertFilterBar,
+  EMPTY_ALERT_FILTERS,
+  alertFiltersFromParams,
+  alertFiltersToQuery,
+  hasActiveAlertFilters,
+} from "@/components/alert-filter-bar"
 import { useToast } from "@/hooks/use-toast"
 import { cn } from "@/lib/utils"
 
@@ -44,7 +53,11 @@ export function AlertsPanel({ open = false, onClose }: AlertsPanelProps) {
   // /system-alerts/admin/*). Volta pra "feed" sempre que o painel fecha, pra
   // nunca reabrir direto na área administrativa por engano.
   const [isMaster, setIsMaster] = useState(false)
-  const [view, setView] = useState<"feed" | "manage">("feed")
+  // "Monitoramento" (ata 2026-08, bloco 2/5) só aparece pra quem tem função
+  // real de acompanhamento — a sonda é o próprio backend (GET /monitoring/
+  // summary responde 403 pra usuário final). Nunca por role no frontend.
+  const [canMonitor, setCanMonitor] = useState(false)
+  const [view, setView] = useState<"feed" | "monitor" | "manage">("feed")
   useEffect(() => {
     if (!open) {
       setView("feed")
@@ -58,6 +71,13 @@ export function AlertsPanel({ open = false, onClose }: AlertsPanelProps) {
       })
       .catch(() => {
         if (!cancelled) setIsMaster(false)
+      })
+    Promise.resolve(apiClient.getAlertMonitoringSummary?.())
+      .then((res) => {
+        if (!cancelled) setCanMonitor(!!res)
+      })
+      .catch(() => {
+        if (!cancelled) setCanMonitor(false)
       })
     return () => {
       cancelled = true
@@ -83,6 +103,34 @@ export function AlertsPanel({ open = false, onClose }: AlertsPanelProps) {
   // fechar (comportamento padrão do Dialog/Radix).
   const [detailAlertId, setDetailAlertId] = useState<string | null>(null)
   const [detailOpen, setDetailOpen] = useState(false)
+
+  // ── Filtros + paginação (ata 2026-08, bloco 2/5) — persistidos na URL, ──
+  // sobrevivem a F5 e voltar/avançar. As abas Ativos/Resolvidos/Arquivados
+  // continuam sendo o recorte de "situação"; o filtro adiciona busca, data,
+  // severidade e origem, tudo aplicado NO SERVIDOR antes da paginação.
+  const [searchParams, setSearchParams] = useSearchParams()
+  const filters = useMemo(() => alertFiltersFromParams(searchParams), [searchParams])
+  const filtersActive = hasActiveAlertFilters(filters)
+  const pageParam = Math.max(1, Number(searchParams.get("page") || "1") || 1)
+  const PAGE_SIZE = 50
+  const [totalPages, setTotalPages] = useState(1)
+  const [totalCount, setTotalCount] = useState(0)
+
+  function patchParams(mut: (sp: URLSearchParams) => void) {
+    const sp = new URLSearchParams(searchParams)
+    mut(sp)
+    setSearchParams(sp, { replace: false })
+  }
+  function applyFeedFilters(next: typeof filters) {
+    patchParams((sp) => {
+      for (const k of ["q", "date_from", "date_to", "severity", "situacao", "origem"]) sp.delete(k)
+      for (const [k, v] of Object.entries(alertFiltersToQuery(next))) sp.set(k, v)
+      sp.set("page", "1")
+    })
+  }
+  function clearFeedFilters() {
+    applyFeedFilters(EMPTY_ALERT_FILTERS)
+  }
 
   const fetchAlerts = useCallback(async () => {
     setLoading(true)
@@ -111,11 +159,15 @@ export function AlertsPanel({ open = false, onClose }: AlertsPanelProps) {
           resolvidos: { is_archived: "all", resolved: "true" },
           arquivados: { is_archived: "true", resolved: "false" },
         } as const
-        const res = await apiClient.getSystemAlerts({
+        const res: any = await apiClient.getSystemAlerts({
           category: "alerta",
           ...filtersByTab[tab],
-          limit: 50,
+          ...alertFiltersToQuery(filters),
+          page: pageParam,
+          page_size: PAGE_SIZE,
         })
+        setTotalPages(res?.total_pages ?? 1)
+        setTotalCount(res?.total ?? 0)
         const raw: any[] = res?.data ?? []
         setAlerts(raw.map((a) => ({
           id: a.id, type: a.type, severity: a.severity, title: a.title,
@@ -139,7 +191,7 @@ export function AlertsPanel({ open = false, onClose }: AlertsPanelProps) {
     } finally {
       setLoading(false)
     }
-  }, [isAgency, accountType, tab])
+  }, [isAgency, accountType, tab, filters, pageParam])
 
   useEffect(() => {
     if (open) void fetchAlerts()
@@ -147,7 +199,7 @@ export function AlertsPanel({ open = false, onClose }: AlertsPanelProps) {
 
   useEffect(() => {
     setDismissed([])
-  }, [tab])
+  }, [tab, filters, pageParam])
 
   const activeAlerts = alerts.filter((a) => !dismissed.includes(a.id))
 
@@ -293,8 +345,8 @@ export function AlertsPanel({ open = false, onClose }: AlertsPanelProps) {
             usada pra travar a área inteira, não um estado independente que
             alguém pudesse manipular via devtools pra "ver" o botão sem ter
             a permissão real (o backend re-checa tudo de qualquer forma). */}
-        {isMaster && (
-          <div className="flex items-center gap-1.5 px-5 pt-3 pb-1 shrink-0" role="tablist" aria-label="Áreas do painel de Alertas">
+        {(isMaster || canMonitor) && (
+          <div className="flex items-center gap-1.5 px-5 pt-3 pb-1 shrink-0 flex-wrap" role="tablist" aria-label="Áreas do painel de Alertas">
             <button
               role="tab"
               aria-selected={view === "feed"}
@@ -306,25 +358,44 @@ export function AlertsPanel({ open = false, onClose }: AlertsPanelProps) {
                   : "text-slate-500 hover:text-slate-700 dark:text-slate-400",
               )}
             >
-              Alertas
+              Meus Alertas
             </button>
-            <button
-              role="tab"
-              aria-selected={view === "manage"}
-              onClick={() => setView("manage")}
-              className={cn(
-                "text-xs px-3 py-1.5 rounded-lg font-medium transition-colors",
-                view === "manage"
-                  ? "bg-slate-100 dark:bg-slate-800 text-slate-900 dark:text-white"
-                  : "text-slate-500 hover:text-slate-700 dark:text-slate-400",
-              )}
-            >
-              Gerenciar
-            </button>
+            {canMonitor && (
+              <button
+                role="tab"
+                aria-selected={view === "monitor"}
+                onClick={() => setView("monitor")}
+                className={cn(
+                  "text-xs px-3 py-1.5 rounded-lg font-medium transition-colors",
+                  view === "monitor"
+                    ? "bg-slate-100 dark:bg-slate-800 text-slate-900 dark:text-white"
+                    : "text-slate-500 hover:text-slate-700 dark:text-slate-400",
+                )}
+              >
+                Monitoramento
+              </button>
+            )}
+            {isMaster && (
+              <button
+                role="tab"
+                aria-selected={view === "manage"}
+                onClick={() => setView("manage")}
+                className={cn(
+                  "text-xs px-3 py-1.5 rounded-lg font-medium transition-colors",
+                  view === "manage"
+                    ? "bg-slate-100 dark:bg-slate-800 text-slate-900 dark:text-white"
+                    : "text-slate-500 hover:text-slate-700 dark:text-slate-400",
+                )}
+              >
+                Gerenciar
+              </button>
+            )}
           </div>
         )}
 
-        {view === "manage" && isMaster ? (
+        {view === "monitor" && canMonitor ? (
+          <AlertsMonitoringView />
+        ) : view === "manage" && isMaster ? (
           <AlertsAdminCenter />
         ) : (
         <>
@@ -370,6 +441,16 @@ export function AlertsPanel({ open = false, onClose }: AlertsPanelProps) {
           ))}
         </div>
 
+        {/* Busca / data / origem — server-side, antes da paginação, na URL. */}
+        <AlertFilterBar
+          value={filters}
+          onChange={applyFeedFilters}
+          onClear={clearFeedFilters}
+          showSituacao={false}
+          showSeverity={false}
+          showOrigem
+        />
+
         <div className="flex-1 min-h-0 overflow-y-auto">
           {error && (
             <p className="text-sm text-red-500 text-center py-10">Não foi possível carregar os alertas agora.</p>
@@ -382,11 +463,13 @@ export function AlertsPanel({ open = false, onClose }: AlertsPanelProps) {
           )}
           {!error && !loading && alerts.length === 0 && (
             <p className="text-sm text-slate-400 text-center py-10">
-              {tab === "arquivados"
-                ? "Nenhum alerta arquivado."
-                : tab === "resolvidos"
-                  ? "Nenhum alerta resolvido ainda."
-                  : "Nenhum alerta ativo no momento."}
+              {filtersActive
+                ? "Nenhum alerta encontrado com esses filtros."
+                : tab === "arquivados"
+                  ? "Nenhum alerta arquivado."
+                  : tab === "resolvidos"
+                    ? "Nenhum alerta resolvido ainda."
+                    : "Nenhum alerta ativo no momento."}
             </p>
           )}
           {!error && (
@@ -633,6 +716,34 @@ export function AlertsPanel({ open = false, onClose }: AlertsPanelProps) {
             </div>
           )}
         </div>
+
+        {!isAgency && !error && totalPages > 1 && (
+          <div className="flex items-center justify-between px-5 py-2 border-t border-slate-100 dark:border-slate-800 shrink-0 text-xs text-slate-500">
+            <span>
+              {totalCount} alerta{totalCount !== 1 ? "s" : ""} · página {pageParam} de {totalPages}
+            </span>
+            <div className="flex gap-1">
+              <Button
+                size="sm"
+                variant="ghost"
+                className="h-7 text-xs"
+                disabled={pageParam <= 1}
+                onClick={() => patchParams((sp) => sp.set("page", String(pageParam - 1)))}
+              >
+                Anterior
+              </Button>
+              <Button
+                size="sm"
+                variant="ghost"
+                className="h-7 text-xs"
+                disabled={pageParam >= totalPages}
+                onClick={() => patchParams((sp) => sp.set("page", String(pageParam + 1)))}
+              >
+                Próxima
+              </Button>
+            </div>
+          </div>
+        )}
         </>
         )}
       </div>

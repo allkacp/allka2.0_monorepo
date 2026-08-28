@@ -2035,6 +2035,33 @@ class ApiClient {
     return this.get("/system-alerts", filters);
   }
 
+  // Monitoramento da liderança (ata 2026-08, bloco 2/5) — alertas críticos
+  // de terceiros no escopo autorizado. 403 quando o usuário não tem função
+  // de acompanhamento (a aba nem aparece).
+  async getAlertMonitoring(filters?: Record<string, any>) {
+    return this.get<{
+      data: any[];
+      total: number;
+      page: number;
+      page_size: number;
+      total_pages: number;
+      scope_level: "master" | "admin" | "leader";
+      scope_note: string | null;
+    }>("/system-alerts/monitoring", filters);
+  }
+
+  async getAlertMonitoringSummary(filters?: Record<string, any>) {
+    return this.get<{
+      criticos_ativos: number;
+      resolvidos_no_periodo: number;
+      automaticos_pendentes: number;
+      manuais_pendentes: number;
+      oldest_open_at: string | null;
+      oldest_open_ms: number | null;
+      filtered: boolean;
+    }>("/system-alerts/monitoring/summary", filters);
+  }
+
   async markSystemAlertRead(id: string) {
     return this.patch(`/system-alerts/${id}/read`, {});
   }
@@ -2206,6 +2233,12 @@ class ApiClient {
       is_active?: boolean;
       image_file_name?: string | null;
       image_alt?: string | null;
+      // Governança do Admin Master (ata 2026-08, bloco 2/5)
+      is_mandatory?: boolean;
+      mandatory_min_severity?: "info" | "warning" | "error" | null;
+      personal_prefs_allowed?: boolean;
+      additional_channels?: string[];
+      governed_event_types?: string[];
     },
   ) {
     return this.patch(`/system-alerts/admin/standards/${id}`, data);

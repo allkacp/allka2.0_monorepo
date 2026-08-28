@@ -6,10 +6,11 @@
  * bootstrap do backend (ver alert-engine.ts).
  */
 import { useCallback, useEffect, useState } from "react";
-import { Eye, Pencil } from "lucide-react";
+import { Eye, Lock, Pencil } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { StandardModalDialog } from "@/components/standard-modal-dialog";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -35,7 +36,16 @@ interface AlertStandard {
   image_file_name?: string | null;
   image_alt?: string | null;
   image_url?: string | null;
+  // Governança do Admin Master (ata 2026-08, bloco 2/5)
+  is_mandatory?: boolean;
+  mandatory_min_severity?: "info" | "warning" | "error" | null;
+  personal_prefs_allowed?: boolean;
+  additional_channels?: string[];
+  governed_event_types?: string[];
+  mandatory_set_by?: { id: string; name: string } | null;
 }
+
+const MANDATORY_HINT = "Definido como obrigatório pelo Admin Master.";
 
 const SEVERITY_OPTIONS: { value: "info" | "warning" | "error"; criticality: Criticality }[] = [
   { value: "info", criticality: "verde" },
@@ -115,15 +125,41 @@ export function AlertStandardsTab() {
                         {criticalityLabel[criticality]}
                       </Badge>
                       {!standard.is_active && <Badge variant="outline" className="text-[10px]">Inativo</Badge>}
+                      {standard.is_mandatory && (
+                        <Badge className="text-[10px] gap-1 bg-amber-100 text-amber-700 border-amber-200">
+                          <Lock className="h-2.5 w-2.5" />
+                          Obrigatório
+                        </Badge>
+                      )}
                     </div>
                     <p className="text-xs text-slate-600 dark:text-slate-300 mt-1">{standard.title}</p>
                     <p className="text-xs text-slate-400 mt-0.5 line-clamp-2">{standard.message}</p>
                     <p className="text-[10px] text-slate-400 mt-1">
                       Variáveis permitidas: {standard.allowed_variables.map((v) => `{{${v}}}`).join(", ")}
                     </p>
+                    {standard.is_mandatory && (
+                      <p className="text-[10px] text-amber-600 mt-1">
+                        {MANDATORY_HINT}
+                        {standard.mandatory_set_by ? ` (${standard.mandatory_set_by.name})` : ""}
+                        {standard.mandatory_min_severity ? ` — criticidade mínima: ${standard.mandatory_min_severity}.` : ""}
+                      </p>
+                    )}
                   </div>
                   <div className="flex items-center gap-1 shrink-0">
-                    <Switch checked={standard.is_active} onCheckedChange={() => void toggleActive(standard)} aria-label={`Ativar/desativar ${standard.name}`} />
+                    {standard.is_mandatory ? (
+                      <TooltipProvider delayDuration={200}>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <span>
+                              <Switch checked disabled aria-label={`${standard.name} está obrigatório e não pode ser desativado`} />
+                            </span>
+                          </TooltipTrigger>
+                          <TooltipContent>{MANDATORY_HINT}</TooltipContent>
+                        </Tooltip>
+                      </TooltipProvider>
+                    ) : (
+                      <Switch checked={standard.is_active} onCheckedChange={() => void toggleActive(standard)} aria-label={`Ativar/desativar ${standard.name}`} />
+                    )}
                     <Button size="sm" variant="ghost" className="h-7 w-7 p-0" title="Visualizar prévia" onClick={() => void openPreview(standard)}>
                       <Eye className="h-3.5 w-3.5" />
                     </Button>
@@ -187,6 +223,14 @@ function EditStandardModal({
   const [severity, setSeverity] = useState(standard.default_severity);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // ── Governança (ata 2026-08, bloco 2/5) ──────────────────────────────
+  const [isMandatory, setIsMandatory] = useState(!!standard.is_mandatory);
+  const [minSeverity, setMinSeverity] = useState<"info" | "warning" | "error" | "">(standard.mandatory_min_severity ?? "");
+  const [personalPrefs, setPersonalPrefs] = useState(standard.personal_prefs_allowed ?? true);
+  const [extraChannels, setExtraChannels] = useState<string[]>(standard.additional_channels ?? []);
+  const [governedEvents, setGovernedEvents] = useState((standard.governed_event_types ?? []).join(", "));
+  const toggleChannel = (c: string) =>
+    setExtraChannels((prev) => (prev.includes(c) ? prev.filter((x) => x !== c) : [...prev, c]));
   const [image, setImage] = useState<AlertImageFieldValue>({
     image_file_name: standard.image_file_name ?? null,
     image_alt: standard.image_alt ?? null,
@@ -213,6 +257,14 @@ function EditStandardModal({
         default_severity: severity,
         image_file_name: image.image_file_name,
         image_alt: image.image_file_name ? image.image_alt : null,
+        is_mandatory: isMandatory,
+        mandatory_min_severity: isMandatory ? (minSeverity || null) : null,
+        personal_prefs_allowed: personalPrefs,
+        additional_channels: extraChannels,
+        governed_event_types: governedEvents
+          .split(",")
+          .map((s) => s.trim())
+          .filter(Boolean),
       });
       onSaved(updated);
     } catch (err: any) {
@@ -262,6 +314,83 @@ function EditStandardModal({
           </div>
         </div>
         <AlertImageField value={image} onChange={setImage} disabled={saving} />
+
+        {/* ── Governança do Admin Master ─────────────────────────────── */}
+        <div className="rounded-lg border border-amber-200 dark:border-amber-900/40 bg-amber-50/50 dark:bg-amber-950/10 p-3 space-y-3">
+          <label className="flex items-center justify-between gap-2">
+            <span className="text-xs font-semibold text-amber-800 dark:text-amber-300">
+              Padrão obrigatório
+              <span className="block text-[10px] font-normal text-amber-600">
+                Não pode ser desativado nem ter a criticidade reduzida por Admin comum, Líder ou usuário.
+              </span>
+            </span>
+            <Switch checked={isMandatory} onCheckedChange={setIsMandatory} aria-label="Marcar padrão como obrigatório" />
+          </label>
+
+          {isMandatory && (
+            <div className="space-y-3 pt-1">
+              <div>
+                <label className="text-[11px] font-medium text-slate-600 dark:text-slate-300">Criticidade mínima</label>
+                <select
+                  value={minSeverity}
+                  onChange={(e) => setMinSeverity(e.target.value as typeof minSeverity)}
+                  className="mt-1 h-8 text-xs w-full rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-2"
+                >
+                  <option value="">Usar a criticidade padrão como piso</option>
+                  <option value="info">Verde (info)</option>
+                  <option value="warning">Amarelo (aviso)</option>
+                  <option value="error">Vermelho (crítico)</option>
+                </select>
+              </div>
+
+              <label className="flex items-center justify-between gap-2">
+                <span className="text-[11px] font-medium text-slate-600 dark:text-slate-300">
+                  Preferências pessoais permitidas
+                  <span className="block text-[10px] font-normal text-slate-400">
+                    Se desligado, Líder/usuário só visualiza os canais deste tipo de alerta.
+                  </span>
+                </span>
+                <Switch checked={personalPrefs} onCheckedChange={setPersonalPrefs} aria-label="Permitir preferências pessoais" />
+              </label>
+
+              <div>
+                <span className="text-[11px] font-medium text-slate-600 dark:text-slate-300">Canais adicionais permitidos</span>
+                <p className="text-[10px] text-slate-400">O canal "dentro da plataforma" é sempre obrigatório.</p>
+                <div className="flex gap-3 mt-1">
+                  {["email", "whatsapp", "push"].map((c) => (
+                    <label key={c} className="flex items-center gap-1 text-xs text-slate-600 dark:text-slate-300">
+                      <input
+                        type="checkbox"
+                        checked={extraChannels.includes(c)}
+                        onChange={() => toggleChannel(c)}
+                      />
+                      {c}
+                    </label>
+                  ))}
+                </div>
+                <p className="text-[10px] text-amber-600 mt-1">
+                  E-mail / WhatsApp / Push ainda não têm envio real — ficam salvos como “disponível futuramente”.
+                </p>
+              </div>
+
+              <div>
+                <label className="text-[11px] font-medium text-slate-600 dark:text-slate-300">
+                  Tipos de evento governados (preferências pessoais)
+                </label>
+                <Input
+                  value={governedEvents}
+                  onChange={(e) => setGovernedEvents(e.target.value)}
+                  placeholder="ex.: task-due, task-assigned"
+                  className="mt-1"
+                />
+                <p className="text-[10px] text-slate-400 mt-1">
+                  Chaves separadas por vírgula. Deixe vazio para proteger só o padrão e suas regras.
+                </p>
+              </div>
+            </div>
+          )}
+        </div>
+
         {error && <p className="text-xs text-red-500">{error}</p>}
         <div className="flex justify-end gap-2 pt-2">
           <Button variant="outline" size="sm" onClick={onClose} disabled={saving}>Cancelar</Button>

@@ -14,12 +14,22 @@ import {
   isConditionControlledTaskAlert,
   isDueSoonTrigger,
   MOTOR_LABEL,
+  NOTIFICATION_CHANNELS,
+  parseJsonStringArray,
   parseRecipientRoles,
   RECIPIENT_CATEGORIES,
   RECIPIENT_CATEGORY_LABELS,
   renderTemplate,
+  SEVERITY_RANK,
+  severityAtLeast,
   TRIGGER_ENTITY_TYPE,
 } from "../lib/alert-engine";
+import {
+  alertListQuerySchema,
+  buildAlertFilterWhere,
+  resolvePagination,
+} from "../lib/alert-list-filters";
+import { monitoringScopeWhere, resolveMonitoringAccess } from "../lib/alert-monitoring-scope";
 import {
   BANNER_HEIGHT,
   BANNER_WIDTH,
@@ -245,29 +255,8 @@ function bloqueiaOcultarAlertaCriticoAtivo(alert: Parameters<typeof isActiveCond
 }
 
 // ── Schemas ───────────────────────────────────────────────────────────────────
-
-const listSchema = z.object({
-  type: z.string().optional(),
-  severity: z.enum(["info", "warning", "error"]).optional(),
-  category: z.enum(["notificacao", "alerta"]).optional(),
-  is_read: z
-    .string()
-    .optional()
-    .transform((v) =>
-      v === "true" ? true : v === "false" ? false : undefined,
-    ),
-  // Ausente = só ativos (comportamento padrão, "o que precisa resolver").
-  // "true"/"false" filtram explicitamente; "all" traz os dois.
-  is_archived: z.enum(["true", "false", "all"]).optional(),
-  // Resolução formal (ata 2026-08, 10º lote) — filtra por
-  // manual_resolved_at, NUNCA pelo resolved_at do motor automático (ver
-  // comentário no schema). Ausente = sem filtro por resolução.
-  resolved: z.enum(["true", "false"]).optional(),
-  entity_type: z.string().optional(),
-  entity_id: z.string().optional(),
-  limit: z.coerce.number().int().min(1).max(200).default(50),
-  offset: z.coerce.number().int().min(0).default(0),
-});
+// O schema de listagem (texto, datas, situação, origem, paginação) mora em
+// lib/alert-list-filters.ts — compartilhado com GET /monitoring.
 
 // Feed pessoal (reparo "banner visual" — ata 2026-08): informa que existe
 // imagem SEM expor o nome físico do arquivo nem o caminho em disco — só
@@ -290,7 +279,7 @@ router.get(
   verifyToken,
   async (req: Request, res: Response, next: NextFunction) => {
     try {
-      const query = listSchema.safeParse(req.query);
+      const query = alertListQuerySchema.safeParse(req.query);
       if (!query.success) {
         res.status(400).json({
           error: "Parâmetros inválidos",
@@ -299,52 +288,38 @@ router.get(
         return;
       }
 
-      const { type, severity, category, is_read, is_archived, resolved, entity_type, entity_id, limit, offset } =
-        query.data;
+      const q = query.data;
+      const filtros = buildAlertFilterWhere(q);
+      const { skip, take, page, pageSize } = resolvePagination(q);
 
-      const filtros: Record<string, unknown> = {};
-      if (type) filtros.type = type;
-      if (severity) filtros.severity = severity;
-      if (category) filtros.category = category;
-      if (is_read !== undefined) filtros.is_read = is_read;
-      if (entity_type) filtros.entity_type = entity_type;
-      if (entity_id) filtros.entity_id = entity_id;
-      if (is_archived === "true") filtros.is_archived = true;
-      else if (is_archived === "false" || is_archived === undefined) filtros.is_archived = false;
-      // is_archived === "all" → sem filtro, traz os dois.
-      // "Resolvido" abrange as DUAS resoluções que a aba "Resolvidos" mostra:
-      // a manual formal (`manual_resolved_at`) e a automática do motor
-      // (`automatic_resolved_at`, ata 2026-08 bloco 1/2). NUNCA `resolved_at`,
-      // que é da expiração/motor legado de etapas — expiração não é resolução.
-      if (resolved === "true") {
-        filtros.OR = [{ manual_resolved_at: { not: null } }, { automatic_resolved_at: { not: null } }];
-      } else if (resolved === "false") {
-        filtros.manual_resolved_at = null;
-        filtros.automatic_resolved_at = null;
-      }
-      // resolved ausente → sem filtro por resolução.
+      // Compat: sem `situacao`/`is_archived`/`resolved` explícitos, a lista
+      // pessoal continua trazendo só os NÃO arquivados (comportamento
+      // histórico — "o que precisa de atenção").
+      const semRecorte =
+        q.situacao === undefined && q.is_archived === undefined && q.resolved === undefined;
+      const compatWhere = semRecorte ? [{ is_archived: false }] : [];
 
-      // AND explícito: o escopo usa OR internamente (admin vê geral + os seus),
-      // e espalhar as duas coisas no mesmo objeto faria um sobrescrever o outro.
-      const where = { AND: [filtros, escopoDoUsuario(req)] };
+      // `recipient_user_id` é do Monitoramento — na lista pessoal ele é
+      // ignorado (o escopo já limita ao próprio usuário). buildAlertFilterWhere
+      // o inclui como `user_id`; aqui a intersecção com escopoDoUsuario
+      // simplesmente não retorna nada de terceiros, então é inócuo, mas
+      // deixamos claro que não é um vetor de acesso.
+
+      const where = { AND: [filtros, ...compatWhere, escopoDoUsuario(req)] };
 
       const [total, alerts, unread] = await Promise.all([
         prisma.systemAlert.count({ where }),
         prisma.systemAlert.findMany({
           where,
           orderBy: { created_at: "desc" },
-          take: limit,
-          skip: offset,
+          take,
+          skip,
         }),
         prisma.systemAlert.count({
-          where: { AND: [filtros, escopoDoUsuario(req), { is_read: false }] },
+          where: { AND: [filtros, ...compatWhere, escopoDoUsuario(req), { is_read: false }] },
         }),
       ]);
 
-      // "Resolvidos" (ata 2026-08, 10º lote) mostra "quem resolveu" na
-      // própria listagem, compacto — resolvido em lote (nunca N+1), mesmo
-      // padrão de attachDestinatarioMany mais abaixo (a Central de
-      // Alertas).
       const resolverIds = [...new Set(alerts.map((a) => a.resolved_by_user_id).filter((id): id is string => !!id))];
       const resolvers = resolverIds.length
         ? await prisma.user.findMany({ where: { id: { in: resolverIds } }, select: { id: true, name: true } })
@@ -355,17 +330,245 @@ router.get(
         data: alerts.map((a) => ({
           ...withPublicImage(a),
           resolved_by: a.resolved_by_user_id ? (resolverById.get(a.resolved_by_user_id) ?? null) : null,
-          // Alerta automático de tarefa (controlado pela condição real) —
-          // o card não oferece "Resolver alerta" e explica a resolução
-          // automática. Derivado no servidor, nunca inferido pelo frontend.
           condition_controlled: isConditionControlledTaskAlert(a),
-          // Automático vermelho com condição ativa: o card também não pode
-          // oferecer arquivar/dispensar (ata 2026-08). O backend recusa
-          // essas ações com 409 de qualquer forma.
           disposal_blocked: isActiveConditionControlledCriticalTaskAlert(a),
         })),
         total,
         unread,
+        page,
+        page_size: pageSize,
+        total_pages: Math.max(1, Math.ceil(total / pageSize)),
+      });
+    } catch (err) {
+      next(err);
+    }
+  },
+);
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Monitoramento da liderança (ata 2026-08, bloco 2/5)
+// ─────────────────────────────────────────────────────────────────────────────
+// Aba separada da Central: alertas CRÍTICOS (vermelhos) de TERCEIROS dentro
+// da autoridade real de quem pergunta (Admin Master → global; Admin
+// não-master com grant → só Gerais; Líder → alertas das tarefas sob sua
+// responsabilidade). Nunca por `role` sozinho — ver lib/alert-monitoring-scope.ts.
+//
+// É SÓ LEITURA: as rotas de resolver/dispensar/arquivar continuam presas ao
+// `escopoDoUsuario` (destinatário direto / geral), então um líder nunca
+// consegue resolver o alerta de outra pessoa por aqui — não há rota pra isso.
+// ═══════════════════════════════════════════════════════════════════════════
+
+function deriveSituacao(a: {
+  is_archived: boolean;
+  manual_resolved_at: Date | null;
+  automatic_resolved_at: Date | null;
+  resolution_reason: string | null;
+  is_read: boolean;
+}): "ativo" | "resolvido" | "arquivado" | "dispensado" | "expirado" {
+  if (a.manual_resolved_at || a.automatic_resolved_at) return "resolvido";
+  if (a.resolution_reason === "expired") return "expirado";
+  if (a.is_archived) return "arquivado";
+  if (a.is_read) return "dispensado";
+  return "ativo";
+}
+
+router.get(
+  "/monitoring",
+  verifyToken,
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const access = await resolveMonitoringAccess(req);
+      if (access.scope.kind === "denied") {
+        res.status(403).json({ error: "Você não tem acesso ao Monitoramento de alertas." });
+        return;
+      }
+
+      const query = alertListQuerySchema.safeParse(req.query);
+      if (!query.success) {
+        res.status(400).json({ error: "Parâmetros inválidos", details: query.error.flatten() });
+        return;
+      }
+      const q = query.data;
+      const { skip, take, page, pageSize } = resolvePagination(q);
+
+      // Primeira versão: Monitoramento é sobre alerta CRÍTICO (vermelho).
+      // O filtro de severidade do cliente pode restringir ainda mais, nunca
+      // afrouxar — se pedir info/warning, intersecção com "error" = vazio.
+      const filtros = buildAlertFilterWhere({ ...q, category: "alerta" });
+      const scopeWhere = monitoringScopeWhere(access.scope, req.user!.id);
+
+      // Sem filtro de situação explícito → mostra ativos + resolvidos (o que
+      // a liderança acompanha); arquivados só entram se o filtro pedir.
+      const semRecorte = q.situacao === undefined && q.is_archived === undefined;
+      const baseSituacao = semRecorte ? [{ is_archived: false }] : [];
+
+      const where: Prisma.SystemAlertWhereInput = {
+        AND: [filtros, { severity: "error" }, ...baseSituacao, scopeWhere],
+      };
+
+      const [total, alerts] = await Promise.all([
+        prisma.systemAlert.count({ where }),
+        prisma.systemAlert.findMany({ where, orderBy: { created_at: "desc" }, take, skip }),
+      ]);
+
+      // Lookups em lote — nunca N+1.
+      const recipientIds = [...new Set(alerts.map((a) => a.user_id).filter((x): x is string => !!x))];
+      const resolverIds = [...new Set(alerts.map((a) => a.resolved_by_user_id).filter((x): x is string => !!x))];
+      const ruleIds = [...new Set(alerts.map((a) => a.rule_id).filter((x): x is string => !!x))];
+      const taskIds = [
+        ...new Set(
+          alerts
+            .filter((a) => a.entity_type === "project_task")
+            .map((a) => a.entity_id)
+            .filter((x): x is string => !!x),
+        ),
+      ];
+
+      const [people, rules, tasks] = await Promise.all([
+        prisma.user.findMany({
+          where: { id: { in: [...new Set([...recipientIds, ...resolverIds])] } },
+          select: { id: true, name: true, email: true },
+        }),
+        ruleIds.length
+          ? prisma.alertRule.findMany({
+              where: { id: { in: ruleIds } },
+              select: { id: true, name: true, trigger_type: true, standard: { select: { name: true, key: true } } },
+            })
+          : Promise.resolve([]),
+        taskIds.length
+          ? prisma.projectTask.findMany({
+              where: { id: { in: taskIds } },
+              select: { id: true, title: true, project: { select: { id: true, title: true } } },
+            })
+          : Promise.resolve([]),
+      ]);
+      const personById = new Map(people.map((p) => [p.id, p]));
+      const ruleById = new Map(rules.map((r) => [r.id, r]));
+      const taskById = new Map(tasks.map((t) => [t.id, t]));
+
+      const now = Date.now();
+      const data = alerts.map((a) => {
+        const situacao = deriveSituacao(a);
+        const resolvedAt = a.manual_resolved_at ?? a.automatic_resolved_at ?? null;
+        const openUntil = resolvedAt ? resolvedAt.getTime() : now;
+        const rule = a.rule_id ? ruleById.get(a.rule_id) : null;
+        const task = a.entity_type === "project_task" && a.entity_id ? taskById.get(a.entity_id) : null;
+        return {
+          id: a.id,
+          title: a.title,
+          severity: a.severity,
+          category: a.category,
+          type: a.type,
+          created_at: a.created_at,
+          // Tempo em aberto — NÃO é SLA (não há SLA configurável).
+          open_ms: Math.max(0, openUntil - a.created_at.getTime()),
+          situacao,
+          recipient: a.user_id
+            ? (personById.get(a.user_id) ?? { id: a.user_id, name: null, email: null })
+            : null,
+          is_general: a.user_id === null,
+          entity_type: a.entity_type,
+          entity_id: a.entity_id,
+          project: task?.project ? { id: task.project.id, name: task.project.title } : null,
+          task: task ? { id: task.id, title: task.title } : null,
+          origin: a.rule_id
+            ? "automatico"
+            : a.schedule_id
+              ? "programado"
+              : a.created_by_user_id
+                ? "manual"
+                : "automatico",
+          rule: rule ? { id: rule.id, name: rule.name, trigger_type: rule.trigger_type, standard: rule.standard.name } : null,
+          condition_controlled: isConditionControlledTaskAlert(a),
+          disposal_blocked: isActiveConditionControlledCriticalTaskAlert(a),
+          resolved_at: resolvedAt,
+          resolution_kind: a.manual_resolved_at ? "manual" : a.automatic_resolved_at ? "automatica" : null,
+          resolved_by: a.manual_resolved_at
+            ? (a.resolved_by_user_id ? (personById.get(a.resolved_by_user_id) ?? null) : null)
+            : a.automatic_resolved_at
+              ? { id: null, name: MOTOR_LABEL }
+              : null,
+          automatic_resolution_message: a.automatic_resolution_message ?? null,
+        };
+      });
+
+      res.json({
+        data,
+        total,
+        page,
+        page_size: pageSize,
+        total_pages: Math.max(1, Math.ceil(total / pageSize)),
+        scope_level: access.level,
+        scope_note: access.scope.kind === "scoped" ? (access.scope.note ?? null) : null,
+      });
+    } catch (err) {
+      next(err);
+    }
+  },
+);
+
+// ── GET /api/system-alerts/monitoring/summary ────────────────────────────────
+// Contagens do topo da aba — respeitam o MESMO escopo e os MESMOS filtros da
+// listagem (menos a paginação). "Período" = date_from/date_to do filtro.
+
+router.get(
+  "/monitoring/summary",
+  verifyToken,
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const access = await resolveMonitoringAccess(req);
+      if (access.scope.kind === "denied") {
+        res.status(403).json({ error: "Você não tem acesso ao Monitoramento de alertas." });
+        return;
+      }
+      const query = alertListQuerySchema.safeParse(req.query);
+      if (!query.success) {
+        res.status(400).json({ error: "Parâmetros inválidos", details: query.error.flatten() });
+        return;
+      }
+      const q = query.data;
+      const filtros = buildAlertFilterWhere({ ...q, category: "alerta" });
+      const scopeWhere = monitoringScopeWhere(access.scope, req.user!.id);
+      const base: Prisma.SystemAlertWhereInput[] = [filtros, { severity: "error" }, scopeWhere];
+
+      const [criticosAtivos, resolvidosNoPeriodo, automaticosPendentes, manuaisPendentes, maisAntigo] =
+        await Promise.all([
+          prisma.systemAlert.count({
+            where: { AND: [...base, { is_archived: false, manual_resolved_at: null, automatic_resolved_at: null }] },
+          }),
+          prisma.systemAlert.count({
+            where: { AND: [...base, { OR: [{ manual_resolved_at: { not: null } }, { automatic_resolved_at: { not: null } }] }] },
+          }),
+          prisma.systemAlert.count({
+            where: {
+              AND: [...base, { is_archived: false, manual_resolved_at: null, automatic_resolved_at: null, rule_id: { not: null } }],
+            },
+          }),
+          prisma.systemAlert.count({
+            where: {
+              AND: [
+                ...base,
+                { is_archived: false, manual_resolved_at: null, automatic_resolved_at: null, rule_id: null, created_by_user_id: { not: null } },
+              ],
+            },
+          }),
+          prisma.systemAlert.findFirst({
+            where: { AND: [...base, { is_archived: false, manual_resolved_at: null, automatic_resolved_at: null }] },
+            orderBy: { created_at: "asc" },
+            select: { created_at: true },
+          }),
+        ]);
+
+      res.json({
+        criticos_ativos: criticosAtivos,
+        resolvidos_no_periodo: resolvidosNoPeriodo,
+        automaticos_pendentes: automaticosPendentes,
+        manuais_pendentes: manuaisPendentes,
+        oldest_open_at: maisAntigo?.created_at ?? null,
+        oldest_open_ms: maisAntigo ? Date.now() - maisAntigo.created_at.getTime() : null,
+        // As contagens acima usam os mesmos filtros da listagem, exceto
+        // paginação. "resolvidos_no_periodo" respeita date_from/date_to.
+        filtered: !!(q.q || q.date_from || q.date_to || q.origem || q.situacao || q.recipient_user_id),
       });
     } catch (err) {
       next(err);
@@ -1506,10 +1709,18 @@ router.get(
   async (_req: Request, res: Response, next: NextFunction) => {
     try {
       const standards = await prisma.alertStandard.findMany({ orderBy: { created_at: "asc" } });
+      const setterIds = [...new Set(standards.map((s) => s.mandatory_set_by_id).filter((x): x is string => !!x))];
+      const setters = setterIds.length
+        ? await prisma.user.findMany({ where: { id: { in: setterIds } }, select: { id: true, name: true } })
+        : [];
+      const setterById = new Map(setters.map((u) => [u.id, u]));
       res.json({
         data: standards.map((s) => ({
           ...s,
           allowed_variables: JSON.parse(s.allowed_variables_json) as string[],
+          additional_channels: parseJsonStringArray(s.additional_channels_json),
+          governed_event_types: parseJsonStringArray(s.governed_event_types_json),
+          mandatory_set_by: s.mandatory_set_by_id ? (setterById.get(s.mandatory_set_by_id) ?? null) : null,
           image_url: s.image_file_name ? `/api/system-alerts/admin/standards/${s.id}/image` : null,
         })),
       });
@@ -1530,10 +1741,27 @@ const editStandardSchema = z
     is_active: z.boolean().optional(),
     image_file_name: z.string().trim().min(1).nullable().optional(),
     image_alt: z.string().trim().max(300).nullable().optional(),
+    // ── Governança do Admin Master (ata 2026-08, bloco 2/5) ─────────────
+    is_mandatory: z.boolean().optional(),
+    mandatory_min_severity: z.enum(["info", "warning", "error"]).nullable().optional(),
+    platform_channel_locked: z.boolean().optional(),
+    personal_prefs_allowed: z.boolean().optional(),
+    // Canais ADICIONAIS que Líder/usuário pode habilitar (nunca "in_app" —
+    // esse é sempre obrigatório).
+    additional_channels: z
+      .array(z.enum(NOTIFICATION_CHANNELS))
+      .max(3)
+      .optional(),
+    // event_types de NotificationPreference que este padrão governa.
+    governed_event_types: z.array(z.string().trim().min(1).max(80)).max(20).optional(),
   })
   .refine((data) => data.image_file_name === undefined || !data.image_file_name || !!data.image_alt, {
     message: "Texto alternativo é obrigatório quando há imagem",
     path: ["image_alt"],
+  })
+  .refine((data) => !data.additional_channels?.includes("in_app"), {
+    message: "O canal 'dentro da plataforma' já é obrigatório — não é um canal adicional",
+    path: ["additional_channels"],
   });
 
 router.patch(
@@ -1569,12 +1797,51 @@ router.patch(
         return;
       }
 
-      const { image_file_name, image_alt, ...rest } = body.data;
+      const {
+        image_file_name,
+        image_alt,
+        is_mandatory,
+        mandatory_min_severity,
+        additional_channels,
+        governed_event_types,
+        ...rest
+      } = body.data;
       const imageChanging = image_file_name !== undefined;
       if (imageChanging && image_file_name && !fs.existsSync(alertImagePath(image_file_name))) {
         res.status(400).json({ error: "Imagem inválida — envie novamente" });
         return;
       }
+
+      // ── Governança: um padrão OBRIGATÓRIO não pode ser desativado nem ter
+      //    a criticidade reduzida abaixo do piso. Vale mesmo para Admin
+      //    Master enquanto a obrigatoriedade estiver ligada — remover
+      //    `is_mandatory` é uma ação explícita e separada.
+      const resultingMandatory = is_mandatory ?? before.is_mandatory;
+      const resultingActive = rest.is_active ?? before.is_active;
+      const resultingSeverity = rest.default_severity ?? before.default_severity;
+      const resultingFloor =
+        (mandatory_min_severity !== undefined ? mandatory_min_severity : before.mandatory_min_severity) ??
+        resultingSeverity;
+
+      if (resultingMandatory) {
+        if (resultingActive === false) {
+          res.status(409).json({
+            error: "Um padrão obrigatório não pode ser desativado.",
+            detail: "Remova a obrigatoriedade primeiro (somente Admin Master).",
+          });
+          return;
+        }
+        if (!severityAtLeast(resultingSeverity, resultingFloor)) {
+          res.status(409).json({
+            error: `Um padrão obrigatório não pode ter criticidade abaixo de "${resultingFloor}".`,
+            detail: "Ajuste o piso de criticidade mínima ou mantenha a criticidade atual.",
+          });
+          return;
+        }
+      }
+
+      const mandatoryToggledOn = is_mandatory === true && !before.is_mandatory;
+      const mandatoryToggledOff = is_mandatory === false && before.is_mandatory;
 
       const updated = await prisma.alertStandard.update({
         where: { id: before.id },
@@ -1583,6 +1850,16 @@ router.patch(
           ...(imageChanging
             ? { image_file_name: image_file_name ?? null, image_alt: image_file_name ? (image_alt ?? null) : null }
             : {}),
+          ...(is_mandatory !== undefined ? { is_mandatory } : {}),
+          ...(mandatory_min_severity !== undefined ? { mandatory_min_severity } : {}),
+          ...(additional_channels !== undefined
+            ? { additional_channels_json: JSON.stringify([...new Set(additional_channels)]) }
+            : {}),
+          ...(governed_event_types !== undefined
+            ? { governed_event_types_json: JSON.stringify([...new Set(governed_event_types)]) }
+            : {}),
+          ...(mandatoryToggledOn ? { mandatory_set_by_id: req.user!.id, mandatory_set_at: new Date() } : {}),
+          ...(mandatoryToggledOff ? { mandatory_set_by_id: null, mandatory_set_at: null } : {}),
           updated_by_id: req.user!.id,
         },
       });
@@ -1602,12 +1879,40 @@ router.patch(
 
       await writeAccessAudit({
         actorId: req.user!.id,
-        action: "alert_standard.updated",
-        before: { alert_standard_id: before.id, name: before.name, title: before.title, message: before.message, default_severity: before.default_severity, is_active: before.is_active },
-        after: { alert_standard_id: before.id, ...rest },
+        action: mandatoryToggledOn
+          ? "alert_standard.mandatory_set"
+          : mandatoryToggledOff
+            ? "alert_standard.mandatory_cleared"
+            : "alert_standard.updated",
+        before: {
+          alert_standard_id: before.id,
+          name: before.name,
+          title: before.title,
+          message: before.message,
+          default_severity: before.default_severity,
+          is_active: before.is_active,
+          is_mandatory: before.is_mandatory,
+          mandatory_min_severity: before.mandatory_min_severity,
+          personal_prefs_allowed: before.personal_prefs_allowed,
+          additional_channels: parseJsonStringArray(before.additional_channels_json),
+          governed_event_types: parseJsonStringArray(before.governed_event_types_json),
+        },
+        after: {
+          alert_standard_id: before.id,
+          ...rest,
+          ...(is_mandatory !== undefined ? { is_mandatory } : {}),
+          ...(mandatory_min_severity !== undefined ? { mandatory_min_severity } : {}),
+          ...(additional_channels !== undefined ? { additional_channels } : {}),
+          ...(governed_event_types !== undefined ? { governed_event_types } : {}),
+        },
       });
 
-      res.json({ ...updated, allowed_variables: allowed });
+      res.json({
+        ...updated,
+        allowed_variables: allowed,
+        additional_channels: parseJsonStringArray(updated.additional_channels_json),
+        governed_event_types: parseJsonStringArray(updated.governed_event_types_json),
+      });
     } catch (err) {
       next(err);
     }
@@ -1687,7 +1992,18 @@ router.get(
     try {
       const rules = await prisma.alertRule.findMany({
         orderBy: { created_at: "asc" },
-        include: { standard: { select: { id: true, key: true, name: true, default_severity: true } } },
+        include: {
+          standard: {
+            select: {
+              id: true,
+              key: true,
+              name: true,
+              default_severity: true,
+              is_mandatory: true,
+              mandatory_min_severity: true,
+            },
+          },
+        },
       });
       const lastRuns = await prisma.systemAlert.groupBy({
         by: ["rule_id"],
@@ -1781,6 +2097,32 @@ router.patch(
       if (body.data.lead_time_minutes !== undefined && !isDueSoonTrigger(before.trigger_type)) {
         res.status(400).json({ error: "Este gatilho não usa antecedência" });
         return;
+      }
+
+      // ── Governança: se o PADRÃO desta regra é obrigatório, a regra não
+      //    pode ser desativada nem ter a criticidade sobrescrita para menos
+      //    que o piso do padrão. (A rota já é Admin Master; isto impede até
+      //    o Master de furar a própria regra obrigatória sem antes remover a
+      //    obrigatoriedade no padrão.)
+      const standard = await prisma.alertStandard.findUnique({
+        where: { id: before.standard_id },
+        select: { is_mandatory: true, mandatory_min_severity: true, default_severity: true, name: true },
+      });
+      if (standard?.is_mandatory) {
+        if (body.data.is_active === false) {
+          res.status(409).json({
+            error: `A regra pertence ao padrão obrigatório "${standard.name}" e não pode ser desativada.`,
+            detail: "Remova a obrigatoriedade do padrão primeiro (somente Admin Master).",
+          });
+          return;
+        }
+        const floor = standard.mandatory_min_severity ?? standard.default_severity;
+        if (body.data.severity_override && !severityAtLeast(body.data.severity_override, floor)) {
+          res.status(409).json({
+            error: `A criticidade não pode ficar abaixo de "${floor}" — o padrão "${standard.name}" é obrigatório.`,
+          });
+          return;
+        }
       }
 
       const { recipient_roles, ...rest } = body.data;

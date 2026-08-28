@@ -115,6 +115,38 @@ const DEFAULT_LEAD_TIME_MINUTES = 24 * 60;
 // nunca uma pessoa real.
 export const MOTOR_LABEL = "Motor da Allka";
 
+// ── Criticidade / severidade ordenável (ata 2026-08, bloco 2/5) ───────────
+// "info" (verde) < "warning" (amarelo) < "error" (vermelho). Usado pela
+// governança do Admin Master: um padrão obrigatório não pode ter a
+// criticidade REDUZIDA abaixo do piso, e uma regra não pode sobrescrever
+// para menos que o piso do padrão.
+export const SEVERITY_RANK: Record<string, number> = { info: 0, warning: 1, error: 2 };
+
+export function severityAtLeast(value: string | null | undefined, floor: string | null | undefined): boolean {
+  if (!floor) return true;
+  const v = SEVERITY_RANK[value ?? ""] ?? -1;
+  const f = SEVERITY_RANK[floor] ?? -1;
+  return v >= f;
+}
+
+// Lê um JSON array de strings de um campo LongText, tolerante a nulo/lixo —
+// nunca lança (um campo corrompido vira lista vazia, nunca um 500).
+export function parseJsonStringArray(raw: string | null | undefined): string[] {
+  if (!raw) return [];
+  try {
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed.filter((v): v is string => typeof v === "string") : [];
+  } catch {
+    return [];
+  }
+}
+
+// Canais de notificação que a preferência pessoal conhece. Só "in_app"
+// entrega de verdade hoje (ver notification-preferences.ts). A governança
+// só permite habilitar como "adicional" um canal desta lista.
+export const NOTIFICATION_CHANNELS = ["in_app", "email", "whatsapp", "push"] as const;
+export type NotificationChannel = (typeof NOTIFICATION_CHANNELS)[number];
+
 // Motivo técnico padronizado → mensagem legível (pt-BR). O motivo é gravado
 // em `automatic_resolution_reason` (enum fechado, nunca texto livre); a
 // mensagem em `automatic_resolution_message`. Nunca "Resolvido
