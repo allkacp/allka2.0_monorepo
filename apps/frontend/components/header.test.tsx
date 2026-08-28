@@ -13,9 +13,10 @@ import { MemoryRouter } from "react-router-dom";
 // header.tsx (com o bug real "/admin/dashboard" pro Admin) nunca era lido
 // em lugar nenhum: dado morto, removido neste lote por ser enganoso.
 
-const { accountConfig, apiClientMock, notifPanelMock } = vi.hoisted(() => ({
+const { accountConfig, apiClientMock, notifPanelMock, basketMock } = vi.hoisted(() => ({
   accountConfig: { accountType: "admin" as string, isPartnerActive: false },
   notifPanelMock: { open: false, setOpen: vi.fn(), tab: "prefs" as string, setTab: vi.fn() },
+  basketMock: { totalItems: 0, setOpen: vi.fn() },
   apiClientMock: {
     getCurrentUser: vi.fn().mockResolvedValue({
       id: 1,
@@ -86,7 +87,7 @@ vi.mock("@/contexts/agencia-context", () => ({
 }));
 
 vi.mock("@/contexts/project-basket-context", () => ({
-  useProjectBasket: () => ({ getTotalItems: () => 0, setOpen: vi.fn() }),
+  useProjectBasket: () => ({ getTotalItems: () => basketMock.totalItems, setOpen: basketMock.setOpen }),
 }));
 
 vi.mock("@/contexts/notifications-panel-context", () => ({
@@ -119,13 +120,15 @@ vi.mock("@/components/user-view-slide-panel", () => ({
 
 import { Header } from "@/components/header";
 
-function renderHeader() {
+function renderHeader(route = "/admin/dashboard") {
   return render(
-    <MemoryRouter initialEntries={["/admin/dashboard"]}>
+    <MemoryRouter initialEntries={[route]}>
       <Header />
     </MemoryRouter>,
   );
 }
+
+const basketBtn = () => screen.queryByRole("button", { name: "Cesta do projeto" });
 
 async function openMeuPerfil(user: ReturnType<typeof userEvent.setup>) {
   const avatarTrigger = document.querySelector(
@@ -140,6 +143,7 @@ describe("Header — 'Meu Perfil' abre o painel compartilhado, nunca o dashboard
   beforeEach(() => {
     accountConfig.accountType = "admin";
     accountConfig.isPartnerActive = false;
+    basketMock.totalItems = 0;
     vi.clearAllMocks();
   });
 
@@ -263,5 +267,47 @@ describe("Header — só o sino de Notificações fica no cabeçalho (Alertas sa
     expect(apiClientMock.getUnreadSystemAlertsCount).not.toHaveBeenCalledWith(undefined);
     expect(apiClientMock.getUnreadSystemAlertsCount).not.toHaveBeenCalledWith({});
     expect(apiClientMock.getUnreadSystemAlertsCount).not.toHaveBeenCalledWith({ category: "alerta" });
+  });
+});
+
+describe("Header — cesta só no contexto de catálogo/loja (ata 2026-08, interface/usabilidade)", () => {
+  beforeEach(() => {
+    accountConfig.accountType = "admin";
+    accountConfig.isPartnerActive = false;
+    basketMock.totalItems = 0;
+    vi.clearAllMocks();
+  });
+
+  it("cesta VAZIA fora de catálogo (dashboard) → ícone não aparece", async () => {
+    renderHeader("/admin/dashboard");
+    await screen.findByRole("menuitem", { name: /^meu perfil$/i }).catch(() => {});
+    expect(basketBtn()).not.toBeInTheDocument();
+  });
+
+  it("cesta VAZIA fora de catálogo (financeiro / perfil) → ícone não aparece", async () => {
+    renderHeader("/admin/financeiro");
+    await new Promise((r) => setTimeout(r, 0));
+    expect(basketBtn()).not.toBeInTheDocument();
+  });
+
+  it("rota de catálogo → ícone aparece mesmo com a cesta vazia", async () => {
+    renderHeader("/admin/catalogo-produtos");
+    expect(basketBtn()).toBeInTheDocument();
+  });
+
+  it("cesta COM itens em qualquer rota (fluxo de projeto em criação a continuar) → ícone aparece", async () => {
+    basketMock.totalItems = 2;
+    renderHeader("/admin/dashboard");
+    expect(basketBtn()).toBeInTheDocument();
+  });
+
+  it("catálogo de empresa e agência também exibem a cesta", async () => {
+    accountConfig.accountType = "empresas";
+    const { unmount } = renderHeader("/company/produtos");
+    expect(basketBtn()).toBeInTheDocument();
+    unmount();
+    accountConfig.accountType = "agencias";
+    renderHeader("/agencia/catalogo");
+    expect(basketBtn()).toBeInTheDocument();
   });
 });

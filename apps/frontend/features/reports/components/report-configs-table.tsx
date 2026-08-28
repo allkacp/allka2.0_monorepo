@@ -11,6 +11,7 @@ import {
   Tooltip, TooltipContent, TooltipProvider, TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { SlidePanel } from "@/components/slide-panel";
+import { ConfirmationDialog } from "@/components/confirmation-dialog";
 import { IconToolbarButton } from "@/components/icon-toolbar-button";
 import { NeonBadge } from "@/components/neon-badge";
 import { useTableScrollSync } from "@/hooks/useTableScrollSync";
@@ -185,6 +186,7 @@ function ConfigRow({ config, index, onEdit, onDelete, onToggle }) {
               <TooltipTrigger asChild>
                 <button
                   onClick={() => onEdit(config)}
+                  aria-label={`Editar permissões de ${ptName}`}
                   className="h-[26px] w-[26px] flex items-center justify-center rounded-[8px] bg-white dark:bg-slate-800 border border-[#e8edf5] dark:border-slate-700 text-[#2558FF] dark:text-slate-500 shadow-[0_4px_10px_rgba(15,23,42,0.06)] hover:bg-gradient-to-br hover:from-[#2558FF] hover:via-[#6E2C96] hover:to-[#D92293] hover:text-white dark:hover:text-[#0a1628] hover:border-transparent hover:shadow-[0_8px_18px_rgba(15,23,42,0.18)] hover:-translate-y-px transition-all duration-150"
                 >
                   <Settings2 className="h-3.5 w-3.5" />
@@ -198,6 +200,7 @@ function ConfigRow({ config, index, onEdit, onDelete, onToggle }) {
               <TooltipTrigger asChild>
                 <button
                   onClick={() => onDelete(config.report_key)}
+                  aria-label={`Remover configuração de ${ptName}`}
                   className="h-[26px] w-[26px] flex items-center justify-center rounded-[8px] bg-white dark:bg-slate-800 border border-[#e8edf5] dark:border-slate-700 text-red-400 dark:text-slate-500 shadow-[0_4px_10px_rgba(15,23,42,0.06)] hover:bg-gradient-to-br hover:from-[#2558FF] hover:via-[#6E2C96] hover:to-[#D92293] hover:text-white dark:hover:text-[#0a1628] hover:border-transparent hover:shadow-[0_8px_18px_rgba(15,23,42,0.18)] hover:-translate-y-px transition-all duration-150"
                 >
                   <Trash2 className="h-3.5 w-3.5" />
@@ -315,6 +318,7 @@ export function ReportConfigsTable({
   onSeedDefaults,
 }: ReportConfigsTableProps) {
   const [deletingKey, setDeletingKey] = useState<string | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
   const [seeding, setSeeding] = useState(false);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<"all" | "active" | "inactive">("all");
@@ -338,15 +342,23 @@ export function ReportConfigsTable({
     finally { setSeeding(false); }
   }
 
-  async function handleDelete(reportKey: string) {
-    const ptName = REPORT_NAMES[reportKey]?.name ?? reportKey;
-    if (!confirm(`Remover "${ptName}"? O relatório ficará inacessível para todos os perfis.`)) return;
+  // Dupla confirmação (ata 2026-08): exclusão FÍSICA da configuração do
+  // relatório (DELETE /api/admin/reports/:key) — o relatório fica
+  // inacessível pra todos os perfis. Guarda contra clique duplo via
+  // `deletingKey`; o erro aparece dentro do próprio diálogo; a linha só
+  // some da tabela depois do sucesso da API (onRefresh).
+  function handleDelete(reportKey: string) {
+    setDeleteTarget(reportKey);
+  }
+
+  async function confirmDelete() {
+    if (!deleteTarget || deletingKey) return;
+    const reportKey = deleteTarget;
     setDeletingKey(reportKey);
     try {
       await apiClient.deleteAdminReport(reportKey);
+      setDeleteTarget(null);
       onRefresh();
-    } catch (err) {
-      alert(err instanceof Error ? err.message : "Erro ao remover configuração.");
     } finally {
       setDeletingKey(null);
     }
@@ -670,6 +682,26 @@ export function ReportConfigsTable({
           </div>
         </div>
       </SlidePanel>
+
+      <ConfirmationDialog
+        open={deleteTarget !== null}
+        onClose={() => { if (!deletingKey) setDeleteTarget(null); }}
+        onConfirm={confirmDelete}
+        twoStep
+        destructive
+        icon={Trash2}
+        title="Excluir configuração de relatório"
+        message="Esta configuração controla quais perfis enxergam este relatório. Excluí-la é permanente."
+        targetName={deleteTarget ? (REPORT_NAMES[deleteTarget]?.name ?? deleteTarget) : ""}
+        targetDetail={deleteTarget ?? undefined}
+        consequences={[
+          "O relatório fica inacessível para todos os perfis.",
+          "As permissões configuradas são perdidas.",
+          "Ação irreversível — não há restauração.",
+        ]}
+        continueText="Continuar para confirmação"
+        finalConfirmText={`Excluir "${deleteTarget ? (REPORT_NAMES[deleteTarget]?.name ?? deleteTarget) : ""}" definitivamente`}
+      />
     </div>
   );
 }

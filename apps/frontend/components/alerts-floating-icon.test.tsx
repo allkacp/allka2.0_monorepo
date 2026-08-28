@@ -101,7 +101,7 @@ describe("AlertsFloatingIcon — barra vertical direita (desktop) e botão flutu
     expect((await screen.findAllByText("4")).length).toBeGreaterThan(0);
   });
 
-  it("o pulso de urgência usa motion-safe (respeita prefers-reduced-motion) só quando há vermelho ativo", async () => {
+  it("o pulso usa motion-safe (respeita prefers-reduced-motion) quando há alerta ativo — nunca 'animate-pulse' cru", async () => {
     (apiClient.getUnreadSystemAlertsCount as any).mockResolvedValue({ count: 1, bySeverity: { info: 0, warning: 0, error: 1 } });
     renderWidget();
 
@@ -113,5 +113,68 @@ describe("AlertsFloatingIcon — barra vertical direita (desktop) e botão flutu
     svgs.forEach((s) => {
       expect(s.getAttribute("class")?.split(" ")).not.toContain("animate-pulse");
     });
+  });
+
+  // ── Indicador de criticidade (ata 2026-08, bloco interface/usabilidade) ──
+
+  async function iconClasses() {
+    await waitFor(() => expect(document.querySelectorAll("svg.lucide-triangle-alert").length).toBeGreaterThan(0));
+    return Array.from(document.querySelectorAll("svg.lucide-triangle-alert")).map((s) => s.getAttribute("class") ?? "");
+  }
+
+  it("nenhum alerta → estado neutro: sem badge, sem pulso, cor neutra", async () => {
+    (apiClient.getUnreadSystemAlertsCount as any).mockResolvedValue({ count: 0, bySeverity: { info: 0, warning: 0, error: 0 } });
+    renderWidget();
+    const classes = await iconClasses();
+    expect(classes.every((c) => !c.includes("animate-pulse"))).toBe(true);
+    expect(classes.some((c) => c.includes("text-white/70"))).toBe(true);
+    expect(screen.queryByText("0")).not.toBeInTheDocument();
+  });
+
+  it("somente verdes (info) → verde (nunca amarelo)", async () => {
+    (apiClient.getUnreadSystemAlertsCount as any).mockResolvedValue({ count: 3, bySeverity: { info: 3, warning: 0, error: 0 } });
+    renderWidget();
+    const classes = await iconClasses();
+    expect(classes.some((c) => c.includes("text-emerald-400"))).toBe(true);
+    expect(classes.some((c) => c.includes("motion-safe:animate-pulse"))).toBe(true);
+    expect((await screen.findAllByText("3")).length).toBeGreaterThan(0);
+  });
+
+  it("amarelo sem vermelho → amarelo verdadeiro (yellow, não orange)", async () => {
+    (apiClient.getUnreadSystemAlertsCount as any).mockResolvedValue({ count: 2, bySeverity: { info: 1, warning: 1, error: 0 } });
+    renderWidget();
+    const classes = await iconClasses();
+    expect(classes.some((c) => c.includes("text-yellow-400"))).toBe(true);
+    expect(classes.some((c) => c.includes("orange"))).toBe(false);
+  });
+
+  it("pelo menos um vermelho → vermelho, mesmo com amarelos e verdes juntos (prioridade)", async () => {
+    (apiClient.getUnreadSystemAlertsCount as any).mockResolvedValue({ count: 6, bySeverity: { info: 2, warning: 3, error: 1 } });
+    renderWidget();
+    const classes = await iconClasses();
+    expect(classes.some((c) => c.includes("text-red-400"))).toBe(true);
+    expect(classes.every((c) => !c.includes("text-yellow-400") && !c.includes("text-emerald-400"))).toBe(true);
+  });
+
+  it("aria-label informa contagem e maior criticidade (a cor não é a única pista)", async () => {
+    (apiClient.getUnreadSystemAlertsCount as any).mockResolvedValue({ count: 4, bySeverity: { info: 1, warning: 1, error: 2 } });
+    renderWidget();
+    await waitFor(() =>
+      expect(screen.getAllByLabelText(/Maior criticidade: Vermelho\./).length).toBeGreaterThan(0),
+    );
+    expect(screen.getAllByLabelText(/você possui 4 alertas/).length).toBeGreaterThan(0);
+  });
+
+  it("painel aberto pausa o pulso (mantém cor e badge)", async () => {
+    (apiClient.getUnreadSystemAlertsCount as any).mockResolvedValue({ count: 1, bySeverity: { info: 0, warning: 0, error: 1 } });
+    const user = userEvent.setup();
+    renderWidget();
+    await iconClasses();
+    const triggers = await getTriggers();
+    await user.click(triggers[0]);
+    await screen.findByRole("heading", { name: "Alertas" });
+    const classes = await iconClasses();
+    expect(classes.every((c) => !c.includes("animate-pulse"))).toBe(true);
+    expect(classes.some((c) => c.includes("text-red-400"))).toBe(true);
   });
 });

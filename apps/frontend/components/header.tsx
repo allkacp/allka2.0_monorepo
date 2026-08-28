@@ -808,10 +808,18 @@ export function Header({ transparent = false }: { transparent?: boolean } = {}) 
                 desatualizado (achava que Alertas também tinha virado ícone
                 flutuante; na verdade virou aba do mesmo painel do sino). */}
 
-            {/* ── Cesta de projeto (oculta para líder) ───────────── */}
+            {/* ── Cesta de projeto ───────────────────────────────────
+                A cesta pertence ao ambiente de loja/catálogo (ata 2026-08,
+                bloco interface/usabilidade): o ícone só aparece nas rotas de
+                catálogo OU quando já há itens pendentes (fluxo de projeto em
+                criação a continuar) — nunca "solto" em dashboard, financeiro,
+                perfil ou administração sem contexto. Oculta para líder
+                sempre (não contrata). */}
             {accountType !== "lider" && (() => {
               const totalItems = basket.getTotalItems();
               const hasItems = totalItems > 0;
+              const onCatalogRoute = /^\/(admin\/(catalogo-produtos|combos|catalogo)|company\/produtos|empresa\/produtos|agencia\/catalogo|agency\/catalogo)(\/|$)/.test(location.pathname);
+              if (!hasItems && !onCatalogRoute) return null;
               return (
                 <div className="relative group">
                   <button

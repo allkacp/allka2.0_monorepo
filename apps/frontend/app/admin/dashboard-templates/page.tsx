@@ -585,6 +585,12 @@ function TemplateContentsPanel({ templateId, onChanged }: { templateId: string; 
   const [contents, setContents] = useState<DashboardTemplateContent[]>([]);
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState<DashboardTemplateContent | "new" | null>(null);
+  // Exclusão física de um banner/aviso (DELETE) — dupla confirmação
+  // (ata 2026-08, interface/usabilidade). Guarda contra clique duplo por
+  // `deleting`; erro aparece dentro do diálogo; a linha só some após o
+  // sucesso da API (load()).
+  const [deleteId, setDeleteId] = useState<string | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
   const load = useCallback(() => {
     setLoading(true);
@@ -600,11 +606,18 @@ function TemplateContentsPanel({ templateId, onChanged }: { templateId: string; 
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [templateId]);
 
-  async function handleDelete(id: string) {
-    if (!confirm("Remover este banner/aviso?")) return;
-    await apiClient.deleteDashboardTemplateContent(id);
-    load();
+  async function confirmDelete() {
+    if (!deleteId || deleting) return;
+    setDeleting(true);
+    try {
+      await apiClient.deleteDashboardTemplateContent(deleteId);
+      setDeleteId(null);
+      load();
+    } finally {
+      setDeleting(false);
+    }
   }
+  const deleteContent = deleteId ? contents.find((c) => c.id === deleteId) ?? null : null;
 
   if (loading) return <PageLoader text="Carregando…" />;
 
@@ -650,10 +663,10 @@ function TemplateContentsPanel({ templateId, onChanged }: { templateId: string; 
                 {c.starts_at || c.ends_at ? ` · ${c.starts_at ? new Date(c.starts_at).toLocaleDateString("pt-BR") : "sem início"} – ${c.ends_at ? new Date(c.ends_at).toLocaleDateString("pt-BR") : "sem fim"}` : ""}
               </p>
             </div>
-            <Button variant="ghost" size="icon" onClick={() => setEditing(c)}>
+            <Button variant="ghost" size="icon" aria-label={`Editar "${c.title}"`} onClick={() => setEditing(c)}>
               <Pencil className="h-3.5 w-3.5" />
             </Button>
-            <Button variant="ghost" size="icon" onClick={() => handleDelete(c.id)}>
+            <Button variant="ghost" size="icon" aria-label={`Excluir "${c.title}"`} onClick={() => setDeleteId(c.id)}>
               <Trash2 className="h-3.5 w-3.5 text-destructive" />
             </Button>
           </div>
@@ -670,6 +683,22 @@ function TemplateContentsPanel({ templateId, onChanged }: { templateId: string; 
           }}
         />
       )}
+
+      <ConfirmationDialog
+        open={deleteId !== null}
+        onClose={() => { if (!deleting) setDeleteId(null); }}
+        onConfirm={confirmDelete}
+        twoStep
+        destructive
+        icon={Trash2}
+        title="Excluir banner/aviso"
+        message="Este banner/aviso deixa de aparecer no topo do dashboard deste perfil. A exclusão é permanente."
+        targetName={deleteContent?.title ?? ""}
+        targetDetail={deleteContent?.type === "notice" ? "Aviso" : "Banner"}
+        consequences={["Some do dashboard de todos os usuários deste perfil.", "Ação irreversível — não há restauração."]}
+        continueText="Continuar para confirmação"
+        finalConfirmText={`Excluir "${deleteContent?.title ?? ""}" definitivamente`}
+      />
     </div>
   );
 }
