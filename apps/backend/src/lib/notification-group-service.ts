@@ -116,74 +116,145 @@ export async function allEligibleIds(
   return new Set(rows.map((r) => r.id));
 }
 
-const APPROVAL_ALERT_DEDUPE = (groupId: string) => `notif_group_approval:${groupId}`;
+// dedupe_key por (grupo, Admin Master) — cada Master tem NO MÁXIMO um alerta
+// de aprovação ativo por solicitação. (Antes era um alerta Geral `user_id:null`,
+// que qualquer admin comum via — reparo ata 2026-08: o pedido de aprovação só
+// pode ser visto/decidido por Admin Master ativo.)
+const APPROVAL_ALERT_DEDUPE = (groupId: string, masterId: string) => `notif_group_approval:${groupId}:${masterId}`;
 
-/** Cria (idempotente por dedupe_key) o alerta amarelo Geral para o Admin Master. */
-export async function createGroupApprovalAlert(
+export class NoActiveAdminMasterError extends Error {
+  httpStatus = 409;
+  code = "no_active_admin_master";
+  constructor() {
+    super("Não há um Admin Master ativo disponível para analisar este pedido no momento.");
+  }
+}
+
+/**
+ * Admin Masters ATIVOS pela classificação oficial da conta + permissões reais
+ * do servidor (nunca por nome/e-mail/dado do frontend): `account_type = "admin"`,
+ * usuário ativo, e `admin_profile.is_master` + `admin_profile.is_active`.
+ * Mesmo critério do middleware `requireAdminMaster`.
+ */
+export async function listActiveAdminMasterIds(db: Tx): Promise<string[]> {
+  const rows = await db.user.findMany({
+    where: {
+      is_active: true,
+      account_type: "admin",
+      admin_profile: { is_master: true, is_active: true },
+    },
+    select: { id: true },
+  });
+  return rows.map((r) => r.id);
+}
+
+/**
+ * Cria UM alerta amarelo INDIVIDUAL por Admin Master ativo (`user_id` real do
+ * Master, nunca `null`). Idempotente por `dedupe_key` (grupo+master): retry /
+ * clique duplo não duplica. Se NÃO houver nenhum Admin Master ativo, lança
+ * `NoActiveAdminMasterError` — o chamador roda tudo dentro de uma transação,
+ * então a solicitação inteira é desfeita (nada de grupo pendente pela metade,
+ * nada de conversa, nada de alerta incompleto).
+ */
+export async function createGroupApprovalAlerts(
   db: Tx,
   group: { id: string; name: string; purpose: string | null; requested_by_id: string | null },
   requesterName: string,
   memberCount: number,
-): Promise<void> {
-  const dedupe = APPROVAL_ALERT_DEDUPE(group.id);
-  const existing = await db.systemAlert.findUnique({ where: { dedupe_key: dedupe }, select: { id: true } });
-  if (existing) return; // retry / clique duplo não duplica
+): Promise<{ created: number; masterIds: string[] }> {
+  const masterIds = await listActiveAdminMasterIds(db);
+  if (masterIds.length === 0) throw new NoActiveAdminMasterError();
 
-  await db.systemAlert.create({
-    data: {
-      type: "notification_group.approval_pending",
-      title: "Novo Grupo de Notificação aguardando aprovação",
-      message:
-        `Grupo "${group.name}" solicitado por ${requesterName}, com ${memberCount} membro${memberCount !== 1 ? "s" : ""}.` +
-        (group.purpose ? ` Finalidade: ${group.purpose}` : ""),
-      severity: "warning",
-      category: "alerta",
-      user_id: null, // Geral — visível a todos os admins (escopoDoUsuario)
-      entity_type: "notification_group",
-      entity_id: group.id,
-      action_url: `/admin/grupos-notificacao?review=${group.id}`,
-      dedupe_key: dedupe,
-      created_by_user_id: group.requested_by_id,
-      events: {
-        create: {
-          event_type: "created",
-          description: "Solicitação de Grupo de Notificação registrada — aguardando decisão do Admin Master.",
-          actor_user_id: group.requested_by_id,
+  const message =
+    `Grupo "${group.name}" solicitado por ${requesterName}, com ${memberCount} membro${memberCount !== 1 ? "s" : ""}.` +
+    (group.purpose ? ` Finalidade: ${group.purpose}` : "");
+
+  let created = 0;
+  for (const masterId of masterIds) {
+    const dedupe = APPROVAL_ALERT_DEDUPE(group.id, masterId);
+    const existing = await db.systemAlert.findFirst({
+      where: {
+        type: "notification_group.approval_pending",
+        entity_id: group.id,
+        user_id: masterId,
+        manual_resolved_at: null,
+      },
+      select: { id: true },
+    });
+    if (existing) continue; // este Master já tem um alerta ativo pra esta solicitação
+    await db.systemAlert.create({
+      data: {
+        type: "notification_group.approval_pending",
+        title: "Novo Grupo de Notificação aguardando aprovação",
+        message,
+        severity: "warning",
+        category: "alerta",
+        user_id: masterId, // destinatário REAL — só este Admin Master vê
+        entity_type: "notification_group",
+        entity_id: group.id,
+        action_url: `/admin/grupos-notificacao?review=${group.id}`,
+        dedupe_key: dedupe,
+        created_by_user_id: group.requested_by_id,
+        events: {
+          create: {
+            event_type: "created",
+            description: "Solicitação de Grupo de Notificação registrada — aguardando decisão do Admin Master.",
+            actor_user_id: group.requested_by_id,
+          },
         },
       },
-    },
-  });
+    });
+    created++;
+  }
+  return { created, masterIds };
 }
 
-/** Encerra o alerta amarelo depois da decisão (aprovar/rejeitar/cancelar). */
-export async function resolveGroupApprovalAlert(
+/**
+ * Encerra TODOS os alertas de aprovação da solicitação (inclusive os dos
+ * outros Admin Masters) depois da decisão — aprovar/rejeitar/cancelar. Busca
+ * por `type` + `entity_id` (nunca por dedupe_key só), então um alerta de
+ * qualquer Master é resolvido. Nunca apaga o histórico (evento "resolved" em
+ * cada um).
+ */
+export async function resolveGroupApprovalAlerts(
   db: Tx,
   groupId: string,
   actorId: string,
   outcome: "approved" | "rejected" | "cancelled",
-): Promise<void> {
-  const alert = await db.systemAlert.findUnique({
-    where: { dedupe_key: APPROVAL_ALERT_DEDUPE(groupId) },
-    select: { id: true, manual_resolved_at: true },
-  });
-  if (!alert || alert.manual_resolved_at) return;
-  const label =
-    outcome === "approved" ? "Grupo aprovado." : outcome === "rejected" ? "Grupo rejeitado." : "Solicitação cancelada pelo solicitante.";
-  await db.systemAlert.update({
-    where: { id: alert.id },
-    data: {
-      manual_resolved_at: new Date(),
-      resolved_by_user_id: actorId,
-      resolution_action: "outra_acao",
-      resolution_description: label,
-      dedupe_key: null, // libera pra um pedido futuro do mesmo grupo, se houver
-      // Evento na MESMA transação (nested write) — nunca com o prisma global,
-      // que travaria esperando os locks que a própria transação segura.
-      events: {
-        create: { event_type: "resolved", description: label, actor_user_id: actorId },
-      },
+): Promise<number> {
+  const alerts = await db.systemAlert.findMany({
+    where: {
+      type: "notification_group.approval_pending",
+      entity_id: groupId,
+      manual_resolved_at: null,
     },
+    select: { id: true },
   });
+  if (alerts.length === 0) return 0;
+  const label =
+    outcome === "approved"
+      ? "Grupo aprovado."
+      : outcome === "rejected"
+        ? "Grupo rejeitado."
+        : "Solicitação cancelada pelo solicitante.";
+  for (const a of alerts) {
+    await db.systemAlert.update({
+      where: { id: a.id },
+      data: {
+        manual_resolved_at: new Date(),
+        resolved_by_user_id: actorId,
+        resolution_action: "outra_acao",
+        resolution_description: label,
+        dedupe_key: null, // libera pra um pedido futuro do mesmo grupo, se houver
+        // Evento na MESMA transação (nested write) — nunca com o prisma global,
+        // que travaria esperando os locks que a própria transação segura.
+        events: {
+          create: { event_type: "resolved", description: label, actor_user_id: actorId },
+        },
+      },
+    });
+  }
+  return alerts.length;
 }
 
 /**
@@ -248,7 +319,7 @@ export async function approveGroup(groupId: string, masterId: string): Promise<{
       },
     });
 
-    await resolveGroupApprovalAlert(tx, group.id, masterId, "approved");
+    await resolveGroupApprovalAlerts(tx, group.id, masterId, "approved");
 
     return { conversationId: conversation.id };
   });

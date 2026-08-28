@@ -8,21 +8,26 @@ import { syncRoomParticipants } from "../lib/chat-service";
 import {
   allEligibleIds,
   approveGroup,
-  createGroupApprovalAlert,
+  createGroupApprovalAlerts,
   eligibleMembersFor,
+  NoActiveAdminMasterError,
   resolveGroupActorRole,
-  resolveGroupApprovalAlert,
+  resolveGroupApprovalAlerts,
   type GroupActorRole,
 } from "../lib/notification-group-service";
 
 const router = Router();
 router.use(verifyToken);
 
-// ── Grupos de Notificação com ciclo de aprovação (ata 2026-08, bloco 3/5) ──
+// ── Grupos de Notificação com ciclo de aprovação (ata 2026-08, bloco 3/5;
+//    reparo do público do alerta) ────────────────────────────────────────
 // Admin Master cria ATIVO direto (com sala). Líder SOLICITA (pending),
-// escolhendo só membros sob sua responsabilidade → alerta amarelo Geral pro
-// Admin Master → Master aprova (transação: ativo + sala + participantes +
-// resolve o alerta) ou rejeita (com justificativa). Tudo auditado.
+// escolhendo só membros sob sua responsabilidade → UM alerta amarelo
+// INDIVIDUAL para cada Admin Master ATIVO (`user_id` real; nunca `null`,
+// nunca visível a admin comum) → qualquer Master aprova (transação: ativo +
+// sala + participantes + resolve TODOS os alertas da solicitação) ou rejeita
+// (com justificativa). Sem Master ativo → a solicitação é recusada
+// transacionalmente (nada de grupo pendente pela metade). Tudo auditado.
 
 const MEMBER_LIMIT = 200;
 const NAME_MIN = 2;
@@ -291,7 +296,10 @@ router.post("/requests", async (req, res, next) => {
         },
         include: { _count: { select: { members: true } } },
       });
-      await createGroupApprovalAlert(
+      // Um alerta amarelo INDIVIDUAL por Admin Master ativo. Se não houver
+      // nenhum, lança NoActiveAdminMasterError → a transação inteira é
+      // desfeita (nada de grupo pendente pela metade, nada de conversa).
+      await createGroupApprovalAlerts(
         tx,
         { id: g.id, name: g.name, purpose: g.purpose, requested_by_id: req.user!.id },
         me?.name ?? "Líder",
@@ -309,6 +317,10 @@ router.post("/requests", async (req, res, next) => {
 
     res.status(201).json(groupSummary(group));
   } catch (err) {
+    if (err instanceof NoActiveAdminMasterError) {
+      res.status(err.httpStatus).json({ error: err.message, code: err.code });
+      return;
+    }
     next(err);
   }
 });
@@ -376,7 +388,7 @@ router.post("/:id/reject", async (req, res, next) => {
         },
         include: { _count: { select: { members: true } } },
       });
-      await resolveGroupApprovalAlert(tx, group.id, req.user!.id, "rejected");
+      await resolveGroupApprovalAlerts(tx, group.id, req.user!.id, "rejected");
       await tx.productFeedbackAccessAudit.create({
         data: {
           actor_id: req.user!.id,
@@ -412,7 +424,7 @@ router.post("/:id/cancel", async (req, res, next) => {
         data: { status: "archived", archived_by_id: meId, archived_at: new Date() },
         include: { _count: { select: { members: true } } },
       });
-      await resolveGroupApprovalAlert(tx, group.id, meId, "cancelled");
+      await resolveGroupApprovalAlerts(tx, group.id, meId, "cancelled");
       await tx.productFeedbackAccessAudit.create({
         data: {
           actor_id: meId,

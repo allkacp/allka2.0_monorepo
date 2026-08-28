@@ -93,13 +93,32 @@ async function mkTaskUnderLeader(leaderId: string, assigneeId: string) {
   createdTaskIds.push(task.id);
 }
 
+async function mkCommonAdmin() {
+  // Admin com perfil NÃO-master, ativo, sem nenhuma permissão concedida.
+  const p = await prisma.adminProfile.create({ data: { name: `ng-common-${suffix}-${crypto.randomBytes(3).toString("hex")}`, is_master: false, is_active: true } });
+  createdProfileIds.push(p.id);
+  return mkUser({ role: "admin", account_type: "admin", admin_profile_id: p.id });
+}
+
 let master: Awaited<ReturnType<typeof mkUser>>;
 let masterToken = "";
+let master2: Awaited<ReturnType<typeof mkUser>>;
+let master2Token = "";
+let commonAdmin: Awaited<ReturnType<typeof mkUser>>;
+let commonAdminToken = "";
 let leader: Awaited<ReturnType<typeof mkUser>>;
 let leaderToken = "";
 let memberA: Awaited<ReturnType<typeof mkUser>>;
 let memberB: Awaited<ReturnType<typeof mkUser>>;
 let outsider: Awaited<ReturnType<typeof mkUser>>;
+
+/** IDs de alertas de aprovação de um grupo, na ordem de criação. */
+async function approvalAlerts(groupId: string) {
+  return prisma.systemAlert.findMany({
+    where: { type: "notification_group.approval_pending", entity_id: groupId },
+    orderBy: { created_at: "asc" },
+  });
+}
 
 describe("Grupos de Notificação — ciclo de aprovação", () => {
   before(async () => {
@@ -112,6 +131,10 @@ describe("Grupos de Notificação — ciclo de aprovação", () => {
 
     master = await mkMaster();
     masterToken = tokenFor(master);
+    master2 = await mkMaster();
+    master2Token = tokenFor(master2);
+    commonAdmin = await mkCommonAdmin();
+    commonAdminToken = tokenFor(commonAdmin);
     leader = await mkUser({ role: "lider", account_type: "lider" });
     leaderToken = tokenFor(leader);
     memberA = await mkUser();
@@ -154,7 +177,7 @@ describe("Grupos de Notificação — ciclo de aprovação", () => {
     assert.equal(parts, 2, "master + memberA na sala");
   });
 
-  it("2/10. Líder cria PENDENTE e a solicitação gera exatamente um alerta amarelo", async () => {
+  it("R1/R2/R3. Líder cria PENDENTE — UM alerta por Admin Master ATIVO, com user_id real, nenhum Geral (user_id null)", async () => {
     const r = await api("/api/notification-groups/requests", {
       method: "POST",
       token: leaderToken,
@@ -165,14 +188,71 @@ describe("Grupos de Notificação — ciclo de aprovação", () => {
     assert.equal(r.json.conversation_id, null, "sem sala ainda");
     createdGroupIds.push(r.json.id);
 
-    const alerts = await prisma.systemAlert.findMany({
-      where: { type: "notification_group.approval_pending", entity_id: r.json.id },
+    const alerts = await approvalAlerts(r.json.id);
+    assert.equal(alerts.length, 2, "um alerta por Admin Master ativo");
+    const targets = alerts.map((a) => a.user_id).sort();
+    assert.deepEqual(targets, [master.id, master2.id].sort(), "destinatários = os Masters ativos");
+    assert.ok(!alerts.some((a) => a.user_id === null), "NENHUM alerta Geral (user_id null)");
+    for (const a of alerts) {
+      assert.equal(a.severity, "warning");
+      assert.match(a.message, /Grupo do Líder/);
+      assert.match(a.action_url ?? "", /grupos-notificacao\?review=/);
+      assert.equal(a.manual_resolved_at, null);
+    }
+  });
+
+  it("R4. Admin comum NÃO recebe o alerta — não aparece na Central dele", async () => {
+    const r = await api("/api/notification-groups/requests", {
+      method: "POST",
+      token: leaderToken,
+      body: { name: "Grupo sem admin comum", purpose: "só masters", member_user_ids: [memberA.id] },
     });
-    assert.equal(alerts.length, 1, "exatamente um alerta");
-    assert.equal(alerts[0].severity, "warning");
-    assert.equal(alerts[0].user_id, null, "Geral — todo admin vê");
-    assert.match(alerts[0].message, /Grupo do Líder/);
-    assert.match(alerts[0].action_url ?? "", /grupos-notificacao\?review=/);
+    createdGroupIds.push(r.json.id);
+    // escopoDoUsuario do admin comum: user_id null OU o próprio id. Os alertas
+    // são user_id = master → não casam.
+    const list = await api("/api/system-alerts?category=alerta&is_archived=all&limit=200", { token: commonAdminToken });
+    const seen = list.json.data.filter((a: any) => a.type === "notification_group.approval_pending" && a.entity_id === r.json.id);
+    assert.equal(seen.length, 0, "admin comum não vê nenhum alerta de aprovação");
+    // o Master vê o dele
+    const masterList = await api("/api/system-alerts?category=alerta&is_archived=all&limit=200", { token: masterToken });
+    assert.ok(masterList.json.data.some((a: any) => a.type === "notification_group.approval_pending" && a.entity_id === r.json.id));
+  });
+
+  it("R5. Admin comum NÃO aprova nem rejeita (chamada direta) — 403", async () => {
+    const r = await api("/api/notification-groups/requests", {
+      method: "POST",
+      token: leaderToken,
+      body: { name: "Comum não decide", purpose: "teste", member_user_ids: [memberA.id] },
+    });
+    createdGroupIds.push(r.json.id);
+    assert.equal((await api(`/api/notification-groups/${r.json.id}/approve`, { method: "POST", token: commonAdminToken })).status, 403);
+    assert.equal((await api(`/api/notification-groups/${r.json.id}/reject`, { method: "POST", token: commonAdminToken, body: { reason: "não posso" } })).status, 403);
+  });
+
+  it("R9. SEM Admin Master ativo — solicitação recusada de forma transacional (nada persiste)", async () => {
+    // desativa temporariamente os dois masters
+    await prisma.adminProfile.updateMany({ where: { id: { in: createdProfileIds } }, data: { is_active: false } });
+    try {
+      const before = await prisma.notificationGroup.count();
+      const r = await api("/api/notification-groups/requests", {
+        method: "POST",
+        token: leaderToken,
+        body: { name: "Sem master ativo", purpose: "não deve criar nada", member_user_ids: [memberA.id] },
+      });
+      assert.equal(r.status, 409);
+      assert.equal(r.json.code, "no_active_admin_master");
+      assert.match(r.json.error, /Admin Master ativo/i);
+      const after = await prisma.notificationGroup.count();
+      assert.equal(after, before, "nenhum grupo criado");
+      const orphanAlerts = await prisma.systemAlert.count({
+        where: { type: "notification_group.approval_pending", message: { contains: "Sem master ativo" } },
+      });
+      assert.equal(orphanAlerts, 0, "nenhum alerta incompleto");
+    } finally {
+      await prisma.adminProfile.updateMany({ where: { id: { in: createdProfileIds } }, data: { is_active: true } });
+      // mkCommonAdmin também está em createdProfileIds e é is_active:true por padrão — reativa sem problema.
+      await prisma.adminProfile.update({ where: { id: commonAdmin.admin_profile_id! }, data: { is_master: false } });
+    }
   });
 
   it("3. Líder não cria grupo ATIVO direto (POST /) — 403", async () => {
@@ -200,7 +280,7 @@ describe("Grupos de Notificação — ciclo de aprovação", () => {
     assert.equal((await api("/api/notification-groups/requests", { method: "POST", token: t, body: { name: "a", purpose: "bbb", member_user_ids: [leader.id] } })).status, 403);
   });
 
-  it("6/11. Retry/clique duplo não duplica grupo nem alerta", async () => {
+  it("R8. Retry/clique duplo não duplica grupo, conversa nem alerta (um alerta ativo por Master)", async () => {
     const body = { name: "Grupo idempotente", purpose: "sem duplicar", member_user_ids: [memberA.id] };
     const r1 = await api("/api/notification-groups/requests", { method: "POST", token: leaderToken, body });
     const r2 = await api("/api/notification-groups/requests", { method: "POST", token: leaderToken, body });
@@ -209,8 +289,11 @@ describe("Grupos de Notificação — ciclo de aprovação", () => {
     assert.equal(r2.json.deduped, true);
     const groups = await prisma.notificationGroup.count({ where: { requested_by_id: leader.id, name: "Grupo idempotente" } });
     assert.equal(groups, 1);
-    const alerts = await prisma.systemAlert.count({ where: { type: "notification_group.approval_pending", entity_id: r1.json.id } });
-    assert.equal(alerts, 1);
+    const alerts = await approvalAlerts(r1.json.id);
+    assert.equal(alerts.length, 2, "exatamente um alerta ATIVO por Master (2 Masters), nunca duplicado");
+    assert.deepEqual(alerts.map((a) => a.user_id).sort(), [master.id, master2.id].sort());
+    const convs = await prisma.conversation.count({ where: { notification_group: { id: r1.json.id } } });
+    assert.equal(convs, 0, "pendente não tem conversa");
   });
 
   it("7. Seletor de membros é paginado e pesquisável, escopado ao líder", async () => {
@@ -223,20 +306,22 @@ describe("Grupos de Notificação — ciclo de aprovação", () => {
     assert.equal(search.json.data.length, 0);
   });
 
-  it("8/14. Rejeição exige justificativa; não cria sala; resolve o alerta", async () => {
+  it("8/14/R13. Rejeição exige justificativa; não cria sala; resolve TODOS os alertas (dos dois Masters)", async () => {
     const req = await api("/api/notification-groups/requests", {
       method: "POST",
       token: leaderToken,
       body: { name: "Para rejeitar", purpose: "motivo", member_user_ids: [memberA.id] },
     });
     createdGroupIds.push(req.json.id);
+    assert.equal((await approvalAlerts(req.json.id)).length, 2, "2 alertas antes da decisão");
 
     const noReason = await api(`/api/notification-groups/${req.json.id}/reject`, { method: "POST", token: masterToken, body: {} });
     assert.equal(noReason.status, 400);
 
+    // Rejeitado pelo master2 → resolve o alerta DELE e o do master1 também.
     const ok = await api(`/api/notification-groups/${req.json.id}/reject`, {
       method: "POST",
-      token: masterToken,
+      token: master2Token,
       body: { reason: "Escopo muito amplo — refaça." },
     });
     assert.equal(ok.status, 200);
@@ -244,35 +329,48 @@ describe("Grupos de Notificação — ciclo de aprovação", () => {
     assert.equal(ok.json.rejection_reason, "Escopo muito amplo — refaça.");
     assert.equal(ok.json.conversation_id, null);
 
-    const alert = await prisma.systemAlert.findFirst({ where: { entity_id: req.json.id, type: "notification_group.approval_pending" } });
-    assert.ok(alert?.manual_resolved_at, "alerta resolvido após decisão");
+    const alerts = await approvalAlerts(req.json.id);
+    assert.ok(alerts.every((a) => a.manual_resolved_at), "TODOS os alertas resolvidos");
+    assert.ok(alerts.every((a) => a.resolved_by_user_id === master2.id), "quem decidiu foi o master2");
   });
 
-  it("12/15/17. Aprovação: sala + participantes na MESMA transação, alerta resolvido, auditoria", async () => {
+  it("R6/R7/12/15/17/R10. Aprovação: sala transacional; resolve TODOS os alertas; Master aprovador NÃO vira participante", async () => {
     const req = await api("/api/notification-groups/requests", {
       method: "POST",
       token: leaderToken,
       body: { name: "Para aprovar", purpose: "vamos aprovar", member_user_ids: [memberA.id, memberB.id] },
     });
     createdGroupIds.push(req.json.id);
+    assert.equal((await approvalAlerts(req.json.id)).length, 2);
 
+    // Aprovado pelo master1.
     const r = await api(`/api/notification-groups/${req.json.id}/approve`, { method: "POST", token: masterToken });
     assert.equal(r.status, 200);
     assert.equal(r.json.status, "active");
     assert.ok(r.json.conversation_id);
     createdConversationIds.push(r.json.conversation_id);
 
-    const parts = await prisma.chatParticipant.findMany({ where: { conversation_id: r.json.conversation_id, left_at: null } });
-    assert.equal(parts.length, 3, "líder + 2 membros");
+    const parts = await prisma.chatParticipant.findMany({ where: { conversation_id: r.json.conversation_id } });
+    assert.equal(parts.length, 3, "líder + 2 membros — SÓ eles");
+    assert.ok(!parts.some((p) => p.user_id === master.id), "R10: Master aprovador NÃO entra na sala");
+    assert.ok(!parts.some((p) => p.user_id === master2.id));
 
-    const alert = await prisma.systemAlert.findFirst({ where: { entity_id: req.json.id, type: "notification_group.approval_pending" } });
-    assert.ok(alert?.manual_resolved_at, "alerta resolvido");
-    assert.equal(alert?.resolved_by_user_id, master.id);
+    const alerts = await approvalAlerts(req.json.id);
+    assert.ok(alerts.every((a) => a.manual_resolved_at), "R7: TODOS os alertas resolvidos (inclusive o do master2)");
+    assert.ok(alerts.every((a) => a.resolved_by_user_id === master.id));
 
     const audit = await prisma.productFeedbackAccessAudit.findFirst({
       where: { action: "notification_group.approved", after_json: { contains: req.json.id } },
     });
     assert.ok(audit, "auditoria before/after gravada");
+  });
+
+  it("R6. Master aprovador NÃO lê a conversa por ter aprovado (GET messages → 404)", async () => {
+    const g = await prisma.notificationGroup.findFirst({ where: { name: "Para aprovar", status: "active" }, select: { conversation_id: true } });
+    const asMaster = await api(`/api/chat/conversations/${g!.conversation_id}/messages`, { token: masterToken });
+    assert.equal(asMaster.status, 404, "Master não é participante → 404");
+    const asLeader = await api(`/api/chat/conversations/${g!.conversation_id}/messages`, { token: leaderToken });
+    assert.equal(asLeader.status, 200, "R11: participante (líder) abre normalmente");
   });
 
   it("13. Aprovar algo que não é pendente → 409 (grupo não fica ativo sem sala)", async () => {
@@ -294,11 +392,12 @@ describe("Grupos de Notificação — ciclo de aprovação", () => {
       body: { name: "Vou cancelar", purpose: "mudei de ideia", member_user_ids: [memberA.id] },
     });
     createdGroupIds.push(pend.json.id);
+    assert.equal((await approvalAlerts(pend.json.id)).length, 2, "2 alertas na solicitação");
     const cancel = await api(`/api/notification-groups/${pend.json.id}/cancel`, { method: "POST", token: leaderToken });
     assert.equal(cancel.status, 200);
     assert.equal(cancel.json.status, "archived");
-    const alert = await prisma.systemAlert.findFirst({ where: { entity_id: pend.json.id, type: "notification_group.approval_pending" } });
-    assert.ok(alert?.manual_resolved_at, "alerta encerrado ao cancelar");
+    const alerts = await approvalAlerts(pend.json.id);
+    assert.ok(alerts.every((a) => a.manual_resolved_at), "R13: cancelamento encerra TODOS os alertas");
   });
 
   it("9. Arquivar grupo ativo deixa a sala somente-leitura, sem apagar mensagens", async () => {

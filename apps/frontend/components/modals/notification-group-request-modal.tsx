@@ -122,6 +122,8 @@ export function NotificationGroupRequestModal({ open, onClose, onRequested }: Pr
     } catch (err) {
       if (err instanceof ApiError && (err.data as any)?.out_of_scope_user_ids) {
         setError("Alguns membros estão fora do seu escopo — remova-os e tente de novo.");
+      } else if (err instanceof ApiError && (err.data as any)?.code === "no_active_admin_master") {
+        setError("Não há um Admin Master ativo para analisar o pedido agora. Tente novamente mais tarde.");
       } else {
         setError(err instanceof ApiError ? err.message : "Não foi possível enviar a solicitação.");
       }
