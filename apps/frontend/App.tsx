@@ -136,6 +136,7 @@ const AdminAlertasPage = React.lazy(() => import("@/app/admin/alertas/page"));
 const AdminLinksCompartilhadosPage = React.lazy(() => import("@/app/admin/links-compartilhados/page"));
 const AdminDashboardTemplatesPage = React.lazy(() => import("@/app/admin/dashboard-templates/page"));
 const AdminAcessoChamadosPage = React.lazy(() => import("@/app/admin/acesso-chamados/page"));
+const AdminGruposNotificacaoPage = React.lazy(() => import("@/app/admin/grupos-notificacao/page"));
 
 // ─── Nômades Pages ────────────────────────────────────────────────────────────
 const NomadDashboardPage = React.lazy(
@@ -888,6 +889,7 @@ export default function App() {
                   <Route path="/admin/links-compartilhados" element={<AdminLinksCompartilhadosPage />} />
                   <Route path="/admin/dashboard-templates" element={<AdminDashboardTemplatesPage />} />
                   <Route path="/admin/acesso-chamados" element={<AdminAcessoChamadosPage />} />
+                  <Route path="/admin/grupos-notificacao" element={<AdminGruposNotificacaoPage />} />
                   {/* ─── Nômade dashboard (replica do admin) ────────────── */}
                   <Route
                     path="/nomad/dashboard"

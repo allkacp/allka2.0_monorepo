@@ -2220,12 +2220,36 @@ model NotificationGroup {
   owner         User     @relation("NotificationGroupOwner", fields: [owner_user_id], references: [id], onDelete: Cascade)
   name          String
   description   String?
+  // "finalidade" — por que o grupo existe (ata 2026-08, bloco 3). Texto
+  // curto obrigatório para solicitação de Líder.
+  purpose       String?  @db.Text
+  // Ciclo de vida (ata 2026-08, bloco 3). Registros antigos nascem "active"
+  // no backfill da migration — comportamento inalterado.
+  //   draft    = rascunho do Líder ainda não enviado (não usado hoje, reservado)
+  //   pending  = solicitação de Líder aguardando o Admin Master
+  //   active   = grupo em uso (tem sala de chat)
+  //   rejected = solicitação recusada (com justificativa)
+  //   archived = grupo desativado (sala fica somente-leitura)
+  status        String   @default("active")
+  // Quem SOLICITOU (Líder). Nulo quando o Admin Master cria direto.
+  requested_by_id String?
+  approved_by_id   String?
+  approved_at      DateTime?
+  rejected_by_id   String?
+  rejected_at      DateTime?
+  rejection_reason String?   @db.Text
+  archived_by_id   String?
+  archived_at      DateTime?
+  // Sala de chat criada na aprovação (1:1). Nula enquanto pending/rejected.
+  conversation_id  String?      @unique
+  conversation     Conversation? @relation(fields: [conversation_id], references: [id])
   created_at    DateTime @default(now())
   updated_at    DateTime @updatedAt
 
   members NotificationGroupMember[]
 
   @@index([owner_user_id])
+  @@index([status])
   @@map("notification_groups")
 }
 
@@ -2330,12 +2354,22 @@ model Conversation {
   title      String?
   type       String   @default("direct")
   // direct | group | support
+  // "active" | "archived" — sala arquivada fica somente-leitura (não recebe
+  // mensagens novas), mas nenhuma mensagem é apagada (ata 2026-08, bloco 3).
+  status        String    @default("active")
+  archived_at   DateTime?
+  // Quem abriu a sala (escalar solto, mesmo padrão de SystemAlert.*_user_id).
+  created_by_id String?
   created_at DateTime @default(now())
   updated_at DateTime @updatedAt
 
   participants ChatParticipant[]
   messages     ChatMessage[]
+  // Sala criada automaticamente ao aprovar um Grupo de Notificação (1:1;
+  // a FK mora em NotificationGroup.conversation_id).
+  notification_group NotificationGroup?
 
+  @@index([type, status])
   @@map("conversations")
 }
 
@@ -2347,8 +2381,17 @@ model ChatParticipant {
   user            User         @relation(fields: [user_id], references: [id])
   role            String       @default("member")
   joined_at       DateTime     @default(now())
+  // Último instante em que este participante leu a sala — base do "não
+  // lidas" por pessoa (funciona pra sala de grupo, onde ChatMessage.is_read
+  // booleano global não bastava).
+  last_read_at    DateTime?
+  // Preenchido quando o participante é removido do grupo: perde acesso
+  // FUTURO (não lista, não abre, não envia), mas a linha e o histórico
+  // permanecem (auditoria + "quem já participou").
+  left_at         DateTime?
 
   @@unique([conversation_id, user_id])
+  @@index([user_id])
   @@map("chat_participants")
 }
 
@@ -2360,8 +2403,14 @@ model ChatMessage {
   sender          User         @relation("SentMessages", fields: [sender_id], references: [id])
   content         String       @db.LongText
   is_read         Boolean      @default(false)
+  // Idempotência do envio (mesmo padrão de SystemAlert.dedupe_key /
+  // SystemAlertEvent.client_event_id): gerado no cliente por clique
+  // intencional em "Enviar", único no banco — retry/duplo-clique com o
+  // mesmo valor nunca grava uma segunda mensagem.
+  client_message_id String?    @unique
   created_at      DateTime     @default(now())
 
+  @@index([conversation_id, created_at])
   @@map("chat_messages")
 }
 

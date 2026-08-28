@@ -171,6 +171,11 @@ export function systemAlertLink(
       : TASKS_ROUTE_BY_ACCOUNT_TYPE[accountType]
   } else if (entity_type === "project") {
     path = entity_id && PROJECT_LINK_BUILDERS[accountType] ? PROJECT_LINK_BUILDERS[accountType]!(entity_id) : TASKS_ROUTE_BY_ACCOUNT_TYPE[accountType]
+  } else if (entity_type === "notification_group" && accountType === "admin") {
+    // Solicitação de Grupo de Notificação aguardando aprovação (ata 2026-08,
+    // bloco 3) — abre a tela de análise do Admin Master, com o grupo já
+    // selecionado. Só faz sentido no portal admin.
+    path = entity_id ? `/admin/grupos-notificacao?review=${encodeURIComponent(entity_id)}` : "/admin/grupos-notificacao"
   }
   // entity_type null (Avulso sem referência), "alert_schedule" (ocorrência
   // de Programação — nunca teve tela própria) ou qualquer tipo não

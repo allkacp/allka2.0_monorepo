@@ -28,7 +28,7 @@ type ActiveModal = "whatsapp" | "email" | "notification" | "schedule" | null
 
 export function QuickContactActions({ user, variant = "dark" }: QuickContactActionsProps) {
   const [activeModal, setActiveModal] = useState<ActiveModal>(null)
-  const { openConversationWithUser } = useChat()
+  const { openDirectWith } = useChat()
 
   const btnClass =
     variant === "dark"
@@ -43,14 +43,7 @@ export function QuickContactActions({ user, variant = "dark" }: QuickContactActi
   }
 
   const handleOpenChat = () => {
-    openConversationWithUser(String(user.id || ""), {
-      id: String(user.id || ""),
-      name: user.name || "Usuário",
-      email: user.email || "",
-      phone: user.phone,
-      account_type: (user.account_type || "empresas") as any,
-      online_status: (user.online_status || "offline") as any,
-    })
+    openDirectWith(String(user.id || ""))
   }
 
   return (

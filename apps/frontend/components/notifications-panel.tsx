@@ -7,7 +7,8 @@
 // filtros e configurações próprios, sem nenhuma aba pra Alertas (ver
 // alerts-panel.tsx pro painel irmão, de verdade separado).
 import { useCallback, useEffect, useState } from "react"
-import { useLocation } from "react-router-dom"
+import { useLocation, useNavigate } from "react-router-dom"
+import { useChat } from "@/contexts/chat-context"
 import {
   Bell, Mail, MessageSquare, Smartphone,
   Settings, CheckCheck, Info, Plus,
@@ -18,10 +19,7 @@ import { HeaderSlideScreen } from "@/components/header-slide-screen"
 import { Switch } from "@/components/ui/switch"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { ConfirmationDialog } from "@/components/confirmation-dialog"
-import {
-  NotificationGroupFormModal,
-  type NotificationGroupDraft,
-} from "@/components/modals/notification-group-form-modal"
+import { NotificationGroupRequestModal } from "@/components/modals/notification-group-request-modal"
 import { apiClient } from "@/lib/api-client"
 import { alertIcon } from "@/components/alerts-header-icon"
 import { cn } from "@/lib/utils"
@@ -88,8 +86,13 @@ interface GroupSummary {
   id: string
   name: string
   description: string | null
+  purpose?: string | null
   member_count: number
   created_at: string
+  status?: string
+  requested_by_id?: string | null
+  rejection_reason?: string | null
+  conversation_id?: string | null
 }
 
 function timeAgo(dateStr: string): string {
@@ -235,18 +238,21 @@ export function NotificationsPanel({
     }
   }
 
-  /* ── Grupos ──────────────────────────────────────────────────────────── */
+  /* ── Grupos (ciclo de aprovação — ata 2026-08, bloco 3/5) ──────────── */
+  const navigate = useNavigate()
+  const { openChat, openRoom } = useChat()
   const [groups, setGroups] = useState<GroupSummary[]>([])
+  const [groupsRole, setGroupsRole] = useState<"master" | "leader" | "other">("other")
   const [groupsLoading, setGroupsLoading] = useState(false)
-  const [groupModalOpen, setGroupModalOpen] = useState(false)
-  const [editingGroup, setEditingGroup] = useState<NotificationGroupDraft | null>(null)
-  const [deletingGroup, setDeletingGroup] = useState<GroupSummary | null>(null)
+  const [requestModalOpen, setRequestModalOpen] = useState(false)
+  const [cancelTarget, setCancelTarget] = useState<GroupSummary | null>(null)
 
   const fetchGroups = useCallback(async () => {
     setGroupsLoading(true)
     try {
-      const res = await apiClient.getNotificationGroups()
-      setGroups(res?.data ?? [])
+      const res = await apiClient.getNotificationGroupsList()
+      setGroups((res?.data ?? []) as GroupSummary[])
+      setGroupsRole(res?.role ?? "other")
     } catch {
       setGroups([])
     } finally {
@@ -258,29 +264,18 @@ export function NotificationsPanel({
     if (open) void fetchGroups()
   }, [open, fetchGroups])
 
-  async function saveGroup(draft: NotificationGroupDraft) {
-    if (draft.id) {
-      await apiClient.updateNotificationGroup(draft.id, {
-        name: draft.name,
-        description: draft.description,
-        member_user_ids: draft.member_user_ids,
-      })
-    } else {
-      await apiClient.createNotificationGroup({
-        name: draft.name,
-        description: draft.description,
-        member_user_ids: draft.member_user_ids,
-      })
-    }
-    await fetchGroups()
+  function openGroupChat(g: GroupSummary) {
+    if (!g.conversation_id) return
+    openChat()
+    openRoom(g.conversation_id)
   }
 
-  async function confirmDeleteGroup() {
-    if (!deletingGroup) return
+  async function confirmCancelRequest() {
+    if (!cancelTarget) return
     try {
-      await apiClient.deleteNotificationGroup(deletingGroup.id)
+      await apiClient.cancelNotificationGroupRequest(cancelTarget.id)
     } finally {
-      setDeletingGroup(null)
+      setCancelTarget(null)
       await fetchGroups()
     }
   }
@@ -357,33 +352,29 @@ export function NotificationsPanel({
             <TabsContent value="groups" className="flex-1 min-h-0 overflow-y-auto mt-0">
               <GroupsTab
                 groups={groups}
+                role={groupsRole}
                 loading={groupsLoading}
-                onNew={() => { setEditingGroup(null); setGroupModalOpen(true) }}
-                onEdit={(g) => {
-                  apiClient.getNotificationGroup(g.id).then((full: any) => {
-                    setEditingGroup({ id: g.id, name: g.name, description: g.description ?? "", member_user_ids: (full?.members ?? []).map((m: any) => m.id) })
-                    setGroupModalOpen(true)
-                  })
-                }}
-                onDelete={setDeletingGroup}
+                onRequest={() => setRequestModalOpen(true)}
+                onOpenAdmin={() => navigate("/admin/grupos-notificacao")}
+                onCancelRequest={setCancelTarget}
+                onOpenChat={openGroupChat}
               />
             </TabsContent>
           </Tabs>
         </div>
       </HeaderSlideScreen>
-      <NotificationGroupFormModal
-        open={groupModalOpen}
-        onClose={() => setGroupModalOpen(false)}
-        initial={editingGroup}
-        onSave={saveGroup}
+      <NotificationGroupRequestModal
+        open={requestModalOpen}
+        onClose={() => setRequestModalOpen(false)}
+        onRequested={() => void fetchGroups()}
       />
       <ConfirmationDialog
-        open={deletingGroup !== null}
-        onClose={() => setDeletingGroup(null)}
-        onConfirm={() => void confirmDeleteGroup()}
-        title={`Excluir grupo "${deletingGroup?.name ?? ""}"`}
-        message="Isso remove o grupo e sua lista de membros. Não afeta nenhuma notificação já enviada."
-        confirmText="Excluir"
+        open={cancelTarget !== null}
+        onClose={() => setCancelTarget(null)}
+        onConfirm={() => void confirmCancelRequest()}
+        title={`Cancelar solicitação "${cancelTarget?.name ?? ""}"`}
+        message="A solicitação sai da fila do Admin Master. Você pode solicitar de novo depois."
+        confirmText="Cancelar solicitação"
         destructive
       />
     </>
@@ -629,60 +620,113 @@ function PrefsTab({
   )
 }
 
+const GROUP_STATUS_BADGE: Record<string, string> = {
+  pending: "bg-amber-100 text-amber-700",
+  active: "bg-emerald-100 text-emerald-700",
+  rejected: "bg-red-100 text-red-700",
+  archived: "bg-slate-100 text-slate-600",
+}
+const GROUP_STATUS_LABEL: Record<string, string> = {
+  pending: "Aguardando aprovação",
+  active: "Ativo",
+  rejected: "Rejeitado",
+  archived: "Arquivado",
+}
+
 function GroupsTab({
-  groups, loading, onNew, onEdit, onDelete,
+  groups, role, loading, onRequest, onOpenAdmin, onCancelRequest, onOpenChat,
 }: {
   groups: GroupSummary[]
+  role: "master" | "leader" | "other"
   loading: boolean
-  onNew: () => void
-  onEdit: (g: GroupSummary) => void
-  onDelete: (g: GroupSummary) => void
+  onRequest: () => void
+  onOpenAdmin: () => void
+  onCancelRequest: (g: GroupSummary) => void
+  onOpenChat: (g: GroupSummary) => void
 }) {
+  if (loading && groups.length === 0) {
+    return <p className="text-xs text-slate-400 text-center py-10">Carregando...</p>
+  }
+
+  if (role === "master") {
+    const pend = groups.filter((g) => g.status === "pending").length
+    return (
+      <div className="p-5 space-y-4">
+        <div className="flex items-start gap-3 px-4 py-3 rounded-xl bg-violet-50 dark:bg-violet-950/20 border border-violet-100 dark:border-violet-800/40">
+          <Info className="h-3.5 w-3.5 text-violet-500 shrink-0 mt-0.5" />
+          <p className="text-xs text-violet-700 dark:text-violet-300">
+            Você gerencia os Grupos de Notificação na central do Admin Master — aprovar/rejeitar solicitações, arquivar e ver a auditoria.
+          </p>
+        </div>
+        {pend > 0 && (
+          <p className="text-xs font-medium text-amber-600">{pend} solicitação{pend !== 1 ? "ões" : ""} aguardando sua decisão.</p>
+        )}
+        <Button size="sm" className="btn-brand border-0 text-xs" onClick={onOpenAdmin}>
+          Abrir central de Grupos de Notificação
+        </Button>
+      </div>
+    )
+  }
+
+  const canRequest = role === "leader"
+  const mine = groups.filter((g) => g.status !== "rejected" || role === "leader")
+
   return (
     <div className="p-5 space-y-4">
-      <div className="flex items-start gap-3 px-4 py-3 rounded-xl bg-violet-50 dark:bg-violet-950/20 border border-violet-100 dark:border-violet-800/40">
-        <Info className="h-3.5 w-3.5 text-violet-500 shrink-0 mt-0.5" />
-        <p className="text-xs text-violet-700 dark:text-violet-300 leading-relaxed">
-          <strong>Grupos</strong> organizam pessoas do seu time. Usar um grupo inteiro como alvo
-          de uma regra é a próxima etapa — por enquanto, só o cadastro do grupo.
-        </p>
-      </div>
+      {canRequest && (
+        <div className="flex items-center justify-between">
+          <p className="text-xs font-semibold text-slate-700 dark:text-slate-200">Meus grupos e solicitações</p>
+          <Button size="sm" className="h-7 text-xs gap-1.5 btn-brand border-0" onClick={onRequest}>
+            <Plus className="h-3.5 w-3.5" /> Solicitar grupo
+          </Button>
+        </div>
+      )}
 
-      <div className="flex items-center justify-between">
-        <p className="text-xs font-semibold text-slate-700 dark:text-slate-200">{groups.length} grupo{groups.length !== 1 ? "s" : ""} criado{groups.length !== 1 ? "s" : ""}</p>
-        <Button size="sm" className="h-7 text-xs gap-1.5 btn-brand border-0" onClick={onNew}><Plus className="h-3.5 w-3.5" />Novo Grupo</Button>
-      </div>
-
-      {loading && groups.length === 0 && <p className="text-xs text-slate-400 text-center py-10">Carregando...</p>}
+      {mine.length === 0 && (
+        <div className="border border-dashed border-slate-200 dark:border-slate-700 rounded-xl py-8 flex flex-col items-center gap-2 text-center">
+          <Users className="h-7 w-7 text-slate-300" />
+          <p className="text-xs font-medium text-slate-500">
+            {canRequest ? "Você ainda não solicitou nenhum grupo." : "Você não participa de nenhum grupo de notificação."}
+          </p>
+          {canRequest && (
+            <Button size="sm" variant="outline" className="text-xs mt-1" onClick={onRequest}>
+              <Plus className="h-3.5 w-3.5 mr-1.5" /> Solicitar grupo
+            </Button>
+          )}
+        </div>
+      )}
 
       <div className="space-y-2">
-        {groups.map(group => (
-          <div key={group.id}
-            className="flex items-center gap-4 p-4 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 hover:border-slate-300 transition-colors">
-            <div className="h-10 w-10 rounded-xl flex items-center justify-center shrink-0 bg-violet-100 text-violet-700">
-              <Users className="h-4 w-4" />
+        {mine.map((g) => (
+          <div key={g.id} className="rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 p-4">
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="text-sm font-semibold text-slate-800 dark:text-white">{g.name}</span>
+              {g.status && (
+                <span className={cn("text-[10px] px-1.5 py-0.5 rounded-full font-medium", GROUP_STATUS_BADGE[g.status])}>
+                  {GROUP_STATUS_LABEL[g.status] ?? g.status}
+                </span>
+              )}
+              <span className="text-[10px] text-slate-400">{g.member_count} membro{g.member_count !== 1 ? "s" : ""}</span>
             </div>
-            <div className="flex-1 min-w-0">
-              <p className="text-sm font-semibold text-slate-800 dark:text-white">{group.name}</p>
-              {group.description && <p className="text-xs text-slate-400 mt-0.5">{group.description}</p>}
-            </div>
-            <div className="flex items-center gap-2 shrink-0">
-              <span className="text-xs font-bold text-slate-700 dark:text-slate-200">{group.member_count}</span>
-              <span className="text-[10px] text-slate-400">membro{group.member_count !== 1 ? "s" : ""}</span>
-              <Button variant="ghost" size="sm" className="h-7 w-7 p-0 rounded-lg" onClick={() => onEdit(group)}><Edit className="h-3.5 w-3.5" /></Button>
-              <Button variant="ghost" size="sm" className="h-7 w-7 p-0 rounded-lg text-red-500 hover:text-red-600" onClick={() => onDelete(group)}><Trash2 className="h-3.5 w-3.5" /></Button>
+            {g.purpose && <p className="text-xs text-slate-500 mt-1">{g.purpose}</p>}
+            {g.status === "rejected" && g.rejection_reason && (
+              <p className="text-xs text-red-600 mt-1">Motivo da rejeição: {g.rejection_reason}</p>
+            )}
+            <div className="flex items-center gap-2 mt-2">
+              {g.status === "pending" && canRequest && (
+                <Button size="sm" variant="ghost" className="h-7 text-xs text-red-600" onClick={() => onCancelRequest(g)}>
+                  Cancelar solicitação
+                </Button>
+              )}
+              {g.status === "active" && g.conversation_id && (
+                <Button size="sm" variant="outline" className="h-7 text-xs gap-1" onClick={() => onOpenChat(g)}>
+                  <Users className="h-3 w-3" /> Abrir chat
+                </Button>
+              )}
             </div>
           </div>
         ))}
       </div>
-
-      {!loading && groups.length === 0 && (
-        <div className="border border-dashed border-slate-200 dark:border-slate-700 rounded-xl py-8 flex flex-col items-center gap-2 text-center">
-          <Users className="h-7 w-7 text-slate-300" />
-          <p className="text-xs font-medium text-slate-500">Crie grupos para organizar sua equipe</p>
-          <Button size="sm" variant="outline" className="text-xs mt-1" onClick={onNew}><Plus className="h-3.5 w-3.5 mr-1.5" />Criar Grupo</Button>
-        </div>
-      )}
     </div>
   )
 }

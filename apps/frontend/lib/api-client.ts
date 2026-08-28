@@ -1591,23 +1591,59 @@ class ApiClient {
     return this.post("/permissions", { profile_id: profileId, permissions });
   }
 
-  // ─── Chat ─────────────────────────────────────────────────────────────────
-  async getConversations() {
-    return this.get("/chat/conversations");
+  // ─── Chat (restaurado — ata 2026-08, bloco 3/5) ──────────────────────────
+  async getConversations(params?: { page?: number; limit?: number }) {
+    return this.get<{ data: any[]; total: number; page: number; limit: number }>("/chat/conversations", params);
   }
 
-  async createConversation(data: Record<string, any>) {
+  async getConversation(conversationId: string) {
+    return this.get(`/chat/conversations/${conversationId}`);
+  }
+
+  async createConversation(data: { title?: string; type?: "direct" | "support"; participant_ids: string[] }) {
     return this.post("/chat/conversations", data);
   }
 
-  async getMessages(conversationId: string | number) {
-    return this.get(`/chat/conversations/${conversationId}/messages`);
+  async getMessages(conversationId: string | number, params?: { page?: number; limit?: number }) {
+    return this.get<{ data: any[]; total: number; page: number; limit: number; read_only?: boolean }>(
+      `/chat/conversations/${conversationId}/messages`,
+      params,
+    );
   }
 
-  async sendMessage(conversationId: string | number, content: string) {
-    return this.post(`/chat/conversations/${conversationId}/messages`, {
-      content,
-    });
+  async sendMessage(
+    conversationId: string | number,
+    body: { content: string; client_message_id?: string },
+  ) {
+    return this.post(`/chat/conversations/${conversationId}/messages`, body);
+  }
+
+  async markConversationRead(conversationId: string) {
+    return this.post(`/chat/conversations/${conversationId}/read`, {});
+  }
+
+  async getChatUnreadCount() {
+    return this.get<{ count: number }>("/chat/unread-count");
+  }
+
+  // ─── Grupos de Notificação — ciclo de aprovação (ata 2026-08, bloco 3/5) ──
+  async getNotificationGroupsList(params?: { status?: string; q?: string }) {
+    return this.get<{ data: any[]; role: "master" | "leader" | "other" }>("/notification-groups", params);
+  }
+  async requestNotificationGroup(data: { name: string; description?: string; purpose: string; member_user_ids: string[] }) {
+    return this.post("/notification-groups/requests", data);
+  }
+  async approveNotificationGroup(id: string) {
+    return this.post(`/notification-groups/${id}/approve`, {});
+  }
+  async rejectNotificationGroup(id: string, reason: string) {
+    return this.post(`/notification-groups/${id}/reject`, { reason });
+  }
+  async cancelNotificationGroupRequest(id: string) {
+    return this.post(`/notification-groups/${id}/cancel`, {});
+  }
+  async archiveNotificationGroup(id: string) {
+    return this.patch(`/notification-groups/${id}/archive`, {});
   }
 
   // ─── Reports ──────────────────────────────────────────────────────────────
@@ -2337,10 +2373,13 @@ class ApiClient {
     }>("/notification-groups");
   }
 
-  async getNotificationGroupEligibleMembers() {
-    return this.get<{ data: Array<{ id: string; name: string; email: string }> }>(
-      "/notification-groups/eligible-members",
-    );
+  async getNotificationGroupEligibleMembers(params?: { q?: string; page?: number; page_size?: number }) {
+    return this.get<{
+      data: Array<{ id: string; name: string; email: string; account_type: string; is_active: boolean }>;
+      total: number;
+      page: number;
+      page_size: number;
+    }>("/notification-groups/eligible-members", params);
   }
 
   async getNotificationGroup(id: string) {

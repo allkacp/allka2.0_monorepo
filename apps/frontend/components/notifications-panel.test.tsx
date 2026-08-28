@@ -13,6 +13,10 @@ import { NotificationsPanel } from "@/components/notifications-panel";
 // verdade). Este arquivo cobre SÓ o painel de Notificações — sem nenhuma
 // aba/estado de Alertas (ver alerts-panel.test.tsx pro painel irmão).
 
+vi.mock("@/contexts/chat-context", () => ({
+  useChat: () => ({ openChat: vi.fn(), openRoom: vi.fn(), rooms: [], totalUnread: 0 }),
+}));
+
 vi.mock("@/lib/api-client", () => ({
   apiClient: {
     getSystemAlerts: vi.fn(),
@@ -23,8 +27,11 @@ vi.mock("@/lib/api-client", () => ({
     getNotificationPreferences: vi.fn(),
     updateNotificationPreference: vi.fn(),
     getNotificationGroups: vi.fn(),
-    getNotificationGroupEligibleMembers: vi.fn(),
+    getNotificationGroupsList: vi.fn().mockResolvedValue({ data: [], role: "other" }),
+    getNotificationGroupEligibleMembers: vi.fn().mockResolvedValue({ data: [], total: 0, page: 1, page_size: 10 }),
     getNotificationGroup: vi.fn(),
+    requestNotificationGroup: vi.fn(),
+    cancelNotificationGroupRequest: vi.fn(),
     createNotificationGroup: vi.fn(),
     updateNotificationGroup: vi.fn(),
     deleteNotificationGroup: vi.fn(),
@@ -172,57 +179,59 @@ describe("NotificationsPanel — Preferências (real, per event x channel, exclu
   });
 });
 
-describe("NotificationsPanel — Grupos (Novo Grupo funciona)", () => {
-  it("'Novo Grupo' opens a real modal, lists eligible members, and submitting creates a real group", async () => {
-    (apiClient.getNotificationGroupEligibleMembers as any).mockResolvedValue({
-      data: [{ id: "u1", name: "Fulano", email: "fulano@example.com" }],
+// Bloco 3/5 (ata 2026-08) — Grupos de Notificação com ciclo de aprovação.
+describe("NotificationsPanel — Grupos (ciclo de aprovação)", () => {
+  it("2. Líder vê 'Solicitar grupo' e a lista com o status de cada um", async () => {
+    (apiClient.getNotificationGroupsList as any).mockResolvedValue({
+      role: "leader",
+      data: [
+        { id: "g1", name: "Grupo pendente", status: "pending", member_count: 2, created_at: new Date().toISOString(), purpose: "acompanhar" },
+        { id: "g2", name: "Grupo rejeitado", status: "rejected", rejection_reason: "escopo amplo", member_count: 1, created_at: new Date().toISOString() },
+      ],
     });
+    renderPanel({ initialTab: "groups" });
+    expect(await screen.findByText("Grupo pendente")).toBeInTheDocument();
+    expect(screen.getByText(/aguardando aprovação/i)).toBeInTheDocument();
+    expect(screen.getByText(/motivo da rejeição: escopo amplo/i)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /solicitar grupo/i })).toBeInTheDocument();
+  });
+
+  it("8. abrir 'Solicitar grupo' exige finalidade e chama requestNotificationGroup", async () => {
+    (apiClient.getNotificationGroupsList as any).mockResolvedValue({ role: "leader", data: [] });
+    (apiClient.getNotificationGroupEligibleMembers as any).mockResolvedValue({
+      data: [{ id: "u1", name: "Fulano", email: "f@x.test", account_type: "empresas", is_active: true }],
+      total: 1,
+      page: 1,
+      page_size: 10,
+    });
+    (apiClient.requestNotificationGroup as any).mockResolvedValue({ id: "g9", status: "pending" });
     const user = userEvent.setup();
     renderPanel({ initialTab: "groups" });
 
-    await user.click(screen.getByRole("tab", { name: /grupos/i }));
-    await user.click(screen.getByRole("button", { name: /novo grupo/i }));
-
+    const btns = await screen.findAllByRole("button", { name: /solicitar grupo/i });
+    await user.click(btns[0]);
     const dialog = await screen.findByRole("dialog");
     await within(dialog).findByText("Fulano");
-    await user.type(within(dialog).getByPlaceholderText(/líderes de projeto/i), "Time X");
+    await user.type(within(dialog).getAllByRole("textbox")[0], "Time X");
+    await user.type(within(dialog).getByPlaceholderText(/por que este grupo/i), "acompanhar entregas");
     await user.click(within(dialog).getByText("Fulano"));
-    await user.click(within(dialog).getByRole("button", { name: /salvar grupo/i }));
+    await user.click(within(dialog).getByRole("button", { name: /enviar solicitação/i }));
 
     await waitFor(() =>
-      expect(apiClient.createNotificationGroup).toHaveBeenCalledWith({
-        name: "Time X",
-        description: "",
-        member_user_ids: ["u1"],
-      }),
+      expect(apiClient.requestNotificationGroup).toHaveBeenCalledWith(
+        expect.objectContaining({ name: "Time X", purpose: "acompanhar entregas", member_user_ids: ["u1"] }),
+      ),
     );
   });
 
-  it("renders real groups fetched from the backend", async () => {
-    (apiClient.getNotificationGroups as any).mockResolvedValue({
-      data: [{ id: "g1", name: "Minha Equipe Real", description: null, member_count: 4, created_at: new Date().toISOString() }],
+  it("Admin Master vê o atalho para a central de grupos, não o CRUD", async () => {
+    (apiClient.getNotificationGroupsList as any).mockResolvedValue({
+      role: "master",
+      data: [{ id: "g1", name: "x", status: "pending", member_count: 1, created_at: new Date().toISOString() }],
     });
     renderPanel({ initialTab: "groups" });
-
-    expect(await screen.findByText("Minha Equipe Real")).toBeInTheDocument();
-  });
-
-  it("deleting a group asks for confirmation, then calls deleteNotificationGroup", async () => {
-    (apiClient.getNotificationGroups as any).mockResolvedValue({
-      data: [{ id: "g1", name: "Equipe a Remover", description: null, member_count: 1, created_at: new Date().toISOString() }],
-    });
-    const user = userEvent.setup();
-    renderPanel({ initialTab: "groups" });
-
-    await screen.findByText("Equipe a Remover");
-    const row = screen.getByText("Equipe a Remover").closest("div.flex.items-center.gap-4") as HTMLElement;
-    const rowButtons = within(row).getAllByRole("button");
-    await user.click(rowButtons[rowButtons.length - 1]);
-
-    await screen.findByText(/excluir grupo/i);
-    await user.click(screen.getByRole("button", { name: /^excluir$/i }));
-
-    await waitFor(() => expect(apiClient.deleteNotificationGroup).toHaveBeenCalledWith("g1"));
+    expect(await screen.findByRole("button", { name: /central de grupos de notificação/i })).toBeInTheDocument();
+    expect(screen.getByText(/1 solicitação/i)).toBeInTheDocument();
   });
 });
 
