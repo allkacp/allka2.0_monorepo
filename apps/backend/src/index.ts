@@ -9,6 +9,7 @@ import { isMetaIntegrationConfigured } from "./lib/meta-ads-client";
 import { runDailySyncForAllConnections } from "./lib/meta-ads-sync";
 import { ensureDefaultAlertStandardsAndRules, runAlertEngineOnceGuarded } from "./lib/alert-engine";
 import { runTaskRotationOnceGuarded } from "./lib/task-rotation-engine";
+import { runCommsSchedulerOnceGuarded } from "./lib/comms";
 
 // Mascara a URL do banco: mantém apenas o caminho do arquivo, omite credenciais
 function maskDatabaseUrl(url: string): string {
@@ -120,6 +121,17 @@ async function main() {
     );
   }, config.TASK_ROTATION_INTERVAL_MS).unref();
   console.log(`🔁 Motor do rodízio de tarefas ativo (intervalo: ${config.TASK_ROTATION_INTERVAL_MS}ms).`);
+
+  // Motor de comunicação (ata 2026-08, bloco 5/5) — ativa campanhas/banners
+  // agendados, cria as entregas idempotentes em lote e processa a outbox.
+  // Não depende de nenhuma página aberta no navegador. Mesmo padrão dos
+  // motores acima: registrado só aqui, naturalmente desligado nos testes.
+  setInterval(() => {
+    runCommsSchedulerOnceGuarded().catch((err) =>
+      console.error("❌ Falha na varredura do motor de comunicação:", err),
+    );
+  }, config.COMMS_SCHEDULER_INTERVAL_MS).unref();
+  console.log(`📣 Motor de comunicação ativo (intervalo: ${config.COMMS_SCHEDULER_INTERVAL_MS}ms).`);
 
   // Passenger/cPanel sets PORT as a socket path or port number
   // Use process.env.PORT directly to support both TCP and Unix socket

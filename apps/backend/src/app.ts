@@ -60,6 +60,8 @@ import productFeedbackRouter from "./routes/product-feedback";
 import productFeedbackAdminRouter from "./routes/product-feedback-admin";
 import roadmapSsoRouter from "./routes/roadmap-sso";
 import centralChamadosAdminRouter from "./routes/central-chamados-admin";
+import commsRouter from "./routes/comms";
+import commsAdminRouter from "./routes/comms-admin";
 import { prisma } from "./lib/prisma";
 import { errorHandler } from "./middleware/error";
 
@@ -229,6 +231,9 @@ app.use("/api/product-feedback", productFeedbackRouter);
 app.use("/api/product-feedback", roadmapSsoRouter);
 app.use("/api/admin/product-feedback", productFeedbackAdminRouter);
 app.use("/api/admin/central-chamados", centralChamadosAdminRouter);
+// Canais, campanhas e banners obrigatórios (ata 2026-08, bloco 5/5).
+app.use("/api/comms", commsRouter);
+app.use("/api/admin/comms", commsAdminRouter);
 
 // ─── 404 Handler ──────────────────────────────────────────────────────────────
 

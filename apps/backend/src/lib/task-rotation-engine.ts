@@ -3,6 +3,8 @@ import { prisma } from "./prisma";
 import { config } from "../config";
 import { onlineUserIds } from "./presence-service";
 import { recordAlertEvent } from "./alert-events";
+import { listActiveAdminMasterIds } from "./notification-group-service";
+import { writeAccessAudit } from "./product-feedback-service";
 
 // ── Rodízio de ofertas de tarefa a Nômades (ata 2026-08, bloco 4/5) ──────
 // Quando uma tarefa está pronta para receber um Nômade e ainda não tem
@@ -148,18 +150,38 @@ async function orderCandidates(candidates: RotationCandidate[]): Promise<Rotatio
 }
 
 // ── Escalonamento (esgotou o rodízio) ──────────────────────────────────
+// Destino do alerta amarelo, na ordem obrigatória (ata 2026-08, bloco 5/5 —
+// acabamento do bloco 4):
+//   1. Líder responsável da tarefa;
+//   2. Admin responsável do projeto;
+//   3. cada Admin Master ATIVO (um alerta individual por Master — nunca um
+//      alerta Geral `user_id: null`, nunca um usuário inventado).
+// Se não existir nenhum Admin Master ativo, o chamador registra um erro
+// operacional explícito e auditável e NÃO cria alerta.
+type EscalationTarget =
+  | { kind: "single"; userId: string; relation: "lider_responsavel" | "admin_responsavel" }
+  | { kind: "masters"; userIds: string[] }
+  | { kind: "none" };
+
 async function resolveEscalationTarget(task: {
   id: string;
   lider_responsavel_id: string | null;
   project_id: string;
-}): Promise<{ userId: string; relation: "lider_responsavel" | "admin_responsavel" } | null> {
-  if (task.lider_responsavel_id) return { userId: task.lider_responsavel_id, relation: "lider_responsavel" };
+}): Promise<EscalationTarget> {
+  if (task.lider_responsavel_id) {
+    return { kind: "single", userId: task.lider_responsavel_id, relation: "lider_responsavel" };
+  }
   const project = await prisma.project.findUnique({
     where: { id: task.project_id },
     select: { admin_responsible_user_id: true },
   });
-  if (project?.admin_responsible_user_id) return { userId: project.admin_responsible_user_id, relation: "admin_responsavel" };
-  return null; // sem responsável comprovado — lacuna documentada, nunca alerta Geral
+  if (project?.admin_responsible_user_id) {
+    return { kind: "single", userId: project.admin_responsible_user_id, relation: "admin_responsavel" };
+  }
+  // Sem Líder nem Admin responsável comprovados — cai nos Admin Masters ativos.
+  const masterIds = await listActiveAdminMasterIds(prisma);
+  if (masterIds.length > 0) return { kind: "masters", userIds: masterIds };
+  return { kind: "none" };
 }
 
 interface EpisodeCounts {
@@ -190,16 +212,21 @@ async function escalate(
   noOneOnline: boolean,
 ): Promise<void> {
   const target = await resolveEscalationTarget(task);
-  if (!target) {
-    console.error(`[task-rotation] tarefa ${task.id} esgotou o rodízio mas não tem líder nem admin responsável — sem alerta (lacuna documentada).`);
+
+  if (target.kind === "none") {
+    // Nunca inventa responsável, nunca cria alerta Geral — erro operacional
+    // explícito e auditável (ata 2026-08, bloco 5/5).
+    console.error(
+      `[task-rotation] tarefa ${task.id} esgotou o rodízio SEM Líder, SEM Admin responsável e SEM Admin Master ativo — nenhum alerta criado. Ação humana necessária.`,
+    );
+    await writeAccessAudit({
+      actorId: null,
+      action: "task_rotation.exhausted_no_recipient",
+      after: { project_task_id: task.id, project_id: task.project_id, episode_key: episodeKey, no_one_online: noOneOnline },
+      reason: "Rodízio esgotado sem Líder, sem Admin responsável do projeto e sem Admin Master ativo.",
+    });
     return;
   }
-  const dedupe = `task_rotation_exhausted:${episodeKey}`;
-  const existing = await prisma.systemAlert.findFirst({
-    where: { type: "task.rotation_exhausted", dedupe_key: dedupe, manual_resolved_at: null },
-    select: { id: true },
-  });
-  if (existing) return; // deduplicado por episódio — não cria um novo a cada varredura
 
   const counts = await episodeCounts(episodeKey);
   const project = await prisma.project.findUnique({
@@ -216,39 +243,61 @@ async function escalate(
   const msg = noOneOnline
     ? `Nenhum Nômade elegível estava online para a tarefa "${task.title}" (${categoria}). O rodízio não encontrou candidatos.`
     : `Todos os ${counts.offered} Nômades avaliados no rodízio da tarefa "${task.title}" recusaram (${counts.declined}) ou não responderam a tempo (${counts.expired}).`;
+  const fullMessage =
+    msg +
+    ` Projeto: ${project?.title ?? "—"}. Produto/categoria: ${produto} / ${categoria}. ` +
+    `Avaliados: ${counts.offered}${noOneOnline ? "" : `; recusaram: ${counts.declined}; expiraram: ${counts.expired}`}.`;
 
-  await prisma.systemAlert.create({
-    data: {
-      type: "task.rotation_exhausted",
-      title: "Tarefa sem Nômade — rodízio esgotado",
-      message:
-        msg +
-        ` Projeto: ${project?.title ?? "—"}. Produto/categoria: ${produto} / ${categoria}. ` +
-        `Avaliados: ${counts.offered}${noOneOnline ? "" : `; recusaram: ${counts.declined}; expiraram: ${counts.expired}`}.`,
-      severity: "warning",
-      category: "alerta",
-      user_id: target.userId, // responsável REAL — nunca Geral
-      entity_type: "project_task",
-      entity_id: task.id,
-      action_url: `/admin/tarefas/${task.id}`,
-      dedupe_key: dedupe,
-      events: {
-        create: {
-          event_type: "created",
-          description: `Rodízio de Nômade esgotado (${target.relation}).`,
-          metadata_json: JSON.stringify({ episode_key: episodeKey, no_one_online: noOneOnline, ...counts }),
+  // Um alerta por destinatário, deduplicado por tarefa + episódio + pessoa.
+  // Assim o fallback para vários Admin Masters não vira 1 alerta Geral nem
+  // N alertas colidindo na mesma dedupe_key.
+  const recipients: Array<{ userId: string; relation: string }> =
+    target.kind === "single"
+      ? [{ userId: target.userId, relation: target.relation }]
+      : target.userIds.map((userId) => ({ userId, relation: "admin_master" }));
+
+  for (const { userId, relation } of recipients) {
+    const dedupe = `task_rotation_exhausted:${episodeKey}:${userId}`;
+    const existing = await prisma.systemAlert.findFirst({
+      where: { type: "task.rotation_exhausted", dedupe_key: dedupe, manual_resolved_at: null },
+      select: { id: true },
+    });
+    if (existing) continue; // deduplicado — não recria a cada varredura do motor
+
+    await prisma.systemAlert.create({
+      data: {
+        type: "task.rotation_exhausted",
+        title: "Tarefa sem Nômade — rodízio esgotado",
+        message: fullMessage,
+        severity: "warning",
+        category: "alerta",
+        user_id: userId, // responsável REAL — nunca Geral (user_id: null)
+        entity_type: "project_task",
+        entity_id: task.id,
+        action_url: `/admin/tarefas/${task.id}`,
+        dedupe_key: dedupe,
+        events: {
+          create: {
+            event_type: "created",
+            description: `Rodízio de Nômade esgotado (${relation}).`,
+            metadata_json: JSON.stringify({ episode_key: episodeKey, no_one_online: noOneOnline, relation, ...counts }),
+          },
         },
       },
-    },
-  });
+    });
+  }
 }
 
 async function resolveExhaustedAlert(taskId: string, episodeKey: string | null, actorUserId: string | null, reason: string): Promise<void> {
+  // Resolve TODOS os alertas de "rodízio esgotado" da tarefa (o Líder / Admin
+  // responsável E os Admin Masters do fallback). O episódio é irrelevante:
+  // atribuir ou reiniciar torna qualquer alerta de esgotamento anterior
+  // obsoleto. `episodeKey` fica só como parâmetro informativo/histórico.
+  void episodeKey;
   const where: Prisma.SystemAlertWhereInput = {
     type: "task.rotation_exhausted",
     entity_id: taskId,
     manual_resolved_at: null,
-    ...(episodeKey ? { dedupe_key: `task_rotation_exhausted:${episodeKey}` } : {}),
   };
   const alerts = await prisma.systemAlert.findMany({ where, select: { id: true } });
   for (const a of alerts) {
@@ -500,7 +549,12 @@ export async function getRotationStatus(taskId: string): Promise<RotationStatus 
   const pending = offers.find((o) => o.status === "pendente" && o.expires_at.getTime() >= Date.now()) ?? null;
   const escalated = episodeKey
     ? !!(await prisma.systemAlert.findFirst({
-        where: { type: "task.rotation_exhausted", dedupe_key: `task_rotation_exhausted:${episodeKey}`, manual_resolved_at: null },
+        where: {
+          type: "task.rotation_exhausted",
+          // Um alerta por destinatário: dedupe_key = "...:<episode>:<userId>".
+          dedupe_key: { startsWith: `task_rotation_exhausted:${episodeKey}:` },
+          manual_resolved_at: null,
+        },
         select: { id: true },
       }))
     : false;

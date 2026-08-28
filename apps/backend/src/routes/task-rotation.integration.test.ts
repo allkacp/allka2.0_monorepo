@@ -112,6 +112,30 @@ async function mkLeaderUser() {
   return u;
 }
 
+const adminProfileIds: string[] = [];
+async function mkAdminMaster(opts: { active?: boolean } = {}) {
+  const id = `rot-master-${crypto.randomBytes(5).toString("hex")}`;
+  const profile = await prisma.adminProfile.create({
+    data: { name: `Master ${id}`, is_master: true, is_active: opts.active ?? true },
+  });
+  adminProfileIds.push(profile.id);
+  const u = await prisma.user.create({
+    data: {
+      id,
+      email: `${id}@example.test`,
+      password_hash: "x",
+      name: `Master ${id}`,
+      role: "admin",
+      account_type: "admin",
+      is_active: true,
+      status: "ativo",
+      admin_profile_id: profile.id,
+    },
+  });
+  users.push(u.id);
+  return u;
+}
+
 describe("Rodízio de ofertas de tarefa", () => {
   before(async () => {
     requireTestDatabaseUrl();
@@ -126,6 +150,7 @@ describe("Rodízio de ofertas de tarefa", () => {
     await prisma.taskAssignmentHistory.deleteMany({ where: { project_task_id: { in: tasks } } });
     await prisma.systemAlert.deleteMany({ where: { type: "task.rotation_exhausted", entity_id: { in: tasks } } });
     await prisma.projectTask.deleteMany({ where: { id: { in: tasks } } });
+    await prisma.productFeedbackAccessAudit.deleteMany({ where: { action: "task_rotation.exhausted_no_recipient" } });
     await prisma.projectProduct.deleteMany({ where: { project_id: { in: projects } } });
     await prisma.project.deleteMany({ where: { id: { in: projects } } });
     await prisma.product.deleteMany({ where: { id: { in: products } } });
@@ -133,6 +158,7 @@ describe("Rodízio de ofertas de tarefa", () => {
     await prisma.nomade.deleteMany({ where: { id: { in: nomades } } });
     await prisma.userPresence.deleteMany({ where: { user_id: { in: users } } });
     await prisma.user.deleteMany({ where: { id: { in: users } } });
+    await prisma.adminProfile.deleteMany({ where: { id: { in: adminProfileIds } } });
     await new Promise<void>((res, rej) => server.close((e) => (e ? rej(e) : res())));
     await prisma.$disconnect();
   });
@@ -304,6 +330,58 @@ describe("Rodízio de ofertas de tarefa", () => {
     await startTaskRotation(task.id);
     const alert = await prisma.systemAlert.findFirst({ where: { type: "task.rotation_exhausted", entity_id: task.id } });
     assert.equal(alert?.user_id, adminResp.id);
+  });
+
+  it("12b. Sem Líder e sem Admin responsável → um alerta amarelo por Admin Master ativo, deduplicado", async () => {
+    const m1 = await mkAdminMaster();
+    const m2 = await mkAdminMaster();
+    await mkAdminMaster({ active: false }); // Master inativo NÃO recebe
+    const task = await mkTask({ liderId: null, adminResponsibleId: null });
+    await mkNomad({ online: false });
+
+    await startTaskRotation(task.id); // esgota → fallback para os Masters
+    let alerts = await prisma.systemAlert.findMany({ where: { type: "task.rotation_exhausted", entity_id: task.id } });
+    const recipients = alerts.map((a) => a.user_id).sort();
+    assert.deepEqual(recipients, [m1.id, m2.id].sort(), "um alerta por Master ATIVO, nunca Geral");
+    assert.ok(alerts.every((a) => a.user_id !== null), "nenhum alerta com user_id null (Geral)");
+
+    // Varre de novo → não duplica (deduplicado por tarefa + episódio + Master).
+    await runTaskRotationOnce();
+    alerts = await prisma.systemAlert.findMany({ where: { type: "task.rotation_exhausted", entity_id: task.id } });
+    assert.equal(alerts.length, 2, "deduplicado por episódio e destinatário");
+
+    // Ao atribuir, TODOS os alertas do fallback são resolvidos.
+    const n = await mkNomad();
+    await restartRotation(task.id, m1.id, true);
+    const resolved = await prisma.systemAlert.findMany({
+      where: { type: "task.rotation_exhausted", entity_id: task.id, manual_resolved_at: null },
+    });
+    assert.equal(resolved.length, 0, "restart resolve os alertas de todos os Masters");
+    void n;
+  });
+
+  it("12c. Sem Líder, sem Admin responsável e sem Admin Master ativo → erro operacional auditável, sem alerta Geral", async () => {
+    // Garante a condição "nenhum Master ativo" independentemente da ordem dos
+    // testes: desativa temporariamente todo perfil master ativo e restaura no fim.
+    const activeMasters = await prisma.adminProfile.findMany({ where: { is_master: true, is_active: true }, select: { id: true } });
+    await prisma.adminProfile.updateMany({ where: { id: { in: activeMasters.map((m) => m.id) } }, data: { is_active: false } });
+    try {
+      const task = await mkTask({ liderId: null, adminResponsibleId: null });
+      await mkNomad({ online: false });
+
+      await startTaskRotation(task.id);
+      const alerts = await prisma.systemAlert.findMany({ where: { type: "task.rotation_exhausted", entity_id: task.id } });
+      assert.equal(alerts.length, 0, "nunca cria alerta Geral nem inventa responsável");
+
+      const audit = await prisma.productFeedbackAccessAudit.findFirst({
+        where: { action: "task_rotation.exhausted_no_recipient" },
+        orderBy: { created_at: "desc" },
+      });
+      assert.ok(audit, "erro operacional registrado e auditável");
+      assert.match(String(audit!.after_json), new RegExp(task.id));
+    } finally {
+      await prisma.adminProfile.updateMany({ where: { id: { in: activeMasters.map((m) => m.id) } }, data: { is_active: true } });
+    }
   });
 
   it("13. Reiniciar o rodízio: usuário sem permissão → 403; Líder responsável → ok + resolve o alerta", async () => {

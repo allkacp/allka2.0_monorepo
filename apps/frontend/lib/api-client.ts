@@ -643,6 +643,122 @@ class ApiClient {
     return this.post(`/project-tasks/${taskId}/rotation/restart`, {});
   }
 
+  // ── Canais, campanhas e banners obrigatórios (ata 2026-08, bloco 5/5) ──
+  async getCommsPreferences() {
+    return this.get<{
+      preferences: {
+        platform_enabled: boolean;
+        email_enabled: boolean;
+        whatsapp_enabled: boolean;
+        push_enabled: boolean;
+        marketing_opt_in: boolean;
+      };
+      channel_status: Array<{ channel: string; state: "working" | "not_configured"; detail: string }>;
+      availability: { email: boolean; whatsapp: boolean; push: boolean };
+    }>("/comms/preferences");
+  }
+  async updateCommsPreferences(patch: Record<string, boolean>) {
+    return this.put<{ preferences: Record<string, boolean> }>("/comms/preferences", patch);
+  }
+  async getCommsPushStatus() {
+    return this.get<{
+      configured: boolean;
+      vapid_public_key: string | null;
+      detail: string;
+      subscriptions: Array<{ id: string; enabled: boolean; user_agent: string | null; created_at: string; last_used_at: string | null }>;
+    }>("/comms/push/status");
+  }
+  async subscribeWebPush(sub: { endpoint: string; keys: { p256dh: string; auth: string } }) {
+    return this.post<{ ok: boolean; configured: boolean }>("/comms/push/subscribe", sub);
+  }
+  async unsubscribeWebPush(endpoint?: string) {
+    return this.post("/comms/push/unsubscribe", endpoint ? { endpoint } : {});
+  }
+  async getMyMandatoryBanners() {
+    return this.get<{
+      data: Array<{
+        id: string;
+        title: string;
+        body: string;
+        kind: "obrigatorio" | "informativo";
+        version: number;
+        ack_button_label: string;
+        link_url: string | null;
+        image_url: string | null;
+        image_alt: string | null;
+      }>;
+    }>("/comms/banners/me");
+  }
+  async acknowledgeBanner(bannerId: string, version?: number) {
+    return this.post<{ acknowledged: boolean; banner_id: string; version: number }>(
+      `/comms/banners/${bannerId}/ack`,
+      version ? { version } : {},
+    );
+  }
+
+  // Central Administrativa de Comunicação.
+  async getCommsChannelAudit() {
+    return this.get<{ data: Array<{ channel: string; state: string; detail: string }> }>("/admin/comms/channels");
+  }
+  async listCommsCampaigns(status?: string) {
+    return this.get<{ data: any[] }>(`/admin/comms/campaigns${status ? `?status=${encodeURIComponent(status)}` : ""}`);
+  }
+  async getCommsCampaign(id: string) {
+    return this.get<any>(`/admin/comms/campaigns/${id}`);
+  }
+  async createCommsCampaign(body: Record<string, any>) {
+    return this.post<any>("/admin/comms/campaigns", body);
+  }
+  async updateCommsCampaign(id: string, body: Record<string, any>) {
+    return this.put<any>(`/admin/comms/campaigns/${id}`, body);
+  }
+  async deleteCommsCampaign(id: string) {
+    return this.del(`/admin/comms/campaigns/${id}`);
+  }
+  async estimateCommsAudience(body: { audience: Record<string, any>; channels: string[]; is_reengagement?: boolean }) {
+    return this.post<any>("/admin/comms/campaigns/estimate", body);
+  }
+  async previewCommsCampaign(id: string) {
+    return this.get<any>(`/admin/comms/campaigns/${id}/preview`);
+  }
+  async activateCommsCampaign(id: string) {
+    return this.post<any>(`/admin/comms/campaigns/${id}/activate`, {});
+  }
+  async pauseCommsCampaign(id: string) {
+    return this.post<any>(`/admin/comms/campaigns/${id}/pause`, {});
+  }
+  async cancelCommsCampaign(id: string) {
+    return this.post<any>(`/admin/comms/campaigns/${id}/cancel`, {});
+  }
+  async getCommsCampaignDeliveries(id: string) {
+    return this.get<any>(`/admin/comms/campaigns/${id}/deliveries`);
+  }
+  async listMandatoryBanners() {
+    return this.get<{ data: any[] }>("/admin/comms/banners");
+  }
+  async getMandatoryBanner(id: string) {
+    return this.get<any>(`/admin/comms/banners/${id}`);
+  }
+  async createMandatoryBanner(body: Record<string, any>) {
+    return this.post<any>("/admin/comms/banners", body);
+  }
+  async updateMandatoryBanner(id: string, body: Record<string, any>) {
+    return this.put<any>(`/admin/comms/banners/${id}`, body);
+  }
+  async publishBannerVersion(id: string) {
+    return this.post<{ ok: boolean; version: number }>(`/admin/comms/banners/${id}/publish-version`, {});
+  }
+  async cancelMandatoryBanner(id: string) {
+    return this.post<any>(`/admin/comms/banners/${id}/cancel`, {});
+  }
+  async uploadCommsImage(file: File): Promise<{ file_name: string }> {
+    return this.uploadFile("/admin/comms/images", file);
+  }
+  /** URL autenticada da imagem de um banner obrigatório (uso admin). */
+  mandatoryBannerImageUrl(id: string): string {
+    return `${API_BASE_URL}/admin/comms/banners/${id}/image`;
+  }
+
   /**
    * Habilitações do nômade, já cruzadas com as áreas que existem na
    * plataforma — "não habilitado" é ausência de registro, então quem faz o

@@ -101,6 +101,10 @@ model User {
   notification_group_memberships     NotificationGroupMember[]          @relation("NotificationGroupMemberUser")
   iallka_sessions                    IallkaSession[]
   presence                           UserPresence?
+  push_subscriptions                 PushSubscription[]
+  communication_channel_pref         UserCommunicationChannelPref?
+  banner_acknowledgements            BannerAcknowledgement[]
+  communication_deliveries           CommunicationDelivery[]
 
   // ── Rastreio da plataforma antiga ─────────────────────────────────────
   // id numérico do registro equivalente no dump legado (Dump20260423.sql).
@@ -3674,4 +3678,202 @@ model DashboardTemplateContent {
 
   @@index([template_id, active])
   @@map("dashboard_template_contents")
+}
+
+// ─── Canais, Campanhas e Banners obrigatórios (ata 2026-08, bloco 5/5) ────────
+//
+// SEPARAÇÃO DE CONCEITOS (não conflatar):
+//   * Alerta      = SystemAlert (category "alerta"), situação operacional.
+//   * Notificação = informação pessoal/operacional a um usuário — hoje entregue
+//     pelo canal "plataforma" (vira SystemAlert category "notificacao").
+//   * Campanha    = comunicação planejada a um público (CommunicationCampaign).
+//   * Banner obrigatório = comunicado interno com exigência de ciência
+//     (MandatoryBanner) — NUNCA um alerta vermelho.
+//
+// AUDITORIA DOS CANAIS (registrada no relatório do lote): não há serviço de
+// e-mail, integração de WhatsApp nem Web Push configurados no backend. Os
+// adaptores abaixo tratam esses canais como "não configurado" + captura de
+// preview local — nunca fingem entrega.
+
+// Outbox central de entregas. TODA saída por canal (notificação, campanha ou
+// banner) passa por aqui. Idempotência real por `idempotency_key` (@unique):
+// retry, clique duplo e job concorrente nunca geram uma segunda entrega para a
+// mesma (origem, origem_id, destinatário, canal, chave de disparo).
+model CommunicationDelivery {
+  id                String    @id @default(cuid())
+  // "notification" | "campaign" | "banner"
+  origin            String
+  // id da campanha / do banner; nulo para notificação avulsa.
+  origin_id         String?
+  recipient_user_id String
+  recipient         User      @relation(fields: [recipient_user_id], references: [id], onDelete: Cascade)
+  // "platform" | "email" | "whatsapp" | "push"
+  channel           String
+  // "pending" | "processing" | "delivered" | "failed" | "cancelled" |
+  // "skipped_by_preference" | "channel_not_configured" | "no_valid_address"
+  status            String    @default("pending")
+  scheduled_for     DateTime
+  first_attempt_at  DateTime?
+  last_attempt_at   DateTime?
+  attempts          Int       @default(0)
+  delivered_at      DateTime?
+  failed_at         DateTime?
+  // Motivo resumido e legível — NUNCA token/chave do provedor/payload sensível.
+  failure_summary   String?   @db.Text
+  // Chave estável de idempotência (ver acima). Um novo envio legítimo gera uma
+  // chave nova; um retry do mesmo envio reusa a mesma.
+  idempotency_key   String    @unique
+  // Metadados mínimos de auditoria (ex.: id externo do provedor QUANDO houver).
+  // Nunca segredo, cookie, URL assinada ou corpo completo da requisição.
+  metadata_json     String?   @db.Text
+  // Captura/preview local para canais não configurados (assunto/corpo/para) —
+  // sem segredos; é o que o Admin abre para conferir que nada real foi enviado.
+  preview_json      String?   @db.Text
+  created_at        DateTime  @default(now())
+  updated_at        DateTime  @updatedAt
+
+  @@index([status, scheduled_for])
+  @@index([origin, origin_id])
+  @@index([recipient_user_id])
+  @@index([channel, status])
+  @@map("communication_deliveries")
+}
+
+model CommunicationCampaign {
+  id                   String    @id @default(cuid())
+  internal_name        String
+  title                String
+  body                 String    @db.LongText
+  // Snapshot próprio de imagem (mesmo padrão de SystemAlert.image_file_name):
+  // nome físico gerado, servido por rota autenticada, nunca caminho do cliente.
+  image_file_name      String?
+  image_alt            String?
+  link_url             String?
+  // JSON string[] — canais desejados: ["platform","email","whatsapp","push"].
+  channels_json        String    @db.LongText
+  // Filtro de público ESTRUTURADO e seguro (nunca SQL livre). Ver
+  // lib/comms/audience.ts — o servidor recalcula o público na ativação.
+  audience_json        String    @db.LongText
+  // "draft" | "scheduled" | "processing" | "completed" | "paused" | "cancelled" | "failed"
+  status               String    @default("draft")
+  is_reengagement      Boolean   @default(false)
+  // Dias de inatividade (sem last_login) para campanha de reengajamento.
+  inactivity_days      Int?
+  scheduled_at         DateTime?
+  starts_at            DateTime?
+  ends_at              DateTime?
+  // Guarda de ambiente: "local" | "qa" | "production" — nulo = qualquer.
+  target_environment   String?
+  activated_at         DateTime?
+  activated_by_user_id String?
+  completed_at         DateTime?
+  created_at           DateTime  @default(now())
+  updated_at           DateTime  @updatedAt
+  created_by_user_id   String?
+
+  recipient_states CampaignRecipientState[]
+
+  @@index([status, scheduled_at])
+  @@map("communication_campaigns")
+}
+
+// Estado por destinatário de uma campanha — idempotência da ativação (uma
+// linha por (campanha, usuário), @unique) e memória de reengajamento (não
+// reenviar a mesma campanha ao mesmo usuário).
+model CampaignRecipientState {
+  id                String                @id @default(cuid())
+  campaign_id       String
+  campaign          CommunicationCampaign @relation(fields: [campaign_id], references: [id], onDelete: Cascade)
+  recipient_user_id String
+  // "queued" | "processed" | "excluded_no_contact" | "excluded_no_consent" | "excluded_recent"
+  state             String                @default("queued")
+  reason            String?
+  processed_at      DateTime?
+  created_at        DateTime              @default(now())
+
+  @@unique([campaign_id, recipient_user_id])
+  @@index([campaign_id, state])
+  @@map("campaign_recipient_states")
+}
+
+// Comunicado interno que aparece DENTRO da plataforma e (quando kind
+// "obrigatorio") exige ciência explícita. Versão nova → exige ciência de novo.
+model MandatoryBanner {
+  id                 String    @id @default(cuid())
+  title              String
+  body               String    @db.LongText
+  image_file_name    String?
+  image_alt          String?
+  link_url           String?
+  // "obrigatorio" (exige "Li e estou ciente", não fecha no Esc/clique-fora) |
+  // "informativo" (pode fechar normalmente).
+  kind               String    @default("obrigatorio")
+  ack_button_label   String    @default("Li e estou ciente")
+  // Incrementado a cada republicação relevante — a ciência é registrada por
+  // (banner, usuário, versão); subir a versão faz o banner reaparecer.
+  version            Int       @default(1)
+  audience_json      String    @db.LongText
+  starts_at          DateTime
+  ends_at            DateTime?
+  is_active          Boolean   @default(true)
+  is_cancelled       Boolean   @default(false)
+  created_at         DateTime  @default(now())
+  updated_at         DateTime  @updatedAt
+  created_by_user_id String?
+
+  acknowledgements BannerAcknowledgement[]
+
+  @@index([is_active, starts_at])
+  @@map("mandatory_banners")
+}
+
+model BannerAcknowledgement {
+  id              String          @id @default(cuid())
+  banner_id       String
+  banner          MandatoryBanner @relation(fields: [banner_id], references: [id], onDelete: Cascade)
+  user_id         String
+  user            User            @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  version         Int
+  acknowledged_at DateTime        @default(now())
+
+  @@unique([banner_id, user_id, version])
+  @@index([user_id])
+  @@map("banner_acknowledgements")
+}
+
+// Fundação de Web Push (ata 2026-08, bloco 5/5). Sem chaves VAPID
+// configuradas o canal fica "não configurado" — a assinatura é guardada mas
+// nenhum envio real acontece. `endpoint` é longo → unicidade por hash sha256.
+model PushSubscription {
+  id            String    @id @default(cuid())
+  user_id       String
+  user          User      @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  endpoint      String    @db.Text
+  endpoint_hash String    @unique
+  p256dh        String
+  auth          String
+  user_agent    String?
+  enabled       Boolean   @default(true)
+  created_at    DateTime  @default(now())
+  last_used_at  DateTime?
+
+  @@index([user_id, enabled])
+  @@map("push_subscriptions")
+}
+
+// Preferência de CANAL do usuário para comunicações NÃO obrigatórias
+// (distinta de NotificationPreference, que é por tipo de evento). `*_enabled`
+// = o usuário aceita receber por aquele canal; `marketing_opt_in` = aceita
+// campanhas de marketing/reengajamento (opt-in, nunca opt-out).
+model UserCommunicationChannelPref {
+  user_id          String   @id
+  user             User     @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  platform_enabled Boolean  @default(true)
+  email_enabled    Boolean  @default(true)
+  whatsapp_enabled Boolean  @default(false)
+  push_enabled     Boolean  @default(false)
+  marketing_opt_in Boolean  @default(false)
+  updated_at       DateTime @updatedAt
+
+  @@map("user_communication_channel_prefs")
 }

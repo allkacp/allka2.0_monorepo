@@ -20,6 +20,7 @@ import { Switch } from "@/components/ui/switch"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { ConfirmationDialog } from "@/components/confirmation-dialog"
 import { NotificationGroupRequestModal } from "@/components/modals/notification-group-request-modal"
+import { CommsChannelPreferences } from "@/components/comms-channel-preferences"
 import { apiClient } from "@/lib/api-client"
 import { alertIcon } from "@/components/alerts-header-icon"
 import { cn } from "@/lib/utils"
@@ -538,8 +539,11 @@ function PrefsTab({
 }) {
   return (
     <div className="p-5 space-y-6">
+      {/* Preferência de canal + opt-in marketing + Web Push (ata 2026-08, bloco 5/5). */}
+      <CommsChannelPreferences />
+
       <div>
-        <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Canais</p>
+        <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Canais por tipo de evento</p>
         <div className="flex items-center gap-2 flex-wrap">
           <span className="inline-flex items-center gap-1.5 text-[10px] font-semibold text-emerald-700 bg-emerald-50 dark:bg-emerald-950/30 dark:text-emerald-300 px-2.5 py-1 rounded-full">
             <Bell className="h-3 w-3" />Dentro da plataforma — sempre ativo

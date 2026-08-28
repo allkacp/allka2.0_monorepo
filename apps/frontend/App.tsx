@@ -36,6 +36,7 @@ import { OpenScreensTray } from "@/components/open-screens-tray";
 import { HeaderFloatingTools } from "@/components/header-floating-tools";
 import { AlertsFloatingIcon } from "@/components/alerts-floating-icon";
 import { TaskOfferPrompt } from "@/components/task-offer-prompt";
+import { MandatoryBannerGate } from "@/components/mandatory-banner-gate";
 import { usePresenceHeartbeat } from "@/hooks/use-presence-heartbeat";
 import { PinActivationListener } from "@/components/pin-activation-listener";
 import { ProductFeedbackWidget } from "@/components/product-feedback-widget";
@@ -126,6 +127,11 @@ const AdminPermissionsPage = React.lazy(
 const AdminTermsPage = React.lazy(() => import("@/app/admin/terms/page"));
 const AdminNotificationsPage = React.lazy(
   () => import("@/app/admin/notifications/page"),
+);
+// Central de Comunicação — canais, campanhas e banners obrigatórios
+// (ata 2026-08, bloco 5/5).
+const AdminComunicacaoPage = React.lazy(
+  () => import("@/app/admin/comunicacao/page"),
 );
 const AdminClientesPage = React.lazy(() => import("@/app/admin/clientes/page"));
 // Lista de agências no Admin — a pasta existia vazia até 2026-08-04.
@@ -591,6 +597,10 @@ function AppLayout({ children }: { children: React.ReactNode }) {
                             <AlertsFloatingIcon />
                             {/* Oferta de tarefa ao Nômade (ata 2026-08, bloco 4/5) */}
                             <TaskOfferPrompt />
+                            {/* Banner obrigatório (ata 2026-08, bloco 5/5) —
+                                overlay dentro do container padrão, bloqueia o
+                                conteúdo atrás enquanto exige ciência. */}
+                            <MandatoryBannerGate />
                             <PinActivationListener />
                           </NotificationsPanelProvider>
                           </ProjectBasketProvider>
@@ -878,6 +888,10 @@ export default function App() {
                   <Route
                     path="/admin/notifications"
                     element={<AdminNotificationsPage />}
+                  />
+                  <Route
+                    path="/admin/comunicacao"
+                    element={<AdminComunicacaoPage />}
                   />
                   <Route
                     path="/admin/clientes"
