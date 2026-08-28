@@ -1,75 +1,7 @@
-// Seed idempotente da fundação do novo catálogo (sprint de produtos, bloco
-// 2/6). Cria só as classificações reutilizáveis (pilares, 4Fs, categorias,
-// especialidades) — NUNCA produtos. Idempotente por `key`. Chamado no boot
-// (src/index.ts), como os demais ensure*.
-
-import { prisma } from "./prisma";
-
-const PILLARS = [
-  { key: "presenca_digital", name: "A. Presença Digital e Conversão", sort_order: 1 },
-  { key: "captacao_leads", name: "B. Captação de Leads e Automação", sort_order: 2 },
-  { key: "redes_conteudo", name: "C. Redes Sociais e Conteúdo", sort_order: 3 },
-  { key: "branding_design", name: "D. Branding e Design", sort_order: 4 },
-  { key: "campanhas_offline", name: "E. Campanhas Offline e Impresso", sort_order: 5 },
-];
-
-const FOUR_F = [
-  { key: "fundacao", name: "F1 — Fundação", sort_order: 1 },
-  { key: "fluxo", name: "F2 — Fluxo", sort_order: 2 },
-  { key: "forca", name: "F3 — Força", sort_order: 3 },
-  { key: "fidelizacao", name: "F4 — Fidelização", sort_order: 4 },
-];
-
-const CATEGORIES = [
-  { key: "performance", name: "Performance", sort_order: 1 },
-  { key: "solucoes_web", name: "Soluções Web", sort_order: 2 },
-  { key: "vendas_automacoes", name: "Vendas e Automações", sort_order: 3 },
-  { key: "redacao", name: "Redação", sort_order: 4 },
-  { key: "design", name: "Design", sort_order: 5 },
-];
-
-// Conjunto inicial de especialidades — perfis profissionais que as tarefas
-// exigem. Refinável no bloco 3; nasce pequeno e honesto.
-const SPECIALTIES = [
-  { key: "gestor_trafego", name: "Gestor de Tráfego", sort_order: 1 },
-  { key: "desenvolvedor_web", name: "Desenvolvedor Web", sort_order: 2 },
-  { key: "especialista_seo_geo", name: "Especialista em SEO/GEO", sort_order: 3 },
-  { key: "redator", name: "Redator", sort_order: 4 },
-  { key: "designer", name: "Designer", sort_order: 5 },
-  { key: "editor_video", name: "Editor de Vídeo", sort_order: 6 },
-  { key: "especialista_automacao", name: "Especialista em Automação", sort_order: 7 },
-];
-
-export async function ensureCatalog2Foundation(): Promise<void> {
-  for (const p of PILLARS) {
-    await prisma.catalog2Pillar.upsert({
-      where: { key: p.key },
-      create: p,
-      update: { name: p.name, sort_order: p.sort_order },
-    });
-  }
-  for (const f of FOUR_F) {
-    await prisma.catalog2FourF.upsert({
-      where: { key: f.key },
-      create: f,
-      update: { name: f.name, sort_order: f.sort_order },
-    });
-  }
-  for (const c of CATEGORIES) {
-    await prisma.catalog2Category.upsert({
-      where: { key: c.key },
-      create: c,
-      update: { name: c.name, sort_order: c.sort_order },
-    });
-  }
-  for (const s of SPECIALTIES) {
-    await prisma.catalog2Specialty.upsert({
-      where: { key: s.key },
-      create: s,
-      update: { name: s.name, sort_order: s.sort_order },
-    });
-  }
-}
+// Constantes do novo catálogo (sprint de produtos). A partir do bloco 3/6
+// este arquivo NÃO faz mais seed no boot (correção 1.2) — as classificações
+// dinâmicas vêm de `catalog2-classifications-seed.ts` por comando explícito,
+// e as 4 fases 4Fs vêm da migration. Aqui ficam só enums/rótulos.
 
 export const CATALOG2_STATUSES = [
   "em_preparacao",

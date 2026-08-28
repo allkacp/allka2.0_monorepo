@@ -3951,6 +3951,12 @@ model Catalog2Specialty {
   sort_order  Int     @default(0)
   is_active   Boolean @default(true)
 
+  // Precificacao (ata 2026-08-26): "custo base da tarefa = tempo estimado x
+  // valor da hora da especialidade", sempre pela REFERENCIA MAXIMA. Nulo =
+  // "aguardando definicao comercial" (o calculo nao inventa valor).
+  max_hourly_rate  Float?
+  hourly_rate_note String? @db.Text
+
   created_at DateTime @default(now())
   updated_at DateTime @updatedAt
 
@@ -3987,9 +3993,11 @@ model Catalog2Product {
   published_version_id String?                 @unique
   published_version    Catalog2ProductVersion? @relation("Catalog2PublishedVersion", fields: [published_version_id], references: [id], onDelete: SetNull)
 
-  created_by_user_id String?
-  created_at         DateTime @default(now())
-  updated_at         DateTime @updatedAt
+  created_by_user_id  String?
+  archived_at         DateTime?
+  archived_by_user_id String?
+  created_at          DateTime  @default(now())
+  updated_at          DateTime  @updatedAt
 
   versions Catalog2ProductVersion[] @relation("Catalog2ProductVersions")
   four_f   Catalog2ProductFourF[]
@@ -4028,10 +4036,16 @@ model Catalog2ProductVersion {
   summary          String? @db.Text
   full_description String? @db.LongText
 
-  published_at         DateTime?
-  published_by_user_id String?
+  published_at             DateTime?
+  published_by_user_id     String?
+  // Idempotencia da publicacao: gerado no frontend por clique intencional em
+  // "Publicar". Retry / clique duplo com o MESMO valor nao publica de novo.
+  publish_client_action_id String?   @unique
 
   created_by_user_id String?
+  updated_by_user_id String?
+  // Resumo da mudanca informado pelo administrador (historico da versao).
+  change_summary     String?  @db.Text
   created_at         DateTime @default(now())
   updated_at         DateTime @updatedAt
 
@@ -4041,10 +4055,28 @@ model Catalog2ProductVersion {
   addons     Catalog2Addon[]
   tasks      Catalog2Task[]
   conditions Catalog2Condition[]
+  events     Catalog2VersionEvent[]
 
   @@unique([product_id, version_number])
   @@index([state])
   @@map("catalog2_product_versions")
+}
+
+// Historico da versao (quem criou/alterou/publicou e quando). Imutavel —
+// so INSERT. `note` = resumo da mudanca. Nunca guarda segredo.
+model Catalog2VersionEvent {
+  id         String                 @id @default(cuid())
+  version_id String
+  version    Catalog2ProductVersion @relation(fields: [version_id], references: [id], onDelete: Cascade)
+
+  // "created" | "updated" | "published" | "new_version"
+  event_type    String
+  actor_user_id String?
+  note          String?  @db.Text
+  created_at    DateTime @default(now())
+
+  @@index([version_id, created_at])
+  @@map("catalog2_version_events")
 }
 
 // VARIACAO = escolha OBRIGATORIA da contratacao (formato, quantidade, tamanho,
@@ -4077,21 +4109,44 @@ model Catalog2VariationOption {
 
   key        String
   label      String
-  sort_order Int    @default(0)
-
-  // Placeholders para custo/prazo/condicoes FUTUROS (nunca calculados aqui).
-  deadline_delta_days      Int?
-  price_delta_hint         String? @db.Text
-  client_info_requirements String? @db.Text
+  sort_order Int     @default(0)
+  is_default Boolean @default(false)
 
   created_at DateTime @default(now())
   updated_at DateTime @updatedAt
+
+  effects Catalog2OptionEffect[]
 
   @@index([variation_id, sort_order])
   @@map("catalog2_variation_options")
 }
 
+// Efeito de escolher uma OPCAO de variacao — vocabulario FECHADO, igual ao
+// das condicoes. "impacto em prazo, custo, tarefas, etapas, entregaveis e
+// informacoes" (bloco 3). Nunca codigo livre.
+model Catalog2OptionEffect {
+  id                  String                  @id @default(cuid())
+  variation_option_id String
+  option              Catalog2VariationOption @relation(fields: [variation_option_id], references: [id], onDelete: Cascade)
+
+  // add_deadline_days | add_fixed_amount | add_percent | add_task |
+  // remove_task | add_step | require_info | add_deliverable
+  effect_type  String
+  // Numero (dias/valor/percentual) OU key de tarefa/etapa da MESMA versao OU
+  // texto (require_info / add_deliverable). Validado no servidor.
+  effect_value String @db.Text
+  sort_order   Int    @default(0)
+
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  @@index([variation_option_id, sort_order])
+  @@map("catalog2_option_effects")
+}
+
 // ADICIONAL = escolha OPCIONAL (add-on), diferente da variacao obrigatoria.
+// Nao precisa constar em todas as etapas (ata 2026-08-26); pode estar
+// vinculado a uma tarefa/etapa especifica.
 model Catalog2Addon {
   id         String                 @id @default(cuid())
   version_id String
@@ -4102,16 +4157,40 @@ model Catalog2Addon {
   description         String? @db.Text
   sort_order          Int     @default(0)
   is_default_selected Boolean @default(false)
+  is_active           Boolean @default(true)
+  // Custo direto do adicional (opcional). Nulo = sem custo direto (o impacto
+  // vem so pelos efeitos). Nunca inventa valor.
+  base_cost           Float?
 
-  deadline_delta_days Int?
-  price_delta_hint    String? @db.Text
-  adds_deliverables   String? @db.Text
+  // Vinculo opcional a uma tarefa/etapa especifica da mesma versao.
+  target_task_id String?
+  target_task    Catalog2Task?     @relation("AddonTargetTask", fields: [target_task_id], references: [id], onDelete: SetNull)
+  target_step_id String?
+  target_step    Catalog2TaskStep? @relation("AddonTargetStep", fields: [target_step_id], references: [id], onDelete: SetNull)
 
   created_at DateTime @default(now())
   updated_at DateTime @updatedAt
 
+  effects Catalog2AddonEffect[]
+
   @@index([version_id, sort_order])
   @@map("catalog2_addons")
+}
+
+model Catalog2AddonEffect {
+  id       String        @id @default(cuid())
+  addon_id String
+  addon    Catalog2Addon @relation(fields: [addon_id], references: [id], onDelete: Cascade)
+
+  effect_type  String
+  effect_value String @db.Text
+  sort_order   Int    @default(0)
+
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  @@index([addon_id, sort_order])
+  @@map("catalog2_addon_effects")
 }
 
 // Tarefa do produto (modelo de catalogo — NAO e a execucao de uma compra).
@@ -4132,15 +4211,39 @@ model Catalog2Task {
   // "humano" | "ia" | "hibrido"
   execution_mode String @default("humano")
 
+  // Duracao estimada da tarefa (minutos) — base do custo humano.
+  estimated_minutes        Int?
+  requires_review          Boolean @default(false)
+  requires_client_approval Boolean @default(false)
+  // true = a tarefa so entra quando um efeito (condicao/variacao/adicional)
+  // a inclui (add_task). false = tarefa fixa do produto.
+  is_conditional           Boolean @default(false)
+
   created_at DateTime @default(now())
   updated_at DateTime @updatedAt
 
-  steps Catalog2TaskStep[]
-  ai    Catalog2TaskAI?
+  steps         Catalog2TaskStep[]
+  ai            Catalog2TaskAI?
+  dependencies  Catalog2TaskDependency[] @relation("TaskDeps")
+  dependents    Catalog2TaskDependency[] @relation("TaskDependents")
+  addon_targets Catalog2Addon[]          @relation("AddonTargetTask")
 
   @@index([version_id, sort_order])
   @@index([specialty_id])
   @@map("catalog2_tasks")
+}
+
+// Dependencia entre tarefas da MESMA versao (task depende de depends_on).
+model Catalog2TaskDependency {
+  id                 String       @id @default(cuid())
+  task_id            String
+  task               Catalog2Task @relation("TaskDeps", fields: [task_id], references: [id], onDelete: Cascade)
+  depends_on_task_id String
+  depends_on_task    Catalog2Task @relation("TaskDependents", fields: [depends_on_task_id], references: [id], onDelete: Cascade)
+
+  @@unique([task_id, depends_on_task_id])
+  @@index([depends_on_task_id])
+  @@map("catalog2_task_dependencies")
 }
 
 // Etapa de UMA tarefa especifica. Ordenada.
@@ -4149,30 +4252,41 @@ model Catalog2TaskStep {
   task_id String
   task    Catalog2Task @relation(fields: [task_id], references: [id], onDelete: Cascade)
 
-  key         String
-  name        String
-  description String? @db.Text
-  sort_order  Int     @default(0)
+  key               String
+  name              String
+  description       String? @db.Text
+  sort_order        Int     @default(0)
+  estimated_minutes Int?
+  is_conditional    Boolean @default(false)
 
   created_at DateTime @default(now())
   updated_at DateTime @updatedAt
+
+  addon_targets Catalog2Addon[] @relation("AddonTargetStep")
 
   @@index([task_id, sort_order])
   @@map("catalog2_task_steps")
 }
 
-// Preparacao para custo de IA — so campos, sem integracao nem calculo.
+// Config de custo de IA por tarefa (ia/hibrido). Calculo por TOKENS +
+// rodadas de revisao (ata 2026-08-26), nunca por horas. Sem chamada externa.
 model Catalog2TaskAI {
   id      String       @id @default(cuid())
   task_id String       @unique
   task    Catalog2Task @relation(fields: [task_id], references: [id], onDelete: Cascade)
 
-  provider              String?
-  model                 String?
-  est_input_tokens      Int?
-  est_output_tokens     Int?
-  cost_note             String? @db.Text
-  human_review_required Boolean @default(true)
+  provider                String?
+  model                   String?
+  est_input_tokens        Int?
+  est_output_tokens       Int?
+  // Custo por 1.000 tokens (entrada/saida). Nulo = "aguardando definicao".
+  unit_cost_input_per_1k  Float?
+  unit_cost_output_per_1k Float?
+  currency                String  @default("BRL")
+  // Rodadas previstas de revisao humana da saida da IA.
+  est_review_rounds       Int?
+  cost_note               String? @db.Text
+  human_review_required   Boolean @default(true)
 
   created_at DateTime @default(now())
   updated_at DateTime @updatedAt
@@ -4180,25 +4294,63 @@ model Catalog2TaskAI {
   @@map("catalog2_task_ai")
 }
 
-// FUNDACAO MINIMA de condicoes (regras que poderao alterar prazo/custo/
-// execucao). NAO e um motor: so um registro parqueado para o Bloco 3 dar
-// forma real, sem exigir migration nova. Sem avaliacao, sem regra de negocio.
+// CONDICAO TIPADA (bloco 3, Parte 6). Gatilho -> efeito, vocabulario FECHADO
+// e validado no servidor. NUNCA codigo livre / JS / SQL / expressao.
 model Catalog2Condition {
   id         String                 @id @default(cuid())
   version_id String
   version    Catalog2ProductVersion @relation(fields: [version_id], references: [id], onDelete: Cascade)
 
-  key          String
-  name         String
-  description  String? @db.Text
-  // "prazo" | "custo" | "execucao"
-  applies_to   String
-  trigger_note String? @db.Text
-  effect_note  String? @db.Text
+  key         String
+  name        String
+  description String? @db.Text
+  is_active   Boolean @default(true)
+  // Ordem/prioridade de aplicacao.
+  sort_order  Int     @default(0)
+
+  // Gatilho: "variation_option" | "addon_selected" | "quantity" |
+  // "client_answer" | "contract_attribute"
+  trigger_source   String
+  // key da opcao de variacao / do adicional / do atributo — conforme a origem.
+  trigger_ref      String?
+  // "eq" | "neq" | "gte" | "lte" | "contains" | "selected" | "not_selected"
+  operator         String
+  comparison_value String?
+
+  // "add_deadline_days" | "add_fixed_amount" | "add_percent" | "add_task" |
+  // "remove_task" | "add_step" | "require_info" | "add_deliverable"
+  effect_type  String
+  effect_value String @db.Text
+
+  // Texto legivel para o admin, gerado no servidor a partir dos campos acima.
+  explanation String @db.Text
 
   created_at DateTime @default(now())
   updated_at DateTime @updatedAt
 
-  @@index([version_id])
+  @@index([version_id, sort_order])
   @@map("catalog2_conditions")
+}
+
+// Modulo de precificacao (ata 2026-08-26): sobre o custo acumulado das
+// tarefas a plataforma soma impostos, comissoes, taxas operacionais e
+// margem de lucro "definidas no modulo de precificacao". A ata NAO informa
+// os percentuais — cada campo nulo vira "aguardando definicao comercial" no
+// resultado; o calculo nunca inventa valor. Singleton (id = "default").
+model Catalog2PricingSettings {
+  id                      String   @id @default("default")
+  tax_percent             Float?
+  commission_percent      Float?
+  operational_fee_percent Float?
+  profit_margin_percent   Float?
+  // Percentual do custo humano reservado para revisao humana (linha separada
+  // no resumo). Nulo = aguardando definicao.
+  human_review_percent    Float?
+  currency                String   @default("BRL")
+  notes                   String?  @db.Text
+  updated_by_user_id      String?
+  updated_at              DateTime @updatedAt
+  created_at              DateTime @default(now())
+
+  @@map("catalog2_pricing_settings")
 }

@@ -1,19 +1,21 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
-import { Boxes, Loader2, Lock, ChevronRight, X } from "lucide-react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { Boxes, Loader2, Lock, Search, ChevronLeft, ChevronRight, Plus } from "lucide-react";
 import { apiClient } from "@/lib/api-client";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { ConfirmationDialog } from "@/components/confirmation-dialog";
+import { ProductEditor } from "@/app/admin/produtos/novo-catalogo/product-editor";
 
-// Novo catálogo — TELA DE VALIDAÇÃO (sprint de produtos, bloco 2/6).
-// Só Admin Master. Não é o construtor visual (isso é o bloco 3). Serve para
-// ver que a estrutura nova existe e está separada do catálogo atual.
+// Novo catálogo — CONSTRUTOR administrativo (sprint de produtos, bloco 3/6).
+// Só Admin Master (o backend reaplica). Não mostra os 162 produtos antigos.
 
 const STATUS_LABEL: Record<string, string> = {
   em_preparacao: "Em preparação",
   disponivel: "Disponível",
-  temporariamente_inativo: "Temporariamente inativo",
+  temporariamente_inativo: "Suspenso",
   arquivado: "Arquivado",
 };
 const STATUS_TONE: Record<string, string> = {
@@ -26,60 +28,84 @@ const STATUS_TONE: Record<string, string> = {
 export default function AdminNovoCatalogoPage() {
   const [state, setState] = useState<"loading" | "ready" | "forbidden" | "error">("loading");
   const [overview, setOverview] = useState<any>(null);
-  const [pillars, setPillars] = useState<any[]>([]);
-  const [fourF, setFourF] = useState<any[]>([]);
-  const [categories, setCategories] = useState<any[]>([]);
-  const [specialties, setSpecialties] = useState<any[]>([]);
-  const [products, setProducts] = useState<any[]>([]);
-  const [detailId, setDetailId] = useState<string | null>(null);
+  const [refs, setRefs] = useState<{ pillars: any[]; categories: any[] }>({ pillars: [], categories: [] });
+  const [openProductId, setOpenProductId] = useState<string | null>(null);
 
-  const load = useCallback(async () => {
+  // filtros/listagem (preservados ao voltar do editor)
+  const [q, setQ] = useState("");
+  const [status, setStatus] = useState("");
+  const [pillarId, setPillarId] = useState("");
+  const [categoryId, setCategoryId] = useState("");
+  const [sort, setSort] = useState("name");
+  const [page, setPage] = useState(1);
+  const [list, setList] = useState<{ data: any[]; total: number; page_size: number } | null>(null);
+  const [listLoading, setListLoading] = useState(false);
+  const [msg, setMsg] = useState<string | null>(null);
+  const [confirm, setConfirm] = useState<{ title: string; message: string; onConfirm: () => void } | null>(null);
+
+  const bootstrap = useCallback(async () => {
     try {
-      const [ov, pl, ff, cat, sp, prods] = await Promise.all([
-        apiClient.getCatalog2Overview(),
-        apiClient.getCatalog2Pillars(),
-        apiClient.getCatalog2FourF(),
-        apiClient.getCatalog2Categories(),
-        apiClient.getCatalog2Specialties(),
-        apiClient.getCatalog2Products(),
-      ]);
+      const [ov, pil, cat] = await Promise.all([apiClient.getCatalog2Overview(), apiClient.getCatalog2Pillars(), apiClient.getCatalog2Categories()]);
       setOverview(ov);
-      setPillars(pl.data);
-      setFourF(ff.data);
-      setCategories(cat.data);
-      setSpecialties(sp.data);
-      setProducts(prods.data);
+      setRefs({ pillars: pil.data, categories: cat.data });
       setState("ready");
     } catch (err: any) {
       if (err?.status === 404) setState("forbidden");
       else setState("error");
     }
   }, []);
+  useEffect(() => { void bootstrap(); }, [bootstrap]);
+
+  const loadList = useCallback(async () => {
+    setListLoading(true);
+    try {
+      const r = await apiClient.getCatalog2Products({ q, status, pillar_id: pillarId, category_id: categoryId, sort, page, page_size: 15 });
+      setList(r);
+    } catch {
+      setList({ data: [], total: 0, page_size: 15 });
+    } finally {
+      setListLoading(false);
+    }
+  }, [q, status, pillarId, categoryId, sort, page]);
 
   useEffect(() => {
-    void load();
-  }, [load]);
+    if (state !== "ready" || openProductId) return;
+    const t = setTimeout(loadList, q ? 300 : 0);
+    return () => clearTimeout(t);
+  }, [state, openProductId, loadList, q]);
+
+  useEffect(() => setPage(1), [q, status, pillarId, categoryId, sort]);
+
+  async function rowAction(fn: () => Promise<any>, ok: string) {
+    setMsg(null);
+    try { await fn(); setMsg(ok); await loadList(); await bootstrap(); }
+    catch (e: any) { setMsg(e?.message ?? "Falha."); }
+  }
 
   if (state === "loading") return <Centered><Loader2 className="h-5 w-5 animate-spin" /> Carregando…</Centered>;
-  if (state === "forbidden")
-    return (
-      <Centered>
-        <Lock className="h-5 w-5" /> Esta área é exclusiva do Admin Master neste momento.
-      </Centered>
-    );
-  if (state === "error") return <Centered>Não foi possível carregar. Tente novamente mais tarde.</Centered>;
+  if (state === "forbidden") return <Centered><Lock className="h-5 w-5" /> Esta área é exclusiva do Admin Master neste momento.</Centered>;
+  if (state === "error") return <Centered>Não foi possível carregar.</Centered>;
 
+  if (openProductId) {
+    return (
+      <div className="mx-auto max-w-5xl p-4 md:p-6">
+        <ProductEditor productId={openProductId} onBack={() => { setOpenProductId(null); void loadList(); void bootstrap(); }} />
+      </div>
+    );
+  }
+
+  const totalPages = list ? Math.max(1, Math.ceil(list.total / list.page_size)) : 1;
   const c = overview.counts;
 
   return (
     <div className="mx-auto max-w-5xl space-y-5 p-4 md:p-6">
       <header className="space-y-1">
         <h1 className="flex items-center gap-2 text-xl font-semibold text-neutral-900 dark:text-neutral-50">
-          <Boxes className="h-5 w-5" /> Novo catálogo — fundação
+          <Boxes className="h-5 w-5" /> Novo catálogo
         </h1>
         <p className="text-sm text-neutral-500">
-          Arquitetura limpa e versionada que receberá os 36 produtos definitivos. Separada do catálogo operacional atual
-          (162 produtos) e do banco Legacy. O construtor visual completo vem no próximo bloco.
+          Construtor do novo catálogo (separado do catálogo operacional atual, com 162 produtos, e do Legacy). Preço e
+          prazo são sempre calculados no servidor.
         </p>
       </header>
 
@@ -92,182 +118,124 @@ export default function AdminNovoCatalogoPage() {
         <Stat k="Versões em rascunho" v={c.draft_versions} />
       </div>
 
-      {overview.is_empty ? (
+      <div className="flex flex-wrap items-center gap-2">
+        <div className="relative min-w-[200px] flex-1">
+          <Search className="absolute left-2 top-2.5 h-4 w-4 text-neutral-400" />
+          <Input className="pl-8" placeholder="Buscar por nome ou slug" value={q} onChange={(e) => setQ(e.target.value)} />
+        </div>
+        <select className="rounded border border-neutral-300 bg-transparent px-2 py-1.5 text-sm dark:border-neutral-700" value={status} onChange={(e) => setStatus(e.target.value)}>
+          <option value="">Todas as situações</option>
+          {Object.entries(STATUS_LABEL).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+        </select>
+        <select className="rounded border border-neutral-300 bg-transparent px-2 py-1.5 text-sm dark:border-neutral-700" value={pillarId} onChange={(e) => setPillarId(e.target.value)}>
+          <option value="">Todos os pilares</option>{refs.pillars.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+        </select>
+        <select className="rounded border border-neutral-300 bg-transparent px-2 py-1.5 text-sm dark:border-neutral-700" value={categoryId} onChange={(e) => setCategoryId(e.target.value)}>
+          <option value="">Todas as categorias</option>{refs.categories.map((c2) => <option key={c2.id} value={c2.id}>{c2.name}</option>)}
+        </select>
+        <select className="rounded border border-neutral-300 bg-transparent px-2 py-1.5 text-sm dark:border-neutral-700" value={sort} onChange={(e) => setSort(e.target.value)}>
+          <option value="name">Nome A–Z</option>
+          <option value="name_desc">Nome Z–A</option>
+          <option value="updated">Alterado recentemente</option>
+          <option value="created">Criado recentemente</option>
+        </select>
+        <Button size="sm" onClick={() => setConfirm({ title: "Criar produto", message: "Um novo produto (em preparação) com uma versão rascunho será criado.", onConfirm: () => createProduct() })}>
+          <Plus className="h-4 w-4" /> Criar produto
+        </Button>
+      </div>
+
+      {msg && <p className="text-sm text-blue-600">{msg}</p>}
+
+      {listLoading ? (
+        <Centered><Loader2 className="h-5 w-5 animate-spin" /> Carregando…</Centered>
+      ) : !list || list.data.length === 0 ? (
         <div className="rounded-lg border border-dashed border-neutral-300 p-8 text-center text-sm text-neutral-500 dark:border-neutral-700">
-          {overview.empty_message}
+          {overview.is_empty ? overview.empty_message : "Nenhum produto com esses filtros."}
         </div>
       ) : (
-        <section className="space-y-2">
-          <h2 className="text-sm font-semibold uppercase tracking-wider text-neutral-500">Produtos e situações</h2>
+        <>
           <ul className="divide-y divide-neutral-100 rounded-lg border border-neutral-200 dark:divide-neutral-800 dark:border-neutral-800">
-            {products.map((p) => (
-              <li key={p.id}>
-                <button
-                  onClick={() => setDetailId(p.id)}
-                  className="flex w-full items-center justify-between gap-3 px-3 py-2.5 text-left hover:bg-neutral-50 dark:hover:bg-neutral-800/50"
-                >
-                  <div className="min-w-0">
-                    <div className="truncate font-medium">{p.internal_name}</div>
+            {list.data.map((p) => (
+              <li key={p.id} className="px-3 py-2.5">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <button className="min-w-0 text-left" onClick={() => setOpenProductId(p.id)}>
+                    <div className="truncate font-medium hover:underline">{p.internal_name}</div>
                     <div className="text-xs text-neutral-500">
-                      {p.pillar?.name ?? "sem pilar"} · {p.category?.name ?? "sem categoria"} · 4F: {p.four_f.join(", ") || "—"} ·{" "}
-                      {p.version_count} versão(ões){p.draft_count > 0 ? ` (${p.draft_count} rascunho)` : ""}
-                      {p.published_version_id ? " · publicada" : " · sem versão publicada"}
+                      {p.slug} · {p.pillar?.name ?? "sem pilar"} · {p.category?.name ?? "sem categoria"}
+                      {p.published_version_number ? ` · v${p.published_version_number} publicada` : " · sem versão publicada"}
+                      {p.has_draft ? " · rascunho" : ""}
+                      {p.published_at ? ` · ${new Date(p.published_at).toLocaleDateString("pt-BR")}` : ""}
+                      {` · alterado ${new Date(p.updated_at).toLocaleDateString("pt-BR")}`}
                     </div>
-                  </div>
-                  <div className="flex items-center gap-2">
+                  </button>
+                  <div className="flex items-center gap-1.5">
+                    {p.is_new && <Badge className="bg-emerald-100 text-emerald-700">Novo</Badge>}
                     <Badge className={STATUS_TONE[p.status] ?? "bg-neutral-100"}>{STATUS_LABEL[p.status] ?? p.status}</Badge>
-                    <ChevronRight className="h-4 w-4 text-neutral-400" />
+                    <Button size="sm" variant="outline" onClick={() => setOpenProductId(p.id)}>Abrir</Button>
+                    {p.published_version_number && !p.has_draft && (
+                      <Button size="sm" variant="ghost" onClick={() => rowAction(() => apiClient.newCatalog2Version(p.id), "Nova versão rascunho criada.")}>Nova versão</Button>
+                    )}
+                    {p.status === "disponivel" && (
+                      <Button size="sm" variant="ghost" onClick={() => rowAction(() => apiClient.setCatalog2ProductStatus(p.id, "temporariamente_inativo"), "Oferta suspensa.")}>Suspender</Button>
+                    )}
+                    {p.status === "temporariamente_inativo" && (
+                      <Button size="sm" variant="ghost" onClick={() => rowAction(() => apiClient.setCatalog2ProductStatus(p.id, "disponivel"), "Oferta reativada.")}>Ativar</Button>
+                    )}
+                    {p.status !== "arquivado" && (
+                      <Button size="sm" variant="ghost" className="text-red-600" onClick={() => setConfirm({ title: "Arquivar produto?", message: "O produto sai do catálogo. O histórico é preservado; nada é apagado.", onConfirm: () => rowAction(() => apiClient.archiveCatalog2Product(p.id), "Produto arquivado.") })}>Arquivar</Button>
+                    )}
                   </div>
-                </button>
+                </div>
               </li>
             ))}
           </ul>
-        </section>
+          <div className="flex items-center justify-between text-sm">
+            <Button size="sm" variant="ghost" disabled={page <= 1} onClick={() => setPage((n) => n - 1)}><ChevronLeft className="h-4 w-4" /> Anterior</Button>
+            <span className="text-neutral-500">Página {page} de {totalPages} · {list.total} produto(s)</span>
+            <Button size="sm" variant="ghost" disabled={page >= totalPages} onClick={() => setPage((n) => n + 1)}>Próxima <ChevronRight className="h-4 w-4" /></Button>
+          </div>
+        </>
       )}
 
-      <div className="grid gap-4 sm:grid-cols-2">
-        <RefList title="Pilares" items={pillars} />
-        <RefList title="Classificações 4F" items={fourF} />
-        <RefList title="Categorias" items={categories} />
-        <RefList title="Especialidades" items={specialties} />
-      </div>
-
       <p className="rounded-lg bg-neutral-100 px-3 py-2 text-xs text-neutral-500 dark:bg-neutral-800">
-        Esta tela não substitui o catálogo operacional atual. Os 162 produtos de hoje continuam intactos.
+        Esta tela não substitui o catálogo operacional atual. Os 162 produtos de hoje continuam intactos. Os 36 produtos
+        da planilha ainda não foram importados.
       </p>
 
-      {detailId && <ProductDetail id={detailId} onClose={() => setDetailId(null)} />}
+      {confirm && (
+        <ConfirmationDialog
+          open
+          onClose={() => setConfirm(null)}
+          title={confirm.title}
+          message={confirm.message}
+          confirmText="Confirmar"
+          destructive={false}
+          onConfirm={() => { confirm.onConfirm(); setConfirm(null); }}
+        />
+      )}
     </div>
   );
+
+  async function createProduct() {
+    setMsg(null);
+    try {
+      const name = window.prompt("Nome interno do produto:");
+      if (!name) return;
+      const p = await apiClient.createCatalog2Product({ internal_name: name });
+      await bootstrap();
+      setOpenProductId(p.id);
+    } catch (e: any) {
+      setMsg(e?.message ?? "Falha ao criar.");
+    }
+  }
 }
 
-function ProductDetail({ id, onClose }: { id: string; onClose: () => void }) {
-  const [data, setData] = useState<any>(null);
-  const [error, setError] = useState(false);
-  useEffect(() => {
-    apiClient.getCatalog2Product(id).then(setData).catch(() => setError(true));
-  }, [id]);
-
-  return (
-    <div className="fixed inset-0 z-[110] flex items-center justify-center p-4" role="dialog" aria-modal="true" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
-      <div className="absolute inset-0 bg-black/50" aria-hidden="true" />
-      <div className="relative flex max-h-[88vh] w-full max-w-2xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl dark:bg-neutral-900">
-        <div className="flex items-center justify-between border-b border-neutral-200 px-5 py-3 dark:border-neutral-800">
-          <h2 className="font-semibold">Estrutura do produto</h2>
-          <button onClick={onClose} aria-label="Fechar" className="rounded p-1 text-neutral-400 hover:bg-neutral-100 dark:hover:bg-neutral-800">
-            <X className="h-5 w-5" />
-          </button>
-        </div>
-        <div className="overflow-y-auto px-5 py-4 text-sm">
-          {error ? (
-            <p className="text-red-600">Não foi possível carregar.</p>
-          ) : !data ? (
-            <Centered><Loader2 className="h-5 w-5 animate-spin" /> Carregando…</Centered>
-          ) : (
-            <ProductBody data={data} />
-          )}
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function ProductBody({ data }: { data: any }) {
-  return (
-    <div className="space-y-4">
-      <div>
-        <div className="text-lg font-semibold">{data.internal_name}</div>
-        <div className="text-xs text-neutral-500">
-          {data.pillar?.name ?? "sem pilar"} · {data.category?.name ?? "sem categoria"} · 4F: {data.four_f.join(", ") || "—"} ·{" "}
-          situação: {STATUS_LABEL[data.status] ?? data.status}
-          {data.is_new ? " · etiqueta “Novo” ativa (derivada da data de publicação)" : ""}
-        </div>
-      </div>
-
-      {data.versions.map((v: any) => (
-        <div key={v.id} className="rounded-lg border border-neutral-200 p-3 dark:border-neutral-800">
-          <div className="mb-2 flex items-center gap-2">
-            <span className="font-medium">Versão {v.version_number}</span>
-            <Badge className={v.state === "publicada" ? "bg-emerald-100 text-emerald-700" : "bg-neutral-100 text-neutral-600"}>
-              {v.state === "publicada" ? (v.is_published_current ? "publicada (atual)" : "publicada") : "rascunho"}
-            </Badge>
-            {v.published_at && (
-              <span className="text-xs text-neutral-400">em {new Date(v.published_at).toLocaleDateString("pt-BR")}</span>
-            )}
-          </div>
-          <p className="text-xs text-neutral-500">{v.summary || "(sem resumo)"}</p>
-
-          <Group title={`Variações — obrigatórias (${v.variations.length})`}>
-            {v.variations.map((va: any) => (
-              <li key={va.id}>
-                <strong>{va.name}</strong>: {va.options.map((o: any) => o.label).join(" / ") || "(sem opções)"}
-              </li>
-            ))}
-          </Group>
-          <Group title={`Adicionais — opcionais (${v.addons.length})`}>
-            {v.addons.map((a: any) => (
-              <li key={a.id}>{a.name}</li>
-            ))}
-          </Group>
-          <Group title={`Tarefas (ordenadas) — ${v.tasks.length}`}>
-            {v.tasks.map((t: any) => (
-              <li key={t.id}>
-                <strong>#{t.sort_order} {t.name}</strong> — execução: {t.execution_mode}
-                {t.specialty ? ` · especialidade: ${t.specialty.name}` : ""}
-                {t.ai ? " · IA preparada (revisão humana obrigatória)" : ""}
-                {t.steps.length > 0 && (
-                  <ul className="ml-4 list-inside list-decimal text-xs text-neutral-500">
-                    {t.steps.map((s: any) => (
-                      <li key={s.id}>{s.name}</li>
-                    ))}
-                  </ul>
-                )}
-              </li>
-            ))}
-          </Group>
-          {v.conditions.length > 0 && (
-            <Group title={`Condições (fundação) — ${v.conditions.length}`}>
-              {v.conditions.map((c: any) => (
-                <li key={c.id}>
-                  {c.name} <span className="text-neutral-400">(afeta {c.applies_to})</span>
-                </li>
-              ))}
-            </Group>
-          )}
-        </div>
-      ))}
-    </div>
-  );
-}
-
-function Group({ title, children }: { title: string; children: React.ReactNode }) {
-  return (
-    <div className="mt-2">
-      <p className="text-xs font-semibold uppercase tracking-wider text-neutral-500">{title}</p>
-      <ul className="ml-1 list-inside list-disc text-sm">{children}</ul>
-    </div>
-  );
-}
 function Stat({ k, v, hint }: { k: string; v: number | string; hint?: string }) {
   return (
     <div className="rounded-lg border border-neutral-200 p-3 dark:border-neutral-800">
       <div className="text-2xl font-semibold">{v}</div>
       <div className="text-xs text-neutral-500">{k}</div>
       {hint && <div className="text-[10px] text-neutral-400">{hint}</div>}
-    </div>
-  );
-}
-function RefList({ title, items }: { title: string; items: any[] }) {
-  return (
-    <div className="rounded-lg border border-neutral-200 p-3 dark:border-neutral-800">
-      <p className="mb-1 text-xs font-semibold uppercase tracking-wider text-neutral-500">
-        {title} ({items.length})
-      </p>
-      <ul className="space-y-0.5 text-sm">
-        {items.map((it) => (
-          <li key={it.id}>{it.name}</li>
-        ))}
-      </ul>
     </div>
   );
 }

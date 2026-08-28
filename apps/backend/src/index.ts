@@ -10,7 +10,6 @@ import { runDailySyncForAllConnections } from "./lib/meta-ads-sync";
 import { ensureDefaultAlertStandardsAndRules, runAlertEngineOnceGuarded } from "./lib/alert-engine";
 import { runTaskRotationOnceGuarded } from "./lib/task-rotation-engine";
 import { runCommsSchedulerOnceGuarded } from "./lib/comms";
-import { ensureCatalog2Foundation } from "./lib/catalog2-foundation";
 
 // Mascara a URL do banco: mantém apenas o caminho do arquivo, omite credenciais
 function maskDatabaseUrl(url: string): string {
@@ -82,10 +81,10 @@ async function main() {
   // Padrões/Regras obrigatórios da Central de Alertas (tarefa próxima do
   // prazo / tarefa atrasada) — idempotente por `key`, ver alert-engine.ts.
   await ensureDefaultAlertStandardsAndRules();
-  // Fundação do novo catálogo (sprint de produtos, bloco 2/6) — só as
-  // classificações reutilizáveis (pilares/4Fs/categorias/especialidades),
-  // nunca produtos. Idempotente por `key`.
-  await ensureCatalog2Foundation();
+  // (bloco 3/6, correção 1.2) O novo catálogo NÃO é semeado no boot. As
+  // classificações dinâmicas vêm de `npm run catalog2:seed-classifications`
+  // (comando explícito, idempotente, recusa host remoto); as 4 fases 4Fs
+  // vêm da migration. O backend inicia sem tocar em dados do catálogo.
 
   await logStartupState();
 

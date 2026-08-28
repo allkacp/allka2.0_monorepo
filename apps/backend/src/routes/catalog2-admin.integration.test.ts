@@ -7,7 +7,7 @@ import { requireTestDatabaseUrl } from "../test-support/require-test-database";
 import app from "../app";
 import { prisma } from "../lib/prisma";
 import { config } from "../config";
-import { ensureCatalog2Foundation } from "../lib/catalog2-foundation";
+import { seedCatalog2Classifications, seedCatalog2FourFForTests } from "../lib/catalog2-classifications-seed";
 import { createProduct, newDraftVersion, publishVersion } from "../lib/catalog2-service";
 
 // Fundação do novo catálogo (sprint de produtos, bloco 2/6).
@@ -62,7 +62,8 @@ describe("Novo catálogo — fundação", () => {
   before(async () => {
     requireTestDatabaseUrl();
     process.env.DATABASE_URL = process.env.TEST_DATABASE_URL ?? process.env.DATABASE_URL;
-    await ensureCatalog2Foundation();
+    await seedCatalog2FourFForTests(prisma);
+    await seedCatalog2Classifications(prisma);
     server = app.listen(0);
     await new Promise<void>((r) => server.once("listening", () => r()));
     baseUrl = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
@@ -121,8 +122,9 @@ describe("Novo catálogo — fundação", () => {
     catProducts.push(p.id);
     const v1 = await prisma.catalog2ProductVersion.findFirstOrThrow({ where: { product_id: p.id, version_number: 1 } });
 
-    // publica a v1
-    const pubRes = await api(`/api/admin/catalog2/versions/${v1.id}/publish`, { method: "POST", token: tokenFor(master) });
+    // publica a v1 (force: este teste não monta o produto completo — o
+    // bloco 3 adicionou a validação de publicação; ver catalog2-builder.*)
+    const pubRes = await api(`/api/admin/catalog2/versions/${v1.id}/publish`, { method: "POST", token: tokenFor(master), body: { force: true } });
     assert.equal(pubRes.status, 200);
 
     // editar a v1 publicada → 409
@@ -195,7 +197,7 @@ describe("Novo catálogo — fundação", () => {
     assert.equal(bad.status, 409);
 
     const v1 = await prisma.catalog2ProductVersion.findFirstOrThrow({ where: { product_id: p.id } });
-    await publishVersion(v1.id, master.id);
+    await publishVersion(v1.id, master.id, { force: true });
     prod = await prisma.catalog2Product.findUniqueOrThrow({ where: { id: p.id } });
     assert.equal(prod.status, "disponivel");
 

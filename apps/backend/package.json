@@ -19,6 +19,7 @@
     "db:legacy:deploy": "prisma migrate deploy --schema prisma/legacy/schema.prisma",
     "import:legacy-snapshot": "tsx src/scripts/import-legacy-snapshot.ts",
     "catalog2:analyze-spreadsheets": "tsx src/scripts/analyze-catalog-spreadsheets.ts",
+    "catalog2:seed-classifications": "tsx src/scripts/seed-catalog2-classifications.ts",
     "catalog2:seed-demo": "tsx src/scripts/seed-catalog2-demo.ts",
     "db:seed": "tsx prisma/seed.ts",
     "db:seed:test-users": "tsx seed-test-users.ts",

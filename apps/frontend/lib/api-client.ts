@@ -795,12 +795,70 @@ class ApiClient {
   async getCatalog2Specialties() {
     return this.get<{ data: any[] }>("/admin/catalog2/specialties");
   }
-  async getCatalog2Products(status?: string) {
-    return this.get<{ data: any[] }>(`/admin/catalog2/products${status ? `?status=${encodeURIComponent(status)}` : ""}`);
+  async getCatalog2Products(params?: Record<string, string | number | undefined>) {
+    const qs = new URLSearchParams();
+    for (const [k, v] of Object.entries(params ?? {})) if (v !== undefined && v !== "") qs.set(k, String(v));
+    return this.get<{ data: any[]; total: number; page: number; page_size: number }>(
+      `/admin/catalog2/products${qs.toString() ? `?${qs}` : ""}`,
+    );
   }
   async getCatalog2Product(id: string) {
     return this.get<any>(`/admin/catalog2/products/${id}`);
   }
+
+  // ── Construtor do novo catálogo (sprint de produtos, bloco 3/6) ────────
+  private c2<T = any>(m: "GET" | "POST" | "PUT" | "PATCH" | "DELETE", path: string, body?: unknown): Promise<T> {
+    if (m === "GET") return this.get<T>(`/admin/catalog2${path}`);
+    if (m === "POST") return this.post<T>(`/admin/catalog2${path}`, body ?? {});
+    if (m === "PUT") return this.put<T>(`/admin/catalog2${path}`, body ?? {});
+    if (m === "PATCH") return this.patch<T>(`/admin/catalog2${path}`, body ?? {});
+    return this.del<T>(`/admin/catalog2${path}`);
+  }
+  createCatalog2Product(body: Record<string, any>) { return this.c2("POST", "/products", body); }
+  updateCatalog2VersionInfo(versionId: string, body: Record<string, any>) { return this.c2("PUT", `/versions/${versionId}`, body); }
+  updateCatalog2Classifications(productId: string, body: Record<string, any>) { return this.c2("PUT", `/products/${productId}/classifications`, body); }
+  setCatalog2ProductStatus(productId: string, status: string) { return this.c2("PATCH", `/products/${productId}/status`, { status }); }
+  archiveCatalog2Product(productId: string) { return this.c2("POST", `/products/${productId}/archive`); }
+  newCatalog2Version(productId: string) { return this.c2("POST", `/products/${productId}/versions`); }
+  validateCatalog2Version(versionId: string) { return this.c2("GET", `/versions/${versionId}/validate`); }
+  publishCatalog2Version(versionId: string, body: Record<string, any>) { return this.c2("POST", `/versions/${versionId}/publish`, body); }
+  simulateCatalog2(versionId: string, selection: Record<string, any>) { return this.c2("POST", `/versions/${versionId}/simulate`, selection); }
+  previewCatalog2Version(versionId: string) { return this.c2("GET", `/versions/${versionId}/preview`); }
+  getCatalog2PricingSettings() { return this.c2("GET", "/pricing-settings"); }
+  updateCatalog2PricingSettings(body: Record<string, any>) { return this.c2("PUT", "/pricing-settings", body); }
+  updateCatalog2Specialty(id: string, body: Record<string, any>) { return this.c2("PUT", `/specialties/${id}`, body); }
+  // variações / opções / efeitos
+  addCatalog2Variation(versionId: string, body: Record<string, any>) { return this.c2("POST", `/versions/${versionId}/variations`, body); }
+  updateCatalog2Variation(id: string, body: Record<string, any>) { return this.c2("PUT", `/variations/${id}`, body); }
+  deleteCatalog2Variation(id: string) { return this.c2("DELETE", `/variations/${id}`); }
+  addCatalog2Option(variationId: string, body: Record<string, any>) { return this.c2("POST", `/variations/${variationId}/options`, body); }
+  updateCatalog2Option(id: string, body: Record<string, any>) { return this.c2("PUT", `/options/${id}`, body); }
+  deleteCatalog2Option(id: string) { return this.c2("DELETE", `/options/${id}`); }
+  addCatalog2OptionEffect(optionId: string, body: Record<string, any>) { return this.c2("POST", `/options/${optionId}/effects`, body); }
+  deleteCatalog2OptionEffect(id: string) { return this.c2("DELETE", `/option-effects/${id}`); }
+  // adicionais
+  addCatalog2Addon(versionId: string, body: Record<string, any>) { return this.c2("POST", `/versions/${versionId}/addons`, body); }
+  updateCatalog2Addon(id: string, body: Record<string, any>) { return this.c2("PUT", `/addons/${id}`, body); }
+  deleteCatalog2Addon(id: string) { return this.c2("DELETE", `/addons/${id}`); }
+  addCatalog2AddonEffect(addonId: string, body: Record<string, any>) { return this.c2("POST", `/addons/${addonId}/effects`, body); }
+  deleteCatalog2AddonEffect(id: string) { return this.c2("DELETE", `/addon-effects/${id}`); }
+  // tarefas / etapas
+  addCatalog2Task(versionId: string, body: Record<string, any>) { return this.c2("POST", `/versions/${versionId}/tasks`, body); }
+  updateCatalog2Task(id: string, body: Record<string, any>) { return this.c2("PUT", `/tasks/${id}`, body); }
+  deleteCatalog2Task(id: string) { return this.c2("DELETE", `/tasks/${id}`); }
+  duplicateCatalog2Task(id: string) { return this.c2("POST", `/tasks/${id}/duplicate`); }
+  reorderCatalog2Tasks(versionId: string, order: string[]) { return this.c2("PUT", `/versions/${versionId}/tasks/order`, { order }); }
+  updateCatalog2TaskAI(taskId: string, body: Record<string, any>) { return this.c2("PUT", `/tasks/${taskId}/ai`, body); }
+  addCatalog2TaskDependency(taskId: string, dependsOn: string) { return this.c2("POST", `/tasks/${taskId}/dependencies`, { depends_on_task_id: dependsOn }); }
+  deleteCatalog2TaskDependency(taskId: string, depId: string) { return this.c2("DELETE", `/tasks/${taskId}/dependencies/${depId}`); }
+  addCatalog2Step(taskId: string, body: Record<string, any>) { return this.c2("POST", `/tasks/${taskId}/steps`, body); }
+  updateCatalog2Step(id: string, body: Record<string, any>) { return this.c2("PUT", `/steps/${id}`, body); }
+  deleteCatalog2Step(id: string) { return this.c2("DELETE", `/steps/${id}`); }
+  reorderCatalog2Steps(taskId: string, order: string[]) { return this.c2("PUT", `/tasks/${taskId}/steps/order`, { order }); }
+  // condições
+  addCatalog2Condition(versionId: string, body: Record<string, any>) { return this.c2("POST", `/versions/${versionId}/conditions`, body); }
+  updateCatalog2Condition(id: string, body: Record<string, any>) { return this.c2("PUT", `/conditions/${id}`, body); }
+  deleteCatalog2Condition(id: string) { return this.c2("DELETE", `/conditions/${id}`); }
   /** URL autenticada da imagem de um banner obrigatório (uso admin). */
   mandatoryBannerImageUrl(id: string): string {
     return `${API_BASE_URL}/admin/comms/banners/${id}/image`;
