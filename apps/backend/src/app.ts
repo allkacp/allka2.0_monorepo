@@ -64,6 +64,7 @@ import commsRouter from "./routes/comms";
 import commsAdminRouter from "./routes/comms-admin";
 import legacyConsultationRouter from "./routes/legacy-consultation";
 import catalog2AdminRouter from "./routes/catalog2-admin";
+import catalog2CatalogRouter from "./routes/catalog2-catalog";
 import { prisma } from "./lib/prisma";
 import { errorHandler } from "./middleware/error";
 
@@ -241,6 +242,9 @@ app.use("/api/admin/comms", commsAdminRouter);
 app.use("/api/admin/legacy", legacyConsultationRouter);
 // Fundação do novo catálogo — somente Admin Master (sprint de produtos, bloco 2/6).
 app.use("/api/admin/catalog2", catalog2AdminRouter);
+// Catálogo do cliente do catalog2 (bloco 5/6) — visibilidade/configurador/
+// cotação/cesta. Permissão resolvida no servidor.
+app.use("/api/catalog2", catalog2CatalogRouter);
 
 // ─── 404 Handler ──────────────────────────────────────────────────────────────
 

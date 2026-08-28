@@ -4002,6 +4002,8 @@ model Catalog2Product {
   versions      Catalog2ProductVersion[]     @relation("Catalog2ProductVersions")
   four_f        Catalog2ProductFourF[]
   import_origin Catalog2ProductImportOrigin?
+  quotes        Catalog2Quote[]
+  cart_items    Catalog2CartItem[]
 
   @@index([status])
   @@index([pillar_id])
@@ -4058,11 +4060,13 @@ model Catalog2ProductVersion {
 
   published_of Catalog2Product? @relation("Catalog2PublishedVersion")
 
-  variations Catalog2Variation[]
-  addons     Catalog2Addon[]
-  tasks      Catalog2Task[]
-  conditions Catalog2Condition[]
-  events     Catalog2VersionEvent[]
+  variations  Catalog2Variation[]
+  addons      Catalog2Addon[]
+  tasks       Catalog2Task[]
+  conditions  Catalog2Condition[]
+  events      Catalog2VersionEvent[]
+  quotes      Catalog2Quote[]    @relation("Catalog2QuoteVersion")
+  cart_items  Catalog2CartItem[] @relation("Catalog2CartVersion")
 
   @@unique([product_id, version_number])
   @@index([state])
@@ -4494,4 +4498,79 @@ model Catalog2ReviewResolution {
 
   @@index([origin_id])
   @@map("catalog2_review_resolutions")
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// BLOCO 5 — catalogo do cliente: pre-cotacao e cesta do catalogo2.
+// Entidades SEPARADAS de compra/projeto. O servidor recalcula tudo; o
+// navegador nunca define preco. Isoladas por conta contratante + usuario.
+// ─────────────────────────────────────────────────────────────────────────
+
+// Pre-cotacao: uma configuracao de UM produto publicado, com preco/prazo
+// CONGELADOS no momento em que ficou "valida". Nao e compra nem projeto.
+model Catalog2Quote {
+  id String @id @default(cuid())
+
+  // Conta contratante (empresa/agencia) + usuario que gerou.
+  account_kind String // "company" | "agency" | "admin_preview"
+  account_id   String
+  user_id      String
+
+  product_id String
+  product    Catalog2Product        @relation(fields: [product_id], references: [id], onDelete: Restrict)
+  version_id String
+  version    Catalog2ProductVersion @relation("Catalog2QuoteVersion", fields: [version_id], references: [id], onDelete: Restrict)
+
+  // Configuracao congelada.
+  selection_json     String  @db.Text // { variation_option_keys, addon_keys, quantity, answers }
+  deliverables_json  String? @db.Text // entregaveis resultantes (snapshot)
+  quantity           Int     @default(1)
+  commercial_deadline_days Int?
+  commercial_price   Float?
+  currency           String  @default("BRL")
+  // sha256 da configuracao normalizada — deteccao de clique-duplo / mudanca.
+  config_checksum    String
+  // Snapshot legivel do calculo no momento do congelamento.
+  pricing_snapshot_json String? @db.LongText
+
+  // "rascunho" | "valida" | "expirada" | "convertida" | "cancelada"
+  status     String   @default("rascunho")
+  valid_until DateTime?
+  is_preview Boolean  @default(false)
+
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  @@index([account_kind, account_id, status])
+  @@index([user_id])
+  @@unique([account_kind, account_id, config_checksum, status])
+  @@map("catalog2_quotes")
+}
+
+// Item da cesta do catalogo2 (isolado por conta + usuario). Uma configuracao
+// so entra apos "Adicionar a cesta". Preco/prazo sao sempre recalculados no
+// servidor ao ler — nunca confiados do que o navegador mandou.
+model Catalog2CartItem {
+  id String @id @default(cuid())
+
+  account_kind String
+  account_id   String
+  user_id      String
+
+  product_id String
+  product    Catalog2Product        @relation(fields: [product_id], references: [id], onDelete: Cascade)
+  version_id String
+  version    Catalog2ProductVersion @relation("Catalog2CartVersion", fields: [version_id], references: [id], onDelete: Cascade)
+
+  selection_json  String @db.Text
+  quantity        Int    @default(1)
+  config_checksum String
+
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  // dedupe: a MESMA configuracao nao entra duas vezes (clique duplo).
+  @@unique([account_kind, account_id, user_id, config_checksum])
+  @@index([account_kind, account_id, user_id])
+  @@map("catalog2_cart_items")
 }

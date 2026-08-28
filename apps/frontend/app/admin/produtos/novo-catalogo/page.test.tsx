@@ -41,6 +41,7 @@ const { api } = vi.hoisted(() => ({
     addCatalog2Variation: vi.fn(),
     deleteCatalog2Variation: vi.fn(),
     getCatalog2ImportSummary: vi.fn(),
+    getCatalog2Readiness: vi.fn(),
     getCatalog2ProductOrigin: vi.fn(),
     resolveCatalog2Pendency: vi.fn(),
   },
@@ -134,6 +135,7 @@ beforeEach(() => {
   api.getCatalog2Specialties.mockResolvedValue(REFS.specialties)
   api.getCatalog2Products.mockResolvedValue(LIST)
   api.getCatalog2ImportSummary.mockResolvedValue(IMPORT_SUMMARY)
+  api.getCatalog2Readiness.mockResolvedValue(null)
   api.getCatalog2ProductOrigin.mockResolvedValue(ORIGIN)
   api.resolveCatalog2Pendency.mockResolvedValue({ ok: true, remaining_pendencies: ["portfolio_pending"], review_state: "portfolio_pending" })
   api.getCatalog2Product.mockResolvedValue(productDetail())

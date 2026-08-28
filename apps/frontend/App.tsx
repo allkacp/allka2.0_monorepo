@@ -143,6 +143,17 @@ const AdminLegacyPage = React.lazy(() => import("@/app/admin/legacy/page"));
 const AdminNovoCatalogoPage = React.lazy(
   () => import("@/app/admin/produtos/novo-catalogo/page"),
 );
+// Catálogo do CLIENTE do novo catálogo (sprint de produtos, bloco 5/6) —
+// componente único compartilhado pelos portais elegíveis.
+const Catalog2AdminPreviewPage = React.lazy(() =>
+  import("@/app/catalog2/page").then((m) => ({ default: m.Catalog2AdminPreviewPage })),
+);
+const Catalog2CompanyPage = React.lazy(() =>
+  import("@/app/catalog2/page").then((m) => ({ default: m.Catalog2CompanyPage })),
+);
+const Catalog2AgencyPage = React.lazy(() =>
+  import("@/app/catalog2/page").then((m) => ({ default: m.Catalog2AgencyPage })),
+);
 const AdminClientesPage = React.lazy(() => import("@/app/admin/clientes/page"));
 // Lista de agências no Admin — a pasta existia vazia até 2026-08-04.
 const AdminAgenciasPage = React.lazy(() => import("@/app/admin/agencias/page"));
@@ -913,6 +924,13 @@ export default function App() {
                     path="/admin/produtos/novo-catalogo"
                     element={<AdminNovoCatalogoPage />}
                   />
+                  {/* Pré-visualizar como cliente (bloco 5/6) — Admin Master;
+                      o backend recusa preview de rascunho para quem não for
+                      Master, mesmo via ?preview=1 na URL. */}
+                  <Route
+                    path="/admin/catalog2"
+                    element={<Catalog2AdminPreviewPage />}
+                  />
                   <Route
                     path="/admin/clientes"
                     element={<AdminClientesPage />}
@@ -1063,6 +1081,12 @@ export default function App() {
                     path="/company/produtos/:produtoId"
                     element={<EmpresaProdutosPage />}
                   />
+                  {/* Novo catálogo do cliente (bloco 5/6) — coexiste com o
+                      catálogo operacional acima; produto aberto via ?produto=. */}
+                  <Route
+                    path="/company/catalog2"
+                    element={<Catalog2CompanyPage />}
+                  />
                   <Route
                     path="/company/relatorios"
                     element={<CompanyRelatoriosPage />}
@@ -1119,6 +1143,12 @@ export default function App() {
                   <Route
                     path="/agency/catalogo/:produtoId"
                     element={<AgencyCatalogoPage />}
+                  />
+                  {/* Novo catálogo do cliente (bloco 5/6) — coexiste com o
+                      catálogo operacional acima; produto aberto via ?produto=. */}
+                  <Route
+                    path="/agency/catalog2"
+                    element={<Catalog2AgencyPage />}
                   />
                   <Route
                     path="/agency/combos"

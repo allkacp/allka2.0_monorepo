@@ -63,6 +63,7 @@ export default function AdminNovoCatalogoPage() {
   const [pendency, setPendency] = useState("");
   const [sort, setSort] = useState("name");
   const [importSummary, setImportSummary] = useState<any>(null);
+  const [readiness, setReadiness] = useState<any>(null);
   const [page, setPage] = useState(1);
   const [list, setList] = useState<{ data: any[]; total: number; page_size: number } | null>(null);
   const [listLoading, setListLoading] = useState(false);
@@ -71,15 +72,17 @@ export default function AdminNovoCatalogoPage() {
 
   const bootstrap = useCallback(async () => {
     try {
-      const [ov, pil, cat, imp] = await Promise.all([
+      const [ov, pil, cat, imp, rdy] = await Promise.all([
         apiClient.getCatalog2Overview(),
         apiClient.getCatalog2Pillars(),
         apiClient.getCatalog2Categories(),
         apiClient.getCatalog2ImportSummary().catch(() => null),
+        apiClient.getCatalog2Readiness().catch(() => null),
       ]);
       setOverview(ov);
       setRefs({ pillars: pil.data, categories: cat.data });
       setImportSummary(imp);
+      setReadiness(rdy);
       setState("ready");
     } catch (err: any) {
       if (err?.status === 404) setState("forbidden");
@@ -135,14 +138,22 @@ export default function AdminNovoCatalogoPage() {
 
   return (
     <div className="mx-auto max-w-5xl space-y-5 p-4 md:p-6">
-      <header className="space-y-1">
-        <h1 className="flex items-center gap-2 text-xl font-semibold text-neutral-900 dark:text-neutral-50">
-          <Boxes className="h-5 w-5" /> Novo catálogo
-        </h1>
-        <p className="text-sm text-neutral-500">
-          Construtor do novo catálogo (separado do catálogo operacional atual, com 162 produtos, e do Legacy). Preço e
-          prazo são sempre calculados no servidor.
-        </p>
+      <header className="flex flex-wrap items-start justify-between gap-3">
+        <div className="space-y-1">
+          <h1 className="flex items-center gap-2 text-xl font-semibold text-neutral-900 dark:text-neutral-50">
+            <Boxes className="h-5 w-5" /> Novo catálogo
+          </h1>
+          <p className="text-sm text-neutral-500">
+            Construtor do novo catálogo (separado do catálogo operacional atual, com 162 produtos, e do Legacy). Preço e
+            prazo são sempre calculados no servidor.
+          </p>
+        </div>
+        <a
+          href="/admin/catalog2?preview=1"
+          className="inline-flex items-center gap-1 rounded border border-neutral-300 px-3 py-1.5 text-sm hover:bg-neutral-50 dark:border-neutral-700 dark:hover:bg-neutral-800"
+        >
+          Pré-visualizar como cliente
+        </a>
       </header>
 
       <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
@@ -188,6 +199,8 @@ export default function AdminNovoCatalogoPage() {
           </p>
         </section>
       )}
+
+      {readiness && <ReadinessPanel readiness={readiness} />}
 
       <div className="flex flex-wrap items-center gap-2">
         <div className="relative min-w-[200px] flex-1">
@@ -356,6 +369,52 @@ function SummaryCell({ k, v }: { k: string; v: number | string }) {
       <div className="font-semibold text-indigo-900 dark:text-indigo-200">{v}</div>
       <div className="text-[10px] text-indigo-700/80 dark:text-indigo-300/70">{k}</div>
     </div>
+  );
+}
+function ReadinessPanel({ readiness }: { readiness: any }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <section className="space-y-2 rounded-lg border border-teal-200 bg-teal-50/50 p-3 dark:border-teal-900 dark:bg-teal-950/20">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <h2 className="text-sm font-semibold text-teal-900 dark:text-teal-200">Prontidão para o catálogo do cliente</h2>
+        <span className="text-xs text-teal-700 dark:text-teal-300">
+          {readiness.ready_for_client}/{readiness.total} prontos · {readiness.client_visible_now} visíveis agora ·{" "}
+          {readiness.with_blockers} com bloqueador
+        </span>
+      </div>
+      <p className="text-[11px] text-teal-700/80 dark:text-teal-300/80">{readiness.note}</p>
+      <button className="text-xs font-medium text-teal-700 underline" onClick={() => setOpen((o) => !o)}>
+        {open ? "Ocultar detalhamento" : "Ver detalhamento por produto"}
+      </button>
+      {open && (
+        <div className="max-h-80 overflow-y-auto rounded border border-teal-200/60 dark:border-teal-900">
+          <table className="w-full text-left text-xs">
+            <thead className="sticky top-0 bg-teal-50 dark:bg-teal-950/40">
+              <tr>
+                <th className="p-1.5">#</th><th className="p-1.5">Produto</th>
+                <th className="p-1.5">Bloqueadores</th><th className="p-1.5">Pendências</th>
+              </tr>
+            </thead>
+            <tbody>
+              {readiness.products.map((p: any) => (
+                <tr key={p.id} className="border-t border-teal-200/40 dark:border-teal-900/60">
+                  <td className="p-1.5 text-neutral-400">{p.source_index ?? "—"}</td>
+                  <td className="p-1.5">{p.name}</td>
+                  <td className="p-1.5">
+                    {p.blockers.length === 0
+                      ? <Badge className="bg-emerald-100 text-emerald-700">nenhum</Badge>
+                      : p.blockers.map((b: string) => <Badge key={b} className="mr-1 bg-red-100 text-red-700">{b}</Badge>)}
+                  </td>
+                  <td className="p-1.5">
+                    {p.pendings.map((b: string) => <Badge key={b} className="mr-1 bg-amber-100 text-amber-700">{b}</Badge>)}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </section>
   );
 }
 function Centered({ children }: { children: React.ReactNode }) {

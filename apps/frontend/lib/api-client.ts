@@ -867,6 +867,38 @@ class ApiClient {
   resolveCatalog2Pendency(productId: string, body: { pendency_key: string; decision: string }) {
     return this.c2("POST", `/products/${productId}/resolve-pendency`, body);
   }
+  /** Prontidão dos produtos para o catálogo do cliente (bloco 5/6). */
+  getCatalog2Readiness() { return this.c2("GET", "/readiness"); }
+
+  // ── Catálogo do CLIENTE do catalog2 (sprint de produtos, bloco 5/6) ────
+  private cc<T = any>(m: "GET" | "POST" | "PUT" | "DELETE", path: string, body?: unknown): Promise<T> {
+    if (m === "GET") return this.get<T>(`/catalog2${path}`);
+    if (m === "POST") return this.post<T>(`/catalog2${path}`, body ?? {});
+    if (m === "PUT") return this.put<T>(`/catalog2${path}`, body ?? {});
+    return this.del<T>(`/catalog2${path}`);
+  }
+  getClientCatalog2Refs() { return this.cc("GET", "/refs"); }
+  getClientCatalog2Products(params?: Record<string, string | number | undefined>) {
+    const qs = new URLSearchParams();
+    for (const [k, v] of Object.entries(params ?? {})) if (v !== undefined && v !== "") qs.set(k, String(v));
+    return this.cc<{ data: any[]; total: number; page: number; page_size: number }>("GET", `/products${qs.toString() ? `?${qs}` : ""}`);
+  }
+  getClientCatalog2Product(slug: string, preview?: boolean) {
+    return this.cc("GET", `/products/${encodeURIComponent(slug)}${preview ? "?preview=1" : ""}`);
+  }
+  configureClientCatalog2(slug: string, selection: Record<string, any>, preview?: boolean) {
+    return this.cc("POST", `/products/${encodeURIComponent(slug)}/configure${preview ? "?preview=1" : ""}`, selection);
+  }
+  listClientCatalog2Quotes() { return this.cc<{ data: any[] }>("GET", "/quotes"); }
+  createClientCatalog2Quote(product: string, selection: Record<string, any>) { return this.cc("POST", "/quotes", { product, selection }); }
+  getClientCatalog2Quote(id: string) { return this.cc("GET", `/quotes/${id}`); }
+  revalidateClientCatalog2Quote(id: string) { return this.cc("POST", `/quotes/${id}/revalidate`); }
+  cancelClientCatalog2Quote(id: string) { return this.cc("POST", `/quotes/${id}/cancel`); }
+  getClientCatalog2Cart() { return this.cc<{ items: any[]; count: number; needs_revalidation: boolean }>("GET", "/cart"); }
+  addClientCatalog2CartItem(product: string, selection: Record<string, any>) { return this.cc("POST", "/cart/items", { product, selection }); }
+  updateClientCatalog2CartItem(id: string, selection: Record<string, any>) { return this.cc("PUT", `/cart/items/${id}`, selection); }
+  removeClientCatalog2CartItem(id: string) { return this.cc("DELETE", `/cart/items/${id}`); }
+  clearClientCatalog2Cart() { return this.cc("POST", "/cart/clear"); }
   /** URL autenticada da imagem de um banner obrigatório (uso admin). */
   mandatoryBannerImageUrl(id: string): string {
     return `${API_BASE_URL}/admin/comms/banners/${id}/image`;

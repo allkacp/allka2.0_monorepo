@@ -73,10 +73,16 @@ describe("Construtor: regras, prazos e precificação", () => {
     app = (await import("../app")).default;
     await seedCatalog2FourFForTests(prisma);
     await seedCatalog2Classifications(prisma);
+    // Percentuais zerados + ORDEM confirmada → configuração comercial completa
+    // (bloco 5, correção 1: sem ordem confirmada o preço fica "A definir").
+    const pricingSeed = {
+      tax_percent: 0, commission_percent: 0, operational_fee_percent: 0, profit_margin_percent: 0, human_review_percent: 0,
+      component_order_json: JSON.stringify(["tax", "commission", "operational", "margin"]),
+    };
     await prisma.catalog2PricingSettings.upsert({
       where: { id: "default" },
-      create: { id: "default", tax_percent: 0, commission_percent: 0, operational_fee_percent: 0, profit_margin_percent: 0, human_review_percent: 0 },
-      update: { tax_percent: 0, commission_percent: 0, operational_fee_percent: 0, profit_margin_percent: 0, human_review_percent: 0 },
+      create: { id: "default", ...pricingSeed },
+      update: pricingSeed,
     });
 
     const master = await mkMaster();

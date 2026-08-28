@@ -336,7 +336,7 @@ describe("Motor de preço — esforço interno × prazo comercial (bloco 4/6)", 
     assert.notEqual(r.deadline.effort_days, r.deadline.commercial_deadline_days);
   });
 
-  it("36. ordem de incidência não confirmada → calcula pela ordem-padrão, mas sinaliza (nunca em silêncio)", async () => {
+  it("36. ordem de incidência não confirmada → preço comercial fica 'A definir'; só existe simulação interna (bloco 5, correção 1)", async () => {
     const vId = await mkPriceVersion();
     await prisma.catalog2PricingSettings.upsert({
       where: { id: "default" },
@@ -345,15 +345,21 @@ describe("Motor de preço — esforço interno × prazo comercial (bloco 4/6)", 
     });
     const r = await computePricing(vId, {});
     assert.equal(r.order_defined, false);
-    assert.deepEqual(r.applied_order, ["tax", "commission", "operational", "margin"]);
-    assert.ok(r.warnings.some((w) => w.code === "tax_order_not_confirmed"));
-    // preço fecha (não fica em silêncio nem trava), acima do mínimo
-    assert.ok((r.lines.commercial_final_price.amount ?? 0) > (r.lines.minimum_price.amount ?? 0));
+    assert.equal(r.lines.commercial_final_price.amount, null);
+    assert.equal(r.lines.commercial_final_price.detail, "A definir");
+    assert.equal(r.commercial_ready, false);
+    assert.ok(r.quote_blockers.includes("preço comercial incompleto"));
+    assert.ok(r.pending_info.includes("ordem de incidência das taxas"));
+    // a simulação ilustrativa existe, mas não autoriza nada
+    assert.ok(r.simulation.total > (r.lines.minimum_price.amount ?? 0));
+    assert.equal(r.simulation.authorizes_quote, false);
+    assert.equal(r.simulation.authorizes_publish, false);
     assert.equal(r.lines.minimum_price.amount, r.lines.direct_cost.amount);
   });
 
-  it("37. com ordem definida e todas as taxas: fecha o preço comercial final acima do mínimo", async () => {
+  it("37. com ordem + taxas + prazo definidos: fecha o preço comercial e fica pronto para cotar", async () => {
     const vId = await mkPriceVersion();
+    await prisma.catalog2ProductVersion.update({ where: { id: vId }, data: { base_commercial_deadline_days: 7 } });
     await prisma.catalog2PricingSettings.upsert({
       where: { id: "default" },
       create: { id: "default", tax_percent: 10, commission_percent: 5, operational_fee_percent: 3, profit_margin_percent: 20, human_review_percent: 0, component_order_json: JSON.stringify(["tax", "commission", "operational", "margin"]) },
@@ -363,5 +369,7 @@ describe("Motor de preço — esforço interno × prazo comercial (bloco 4/6)", 
     assert.equal(r.order_defined, true);
     assert.equal(r.pricing_pending, false);
     assert.ok(r.lines.commercial_final_price.amount! > r.lines.minimum_price.amount!);
+    assert.equal(r.commercial_ready, true);
+    assert.deepEqual(r.quote_blockers, []);
   });
 });

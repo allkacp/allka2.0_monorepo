@@ -1011,4 +1011,112 @@ router.post("/products/:id/resolve-pendency", async (req, res, next) => {
   } catch (e) { handle(e, res, next); }
 });
 
+// ═══════════════════════════════════════════════════════════════════════
+// PRONTIDÃO PARA O CATÁLOGO DO CLIENTE (sprint de produtos, bloco 5/6).
+// Por produto: conteúdo, classificação, variações, adicionais, tarefas,
+// etapas, preço, prazo, portfólio, revisão da Rose e publicação — cada
+// item = pronto | pendente | bloqueador | opcional. Os 36 seguem rascunho.
+// ═══════════════════════════════════════════════════════════════════════
+type ReadinessLevel = "pronto" | "pendente" | "bloqueador" | "opcional";
+router.get("/readiness", async (_req, res, next) => {
+  try {
+    const products = await prisma.catalog2Product.findMany({
+      orderBy: { internal_name: "asc" },
+      include: {
+        pillar: { select: { name: true } },
+        category: { select: { name: true } },
+        four_f: { select: { four_f_id: true } },
+        import_origin: { select: { source_index: true, rose_reviewed: true, pendencies_json: true, review_state: true } },
+        versions: {
+          orderBy: { version_number: "desc" },
+          include: { _count: { select: { variations: true, addons: true, tasks: true } } },
+        },
+      },
+    });
+
+    const rows = [];
+    for (const p of products) {
+      const draft = p.versions.find((v) => v.state === "rascunho") ?? p.versions[0] ?? null;
+      const published = p.versions.find((v) => v.id === p.published_version_id) ?? null;
+      const targetVersion = published ?? draft;
+      const pend = safeJsonArray(p.import_origin?.pendencies_json);
+      const has = (k: string) => pend.includes(k);
+
+      let pricing: Awaited<ReturnType<typeof computePricing>> | null = null;
+      if (targetVersion) {
+        try {
+          pricing = await computePricing(targetVersion.id, await defaultSelection(targetVersion.id));
+        } catch {
+          pricing = null;
+        }
+      }
+
+      const items: Record<string, { level: ReadinessLevel; note: string }> = {
+        conteudo: has("content_review_pending")
+          ? { level: "bloqueador", note: "Revisão de conteúdo pendente (texto preservado da importação)." }
+          : { level: "pronto", note: "Conteúdo revisável." },
+        classificacao: !p.pillar_id || !p.category_id
+          ? { level: "bloqueador", note: "Falta pilar ou categoria." }
+          : has("classification_decision_pending")
+            ? { level: "bloqueador", note: "Divergência categoria × área aguardando decisão." }
+            : { level: "pronto", note: `${p.pillar?.name ?? "—"} / ${p.category?.name ?? "—"} / ${p.four_f.length} 4F` },
+        variacoes: (targetVersion?._count.variations ?? 0) > 0
+          ? { level: "pronto", note: `${targetVersion?._count.variations} variação(ões).` }
+          : { level: "opcional", note: "Sem variações (permitido)." },
+        adicionais: (targetVersion?._count.addons ?? 0) > 0
+          ? { level: "pronto", note: `${targetVersion?._count.addons} adicional(is).` }
+          : { level: "opcional", note: "Sem adicionais (permitido)." },
+        tarefas: (targetVersion?._count.tasks ?? 0) > 0
+          ? { level: "pronto", note: `${targetVersion?._count.tasks} tarefa(s).` }
+          : { level: "pendente", note: "Nenhuma tarefa — não vira operação sem tarefas (bloco 6)." },
+        etapas: { level: "opcional", note: "Etapas não são obrigatórias para o catálogo do cliente." },
+        preco: pricing?.commercial_ready
+          ? { level: "pronto", note: `Preço comercial ${pricing.currency} ${pricing.lines.commercial_final_price.amount}.` }
+          : { level: "bloqueador", note: `Preço comercial "A definir": ${pricing?.pending_info.join("; ") || "configuração comercial incompleta"}.` },
+        prazo: pricing && !pricing.deadline.commercial_deadline_pending
+          ? { level: "pronto", note: `Prazo comercial ${pricing.deadline.commercial_deadline_days} dia(s).` }
+          : { level: "bloqueador", note: "Prazo comercial base não definido." },
+        portfolio: has("portfolio_pending")
+          ? { level: "pendente", note: "Sem material de portfólio (não bloqueia venda, mas empobrece a página)." }
+          : { level: "pronto", note: "Portfólio ok / não aplicável." },
+        revisao_rose: p.import_origin
+          ? p.import_origin.rose_reviewed
+            ? { level: "pronto", note: "Revisado pela Rose." }
+            : { level: "pendente", note: "Sem revisão da Rose." }
+          : { level: "opcional", note: "Produto não veio da importação." },
+        publicacao: published
+          ? { level: "pronto", note: `v${published.version_number} publicada.` }
+          : { level: "bloqueador", note: "Nunca publicado — invisível para o cliente (bloco 5 não publica)." },
+      };
+
+      const blockers = Object.entries(items).filter(([, v]) => v.level === "bloqueador").map(([k]) => k);
+      const pendings = Object.entries(items).filter(([, v]) => v.level === "pendente").map(([k]) => k);
+      rows.push({
+        id: p.id,
+        slug: p.slug,
+        name: p.internal_name,
+        source_index: p.import_origin?.source_index ?? null,
+        review_state: p.import_origin?.review_state ?? null,
+        status: p.status,
+        published: !!published,
+        client_visible: p.status === "disponivel" && !!published && pend.length === 0 && !!pricing?.commercial_ready,
+        items,
+        blockers,
+        pendings,
+        ready_for_client: blockers.length === 0,
+      });
+    }
+
+    res.json({
+      expected: 36,
+      total: rows.length,
+      ready_for_client: rows.filter((r) => r.ready_for_client).length,
+      client_visible_now: rows.filter((r) => r.client_visible).length,
+      with_blockers: rows.filter((r) => r.blockers.length > 0).length,
+      note: "Os 36 produtos continuam rascunhos neste bloco — nada é publicado aqui.",
+      products: rows,
+    });
+  } catch (e) { next(e); }
+});
+
 export default router;

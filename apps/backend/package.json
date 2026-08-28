@@ -50,7 +50,8 @@
     "db:reset": "echo '⛔  Proibido em automação. Use: prisma migrate reset --force (manualmente)'",
     "db:healthcheck": "node -e \"require('dotenv').config();const {PrismaClient}=require('@prisma/client');const p=new PrismaClient();Promise.all([p.product.count(),p.project.count(),p.catalogTask.count(),p.projectTask.count()]).then(([pr,pj,ct,pt])=>console.log(JSON.stringify({products:pr,projects:pj,catalogTasks:ct,projectTasks:pt}))).finally(()=>p.$disconnect())\"",
     "catalog2:import-products": "tsx src/scripts/import-catalog2-products.ts",
-    "catalog2:cutover-plan": "tsx src/scripts/catalog2-cutover-plan.ts"
+    "catalog2:cutover-plan": "tsx src/scripts/catalog2-cutover-plan.ts",
+    "catalog2:client-demo": "tsx src/scripts/seed-catalog2-client-demo.ts"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"

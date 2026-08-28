@@ -81,6 +81,17 @@ export interface PricingResult {
   // Ordem de incidência declarada? Se não, o motor não fecha o preço final.
   order_defined: boolean;
   applied_order: string[];
+  // Simulação ilustrativa (ordem-padrão) — nunca autoriza publicação/cotação.
+  simulation: {
+    total: number;
+    label: string;
+    authorizes_publish: boolean;
+    authorizes_quote: boolean;
+    authorizes_contract: boolean;
+  };
+  // Preço comercial completo E prazo comercial completo (exigido p/ cotar).
+  commercial_ready: boolean;
+  quote_blockers: string[];
   deadline: DeadlineResult;
   // compat: agora aponta para o PRAZO COMERCIAL (null se pendente), não o esforço.
   estimated_deadline_days: number | null;
@@ -345,21 +356,26 @@ export async function computePricing(versionId: string, selection: PricingSelect
   }
 
   // `pending_info` é SÓ sobre PREÇO (reparo 2.2). O prazo comercial tem
-  // pendência PRÓPRIA (`deadline.commercial_deadline_pending`) e não bloqueia
-  // o cálculo de preço.
+  // pendência PRÓPRIA (`deadline.commercial_deadline_pending`).
   const pendingInfo: string[] = [];
   if (humanPending) pendingInfo.push("valor/hora de especialidade");
   if (iaPending) pendingInfo.push("custo por token de IA");
   if (reviewPct == null) pendingInfo.push("percentual de revisão humana");
   if (anyRatePending) pendingInfo.push("percentual de imposto/comissão/taxa/margem");
-  // Ordem não confirmada: NÃO bloqueia o preço (usamos a ordem-padrão), mas
-  // fica sinalizado em `order_defined:false` + warning — nunca em silêncio.
+  // Bloco 5, correção 1: sem ORDEM confirmada o preço comercial NÃO fecha.
+  // A ordem-padrão só serve para a "Simulação interna não comercial".
   if (!orderDefined) {
-    warnings.push({ code: "tax_order_not_confirmed", message: `Ordem de incidência de taxas não confirmada — usando a ordem-padrão (${DEFAULT_COMPONENT_ORDER.join(" → ")}). Confirme no módulo de precificação.` });
+    pendingInfo.push("ordem de incidência das taxas");
+    warnings.push({ code: "tax_order_not_confirmed", message: `Ordem de incidência de taxas não confirmada — o preço comercial fica "A definir". A ordem-padrão (${DEFAULT_COMPONENT_ORDER.join(" → ")}) é usada apenas na simulação interna não comercial.` });
   }
 
   const pricingPending = pendingInfo.length > 0;
-  const commercialFinal = pricingPending ? null : round2(running);
+  // Total ILUSTRATIVO (ordem-padrão + percentuais disponíveis). NUNCA é o
+  // preço comercial: não autoriza publicação, cotação nem contratação.
+  const simulationTotal = round2(running);
+  // O preço comercial só existe quando percentuais + base + ORDEM estão
+  // confirmados e não há pendência de custo (correção 1 do bloco 5).
+  const commercialFinal = pricingPending ? null : simulationTotal;
   const minimumPrice = round2(directCost); // nunca vender abaixo do custo direto
 
   // ── ESFORÇO (planejamento interno) × PRAZO COMERCIAL (reparo 2.1) ───
@@ -398,8 +414,15 @@ export async function computePricing(versionId: string, selection: PricingSelect
   const finalLine: PricingLine = {
     label: "Preço comercial final",
     amount: commercialFinal,
-    detail: pricingPending ? `aguardando: ${[...new Set(pendingInfo)].join("; ")}` : undefined,
+    detail: commercialFinal == null ? "A definir" : undefined,
   };
+
+  // Uma COTAÇÃO VÁLIDA exige preço comercial completo E prazo comercial
+  // completo. Sem isso, só existe simulação interna.
+  const quoteBlockers: string[] = [];
+  if (pricingPending) quoteBlockers.push("preço comercial incompleto");
+  if (commercialPending) quoteBlockers.push("prazo comercial não definido");
+  const commercialReady = quoteBlockers.length === 0;
 
   return {
     currency,
@@ -426,6 +449,17 @@ export async function computePricing(versionId: string, selection: PricingSelect
     },
     order_defined: orderDefined,
     applied_order: appliedOrder,
+    // Bloco 5, correção 1: número ilustrativo, explicitamente NÃO comercial.
+    simulation: {
+      total: simulationTotal,
+      label: "Simulação interna não comercial",
+      authorizes_publish: false,
+      authorizes_quote: false,
+      authorizes_contract: false,
+    },
+    // Preço comercial completo + prazo comercial completo?
+    commercial_ready: commercialReady,
+    quote_blockers: quoteBlockers,
     deadline,
     // compat: ESTIMATIVA INTERNA (esforço + dias de efeitos). NÃO é o prazo
     // comercial nem promessa ao cliente — esse fica em `deadline`.
