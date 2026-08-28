@@ -62,6 +62,7 @@ import roadmapSsoRouter from "./routes/roadmap-sso";
 import centralChamadosAdminRouter from "./routes/central-chamados-admin";
 import commsRouter from "./routes/comms";
 import commsAdminRouter from "./routes/comms-admin";
+import legacyConsultationRouter from "./routes/legacy-consultation";
 import { prisma } from "./lib/prisma";
 import { errorHandler } from "./middleware/error";
 
@@ -234,6 +235,9 @@ app.use("/api/admin/central-chamados", centralChamadosAdminRouter);
 // Canais, campanhas e banners obrigatórios (ata 2026-08, bloco 5/5).
 app.use("/api/comms", commsRouter);
 app.use("/api/admin/comms", commsAdminRouter);
+// Consulta da Plataforma Anterior — somente leitura, somente Admin Master
+// (sprint de produtos, bloco 1/6).
+app.use("/api/admin/legacy", legacyConsultationRouter);
 
 // ─── 404 Handler ──────────────────────────────────────────────────────────────
 

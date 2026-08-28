@@ -521,6 +521,15 @@ const navigationConfig = {
           icon: Settings,
           current: false,
         },
+        {
+          // Sprint de produtos, bloco 1/6 — somente Admin Master (filtrado
+          // abaixo por `masterOnly`; o backend reaplica a checagem).
+          name: "Consulta da Plataforma Anterior",
+          href: "/admin/consulta-legado",
+          icon: History,
+          current: false,
+          masterOnly: true,
+        },
       ],
     },
   ],
@@ -746,6 +755,30 @@ export function Sidebar({ transparent = false }: { transparent?: boolean } = {})
   }, [accountType]);
   const isOrgAdmin = currentUserRole === "company_admin" || currentUserRole === "agency_admin" || currentUserRole === "partner_admin";
 
+  // Admin Master de verdade (nunca só pelo texto do papel) — usado só para
+  // esconder itens `masterOnly` do menu. Sinal de UI; o backend reaplica a
+  // regra estrita (ex.: /api/admin/legacy/* → 404 para quem não é Master).
+  const [isAdminMaster, setIsAdminMaster] = useState(false);
+  useEffect(() => {
+    if (accountType !== "admin") {
+      setIsAdminMaster(false);
+      return;
+    }
+    let cancelled = false;
+    apiClient
+      .getCurrentUser()
+      .then((me: any) => {
+        const p = me?.admin_profile;
+        if (!cancelled) setIsAdminMaster(!!p && p.is_active !== false && p.is_master === true);
+      })
+      .catch(() => {
+        if (!cancelled) setIsAdminMaster(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [accountType]);
+
   // Partner não é mais account_type separado — é a Agency com
   // PartnerProfile.status "active". Usado só pra decidir se os itens de
   // nav exclusivos de Partner (Agências lideradas/Comissões/Saques)
@@ -867,7 +900,11 @@ export function Sidebar({ transparent = false }: { transparent?: boolean } = {})
   const getNavigationItems = () => {
     // Admin users see all menu items
     if (accountType === "admin") {
-      return navigationConfig.admin.map((item: any) => {
+      const stripMasterOnly = (item: any) =>
+        item.subitems
+          ? { ...item, subitems: item.subitems.filter((s: any) => !s.masterOnly || isAdminMaster) }
+          : item;
+      return navigationConfig.admin.map(stripMasterOnly).map((item: any) => {
         if (item.name === "Projetos e Tarefas" && item.subitems) {
           return {
             ...item,

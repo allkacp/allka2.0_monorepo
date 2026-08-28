@@ -81,6 +81,10 @@ operacao-tarefas-legado.json
 # Dumps de banco (nunca versionar)
 *.sql
 !apps/backend/prisma/migrations/**/*.sql
+!apps/backend/prisma/legacy/migrations/**/*.sql
+
+# Cliente Prisma gerado do banco legado (regerado via `npm run db:legacy:generate`)
+apps/backend/src/legacy/generated/
 
 # Links de primeiro acesso gerados para a migração — tratar como senha
 links-primeiro-acesso*.csv

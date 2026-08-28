@@ -1,0 +1,140 @@
+// ─────────────────────────────────────────────────────────────────────────────
+// SCHEMA DO BANCO LEGADO — "Consulta da Plataforma Anterior"
+// (sprint de produtos, bloco 1/6)
+//
+// Banco SEPARADO (`allka_legacy`), árvore de migrations PRÓPRIA e independente
+// da operacional (a operacional segue com o bloqueador do BOM em `0_baseline`;
+// esta aqui nasce limpa e `migrate deploy` funciona do zero).
+//
+// A aplicação conecta neste banco com credencial SOMENTE LEITURA
+// (`LEGACY_DATABASE_URL`). A escrita (importador offline) usa
+// `LEGACY_IMPORT_DATABASE_URL`. Nenhuma rota HTTP escreve aqui.
+//
+// O `datasource` aponta para a URL de IMPORT porque é ela que as migrations
+// precisam (escrita). Em runtime, o client é instanciado sobrescrevendo a URL
+// para a somente-leitura — ver src/legacy/legacy-prisma.ts.
+// ─────────────────────────────────────────────────────────────────────────────
+
+generator client {
+  provider = "prisma-client-js"
+  output   = "../../src/legacy/generated"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("LEGACY_IMPORT_DATABASE_URL")
+}
+
+// Um lote = uma "fotografia" de uma origem num instante. Idempotência e
+// rastreio de conferência vivem aqui.
+model LegacyImportBatch {
+  id                  String   @id @default(cuid())
+  // Nome legível da origem (ex.: "[TESTE LOCAL] Fotografia de produtos anteriores").
+  source_name         String
+  // Ambiente de onde a fotografia veio ("local", "qa", "producao", "dump-2026-xx").
+  source_environment  String
+  // Instante do "retrato" (quando os dados de origem foram considerados válidos).
+  snapshot_at         DateTime
+  imported_at         DateTime @default(now())
+  importer_version    String
+  expected_count      Int      @default(0)
+  imported_count      Int      @default(0)
+  // "pending" | "running" | "completed" | "completed_with_divergences" | "failed"
+  status              String   @default("pending")
+  // Checksum agregado do lote (sha256 dos checksums de registro, ordenados).
+  checksum            String?
+  // Conferência: JSON com { entidade: { esperado, importado, divergencia, justificativa } }.
+  reconciliation_json String?  @db.LongText
+  notes               String?  @db.LongText
+  created_at          DateTime @default(now())
+  updated_at          DateTime @updatedAt
+
+  records   LegacyRecordSnapshot[]
+  relations LegacyRelationSnapshot[]
+
+  @@index([source_environment])
+  @@index([status])
+  @@map("legacy_import_batches")
+}
+
+// Registro histórico genérico. Suporta vários tipos de entidade sem obrigar o
+// sistema novo a reproduzir o schema antigo. Conteúdo seguro em JSON +
+// colunas indexadas o suficiente para busca/filtro sem varrer o JSON.
+model LegacyRecordSnapshot {
+  id       String            @id @default(cuid())
+  batch_id String
+  batch    LegacyImportBatch @relation(fields: [batch_id], references: [id], onDelete: Cascade)
+
+  // "product" | "product_variation" | "product_addon" | "product_condition" |
+  // "catalog_task" | "product_catalog_task" | "specialty" | ...
+  entity_type   String
+  // Tabela/origem no sistema de onde saiu ("products", "product_variations", ...).
+  source_table  String
+  // ID original PRESERVADO COMO TEXTO — nunca reutilizado como id operacional.
+  original_id   String
+  // Código apresentado na interface antiga (ex.: "prod_50"), como texto.
+  original_code String?
+
+  title           String?
+  subtitle        String? @db.Text
+  // Situação no sistema antigo, como texto ("ativo", "inativo", "arquivado"...).
+  original_status String?
+
+  // Datas relevantes do registro antigo (JSON: { created_at, updated_at, ... }).
+  dates_json            String? @db.Text
+  // Conteúdo histórico SEGURO em JSON (já sanitizado — sem segredos).
+  content_json          String  @db.LongText
+  // sha256 do content_json APÓS sanitização.
+  checksum              String
+  // true quando o importador removeu ao menos um campo bloqueado deste registro.
+  sanitized             Boolean @default(false)
+  // Lista dos NOMES de campos removidos (nunca os valores).
+  sanitized_fields_json String? @db.Text
+
+  // ── Colunas indexadas para busca/filtro de PRODUTO (preenchidas quando
+  //    fizer sentido para o entity_type) ──────────────────────────────────
+  search_category String?
+  search_active   Boolean?
+
+  imported_at DateTime @default(now())
+
+  relations_from LegacyRelationSnapshot[] @relation("RelationFrom")
+  relations_to   LegacyRelationSnapshot[] @relation("RelationTo")
+
+  // Idempotência: no MESMO lote, um (tipo, id original) só existe uma vez.
+  @@unique([batch_id, entity_type, original_id])
+  @@index([entity_type])
+  @@index([original_status])
+  @@index([search_category])
+  @@index([search_active])
+  @@index([original_code])
+  @@map("legacy_record_snapshots")
+}
+
+// Relação histórica entre dois registros da fotografia. O "destino" pode não
+// ter sido importado (ex.: relação para um projeto ainda não puxado) — por
+// isso `to_record_id` é opcional e o `to_original_id` textual sempre fica.
+model LegacyRelationSnapshot {
+  id       String            @id @default(cuid())
+  batch_id String
+  batch    LegacyImportBatch @relation(fields: [batch_id], references: [id], onDelete: Cascade)
+
+  from_record_id String
+  from_record    LegacyRecordSnapshot @relation("RelationFrom", fields: [from_record_id], references: [id], onDelete: Cascade)
+
+  to_record_id String?
+  to_record    LegacyRecordSnapshot? @relation("RelationTo", fields: [to_record_id], references: [id], onDelete: SetNull)
+
+  // "has_variation" | "has_addon" | "has_condition" | "has_catalog_task" |
+  // "in_category" | "used_in_project" | ...
+  relation_type  String
+  to_original_id String
+  description    String? @db.Text
+
+  created_at DateTime @default(now())
+
+  @@index([from_record_id])
+  @@index([to_record_id])
+  @@index([relation_type])
+  @@map("legacy_relation_snapshots")
+}

@@ -82,6 +82,14 @@ const baseEnvSchema = z.object({
   // Ambiente reportado para a guarda de público das campanhas
   // ("local" | "qa" | "production"). Nunca inferido de NODE_ENV.
   COMMS_ENVIRONMENT: z.enum(["local", "qa", "production"]).default("local"),
+
+  // ── Consulta da Plataforma Anterior (sprint de produtos, bloco 1/6) ─────
+  // Banco LEGADO separado. `LEGACY_DATABASE_URL` é a conexão da APLICAÇÃO
+  // (credencial somente leitura); vazia/ausente = Consulta desativada (as
+  // rotas respondem 503). `LEGACY_IMPORT_DATABASE_URL` é usada APENAS pelo
+  // importador offline e pelas migrations do legado — nunca por rota HTTP.
+  LEGACY_DATABASE_URL: z.string().optional(),
+  LEGACY_IMPORT_DATABASE_URL: z.string().optional(),
   // Purpose-separated from ROADMAP_HMAC_* — only ever signs the SSO
   // handoff (POST .../allka/sso/tickets on the Roadmap), never ticket
   // creation/lookup. Deliberately optional: lib/roadmap-client.ts falls

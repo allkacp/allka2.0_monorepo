@@ -133,6 +133,11 @@ const AdminNotificationsPage = React.lazy(
 const AdminComunicacaoPage = React.lazy(
   () => import("@/app/admin/comunicacao/page"),
 );
+// Consulta da Plataforma Anterior — somente leitura, somente Admin Master
+// (sprint de produtos, bloco 1/6).
+const AdminConsultaLegadoPage = React.lazy(
+  () => import("@/app/admin/consulta-legado/page"),
+);
 const AdminClientesPage = React.lazy(() => import("@/app/admin/clientes/page"));
 // Lista de agências no Admin — a pasta existia vazia até 2026-08-04.
 const AdminAgenciasPage = React.lazy(() => import("@/app/admin/agencias/page"));
@@ -892,6 +897,10 @@ export default function App() {
                   <Route
                     path="/admin/comunicacao"
                     element={<AdminComunicacaoPage />}
+                  />
+                  <Route
+                    path="/admin/consulta-legado"
+                    element={<AdminConsultaLegadoPage />}
                   />
                   <Route
                     path="/admin/clientes"

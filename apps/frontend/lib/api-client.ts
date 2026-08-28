@@ -754,6 +754,30 @@ class ApiClient {
   async uploadCommsImage(file: File): Promise<{ file_name: string }> {
     return this.uploadFile("/admin/comms/images", file);
   }
+
+  // ── Consulta da Plataforma Anterior (sprint de produtos, bloco 1/6) ────
+  async getLegacySummary() {
+    return this.get<any>("/admin/legacy/summary");
+  }
+  async getLegacyProducts(params?: {
+    q?: string;
+    status?: string;
+    category?: string;
+    page?: number;
+    page_size?: number;
+    sort_by?: string;
+    sort_dir?: "asc" | "desc";
+  }) {
+    const qs = new URLSearchParams();
+    for (const [k, v] of Object.entries(params ?? {})) {
+      if (v !== undefined && v !== null && v !== "") qs.set(k, String(v));
+    }
+    const suffix = qs.toString() ? `?${qs.toString()}` : "";
+    return this.get<any>(`/admin/legacy/products${suffix}`);
+  }
+  async getLegacyRecord(id: string) {
+    return this.get<any>(`/admin/legacy/records/${id}`);
+  }
   /** URL autenticada da imagem de um banner obrigatório (uso admin). */
   mandatoryBannerImageUrl(id: string): string {
     return `${API_BASE_URL}/admin/comms/banners/${id}/image`;
