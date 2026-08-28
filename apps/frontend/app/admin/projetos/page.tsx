@@ -4723,7 +4723,12 @@ export default function AdminProjetosPage({
                     </DialogHeader>
                     <div className="space-y-4 py-4">
                       <p className="text-sm text-muted-foreground">
-                        Tem certeza que deseja excluir esta coluna?
+                        Remover a coluna{" "}
+                        <span className="font-semibold text-foreground">
+                          {kanbanColumns.find((col) => col.id === columnToDelete)?.label ?? "selecionada"}
+                        </span>{" "}
+                        deste quadro? Ela some da visualização por status — os
+                        projetos não são excluídos.
                       </p>
 
                       {columnToDelete &&
@@ -5287,9 +5292,10 @@ function KanbanColumn({
             <button
               onClick={(e) => {
                 e.stopPropagation();
-                if (confirm("Tem certeza que deseja remover esta coluna?")) {
-                  onDelete();
-                }
+                // Sem window.confirm aqui: abre direto o diálogo de exclusão
+                // de coluna (nome da coluna + para onde vão os cartões +
+                // Cancelar/Excluir). Ver <Dialog open={showDeleteColumnDialog}>.
+                onDelete();
               }}
               className="hover:bg-white/20 rounded p-0.5 transition-colors"
             >

@@ -46,6 +46,7 @@ import { usePartner } from "@/contexts/partner-context";
 import { useEmpresa } from "@/contexts/empresa-context";
 import { useAgencia } from "@/contexts/agencia-context";
 import { apiClient } from "@/lib/api-client";
+import { isCatalogRoute } from "@/lib/catalog-access";
 import { useProjectBasket } from "@/contexts/project-basket-context";
 import { ProjectBasketDrawer } from "@/components/project-basket-drawer";
 import { useNotificationsPanel } from "@/contexts/notifications-panel-context";
@@ -808,17 +809,15 @@ export function Header({ transparent = false }: { transparent?: boolean } = {}) 
                 flutuante; na verdade virou aba do mesmo painel do sino). */}
 
             {/* ── Cesta de projeto ───────────────────────────────────
-                A cesta pertence ao ambiente de loja/catálogo (ata 2026-08,
-                bloco interface/usabilidade): o ícone só aparece nas rotas de
-                catálogo OU quando já há itens pendentes (fluxo de projeto em
-                criação a continuar) — nunca "solto" em dashboard, financeiro,
-                perfil ou administração sem contexto. Oculta para líder
-                sempre (não contrata). */}
-            {accountType !== "lider" && (() => {
+                A cesta pertence ao ambiente de catálogo/loja (ata 2026-08,
+                bloco interface/usabilidade) — NÃO é um componente global. O
+                ícone só aparece nas rotas de catálogo (`isCatalogRoute`),
+                mesmo quando há itens salvos: sair do catálogo esconde o
+                ícone sem apagar a cesta; voltar mostra de novo. Oculta para
+                líder sempre (não contrata). */}
+            {accountType !== "lider" && isCatalogRoute(location.pathname) && (() => {
               const totalItems = basket.getTotalItems();
               const hasItems = totalItems > 0;
-              const onCatalogRoute = /^\/(admin\/(catalogo-produtos|combos|catalogo)|company\/produtos|empresa\/produtos|agencia\/catalogo|agency\/catalogo)(\/|$)/.test(location.pathname);
-              if (!hasItems && !onCatalogRoute) return null;
               return (
                 <div className="relative group">
                   <button

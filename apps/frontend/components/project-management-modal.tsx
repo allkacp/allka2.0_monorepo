@@ -16,6 +16,7 @@ import {
   AccordionTrigger,
 } from "@/components/ui/accordion";
 import { ConfirmationDialog } from "@/components/confirmation-dialog";
+import { DocumentDeleteButton } from "@/components/document-delete-button";
 import {
   Sheet,
   SheetContent,
@@ -733,15 +734,13 @@ export function ProjectManagementModal({
     }
   }
 
-  async function handleDeleteProjectDocument(doc: any) {
-    if (!project?.id || !window.confirm(`Remover "${doc.name}" dos documentos do projeto?`)) return;
-    try {
-      await apiClient.deleteProjectDocument(String(project.id), doc.id);
-      toast({ title: "Documento removido" });
-      reloadProjectDocuments();
-    } catch (err: any) {
-      toast({ title: "Erro ao remover documento", description: err?.message, variant: "destructive" });
-    }
+  // Exclusão de documento do projeto: ver <DocumentDeleteButton /> no JSX —
+  // a confirmação em duas etapas e o tratamento de erro (403/409/rede,
+  // documento preservado) moram no componente compartilhado. Aqui fica só a
+  // chamada real, usada como `onDelete`.
+  function deleteProjectDocumentRequest(docId: string) {
+    if (!project?.id) return Promise.reject(new Error("Projeto sem id."));
+    return apiClient.deleteProjectDocument(String(project.id), docId);
   }
 
   async function handleDownloadProjectDocument(doc: any) {
@@ -3397,13 +3396,28 @@ export function ProjectManagementModal({
                             >
                               <Download className="h-3.5 w-3.5" />
                             </button>
-                            <button
-                              onClick={() => handleDeleteProjectDocument(doc)}
-                              title="Excluir"
-                              className="h-7 w-7 flex items-center justify-center rounded-lg text-slate-400 hover:text-red-500 hover:bg-red-50"
+                            <DocumentDeleteButton
+                              documentName={doc.name}
+                              scopeLabel="dos documentos do projeto"
+                              title="Excluir documento do projeto"
+                              consequences={[
+                                "O arquivo é apagado do servidor — não há lixeira nem desfazer.",
+                                "Toda a equipe do projeto deixa de ver esse documento na hora.",
+                                "Enviar o arquivo de novo cria um documento novo, com outro histórico.",
+                              ]}
+                              onDelete={() => deleteProjectDocumentRequest(doc.id)}
+                              onDeleted={reloadProjectDocuments}
                             >
-                              <Trash2 className="h-3.5 w-3.5" />
-                            </button>
+                              {(open) => (
+                                <button
+                                  onClick={open}
+                                  title="Excluir"
+                                  className="h-7 w-7 flex items-center justify-center rounded-lg text-slate-400 hover:text-red-500 hover:bg-red-50"
+                                >
+                                  <Trash2 className="h-3.5 w-3.5" />
+                                </button>
+                              )}
+                            </DocumentDeleteButton>
                           </div>
                         ))}
                       </div>

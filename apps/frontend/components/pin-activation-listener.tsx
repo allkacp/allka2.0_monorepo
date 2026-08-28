@@ -11,13 +11,16 @@
  * Notificações (não precisa de "tab" nenhum).
  */
 import { useEffect } from "react";
+import { useLocation } from "react-router-dom";
 import { useOpenScreens } from "@/contexts/open-screens-context";
 import { useProjectBasket } from "@/contexts/project-basket-context";
 import { useNotificationsPanel } from "@/contexts/notifications-panel-context";
 import { useGlobalHeaderPanel } from "@/contexts/global-header-panel-context";
+import { isCatalogRoute } from "@/lib/catalog-access";
 
 export function PinActivationListener() {
   const basket = useProjectBasket();
+  const location = useLocation();
   const notifications = useNotificationsPanel();
   const { openPanel } = useGlobalHeaderPanel();
   // NÃO usar useConsumePendingActivation aqui: aquele hook limpa
@@ -32,7 +35,11 @@ export function PinActivationListener() {
   const { pendingActivation, setPendingActivation } = useOpenScreens();
   useEffect(() => {
     if (pendingActivation === "open-cesta") {
-      basket.setOpen(true);
+      // A cesta só abre dentro do catálogo (ata 2026-08). Reativar o pin
+      // navega pro catálogo do portal (ver ProjectBasketDrawer.pin.path);
+      // se por algum motivo a rota atual não for de catálogo, só consome o
+      // sinal sem abrir — nunca "solta" a cesta numa tela sem contexto.
+      if (isCatalogRoute(location.pathname)) basket.setOpen(true);
       setPendingActivation(null);
     } else if (pendingActivation === "open-notificacoes") {
       notifications.setOpen(true);

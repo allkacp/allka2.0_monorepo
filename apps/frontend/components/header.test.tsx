@@ -288,19 +288,36 @@ describe("Header — cesta só no contexto de catálogo/loja (ata 2026-08, inter
     expect(basketBtn()).toBeInTheDocument();
   });
 
-  it("cesta COM itens em qualquer rota (fluxo de projeto em criação a continuar) → ícone aparece", async () => {
+  it("cesta COM itens FORA do catálogo (dashboard) → ícone continua NÃO aparecendo (regra vale mesmo com itens salvos)", async () => {
     basketMock.totalItems = 2;
     renderHeader("/admin/dashboard");
+    expect(basketBtn()).not.toBeInTheDocument();
+  });
+
+  it("gestão de produtos (/admin/produtos) e combos (/admin/combos) NÃO são catálogo de compra → sem cesta", async () => {
+    basketMock.totalItems = 3;
+    const { unmount } = renderHeader("/admin/produtos");
+    expect(basketBtn()).not.toBeInTheDocument();
+    unmount();
+    renderHeader("/admin/combos");
+    expect(basketBtn()).not.toBeInTheDocument();
+  });
+
+  it("detalhe de produto dentro do catálogo pertence ao contexto → cesta aparece", async () => {
+    renderHeader("/admin/catalogo-produtos/prod-123");
     expect(basketBtn()).toBeInTheDocument();
   });
 
-  it("catálogo de empresa e agência também exibem a cesta", async () => {
+  it("catálogos de empresa, agência (e alias /agencia) exibem a cesta", async () => {
     accountConfig.accountType = "empresas";
-    const { unmount } = renderHeader("/company/produtos");
+    const { unmount: u1 } = renderHeader("/company/produtos");
     expect(basketBtn()).toBeInTheDocument();
-    unmount();
+    u1();
     accountConfig.accountType = "agencias";
-    renderHeader("/agencia/catalogo");
+    const { unmount: u2 } = renderHeader("/agency/catalogo");
+    expect(basketBtn()).toBeInTheDocument();
+    u2();
+    renderHeader("/agencia/catalogo/x");
     expect(basketBtn()).toBeInTheDocument();
   });
 });

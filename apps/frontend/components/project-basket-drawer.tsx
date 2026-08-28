@@ -36,6 +36,7 @@ import {
   Info,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { isCatalogRoute } from "@/lib/catalog-access";
 import { useProjectBasket } from "@/contexts/project-basket-context";
 import { ProjectCreateNewPanel } from "@/components/project-create-new-panel";
 import { ProductDetailSheet } from "@/components/product-detail-sheet";
@@ -154,6 +155,8 @@ function resolveCatalogPath(pathname: string): string | null {
   if (pathname.startsWith("/company")) return "/company/produtos";
   if (pathname.startsWith("/agencia")) return "/agencia/catalogo";
   if (pathname.startsWith("/agency")) return "/agency/catalogo";
+  if (pathname.startsWith("/leader")) return "/leader/catalogo";
+  if (pathname.startsWith("/lider")) return "/lider/catalogo";
   return null;
 }
 
@@ -272,6 +275,17 @@ export function ProjectBasketDrawer() {
     }
   }, [location.pathname]);
 
+  // A cesta pertence ao catálogo (ata 2026-08): fora das rotas de catálogo
+  // ela NUNCA é renderizada como aberta — mesmo que `basket.isOpen` esteja
+  // com um valor antigo (atalho da bandeja, estado remanescente). Fechar
+  // aqui não apaga itens (só `clearBasket` faz isso), então voltar ao
+  // catálogo mantém a compra intacta.
+  const onCatalog = isCatalogRoute(location.pathname);
+  useEffect(() => {
+    if (!onCatalog && basket.isOpen) basket.setOpen(false);
+  }, [onCatalog, basket.isOpen]);
+  const drawerOpen = basket.isOpen && onCatalog;
+
   // ── Helpers
   const getCategoryIcon = (cat: string) => CATEGORY_ICONS[cat] || Package;
   const getCategoryGradient = (cat: string) =>
@@ -281,14 +295,16 @@ export function ProjectBasketDrawer() {
     <>
       {/* ── Tela Slide ──────────────────────────────────────────── */}
       <HeaderSlideScreen
-        open={basket.isOpen}
+        open={drawerOpen}
         onClose={handleClose}
         hideHeader
         pin={{
           id: "global-cesta",
           label: "Cesta do Projeto",
           icon: Briefcase,
-          path: location.pathname,
+          // Reativar pela bandeja sempre leva de volta ao catálogo do
+          // portal — nunca reabre a cesta "solta" numa tela sem contexto.
+          path: resolveCatalogPath(location.pathname) ?? location.pathname,
           activateKey: "open-cesta",
         }}
       >

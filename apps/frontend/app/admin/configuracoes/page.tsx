@@ -75,6 +75,7 @@ import {
   StandardPageBanner,
 } from "@/components/standard-page-shell";
 import { PinToTrayButton } from "@/components/pin-to-tray-button";
+import { DocumentDeleteButton } from "@/components/document-delete-button";
 
 // ─── helpers ──────────────────────────────────────────────────────────────────
 
@@ -464,15 +465,11 @@ export default function AdminConfiguracoesPage() {
     }
   }
 
-  async function handleKbDeleteDocument(doc) {
-    if (!window.confirm(`Remover "${doc.name}" desta base de conhecimento?`)) return;
-    try {
-      await apiClient.deleteKnowledgeDocument(doc.id);
-      toast({ title: "Documento removido" });
-      await Promise.all([loadKbDocuments(kbSelectedCategory), loadKbCategories()]);
-    } catch (err) {
-      toast({ title: "Erro ao remover", description: err?.message, variant: "destructive" });
-    }
+  // Exclusão do documento da base: ver <KnowledgeDocDeleteButton /> — a
+  // confirmação em duas etapas + o tratamento de erro (403/409/rede) moram
+  // no componente extraído. Aqui só resta o "recarregar depois de excluir".
+  function reloadKbAfterDocDelete() {
+    return Promise.all([loadKbDocuments(kbSelectedCategory), loadKbCategories()]);
   }
 
   async function handleKbDownload(doc) {
@@ -2369,7 +2366,26 @@ export default function AdminConfiguracoesPage() {
                       <td data-rotulo="Ações" className="py-2 px-4">
                         <div className="flex items-center justify-center gap-1">
                           <IconActionButton icon={Download} tooltip="Baixar" onClick={() => handleKbDownload(doc)} tone="text-blue-500" />
-                          <IconActionButton icon={Trash2} tooltip="Excluir" onClick={() => handleKbDeleteDocument(doc)} tone="text-red-400" />
+                          <DocumentDeleteButton
+                            documentName={doc.name}
+                            scopeLabel={
+                              kbSelectedCategoryData?.name
+                                ? `da base de conhecimento "${kbSelectedCategoryData.name}"`
+                                : "da base de conhecimento"
+                            }
+                            title="Excluir documento da base de conhecimento"
+                            consequences={[
+                              "O arquivo é apagado do servidor — não há lixeira nem desfazer.",
+                              "A base de conhecimento deixa de responder com base nesse documento.",
+                              "Enviar o arquivo de novo cria um documento novo, com outro histórico.",
+                            ]}
+                            onDelete={() => apiClient.deleteKnowledgeDocument(doc.id)}
+                            onDeleted={reloadKbAfterDocDelete}
+                          >
+                            {(open) => (
+                              <IconActionButton icon={Trash2} tooltip="Excluir" onClick={open} tone="text-red-400" />
+                            )}
+                          </DocumentDeleteButton>
                         </div>
                       </td>
                       <td data-rotulo="Documento" className="py-3 px-4">

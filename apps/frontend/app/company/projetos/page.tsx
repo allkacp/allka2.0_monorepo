@@ -126,6 +126,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import type { FrontendProject } from "@/lib/project-adapter";
+import { PlannerColumnDeleteButton } from "./planner-column-delete-button";
 
 // Maps EmpresaProject status to admin/FrontendProject status
 function mapEmpresaStatus(s: string): string {
@@ -967,8 +968,10 @@ export default function EmpresaProjetosPage() {
     setNewPlannerColumnColor("bg-blue-500");
   };
 
+  // A confirmação em duas etapas mora em <PlannerColumnDeleteButton /> (o
+  // botão X da coluna). Aqui fica só a remoção local — este Planejador é um
+  // quadro de trabalho em memória, sem persistência no servidor.
   const handleDeletePlannerColumn = (colId: string) => {
-    if (!confirm("Excluir esta coluna e todos os seus cartões?")) return;
     setPlannerCards((cards) => cards.filter((c) => c.columnId !== colId));
     setPlannerColumns((cols) => cols.filter((c) => c.id !== colId));
   };
@@ -3915,7 +3918,12 @@ export default function EmpresaProjetosPage() {
                     </DialogHeader>
                     <div className="space-y-4 py-4">
                       <p className="text-sm text-muted-foreground">
-                        Tem certeza que deseja excluir esta coluna?
+                        Remover a coluna{" "}
+                        <span className="font-semibold text-foreground">
+                          {kanbanColumns.find((col) => col.id === columnToDelete)?.label ?? "selecionada"}
+                        </span>{" "}
+                        deste quadro? Ela some da visualização por status — os
+                        projetos não são excluídos.
                       </p>
 
                       {columnToDelete &&
@@ -4706,9 +4714,10 @@ function KanbanColumn({
             <button
               onClick={(e) => {
                 e.stopPropagation();
-                if (confirm("Tem certeza que deseja remover esta coluna?")) {
-                  onDelete();
-                }
+                // Sem window.confirm aqui: abre direto o diálogo de exclusão
+                // de coluna (nome da coluna + para onde vão os cartões +
+                // Cancelar/Excluir). Ver <Dialog open={showDeleteColumnDialog}>.
+                onDelete();
               }}
               className="hover:bg-white/20 rounded p-0.5 transition-colors"
             >
@@ -4947,15 +4956,11 @@ function PlannerColumn({
           >
             <Settings className="h-3 w-3" />
           </button>
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              onDelete();
-            }}
-            className="hover:bg-white/20 rounded p-0.5 transition-colors"
-          >
-            <X className="h-3 w-3" />
-          </button>
+          <PlannerColumnDeleteButton
+            columnLabel={column.label}
+            cardCount={cards.length}
+            onConfirm={onDelete}
+          />
         </div>
       </div>
 

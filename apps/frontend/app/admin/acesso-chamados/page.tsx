@@ -14,6 +14,7 @@ import {
   KeyRound,
 } from "lucide-react";
 import { DashboardShellFrame } from "@/features/dashboards/shared/dashboard-shell-frame";
+import { ArchiveGroupButton } from "./archive-group-button";
 import { STANDARD_SHELL_TABLE_CARD_CLASS } from "@/components/standard-page-shell";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -249,15 +250,15 @@ export default function AcessoAosChamadosPage() {
     }
   }
 
-  async function archiveGroup(id: string) {
-    if (!window.confirm("Arquivar este grupo? Ele deixa de valer para todos os membros.")) return;
-    try {
-      await apiClient.archiveProductFeedbackGroup(id);
-      setMessage("Grupo arquivado.");
-      await loadAll();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Não foi possível arquivar o grupo.");
-    }
+  // Arquivar grupo: ver <ArchiveGroupButton /> no JSX — a confirmação em
+  // duas etapas (âmbar/atenção, não é exclusão) e o erro inline moram no
+  // componente. Aqui ficam só a chamada real e a recarga com aviso.
+  function archiveGroupRequest(id: string) {
+    return apiClient.archiveProductFeedbackGroup(id);
+  }
+  async function afterGroupArchived() {
+    setMessage("Grupo arquivado.");
+    await loadAll();
   }
 
   function startEditingGroup(group: Group) {
@@ -609,9 +610,12 @@ export default function AcessoAosChamadosPage() {
                         Editar
                       </Button>
                     )}
-                    <Button variant="ghost" size="sm" className="text-xs text-red-600" onClick={() => void archiveGroup(g.id)}>
-                      Arquivar
-                    </Button>
+                    <ArchiveGroupButton
+                      groupName={g.name}
+                      memberCount={g.memberCount}
+                      onArchive={() => archiveGroupRequest(g.id)}
+                      onArchived={afterGroupArchived}
+                    />
                   </div>
                   )}
                 </div>
