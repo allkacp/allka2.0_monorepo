@@ -12,7 +12,7 @@
  * padrão já estabelecido pro deep-link de tarefa.
  */
 import { useEffect, useMemo, useRef, useState } from "react";
-import { AlertTriangle, Bot, CheckCircle2, ExternalLink, Loader2 } from "lucide-react";
+import { AlertTriangle, Bot, CheckCircle2, ExternalLink, Loader2, ShieldAlert } from "lucide-react";
 import { StandardModalDialog } from "@/components/standard-modal-dialog";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -62,6 +62,10 @@ interface AlertDetail {
   // não tem "Resolver alerta"; encerra sozinho quando a situação da tarefa
   // deixa de atender à regra.
   condition_controlled?: boolean;
+  // Automático VERMELHO + condição ativa: também não pode ser
+  // arquivado/dispensado até a condição real terminar ("Acompanhamento
+  // obrigatório").
+  disposal_blocked?: boolean;
   type?: string | null;
   created_at: string;
   expires_at: string | null;
@@ -360,6 +364,20 @@ export function AlertDetailDrawer({ alertId, open, onClose, accountType }: Alert
                   {detail.type === "task.due_soon"
                     ? "O alerta será encerrado quando a tarefa for entregue/concluída, cancelada, sair da janela de aviso ou passar para atraso."
                     : "Conclua ou entregue a tarefa, cancele-a ou regularize o prazo."}
+                </p>
+              </div>
+            )}
+
+            {/* Automático VERMELHO + condição ATIVA (ata 2026-08): não pode
+                ser dispensado nem arquivado até a tarefa ser regularizada. */}
+            {detail.disposal_blocked && (
+              <div className="rounded-lg border border-amber-300 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/30 p-3.5 space-y-1.5">
+                <div className="flex items-center gap-1.5 text-amber-800 dark:text-amber-300">
+                  <ShieldAlert className="h-4 w-4" aria-hidden="true" />
+                  <h4 className="text-xs font-semibold">Acompanhamento obrigatório</h4>
+                </div>
+                <p className="text-xs text-amber-800/90 dark:text-amber-300/80">
+                  Este alerta permanecerá ativo até que a situação da tarefa seja regularizada. Não pode ser dispensado nem arquivado enquanto isso.
                 </p>
               </div>
             )}

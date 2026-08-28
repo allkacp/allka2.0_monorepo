@@ -56,6 +56,11 @@ export interface DisplayAlert {
   // sem botão "Resolver alerta" — o card explica que a resolução é
   // automática. Derivado no backend (isConditionControlledTaskAlert).
   condition_controlled?: boolean
+  // Automático VERMELHO com condição AINDA ATIVA: o card não oferece
+  // arquivar nem dispensar (X), e "Dispensar todos" não o esconde. O
+  // backend recusa essas ações com 409. Derivado no backend
+  // (isActiveConditionControlledCriticalTaskAlert).
+  disposal_blocked?: boolean
 }
 
 interface ApiAlert {

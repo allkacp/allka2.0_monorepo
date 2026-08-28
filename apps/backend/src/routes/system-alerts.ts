@@ -10,6 +10,7 @@ import { writeAccessAudit } from "../lib/product-feedback-service";
 import {
   computeNextRun,
   findUnknownVariables,
+  isActiveConditionControlledCriticalTaskAlert,
   isConditionControlledTaskAlert,
   isDueSoonTrigger,
   MOTOR_LABEL,
@@ -219,6 +220,30 @@ function precisaResolverAntes(alert: {
 }
 const MENSAGEM_PRECISA_RESOLVER = "Este alerta crítico precisa ser resolvido antes de ser arquivado ou dispensado.";
 
+// Alerta automático vermelho de tarefa com condição AINDA ATIVA (ata
+// 2026-08): não pode ser dispensado/arquivado/escondido — só a situação
+// real da tarefa o encerra.
+const MENSAGEM_ACOMPANHAMENTO_OBRIGATORIO =
+  "Este alerta crítico continuará ativo até que a situação real da tarefa seja regularizada.";
+const MENSAGEM_ACOMPANHAMENTO_DETALHE =
+  "Entregue ou conclua a tarefa, cancele-a ou altere o prazo pelo fluxo autorizado.";
+
+// True (e já respondeu 409) quando o alerta é um automático vermelho de
+// tarefa com condição ativa — usado nas rotas de dispensar/arquivar
+// (inclusive as administrativas). `alert` precisa trazer entity_type,
+// standard_id, rule_id, type, severity, automatic_resolved_at,
+// manual_resolved_at e condition_cleared_at.
+function bloqueiaOcultarAlertaCriticoAtivo(alert: Parameters<typeof isActiveConditionControlledCriticalTaskAlert>[0], res: Response): boolean {
+  if (!isActiveConditionControlledCriticalTaskAlert(alert)) return false;
+  res.status(409).json({
+    error: MENSAGEM_ACOMPANHAMENTO_OBRIGATORIO,
+    detail: MENSAGEM_ACOMPANHAMENTO_DETALHE,
+    condition_controlled: true,
+    requires_condition_change: true,
+  });
+  return true;
+}
+
 // ── Schemas ───────────────────────────────────────────────────────────────────
 
 const listSchema = z.object({
@@ -334,6 +359,10 @@ router.get(
           // o card não oferece "Resolver alerta" e explica a resolução
           // automática. Derivado no servidor, nunca inferido pelo frontend.
           condition_controlled: isConditionControlledTaskAlert(a),
+          // Automático vermelho com condição ativa: o card também não pode
+          // oferecer arquivar/dispensar (ata 2026-08). O backend recusa
+          // essas ações com 409 de qualquer forma.
+          disposal_blocked: isActiveConditionControlledCriticalTaskAlert(a),
         })),
         total,
         unread,
@@ -415,6 +444,7 @@ router.patch(
         res.status(404).json({ error: "Alerta não encontrado" });
         return;
       }
+      if (bloqueiaOcultarAlertaCriticoAtivo(alert, res)) return;
       if (precisaResolverAntes(alert)) {
         res.status(409).json({ error: MENSAGEM_PRECISA_RESOLVER, requires_resolution: true });
         return;
@@ -461,6 +491,7 @@ router.patch(
         res.status(404).json({ error: "Alerta não encontrado" });
         return;
       }
+      if (bloqueiaOcultarAlertaCriticoAtivo(alert, res)) return;
       if (precisaResolverAntes(alert)) {
         res.status(409).json({ error: MENSAGEM_PRECISA_RESOLVER, requires_resolution: true });
         return;
@@ -644,9 +675,14 @@ router.post(
       // arquivado/dispensado. Não confia no frontend: a mesma recusa vale
       // pra chamada direta à API.
       if (isConditionControlledTaskAlert(alert)) {
+        const critico = isActiveConditionControlledCriticalTaskAlert(alert);
         res.status(409).json({
-          error: "Este alerta é controlado automaticamente pela situação da tarefa e não pode ser resolvido manualmente.",
-          detail: "Conclua ou entregue a tarefa, cancele-a ou regularize o prazo para que o sistema atualize o alerta.",
+          error: critico
+            ? MENSAGEM_ACOMPANHAMENTO_OBRIGATORIO
+            : "Este alerta é controlado automaticamente pela situação da tarefa e não pode ser resolvido manualmente.",
+          detail: critico
+            ? MENSAGEM_ACOMPANHAMENTO_DETALHE
+            : "Conclua ou entregue a tarefa, cancele-a ou regularize o prazo para que o sistema atualize o alerta.",
           condition_controlled: true,
         });
         return;
@@ -769,20 +805,42 @@ router.patch(
 
       // Mesma regra de "vermelho sem resolução não dispensa" (ata 2026-08,
       // 10º lote) — sem isto, "Dispensar todos" seria uma brecha real pra
-      // pular a checagem que PATCH /:id/read já aplica um por um.
+      // pular a checagem que PATCH /:id/read já aplica um por um. Cobre tanto
+      // o vermelho MANUAL sem resolução formal quanto o vermelho AUTOMÁTICO
+      // de tarefa com condição ativa (ata 2026-08, "não esconder alerta
+      // crítico ativo"): ambos ficam de fora do updateMany.
+      const permaneceCriticoAtivo = [
+        { is_read: false },
+        { severity: "error" },
+        { manual_resolved_at: null },
+        { automatic_resolved_at: null },
+      ];
       const naoExigeResolucao = {
         OR: [
           { severity: { not: "error" } },
           { manual_resolved_at: { not: null } },
-          // Resolvido pelo motor (condição real acabou) — ata 2026-08, bloco 1/2.
           { automatic_resolved_at: { not: null } },
         ],
       };
-      const result = await prisma.systemAlert.updateMany({
-        where: { AND: [filtros, { is_read: false }, naoExigeResolucao, escopoDoUsuario(req)] },
-        data: { is_read: true, read_at: new Date() },
+      // updateMany é atômico e o filtro nunca alcança um alerta protegido —
+      // não existe alteração parcial de um crítico ativo.
+      const [result, preserved] = await Promise.all([
+        prisma.systemAlert.updateMany({
+          where: { AND: [filtros, { is_read: false }, naoExigeResolucao, escopoDoUsuario(req)] },
+          data: { is_read: true, read_at: new Date() },
+        }),
+        prisma.systemAlert.count({
+          where: { AND: [filtros, ...permaneceCriticoAtivo, escopoDoUsuario(req)] },
+        }),
+      ]);
+      res.json({
+        updated: result.count,
+        preserved,
+        message:
+          preserved > 0
+            ? `Os demais alertas foram dispensados, mas ${preserved} alerta${preserved > 1 ? "s" : ""} crítico${preserved > 1 ? "s" : ""} permanece${preserved > 1 ? "ram" : "u"} ativo${preserved > 1 ? "s" : ""} porque ainda ${preserved > 1 ? "precisam" : "precisa"} ser regularizado${preserved > 1 ? "s" : ""}.`
+            : undefined,
       });
-      res.json({ updated: result.count });
     } catch (err) {
       next(err);
     }
@@ -1341,12 +1399,19 @@ router.patch(
     try {
       const before = await prisma.systemAlert.findFirst({
         where: { id: req.params.id as string, category: "alerta" },
-        select: { id: true, is_archived: true, severity: true, manual_resolved_at: true },
+        select: {
+          id: true, is_archived: true, severity: true, manual_resolved_at: true,
+          entity_type: true, standard_id: true, rule_id: true, type: true,
+          automatic_resolved_at: true, condition_cleared_at: true,
+        },
       });
       if (!before) {
         res.status(404).json({ error: "Alerta não encontrado" });
         return;
       }
+      // Mesma regra do /:id/archive: Admin Master não arquiva um automático
+      // vermelho de tarefa com condição ativa.
+      if (bloqueiaOcultarAlertaCriticoAtivo(before, res)) return;
       if (precisaResolverAntes(before)) {
         res.status(409).json({ error: MENSAGEM_PRECISA_RESOLVER, requires_resolution: true });
         return;
@@ -2320,6 +2385,9 @@ router.get(
         // Controlado pela condição real da tarefa: sem "Resolver alerta",
         // encerra sozinho quando a situação da tarefa deixa de atender à regra.
         condition_controlled: isConditionControlledTaskAlert(alert),
+        // Automático vermelho + condição ativa: também não pode ser
+        // arquivado/dispensado até a condição real terminar.
+        disposal_blocked: isActiveConditionControlledCriticalTaskAlert(alert),
         type: alert.type,
         created_at: alert.created_at,
         expires_at: alert.expires_at,

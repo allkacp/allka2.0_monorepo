@@ -320,7 +320,9 @@ describe("Motor de alertas — resolução automática de tarefa (ata 2026-08, b
     });
     assert.equal(resolve.status, 409);
     assert.equal(resolve.json.condition_controlled, true);
-    assert.match(resolve.json.error, /controlado automaticamente/i);
+    // Vermelho ativo → mensagem de "acompanhamento obrigatório" (ata 2026-08,
+    // lote "não esconder crítico ativo").
+    assert.match(resolve.json.error, /continuará ativo até que a situação real da tarefa seja regularizada/i);
 
     await runAlertEngineOnce();
     await runAlertEngineOnce();

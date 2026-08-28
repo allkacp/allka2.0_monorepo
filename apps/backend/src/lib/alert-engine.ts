@@ -168,6 +168,34 @@ export function isConditionControlledTaskAlert(alert: {
   );
 }
 
+// Subconjunto: alerta automático de tarefa VERMELHO cuja condição ainda
+// está ATIVA (nunca resolvido nem encerrado). Enquanto isto é verdade, o
+// alerta não pode ser dispensado, arquivado nem escondido de "Dispensar
+// todos" — nem pelo Admin Master: autoridade administrativa não torna uma
+// tarefa atrasada entregue (ata 2026-08). Depois que a condição real
+// termina (`automatic_resolved_at`/`condition_cleared_at`), esta função
+// passa a devolver `false` e o arquivamento explícito volta a ser
+// permitido.
+export function isActiveConditionControlledCriticalTaskAlert(alert: {
+  category?: string | null;
+  entity_type?: string | null;
+  standard_id?: string | null;
+  rule_id?: string | null;
+  type?: string | null;
+  severity?: string | null;
+  automatic_resolved_at?: Date | null;
+  manual_resolved_at?: Date | null;
+  condition_cleared_at?: Date | null;
+}): boolean {
+  return (
+    isConditionControlledTaskAlert(alert) &&
+    alert.severity === "error" &&
+    !alert.automatic_resolved_at &&
+    !alert.manual_resolved_at &&
+    !alert.condition_cleared_at
+  );
+}
+
 // "Entrega da tarefa INTEIRA pelo responsável" — condição inequívoca
 // auditada no código (ver stage-engine.ts `concluirEtapa`): quando NÃO
 // sobra nenhuma etapa obrigatória em aberto, a plataforma move a tarefa

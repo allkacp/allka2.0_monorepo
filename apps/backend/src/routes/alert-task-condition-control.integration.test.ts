@@ -237,8 +237,9 @@ describe("Alerta automático de tarefa — controle por condição (ata 2026-08)
     await api(`/api/system-alerts/${alerta.id}/events`, { method: "POST", token: tokenFor(user), body: { event_type: "origin_clicked", client_event_id: `ev-${crypto.randomBytes(6).toString("hex")}` } });
     await api(`/api/system-alerts/${alerta.id}/events`, { method: "POST", token: tokenFor(user), body: { event_type: "details_opened", client_event_id: `ev-${crypto.randomBytes(6).toString("hex")}` } });
     await api(`/api/system-alerts/${alerta.id}`, { token: tokenFor(user) }); // abrir detalhes (GET)
+    // marcar como lido/dispensar agora é BLOQUEADO enquanto a condição está ativa
     const readRes = await api(`/api/system-alerts/${alerta.id}/read`, { method: "PATCH", token: tokenFor(user) });
-    assert.equal(readRes.status, 200, "marcar como lido é permitido (não é resolução)");
+    assert.equal(readRes.status, 409);
     // editar um campo sem relação com a condição de prazo
     await prisma.projectTask.update({ where: { id: task.id }, data: { observations: "anotação qualquer" } });
 

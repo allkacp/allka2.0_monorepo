@@ -330,6 +330,40 @@ describe("AlertsPanel — resolução de alerta crítico", () => {
     expect(screen.queryByRole("button", { name: "Resolver alerta" })).not.toBeInTheDocument()
   })
 
+  it("automático vermelho ATIVO (disposal_blocked): sem Resolver, sem Arquivar, sem X — mostra 'Acompanhamento obrigatório' + explicação, e Detalhes", async () => {
+    (apiClient.getSystemAlerts as any).mockResolvedValue({
+      data: [{ ...redAlert, type: "task.overdue", condition_controlled: true, disposal_blocked: true, entity_type: "project_task", entity_id: "t1" }],
+    })
+    render(<AlertsPanel open onClose={() => {}} />)
+    await waitFor(() => expect(screen.getByText("Aviso importante")).toBeInTheDocument())
+
+    expect(screen.queryByRole("button", { name: "Resolver alerta" })).not.toBeInTheDocument()
+    expect(screen.queryByTitle("Arquivar")).not.toBeInTheDocument()
+    expect(screen.queryByTitle("Marcar como lido")).not.toBeInTheDocument()
+    expect(screen.getByText("Acompanhamento obrigatório")).toBeInTheDocument()
+    expect(screen.getByText(/permanecerá ativo até que a situação da tarefa seja regularizada/)).toBeInTheDocument()
+    expect(screen.getByText("Detalhes")).toBeInTheDocument()
+  })
+
+  it("'Dispensar todos' NÃO esconde o disposal_blocked (continua visível); os demais somem", async () => {
+    (apiClient.getSystemAlerts as any).mockResolvedValue({
+      data: [
+        { ...redAlert, id: "crit-1", title: "Crítico ativo", type: "task.overdue", condition_controlled: true, disposal_blocked: true, entity_type: "project_task", entity_id: "t1" },
+        { ...baseAlert, id: "ok-1", title: "Aviso comum", severity: "info" as const },
+      ],
+    })
+    ;(apiClient.markAllSystemAlertsRead as any).mockResolvedValue({ updated: 1, preserved: 1, message: "Os demais alertas foram dispensados, mas 1 alerta crítico permaneceu ativo porque ainda precisa ser regularizado." })
+    const user = userEvent.setup()
+    render(<AlertsPanel open onClose={() => {}} />)
+    await waitFor(() => expect(screen.getByText("Crítico ativo")).toBeInTheDocument())
+
+    await user.click(screen.getByText("Dispensar todos"))
+    // o crítico continua visível; o comum some
+    await waitFor(() => expect(screen.queryByText("Aviso comum")).not.toBeInTheDocument())
+    expect(screen.getByText("Crítico ativo")).toBeInTheDocument()
+    expect(apiClient.markAllSystemAlertsRead).toHaveBeenCalled()
+  })
+
   it("22. verde/amarelo mantêm dispensar/arquivar normalmente (sem 'Resolver alerta')", async () => {
     (apiClient.getSystemAlerts as any).mockResolvedValue({ data: [{ ...baseAlert, severity: "warning" }] });
     render(<AlertsPanel open onClose={() => {}} />);

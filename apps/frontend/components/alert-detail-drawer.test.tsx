@@ -125,6 +125,24 @@ describe("AlertDetailDrawer", () => {
     expect(screen.getByText(/Conclua ou entregue a tarefa, cancele-a ou regularize o prazo\./)).toBeInTheDocument();
   });
 
+  it("automático VERMELHO ativo (disposal_blocked): bloco 'Acompanhamento obrigatório' explica que não pode ser dispensado nem arquivado", async () => {
+    (apiClient.getSystemAlertDetail as any).mockResolvedValue({
+      ...fullDetail,
+      severity: "error",
+      situacao: "ativo",
+      condition_controlled: true,
+      disposal_blocked: true,
+      type: "task.overdue",
+      resolution: null,
+      automatic_resolution: null,
+      origin: { type: "padrao_regra", rule_name: "Tarefa atrasada", standard_name: "Tarefa atrasada" },
+    });
+    renderDrawer();
+    await screen.findByText("Alerta de teste");
+    expect(screen.getByRole("heading", { name: "Acompanhamento obrigatório" })).toBeInTheDocument();
+    expect(screen.getByText(/permanecerá ativo até que a situação da tarefa seja regularizada\. Não pode ser dispensado nem arquivado/)).toBeInTheDocument();
+  });
+
   it("resolução automática: bloco próprio com Tipo, Responsável 'Motor da Allka', motivo e regra — sem formulário humano", async () => {
     (apiClient.getSystemAlertDetail as any).mockResolvedValue({
       ...fullDetail,

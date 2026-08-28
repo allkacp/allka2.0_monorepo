@@ -7,7 +7,7 @@
 // EXCLUSIVO de alertas: fonte de dados, loading, erro e filtros próprios —
 // nenhuma aba pra Notificações aqui.
 import { useCallback, useEffect, useState } from "react"
-import { AlertTriangle, Archive, ArchiveRestore, ArrowRight, Bot, CheckCircle2, Info, X } from "lucide-react"
+import { AlertTriangle, Archive, ArchiveRestore, ArrowRight, Bot, CheckCircle2, Info, ShieldAlert, X } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { HeaderSlideScreen } from "@/components/header-slide-screen"
@@ -130,6 +130,7 @@ export function AlertsPanel({ open = false, onClose }: AlertsPanelProps) {
           automatic_resolution_reason: a.automatic_resolution_reason ?? null,
           automatic_resolution_message: a.automatic_resolution_message ?? null,
           condition_controlled: !!a.condition_controlled,
+          disposal_blocked: !!a.disposal_blocked,
         })))
       }
     } catch {
@@ -194,6 +195,10 @@ export function AlertsPanel({ open = false, onClose }: AlertsPanelProps) {
   }
 
   async function dismiss(alert: DisplayAlert) {
+    if (alert.isSystemAlert && alert.disposal_blocked) {
+      toast({ title: "Este alerta crítico continuará ativo até que a situação real da tarefa seja regularizada." })
+      return
+    }
     if (alert.isSystemAlert && precisaResolverAntes(alert)) {
       openResolveModal(alert)
       return
@@ -214,6 +219,10 @@ export function AlertsPanel({ open = false, onClose }: AlertsPanelProps) {
   }
 
   async function toggleArchive(alert: DisplayAlert) {
+    if (alert.disposal_blocked && tab !== "arquivados") {
+      toast({ title: "Este alerta crítico continuará ativo até que a situação real da tarefa seja regularizada." })
+      return
+    }
     if (tab !== "arquivados" && precisaResolverAntes(alert)) {
       openResolveModal(alert)
       return
@@ -233,13 +242,17 @@ export function AlertsPanel({ open = false, onClose }: AlertsPanelProps) {
   }
 
   async function dismissAll() {
-    // Vermelho sem resolução nunca é dispensado em lote — mesma regra do
-    // dispensar individual (o backend também exclui isso do PATCH
-    // /read-all, essa filtragem aqui só evita esconder localmente algo que
-    // o servidor não vai realmente marcar como lido).
-    setDismissed(alerts.filter((a) => !precisaResolverAntes(a)).map((a) => a.id))
+    // Nunca dispensa em lote (nem esconde localmente) um crítico que o
+    // servidor vai preservar: vermelho manual sem resolução formal OU
+    // vermelho automático de tarefa com condição ativa. O backend recusa
+    // ambos no PATCH /read-all — esta filtragem só evita sumir com o card
+    // antes do próximo fetch.
+    setDismissed(alerts.filter((a) => !precisaResolverAntes(a) && !a.disposal_blocked).map((a) => a.id))
     if (!isAgency) {
-      try { await apiClient.markAllSystemAlertsRead({ category: "alerta" }) } catch {}
+      try {
+        const res: any = await apiClient.markAllSystemAlertsRead({ category: "alerta" })
+        if (res?.message) toast({ title: res.message })
+      } catch {}
     }
   }
 
@@ -468,6 +481,19 @@ export function AlertsPanel({ open = false, onClose }: AlertsPanelProps) {
                           </div>
                         </div>
                       )}
+                      {/* Automático vermelho + condição ATIVA (ata 2026-08):
+                          não pode ser dispensado/arquivado até a tarefa ser
+                          regularizada. Rótulo e explicação sempre visíveis
+                          (sem hover — funciona no mobile). */}
+                      {alert.isSystemAlert && alert.disposal_blocked && (
+                        <div className="mt-1.5 flex items-start gap-1.5 rounded-md bg-amber-50 dark:bg-amber-950/30 border border-amber-300 dark:border-amber-800 px-2 py-1.5">
+                          <ShieldAlert className="h-3 w-3 mt-0.5 shrink-0 text-amber-600 dark:text-amber-400" aria-hidden="true" />
+                          <div className="min-w-0">
+                            <p className="text-[11px] font-medium text-amber-800 dark:text-amber-300">Acompanhamento obrigatório</p>
+                            <p className="text-[10px] text-amber-700/90 dark:text-amber-300/80">Este alerta permanecerá ativo até que a situação da tarefa seja regularizada.</p>
+                          </div>
+                        </div>
+                      )}
                       {alert.isSystemAlert && alert.has_image && alert.image_url && (
                         <div className="mt-2 rounded-lg overflow-hidden">
                           <AlertBannerImage
@@ -563,12 +589,12 @@ export function AlertsPanel({ open = false, onClose }: AlertsPanelProps) {
                           </Tooltip>
                         </TooltipProvider>
                       )}
-                      {/* Regra principal do 10º lote: vermelho ainda sem
-                          resolução mostra a AÇÃO PRINCIPAL "Resolver
-                          alerta" no lugar de arquivar/dispensar — nunca os
-                          dois lado a lado (evita sugerir um atalho que o
-                          backend vai recusar de qualquer forma). */}
-                      {alert.isSystemAlert && precisaResolverAntes(alert) ? (
+                      {/* Automático vermelho com condição ativa (ata
+                          2026-08): NENHUMA ação de ocultar — nem Resolver,
+                          nem Arquivar, nem X. Só a situação real da tarefa
+                          o encerra. O rótulo "Acompanhamento obrigatório"
+                          fica no corpo do card (sempre visível). */}
+                      {alert.isSystemAlert && alert.disposal_blocked ? null : alert.isSystemAlert && precisaResolverAntes(alert) ? (
                         <Button
                           size="sm"
                           className="h-7 text-xs px-2.5 gap-1 bg-red-600 hover:bg-red-700 text-white border-0"
