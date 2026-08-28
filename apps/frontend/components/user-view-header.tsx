@@ -40,6 +40,12 @@ interface UserViewHeaderProps {
   userPlan: "free" | "premium" | "vip";
   showBalance: boolean;
   onToggleBalance: () => void;
+  /** "Meu Perfil" como página (ata 2026-08): um único cabeçalho, sem X de
+   * slide-over, sem ações que só fazem sentido pra um admin gerenciando
+   * OUTRA pessoa (contato rápido, copiar link administrativo, exportar,
+   * cartão de saldo — este já aparece na topbar global). Mantém avatar,
+   * nome, tipo de conta, status e os botões de salvar/cancelar edição. */
+  asPage?: boolean;
 }
 
 const getInitials = (name: string): string => {
@@ -89,6 +95,7 @@ export function UserViewHeader({
   userPlan,
   showBalance,
   onToggleBalance,
+  asPage = false,
 }: UserViewHeaderProps) {
   const [avatar, setAvatar] = useState<string | null>(user.avatar || null);
   const [showAvatarUpload, setShowAvatarUpload] = useState(false);
@@ -229,7 +236,9 @@ export function UserViewHeader({
             )}
           </div>
 
-          {/* Quick Contact Actions */}
+          {/* Quick Contact Actions — só faz sentido pra admin contatando
+              OUTRA pessoa; escondido no próprio perfil. */}
+          {!asPage && (
           <QuickContactActions
             user={{
               id: user.id,
@@ -241,8 +250,11 @@ export function UserViewHeader({
             }}
             variant="dark"
           />
+          )}
 
-          {/* Wallet Balance Card */}
+          {/* Wallet Balance Card — redundante com o saldo da topbar global
+              no próprio perfil. */}
+          {!asPage && (
           <div className="flex items-center gap-2 bg-gradient-to-r from-blue-900/40 to-cyan-900/40 px-4 py-2 rounded-lg border border-blue-700/50">
             <div className="flex-1">
               <p className="text-blue-300 text-xs font-semibold uppercase tracking-wide">
@@ -277,11 +289,12 @@ export function UserViewHeader({
               </Tooltip>
             </TooltipProvider>
           </div>
+          )}
 
           {/* Actions Section */}
           <TooltipProvider>
             <div className="flex items-center gap-1">
-              {!isEditMode && (
+              {!isEditMode && !asPage && (
                 <Tooltip>
                   <TooltipTrigger asChild>
                     <button
@@ -339,10 +352,10 @@ export function UserViewHeader({
               )}
             </div>
           </TooltipProvider>
-          <CopyLinkButton />
+          {!asPage && <CopyLinkButton />}
         </div>
       }
-      onClose={onClose}
+      onClose={asPage ? undefined : onClose}
     />
   );
 }

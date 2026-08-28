@@ -1,7 +1,7 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { MemoryRouter } from "react-router-dom";
+import { MemoryRouter, useLocation } from "react-router-dom";
 
 // Lote de navegação de perfil (ata 2026-08-21): "Meu Perfil" no menu do
 // usuário (header global) precisa SEMPRE abrir o painel compartilhado
@@ -120,13 +120,21 @@ vi.mock("@/components/user-view-slide-panel", () => ({
 
 import { Header } from "@/components/header";
 
+function LocationProbe() {
+  const loc = useLocation();
+  return <div data-testid="loc">{loc.pathname}</div>;
+}
+
 function renderHeader(route = "/admin/dashboard") {
   return render(
     <MemoryRouter initialEntries={[route]}>
       <Header />
+      <LocationProbe />
     </MemoryRouter>,
   );
 }
+
+const currentPath = () => screen.getByTestId("loc").textContent;
 
 const basketBtn = () => screen.queryByRole("button", { name: "Cesta do projeto" });
 
@@ -139,7 +147,7 @@ async function openMeuPerfil(user: ReturnType<typeof userEvent.setup>) {
   await user.click(item);
 }
 
-describe("Header — 'Meu Perfil' abre o painel compartilhado, nunca o dashboard", () => {
+describe("Header — 'Meu Perfil' NAVEGA para a rota pessoal do portal (nunca abre o slide-over)", () => {
   beforeEach(() => {
     accountConfig.accountType = "admin";
     accountConfig.isPartnerActive = false;
@@ -147,68 +155,53 @@ describe("Header — 'Meu Perfil' abre o painel compartilhado, nunca o dashboard
     vi.clearAllMocks();
   });
 
-  it("1. Admin: clicar em 'Meu Perfil' abre o painel com os dados do admin, não navega pro dashboard", async () => {
+  it("1. Admin: 'Meu Perfil' navega para /admin/perfil e NÃO renderiza o UserViewSlidePanel", async () => {
     const user = userEvent.setup();
-    renderHeader();
+    renderHeader("/admin/tarefas");
     await openMeuPerfil(user);
 
-    const panel = await screen.findByTestId("profile-panel");
-    expect(panel).toHaveAttribute("data-viewer-role", "admin");
-    // A URL não muda — abrir o perfil não é uma navegação.
-    expect(window.location.pathname).not.toMatch(/dashboard$/);
+    await waitFor(() => expect(currentPath()).toBe("/admin/perfil"));
+    expect(screen.queryByTestId("profile-panel")).not.toBeInTheDocument();
   });
 
-  it("5. Empresa: 'Meu Perfil' abre o painel com os dados da própria empresa (viewerRole=company)", async () => {
+  it("5. Empresa: 'Meu Perfil' navega para /company/perfil", async () => {
     accountConfig.accountType = "empresas";
     const user = userEvent.setup();
-    renderHeader();
+    renderHeader("/company/dashboard");
     await openMeuPerfil(user);
-
-    expect(await screen.findByTestId("profile-panel-name")).toHaveTextContent("Rose Empresa LTDA");
-    expect(screen.getByTestId("profile-panel-email")).toHaveTextContent("rose@lamego.com.vc");
-    expect(screen.getByTestId("profile-panel")).toHaveAttribute("data-viewer-role", "company");
+    await waitFor(() => expect(currentPath()).toBe("/company/perfil"));
   });
 
-  it("6. Agência: 'Meu Perfil' abre o painel com os dados da própria agência (viewerRole=agency)", async () => {
+  it("6. Agência: 'Meu Perfil' navega para /agency/perfil", async () => {
     accountConfig.accountType = "agencias";
     const user = userEvent.setup();
-    renderHeader();
+    renderHeader("/agency/projetos");
     await openMeuPerfil(user);
-
-    expect(await screen.findByTestId("profile-panel-name")).toHaveTextContent("Gabriel Franco Agency");
-    expect(screen.getByTestId("profile-panel-email")).toHaveTextContent("gabriel@lamego.com.vc");
-    expect(screen.getByTestId("profile-panel")).toHaveAttribute("data-viewer-role", "agency");
+    await waitFor(() => expect(currentPath()).toBe("/agency/perfil"));
   });
 
-  it("7. Parceiro (Agência com PartnerProfile ativo): 'Meu Perfil' também abre o painel com os dados da agência (mesma conta, viewerRole=agency)", async () => {
+  it("7. Parceiro (Agência com PartnerProfile ativo): também vai para /agency/perfil", async () => {
     accountConfig.accountType = "agencias";
     accountConfig.isPartnerActive = true;
     const user = userEvent.setup();
-    renderHeader();
+    renderHeader("/agency/projetos");
     await openMeuPerfil(user);
-
-    expect(await screen.findByTestId("profile-panel-name")).toHaveTextContent("Gabriel Franco Agency");
-    expect(screen.getByTestId("profile-panel")).toHaveAttribute("data-viewer-role", "agency");
+    await waitFor(() => expect(currentPath()).toBe("/agency/perfil"));
   });
 
-  it("8. O painel abre sempre com os dados do usuário ATUAL (nunca aceita um id externo) — o objeto `user` vem só do contexto da própria sessão", async () => {
-    accountConfig.accountType = "empresas";
-    const user = userEvent.setup();
-    renderHeader();
-    await openMeuPerfil(user);
-    // O componente real (mockado aqui) nunca recebe nem usa um "userId" de
-    // rota/URL — o `user` é montado a partir do contexto local (empresa.profile),
-    // não de uma busca por id. Não existe caminho de UI pra trocar esse id.
-    expect(await screen.findByTestId("profile-panel-name")).toHaveTextContent("Rose Empresa LTDA");
-  });
-
-  it("11. abrir 'Meu Perfil' nunca resulta em uma tela vazia — o painel sempre recebe um `user` com nome", async () => {
+  it("11. Nomad e Leader preservam as rotas dedicadas", async () => {
     accountConfig.accountType = "nomades";
     const user = userEvent.setup();
-    renderHeader();
+    const { unmount } = renderHeader("/nomades/minhastarefas");
     await openMeuPerfil(user);
-    const panel = await screen.findByTestId("profile-panel");
-    expect(panel).toBeInTheDocument();
+    await waitFor(() => expect(currentPath()).toBe("/nomades/perfil"));
+    unmount();
+
+    accountConfig.accountType = "lider";
+    const user2 = userEvent.setup();
+    renderHeader("/leader/tarefas");
+    await openMeuPerfil(user2);
+    await waitFor(() => expect(currentPath()).toBe("/leader/perfil"));
   });
 });
 

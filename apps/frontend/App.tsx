@@ -161,6 +161,10 @@ const NomadesHistoricoPage = React.lazy(
   () => import("@/app/nomades/historico/page"),
 );
 const NomadesPerfilPage = React.lazy(() => import("@/app/nomades/perfil/page"));
+// "Meu Perfil" como página dedicada (ata 2026-08) — compartilhada por
+// Admin/Company/Agency/Partner; escolhe a fonte de identidade pelo
+// account_type da sessão. Nomad e Leader mantêm as próprias páginas.
+const SelfProfilePage = React.lazy(() => import("@/app/perfil/page"));
 
 // ─── Parceiro Pages ──────────────────────────────────────────────────────────
 const PartnerDashboardPage = React.lazy(
@@ -736,6 +740,7 @@ export default function App() {
                     path="/admin/dashboard-config"
                     element={<AdminDashboardConfigPage />}
                   />
+                  <Route path="/admin/perfil" element={<SelfProfilePage />} />
                   <Route
                     path="/admin/usuarios"
                     element={<AdminUsuariosPage />}
@@ -1027,6 +1032,15 @@ export default function App() {
                     path="/company/usuarios"
                     element={<CompanyUsuariosPage />}
                   />
+                  {/* "Meu Perfil" (página dedicada, ata 2026-08) — Company,
+                      Partner e Agency. Partner = Agency com PartnerProfile;
+                      `/parceiro/perfil` é alias de `/partner/perfil`. */}
+                  <Route path="/company/perfil" element={<SelfProfilePage />} />
+                  <Route path="/partner/perfil" element={<SelfProfilePage />} />
+                  <Route
+                    path="/parceiro/perfil"
+                    element={<Navigate to="/partner/perfil" replace />}
+                  />
                   {/* Partner não tem gestão de usuários própria — colaboradores
                       são geridos pela própria Agency. */}
                   <Route
@@ -1083,8 +1097,13 @@ export default function App() {
                     path="/agency/usuarios"
                     element={<AgencyUsuariosPage />}
                   />
+                  <Route path="/agency/perfil" element={<SelfProfilePage />} />
 
                   {/* ─── Agência ──────────────────────────────────────────── */}
+                  <Route
+                    path="/agencia/perfil"
+                    element={<RedirectToAgency />}
+                  />
                   <Route
                     path="/agencia/dashboard"
                     element={<RedirectToAgency />}

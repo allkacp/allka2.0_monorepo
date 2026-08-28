@@ -63,6 +63,16 @@ interface EmbeddedSlideScreenProps {
    */
   hideHeader?: boolean;
   /**
+   * Renderiza o painel como uma PÁGINA de verdade dentro do container padrão
+   * (ata 2026-08, reparo "Meu Perfil no container padrão") — não como
+   * slide-over `absolute inset-0` por cima da rota atual. Nesse modo: sem
+   * animação de entrada/saída, sem tecla Escape pra fechar, sem botão X, o
+   * card fica no fluxo normal (`relative w-full h-full`) e é
+   * imediatamente montado (ignora a coreografia de `open`). Usado só quando
+   * o conteúdo virou uma rota dedicada com seu próprio histórico/URL.
+   */
+  asPage?: boolean;
+  /**
    * Chamado (e aguardado, se async) bem antes de adicionar o pin à Bandeja
    * de Telas — só no momento de PINAR (não ao despinar). Único ponto onde
    * um callback "vivo" faz sentido aqui: ao contrário da reativação (que
@@ -92,6 +102,7 @@ export function EmbeddedSlideScreen({
   zIndex = 30,
   pin,
   hideHeader = false,
+  asPage = false,
   onBeforePin,
 }: EmbeddedSlideScreenProps) {
   const [mounted, setMounted] = useState(open);
@@ -121,6 +132,7 @@ export function EmbeddedSlideScreen({
   };
 
   useEffect(() => {
+    if (asPage) return;
     if (open) {
       setMounted(true);
       setClosing(false);
@@ -133,16 +145,30 @@ export function EmbeddedSlideScreen({
       return () => clearTimeout(t);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open]);
+  }, [open, asPage]);
 
   useEffect(() => {
-    if (!mounted) return;
+    if (asPage || !mounted) return;
     const onKeyDown = (e: KeyboardEvent) => {
       if (e.key === "Escape") onClose();
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [mounted, onClose]);
+  }, [mounted, onClose, asPage]);
+
+  // ── Modo PÁGINA: card no fluxo normal, sem overlay/animação/Escape/X ──
+  if (asPage) {
+    return (
+      <div className="relative w-full h-full flex flex-col overflow-hidden bg-white dark:bg-slate-900 rounded-2xl lg:rounded-[1.5rem] border border-slate-200/70 dark:border-slate-700/60 shadow-[0_20px_50px_-12px_rgba(15,23,42,0.18),0_4px_16px_-4px_rgba(15,23,42,0.10)]">
+        <div className="flex flex-1 overflow-hidden min-h-0">{children}</div>
+        {footer && (
+          <div className="shrink-0 border-t border-slate-200/80 dark:border-slate-700/80 bg-white/50 dark:bg-slate-900/50 backdrop-blur-sm px-6 py-4">
+            {footer}
+          </div>
+        )}
+      </div>
+    );
+  }
 
   if (!mounted) return null;
 

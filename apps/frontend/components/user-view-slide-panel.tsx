@@ -159,6 +159,14 @@ interface UserViewSlidePanelProps {
   /** Abre já em modo de edição — usado pelo ícone "Editar" da tabela, que é
    * o mesmo painel de sempre, só pulando direto pro isEditMode=true. */
   startInEditMode?: boolean;
+  /** "Meu Perfil" como PÁGINA dedicada dentro do container padrão (ata
+   * 2026-08) — em vez do slide-over administrativo por cima da rota. Nesse
+   * modo: card no fluxo normal (sem overlay/animação/Escape/X), um único
+   * cabeçalho sem ações de "admin gerenciando outra pessoa", e o `user`
+   * SEMPRE vem da sessão atual (quem chama não passa id externo). O uso do
+   * painel em Admin › Usuários e no company-edit continua igual (asPage
+   * omitido = comportamento de sempre). */
+  asPage?: boolean;
 }
 
 // Return user data with safe defaults
@@ -288,6 +296,7 @@ export function UserViewSlidePanel({
   agencyFinancial,
   viewerRole = "admin",
   startInEditMode = false,
+  asPage = false,
 }: UserViewSlidePanelProps) {
   const {
     getUserById,
@@ -1918,15 +1927,15 @@ export function UserViewSlidePanel({
       open={open}
       onClose={handleClose}
       hideHeader
-      // Este painel é aberto pelo header global (menu "Meu Perfil"), então
-      // pode abrir em CIMA do conteúdo de qualquer página — que também usa
-      // EmbeddedSlideScreen com o zIndex padrão (30). Sem um valor maior
-      // aqui, o painel de perfil renderiza escondido atrás do conteúdo da
-      // página (a ordem no DOM decide o empate), ficando praticamente
-      // inacessível. 45 fica acima do padrão (30) e do único outro valor
-      // customizado do app (40, em project-create-new-panel.tsx).
+      asPage={asPage}
+      // Slide-over (uso administrativo): é aberto por cima do conteúdo de
+      // qualquer página — sem um zIndex maior que o padrão (30) ele fica
+      // escondido atrás. 45 fica acima do padrão e do único outro valor
+      // customizado (40, project-create-new-panel.tsx). No modo `asPage`
+      // (rota dedicada "Meu Perfil") não há overlay nem empilhamento — o
+      // zIndex é irrelevante e não há pin (a própria rota/URL é o marcador).
       zIndex={45}
-      pin={{
+      pin={asPage ? undefined : {
         id: `usuarios-view-${user?.id ?? "none"}`,
         label: user?.name ? `Usuário: ${user.name}` : "Detalhes do usuário",
         icon: UserIcon,
@@ -1951,6 +1960,7 @@ export function UserViewSlidePanel({
           userPlan={userPlan}
           showBalance={showBalanceAllka}
           onToggleBalance={() => setShowBalanceAllka(!showBalanceAllka)}
+          asPage={asPage}
         />
 
         {/* Content with Tabs */}

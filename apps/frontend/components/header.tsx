@@ -42,7 +42,6 @@ import { useNavigate, useLocation } from "react-router-dom";
 import { useAccountType } from "@/contexts/account-type-context";
 import { useSidebar } from "@/contexts/sidebar-context";
 import { NotificationsPanel } from "@/components/notifications-panel";
-import { UserViewSlidePanel } from "@/components/user-view-slide-panel";
 import { usePartner } from "@/contexts/partner-context";
 import { useEmpresa } from "@/contexts/empresa-context";
 import { useAgencia } from "@/contexts/agencia-context";
@@ -138,8 +137,6 @@ export function Header({ transparent = false }: { transparent?: boolean } = {}) 
     const id = setInterval(fetchUnread, 60_000);
     return () => clearInterval(id);
   }, []);
-  const [profileOpen, setProfileOpen] = useState(false);
-  const [selfUser, setSelfUser] = useState<any>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [searchResults, setSearchResults] = useState<
     { type: string; label: string; sub: string; path: string; icon: any; navState?: Record<string, string> }[]
@@ -430,20 +427,22 @@ export function Header({ transparent = false }: { transparent?: boolean } = {}) 
     return () => clearTimeout(t);
   }, [searchQuery, doSearch]);
 
-  const openProfile = async () => {
-    setProfileOpen(true);
-    // Only fetch the real authenticated user for admin.
-    // Other account types (empresa, agencia, parceiro, nomades) build their
-    // profile object directly from their respective context — so we never
-    // accidentally show admin data (e.g. Vinícius Guardia) inside company view.
-    if (accountType === "admin" && !selfUser) {
-      try {
-        const u = await apiClient.getCurrentUser();
-        setSelfUser(u);
-      } catch {
-        /* use fallback */
-      }
+  // "Meu Perfil" (ata 2026-08, reparo "Meu Perfil no container padrão"):
+  // NAVEGA para a rota pessoal do portal — nunca mais abre o slide-over
+  // administrativo (UserViewSlidePanel) por cima da rota atual. A rota
+  // renderiza o mesmo painel em modo `asPage` (container padrão), lendo
+  // sempre a identidade da sessão.
+  const selfProfilePath = (() => {
+    switch (accountType) {
+      case "empresas": return "/company/perfil";
+      case "agencias": return "/agency/perfil";
+      case "nomades": return "/nomades/perfil";
+      case "lider": return "/leader/perfil";
+      default: return "/admin/perfil";
     }
+  })();
+  const openProfile = () => {
+    navigate(selfProfilePath);
   };
 
   const handleLogout = () => {
@@ -1145,79 +1144,10 @@ export function Header({ transparent = false }: { transparent?: boolean } = {}) 
         onClose={() => setNotifOpen(false)}
         initialTab={notifTab}
       />
-      <UserViewSlidePanel
-        open={profileOpen}
-        onClose={() => setProfileOpen(false)}
-        viewerRole={
-          accountType === "agencias" ? "agency"
-          : accountType === "empresas" ? "company"
-          : accountType === "nomades" ? "nomad"
-          // Partner nao e um account_type proprio: e uma Agency com
-          // PartnerProfile ativo, entao cai no ramo "agency" acima.
-          : "admin"
-        }
-        agencyFinancial={accountType === "agencias" && agencia.profile ? {
-          invoices: agencia.invoices,
-          projectRevenue: agencia.projects.reduce((s, p) => s + (p.value ?? 0), 0),
-          currentMrr: agencia.profile.currentMrr,
-          plan: agencia.profile.plan,
-          planDiscount: agencia.profile.planDiscount,
-        } : undefined}
-        user={(() => {
-          // Build profile object from context — each account type uses its own data source.
-          if (accountType === "empresas" && empresa.profile) {
-            const p = empresa.profile;
-            return {
-              id: p.id,
-              name: p.name,
-              email: p.email,
-              role: "company_admin",
-              account_type: "company",
-              cnpj: p.cnpj,
-              phone: p.phone,
-              is_active: p.status === "active",
-              is_admin: false,
-              permissions: [],
-              created_at: p.createdAt ?? "",
-              updated_at: p.createdAt ?? "",
-            };
-          }
-          if (accountType === "agencias" && agencia.profile) {
-            const p = agencia.profile;
-            return {
-              id: p.id,
-              name: p.name,
-              email: p.email,
-              role: "agency_admin",
-              account_type: "agency",
-              phone: p.phone ?? "",
-              is_active: true,
-              is_admin: false,
-              permissions: [],
-              created_at: p.createdAt ?? "",
-              updated_at: p.createdAt ?? "",
-              currentMrr: p.currentMrr,
-              totalProjects: p.totalProjects,
-              partnerLevel: p.partnerLevel,
-            };
-          }
-          // admin + nomades: use real authenticated user (or context fallback)
-          return (
-            selfUser ?? {
-              id: 0,
-              name: ctx.name,
-              email: ctx.email,
-              role: accountType,
-              account_type: accountType,
-              is_active: true,
-              is_admin: accountType === "admin",
-              permissions: [],
-              created_at: "",
-              updated_at: "",
-            }
-          );
-        })()}
-      />
+      {/* "Meu Perfil" não abre mais aqui um slide-over — vira uma rota
+          dedicada (ver `openProfile` acima e app/perfil/page.tsx). O
+          UserViewSlidePanel segue sendo usado só em Admin › Usuários e no
+          company-edit, para visualizar/editar OUTRA pessoa. */}
 
       {/* ── Basket drawer ─────────────────────────────────────────────── */}
       <ProjectBasketDrawer />
