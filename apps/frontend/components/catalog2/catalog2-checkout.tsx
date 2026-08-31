@@ -168,18 +168,22 @@ export function Catalog2Checkout({ portal }: { portal: Portal }) {
       {step === "result" && result && (
         <div className="space-y-4 rounded-lg border border-neutral-200 p-4 dark:border-neutral-800">
           <h2 className="flex items-center gap-2 text-sm font-semibold text-emerald-700">
-            <CheckCircle2 className="h-4 w-4" /> Pedido {result.project.project_code} confirmado
+            <CheckCircle2 className="h-4 w-4" />
+            {!paid ? "Pedido" : "Projeto"} {result.project.project_code} {!paid ? "confirmado" : "ativo"}
           </h2>
+          <p className="text-xs text-neutral-500">Número de acompanhamento: <strong>{result.project.project_code}</strong></p>
           {!paid ? (
             <>
-              <p className="text-sm text-neutral-500">Ambiente local — confirme o pagamento simulado (sandbox) para liberar a execução.</p>
+              <p className="text-sm text-neutral-500">
+                Este é o seu <strong>pedido</strong> — ele ainda não virou projeto de execução. Confirme o pagamento simulado (ambiente local) para ativá-lo.
+              </p>
               <Button size="sm" disabled={paying} onClick={simulatePayment}>
                 {paying ? <Loader2 className="h-4 w-4 animate-spin" /> : null} Simular pagamento
               </Button>
             </>
           ) : (
             <>
-              <p className="text-sm text-emerald-700">Pagamento confirmado — tarefas geradas a partir da versão contratada.</p>
+              <p className="text-sm text-emerald-700">Pagamento confirmado — seu pedido virou <strong>projeto</strong> e as tarefas já foram geradas a partir da versão contratada.</p>
               <Button size="sm" variant="outline" onClick={() => navigate(projectListPath)}>
                 Ver projeto
               </Button>

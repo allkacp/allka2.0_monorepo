@@ -4605,6 +4605,37 @@ model Catalog2Quote {
   @@map("catalog2_quotes")
 }
 
+// ─── Catalog2CutoverBatch — lote de virada comercial (fechamento técnico) ──
+// Registra CADA execução real (nunca dry-run) do script
+// catalog2-commercial-cutover-plan.ts --apply. Nunca apagado — histórico
+// permanente de quando/quem/o quê, mesmo que revertido depois.
+model Catalog2CutoverBatch {
+  id String @id @default(cuid())
+
+  actor      String
+  // e-mail/identificador de quem rodou o --apply (script de linha de
+  // comando, não uma sessão HTTP autenticada — não há req.user aqui).
+  applied_at DateTime @default(now())
+
+  // Contagens no momento da aplicação — nunca recalculadas depois.
+  operational_products_deactivated Int
+  catalog2_products_published      Int
+
+  // sha256 do conjunto ordenado de ids de Product desativados nesta
+  // execução — permite provar exatamente quais produtos este lote tocou.
+  affected_products_checksum String
+  // Lista JSON dos MESMOS ids, em texto — necessária pra reversão precisa
+  // (reativar exatamente estes produtos, nunca "todos os inativos").
+  affected_product_ids_json  String @db.LongText
+
+  // Nulo enquanto o lote está em vigor. Preenchido quando revertido.
+  reversed_at   DateTime?
+  reversed_by   String?
+  reversal_note String?   @db.Text
+
+  @@map("catalog2_cutover_batches")
+}
+
 // ─── Catalog2ChangeOrder — aditivo pós-venda (Bloco 6/6) ───────────────────
 // NUNCA altera o ProjectProduct/ProjectTask originais — só adiciona uma nova
 // linha (origin="CATALOG2_ADDITIVE") quando aprovado E pago. Preço/prazo do

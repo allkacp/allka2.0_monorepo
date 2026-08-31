@@ -215,6 +215,19 @@ router.post("/:projectProductId/cancel", async (req, res, next) => {
     const updated = await prisma.projectProduct.update({ where: { id: pp.id }, data: { status: "CANCELADO" } });
     await recalculateProjectValue(prisma, pp.project_id);
 
+    // Pedido (Project ainda "draft", nunca pago) que fica sem nenhum item
+    // ativo não pode continuar parecendo um rascunho aberto indefinidamente —
+    // encerra como "cancelled" (nunca some, sempre auditável). Projeto já em
+    // execução com outros itens pagos nunca é tocado aqui.
+    if (project.status === "draft") {
+      const remainingActive = await prisma.projectProduct.count({
+        where: { project_id: project.id, status: { notIn: ["CANCELADO", "TRANSFERIDO"] } },
+      });
+      if (remainingActive === 0) {
+        await prisma.project.update({ where: { id: project.id }, data: { status: "cancelled" } });
+      }
+    }
+
     if (wasPaid) {
       const ownerType = project.company_id ? "company" : project.agency_id ? "agency" : null;
       const ownerId = project.company_id ?? project.agency_id ?? null;

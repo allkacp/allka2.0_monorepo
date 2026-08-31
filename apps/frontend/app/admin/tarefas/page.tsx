@@ -1766,10 +1766,13 @@ export default function AdminTarefasPage({
     setAppliedFilters(EMPTY_FILTERS);
   };
 
+  const [taskActionError, setTaskActionError] = useState<string | null>(null);
+
   const handleStatusChange = useCallback(
     async (tarefa: TarefaOperacional, newStatus: TaskStatus) => {
       if (tarefa.status === newStatus) return;
       setUpdatingId(tarefa.id);
+      setTaskActionError(null);
       try {
         await apiClient.updateProjectTask(tarefa.id, { status: newStatus });
         const now = new Date().toISOString();
@@ -1788,7 +1791,8 @@ export default function AdminTarefasPage({
         );
         if (selectedTarefa?.id === tarefa.id)
           setSelectedTarefa((p) => (p ? { ...p, status: newStatus } : p));
-      } catch {
+      } catch (err: any) {
+        setTaskActionError(err?.message || "Não foi possível alterar o status desta tarefa.");
       } finally {
         setUpdatingId(null);
       }
@@ -1960,6 +1964,7 @@ export default function AdminTarefasPage({
         onStatusChange={handleStatusChange}
         updatingId={updatingId}
         startInEditMode={drawerStartInEditMode}
+        actionError={taskActionError}
       />
       <ProjectViewSlidePanel
         open={projectOpen}
