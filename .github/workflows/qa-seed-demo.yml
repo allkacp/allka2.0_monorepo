@@ -1,0 +1,100 @@
+name: Seed QA Demo (manual)
+
+# Disparo manual only. Roda `npm run seed:qa-demo` dentro do container
+# backend já em produção (mesmo binário/imagem que está no ar), com
+# SEED_QA_ENVIRONMENT=qa explícito — o script recusa sozinho se essa
+# variável não vier setada, e nunca imprime a senha no console (comprovado
+# pelos testes em seed-qa-demo.integration.test.ts). Aceita --remove para
+# desfazer a fixture (nunca toca nos 162 produtos operacionais nem nos 36
+# rascunhos, por construção do próprio script).
+#
+# SEED_QA_PASSWORD precisa ser criado como secret do repositório por quem
+# está operando o QA (nunca pelo Claude/CI) — assim a senha nunca passa por
+# nenhum log, nenhuma mensagem, nenhum arquivo deste repositório.
+
+on:
+  workflow_dispatch:
+    inputs:
+      remove:
+        description: "Marque true para rodar --remove (desfaz a fixture de QA)"
+        required: true
+        default: false
+        type: boolean
+
+concurrency:
+  group: deploy-vps
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  seed:
+    runs-on: ubuntu-latest
+    environment: dev
+    steps:
+      - name: Validate required secrets
+        shell: bash
+        env:
+          VPS_HOST: ${{ secrets.VPS_HOST }}
+          VPS_USER: ${{ secrets.VPS_USER }}
+          VPS_SSH_PORT: ${{ secrets.VPS_SSH_PORT }}
+          VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+          SEED_QA_PASSWORD: ${{ secrets.SEED_QA_PASSWORD }}
+        run: |
+          : "${VPS_HOST:?Set the VPS_HOST secret}"
+          : "${VPS_USER:?Set the VPS_USER secret}"
+          : "${VPS_SSH_PORT:?Set the VPS_SSH_PORT secret}"
+          : "${VPS_SSH_KEY:?Set the VPS_SSH_KEY secret}"
+          : "${SEED_QA_PASSWORD:?Set the SEED_QA_PASSWORD secret (escolhida por quem opera o QA, nunca pelo CI)}"
+
+      - name: Configure SSH
+        shell: bash
+        env:
+          VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+        run: |
+          mkdir -p ~/.ssh
+          touch ~/.ssh/allka_deploy_key
+          chmod 600 ~/.ssh/allka_deploy_key
+          printf '%s\n' "$VPS_SSH_KEY" > ~/.ssh/allka_deploy_key
+          touch ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/known_hosts
+
+      - name: Run seed:qa-demo on the VPS
+        shell: bash
+        env:
+          VPS_HOST: ${{ secrets.VPS_HOST }}
+          VPS_USER: ${{ secrets.VPS_USER }}
+          VPS_SSH_PORT: ${{ secrets.VPS_SSH_PORT }}
+          VPS_DEPLOY_PATH: ${{ secrets.VPS_DEPLOY_PATH || '/opt/allka-2026' }}
+          SEED_QA_PASSWORD: ${{ secrets.SEED_QA_PASSWORD }}
+          REMOVE_FLAG: ${{ inputs.remove }}
+        run: |
+          VPS_HOST="$(echo -n "$VPS_HOST" | tr -d '[:space:]')"
+          VPS_USER="$(echo -n "$VPS_USER" | tr -d '[:space:]')"
+          VPS_SSH_PORT="$(echo -n "$VPS_SSH_PORT" | tr -d '[:space:]')"
+          remote="${VPS_USER}@${VPS_HOST}"
+          SSH_OPTS=(
+            -i "$HOME/.ssh/allka_deploy_key"
+            -p "$VPS_SSH_PORT"
+            -o ConnectTimeout=15
+            -o ConnectionAttempts=2
+            -o BatchMode=yes
+            -o StrictHostKeyChecking=accept-new
+            -o UserKnownHostsFile="$HOME/.ssh/known_hosts"
+          )
+          extra_arg=""
+          if [ "$REMOVE_FLAG" = "true" ]; then
+            extra_arg="--remove"
+          fi
+          ssh "${SSH_OPTS[@]}" "$remote" bash -s -- "$VPS_DEPLOY_PATH" "$SEED_QA_PASSWORD" "$extra_arg" <<'REMOTE'
+            set -euo pipefail
+            deploy_path="$1"
+            pwd_value="$2"
+            extra_arg="$3"
+            cd "$deploy_path"
+            docker compose --env-file .env -f docker-compose.yml run --rm --no-deps \
+              -e SEED_QA_ENVIRONMENT=qa \
+              -e SEED_QA_PASSWORD="$pwd_value" \
+              backend npm run seed:qa-demo -- $extra_arg
+REMOTE
