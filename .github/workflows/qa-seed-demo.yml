@@ -11,6 +11,16 @@ name: Seed QA Demo (manual)
 # SEED_QA_PASSWORD precisa ser criado como secret do repositório por quem
 # está operando o QA (nunca pelo Claude/CI) — assim a senha nunca passa por
 # nenhum log, nenhuma mensagem, nenhum arquivo deste repositório.
+#
+# Roda com a imagem `backend:tools` (estágio "build" do Dockerfile, publicada
+# por deploy-backend.yml), não a imagem de runtime que está de fato no ar:
+# a imagem de runtime roda `npm ci --omit=dev` (sem tsx, que é devDependency)
+# e o Dockerfile não copia `src/` pro runtime (só `dist/`, e
+# `src/scripts/**` é explicitamente excluído do build TypeScript em
+# tsconfig.json) — então `tsx src/scripts/seed-qa-demo.ts` não existe nem
+# roda na imagem de produção. A imagem tools tem devDependencies + src/
+# completos e roda dentro da mesma rede/serviço via `BACKEND_IMAGE`
+# sobrescrito só para este `docker compose run`.
 
 on:
   workflow_dispatch:
@@ -41,12 +51,16 @@ jobs:
           VPS_SSH_PORT: ${{ secrets.VPS_SSH_PORT }}
           VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
           SEED_QA_PASSWORD: ${{ secrets.SEED_QA_PASSWORD }}
+          GHCR_PAT: ${{ secrets.GHCR_PAT }}
+          GHCR_USERNAME: ${{ secrets.GHCR_USERNAME }}
         run: |
           : "${VPS_HOST:?Set the VPS_HOST secret}"
           : "${VPS_USER:?Set the VPS_USER secret}"
           : "${VPS_SSH_PORT:?Set the VPS_SSH_PORT secret}"
           : "${VPS_SSH_KEY:?Set the VPS_SSH_KEY secret}"
           : "${SEED_QA_PASSWORD:?Set the SEED_QA_PASSWORD secret (escolhida por quem opera o QA, nunca pelo CI)}"
+          : "${GHCR_PAT:?Set the GHCR_PAT secret}"
+          : "${GHCR_USERNAME:?Set the GHCR_USERNAME secret}"
 
       - name: Configure SSH
         shell: bash
@@ -69,8 +83,13 @@ jobs:
           deploy_path="$1"
           pwd_value="$2"
           extra_arg="$3"
+          ghcr_user="$4"
+          ghcr_pat="$5"
+          tools_image="$6"
           cd "$deploy_path"
-          docker compose --env-file .env -f docker-compose.yml run --rm --no-deps \
+          printf '%s' "$ghcr_pat" | docker login ghcr.io -u "$ghcr_user" --password-stdin
+          docker pull "$tools_image"
+          BACKEND_IMAGE="$tools_image" docker compose --env-file .env -f docker-compose.yml run --rm --no-deps \
             -e SEED_QA_ENVIRONMENT=qa \
             -e SEED_QA_PASSWORD="$pwd_value" \
             backend npm run seed:qa-demo -- $extra_arg
@@ -85,6 +104,8 @@ jobs:
           VPS_DEPLOY_PATH: ${{ secrets.VPS_DEPLOY_PATH || '/opt/allka-2026' }}
           SEED_QA_PASSWORD: ${{ secrets.SEED_QA_PASSWORD }}
           REMOVE_FLAG: ${{ inputs.remove }}
+          GHCR_PAT: ${{ secrets.GHCR_PAT }}
+          GHCR_USERNAME: ${{ secrets.GHCR_USERNAME }}
         run: |
           VPS_HOST="$(echo -n "$VPS_HOST" | tr -d '[:space:]')"
           VPS_USER="$(echo -n "$VPS_USER" | tr -d '[:space:]')"
@@ -103,7 +124,9 @@ jobs:
           if [ "$REMOVE_FLAG" = "true" ]; then
             extra_arg="--remove"
           fi
+          repo="${GITHUB_REPOSITORY,,}"
+          tools_image="ghcr.io/${repo}/backend:tools"
           scp -i "$HOME/.ssh/allka_deploy_key" -P "$VPS_SSH_PORT" \
             -o StrictHostKeyChecking=accept-new -o UserKnownHostsFile="$HOME/.ssh/known_hosts" \
             .deploy/remote-seed.sh "$remote:/tmp/allka-remote-seed.sh"
-          ssh "${SSH_OPTS[@]}" "$remote" "bash /tmp/allka-remote-seed.sh '${VPS_DEPLOY_PATH}' '${SEED_QA_PASSWORD}' '${extra_arg}' && rm -f /tmp/allka-remote-seed.sh"
+          ssh "${SSH_OPTS[@]}" "$remote" "bash /tmp/allka-remote-seed.sh '${VPS_DEPLOY_PATH}' '${SEED_QA_PASSWORD}' '${extra_arg}' '${GHCR_USERNAME}' '${GHCR_PAT}' '${tools_image}' && rm -f /tmp/allka-remote-seed.sh"
