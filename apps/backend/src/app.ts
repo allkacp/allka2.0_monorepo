@@ -65,6 +65,8 @@ import commsAdminRouter from "./routes/comms-admin";
 import legacyConsultationRouter from "./routes/legacy-consultation";
 import catalog2AdminRouter from "./routes/catalog2-admin";
 import catalog2CatalogRouter from "./routes/catalog2-catalog";
+import catalog2CheckoutRouter from "./routes/catalog2-checkout";
+import catalog2ChangeOrdersRouter from "./routes/catalog2-change-orders";
 import { prisma } from "./lib/prisma";
 import { errorHandler } from "./middleware/error";
 
@@ -242,6 +244,11 @@ app.use("/api/admin/comms", commsAdminRouter);
 app.use("/api/admin/legacy", legacyConsultationRouter);
 // Fundação do novo catálogo — somente Admin Master (sprint de produtos, bloco 2/6).
 app.use("/api/admin/catalog2", catalog2AdminRouter);
+// Checkout/aditivos do catalog2 (bloco 6/6) — montados ANTES do mount
+// genérico "/api/catalog2" abaixo, para o Express casar os prefixos mais
+// específicos primeiro.
+app.use("/api/catalog2/checkout", catalog2CheckoutRouter);
+app.use("/api/catalog2/change-orders", catalog2ChangeOrdersRouter);
 // Catálogo do cliente do catalog2 (bloco 5/6) — visibilidade/configurador/
 // cotação/cesta. Permissão resolvida no servidor.
 app.use("/api/catalog2", catalog2CatalogRouter);

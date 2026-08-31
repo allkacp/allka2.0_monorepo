@@ -6,9 +6,9 @@
 // prazo vêm SEMPRE do backend. Filtros e o produto aberto ficam na URL.
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useSearchParams } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import {
-  ArrowLeft, Loader2, Search, ShoppingCart, X, Info, CheckCircle2, AlertTriangle, Trash2,
+  ArrowLeft, Loader2, Search, ShoppingCart, X, Info, AlertTriangle, Trash2,
 } from "lucide-react";
 import { apiClient } from "@/lib/api-client";
 import { Button } from "@/components/ui/button";
@@ -97,6 +97,7 @@ export function Catalog2Store({ portal }: { portal: Portal }) {
 
       {cartOpen && (
         <CartDrawer
+          portal={portal}
           cart={cart}
           onClose={() => setCartOpen(false)}
           onChanged={loadCart}
@@ -472,7 +473,8 @@ function DescriptionBlock({ text }: { text: string }) {
 }
 
 // ── Cesta ─────────────────────────────────────────────────────────────
-function CartDrawer({ cart, onClose, onChanged, onOpenProduct }: any) {
+function CartDrawer({ portal, cart, onClose, onChanged, onOpenProduct }: any) {
+  const navigate = useNavigate();
   const [confirmClear, setConfirmClear] = useState(false);
   const [busy, setBusy] = useState(false);
 
@@ -519,15 +521,27 @@ function CartDrawer({ cart, onClose, onChanged, onOpenProduct }: any) {
         )}
 
         <div className="mt-3 space-y-2 border-t border-neutral-200 pt-3 dark:border-neutral-800">
+          {cart.items.length > 0 && (
+            <Button
+              size="sm"
+              className="w-full"
+              disabled={cart.needs_revalidation}
+              onClick={() => navigate(`/${portal}/catalog2/checkout`)}
+            >
+              Finalizar compra
+            </Button>
+          )}
           <Button size="sm" variant="ghost" className="w-full" onClick={onClose}>Continuar comprando</Button>
           {cart.items.length > 0 && (
             <Button size="sm" variant="ghost" className="w-full text-red-600" disabled={busy} onClick={() => setConfirmClear(true)}>
               Limpar cesta
             </Button>
           )}
-          <p className="flex items-center gap-1 text-[11px] text-neutral-500">
-            <CheckCircle2 className="h-3 w-3" /> A compra não é finalizada aqui — isso será tratado no próximo bloco.
-          </p>
+          {cart.needs_revalidation && (
+            <p className="flex items-center gap-1 text-[11px] text-amber-600">
+              <AlertTriangle className="h-3 w-3" /> Revise os itens desatualizados antes de finalizar a compra.
+            </p>
+          )}
         </div>
       </div>
 

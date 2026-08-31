@@ -744,6 +744,13 @@ model Project {
   admin_responsible_user_id String?
   admin_responsible         User?   @relation("ProjectAdminResponsible", fields: [admin_responsible_user_id], references: [id], onDelete: SetNull)
 
+  // ── Catalog2 (Bloco 6/6 — checkout) ─────────────────────────────────────
+  // Idempotência do clique "Confirmar pedido" no checkout do novo catálogo —
+  // gerado uma vez no cliente por tentativa de compra (mesmo padrão de
+  // publish_client_action_id em Catalog2ProductVersion). Retry/clique duplo
+  // com o MESMO valor devolve o Project já criado, nunca cria outro.
+  catalog2_checkout_client_action_id String? @unique
+
   task_executions TaskExecution[]
   invoices        Invoice[]
   products        ProjectProduct[]
@@ -754,6 +761,7 @@ model Project {
   connections     ProjectConnection[]
   iallka_session  IallkaSession?
   planner_cards   PlannerCard[]
+  change_orders   Catalog2ChangeOrder[]
 
   // ── Rastreio da plataforma antiga ─────────────────────────────────────
   // id numérico do registro equivalente no dump legado (Dump20260423.sql).
@@ -1247,10 +1255,31 @@ model ProjectProduct {
   id           String            @id @default(cuid())
   project_id   String
   project      Project           @relation(fields: [project_id], references: [id], onDelete: Cascade)
-  product_id   String
-  product      Product           @relation(fields: [product_id], references: [id])
+  // Opcional desde o Bloco 6 (checkout do catalog2): uma linha nascida do
+  // catalog2 nunca tem product_id (catálogo antigo) — tem catalog2_product_id
+  // abaixo. Invariante de aplicação (não constraint de banco, mesmo padrão do
+  // ClientLink): exatamente um dos dois deve estar preenchido.
+  product_id   String?
+  product      Product?          @relation(fields: [product_id], references: [id], onDelete: SetNull)
   variation_id String?
   variation    ProductVariation? @relation(fields: [variation_id], references: [id])
+
+  // ── Catalog2 (Bloco 6/6 — checkout) ─────────────────────────────────────
+  // Produto/versão CONTRATADOS do novo catálogo — a versão é a mesma que a
+  // Catalog2Quote congelou, nunca a "published_version_id" atual do produto
+  // (que pode já ter mudado). Restrict: nunca apagar um produto/versão que
+  // já foi vendido.
+  catalog2_product_id             String?
+  catalog2_product                Catalog2Product?        @relation(fields: [catalog2_product_id], references: [id], onDelete: Restrict)
+  catalog2_version_id             String?
+  catalog2_version                Catalog2ProductVersion? @relation(fields: [catalog2_version_id], references: [id], onDelete: Restrict)
+  // Rastreia a Catalog2Quote de origem — soft ref, mesmo espírito snapshot-safe
+  // de origin_bundle_purchase_id abaixo. @unique = idempotência: a MESMA
+  // cotação nunca vira duas linhas (clique duplo/retry do checkout).
+  origin_catalog2_quote_id        String?                 @unique
+  // Preenchido só quando origin = "CATALOG2_ADDITIVE" — rastreia o aditivo
+  // (Catalog2ChangeOrder) que originou esta linha.
+  origin_catalog2_change_order_id String?                 @unique
 
   // Snapshot: preserves commercial history even if product is later edited
   product_name_snapshot     String
@@ -1284,13 +1313,16 @@ model ProjectProduct {
   expected_end_date DateTime?
 
   origin String @default("VENDA")
-  // VENDA | TRANSFERENCIA | COMBO | AI_ASSEMBLY — TRANSFERENCIA marca um
-  // vínculo criado pela transferência de uma tarefa não usada de outro
-  // projeto (já paga lá, nunca cobrar de novo aqui). COMBO marca um vínculo
-  // nascido da contratação de um ProductBundle (ver POST
-  // /api/product-bundles/:id/contract). AI_ASSEMBLY marca um vínculo
-  // nascido de uma proposta aprovada do assistente IALLKA (ver POST
-  // /api/iallka/sessions/:id/approve).
+  // VENDA | TRANSFERENCIA | COMBO | AI_ASSEMBLY | CATALOG2 | CATALOG2_ADDITIVE
+  // — TRANSFERENCIA marca um vínculo criado pela transferência de uma tarefa
+  // não usada de outro projeto (já paga lá, nunca cobrar de novo aqui). COMBO
+  // marca um vínculo nascido da contratação de um ProductBundle (ver POST
+  // /api/product-bundles/:id/contract). AI_ASSEMBLY marca um vínculo nascido
+  // de uma proposta aprovada do assistente IALLKA (ver POST
+  // /api/iallka/sessions/:id/approve). CATALOG2 marca a compra original via
+  // checkout do novo catálogo (ver src/lib/catalog2-checkout.ts);
+  // CATALOG2_ADDITIVE marca uma linha nascida de um Catalog2ChangeOrder
+  // aprovado e pago — nunca reaproveita a linha original.
 
   // Agrupa as N linhas nascidas do MESMO evento de contratação de combo —
   // não aponta pro ProductBundle (que pode ser editado/apagado depois), é
@@ -1307,9 +1339,10 @@ model ProjectProduct {
   created_at DateTime @default(now())
   updated_at DateTime @updatedAt
 
-  tasks         ProjectTask[]
-  credentials   ProjectCredential[]
-  payment_items PaymentItem[]
+  tasks                     ProjectTask[]
+  credentials               ProjectCredential[]
+  payment_items             PaymentItem[]
+  change_orders_as_original Catalog2ChangeOrder[] @relation("ChangeOrderOriginal")
 
   // ── Rastreio da plataforma antiga ─────────────────────────────────────
   // id numérico do registro equivalente no dump legado (Dump20260423.sql).
@@ -1319,6 +1352,7 @@ model ProjectProduct {
   legacy_id Int? @unique
 
   @@index([project_id])
+  @@index([catalog2_product_id])
   @@map("project_products")
 }
 
@@ -1330,10 +1364,22 @@ model ProjectTask {
   project            Project        @relation(fields: [project_id], references: [id], onDelete: Cascade)
   project_product_id String
   project_product    ProjectProduct @relation(fields: [project_product_id], references: [id], onDelete: Cascade)
-  product_id         String
-  product            Product        @relation(fields: [product_id], references: [id])
+  // Opcional desde o Bloco 6: tarefa nascida do catalog2 nunca tem product_id
+  // do catálogo antigo — tem catalog2_task_id abaixo.
+  product_id         String?
+  product            Product?       @relation(fields: [product_id], references: [id], onDelete: SetNull)
   catalog_task_id    String?
   catalog_task       CatalogTask?   @relation(fields: [catalog_task_id], references: [id])
+
+  // ── Catalog2 (Bloco 6/6) ─────────────────────────────────────────────
+  // Modelo de tarefa de origem no novo catálogo — sempre resolvido a partir
+  // de ProjectProduct.catalog2_version_id (a versão CONTRATADA/congelada),
+  // nunca da versão publicada mais recente. Denormaliza product/version aqui
+  // pelo mesmo motivo que product_id acima já denormaliza o produto.
+  catalog2_task_id    String?
+  catalog2_task       Catalog2Task? @relation(fields: [catalog2_task_id], references: [id], onDelete: SetNull)
+  catalog2_product_id String?
+  catalog2_version_id String?
 
   // Snapshots: task model data at the time of creation
   code_snapshot     String?
@@ -1352,6 +1398,9 @@ model ProjectTask {
   origin_payment    Payment? @relation("PaymentGeneratedTasks", fields: [origin_payment_id], references: [id], onDelete: SetNull)
   // paymentId:projectProductId:catalogTaskId:occurrenceIndex — impede
   // recriar a mesma tarefa do mesmo produto/pagamento/ciclo/ocorrência.
+  // Tarefas do catalog2 usam o prefixo "c2:" (c2:paymentId:projectProductId:
+  // catalog2TaskId:occurrenceIndex) — só pra ficar grepável; nunca migra
+  // dados antigos pro novo formato nem o contrário.
   generation_key    String?  @unique
   // Espelha Payment.billing_cycle_key no momento da geração (fica preservado
   // mesmo se o Payment for editado depois).
@@ -1476,6 +1525,7 @@ model ProjectTask {
   @@index([nomade_responsavel_id])
   @@index([responsavel_agencia_id])
   @@index([lider_responsavel_id])
+  @@index([catalog2_task_id])
   // Usado pelo motor de alertas automáticos (src/lib/alert-engine.ts) pra
   // varrer tarefas ativas com prazo sem full scan.
   @@index([status, due_date])
@@ -3999,11 +4049,13 @@ model Catalog2Product {
   created_at          DateTime  @default(now())
   updated_at          DateTime  @updatedAt
 
-  versions      Catalog2ProductVersion[]     @relation("Catalog2ProductVersions")
-  four_f        Catalog2ProductFourF[]
-  import_origin Catalog2ProductImportOrigin?
-  quotes        Catalog2Quote[]
-  cart_items    Catalog2CartItem[]
+  versions         Catalog2ProductVersion[]     @relation("Catalog2ProductVersions")
+  four_f           Catalog2ProductFourF[]
+  import_origin    Catalog2ProductImportOrigin?
+  quotes           Catalog2Quote[]
+  cart_items       Catalog2CartItem[]
+  // Linhas de pedido (Bloco 6/6) — produto CONTRATADO a partir deste catálogo.
+  project_products ProjectProduct[]
 
   @@index([status])
   @@index([pillar_id])
@@ -4060,13 +4112,15 @@ model Catalog2ProductVersion {
 
   published_of Catalog2Product? @relation("Catalog2PublishedVersion")
 
-  variations  Catalog2Variation[]
-  addons      Catalog2Addon[]
-  tasks       Catalog2Task[]
-  conditions  Catalog2Condition[]
-  events      Catalog2VersionEvent[]
-  quotes      Catalog2Quote[]    @relation("Catalog2QuoteVersion")
-  cart_items  Catalog2CartItem[] @relation("Catalog2CartVersion")
+  variations       Catalog2Variation[]
+  addons           Catalog2Addon[]
+  tasks            Catalog2Task[]
+  conditions       Catalog2Condition[]
+  events           Catalog2VersionEvent[]
+  quotes           Catalog2Quote[]        @relation("Catalog2QuoteVersion")
+  cart_items       Catalog2CartItem[]     @relation("Catalog2CartVersion")
+  // Linhas de pedido (Bloco 6/6) — versão CONTRATADA/congelada de um pedido.
+  project_products ProjectProduct[]
 
   @@unique([product_id, version_number])
   @@index([state])
@@ -4238,6 +4292,8 @@ model Catalog2Task {
   dependencies  Catalog2TaskDependency[] @relation("TaskDeps")
   dependents    Catalog2TaskDependency[] @relation("TaskDependents")
   addon_targets Catalog2Addon[]          @relation("AddonTargetTask")
+  // ProjectTask materializadas a partir deste modelo (Bloco 6/6).
+  project_tasks ProjectTask[]
 
   @@index([version_id, sort_order])
   @@index([specialty_id])
@@ -4522,29 +4578,90 @@ model Catalog2Quote {
   version    Catalog2ProductVersion @relation("Catalog2QuoteVersion", fields: [version_id], references: [id], onDelete: Restrict)
 
   // Configuracao congelada.
-  selection_json     String  @db.Text // { variation_option_keys, addon_keys, quantity, answers }
-  deliverables_json  String? @db.Text // entregaveis resultantes (snapshot)
-  quantity           Int     @default(1)
+  selection_json           String  @db.Text // { variation_option_keys, addon_keys, quantity, answers }
+  deliverables_json        String? @db.Text // entregaveis resultantes (snapshot)
+  quantity                 Int     @default(1)
   commercial_deadline_days Int?
-  commercial_price   Float?
-  currency           String  @default("BRL")
+  commercial_price         Float?
+  currency                 String  @default("BRL")
   // sha256 da configuracao normalizada — deteccao de clique-duplo / mudanca.
-  config_checksum    String
+  config_checksum          String
   // Snapshot legivel do calculo no momento do congelamento.
-  pricing_snapshot_json String? @db.LongText
+  pricing_snapshot_json    String? @db.LongText
 
   // "rascunho" | "valida" | "expirada" | "convertida" | "cancelada"
-  status     String   @default("rascunho")
+  status      String    @default("rascunho")
   valid_until DateTime?
-  is_preview Boolean  @default(false)
+  is_preview  Boolean   @default(false)
 
   created_at DateTime @default(now())
   updated_at DateTime @updatedAt
 
+  change_order Catalog2ChangeOrder?
+
+  @@unique([account_kind, account_id, config_checksum, status])
   @@index([account_kind, account_id, status])
   @@index([user_id])
-  @@unique([account_kind, account_id, config_checksum, status])
   @@map("catalog2_quotes")
+}
+
+// ─── Catalog2ChangeOrder — aditivo pós-venda (Bloco 6/6) ───────────────────
+// NUNCA altera o ProjectProduct/ProjectTask originais — só adiciona uma nova
+// linha (origin="CATALOG2_ADDITIVE") quando aprovado E pago. Preço/prazo do
+// aditivo vêm sempre de uma Catalog2Quote própria (mesmo motor de
+// recálculo/expiração/checksum do checkout normal) — nunca digitados
+// livremente nem forjados pelo cliente.
+model Catalog2ChangeOrder {
+  id String @id @default(cuid())
+
+  project_id String
+  project    Project @relation(fields: [project_id], references: [id], onDelete: Restrict)
+
+  // Item já contratado que está sendo ampliado (ex.: adicional novo num
+  // produto já pago). Nulo quando o aditivo introduz um produto novo dentro
+  // do mesmo projeto.
+  original_project_product_id String?
+  original_project_product    ProjectProduct? @relation("ChangeOrderOriginal", fields: [original_project_product_id], references: [id], onDelete: SetNull)
+
+  // Cotação que precifica EXATAMENTE o que este aditivo contratará.
+  quote_id String        @unique
+  quote    Catalog2Quote @relation(fields: [quote_id], references: [id], onDelete: Restrict)
+
+  requested_by_user_id String
+  request_note         String? @db.Text
+  // Texto legível gerado no SERVIDOR a partir da cotação — nunca escrito
+  // livre por humano.
+  change_summary       String  @db.Text
+
+  // Snapshot IMUTÁVEL do impacto — copiado da quote só no momento da
+  // APROVAÇÃO (nunca no momento da solicitação, pra sempre valer o preço
+  // mais atual). Nunca recalculado depois disso, nunca editável.
+  price_impact_snapshot         Float?
+  deadline_impact_days_snapshot Int?
+  currency_snapshot             String @default("BRL")
+
+  // "solicitado" | "aprovado" | "rejeitado" | "expirado" | "materializado" | "cancelado"
+  status String @default("solicitado")
+
+  // Aprovação SEMPRE explícita por um Admin (isAdminUser) — nunca inferida,
+  // mesmo padrão de Project.admin_responsible_user_id.
+  decided_by_user_id        String?
+  decided_at                DateTime?
+  decision_note             String?   @db.Text
+  // Idempotência do clique "Aprovar" — retry/clique duplo com o MESMO valor
+  // não duplica a decisão.
+  approval_client_action_id String?   @unique
+
+  // Preenchidos só depois que o ProjectProduct do aditivo foi criado
+  // (attachCatalog2QuoteToProject) e, respectivamente, pago.
+  materialized_project_product_id String? @unique
+  materialized_payment_id         String?
+
+  requested_at DateTime @default(now())
+  updated_at   DateTime @updatedAt
+
+  @@index([project_id, status])
+  @@map("catalog2_change_orders")
 }
 
 // Item da cesta do catalogo2 (isolado por conta + usuario). Uma configuracao

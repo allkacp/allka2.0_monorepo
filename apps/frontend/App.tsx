@@ -154,6 +154,13 @@ const Catalog2CompanyPage = React.lazy(() =>
 const Catalog2AgencyPage = React.lazy(() =>
   import("@/app/catalog2/page").then((m) => ({ default: m.Catalog2AgencyPage })),
 );
+// Checkout do novo catálogo (sprint de produtos, bloco 6/6).
+const Catalog2CheckoutCompanyPage = React.lazy(() =>
+  import("@/app/catalog2-checkout/page").then((m) => ({ default: m.Catalog2CheckoutCompanyPage })),
+);
+const Catalog2CheckoutAgencyPage = React.lazy(() =>
+  import("@/app/catalog2-checkout/page").then((m) => ({ default: m.Catalog2CheckoutAgencyPage })),
+);
 const AdminClientesPage = React.lazy(() => import("@/app/admin/clientes/page"));
 // Lista de agências no Admin — a pasta existia vazia até 2026-08-04.
 const AdminAgenciasPage = React.lazy(() => import("@/app/admin/agencias/page"));
@@ -1087,6 +1094,11 @@ export default function App() {
                     path="/company/catalog2"
                     element={<Catalog2CompanyPage />}
                   />
+                  {/* Checkout do novo catálogo (bloco 6/6). */}
+                  <Route
+                    path="/company/catalog2/checkout"
+                    element={<Catalog2CheckoutCompanyPage />}
+                  />
                   <Route
                     path="/company/relatorios"
                     element={<CompanyRelatoriosPage />}
@@ -1149,6 +1161,11 @@ export default function App() {
                   <Route
                     path="/agency/catalog2"
                     element={<Catalog2AgencyPage />}
+                  />
+                  {/* Checkout do novo catálogo (bloco 6/6). */}
+                  <Route
+                    path="/agency/catalog2/checkout"
+                    element={<Catalog2CheckoutAgencyPage />}
                   />
                   <Route
                     path="/agency/combos"

@@ -899,6 +899,29 @@ class ApiClient {
   updateClientCatalog2CartItem(id: string, selection: Record<string, any>) { return this.cc("PUT", `/cart/items/${id}`, selection); }
   removeClientCatalog2CartItem(id: string) { return this.cc("DELETE", `/cart/items/${id}`); }
   clearClientCatalog2Cart() { return this.cc("POST", "/cart/clear"); }
+
+  // ── Checkout / pedido / aditivos do catalog2 (sprint de produtos, bloco 6/6) ──
+  checkoutCatalog2(body: { quote_ids: string[]; checkout_client_action_id: string }) {
+    return this.cc<{ project: any; project_products: any[]; next_step: string; payment_endpoint: string; already_processed: boolean }>("POST", "/checkout", body);
+  }
+  cancelCatalog2ProjectProduct(projectProductId: string) {
+    return this.cc("POST", `/checkout/${projectProductId}/cancel`);
+  }
+  requestCatalog2ChangeOrder(body: { project_id: string; original_project_product_id?: string; quote_id: string; request_note?: string }) {
+    return this.cc("POST", "/change-orders", body);
+  }
+  listCatalog2ChangeOrders(projectId: string) {
+    return this.cc<{ data: any[] }>("GET", `/change-orders?project_id=${projectId}`);
+  }
+  approveCatalog2ChangeOrder(id: string, body: { decision_note?: string; approval_client_action_id: string }) {
+    return this.cc("POST", `/change-orders/${id}/approve`, body);
+  }
+  rejectCatalog2ChangeOrder(id: string, body: { decision_note: string }) {
+    return this.cc("POST", `/change-orders/${id}/reject`, body);
+  }
+  checkoutCatalog2ChangeOrder(id: string) {
+    return this.cc("POST", `/change-orders/${id}/checkout`);
+  }
   /** URL autenticada da imagem de um banner obrigatório (uso admin). */
   mandatoryBannerImageUrl(id: string): string {
     return `${API_BASE_URL}/admin/comms/banners/${id}/image`;
