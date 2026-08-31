@@ -52,7 +52,8 @@
     "catalog2:import-products": "tsx src/scripts/import-catalog2-products.ts",
     "catalog2:cutover-plan": "tsx src/scripts/catalog2-cutover-plan.ts",
     "catalog2:commercial-cutover-plan": "tsx src/scripts/catalog2-commercial-cutover-plan.ts",
-    "catalog2:client-demo": "tsx src/scripts/seed-catalog2-client-demo.ts"
+    "catalog2:client-demo": "tsx src/scripts/seed-catalog2-client-demo.ts",
+    "seed:qa-demo": "tsx src/scripts/seed-qa-demo.ts"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"

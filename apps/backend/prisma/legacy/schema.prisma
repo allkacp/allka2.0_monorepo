@@ -3,8 +3,10 @@
 // (sprint de produtos, bloco 1/6)
 //
 // Banco SEPARADO (`allka_legacy`), árvore de migrations PRÓPRIA e independente
-// da operacional (a operacional segue com o bloqueador do BOM em `0_baseline`;
-// esta aqui nasce limpa e `migrate deploy` funciona do zero).
+// da operacional. Ambas as árvores hoje sobem do zero com `migrate deploy`
+// limpo — a operacional foi rebaselinada em 2026-09-08 (ver
+// docs/migrations-baseline-2026-09.md); esta aqui já nascia limpa desde o
+// bloco 1/6.
 //
 // A aplicação conecta neste banco com credencial SOMENTE LEITURA
 // (`LEGACY_DATABASE_URL`). A escrita (importador offline) usa

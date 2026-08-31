@@ -1971,9 +1971,19 @@ export function UserViewSlidePanel({
           {/* Tab Navigation - Fixed */}
           <div className="flex-shrink-0 bg-white px-[50px] pt-0 pb-[10px] overflow-x-auto">
             {(() => {
+              // "Permissões" gerencia perfil de acesso ADMIN, vínculo com
+              // outras empresas e permissões por projeto — função exclusiva
+              // de administração. Só quem está OLHANDO como admin/partner
+              // (viewerRole, nunca o tipo de conta do usuário sendo exibido)
+              // pode ver essa aba; caso contrário um usuário comum veria e
+              // poderia tentar editar seu próprio nível de acesso global no
+              // autoatendimento "Meu Perfil".
+              const canSeePermissoes = viewerRole === "admin" || viewerRole === "partner";
               const tabs = userAccountType === "agency" && agencyFinancial
                 ? ["visao-geral", "conta", "carteira", "seguranca"]
-                : ["visao-geral", "conta", "permissoes", "seguranca", "lgpd"];
+                : canSeePermissoes
+                  ? ["visao-geral", "conta", "permissoes", "seguranca", "lgpd"]
+                  : ["visao-geral", "conta", "seguranca", "lgpd"];
               return (
                 <TabsList className={`grid w-max gap-1 bg-transparent p-0 h-auto grid-cols-${tabs.length}`}>
                   {tabs.map((tab) => (
