@@ -117,20 +117,18 @@ async function main() {
   };
 
   try {
-    // db push (not migrate deploy) on purpose: this repo's very first
-    // migration (prisma/migrations/0_baseline/migration.sql) carries a
-    // UTF-8 BOM byte at the top of the file, which MySQL rejects as a
-    // syntax error when the SQL is actually executed from scratch — that
-    // migration was originally introduced via `migrate resolve --applied`
-    // against an already-existing real database, so this bug had never
-    // been exercised before. Editing that file isn't safe here: its
-    // checksum is already recorded as applied in the real local dev
-    // database's _prisma_migrations table, and changing the file would
-    // make a future `migrate deploy` against that real database fail on a
-    // checksum mismatch. db push sidesteps the whole migration-history
-    // chain for this disposable database — it just syncs the current
-    // schema.prisma shape directly, which is all a throwaway test database
-    // needs.
+    // db push (not migrate deploy) on purpose: even though `migrate deploy`
+    // now works cleanly from an empty database (see the single consolidated
+    // baseline migration, prisma/migrations/20260908000000_baseline_
+    // consolidated/, and docs/migrations-baseline-2026-09.md for why the
+    // old 85-migration chain was archived), db push is still faster and
+    // simpler for a throwaway per-test-run database: it syncs the current
+    // schema.prisma shape directly, with no migration-history bookkeeping
+    // to manage for something that gets dropped a few seconds later. This
+    // is never used for QA/production — those always go through
+    // `migrate deploy` against the real migrations tree (see the docs
+    // above for the exact procedure for a brand-new vs. an existing
+    // database).
     run(
       process.execPath,
       [

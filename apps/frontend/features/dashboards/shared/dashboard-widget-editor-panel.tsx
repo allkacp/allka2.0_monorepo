@@ -4,6 +4,7 @@
 // (agency/company/leader/partner/admin) — extraído pra ser literalmente o
 // mesmo componente usado ali E no editor de template
 // (/admin/dashboard-templates), em vez de um look-alike reconstruído.
+import { useState } from "react";
 import {
   LayoutGrid,
   GripVertical,
@@ -19,6 +20,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { useTelaEstreita } from "@/hooks/useTelaEstreita";
+import { ConfirmationDialog } from "@/components/confirmation-dialog";
 import type { WidgetState } from "./dashboard-common";
 import { EDITOR_GRADIENT_MAP, type DashboardWidgetEditor, type EditorWidgetLibraryItem } from "./dashboard-widget-editor";
 
@@ -80,6 +82,16 @@ export function DashboardWidgetEditorBody({
   // Mesmo componente/estado em ambos os casos — só a interação muda.
   const isMobile = useTelaEstreita();
 
+  // Remoção de widget: confirmação dupla (ver ConfirmationDialog). O clique
+  // no ícone de lixeira só tirava o widget de `draftWidgets` na hora, sem
+  // confirmação nenhuma — e o aviso do modo "remover" prometia algo que não
+  // era verdade ("remover permanentemente"): esta remoção é só do rascunho
+  // (draftWidgets); nada é salvo até o clique em "Salvar" no rodapé, e
+  // "Cancelar" descarta a remoção junto com qualquer outra mudança da
+  // sessão de edição. Nenhum dado do próprio widget é apagado — só a
+  // personalização do painel.
+  const [removingWidget, setRemovingWidget] = useState<{ id: string; title: string } | null>(null);
+
   return (
     <div className={cn("flex flex-1 overflow-hidden", isMobile ? "flex-col" : "flex-row")}>
       <div
@@ -101,7 +113,7 @@ export function DashboardWidgetEditorBody({
           <div className="mb-5 flex items-center gap-2.5 px-4 py-2.5 bg-red-50 dark:bg-red-950/30 rounded-xl border border-red-200 dark:border-red-800">
             <Trash2 className="h-3.5 w-3.5 text-red-500 shrink-0" />
             <p className="text-xs text-red-700 dark:text-red-300 font-medium">
-              Modo remoção ativo — clique no ícone de lixeira pra remover um widget permanentemente
+              Modo remoção ativo — clique no ícone de lixeira pra remover um widget desta personalização
             </p>
           </div>
         )}
@@ -245,8 +257,9 @@ export function DashboardWidgetEditorBody({
                         onMouseDown={(e) => e.stopPropagation()}
                         onClick={(e) => {
                           e.stopPropagation();
-                          editor.removeWidget(widget.id);
+                          setRemovingWidget({ id: widget.id, title });
                         }}
+                        aria-label={`Remover widget ${title}`}
                         className="flex items-center gap-1 text-[10px] font-semibold text-red-600 bg-red-50 dark:bg-red-950/40 hover:bg-red-100 rounded-md px-2 py-1 transition-colors"
                       >
                         <Trash2 className="h-3 w-3" />
@@ -310,6 +323,25 @@ export function DashboardWidgetEditorBody({
           </div>
         </div>
       )}
+
+      <ConfirmationDialog
+        open={removingWidget !== null}
+        onClose={() => setRemovingWidget(null)}
+        onConfirm={() => {
+          if (removingWidget) editor.removeWidget(removingWidget.id);
+        }}
+        title="Remover widget"
+        message="Isso remove o widget desta personalização de painel — nenhum dado apresentado por ele é apagado."
+        twoStep
+        attention
+        targetName={removingWidget?.title}
+        targetDetail="Personalização deste painel"
+        consequences={[
+          "A mudança só é salva de verdade quando você clicar em \"Salvar\" no rodapé do editor.",
+          "Antes de salvar, dá pra desfazer clicando em \"Cancelar\" (descarta tudo desta sessão) ou adicionando o mesmo widget de novo pelo modo \"Adicionar\".",
+        ]}
+        finalConfirmText="Remover widget do painel"
+      />
     </div>
   );
 }

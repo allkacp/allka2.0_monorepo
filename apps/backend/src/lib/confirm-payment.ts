@@ -3,6 +3,7 @@ import type { DbClient } from "./project-scope";
 import { projectVisibleToUser } from "./project-scope";
 import { recalculateProjectValue } from "./project-value";
 import { gerarTarefasDoProjeto, type GerarTarefasResult } from "./generate-tasks";
+import { gerarTarefasCatalog2DoProjeto, mergeGerarTarefasResults } from "./generate-tasks-catalog2";
 
 export class PaymentValidationError extends Error {
   statusCode: number;
@@ -235,12 +236,32 @@ export async function confirmPaymentAndGenerateProjectTasks(
   });
 
   // gera tarefas + etapas exclusivamente a partir dos PaymentItems recém-criados
-  const tasksResult = await gerarTarefasDoProjeto(tx, project.id, {
-    paymentId: confirmedPayment.id,
-    paidAt,
-    billingCycleKey: cycleKey,
-    projectProductIds: validProducts.map((p) => p.id),
-  });
+  // — dividido por origem: catálogo antigo (CatalogTask) e catalog2
+  // (Catalog2Task), cada um com seu próprio motor de materialização (ver
+  // generate-tasks.ts e generate-tasks-catalog2.ts). Um mesmo Payment pode
+  // cobrir produtos das duas origens ao mesmo tempo (ex.: aditivo catalog2
+  // num projeto que também tem produtos legados pendentes).
+  const legacyProductIds = validProducts.filter((p) => p.product_id != null).map((p) => p.id);
+  const catalog2ProductIds = validProducts.filter((p) => p.catalog2_product_id != null).map((p) => p.id);
+
+  let tasksResult: GerarTarefasResult | null = null;
+  if (legacyProductIds.length > 0) {
+    tasksResult = await gerarTarefasDoProjeto(tx, project.id, {
+      paymentId: confirmedPayment.id,
+      paidAt,
+      billingCycleKey: cycleKey,
+      projectProductIds: legacyProductIds,
+    });
+  }
+  if (catalog2ProductIds.length > 0) {
+    const catalog2Result = await gerarTarefasCatalog2DoProjeto(tx, project.id, {
+      paymentId: confirmedPayment.id,
+      paidAt,
+      billingCycleKey: cycleKey,
+      projectProductIds: catalog2ProductIds,
+    });
+    tasksResult = mergeGerarTarefasResults(tasksResult, catalog2Result);
+  }
 
   const updatedProject = await tx.project.update({
     where: { id: project.id },

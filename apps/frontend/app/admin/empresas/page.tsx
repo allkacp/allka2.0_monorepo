@@ -14,7 +14,7 @@ import type {
   CompanyStatusFilter,
 } from "@/types/company";
 import { useItemsPerPage } from "@/lib/use-items-per-page";
-import { useNavigate, useParams } from "react-router-dom";
+import { useNavigate, useParams, useLocation } from "react-router-dom";
 import { PageLoader } from "@/components/ui/loading";
 import {
   STANDARD_SHELL_PANEL_CLASS,
@@ -168,6 +168,12 @@ const EMPTY_ADVANCED_FILTERS = {
   statuses: ["active"] as string[],
   accountTypes: [] as string[],
   partnerLevels: [] as string[],
+  // Subfiltro de Partner — só faz sentido dentro do tipo Agência (Partner
+  // não é um tipo principal, é um upgrade que uma Agency recebe, ver
+  // company.partner_status). "only"/"non" filtram por partner_status
+  // active/invited; "all" não filtra. Sempre volta pra "all" ao trocar de
+  // tipo principal — ver applyTypeFilter.
+  agencyPartnerFilter: "all" as "all" | "only" | "non",
   minUsers: "",
   maxUsers: "",
   minProjects: "",
@@ -573,6 +579,14 @@ export default function EmpresasPage() {
     updateCompany,
     deleteCompany: apiDeleteCompany,
   } = useCompanies();
+  // Fica `true` depois da primeira vez que `companiesLoading` termina (com
+  // resultado ou vazio) e nunca mais volta a `false` — é o que distingue
+  // "carregando pela primeira vez" (deve mostrar o loader de página cheia)
+  // de "recarregando depois de uma ação" (não deve: ver o gate mais abaixo).
+  const hasLoadedCompaniesOnceRef = useRef(false);
+  useEffect(() => {
+    if (!companiesLoading) hasLoadedCompaniesOnceRef.current = true;
+  }, [companiesLoading]);
   // Agency/Nomad são entidades Prisma separadas de Company — sem hook
   // próprio, buscadas em paralelo aqui e mescladas na mesma lista via o
   // campo "type" (ver useEffect de merge abaixo), pra essa tela virar o
@@ -661,6 +675,7 @@ export default function EmpresasPage() {
   const [footerHeight, setFooterHeight] = useState(40);
   const navigate = useNavigate();
   const { empresaId: urlEmpresaId } = useParams<{ empresaId?: string }>();
+  const location = useLocation();
 
   // ── Column visibility ──────────────────────────────────────────
   type ColKey =
@@ -1100,8 +1115,168 @@ export default function EmpresasPage() {
   >({});
   const [deleteDialogLoadingMembers, setDeleteDialogLoadingMembers] = useState(false);
 
+  // Empresa Nomad (CNPJ, gerida junto de Company/Agência — não um perfil
+  // profissional isolado): desativar/reativar (reversível, 1 etapa) e
+  // excluir (irreversível, 2 etapas) são ações DISTINTAS da exclusão
+  // genérica de empresa — nenhuma das duas apaga a conta de login
+  // vinculada (ver DELETE /api/nomades/:id).
+  const [nomadStatusDialog, setNomadStatusDialog] = useState<{
+    open: boolean;
+    nomadId: string | null;
+    name: string;
+    email: string;
+    willActivate: boolean;
+  }>({ open: false, nomadId: null, name: "", email: "", willActivate: false });
+
+  const [nomadRemoveDialog, setNomadRemoveDialog] = useState<{
+    open: boolean;
+    nomadId: string | null;
+    name: string;
+    email: string;
+    relations: {
+      walletTransactions: number;
+      hasBankAccount: boolean;
+      qualifications: number;
+      withdrawalRequests: number;
+      taskExecutions: number;
+    } | null;
+  }>({ open: false, nomadId: null, name: "", email: "", relations: null });
+
+  const maskEmailForConfirmation = (email: string) => {
+    const [local, domain] = email.split("@");
+    if (!domain) return email;
+    const visible = local.slice(0, 2);
+    return `${visible}${"*".repeat(Math.max(local.length - visible.length, 3))}@${domain}`;
+  };
+
+  const requestToggleNomadStatus = (company: Company) => {
+    if (!company._apiId) return;
+    setNomadStatusDialog({
+      open: true,
+      nomadId: company._apiId,
+      name: company.name,
+      email: company.email || "",
+      willActivate: company.status !== "active",
+    });
+  };
+
+  const confirmToggleNomadStatus = async () => {
+    if (!nomadStatusDialog.nomadId) return;
+    const newStatus = nomadStatusDialog.willActivate ? "ativo" : "inativo";
+    await apiClient.updateNomadeStatus(nomadStatusDialog.nomadId, newStatus);
+    // Atualiza só o registro afetado no estado local (que alimenta a
+    // lista/tabela via o useEffect de merge) em vez de um refetch — sem
+    // isso, `refetchAllOrgTypes()` reacende `companiesLoading`/o loading do
+    // fetch de agencies+nomades e a tela inteira pisca. Filtro, busca,
+    // paginação e rolagem continuam intactos porque nada mais na árvore
+    // remonta. Se a chamada acima já não tiver lançado, é seguro assumir
+    // sucesso — não precisa de refetch pra "confirmar" o que a própria
+    // resposta 2xx já confirmou.
+    setApiNomades((prev) =>
+      prev.map((n) => (n.id === nomadStatusDialog.nomadId ? { ...n, status: newStatus } : n)),
+    );
+    toast({
+      title: nomadStatusDialog.willActivate ? "Empresa Nomad reativada" : "Empresa Nomad desativada",
+      description: nomadStatusDialog.willActivate
+        ? `"${nomadStatusDialog.name}" volta a operar normalmente na plataforma.`
+        : `"${nomadStatusDialog.name}" não poderá operar como Nomad enquanto estiver desativada. O CNPJ, o histórico e a carteira continuam intactos — reative a qualquer momento por aqui.`,
+    });
+    // Só o contador do badge da sidebar (fetch independente, não remonta
+    // nada) — ver comentário em refetchAllOrgTypes.
+    window.dispatchEvent(new Event("allka:admin-counts-changed"));
+  };
+
+  const requestRemoveNomadProfile = async (company: Company) => {
+    if (!company._apiId) return;
+    try {
+      const full: any = await apiClient.getNomade(company._apiId);
+      setNomadRemoveDialog({
+        open: true,
+        nomadId: company._apiId,
+        name: company.name,
+        email: company.email || "",
+        relations: {
+          walletTransactions: full?._count?.wallet_transactions ?? 0,
+          hasBankAccount: !!full?.bank_account,
+          qualifications: full?._count?.qualifications ?? 0,
+          withdrawalRequests: full?._count?.withdrawal_requests ?? 0,
+          taskExecutions: full?._count?.task_executions ?? 0,
+        },
+      });
+    } catch (error: any) {
+      toast({
+        title: "Não foi possível verificar a empresa",
+        description: error.message,
+        variant: "destructive",
+      });
+    }
+  };
+
+  const confirmRemoveNomadProfile = async () => {
+    if (!nomadRemoveDialog.nomadId) return;
+    await apiClient.deleteNomade(nomadRemoveDialog.nomadId);
+    // Remove só esse registro do estado local — mesmo raciocínio do
+    // toggle de status acima: sem refetch, sem piscar a tela. O registro
+    // some da lista mesmo que o filtro atual continuasse mostrando-o
+    // (agora não existe mais), e o total (derivado de filteredCompanies)
+    // se ajusta sozinho.
+    setApiNomades((prev) => prev.filter((n) => n.id !== nomadRemoveDialog.nomadId));
+    toast({
+      title: "Empresa Nomad excluída",
+      description: `O cadastro empresarial de "${nomadRemoveDialog.name}" foi removido. A conta de login vinculada não foi apagada — ela ficou desativada, exatamente como um bloqueio.`,
+    });
+    window.dispatchEvent(new Event("allka:admin-counts-changed"));
+  };
+
+  const nomadRemoveRelationsList = (relations: typeof nomadRemoveDialog.relations) => {
+    if (!relations) return [];
+    const items: string[] = [];
+    if (relations.walletTransactions > 0) items.push(`${relations.walletTransactions} lançamento(s) de carteira`);
+    if (relations.hasBankAccount) items.push("conta bancária cadastrada");
+    if (relations.qualifications > 0) items.push(`${relations.qualifications} qualificação(ões)`);
+    if (relations.withdrawalRequests > 0) items.push(`${relations.withdrawalRequests} solicitação(ões) de saque`);
+    if (relations.taskExecutions > 0) items.push(`${relations.taskExecutions} tarefa(s) executada(s)`);
+    return items;
+  };
+
   // Filtros avançados
-  const [advancedFilters, setAdvancedFilters] = useState(EMPTY_ADVANCED_FILTERS);
+  // `?type=nomad|company|agency` chega aqui via redirecionamento da rota
+  // antiga /admin/nomades (ver App.tsx) ou de um clique nos chips abaixo —
+  // ver applyTypeFilter. `?partner=only|non` só se aplica junto de
+  // `type=agency` (Partner é subfiltro de Agência, nunca tipo principal).
+  const readTypeFilterFromUrl = (search: string) => {
+    const params = new URLSearchParams(search);
+    const typeParam = params.get("type");
+    const partnerParam = params.get("partner");
+    if (typeParam && ["company", "agency", "nomad"].includes(typeParam)) {
+      const agencyPartnerFilter =
+        typeParam === "agency" && (partnerParam === "only" || partnerParam === "non")
+          ? partnerParam
+          : "all";
+      return { types: [typeParam], agencyPartnerFilter: agencyPartnerFilter as "all" | "only" | "non" };
+    }
+    return { types: [] as string[], agencyPartnerFilter: "all" as "all" | "only" | "non" };
+  };
+  const [advancedFilters, setAdvancedFilters] = useState(() => ({
+    ...EMPTY_ADVANCED_FILTERS,
+    ...readTypeFilterFromUrl(location.search),
+  }));
+
+  // Sincroniza o filtro de tipo/partner com a URL quando ela muda por fora
+  // de um clique nos chips — voltar/avançar do navegador, ou editar a URL
+  // direto. Um clique nos chips já deixa o estado e a URL consistentes na
+  // hora (ver applyTypeFilter), então esta comparação evita um loop:
+  // só chama setAdvancedFilters quando o valor realmente muda.
+  useEffect(() => {
+    const next = readTypeFilterFromUrl(location.search);
+    setAdvancedFilters((prev) => {
+      const sameType = prev.types.length === next.types.length && prev.types[0] === next.types[0];
+      const samePartner = prev.agencyPartnerFilter === next.agencyPartnerFilter;
+      if (sameType && samePartner) return prev;
+      return { ...prev, types: next.types, agencyPartnerFilter: next.agencyPartnerFilter };
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [location.search]);
 
   // Gerenciamento de filtros salvos
   const [savedFilters, setSavedFilters] = useState<
@@ -1338,6 +1513,42 @@ export default function EmpresasPage() {
     setCompanies([...mapped, ...mappedAgencies, ...mappedNomades]);
   }, [apiCompanies, apiAgencies, apiNomades]);
 
+  // ── Fonte única de verdade pra "este registro pertence ao filtro de tipo
+  // principal selecionado" (Nomad/Agency/Company/Todos + subfiltro Partner
+  // dentro de Agency). Usa SÓ `company.type` (já normalizado uma vez só, no
+  // merge Company/Agency/Nomade acima — nunca nome, e-mail, badge ou ID) e
+  // `company.partner_status` (exclusivo do subfiltro Partner). Extraída
+  // como função pura + useMemo porque TODA lista que aparece na tela
+  // enquanto um filtro de tipo está ativo precisa passar por ela — a tabela
+  // (via `filteredCompanies` abaixo) E as sugestões de busca
+  // (`searchSuggestions`, logo abaixo). Antes, `searchSuggestions` lia
+  // `companies` sem filtro nenhum e podia sugerir uma Agency com a aba
+  // Nomad selecionada — a tabela já filtrava certo, mas a caixa de sugestão
+  // não, e é isso que o responsável viu ao digitar uma busca com o filtro
+  // Nomad ativo.
+  const matchesTypeAndPartnerFilter = useCallback(
+    (company: Company) => {
+      if (advancedFilters.types.length > 0 && !advancedFilters.types.includes(company.type)) {
+        return false;
+      }
+      if (
+        advancedFilters.types.length === 1 &&
+        advancedFilters.types[0] === "agency" &&
+        advancedFilters.agencyPartnerFilter !== "all"
+      ) {
+        const isPartner = company.partner_status === "active" || company.partner_status === "invited";
+        if (advancedFilters.agencyPartnerFilter === "only" ? !isPartner : isPartner) return false;
+      }
+      return true;
+    },
+    [advancedFilters.types, advancedFilters.agencyPartnerFilter],
+  );
+
+  const typeFilteredCompanies = useMemo(
+    () => companies.filter(matchesTypeAndPartnerFilter),
+    [companies, matchesTypeAndPartnerFilter],
+  );
+
   // ── Search autocomplete (name/ID suggestions as you type) ────────────────
   const [searchFocused, setSearchFocused] = useState(false);
   const searchBoxRef = useRef<HTMLDivElement>(null);
@@ -1357,7 +1568,10 @@ export default function EmpresasPage() {
   const searchSuggestions = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
     if (!q) return [];
-    return companies
+    // Parte de `typeFilteredCompanies`, não de `companies` — nunca sugerir
+    // um registro de um tipo diferente do filtro principal ativo (ver
+    // comentário acima de `matchesTypeAndPartnerFilter`).
+    return typeFilteredCompanies
       .filter((c) => {
         const idCode = `emp_${c.sequence_number ?? ""}`;
         return (
@@ -1365,7 +1579,7 @@ export default function EmpresasPage() {
         );
       })
       .slice(0, 6);
-  }, [companies, searchQuery]);
+  }, [typeFilteredCompanies, searchQuery]);
   useEffect(() => {
     const onClickOutside = (e: MouseEvent) => {
       if (
@@ -1380,8 +1594,13 @@ export default function EmpresasPage() {
   }, []);
 
   // ── Filtered companies (derived — useMemo ensures instant reactive updates) ──
+  // Parte de `typeFilteredCompanies` (tipo principal + Partner já aplicados)
+  // — busca, CNPJ, status etc. só afinam dentro do tipo já selecionado,
+  // nunca revertem pra fora dele. Isso também é o que garante "filtro antes
+  // da paginação": a paginação (`paginatedCompanies` abaixo) sempre faz
+  // `.slice()` em cima do resultado JÁ filtrado por tipo e por tudo mais.
   const filteredCompanies = useMemo(() => {
-    let filtered = companies;
+    let filtered: Company[] = typeFilteredCompanies;
 
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase().trim();
@@ -1451,11 +1670,8 @@ export default function EmpresasPage() {
       );
     }
 
-    if (advancedFilters.types.length > 0) {
-      filtered = filtered.filter((company) =>
-        advancedFilters.types.includes(company.type),
-      );
-    }
+    // Tipo principal e subfiltro Partner já foram aplicados em
+    // `typeFilteredCompanies`, acima — não repetir aqui.
 
     if (advancedFilters.statuses.length > 0) {
       filtered = filtered.filter((company) =>
@@ -1534,7 +1750,7 @@ export default function EmpresasPage() {
     }
 
     return filtered;
-  }, [searchQuery, companies, advancedFilters]);
+  }, [searchQuery, typeFilteredCompanies, advancedFilters]);
 
   // Reset to page 1 whenever filter criteria change
   useEffect(() => {
@@ -2072,8 +2288,6 @@ export default function EmpresasPage() {
         try {
           if (company.type === "agency") {
             await apiClient.deleteAgency(company._apiId);
-          } else if (company.type === "nomad") {
-            await apiClient.deleteNomade(company._apiId);
           } else {
             const userActions = deleteDialogMembers.map((m) => ({
               userId: m.id,
@@ -2132,12 +2346,43 @@ export default function EmpresasPage() {
     return colors[status] as any;
   };
 
+  // Troca o tipo principal (chips "Todos/Company/Agency/Nomad") e mantém a
+  // URL coerente com o estado — `navigate` aqui NUNCA remonta a página (é a
+  // mesma rota /admin/empresas, só a query string muda; remontar só
+  // aconteceria trocando pra /admin/empresas/:id, ver handleViewCompany).
+  // Sempre limpa o subfiltro Partner: ele só faz sentido dentro de Agência.
+  const applyTypeFilter = (t: CompanyType) => {
+    setAdvancedFilters((prev) => ({
+      ...prev,
+      types: t === "all" ? [] : [t],
+      agencyPartnerFilter: "all",
+    }));
+    const params = new URLSearchParams();
+    if (t !== "all") params.set("type", t);
+    navigate({ pathname: "/admin/empresas", search: params.toString() ? `?${params.toString()}` : "" });
+  };
+
+  // Subfiltro Partner — só chamado com Agência já selecionada (o controle
+  // some da tela quando outro tipo está ativo, ver renderização abaixo).
+  const applyAgencyPartnerFilter = (value: "all" | "only" | "non") => {
+    setAdvancedFilters((prev) => ({ ...prev, agencyPartnerFilter: value }));
+    const params = new URLSearchParams({ type: "agency" });
+    if (value !== "all") params.set("partner", value);
+    navigate({ pathname: "/admin/empresas", search: `?${params.toString()}` });
+  };
+
   // Stat cards / sparkline / cores agora vêm do shell compartilhado
   // (components/standard-page-shell.tsx) — ver StandardMetricCard acima.
 
   // avatar helpers are module-scope (companyInitials / avatarColor / CompanyAvatar)
 
-  if (companiesLoading) {
+  // Só a carga INICIAL bloqueia a tela inteira — um refetch depois disso
+  // (após ativar/desativar, salvar, excluir) não pode mais substituir a
+  // página inteira por um loader: é exatamente esse gate incondicional que
+  // causava o "recarregamento completo" que este lote corrige. Uma vez que
+  // a lista carregou pela primeira vez (com resultado ou vazia), fica assim
+  // pro resto da vida do componente.
+  if (companiesLoading && !hasLoadedCompaniesOnceRef.current) {
     return <PageLoader text="Carregando empresas…" />;
   }
 
@@ -2438,7 +2683,9 @@ export default function EmpresasPage() {
             )}
           </div>
 
-          {/* Quick type filter chips — All/Company/Agency/Nomad/Partner */}
+          {/* Quick type filter chips — Todos/Company/Agency/Nomad. Partner NÃO
+              é um chip principal aqui — é subfiltro exclusivo de Agência,
+              ver bloco logo abaixo. */}
           <div
             className="flex items-center gap-1.5 flex-shrink-0"
             role="group"
@@ -2451,7 +2698,7 @@ export default function EmpresasPage() {
                   key={t}
                   type="button"
                   aria-pressed={active}
-                  onClick={() => setAdvancedFilters({ ...advancedFilters, types: t === "all" ? [] : [t] })}
+                  onClick={() => applyTypeFilter(t)}
                   className={`px-3 py-1.5 rounded-full text-xs font-medium border transition-colors whitespace-nowrap ${
                     active
                       ? "text-white border-transparent"
@@ -2464,6 +2711,45 @@ export default function EmpresasPage() {
               );
             })}
           </div>
+
+          {/* Subfiltro Partner — só aparece com Agência selecionada. Visual
+              claramente subordinado (menor, indentado, ícone de prêmio) pra
+              nunca parecer um 5º tipo principal no mesmo nível dos chips
+              acima. Some e limpa o próprio estado assim que outro tipo é
+              escolhido (ver applyTypeFilter). */}
+          {advancedFilters.types.length === 1 && advancedFilters.types[0] === "agency" && (
+            <div
+              className="flex items-center gap-1 flex-shrink-0 pl-1.5 ml-0.5 border-l border-slate-200 dark:border-slate-700"
+              role="group"
+              aria-label="Subfiltro Partner dentro de Agência"
+            >
+              {(
+                [
+                  { value: "all", label: "Todas as Agências" },
+                  { value: "only", label: "Partners" },
+                  { value: "non", label: "Não Partners" },
+                ] as const
+              ).map((opt) => {
+                const active = advancedFilters.agencyPartnerFilter === opt.value;
+                return (
+                  <button
+                    key={opt.value}
+                    type="button"
+                    aria-pressed={active}
+                    onClick={() => applyAgencyPartnerFilter(opt.value)}
+                    className={`px-2.5 py-1 rounded-full text-[11px] font-medium border transition-colors whitespace-nowrap inline-flex items-center gap-1 ${
+                      active
+                        ? "bg-amber-100 dark:bg-amber-900/30 border-amber-300 dark:border-amber-700 text-amber-800 dark:text-amber-300"
+                        : "bg-white dark:bg-slate-800 text-slate-500 dark:text-slate-400 border-slate-200 dark:border-slate-700 hover:border-amber-300"
+                    }`}
+                  >
+                    {opt.value !== "all" && <Award className="h-2.5 w-2.5" />}
+                    {opt.label}
+                  </button>
+                );
+              })}
+            </div>
+          )}
 
           {/* Limpar filtros — aparece quando QUALQUER filtro real está ativo,
               incluindo os campos que só existem dentro do modal "Filtros
@@ -2879,25 +3165,82 @@ export default function EmpresasPage() {
                               </Tooltip>
                             </TooltipProvider>
                           )}
-                        {/* Excluir empresa */}
-                        <TooltipProvider delayDuration={400}>
-                          <Tooltip>
-                            <TooltipTrigger asChild>
-                              <button
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  handleDeleteCompany(company.id);
-                                }}
-                                className="h-[26px] w-[26px] flex items-center justify-center rounded-[8px] bg-white dark:bg-slate-800 border border-[#e8edf5] dark:border-slate-700 text-red-500 dark:text-red-400 shadow-[0_4px_10px_rgba(15,23,42,0.06)] hover:bg-gradient-to-br hover:from-[#2558FF] hover:via-[#6E2C96] hover:to-[#D92293] hover:text-white dark:hover:text-[#0a1628] hover:border-transparent hover:shadow-[0_8px_18px_rgba(15,23,42,0.18)] hover:-translate-y-px transition-all duration-150"
-                              >
-                                <Trash2 className="h-3.5 w-3.5" />
-                              </button>
-                            </TooltipTrigger>
-                            <TooltipContent className="text-xs font-medium">
-                              Excluir empresa
-                            </TooltipContent>
-                          </Tooltip>
-                        </TooltipProvider>
+                        {/* Nomad é uma empresa (CNPJ), não um perfil profissional
+                            isolado — duas ações distintas, nunca "Excluir
+                            empresa definitivamente" sem checar vínculos, ver
+                            DELETE /api/nomades/:id. */}
+                        {company.type === "nomad" ? (
+                          <>
+                            <TooltipProvider delayDuration={400}>
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      requestToggleNomadStatus(company);
+                                    }}
+                                    aria-label={
+                                      company.status === "active"
+                                        ? `Desativar empresa Nomad ${company.name}`
+                                        : `Reativar empresa Nomad ${company.name}`
+                                    }
+                                    className={`h-[26px] w-[26px] flex items-center justify-center rounded-[8px] bg-white dark:bg-slate-800 border border-[#e8edf5] dark:border-slate-700 shadow-[0_4px_10px_rgba(15,23,42,0.06)] hover:bg-gradient-to-br hover:from-[#2558FF] hover:via-[#6E2C96] hover:to-[#D92293] hover:text-white dark:hover:text-[#0a1628] hover:border-transparent hover:shadow-[0_8px_18px_rgba(15,23,42,0.18)] hover:-translate-y-px transition-all duration-150 ${
+                                      company.status === "active" ? "text-amber-500 dark:text-amber-400" : "text-emerald-500 dark:text-emerald-400"
+                                    }`}
+                                  >
+                                    {company.status === "active" ? (
+                                      <PauseCircle className="h-3.5 w-3.5" />
+                                    ) : (
+                                      <CheckCircle className="h-3.5 w-3.5" />
+                                    )}
+                                  </button>
+                                </TooltipTrigger>
+                                <TooltipContent className="text-xs font-medium">
+                                  {company.status === "active" ? "Desativar empresa Nomad" : "Reativar empresa Nomad"}
+                                </TooltipContent>
+                              </Tooltip>
+                            </TooltipProvider>
+                            <TooltipProvider delayDuration={400}>
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      requestRemoveNomadProfile(company);
+                                    }}
+                                    aria-label={`Excluir empresa Nomad ${company.name}`}
+                                    className="h-[26px] w-[26px] flex items-center justify-center rounded-[8px] bg-white dark:bg-slate-800 border border-[#e8edf5] dark:border-slate-700 text-red-500 dark:text-red-400 shadow-[0_4px_10px_rgba(15,23,42,0.06)] hover:bg-gradient-to-br hover:from-[#2558FF] hover:via-[#6E2C96] hover:to-[#D92293] hover:text-white dark:hover:text-[#0a1628] hover:border-transparent hover:shadow-[0_8px_18px_rgba(15,23,42,0.18)] hover:-translate-y-px transition-all duration-150"
+                                  >
+                                    <Trash2 className="h-3.5 w-3.5" />
+                                  </button>
+                                </TooltipTrigger>
+                                <TooltipContent className="text-xs font-medium">
+                                  Excluir empresa Nomad
+                                </TooltipContent>
+                              </Tooltip>
+                            </TooltipProvider>
+                          </>
+                        ) : (
+                          /* Excluir empresa */
+                          <TooltipProvider delayDuration={400}>
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleDeleteCompany(company.id);
+                                  }}
+                                  className="h-[26px] w-[26px] flex items-center justify-center rounded-[8px] bg-white dark:bg-slate-800 border border-[#e8edf5] dark:border-slate-700 text-red-500 dark:text-red-400 shadow-[0_4px_10px_rgba(15,23,42,0.06)] hover:bg-gradient-to-br hover:from-[#2558FF] hover:via-[#6E2C96] hover:to-[#D92293] hover:text-white dark:hover:text-[#0a1628] hover:border-transparent hover:shadow-[0_8px_18px_rgba(15,23,42,0.18)] hover:-translate-y-px transition-all duration-150"
+                                >
+                                  <Trash2 className="h-3.5 w-3.5" />
+                                </button>
+                              </TooltipTrigger>
+                              <TooltipContent className="text-xs font-medium">
+                                Excluir empresa
+                              </TooltipContent>
+                            </Tooltip>
+                          </TooltipProvider>
+                        )}
                       </div>
                     </td>
                   )}
@@ -4533,17 +4876,48 @@ export default function EmpresasPage() {
                     <Pencil className="h-3.5 w-3.5 mr-1.5" />
                     Editar empresa
                   </Button>
-                  <Button
-                    variant="outline"
-                    className="border-rose-200 dark:border-rose-900/50 text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/30"
-                    onClick={() => {
-                      closeInfoPanel();
-                      handleDeleteCompany(company.id);
-                    }}
-                  >
-                    <Trash2 className="h-3.5 w-3.5 mr-1.5" />
-                    Excluir empresa
-                  </Button>
+                  {company.type === "nomad" ? (
+                    <>
+                      <Button
+                        variant="outline"
+                        className="border-amber-200 dark:border-amber-900/50 text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-950/30"
+                        onClick={() => {
+                          closeInfoPanel();
+                          requestToggleNomadStatus(company);
+                        }}
+                      >
+                        {company.status === "active" ? (
+                          <PauseCircle className="h-3.5 w-3.5 mr-1.5" />
+                        ) : (
+                          <CheckCircle className="h-3.5 w-3.5 mr-1.5" />
+                        )}
+                        {company.status === "active" ? "Desativar empresa Nomad" : "Reativar empresa Nomad"}
+                      </Button>
+                      <Button
+                        variant="outline"
+                        className="border-rose-200 dark:border-rose-900/50 text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/30"
+                        onClick={() => {
+                          closeInfoPanel();
+                          requestRemoveNomadProfile(company);
+                        }}
+                      >
+                        <Trash2 className="h-3.5 w-3.5 mr-1.5" />
+                        Excluir empresa Nomad
+                      </Button>
+                    </>
+                  ) : (
+                    <Button
+                      variant="outline"
+                      className="border-rose-200 dark:border-rose-900/50 text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/30"
+                      onClick={() => {
+                        closeInfoPanel();
+                        handleDeleteCompany(company.id);
+                      }}
+                    >
+                      <Trash2 className="h-3.5 w-3.5 mr-1.5" />
+                      Excluir empresa
+                    </Button>
+                  )}
                 </div>
               }
             >
@@ -5378,6 +5752,56 @@ export default function EmpresasPage() {
         confirmText="Excluir"
         cancelText="Cancelar"
         destructive
+      />
+
+      {/* Empresa Nomad — desativar/reativar (reversível, 1 etapa). Nomad é um
+          tipo de empresa (CNPJ), gerida junto de Company/Agência — nunca um
+          perfil profissional isolado. */}
+      <ConfirmationDialog
+        open={nomadStatusDialog.open}
+        onClose={() => setNomadStatusDialog((s) => ({ ...s, open: false }))}
+        onConfirm={confirmToggleNomadStatus}
+        title={nomadStatusDialog.willActivate ? "Reativar empresa Nomad" : "Desativar empresa Nomad"}
+        message={
+          nomadStatusDialog.willActivate
+            ? "A empresa Nomad volta a operar na plataforma imediatamente, com o mesmo CNPJ e histórico de antes."
+            : "A empresa Nomad não poderá operar nem atuar em tarefas enquanto estiver desativada. O CNPJ, o histórico e a carteira continuam intactos — é possível reativar a qualquer momento por aqui."
+        }
+        targetName={nomadStatusDialog.name}
+        targetDetail={nomadStatusDialog.email ? maskEmailForConfirmation(nomadStatusDialog.email) : undefined}
+        consequences={
+          nomadStatusDialog.willActivate
+            ? ["A empresa Nomad consegue fazer login e receber tarefas normalmente de novo."]
+            : ["O login fica bloqueado até alguém reativar por aqui.", "Nenhum dado é apagado."]
+        }
+        confirmText={nomadStatusDialog.willActivate ? "Reativar" : "Desativar"}
+        cancelText="Cancelar"
+        destructive={!nomadStatusDialog.willActivate}
+        attention={nomadStatusDialog.willActivate}
+      />
+
+      {/* Empresa Nomad — excluir (irreversível, 2 etapas) — nunca apaga a
+          conta de login vinculada, só o cadastro empresarial, ver
+          DELETE /api/nomades/:id. Bloqueada no backend se houver carteira,
+          conta bancária, qualificações, saques ou tarefas vinculadas. */}
+      <ConfirmationDialog
+        open={nomadRemoveDialog.open}
+        onClose={() => setNomadRemoveDialog({ open: false, nomadId: null, name: "", email: "", relations: null })}
+        onConfirm={confirmRemoveNomadProfile}
+        title="Excluir empresa Nomad"
+        message="O cadastro empresarial (CNPJ, nível, dados de cadastro) será apagado do banco de dados — a conta de login vinculada não é apagada, mas fica desativada, já que deixa de fazer sentido acessar o portal Nomad sem uma empresa por trás."
+        twoStep
+        destructive
+        targetName={nomadRemoveDialog.name}
+        targetDetail={nomadRemoveDialog.email ? maskEmailForConfirmation(nomadRemoveDialog.email) : undefined}
+        consequences={[
+          "Esta ação é permanente — o cadastro empresarial é removido de vez.",
+          "A conta de login vinculada NÃO é apagada — só fica desativada, como um bloqueio.",
+          ...(nomadRemoveRelationsList(nomadRemoveDialog.relations).length > 0
+            ? [`Vínculos encontrados: ${nomadRemoveRelationsList(nomadRemoveDialog.relations).join(", ")}.`]
+            : []),
+        ]}
+        finalConfirmText="Excluir empresa definitivamente"
       />
 
       <ConfirmationDialog

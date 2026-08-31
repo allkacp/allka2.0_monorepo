@@ -84,11 +84,15 @@ model User {
   linked_coupons                     Coupon[]
   created_clients                    Client[]                           @relation("ClientCreatedBy")
   created_projects                   Project[]                          @relation("ProjectCreatedBy")
+  archived_projects                  Project[]                          @relation("ProjectArchivedBy")
+  admin_responsible_projects         Project[]                          @relation("ProjectAdminResponsible")
   profile                            UserProfile?
   deleted_company_archives           CompanyArchive[]                   @relation("CompanyArchiveDeletedBy")
   product_feedback_override          ProductFeedbackUserOverride?
   product_feedback_group_memberships ProductFeedbackAccessGroupMember[]
   product_feedback_work_item_links   ProductFeedbackWorkItemLink[]
+  planner_columns                    PlannerColumn[]
+  planner_cards                      PlannerCard[]
   share_links                        ShareLink[]
   dashboard_templates                DashboardTemplate[]
   share_comments                     ShareComment[]
@@ -96,6 +100,11 @@ model User {
   notification_groups_owned          NotificationGroup[]                @relation("NotificationGroupOwner")
   notification_group_memberships     NotificationGroupMember[]          @relation("NotificationGroupMemberUser")
   iallka_sessions                    IallkaSession[]
+  presence                           UserPresence?
+  push_subscriptions                 PushSubscription[]
+  communication_channel_pref         UserCommunicationChannelPref?
+  banner_acknowledgements            BannerAcknowledgement[]
+  communication_deliveries           CommunicationDelivery[]
 
   // ── Rastreio da plataforma antiga ─────────────────────────────────────
   // id numérico do registro equivalente no dump legado (Dump20260423.sql).
@@ -717,6 +726,31 @@ model Project {
   created_at           DateTime        @default(now())
   updated_at           DateTime        @updatedAt
 
+  // Arquivamento (Lote reunião 2026-08: "Arquivar Projetos") — soft state,
+  // nunca exclusão física. archived_at != null é a única fonte de verdade
+  // de "está arquivado"; status (acima) não é reaproveitado pra isso, pois
+  // já tem "cancelled"/"completed" com significado próprio e distinto.
+  archived_at         DateTime?
+  archive_reason      String?   @db.Text
+  archived_by_user_id String?
+  archived_by         User?     @relation("ProjectArchivedBy", fields: [archived_by_user_id], references: [id], onDelete: SetNull)
+
+  // ── Admin responsável da Allka (ata 2026-08, reparo "categoria sem
+  // efeito") — escolhido explicitamente no projeto, nunca inferido do dono
+  // da Company/Agency nem de qualquer Admin global. Tarefas e etapas deste
+  // projeto herdam este destinatário pra categoria "admin_responsavel" do
+  // motor de alertas (ver alert-engine.ts). Opcional — projeto antigo/sem
+  // escolha explícita fica nulo, sem escolher substituto automático.
+  admin_responsible_user_id String?
+  admin_responsible         User?   @relation("ProjectAdminResponsible", fields: [admin_responsible_user_id], references: [id], onDelete: SetNull)
+
+  // ── Catalog2 (Bloco 6/6 — checkout) ─────────────────────────────────────
+  // Idempotência do clique "Confirmar pedido" no checkout do novo catálogo —
+  // gerado uma vez no cliente por tentativa de compra (mesmo padrão de
+  // publish_client_action_id em Catalog2ProductVersion). Retry/clique duplo
+  // com o MESMO valor devolve o Project já criado, nunca cria outro.
+  catalog2_checkout_client_action_id String? @unique
+
   task_executions TaskExecution[]
   invoices        Invoice[]
   products        ProjectProduct[]
@@ -726,6 +760,8 @@ model Project {
   attachments     ProjectAttachment[]
   connections     ProjectConnection[]
   iallka_session  IallkaSession?
+  planner_cards   PlannerCard[]
+  change_orders   Catalog2ChangeOrder[]
 
   // ── Rastreio da plataforma antiga ─────────────────────────────────────
   // id numérico do registro equivalente no dump legado (Dump20260423.sql).
@@ -738,7 +774,86 @@ model Project {
   legacy_client_id Int?
 
   @@index([created_by_user_id])
+  @@index([archived_by_user_id])
+  @@index([archived_at])
+  @@index([admin_responsible_user_id])
   @@map("projects")
+}
+
+// ─── PlannerColumn / PlannerCard — quadro do Planejador (Admin → Projetos,
+// ata 2026-08-24). Entidade própria, NÃO um Project: os 7 cards de exemplo
+// do mock antigo tinham colunas genéricas de kanban (Backlog/A Fazer/Em
+// Andamento/Em Revisão/Concluído) sem relação com o `status`/`lifecycle`
+// reais de Project, e um `projectId: number` que nunca chegou a apontar
+// pra um `Project.id` de verdade (que é String/cuid) — nunca foi uma view
+// de Project, sempre foi uma entidade solta. `project_id` abaixo é só um
+// vínculo leve e opcional ("este card se refere a este projeto"), sem
+// herdar nada do ciclo de vida do Project — não confundir com uma segunda
+// tabela de projetos.
+//
+// Quadro é pessoal (owner_user_id): cada usuário só vê/edita o próprio,
+// sem visão de equipe compartilhada neste lote (fora de escopo — ver
+// relatório de fechamento). Arquivamento lógico (archived_at) em vez de
+// exclusão física, pra deixar a estrutura pronta pra uma tela de
+// restauração futura sem precisar de nova migration.
+//
+// `column_id` nullable + `onDelete: SetNull` (lote da tela de arquivados,
+// ata 2026-08-24): antes era obrigatório + `Cascade`, o que significava
+// que excluir uma coluna com cards ARQUIVADOS destruiria esses cards
+// junto (o endpoint de exclusão de coluna só bloqueia por cards ATIVOS) —
+// contradizia a garantia de "arquivar não é apagar". Agora a coluna pode
+// sumir e o card arquivado sobrevive com `column_id: null`; a restauração
+// cai pro Backlog/coluna padrão nesse caso (ver GET/POST .../restore em
+// routes/planner.ts).
+model PlannerColumn {
+  id            String   @id @default(cuid())
+  owner_user_id String
+  owner         User     @relation(fields: [owner_user_id], references: [id], onDelete: Cascade)
+  label         String
+  color         String   @default("bg-slate-500")
+  position      Int      @default(0)
+  // Marca a coluna principal (Backlog) por identidade, não por texto do
+  // `label` (lote de exclusão de coluna, ata 2026-08-24): o título é
+  // editável pelo usuário, então confiar em `label === "Backlog"` pra
+  // proteger contra exclusão seria furável só renomeando a coluna. Setada
+  // uma única vez em `ensureDefaultColumns()`, nunca exposta pro payload
+  // de criação/edição — não pode ser ligada/desligada pela API.
+  is_default    Boolean  @default(false)
+  created_at    DateTime @default(now())
+  updated_at    DateTime @updatedAt
+
+  cards PlannerCard[]
+
+  @@index([owner_user_id])
+  @@map("planner_columns")
+}
+
+model PlannerCard {
+  id                 String         @id @default(cuid())
+  owner_user_id      String
+  owner              User           @relation(fields: [owner_user_id], references: [id], onDelete: Cascade)
+  column_id          String?
+  column             PlannerColumn? @relation(fields: [column_id], references: [id], onDelete: SetNull)
+  title              String
+  description        String?        @db.LongText
+  priority           String         @default("medium")
+  // low | medium | high | urgent
+  due_date           DateTime?
+  project_id         String?
+  project            Project?       @relation(fields: [project_id], references: [id], onDelete: SetNull)
+  position           Int            @default(0)
+  archived_at        DateTime?
+  // Quem editou por último (pode divergir do owner_user_id — ex.: um admin
+  // master corrigindo o card de outro admin). Nunca confiado do payload:
+  // sempre resolvido do token no backend, igual created_by_user_id em Project.
+  updated_by_user_id String?
+  created_at         DateTime       @default(now())
+  updated_at         DateTime       @updatedAt
+
+  @@index([owner_user_id])
+  @@index([column_id])
+  @@index([project_id])
+  @@map("planner_cards")
 }
 
 // ─── EntitySequence — contador atômico e seguro para códigos sequenciais ────
@@ -948,15 +1063,15 @@ model ProductVariation {
 // project_id_alteracoes_e_combos no plano desta sessão.
 
 model ProductBundle {
-  id          String   @id @default(cuid())
-  name        String
-  description String?  @db.LongText
-  category    String?
+  id                 String   @id @default(cuid())
+  name               String
+  description        String?  @db.LongText
+  category           String?
   // null = combo global (só admin cria/edita); preenchido = combo próprio
   // dessa agência (só ela + admin veem/editam). Primeiro uso desse padrão
   // "null=global, preenchido=da agência" fora de Project.
   agency_id          String?
-  agency              Agency?  @relation(fields: [agency_id], references: [id], onDelete: Cascade)
+  agency             Agency?  @relation(fields: [agency_id], references: [id], onDelete: Cascade)
   created_by_user_id String?
   is_active          Boolean  @default(true)
   created_at         DateTime @default(now())
@@ -1140,10 +1255,31 @@ model ProjectProduct {
   id           String            @id @default(cuid())
   project_id   String
   project      Project           @relation(fields: [project_id], references: [id], onDelete: Cascade)
-  product_id   String
-  product      Product           @relation(fields: [product_id], references: [id])
+  // Opcional desde o Bloco 6 (checkout do catalog2): uma linha nascida do
+  // catalog2 nunca tem product_id (catálogo antigo) — tem catalog2_product_id
+  // abaixo. Invariante de aplicação (não constraint de banco, mesmo padrão do
+  // ClientLink): exatamente um dos dois deve estar preenchido.
+  product_id   String?
+  product      Product?          @relation(fields: [product_id], references: [id], onDelete: SetNull)
   variation_id String?
   variation    ProductVariation? @relation(fields: [variation_id], references: [id])
+
+  // ── Catalog2 (Bloco 6/6 — checkout) ─────────────────────────────────────
+  // Produto/versão CONTRATADOS do novo catálogo — a versão é a mesma que a
+  // Catalog2Quote congelou, nunca a "published_version_id" atual do produto
+  // (que pode já ter mudado). Restrict: nunca apagar um produto/versão que
+  // já foi vendido.
+  catalog2_product_id             String?
+  catalog2_product                Catalog2Product?        @relation(fields: [catalog2_product_id], references: [id], onDelete: Restrict)
+  catalog2_version_id             String?
+  catalog2_version                Catalog2ProductVersion? @relation(fields: [catalog2_version_id], references: [id], onDelete: Restrict)
+  // Rastreia a Catalog2Quote de origem — soft ref, mesmo espírito snapshot-safe
+  // de origin_bundle_purchase_id abaixo. @unique = idempotência: a MESMA
+  // cotação nunca vira duas linhas (clique duplo/retry do checkout).
+  origin_catalog2_quote_id        String?                 @unique
+  // Preenchido só quando origin = "CATALOG2_ADDITIVE" — rastreia o aditivo
+  // (Catalog2ChangeOrder) que originou esta linha.
+  origin_catalog2_change_order_id String?                 @unique
 
   // Snapshot: preserves commercial history even if product is later edited
   product_name_snapshot     String
@@ -1177,13 +1313,16 @@ model ProjectProduct {
   expected_end_date DateTime?
 
   origin String @default("VENDA")
-  // VENDA | TRANSFERENCIA | COMBO | AI_ASSEMBLY — TRANSFERENCIA marca um
-  // vínculo criado pela transferência de uma tarefa não usada de outro
-  // projeto (já paga lá, nunca cobrar de novo aqui). COMBO marca um vínculo
-  // nascido da contratação de um ProductBundle (ver POST
-  // /api/product-bundles/:id/contract). AI_ASSEMBLY marca um vínculo
-  // nascido de uma proposta aprovada do assistente IALLKA (ver POST
-  // /api/iallka/sessions/:id/approve).
+  // VENDA | TRANSFERENCIA | COMBO | AI_ASSEMBLY | CATALOG2 | CATALOG2_ADDITIVE
+  // — TRANSFERENCIA marca um vínculo criado pela transferência de uma tarefa
+  // não usada de outro projeto (já paga lá, nunca cobrar de novo aqui). COMBO
+  // marca um vínculo nascido da contratação de um ProductBundle (ver POST
+  // /api/product-bundles/:id/contract). AI_ASSEMBLY marca um vínculo nascido
+  // de uma proposta aprovada do assistente IALLKA (ver POST
+  // /api/iallka/sessions/:id/approve). CATALOG2 marca a compra original via
+  // checkout do novo catálogo (ver src/lib/catalog2-checkout.ts);
+  // CATALOG2_ADDITIVE marca uma linha nascida de um Catalog2ChangeOrder
+  // aprovado e pago — nunca reaproveita a linha original.
 
   // Agrupa as N linhas nascidas do MESMO evento de contratação de combo —
   // não aponta pro ProductBundle (que pode ser editado/apagado depois), é
@@ -1200,9 +1339,10 @@ model ProjectProduct {
   created_at DateTime @default(now())
   updated_at DateTime @updatedAt
 
-  tasks         ProjectTask[]
-  credentials   ProjectCredential[]
-  payment_items PaymentItem[]
+  tasks                     ProjectTask[]
+  credentials               ProjectCredential[]
+  payment_items             PaymentItem[]
+  change_orders_as_original Catalog2ChangeOrder[] @relation("ChangeOrderOriginal")
 
   // ── Rastreio da plataforma antiga ─────────────────────────────────────
   // id numérico do registro equivalente no dump legado (Dump20260423.sql).
@@ -1212,6 +1352,7 @@ model ProjectProduct {
   legacy_id Int? @unique
 
   @@index([project_id])
+  @@index([catalog2_product_id])
   @@map("project_products")
 }
 
@@ -1223,10 +1364,22 @@ model ProjectTask {
   project            Project        @relation(fields: [project_id], references: [id], onDelete: Cascade)
   project_product_id String
   project_product    ProjectProduct @relation(fields: [project_product_id], references: [id], onDelete: Cascade)
-  product_id         String
-  product            Product        @relation(fields: [product_id], references: [id])
+  // Opcional desde o Bloco 6: tarefa nascida do catalog2 nunca tem product_id
+  // do catálogo antigo — tem catalog2_task_id abaixo.
+  product_id         String?
+  product            Product?       @relation(fields: [product_id], references: [id], onDelete: SetNull)
   catalog_task_id    String?
   catalog_task       CatalogTask?   @relation(fields: [catalog_task_id], references: [id])
+
+  // ── Catalog2 (Bloco 6/6) ─────────────────────────────────────────────
+  // Modelo de tarefa de origem no novo catálogo — sempre resolvido a partir
+  // de ProjectProduct.catalog2_version_id (a versão CONTRATADA/congelada),
+  // nunca da versão publicada mais recente. Denormaliza product/version aqui
+  // pelo mesmo motivo que product_id acima já denormaliza o produto.
+  catalog2_task_id    String?
+  catalog2_task       Catalog2Task? @relation(fields: [catalog2_task_id], references: [id], onDelete: SetNull)
+  catalog2_product_id String?
+  catalog2_version_id String?
 
   // Snapshots: task model data at the time of creation
   code_snapshot     String?
@@ -1245,6 +1398,9 @@ model ProjectTask {
   origin_payment    Payment? @relation("PaymentGeneratedTasks", fields: [origin_payment_id], references: [id], onDelete: SetNull)
   // paymentId:projectProductId:catalogTaskId:occurrenceIndex — impede
   // recriar a mesma tarefa do mesmo produto/pagamento/ciclo/ocorrência.
+  // Tarefas do catalog2 usam o prefixo "c2:" (c2:paymentId:projectProductId:
+  // catalog2TaskId:occurrenceIndex) — só pra ficar grepável; nunca migra
+  // dados antigos pro novo formato nem o contrário.
   generation_key    String?  @unique
   // Espelha Payment.billing_cycle_key no momento da geração (fica preservado
   // mesmo se o Payment for editado depois).
@@ -1322,7 +1478,7 @@ model ProjectTask {
   emergencial_solicitada_por     String?
   emergencial_reducao_percentual Int?
   emergencial_invoice_id         String?
-  emergencial_invoice            Invoice? @relation("TaskEmergencialInvoice", fields: [emergencial_invoice_id], references: [id], onDelete: SetNull)
+  emergencial_invoice            Invoice?  @relation("TaskEmergencialInvoice", fields: [emergencial_invoice_id], references: [id], onDelete: SetNull)
 
   sort_order Int     @default(0)
   fase       String?
@@ -1338,11 +1494,17 @@ model ProjectTask {
   created_at DateTime @default(now())
   updated_at DateTime @updatedAt
 
+  // Episódio atual do rodízio de ofertas de Nômade (ata 2026-08, bloco 4/5)
+  // — "<taskId>:<epochMs do início>". Agrupa as ofertas de uma rodada e é a
+  // base do dedupe do alerta de esgotamento. Nulo quando não há rodízio.
+  rotation_episode_key String?
+
   stages             ProjectTaskStage[]
   briefing_answers   TaskBriefingAnswer[]
   attachments        TaskAttachment[]
   assignment_history TaskAssignmentHistory[]
   credentials        ProjectCredential[]
+  task_offers        TaskOffer[]
   lider_responsavel  User?                   @relation("TaskLiderResponsavel", fields: [lider_responsavel_id], references: [id])
 
   // ── Rastreio da plataforma antiga ─────────────────────────────────────
@@ -1363,6 +1525,10 @@ model ProjectTask {
   @@index([nomade_responsavel_id])
   @@index([responsavel_agencia_id])
   @@index([lider_responsavel_id])
+  @@index([catalog2_task_id])
+  // Usado pelo motor de alertas automáticos (src/lib/alert-engine.ts) pra
+  // varrer tarefas ativas com prazo sem full scan.
+  @@index([status, due_date])
   @@map("project_tasks")
 }
 
@@ -1650,37 +1816,218 @@ model TaskAssignmentHistory {
   @@map("task_assignment_history")
 }
 
+// ─── Presença online + Rodízio de ofertas de tarefa (ata 2026-08, bloco 4/5) ──
+
+// Presença mínima e segura: o heartbeat autenticado atualiza `last_seen_at`.
+// "Online" = último heartbeat dentro de PRESENCE_OFFLINE_AFTER_MS (config).
+// Identidade sempre vem da sessão — uma conta nunca atualiza a presença de
+// outra. Logout apaga a linha (offline imediato).
+model UserPresence {
+  user_id      String   @id
+  user         User     @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  last_seen_at DateTime
+  updated_at   DateTime @updatedAt
+
+  @@index([last_seen_at])
+  @@map("user_presence")
+}
+
+// Oferta INDIVIDUAL de uma tarefa a um Nômade (nunca uma lista disputada).
+// Só UMA oferta `pendente` por tarefa a cada momento (garantido por índice
+// parcial no código + checagem transacional). `nomade_id`/`nomade_user_id`
+// são escalares soltos (mesmo padrão de TaskAssignmentHistory.nomade_id e
+// SystemAlert.*_user_id) — evita mexer nas listas de relação de Nomade/User.
+model TaskOffer {
+  id                   String      @id @default(cuid())
+  project_task_id      String
+  project_task         ProjectTask @relation(fields: [project_task_id], references: [id], onDelete: Cascade)
+  // Nomade.id do destinatário e o User.id correspondente (usado pra validar
+  // a sessão em aceitar/recusar — a identidade nunca vem do corpo).
+  nomade_id            String
+  nomade_user_id       String?
+  // Episódio do rodízio ao qual esta oferta pertence — igual a
+  // ProjectTask.rotation_episode_key no momento da criação.
+  episode_key          String
+  // Ordem da oferta dentro do episódio: 1, 2, 3...
+  rotation_order       Int
+  // pendente | aceita | recusada | expirada | cancelada
+  status               String      @default("pendente")
+  offered_at           DateTime    @default(now())
+  expires_at           DateTime
+  responded_at         DateTime?
+  // Quem respondeu (sessão) — normalmente o próprio nomade_user_id.
+  responded_by_user_id String?
+  decline_reason       String?     @db.Text
+  // Motivo técnico do encerramento: "accepted" | "declined" | "expired" |
+  // "cancelled_task_assigned" | "cancelled_new_episode" | "cancelled_restart"
+  close_reason         String?
+  created_at           DateTime    @default(now())
+
+  @@index([project_task_id, status])
+  @@index([nomade_id, status])
+  @@index([status, expires_at])
+  @@index([episode_key])
+  @@map("task_offers")
+}
+
 // ─── SystemAlert ──────────────────────────────────────────────────────────────
 
-model SystemAlert {
-  id          String    @id @default(cuid())
-  type        String
-  // "nomade_nao_encontrado" | "tarefa_atrasada" | etc.
-  title       String
-  message     String    @db.LongText
-  severity    String    @default("warning")
+// ─── Motor de alertas automáticos (ata 2026-08, 2º lote) ────────────────────
+// Padrão → Regra → Verificação automática → Ocorrência (SystemAlert). Um
+// Padrão define conteúdo/aparência (reaproveitável), uma Regra define quando
+// disparar (usa um Padrão), e cada disparo real vira um SystemAlert comum —
+// não há tabela paralela de "ocorrências". Ver src/lib/alert-engine.ts.
+model AlertStandard {
+  id                     String  @id @default(cuid())
+  // Chave estável — nunca editável pela interface, é o que a Regra e o motor
+  // usam para reconhecer o padrão (ex.: "task.due_soon", "task.overdue").
+  key                    String  @unique
+  name                   String
+  // Título/mensagem-modelo, com variáveis entre chaves duplas — ver
+  // `allowed_variables_json` (lista fechada; nunca código executável).
+  title                  String
+  message                String  @db.LongText
+  default_severity       String  @default("warning")
   // "info" | "warning" | "error"
-  category    String    @default("notificacao")
+  is_active              Boolean @default(true)
+  // Padrão nascido do bootstrap do sistema (task.due_soon/task.overdue) —
+  // não pode ser excluído fisicamente, só desativado.
+  is_system              Boolean @default(false)
+  // JSON array de strings — nomes de variáveis aceitas na mensagem deste
+  // padrão (ex.: ["tarefa","prazo","projeto"]). Validado no backend a cada
+  // gravação; nunca interpretado como código.
+  allowed_variables_json String  @db.LongText
+  // Imagem opcional do padrão (ata 2026-08, 4º lote) — nome físico gerado
+  // (nunca o nome enviado pelo usuário), servido via rota autenticada, nunca
+  // caminho no disco aceito do cliente. Quando uma ocorrência é criada a
+  // partir deste padrão, o arquivo é COPIADO fisicamente pra um nome novo e
+  // gravado na própria ocorrência — nunca uma referência viva a este campo
+  // — pra que substituir/remover a imagem do padrão depois nunca quebre uma
+  // ocorrência histórica.
+  image_file_name        String?
+  // Obrigatório sempre que image_file_name estiver preenchido — validado no
+  // backend, nunca só no frontend.
+  image_alt              String?
+
+  // ── Governança do Admin Master (ata 2026-08, bloco 2/5) ─────────────────
+  // Um padrão OBRIGATÓRIO não pode ser desativado nem ter a criticidade
+  // reduzida por Admin comum, Líder ou usuário — a proteção mora no
+  // servidor (rotas /admin/* já são requireAdminMaster; a camada de
+  // preferência pessoal reaplica a mesma regra via governed_event_types).
+  // Todos aditivos: registros antigos nascem is_mandatory=false e se
+  // comportam exatamente como antes.
+  is_mandatory              Boolean   @default(false)
+  // Piso de criticidade quando obrigatório ("info" | "warning" | "error").
+  // Nulo = usa default_severity como piso. O motor/regra nunca pode gravar
+  // uma severidade abaixo disto para este padrão.
+  mandatory_min_severity    String?
+  // Quando obrigatório, o canal "dentro da plataforma" (in_app) dos
+  // event_types governados nunca pode ser desligado por preferência
+  // pessoal. (Hoje in_app já é global-locked em notification-preferences;
+  // este campo torna a intenção explícita e auditável por padrão.)
+  platform_channel_locked   Boolean   @default(true)
+  // JSON string[] — canais ADICIONAIS que Líder/usuário PODE habilitar
+  // para os event_types deste padrão (ex.: ["email"]). Só isto pode ser
+  // ligado além do in_app; qualquer canal fora desta lista é recusado.
+  additional_channels_json  String?   @db.LongText
+  // false = preferências pessoais NÃO podem mexer nos canais dos
+  // event_types governados por este padrão obrigatório (nem ligar extra,
+  // nem desligar). true (default) = pode ligar os additional_channels.
+  personal_prefs_allowed    Boolean   @default(true)
+  // JSON string[] — quais `event_type` de NotificationPreference este
+  // padrão governa (ex.: ["tarefa_prazo","tarefa_atraso"]). Vazio/nulo =
+  // não governa nenhuma preferência pessoal (só protege o próprio padrão
+  // e suas regras). Nunca IDs de usuário — sempre chaves de catálogo.
+  governed_event_types_json String?   @db.LongText
+  // Histórico rápido de "quem tornou obrigatório e quando" (além do
+  // writeAccessAudit before/after, que registra toda alteração).
+  mandatory_set_by_id       String?
+  mandatory_set_at          DateTime?
+
+  created_at    DateTime @default(now())
+  updated_at    DateTime @updatedAt
+  created_by_id String?
+  updated_by_id String?
+
+  rules  AlertRule[]
+  alerts SystemAlert[]
+
+  @@map("alert_standards")
+}
+
+model AlertRule {
+  id                   String        @id @default(cuid())
+  standard_id          String
+  standard             AlertStandard @relation(fields: [standard_id], references: [id])
+  name                 String
+  // Único construtor aceito nesta fase — não é um DSL genérico:
+  // "task.due_soon" | "task.overdue" | "stage.due_soon" | "stage.overdue".
+  trigger_type         String
+  is_active            Boolean       @default(true)
+  // Antecedência em minutos (só usado por gatilhos "due_soon").
+  lead_time_minutes    Int?
+  // Sobrescreve a criticidade padrão do Padrão, quando preenchido.
+  severity_override    String?
+  // JSON com parâmetros seguros do gatilho (ex.: {}) — nunca código/SQL.
+  // Reservado para parâmetros futuros deste mesmo conjunto fechado de
+  // gatilhos; validado com allowlist no backend.
+  config_json          String?       @db.LongText
+  // JSON array de categorias de destinatário (papéis/relações, nunca IDs de
+  // usuário individuais) — ex.: ["responsavel","nomade"]. A regra continua
+  // única e geral; o motor resolve a pessoa real de cada categoria pra cada
+  // registro elegível no momento da execução. Ver ALERT_RECIPIENT_CATEGORIES
+  // em alert-engine.ts.
+  recipient_roles_json String        @db.LongText
+
+  created_at    DateTime @default(now())
+  updated_at    DateTime @updatedAt
+  created_by_id String?
+  updated_by_id String?
+
+  alerts SystemAlert[]
+
+  @@index([standard_id])
+  @@index([trigger_type])
+  @@map("alert_rules")
+}
+
+model SystemAlert {
+  id               String    @id @default(cuid())
+  type             String
+  // "nomade_nao_encontrado" | "tarefa_atrasada" | etc.
+  title            String
+  message          String    @db.LongText
+  severity         String    @default("warning")
+  // "info" | "warning" | "error"
+  category         String    @default("notificacao")
   // "notificacao" (informativo, sem ação exigida) | "alerta" (precisa de
   // decisão/prioridade) — separa a aba Notificações da aba Alertas no sino
   // do header, que hoje mostravam exatamente o mesmo feed sem distinção.
-  entity_type String?
-  // "project_task" | "project" | etc.
-  entity_id   String?
+  entity_type      String?
+  // "project_task" | "project_task_stage" | "project" | etc.
+  entity_id        String?
+  // "Pai" navegável, só usado quando entity_id sozinho não é suficiente pra
+  // montar o destino do botão "Ver" (ata 2026-08, reparo "Ver alerta"): pra
+  // entity_type="project_task_stage", entity_id é o id da ETAPA e este
+  // campo é o id da TAREFA que contém a etapa — a plataforma não tem rota
+  // exclusiva de etapa, então "Ver" abre a tarefa. Nulo pros demais tipos
+  // (entity_id já é suficiente, ou não existe destino nenhum). Nunca usado
+  // pra nada além de montar o link — não afeta dedupe/regra/resolução.
+  entity_parent_id String?
   // Destinatário. Nulo = alerta geral do sistema (comportamento original,
   // visível ao Admin); preenchido = aviso de uma pessoa só, como "a etapa X
   // abriu para você".
-  user_id     String?
+  user_id          String?
   // Para onde a pessoa deve ir ao clicar (ex.: /nomades/minhastarefas).
-  action_url  String?
-  is_read     Boolean   @default(false)
-  read_at     DateTime?
+  action_url       String?
+  is_read          Boolean   @default(false)
+  read_at          DateTime?
   // Arquivado = usuário já tratou/não precisa mais ver por padrão, mas o
   // dado continua existindo (nunca é hard-delete) — diferente de is_read,
   // que só marca "já vi": dá pra ler e continuar precisando resolver.
-  is_archived Boolean   @default(false)
-  archived_at DateTime?
-  created_at  DateTime  @default(now())
+  is_archived      Boolean   @default(false)
+  archived_at      DateTime?
+  created_at       DateTime  @default(now())
 
   // De qual mensagem de notificacao este alerta nasceu, quando veio de um
   // envio da tela /admin/notifications. Nulo nos alertas do proprio sistema
@@ -1689,11 +2036,227 @@ model SystemAlert {
   notification_message_id String?
   notification_message    NotificationMessage? @relation(fields: [notification_message_id], references: [id], onDelete: SetNull)
 
+  // ── Motor automático (ata 2026-08, 2º lote) — todos opcionais/nulos em
+  // registros antigos, que continuam funcionando sem eles. ──────────────
+  standard_id       String?
+  standard          AlertStandard? @relation(fields: [standard_id], references: [id])
+  rule_id           String?
+  rule              AlertRule?     @relation(fields: [rule_id], references: [id])
+  // Chave determinística regra+tipo_entidade+entidade+destinatário+prazo
+  // (ex.: "ruleId:project_task_stage:stageId:userId:2026-08-30") — única
+  // por linha ATIVA (constraint de banco, não só trava em memória; protege
+  // mesmo com mais de uma instância do backend). Zerada em registros já
+  // resolvidos (ver migration) pra não colidir com um ciclo futuro que
+  // reaproveite o mesmo prazo depois de resolvido.
+  dedupe_key        String?        @unique
+  resolved_at       DateTime?
+  // "condition_cleared" | "task_completed" | "task_cancelled" | "superseded"
+  // | "expired" — motivo controlado, nunca texto livre do administrador.
+  resolution_reason String?
+
+  // ── Imagem, expiração e Programados (ata 2026-08, 4º lote) ─────────────
+  // Snapshot próprio da ocorrência — nunca uma referência viva ao Padrão
+  // (ver comentário em AlertStandard.image_file_name). Alerta Avulso com
+  // imagem também usa este mesmo par de campos, upload direto.
+  image_file_name String?
+  image_alt       String?
+  // Expiração da OCORRÊNCIA (distinta do fim da programação, que é
+  // AlertSchedule.ends_at — depois dele a programação para de CRIAR novas
+  // ocorrências; isto aqui é sobre UMA ocorrência já criada deixar de ser
+  // "ativa"). Nulo = nunca expira sozinha. Só usado por Avulsos e
+  // Programados — o motor nunca aplica isto a ocorrências de Regra de
+  // tarefa/etapa (elas não têm este campo preenchido).
+  expires_at      DateTime?
+  schedule_id     String?
+  schedule        AlertSchedule? @relation(fields: [schedule_id], references: [id])
+
+  // ── Visualização detalhada e histórico (ata 2026-08, 8º lote) ───────────
+  // Quem criou manualmente (Avulso, POST /admin) — nulo em qualquer origem
+  // automática (regra/padrão/programado/motor) e também nulo em Avulsos
+  // criados ANTES deste lote (nunca inferido por backfill; a interface
+  // simplesmente não mostra "responsável pela criação" quando isto é nulo).
+  created_by_user_id String?
+  events             SystemAlertEvent[]
+
+  // ── Resolução formal de alerta crítico (ata 2026-08, 10º lote) ──────────
+  // Campos NOVOS e DISTINTOS de resolved_at/resolution_reason acima —
+  // aqueles são do motor automático (regra/padrão, expiração; nunca texto
+  // livre, nunca autor humano) e continuam intocados, com seu próprio
+  // significado (dedupe_key zerado, permite um ciclo futuro reabrir a
+  // condição). Isto aqui é a resolução MANUAL de um alerta vermelho/crítico
+  // pelo destinatário/admin autorizado — histórico permanente, nunca
+  // reaproveitado como sinônimo de "expirado" ou "arquivado". Auditoria
+  // prévia confirmou que reaproveitar resolved_at/resolution_reason
+  // conflitaria com a semântica já estabelecida do motor (um alerta
+  // expirado passava a aparecer como "resolvido" no detalhe — bug real
+  // encontrado e corrigido neste lote).
+  manual_resolved_at          DateTime?
+  resolved_by_user_id         String?
+  // "correcao_aplicada" | "responsavel_acionado" | "processo_ajustado" |
+  // "falso_positivo" | "outra_acao" — enumeração fechada, nunca texto
+  // livre pra este campo (a explicação vai em resolution_description).
+  resolution_action           String?
+  resolution_description      String?   @db.Text
+  // Idempotência da resolução (mesmo padrão de SystemAlertEvent.client_event_id
+  // — ata 2026-08, 9º lote): gerado no frontend por clique intencional em
+  // "Confirmar resolução", único no banco. Retry/corrida com o MESMO valor
+  // nunca cria uma segunda resolução nem sobrescreve a original.
+  resolution_client_action_id String?   @unique
+
+  // ── Resolução AUTOMÁTICA de ocorrência de TAREFA (ata 2026-08, bloco 1/2
+  // "resolução automática de alertas de tarefa") ────────────────────────────
+  // A condição real que criou o alerta (tarefa próxima do prazo / tarefa
+  // atrasada) deixou de existir. Campos NOVOS e distintos dos dois pares
+  // acima — nunca conflatados:
+  //   - `resolved_at`/`resolution_reason`  = motor legado de etapas + EXPIRAÇÃO
+  //     (Avulso/Programado). Continua sendo o campo da expiração; a interface
+  //     nunca deve apresentar expiração como resolução automática.
+  //   - `manual_resolved_at`/`resolution_*` = resolução HUMANA formal.
+  // Só o motor grava estes campos — não existe rota pública que aceite
+  // "resolver automaticamente". Nunca sobrescreve uma resolução manual já
+  // gravada.
+  automatic_resolved_at        DateTime?
+  // Enum fechado no código (AUTO_RESOLUTION_REASON_MESSAGES em
+  // alert-engine.ts): task_completed | task_cancelled | task_removed |
+  // deadline_changed_not_overdue | deadline_out_of_window | deadline_changed |
+  // superseded_by_overdue | recipient_changed | rule_disabled. Nunca texto livre.
+  automatic_resolution_reason  String?
+  // Mensagem legível (pt-BR) derivada do motivo — gerada no servidor.
+  automatic_resolution_message String?   @db.Text
+  // Fim do EPISÓDIO da condição (regra+tarefa+destinatário). Gravado pelo
+  // motor quando a condição termina, MESMO que o alerta já tenha sido
+  // resolvido manualmente antes disso. Enquanto uma ocorrência está "no
+  // episódio" ela mantém `dedupe_key`; ao encerrar, o motor zera `dedupe_key`
+  // e grava aqui. É o que impede a recriação a cada ciclo depois de uma
+  // resolução manual e o que libera um episódio novo quando a condição volta.
+  condition_cleared_at         DateTime?
+
   @@index([user_id, is_read])
   @@index([user_id, is_archived])
   @@index([user_id, category, is_read])
   @@index([notification_message_id])
+  @@index([rule_id])
+  @@index([standard_id])
+  @@index([schedule_id])
+  @@index([expires_at])
+  @@index([automatic_resolved_at])
   @@map("system_alerts")
+}
+
+// ─── SystemAlertEvent ───────────────────────────────────────────────────────
+// Linha do tempo real de UMA ocorrência de alerta (ata 2026-08, 8º lote —
+// "visualização detalhada e histórico real"). Auditado antes de criar: a
+// única estrutura de auditoria existente (ProductFeedbackAccessAudit, via
+// writeAccessAudit) é genérica, sem índice por alerta, pensada só pra ações
+// ADMINISTRATIVAS da Central (criar/editar/reclassificar/arquivar Avulso) —
+// nunca cobriu ações do destinatário (abrir detalhes, clicar em Ver origem,
+// dispensar) nem é praticamente consultável "todos os eventos do alerta X"
+// sem varrer texto. Por isso uma tabela própria, imutável (nunca
+// UPDATE/DELETE por esta feature — só INSERT), com o mínimo necessário.
+model SystemAlertEvent {
+  id       String      @id @default(cuid())
+  alert_id String
+  alert    SystemAlert @relation(fields: [alert_id], references: [id], onDelete: Cascade)
+
+  // "created" | "details_opened" | "origin_clicked" | "archived" |
+  // "unarchived" | "dismissed" | "expired_by_engine" | "admin_updated"
+  event_type String
+
+  // Quem realizou a ação — nulo pra eventos do motor (criação automática,
+  // expiração). Escalar solto (mesmo padrão de SystemAlert.user_id): não
+  // precisa de FK Prisma pra isto ser útil, e evita mais uma relação sem
+  // `onDelete` definido de propósito.
+  actor_user_id String?
+
+  // Texto legível gerado no SERVIDOR (nunca no frontend, nunca digitado
+  // por humano) — o que aparece na linha do tempo.
+  description String @db.Text
+
+  // Metadados mínimos e seguros (ex.: severidade antiga/nova numa
+  // reclassificação). Nunca token, cookie, senha, URL assinada ou payload
+  // completo da requisição.
+  metadata_json String? @db.Text
+
+  // Idempotência de eventos de visualização (ata 2026-08, 9º lote —
+  // "details_opened"/"origin_clicked", os únicos gravados a partir de uma
+  // ação do CLIENTE, não de uma mudança de estado no servidor). Gerado no
+  // frontend por ação intencional (uma abertura do painel, um clique) e
+  // protegido por índice único de verdade — nunca só um `useRef` do lado
+  // do cliente, que não sobrevive a Strict Mode/efeitos concorrentes/
+  // retry de rede. Nulo nos demais eventos (criados/arquivados/etc.),
+  // todos originados de uma mudança de estado já idempotente por natureza
+  // (guardada por `is_archived`/`is_read` antes de gravar — ver
+  // system-alerts.ts). Mesmo padrão de SystemAlert.dedupe_key.
+  client_event_id String? @unique
+
+  created_at DateTime @default(now())
+
+  @@index([alert_id, created_at])
+  @@map("system_alert_events")
+}
+
+// ─── AlertSchedule ──────────────────────────────────────────────────────────
+// Alerta Programado (ata 2026-08, 4º lote) — estrutura própria e explícita
+// (nunca cron livre digitado pelo Admin). Cada disparo vira um SystemAlert
+// comum (ver SystemAlert.schedule_id) — não existe tabela paralela de
+// "ocorrência de programação".
+model AlertSchedule {
+  id              String  @id @default(cuid())
+  // Nome administrativo — nunca aparece pro destinatário.
+  name            String
+  title           String
+  message         String  @db.LongText
+  severity        String  @default("warning")
+  // "info" | "warning" | "error"
+  image_file_name String?
+  image_alt       String?
+  // Nulo = alerta Geral (mesmo significado já usado em Avulsos); preenchido
+  // = um usuário específico. Nunca grupo — fora de escopo deste lote.
+  user_id         String?
+
+  // "once" | "daily" | "weekly"
+  recurrence_type            String
+  // JSON array de inteiros 0-6 (0=domingo), só relevante quando
+  // recurrence_type === "weekly".
+  weekdays_json              String?   @db.LongText
+  // "HH:MM" em 24h, no horário local do campo `timezone` abaixo — nunca
+  // interpretado no horário do servidor.
+  time_of_day                String
+  // IANA (ex.: "America/Sao_Paulo") — nunca inferido do servidor.
+  timezone                   String    @default("America/Sao_Paulo")
+  // Para "once": o instante exato do envio, já resolvido em UTC no momento
+  // da criação (a partir de data+hora+timezone informados). Para
+  // daily/weekly: a partir de quando a programação passa a valer.
+  starts_at                  DateTime
+  // Fim da PROGRAMAÇÃO — depois desta data, nenhuma ocorrência nova é
+  // criada (distinto de SystemAlert.expires_at, que é sobre uma ocorrência
+  // já criada). Nulo = sem data de término.
+  ends_at                    DateTime?
+  // Expiração aplicada a CADA ocorrência criada por esta programação
+  // (minutos após a criação) — copiado pro SystemAlert.expires_at de cada
+  // disparo. Nulo = ocorrências desta programação não expiram sozinhas.
+  occurrence_expires_minutes Int?
+
+  is_active   Boolean   @default(true)
+  is_archived Boolean   @default(false)
+  archived_at DateTime?
+
+  last_run_at DateTime?
+  // Próximo instante (UTC) em que esta programação deve disparar — nulo
+  // quando não há próxima execução (programação "once" já disparada, ou
+  // passou de `ends_at`). Recalculado a cada execução e a cada edição de
+  // horário/dias/timezone.
+  next_run_at DateTime?
+
+  created_at    DateTime @default(now())
+  updated_at    DateTime @updatedAt
+  created_by_id String?
+  updated_by_id String?
+
+  alerts SystemAlert[]
+
+  @@index([is_active, next_run_at])
+  @@map("alert_schedules")
 }
 
 // ─── Notificacoes ─────────────────────────────────────────────────────────────
@@ -1767,17 +2330,41 @@ model NotificationPreference {
 // Usar um grupo como alvo de uma regra/notificação de verdade é uma etapa
 // futura, ainda não conectada aqui.
 model NotificationGroup {
-  id            String   @id @default(cuid())
-  owner_user_id String
-  owner         User     @relation("NotificationGroupOwner", fields: [owner_user_id], references: [id], onDelete: Cascade)
-  name          String
-  description   String?
-  created_at    DateTime @default(now())
-  updated_at    DateTime @updatedAt
+  id               String        @id @default(cuid())
+  owner_user_id    String
+  owner            User          @relation("NotificationGroupOwner", fields: [owner_user_id], references: [id], onDelete: Cascade)
+  name             String
+  description      String?
+  // "finalidade" — por que o grupo existe (ata 2026-08, bloco 3). Texto
+  // curto obrigatório para solicitação de Líder.
+  purpose          String?       @db.Text
+  // Ciclo de vida (ata 2026-08, bloco 3). Registros antigos nascem "active"
+  // no backfill da migration — comportamento inalterado.
+  //   draft    = rascunho do Líder ainda não enviado (não usado hoje, reservado)
+  //   pending  = solicitação de Líder aguardando o Admin Master
+  //   active   = grupo em uso (tem sala de chat)
+  //   rejected = solicitação recusada (com justificativa)
+  //   archived = grupo desativado (sala fica somente-leitura)
+  status           String        @default("active")
+  // Quem SOLICITOU (Líder). Nulo quando o Admin Master cria direto.
+  requested_by_id  String?
+  approved_by_id   String?
+  approved_at      DateTime?
+  rejected_by_id   String?
+  rejected_at      DateTime?
+  rejection_reason String?       @db.Text
+  archived_by_id   String?
+  archived_at      DateTime?
+  // Sala de chat criada na aprovação (1:1). Nula enquanto pending/rejected.
+  conversation_id  String?       @unique
+  conversation     Conversation? @relation(fields: [conversation_id], references: [id])
+  created_at       DateTime      @default(now())
+  updated_at       DateTime      @updatedAt
 
   members NotificationGroupMember[]
 
   @@index([owner_user_id])
+  @@index([status])
   @@map("notification_groups")
 }
 
@@ -1878,16 +2465,26 @@ model TermAcceptance {
 // ─── Chat ─────────────────────────────────────────────────────────────────────
 
 model Conversation {
-  id         String   @id @default(cuid())
-  title      String?
-  type       String   @default("direct")
+  id            String    @id @default(cuid())
+  title         String?
+  type          String    @default("direct")
   // direct | group | support
-  created_at DateTime @default(now())
-  updated_at DateTime @updatedAt
+  // "active" | "archived" — sala arquivada fica somente-leitura (não recebe
+  // mensagens novas), mas nenhuma mensagem é apagada (ata 2026-08, bloco 3).
+  status        String    @default("active")
+  archived_at   DateTime?
+  // Quem abriu a sala (escalar solto, mesmo padrão de SystemAlert.*_user_id).
+  created_by_id String?
+  created_at    DateTime  @default(now())
+  updated_at    DateTime  @updatedAt
 
-  participants ChatParticipant[]
-  messages     ChatMessage[]
+  participants       ChatParticipant[]
+  messages           ChatMessage[]
+  // Sala criada automaticamente ao aprovar um Grupo de Notificação (1:1;
+  // a FK mora em NotificationGroup.conversation_id).
+  notification_group NotificationGroup?
 
+  @@index([type, status])
   @@map("conversations")
 }
 
@@ -1899,21 +2496,36 @@ model ChatParticipant {
   user            User         @relation(fields: [user_id], references: [id])
   role            String       @default("member")
   joined_at       DateTime     @default(now())
+  // Último instante em que este participante leu a sala — base do "não
+  // lidas" por pessoa (funciona pra sala de grupo, onde ChatMessage.is_read
+  // booleano global não bastava).
+  last_read_at    DateTime?
+  // Preenchido quando o participante é removido do grupo: perde acesso
+  // FUTURO (não lista, não abre, não envia), mas a linha e o histórico
+  // permanecem (auditoria + "quem já participou").
+  left_at         DateTime?
 
   @@unique([conversation_id, user_id])
+  @@index([user_id])
   @@map("chat_participants")
 }
 
 model ChatMessage {
-  id              String       @id @default(cuid())
-  conversation_id String
-  conversation    Conversation @relation(fields: [conversation_id], references: [id])
-  sender_id       String
-  sender          User         @relation("SentMessages", fields: [sender_id], references: [id])
-  content         String       @db.LongText
-  is_read         Boolean      @default(false)
-  created_at      DateTime     @default(now())
+  id                String       @id @default(cuid())
+  conversation_id   String
+  conversation      Conversation @relation(fields: [conversation_id], references: [id])
+  sender_id         String
+  sender            User         @relation("SentMessages", fields: [sender_id], references: [id])
+  content           String       @db.LongText
+  is_read           Boolean      @default(false)
+  // Idempotência do envio (mesmo padrão de SystemAlert.dedupe_key /
+  // SystemAlertEvent.client_event_id): gerado no cliente por clique
+  // intencional em "Enviar", único no banco — retry/duplo-clique com o
+  // mesmo valor nunca grava uma segunda mensagem.
+  client_message_id String?      @unique
+  created_at        DateTime     @default(now())
 
+  @@index([conversation_id, created_at])
   @@map("chat_messages")
 }
 
@@ -2667,7 +3279,7 @@ model ProjectConnection {
   // token não expira de forma rotativa.
 
   last_synced_at DateTime?
-  last_error     String? @db.LongText
+  last_error     String?   @db.LongText
 
   // Id solto, sem FK — mesmo padrão de ProjectCredential.created_by acima
   // (auditoria, não vínculo de integridade referencial).
@@ -2911,8 +3523,8 @@ model ProductFeedbackWorkItemLink {
 // (nunca aceito do cliente, exceto pra admin) — ver resolveOwnScopeId em
 // routes/share.ts.
 model ShareLink {
-  id                   String    @id @default(cuid())
-  token                String    @unique
+  id                   String              @id @default(cuid())
+  token                String              @unique
   // URL amigável opcional (ex.: "visao-financeira") — só serve pra
   // LOCALIZAR o registro, nunca pra autorizar nada; todo o resto (status,
   // revoked_at, expires_at, deleted_at, PIN, permission, escopo) continua
@@ -2924,7 +3536,7 @@ model ShareLink {
   // editar o slug troca o valor da própria linha, o slug anterior fica
   // livre pra qualquer um (sem alias/redirect — decisão deliberada, ver
   // PATCH /api/dashboard-shares/:id).
-  slug                 String?   @unique
+  slug                 String?             @unique
   target_id            String
   target_type          String
   // widget | dashboard
@@ -2939,7 +3551,7 @@ model ShareLink {
   period_from          DateTime?
   period_to            DateTime?
   period_label         String?
-  allow_filter_changes Boolean   @default(false)
+  allow_filter_changes Boolean             @default(false)
   expires_at           DateTime?
   revoked_at           DateTime?
   // Soft-delete/arquivamento (ver routes/dashboard-shares.ts) — some da
@@ -2949,8 +3561,8 @@ model ShareLink {
   // é a base pro item futuro de audit log.
   deleted_at           DateTime?
   created_by           String
-  creator              User      @relation(fields: [created_by], references: [id], onDelete: Cascade)
-  created_at           DateTime  @default(now())
+  creator              User                @relation(fields: [created_by], references: [id], onDelete: Cascade)
+  created_at           DateTime            @default(now())
   comments             ShareComment[]
   activities           ShareLinkActivity[]
 
@@ -2967,19 +3579,19 @@ model ShareLink {
 // na época. Nunca grava PIN em texto puro, pin_hash, JWT ou qualquer
 // segredo — ver ACTIVITY_ACTIONS e redactMetadata em lib/share-link-activity.ts.
 model ShareLinkActivity {
-  id             String    @id @default(cuid())
-  share_link_id  String
-  share_link     ShareLink @relation(fields: [share_link_id], references: [id], onDelete: Cascade)
-  action         String
+  id            String    @id @default(cuid())
+  share_link_id String
+  share_link    ShareLink @relation(fields: [share_link_id], references: [id], onDelete: Cascade)
+  action        String
   // created | slug_changed | permission_changed | pin_enabled | pin_changed
   // | pin_removed | expiry_changed | revoked | reactivated | archived
-  actor_user_id  String?
-  actor_name     String?
-  actor_email    String?
+  actor_user_id String?
+  actor_name    String?
+  actor_email   String?
   // JSON só com valores seguros (ex.: {"from":"view","to":"comment"}) —
   // nunca PIN/hash/token. Ver redactMetadata.
-  metadata       Json?
-  created_at     DateTime  @default(now())
+  metadata      Json?
+  created_at    DateTime  @default(now())
 
   @@index([share_link_id, created_at])
   @@map("share_link_activities")
@@ -2995,12 +3607,12 @@ model ShareLinkActivity {
 // preenche nome/e-mail uma vez; e-mail é obrigatório pra ter alguma
 // identificação mínima persistida.
 model ShareComment {
-  id             String    @id @default(cuid())
-  share_link_id  String
-  share_link     ShareLink @relation(fields: [share_link_id], references: [id], onDelete: Cascade)
+  id              String                   @id @default(cuid())
+  share_link_id   String
+  share_link      ShareLink                @relation(fields: [share_link_id], references: [id], onDelete: Cascade)
   // Nullable: comentário pode ser só anexo (ver regra em routes/share.ts —
   // content vazio + attachments.length === 0 é o único caso rejeitado).
-  content        String?   @db.LongText
+  content         String?                  @db.LongText
   // "plain": texto puro, formato de todo comentário criado antes do editor
   // rico — continua renderizado como sempre foi (cor única em `color`,
   // sem HTML). "html": HTML restrito sanitizado no backend (ver
@@ -3008,22 +3620,22 @@ model ShareComment {
   // de classes dentro do próprio HTML, `color` é ignorado nesse caso.
   // Default "plain" propositalmente: nenhuma migração destrutiva precisa
   // tocar as linhas já existentes.
-  content_format String    @default("plain")
+  content_format  String                   @default("plain")
   // Cor única do comentário INTEIRO — só usada quando content_format=
   // "plain" (comentário antigo/sem rich text). Chave de uma paleta fixa
   // validada no backend, nunca CSS arbitrário.
-  color          String    @default("default")
-  author_name    String?
-  author_email   String
+  color           String                   @default("default")
+  author_name     String?
+  author_email    String
   author_whatsapp String?
-  user_id        String?
-  user           User?     @relation(fields: [user_id], references: [id], onDelete: SetNull)
-  status         String    @default("visible")
+  user_id         String?
+  user            User?                    @relation(fields: [user_id], references: [id], onDelete: SetNull)
+  status          String                   @default("visible")
   // visible | deleted (soft delete — reservado para moderação futura, não
   // implementada nesta tarefa)
-  created_at     DateTime  @default(now())
-  updated_at     DateTime  @updatedAt
-  attachments    ShareCommentAttachment[]
+  created_at      DateTime                 @default(now())
+  updated_at      DateTime                 @updatedAt
+  attachments     ShareCommentAttachment[]
 
   @@index([share_link_id])
   @@map("share_comments")
@@ -3034,17 +3646,17 @@ model ShareComment {
 // padrão de apps/backend/src/lib/file-storage.ts já usado por
 // ProjectAttachment (routes/projects.ts) — sem infra nova.
 model ShareCommentAttachment {
-  id         String       @id @default(cuid())
-  comment_id String
-  comment    ShareComment @relation(fields: [comment_id], references: [id], onDelete: Cascade)
-  filename   String
+  id          String       @id @default(cuid())
+  comment_id  String
+  comment     ShareComment @relation(fields: [comment_id], references: [id], onDelete: Cascade)
+  filename    String
   // Nome original enviado pela pessoa — exibido na UI.
-  mime_type  String
-  size       Int
+  mime_type   String
+  size        Int
   // storage_key = nome gerado em disco (uploads/share-comments/{comment_id}/{storage_key}),
   // nunca o filename original (evita colisão e path traversal).
   storage_key String
-  created_at DateTime     @default(now())
+  created_at  DateTime     @default(now())
 
   @@index([comment_id])
   @@map("share_comment_attachments")
@@ -3059,27 +3671,27 @@ model ShareCommentAttachment {
 // aqui NUNCA sobrescreve quem já personalizou (ver GET /resolve em
 // routes/dashboard-templates.ts).
 model DashboardTemplate {
-  id          String    @id @default(cuid())
-  name        String
-  profile     String
+  id         String                     @id @default(cuid())
+  name       String
+  profile    String
   // admin | agency | company | nomad | partner | leader — mesmo vocabulário
   // já usado em ShareLink.profile, não o DashboardRole (maiúsculo) do
   // frontend; a rota normaliza para minúsculo nos dois sentidos.
-  is_default  Boolean   @default(false)
+  is_default Boolean                    @default(false)
   // Só pode haver 1 default ativo por profile — garantido em transaction em
   // POST /:id/set-default (nunca por unique constraint composta, porque
   // teríamos vários templates com is_default=false simultâneos).
-  is_active   Boolean   @default(true)
-  widgets     Json
+  is_active  Boolean                    @default(true)
+  widgets    Json
   // Array de WidgetState — mesmo shape (id/type/visible/order/customTitle?/
   // colSpan?) usado hoje em localStorage pelas 6 telas (ver
   // features/dashboards/shared/dashboard-common.tsx). Guardado como JSON
   // estruturado (não texto livre) pra não perder nenhum campo existente.
-  created_by  String?
-  creator     User?     @relation(fields: [created_by], references: [id], onDelete: SetNull)
-  created_at  DateTime  @default(now())
-  updated_at  DateTime  @updatedAt
-  contents    DashboardTemplateContent[]
+  created_by String?
+  creator    User?                      @relation(fields: [created_by], references: [id], onDelete: SetNull)
+  created_at DateTime                   @default(now())
+  updated_at DateTime                   @updatedAt
+  contents   DashboardTemplateContent[]
 
   @@index([profile, is_active])
   @@index([profile, is_default])
@@ -3091,29 +3703,1022 @@ model DashboardTemplate {
 // perfil); `locked=false` = pode ser dispensado individualmente (dispensa
 // fica em localStorage, mesmo padrão de persistência pessoal do item 9).
 model DashboardTemplateContent {
-  id                 String            @id @default(cuid())
-  template_id        String
-  template           DashboardTemplate @relation(fields: [template_id], references: [id], onDelete: Cascade)
-  type               String
+  id                String            @id @default(cuid())
+  template_id       String
+  template          DashboardTemplate @relation(fields: [template_id], references: [id], onDelete: Cascade)
+  type              String
   // banner | notice
-  title              String
-  body               String?           @db.Text
-  image_storage_key  String?
+  title             String
+  body              String?           @db.Text
+  image_storage_key String?
   // Nome gerado em disco (uploads/dashboard-template-contents/{id}/{key}) —
   // mesmo padrão de ShareCommentAttachment.storage_key, nunca o nome
   // original. Servido publicamente (sem auth) por ser conteúdo de
   // marketing interno não sensível — ver GET /contents/:id/image.
-  image_mime_type    String?
-  link_url           String?
-  link_label         String?
-  active             Boolean           @default(true)
-  starts_at          DateTime?
-  ends_at            DateTime?
-  sort_order         Int               @default(0)
-  locked             Boolean           @default(false)
-  created_at         DateTime          @default(now())
-  updated_at         DateTime          @updatedAt
+  image_mime_type   String?
+  link_url          String?
+  link_label        String?
+  active            Boolean           @default(true)
+  starts_at         DateTime?
+  ends_at           DateTime?
+  sort_order        Int               @default(0)
+  locked            Boolean           @default(false)
+  created_at        DateTime          @default(now())
+  updated_at        DateTime          @updatedAt
 
   @@index([template_id, active])
   @@map("dashboard_template_contents")
+}
+
+// ─── Canais, Campanhas e Banners obrigatórios (ata 2026-08, bloco 5/5) ────────
+//
+// SEPARAÇÃO DE CONCEITOS (não conflatar):
+//   * Alerta      = SystemAlert (category "alerta"), situação operacional.
+//   * Notificação = informação pessoal/operacional a um usuário — hoje entregue
+//     pelo canal "plataforma" (vira SystemAlert category "notificacao").
+//   * Campanha    = comunicação planejada a um público (CommunicationCampaign).
+//   * Banner obrigatório = comunicado interno com exigência de ciência
+//     (MandatoryBanner) — NUNCA um alerta vermelho.
+//
+// AUDITORIA DOS CANAIS (registrada no relatório do lote): não há serviço de
+// e-mail, integração de WhatsApp nem Web Push configurados no backend. Os
+// adaptores abaixo tratam esses canais como "não configurado" + captura de
+// preview local — nunca fingem entrega.
+
+// Outbox central de entregas. TODA saída por canal (notificação, campanha ou
+// banner) passa por aqui. Idempotência real por `idempotency_key` (@unique):
+// retry, clique duplo e job concorrente nunca geram uma segunda entrega para a
+// mesma (origem, origem_id, destinatário, canal, chave de disparo).
+model CommunicationDelivery {
+  id                String    @id @default(cuid())
+  // "notification" | "campaign" | "banner"
+  origin            String
+  // id da campanha / do banner; nulo para notificação avulsa.
+  origin_id         String?
+  recipient_user_id String
+  recipient         User      @relation(fields: [recipient_user_id], references: [id], onDelete: Cascade)
+  // "platform" | "email" | "whatsapp" | "push"
+  channel           String
+  // "pending" | "processing" | "delivered" | "failed" | "cancelled" |
+  // "skipped_by_preference" | "channel_not_configured" | "no_valid_address"
+  status            String    @default("pending")
+  scheduled_for     DateTime
+  first_attempt_at  DateTime?
+  last_attempt_at   DateTime?
+  attempts          Int       @default(0)
+  delivered_at      DateTime?
+  failed_at         DateTime?
+  // Motivo resumido e legível — NUNCA token/chave do provedor/payload sensível.
+  failure_summary   String?   @db.Text
+  // Chave estável de idempotência (ver acima). Um novo envio legítimo gera uma
+  // chave nova; um retry do mesmo envio reusa a mesma.
+  idempotency_key   String    @unique
+  // Metadados mínimos de auditoria (ex.: id externo do provedor QUANDO houver).
+  // Nunca segredo, cookie, URL assinada ou corpo completo da requisição.
+  metadata_json     String?   @db.Text
+  // Captura/preview local para canais não configurados (assunto/corpo/para) —
+  // sem segredos; é o que o Admin abre para conferir que nada real foi enviado.
+  preview_json      String?   @db.Text
+  created_at        DateTime  @default(now())
+  updated_at        DateTime  @updatedAt
+
+  @@index([status, scheduled_for])
+  @@index([origin, origin_id])
+  @@index([recipient_user_id])
+  @@index([channel, status])
+  @@map("communication_deliveries")
+}
+
+model CommunicationCampaign {
+  id                   String    @id @default(cuid())
+  internal_name        String
+  title                String
+  body                 String    @db.LongText
+  // Snapshot próprio de imagem (mesmo padrão de SystemAlert.image_file_name):
+  // nome físico gerado, servido por rota autenticada, nunca caminho do cliente.
+  image_file_name      String?
+  image_alt            String?
+  link_url             String?
+  // JSON string[] — canais desejados: ["platform","email","whatsapp","push"].
+  channels_json        String    @db.LongText
+  // Filtro de público ESTRUTURADO e seguro (nunca SQL livre). Ver
+  // lib/comms/audience.ts — o servidor recalcula o público na ativação.
+  audience_json        String    @db.LongText
+  // "draft" | "scheduled" | "processing" | "completed" | "paused" | "cancelled" | "failed"
+  status               String    @default("draft")
+  is_reengagement      Boolean   @default(false)
+  // Dias de inatividade (sem last_login) para campanha de reengajamento.
+  inactivity_days      Int?
+  scheduled_at         DateTime?
+  starts_at            DateTime?
+  ends_at              DateTime?
+  // Guarda de ambiente: "local" | "qa" | "production" — nulo = qualquer.
+  target_environment   String?
+  activated_at         DateTime?
+  activated_by_user_id String?
+  completed_at         DateTime?
+  created_at           DateTime  @default(now())
+  updated_at           DateTime  @updatedAt
+  created_by_user_id   String?
+
+  recipient_states CampaignRecipientState[]
+
+  @@index([status, scheduled_at])
+  @@map("communication_campaigns")
+}
+
+// Estado por destinatário de uma campanha — idempotência da ativação (uma
+// linha por (campanha, usuário), @unique) e memória de reengajamento (não
+// reenviar a mesma campanha ao mesmo usuário).
+model CampaignRecipientState {
+  id                String                @id @default(cuid())
+  campaign_id       String
+  campaign          CommunicationCampaign @relation(fields: [campaign_id], references: [id], onDelete: Cascade)
+  recipient_user_id String
+  // "queued" | "processed" | "excluded_no_contact" | "excluded_no_consent" | "excluded_recent"
+  state             String                @default("queued")
+  reason            String?
+  processed_at      DateTime?
+  created_at        DateTime              @default(now())
+
+  @@unique([campaign_id, recipient_user_id])
+  @@index([campaign_id, state])
+  @@map("campaign_recipient_states")
+}
+
+// Comunicado interno que aparece DENTRO da plataforma e (quando kind
+// "obrigatorio") exige ciência explícita. Versão nova → exige ciência de novo.
+model MandatoryBanner {
+  id                 String    @id @default(cuid())
+  title              String
+  body               String    @db.LongText
+  image_file_name    String?
+  image_alt          String?
+  link_url           String?
+  // "obrigatorio" (exige "Li e estou ciente", não fecha no Esc/clique-fora) |
+  // "informativo" (pode fechar normalmente).
+  kind               String    @default("obrigatorio")
+  ack_button_label   String    @default("Li e estou ciente")
+  // Incrementado a cada republicação relevante — a ciência é registrada por
+  // (banner, usuário, versão); subir a versão faz o banner reaparecer.
+  version            Int       @default(1)
+  audience_json      String    @db.LongText
+  starts_at          DateTime
+  ends_at            DateTime?
+  is_active          Boolean   @default(true)
+  is_cancelled       Boolean   @default(false)
+  created_at         DateTime  @default(now())
+  updated_at         DateTime  @updatedAt
+  created_by_user_id String?
+
+  acknowledgements BannerAcknowledgement[]
+
+  @@index([is_active, starts_at])
+  @@map("mandatory_banners")
+}
+
+model BannerAcknowledgement {
+  id              String          @id @default(cuid())
+  banner_id       String
+  banner          MandatoryBanner @relation(fields: [banner_id], references: [id], onDelete: Cascade)
+  user_id         String
+  user            User            @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  version         Int
+  acknowledged_at DateTime        @default(now())
+
+  @@unique([banner_id, user_id, version])
+  @@index([user_id])
+  @@map("banner_acknowledgements")
+}
+
+// Fundação de Web Push (ata 2026-08, bloco 5/5). Sem chaves VAPID
+// configuradas o canal fica "não configurado" — a assinatura é guardada mas
+// nenhum envio real acontece. `endpoint` é longo → unicidade por hash sha256.
+model PushSubscription {
+  id            String    @id @default(cuid())
+  user_id       String
+  user          User      @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  endpoint      String    @db.Text
+  endpoint_hash String    @unique
+  p256dh        String
+  auth          String
+  user_agent    String?
+  enabled       Boolean   @default(true)
+  created_at    DateTime  @default(now())
+  last_used_at  DateTime?
+
+  @@index([user_id, enabled])
+  @@map("push_subscriptions")
+}
+
+// Preferência de CANAL do usuário para comunicações NÃO obrigatórias
+// (distinta de NotificationPreference, que é por tipo de evento). `*_enabled`
+// = o usuário aceita receber por aquele canal; `marketing_opt_in` = aceita
+// campanhas de marketing/reengajamento (opt-in, nunca opt-out).
+model UserCommunicationChannelPref {
+  user_id          String   @id
+  user             User     @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  platform_enabled Boolean  @default(true)
+  email_enabled    Boolean  @default(true)
+  whatsapp_enabled Boolean  @default(false)
+  push_enabled     Boolean  @default(false)
+  marketing_opt_in Boolean  @default(false)
+  updated_at       DateTime @updatedAt
+
+  @@map("user_communication_channel_prefs")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// NOVO CATÁLOGO ("catalog2") — sprint de produtos, bloco 2/6.
+//
+// Arquitetura LIMPA e VERSIONADA que recebera os 36 produtos definitivos num
+// bloco futuro. Coexiste com: (1) o catalogo operacional atual (models
+// Product/ProductVariation/CatalogTask — INTOCADOS), (2) o banco Legacy
+// (separado). Tabelas proprias com prefixo `catalog2_` — nada e renomeado nem
+// reaproveitado do catalogo antigo.
+//
+// NAO copia os 162 produtos atuais. NAO grava os 36 produtos da planilha
+// neste lote. Sem precificacao, sem checkout, sem execucao, sem IA real.
+// ─────────────────────────────────────────────────────────────────────────────
+
+// Pilar interno (ex.: "A. Presenca Digital e Conversao"). Reutilizavel — o
+// produto referencia por FK, nunca repete o texto.
+model Catalog2Pillar {
+  id          String  @id @default(cuid())
+  key         String  @unique
+  name        String
+  description String? @db.Text
+  sort_order  Int     @default(0)
+  is_active   Boolean @default(true)
+
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  products Catalog2Product[]
+
+  @@map("catalog2_pillars")
+}
+
+// Fase da metodologia 4Fs (Fundacao / Fluxo / Forca / Fidelizacao).
+model Catalog2FourF {
+  id         String @id @default(cuid())
+  key        String @unique
+  name       String
+  sort_order Int    @default(0)
+
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  product_links Catalog2ProductFourF[]
+
+  @@map("catalog2_four_f")
+}
+
+// Categoria padrao do produto (ex.: "Performance", "Design"). Reutilizavel.
+model Catalog2Category {
+  id          String  @id @default(cuid())
+  key         String  @unique
+  name        String
+  description String? @db.Text
+  sort_order  Int     @default(0)
+  is_active   Boolean @default(true)
+
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  products Catalog2Product[]
+
+  @@map("catalog2_categories")
+}
+
+// Especialidade / perfil profissional. Reutilizavel, associada PRINCIPALMENTE
+// as tarefas que exigem determinado perfil (Catalog2Task.specialty_id).
+model Catalog2Specialty {
+  id          String  @id @default(cuid())
+  key         String  @unique
+  name        String
+  description String? @db.Text
+  sort_order  Int     @default(0)
+  is_active   Boolean @default(true)
+
+  // Precificacao (ata 2026-08-26): "custo base da tarefa = tempo estimado x
+  // valor da hora da especialidade", sempre pela REFERENCIA MAXIMA. Nulo =
+  // "aguardando definicao comercial" (o calculo nao inventa valor).
+  max_hourly_rate  Float?
+  hourly_rate_note String? @db.Text
+
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  tasks Catalog2Task[]
+
+  @@map("catalog2_specialties")
+}
+
+// Identidade ESTAVEL do produto — nao muda entre versoes. O conteudo
+// (descricao, tarefas, variacoes...) vive nas versoes.
+model Catalog2Product {
+  id            String @id @default(cuid())
+  slug          String @unique
+  internal_name String
+
+  pillar_id   String?
+  pillar      Catalog2Pillar?   @relation(fields: [pillar_id], references: [id], onDelete: SetNull)
+  category_id String?
+  category    Catalog2Category? @relation(fields: [category_id], references: [id], onDelete: SetNull)
+
+  // Estado do PRODUTO (nao da versao):
+  //   "em_preparacao"            = sem versao publicada; nao aparece pro cliente.
+  //   "disponivel"               = tem versao publicada e esta ofertavel.
+  //   "temporariamente_inativo"  = tem versao publicada, oferta suspensa
+  //                                (volta sem nova versao).
+  //   "arquivado"                = fora do catalogo; historico preservado.
+  status String @default("em_preparacao")
+
+  // "existente" | "novo" | "reativado" — informativo (relatorio), sem regra.
+  origin String?
+
+  // Versao PUBLICADA atual (nula enquanto "em_preparacao"). A etiqueta
+  // "Novo por 3 meses" e DERIVADA de published_version.published_at.
+  published_version_id String?                 @unique
+  published_version    Catalog2ProductVersion? @relation("Catalog2PublishedVersion", fields: [published_version_id], references: [id], onDelete: SetNull)
+
+  created_by_user_id  String?
+  archived_at         DateTime?
+  archived_by_user_id String?
+  created_at          DateTime  @default(now())
+  updated_at          DateTime  @updatedAt
+
+  versions         Catalog2ProductVersion[]     @relation("Catalog2ProductVersions")
+  four_f           Catalog2ProductFourF[]
+  import_origin    Catalog2ProductImportOrigin?
+  quotes           Catalog2Quote[]
+  cart_items       Catalog2CartItem[]
+  // Linhas de pedido (Bloco 6/6) — produto CONTRATADO a partir deste catálogo.
+  project_products ProjectProduct[]
+
+  @@index([status])
+  @@index([pillar_id])
+  @@index([category_id])
+  @@map("catalog2_products")
+}
+
+model Catalog2ProductFourF {
+  id         String          @id @default(cuid())
+  product_id String
+  product    Catalog2Product @relation(fields: [product_id], references: [id], onDelete: Cascade)
+  four_f_id  String
+  four_f     Catalog2FourF   @relation(fields: [four_f_id], references: [id], onDelete: Cascade)
+
+  @@unique([product_id, four_f_id])
+  @@index([four_f_id])
+  @@map("catalog2_product_four_f")
+}
+
+// Versao de um produto. Rascunho e editavel; publicada e IMUTAVEL (a API
+// recusa edicao — 409). Publicar cria uma versao NOVA e nunca apaga a
+// anterior; versoes antigas continuam consultaveis.
+model Catalog2ProductVersion {
+  id             String          @id @default(cuid())
+  product_id     String
+  product        Catalog2Product @relation("Catalog2ProductVersions", fields: [product_id], references: [id], onDelete: Restrict)
+  version_number Int
+
+  // "rascunho" | "publicada"
+  state String @default("rascunho")
+
+  title            String
+  summary          String? @db.Text
+  full_description String? @db.LongText
+
+  // PRAZO COMERCIAL base (dias) prometido ao cliente — NUNCA derivado do
+  // esforco (bloco 4, reparo 2.1). Nulo = "prazo comercial aguardando
+  // definicao"; o esforco calculado continua servindo so para planejamento
+  // interno e nao vira promessa de entrega.
+  base_commercial_deadline_days Int?
+
+  published_at             DateTime?
+  published_by_user_id     String?
+  // Idempotencia da publicacao: gerado no frontend por clique intencional em
+  // "Publicar". Retry / clique duplo com o MESMO valor nao publica de novo.
+  publish_client_action_id String?   @unique
+
+  created_by_user_id String?
+  updated_by_user_id String?
+  // Resumo da mudanca informado pelo administrador (historico da versao).
+  change_summary     String?  @db.Text
+  created_at         DateTime @default(now())
+  updated_at         DateTime @updatedAt
+
+  published_of Catalog2Product? @relation("Catalog2PublishedVersion")
+
+  variations       Catalog2Variation[]
+  addons           Catalog2Addon[]
+  tasks            Catalog2Task[]
+  conditions       Catalog2Condition[]
+  events           Catalog2VersionEvent[]
+  quotes           Catalog2Quote[]        @relation("Catalog2QuoteVersion")
+  cart_items       Catalog2CartItem[]     @relation("Catalog2CartVersion")
+  // Linhas de pedido (Bloco 6/6) — versão CONTRATADA/congelada de um pedido.
+  project_products ProjectProduct[]
+
+  @@unique([product_id, version_number])
+  @@index([state])
+  @@map("catalog2_product_versions")
+}
+
+// Historico da versao (quem criou/alterou/publicou e quando). Imutavel —
+// so INSERT. `note` = resumo da mudanca. Nunca guarda segredo.
+model Catalog2VersionEvent {
+  id         String                 @id @default(cuid())
+  version_id String
+  version    Catalog2ProductVersion @relation(fields: [version_id], references: [id], onDelete: Cascade)
+
+  // "created" | "updated" | "published" | "new_version"
+  event_type    String
+  actor_user_id String?
+  note          String?  @db.Text
+  created_at    DateTime @default(now())
+
+  @@index([version_id, created_at])
+  @@map("catalog2_version_events")
+}
+
+// VARIACAO = escolha OBRIGATORIA da contratacao (formato, quantidade, tamanho,
+// modalidade). Entidade DISTINTA de Adicional. Pertence a uma versao.
+model Catalog2Variation {
+  id         String                 @id @default(cuid())
+  version_id String
+  version    Catalog2ProductVersion @relation(fields: [version_id], references: [id], onDelete: Cascade)
+
+  key            String
+  name           String
+  selection_type String  @default("single")
+  is_required    Boolean @default(true)
+  sort_order     Int     @default(0)
+  notes          String? @db.Text
+
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  options Catalog2VariationOption[]
+
+  @@index([version_id, sort_order])
+  @@map("catalog2_variations")
+}
+
+model Catalog2VariationOption {
+  id           String            @id @default(cuid())
+  variation_id String
+  variation    Catalog2Variation @relation(fields: [variation_id], references: [id], onDelete: Cascade)
+
+  key        String
+  label      String
+  sort_order Int     @default(0)
+  is_default Boolean @default(false)
+
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  effects Catalog2OptionEffect[]
+
+  @@index([variation_id, sort_order])
+  @@map("catalog2_variation_options")
+}
+
+// Efeito de escolher uma OPCAO de variacao — vocabulario FECHADO, igual ao
+// das condicoes. "impacto em prazo, custo, tarefas, etapas, entregaveis e
+// informacoes" (bloco 3). Nunca codigo livre.
+model Catalog2OptionEffect {
+  id                  String                  @id @default(cuid())
+  variation_option_id String
+  option              Catalog2VariationOption @relation(fields: [variation_option_id], references: [id], onDelete: Cascade)
+
+  // add_deadline_days | add_fixed_amount | add_percent | add_task |
+  // remove_task | add_step | require_info | add_deliverable
+  effect_type  String
+  // Numero (dias/valor/percentual) OU key de tarefa/etapa da MESMA versao OU
+  // texto (require_info / add_deliverable). Validado no servidor.
+  effect_value String @db.Text
+  sort_order   Int    @default(0)
+
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  @@index([variation_option_id, sort_order])
+  @@map("catalog2_option_effects")
+}
+
+// ADICIONAL = escolha OPCIONAL (add-on), diferente da variacao obrigatoria.
+// Nao precisa constar em todas as etapas (ata 2026-08-26); pode estar
+// vinculado a uma tarefa/etapa especifica.
+model Catalog2Addon {
+  id         String                 @id @default(cuid())
+  version_id String
+  version    Catalog2ProductVersion @relation(fields: [version_id], references: [id], onDelete: Cascade)
+
+  key                 String
+  name                String
+  description         String? @db.Text
+  sort_order          Int     @default(0)
+  is_default_selected Boolean @default(false)
+  is_active           Boolean @default(true)
+  // Custo direto do adicional (opcional). Nulo = sem custo direto (o impacto
+  // vem so pelos efeitos). Nunca inventa valor.
+  base_cost           Float?
+
+  // Vinculo opcional a uma tarefa/etapa especifica da mesma versao.
+  target_task_id String?
+  target_task    Catalog2Task?     @relation("AddonTargetTask", fields: [target_task_id], references: [id], onDelete: SetNull)
+  target_step_id String?
+  target_step    Catalog2TaskStep? @relation("AddonTargetStep", fields: [target_step_id], references: [id], onDelete: SetNull)
+
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  effects Catalog2AddonEffect[]
+
+  @@index([version_id, sort_order])
+  @@map("catalog2_addons")
+}
+
+model Catalog2AddonEffect {
+  id       String        @id @default(cuid())
+  addon_id String
+  addon    Catalog2Addon @relation(fields: [addon_id], references: [id], onDelete: Cascade)
+
+  effect_type  String
+  effect_value String @db.Text
+  sort_order   Int    @default(0)
+
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  @@index([addon_id, sort_order])
+  @@map("catalog2_addon_effects")
+}
+
+// Tarefa do produto (modelo de catalogo — NAO e a execucao de uma compra).
+model Catalog2Task {
+  id         String                 @id @default(cuid())
+  version_id String
+  version    Catalog2ProductVersion @relation(fields: [version_id], references: [id], onDelete: Cascade)
+
+  key         String
+  name        String
+  description String? @db.Text
+  objective   String? @db.Text
+  sort_order  Int     @default(0)
+
+  specialty_id String?
+  specialty    Catalog2Specialty? @relation(fields: [specialty_id], references: [id], onDelete: SetNull)
+
+  // "humano" | "ia" | "hibrido"
+  execution_mode String @default("humano")
+
+  // Duracao estimada da tarefa (minutos) — base do custo humano.
+  estimated_minutes        Int?
+  requires_review          Boolean @default(false)
+  requires_client_approval Boolean @default(false)
+  // true = a tarefa so entra quando um efeito (condicao/variacao/adicional)
+  // a inclui (add_task). false = tarefa fixa do produto.
+  is_conditional           Boolean @default(false)
+
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  steps         Catalog2TaskStep[]
+  ai            Catalog2TaskAI?
+  dependencies  Catalog2TaskDependency[] @relation("TaskDeps")
+  dependents    Catalog2TaskDependency[] @relation("TaskDependents")
+  addon_targets Catalog2Addon[]          @relation("AddonTargetTask")
+  // ProjectTask materializadas a partir deste modelo (Bloco 6/6).
+  project_tasks ProjectTask[]
+
+  @@index([version_id, sort_order])
+  @@index([specialty_id])
+  @@map("catalog2_tasks")
+}
+
+// Dependencia entre tarefas da MESMA versao (task depende de depends_on).
+model Catalog2TaskDependency {
+  id                 String       @id @default(cuid())
+  task_id            String
+  task               Catalog2Task @relation("TaskDeps", fields: [task_id], references: [id], onDelete: Cascade)
+  depends_on_task_id String
+  depends_on_task    Catalog2Task @relation("TaskDependents", fields: [depends_on_task_id], references: [id], onDelete: Cascade)
+
+  @@unique([task_id, depends_on_task_id])
+  @@index([depends_on_task_id])
+  @@map("catalog2_task_dependencies")
+}
+
+// Etapa de UMA tarefa especifica. Ordenada.
+model Catalog2TaskStep {
+  id      String       @id @default(cuid())
+  task_id String
+  task    Catalog2Task @relation(fields: [task_id], references: [id], onDelete: Cascade)
+
+  key               String
+  name              String
+  description       String? @db.Text
+  sort_order        Int     @default(0)
+  estimated_minutes Int?
+  is_conditional    Boolean @default(false)
+
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  addon_targets Catalog2Addon[] @relation("AddonTargetStep")
+
+  @@index([task_id, sort_order])
+  @@map("catalog2_task_steps")
+}
+
+// Config de custo de IA por tarefa (ia/hibrido). Calculo por TOKENS +
+// rodadas de revisao (ata 2026-08-26), nunca por horas. Sem chamada externa.
+model Catalog2TaskAI {
+  id      String       @id @default(cuid())
+  task_id String       @unique
+  task    Catalog2Task @relation(fields: [task_id], references: [id], onDelete: Cascade)
+
+  provider                String?
+  model                   String?
+  est_input_tokens        Int?
+  est_output_tokens       Int?
+  // Custo por 1.000 tokens (entrada/saida). Nulo = "aguardando definicao".
+  unit_cost_input_per_1k  Float?
+  unit_cost_output_per_1k Float?
+  currency                String  @default("BRL")
+  // Rodadas previstas de revisao humana da saida da IA.
+  est_review_rounds       Int?
+  cost_note               String? @db.Text
+  human_review_required   Boolean @default(true)
+
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  @@map("catalog2_task_ai")
+}
+
+// CONDICAO TIPADA (bloco 3, Parte 6). Gatilho -> efeito, vocabulario FECHADO
+// e validado no servidor. NUNCA codigo livre / JS / SQL / expressao.
+model Catalog2Condition {
+  id         String                 @id @default(cuid())
+  version_id String
+  version    Catalog2ProductVersion @relation(fields: [version_id], references: [id], onDelete: Cascade)
+
+  key         String
+  name        String
+  description String? @db.Text
+  is_active   Boolean @default(true)
+  // Ordem/prioridade de aplicacao.
+  sort_order  Int     @default(0)
+
+  // Gatilho: "variation_option" | "addon_selected" | "quantity" |
+  // "client_answer" | "contract_attribute"
+  trigger_source   String
+  // key da opcao de variacao / do adicional / do atributo — conforme a origem.
+  trigger_ref      String?
+  // "eq" | "neq" | "gte" | "lte" | "contains" | "selected" | "not_selected"
+  operator         String
+  comparison_value String?
+
+  // "add_deadline_days" | "add_fixed_amount" | "add_percent" | "add_task" |
+  // "remove_task" | "add_step" | "require_info" | "add_deliverable"
+  effect_type  String
+  effect_value String @db.Text
+
+  // Texto legivel para o admin, gerado no servidor a partir dos campos acima.
+  explanation String @db.Text
+
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  @@index([version_id, sort_order])
+  @@map("catalog2_conditions")
+}
+
+// Modulo de precificacao (ata 2026-08-26): sobre o custo acumulado das
+// tarefas a plataforma soma impostos, comissoes, taxas operacionais e
+// margem de lucro "definidas no modulo de precificacao". A ata NAO informa
+// os percentuais — cada campo nulo vira "aguardando definicao comercial" no
+// resultado; o calculo nunca inventa valor. Singleton (id = "default").
+model Catalog2PricingSettings {
+  id                      String   @id @default("default")
+  tax_percent             Float?
+  commission_percent      Float?
+  operational_fee_percent Float?
+  profit_margin_percent   Float?
+  // Percentual do custo humano reservado para revisao humana (linha separada
+  // no resumo). Nulo = aguardando definicao.
+  human_review_percent    Float?
+  // Ordem de incidencia das taxas/margem (bloco 4, reparo 2.2). JSON string[]
+  // de "tax"|"commission"|"operational"|"margin". Nulo = ordem NAO definida:
+  // o motor marca `order_not_defined` e NAO calcula o preco comercial final.
+  component_order_json    String?  @db.Text
+  // Base de calculo por componente. JSON { "<comp>": "running"|"subtotal"|
+  // "direct_cost" }. Ausente = "running" (acumulado ate ali), mas sinalizado
+  // como nao explicitamente definido.
+  component_base_json     String?  @db.Text
+  currency                String   @default("BRL")
+  notes                   String?  @db.Text
+  updated_by_user_id      String?
+  updated_at              DateTime @updatedAt
+  created_at              DateTime @default(now())
+
+  @@map("catalog2_pricing_settings")
+}
+
+// ─── Importacao dos 36 produtos definitivos (bloco 4/6) ──────────────────────
+// Cada `--apply` = um lote. Auditavel, repetivel, NUNCA sobrescreve edicao
+// humana. Fonte principal = Allka_Proposta_Catalogo_Produtos_v9.xlsx;
+// revisao = Review Rose.xlsx. As planilhas NAO sao copiadas para o repo.
+model Catalog2ImportBatch {
+  id                   String    @id @default(cuid())
+  // "dry_run" | "apply"
+  mode                 String
+  rule_version         String
+  source_main_name     String
+  source_main_checksum String
+  source_rose_name     String
+  source_rose_checksum String
+  source_ata_checksum  String?
+  row_count_main       Int       @default(0)
+  row_count_rose       Int       @default(0)
+  expected_products    Int       @default(36)
+  created_count        Int       @default(0)
+  updated_count        Int       @default(0)
+  unchanged_count      Int       @default(0)
+  divergence_count     Int       @default(0)
+  // "completed" | "completed_with_divergences" | "failed" | "dry_run"
+  status               String    @default("dry_run")
+  report_json          String?   @db.LongText
+  notes                String?   @db.Text
+  actor_user_id        String?
+  started_at           DateTime  @default(now())
+  finished_at          DateTime?
+
+  records Catalog2ImportRecord[]
+
+  @@index([mode, started_at])
+  @@map("catalog2_import_batches")
+}
+
+// Resultado por LINHA de produto num lote (historico completo, imutavel).
+model Catalog2ImportRecord {
+  id                    String              @id @default(cuid())
+  batch_id              String
+  batch                 Catalog2ImportBatch @relation(fields: [batch_id], references: [id], onDelete: Cascade)
+  // Chave estavel da linha na fonte: "catalogo_v9:<indice>".
+  source_key            String
+  source_index          Int
+  source_name           String
+  // Produto/versao criados ou reconhecidos (nulos em dry_run).
+  product_id            String?
+  version_id            String?
+  slug                  String?
+  // "created" | "updated" | "unchanged" | "skipped_human_edit" | "divergence" | "error"
+  outcome               String
+  checksum              String
+  fields_from_main_json String?             @db.LongText
+  fields_from_rose_json String?             @db.LongText
+  original_texts_json   String?             @db.LongText
+  divergences_json      String?             @db.Text
+  warnings_json         String?             @db.Text
+  errors_json           String?             @db.Text
+  rose_reviewed         Boolean             @default(false)
+  created_at            DateTime            @default(now())
+
+  @@unique([batch_id, source_key])
+  @@index([source_key])
+  @@map("catalog2_import_records")
+}
+
+// Origem + revisao POR PRODUTO (1:1). Idempotencia (source_key @unique) +
+// guarda de edicao humana + dados da secao "Origem e revisao" do editor.
+model Catalog2ProductImportOrigin {
+  id                      String          @id @default(cuid())
+  product_id              String          @unique
+  product                 Catalog2Product @relation(fields: [product_id], references: [id], onDelete: Cascade)
+  source_key              String          @unique
+  source_index            Int
+  source_name             String
+  rose_reviewed           Boolean         @default(false)
+  // "Area" da Rose — preservada como revisao/sugestao de especialidade,
+  // NUNCA sobrescreve a categoria.
+  area_rose               String?
+  // "importado" | "content_review_pending" | "classification_decision_pending"
+  // | "price_pending" | "deadline_pending" | "portfolio_pending"
+  // | "ready_for_final_review" | "ready_for_publication"
+  review_state            String          @default("importado")
+  // JSON string[] de todas as pendencias simultaneas.
+  pendencies_json         String?         @db.Text
+  // Ultimo checksum aplicado pelo importador (detecta mudanca da fonte).
+  last_import_checksum    String
+  last_import_batch_id    String?
+  // Marcado quando o Admin edita o rascunho depois da importacao — o
+  // importador nunca sobrescreve isto.
+  human_edited_at         DateTime?
+  human_edited_by_user_id String?
+  // Snapshots para a secao "Origem e revisao".
+  main_fields_json        String?         @db.LongText
+  rose_fields_json        String?         @db.LongText
+  original_texts_json     String?         @db.LongText
+  divergences_json        String?         @db.Text
+  observations            String?         @db.Text
+  historical_price_min    Float?
+  historical_price_max    Float?
+  historical_price_note   String?
+
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  resolutions Catalog2ReviewResolution[]
+
+  @@index([review_state])
+  @@map("catalog2_product_import_origins")
+}
+
+// Resolucao de UMA pendencia pelo Admin Master — altera so o rascunho,
+// registra quem/quando/decisao e PRESERVA a divergencia original.
+model Catalog2ReviewResolution {
+  id                       String                      @id @default(cuid())
+  origin_id                String
+  origin                   Catalog2ProductImportOrigin @relation(fields: [origin_id], references: [id], onDelete: Cascade)
+  pendency_key             String
+  decision                 String                      @db.Text
+  original_divergence_json String?                     @db.Text
+  resolved_by_user_id      String?
+  resolved_at              DateTime                    @default(now())
+
+  @@index([origin_id])
+  @@map("catalog2_review_resolutions")
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// BLOCO 5 — catalogo do cliente: pre-cotacao e cesta do catalogo2.
+// Entidades SEPARADAS de compra/projeto. O servidor recalcula tudo; o
+// navegador nunca define preco. Isoladas por conta contratante + usuario.
+// ─────────────────────────────────────────────────────────────────────────
+
+// Pre-cotacao: uma configuracao de UM produto publicado, com preco/prazo
+// CONGELADOS no momento em que ficou "valida". Nao e compra nem projeto.
+model Catalog2Quote {
+  id String @id @default(cuid())
+
+  // Conta contratante (empresa/agencia) + usuario que gerou.
+  account_kind String // "company" | "agency" | "admin_preview"
+  account_id   String
+  user_id      String
+
+  product_id String
+  product    Catalog2Product        @relation(fields: [product_id], references: [id], onDelete: Restrict)
+  version_id String
+  version    Catalog2ProductVersion @relation("Catalog2QuoteVersion", fields: [version_id], references: [id], onDelete: Restrict)
+
+  // Configuracao congelada.
+  selection_json           String  @db.Text // { variation_option_keys, addon_keys, quantity, answers }
+  deliverables_json        String? @db.Text // entregaveis resultantes (snapshot)
+  quantity                 Int     @default(1)
+  commercial_deadline_days Int?
+  commercial_price         Float?
+  currency                 String  @default("BRL")
+  // sha256 da configuracao normalizada — deteccao de clique-duplo / mudanca.
+  config_checksum          String
+  // Snapshot legivel do calculo no momento do congelamento.
+  pricing_snapshot_json    String? @db.LongText
+
+  // "rascunho" | "valida" | "expirada" | "convertida" | "cancelada"
+  status      String    @default("rascunho")
+  valid_until DateTime?
+  is_preview  Boolean   @default(false)
+
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  change_order Catalog2ChangeOrder?
+
+  @@unique([account_kind, account_id, config_checksum, status])
+  @@index([account_kind, account_id, status])
+  @@index([user_id])
+  @@map("catalog2_quotes")
+}
+
+// ─── Catalog2CutoverBatch — lote de virada comercial (fechamento técnico) ──
+// Registra CADA execução real (nunca dry-run) do script
+// catalog2-commercial-cutover-plan.ts --apply. Nunca apagado — histórico
+// permanente de quando/quem/o quê, mesmo que revertido depois.
+model Catalog2CutoverBatch {
+  id String @id @default(cuid())
+
+  actor      String
+  // e-mail/identificador de quem rodou o --apply (script de linha de
+  // comando, não uma sessão HTTP autenticada — não há req.user aqui).
+  applied_at DateTime @default(now())
+
+  // Contagens no momento da aplicação — nunca recalculadas depois.
+  operational_products_deactivated Int
+  catalog2_products_published      Int
+
+  // sha256 do conjunto ordenado de ids de Product desativados nesta
+  // execução — permite provar exatamente quais produtos este lote tocou.
+  affected_products_checksum String
+  // Lista JSON dos MESMOS ids, em texto — necessária pra reversão precisa
+  // (reativar exatamente estes produtos, nunca "todos os inativos").
+  affected_product_ids_json  String @db.LongText
+
+  // Nulo enquanto o lote está em vigor. Preenchido quando revertido.
+  reversed_at   DateTime?
+  reversed_by   String?
+  reversal_note String?   @db.Text
+
+  @@map("catalog2_cutover_batches")
+}
+
+// ─── Catalog2ChangeOrder — aditivo pós-venda (Bloco 6/6) ───────────────────
+// NUNCA altera o ProjectProduct/ProjectTask originais — só adiciona uma nova
+// linha (origin="CATALOG2_ADDITIVE") quando aprovado E pago. Preço/prazo do
+// aditivo vêm sempre de uma Catalog2Quote própria (mesmo motor de
+// recálculo/expiração/checksum do checkout normal) — nunca digitados
+// livremente nem forjados pelo cliente.
+model Catalog2ChangeOrder {
+  id String @id @default(cuid())
+
+  project_id String
+  project    Project @relation(fields: [project_id], references: [id], onDelete: Restrict)
+
+  // Item já contratado que está sendo ampliado (ex.: adicional novo num
+  // produto já pago). Nulo quando o aditivo introduz um produto novo dentro
+  // do mesmo projeto.
+  original_project_product_id String?
+  original_project_product    ProjectProduct? @relation("ChangeOrderOriginal", fields: [original_project_product_id], references: [id], onDelete: SetNull)
+
+  // Cotação que precifica EXATAMENTE o que este aditivo contratará.
+  quote_id String        @unique
+  quote    Catalog2Quote @relation(fields: [quote_id], references: [id], onDelete: Restrict)
+
+  requested_by_user_id String
+  request_note         String? @db.Text
+  // Texto legível gerado no SERVIDOR a partir da cotação — nunca escrito
+  // livre por humano.
+  change_summary       String  @db.Text
+
+  // Snapshot IMUTÁVEL do impacto — copiado da quote só no momento da
+  // APROVAÇÃO (nunca no momento da solicitação, pra sempre valer o preço
+  // mais atual). Nunca recalculado depois disso, nunca editável.
+  price_impact_snapshot         Float?
+  deadline_impact_days_snapshot Int?
+  currency_snapshot             String @default("BRL")
+
+  // "solicitado" | "aprovado" | "rejeitado" | "expirado" | "materializado" | "cancelado"
+  status String @default("solicitado")
+
+  // Aprovação SEMPRE explícita por um Admin (isAdminUser) — nunca inferida,
+  // mesmo padrão de Project.admin_responsible_user_id.
+  decided_by_user_id        String?
+  decided_at                DateTime?
+  decision_note             String?   @db.Text
+  // Idempotência do clique "Aprovar" — retry/clique duplo com o MESMO valor
+  // não duplica a decisão.
+  approval_client_action_id String?   @unique
+
+  // Preenchidos só depois que o ProjectProduct do aditivo foi criado
+  // (attachCatalog2QuoteToProject) e, respectivamente, pago.
+  materialized_project_product_id String? @unique
+  materialized_payment_id         String?
+
+  requested_at DateTime @default(now())
+  updated_at   DateTime @updatedAt
+
+  @@index([project_id, status])
+  @@map("catalog2_change_orders")
+}
+
+// Item da cesta do catalogo2 (isolado por conta + usuario). Uma configuracao
+// so entra apos "Adicionar a cesta". Preco/prazo sao sempre recalculados no
+// servidor ao ler — nunca confiados do que o navegador mandou.
+model Catalog2CartItem {
+  id String @id @default(cuid())
+
+  account_kind String
+  account_id   String
+  user_id      String
+
+  product_id String
+  product    Catalog2Product        @relation(fields: [product_id], references: [id], onDelete: Cascade)
+  version_id String
+  version    Catalog2ProductVersion @relation("Catalog2CartVersion", fields: [version_id], references: [id], onDelete: Cascade)
+
+  selection_json  String @db.Text
+  quantity        Int    @default(1)
+  config_checksum String
+
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  // dedupe: a MESMA configuracao nao entra duas vezes (clique duplo).
+  @@unique([account_kind, account_id, user_id, config_checksum])
+  @@index([account_kind, account_id, user_id])
+  @@map("catalog2_cart_items")
 }

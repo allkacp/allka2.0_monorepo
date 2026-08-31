@@ -57,12 +57,23 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-import { useSidebar } from "@/contexts/sidebar-context";
 import { computeProductRating } from "@/dev-mocks/data/product-nomads";
 import { PageLoader } from "@/components/ui/loading";
 import { CatalogCartStickyBar } from "@/components/catalog-cart-sticky-bar";
 
 export type CatalogMode = "page" | "panel";
+
+// Mesmo estilo de detecção de portal por prefixo já usado em
+// project-basket-drawer.tsx (resolveCatalogPath) — aqui pra montar a rota
+// da tela cheia do produto (/<catálogo-do-portal>/:id) a partir de onde o
+// usuário está agora. Só os 3 portais com rota de catálogo real.
+function resolveCatalogBasePath(pathname: string): string {
+  if (pathname.startsWith("/admin")) return "/admin/catalogo-produtos";
+  if (pathname.startsWith("/company")) return "/company/produtos";
+  if (pathname.startsWith("/agencia")) return "/agencia/catalogo";
+  if (pathname.startsWith("/agency")) return "/agency/catalogo";
+  return pathname.replace(/\/$/, "");
+}
 
 export interface CatalogSelectedProduct {
   id: string;
@@ -89,8 +100,6 @@ interface ProductCatalogViewProps {
   onConfirm?: () => void;
   /** Show a different title in panel mode */
   panelTitle?: string;
-  /** Pre-open a specific product by ID (deep link) */
-  initialProductId?: string;
   /** Hides all contracting/basket actions — catalog is browse-only */
   readOnly?: boolean;
 }
@@ -297,7 +306,6 @@ export function ProductCatalogView({
   contractableOnly = true,
   onConfirm,
   panelTitle = "Selecionar Produtos",
-  initialProductId,
   readOnly = false,
 }: ProductCatalogViewProps) {
   const { products, loading, error: productsError } = useProducts();
@@ -314,25 +322,23 @@ export function ProductCatalogView({
     return state?.projectId ?? state?.openProjectId ?? state?.draftProjectId ?? null;
   }, [location.state]);
 
-  const { sidebarWidth } = useSidebar();
-  const headerHeight = 64;
-  const footerHeight = 40;
-
   const [search, setSearch] = useState("");
+  // Modal embutido (ProductDetailSheet) — só usado no modo "panel" (seleção
+  // de produtos dentro da criação de projeto). No modo "page" (catálogo
+  // como tela própria), "Escolher"/"Detalhes" navega pra uma tela cheia
+  // (rota /:id) em vez de abrir isto — ver handleOpenProduct abaixo.
   const [detailProduct, setDetailProduct] = useState<Product | null>(null);
   const [detailOpen, setDetailOpen] = useState(false);
 
-  // Deep-link: open product detail from initialProductId when products load
-  useEffect(() => {
-    if (!initialProductId || !products.length) return;
-    const found = products.find(
-      (p) => String(p.id) === String(initialProductId),
-    );
-    if (found) {
-      setDetailProduct(found);
-      setDetailOpen(true);
+  const handleOpenProduct = (product: Product) => {
+    if (mode === "page") {
+      const base = resolveCatalogBasePath(location.pathname);
+      navigate(`${base}/${product.id}`);
+      return;
     }
-  }, [initialProductId, products]);
+    setDetailProduct(product);
+    setDetailOpen(true);
+  };
 
   useEffect(() => {
     if (readOnly) return;
@@ -583,19 +589,6 @@ export function ProductCatalogView({
     }
 
     basket.setOpen(true);
-  };
-
-  const continueShopping = () => {
-    const searchBox = document.querySelector<HTMLInputElement>(
-      'input[placeholder="Buscar produtos, tags..."]',
-    );
-
-    if (searchBox) {
-      searchBox.focus();
-      return;
-    }
-
-    window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
   return (
@@ -1177,10 +1170,7 @@ export function ProductCatalogView({
                         variant="outline"
                         size="sm"
                         className="h-7 px-3 text-xs text-blue-600 border-blue-200 hover:bg-blue-50 bg-transparent"
-                        onClick={() => {
-                          setDetailProduct(product);
-                          setDetailOpen(true);
-                        }}
+                        onClick={() => handleOpenProduct(product)}
                       >
                         Detalhes
                       </Button>
@@ -1229,8 +1219,7 @@ export function ProductCatalogView({
                           }}
                           onClick={() => {
                             if (!canChoose) return;
-                            setDetailProduct(product);
-                            setDetailOpen(true);
+                            handleOpenProduct(product);
                           }}
                         >
                           Escolher
@@ -1253,8 +1242,7 @@ export function ProductCatalogView({
                           }}
                           onClick={() => {
                             if (!canChoose) return;
-                            setDetailProduct(product);
-                            setDetailOpen(true);
+                            handleOpenProduct(product);
                           }}
                         >
                           Escolher
@@ -1555,10 +1543,7 @@ export function ProductCatalogView({
                             variant="outline"
                             size="sm"
                             className="w-full h-8 text-xs text-blue-600 hover:text-blue-700 border-blue-200 hover:bg-blue-50 bg-transparent"
-                            onClick={() => {
-                              setDetailProduct(product);
-                              setDetailOpen(true);
-                            }}
+                            onClick={() => handleOpenProduct(product)}
                           >
                             Ver detalhes
                           </Button>
@@ -1612,8 +1597,7 @@ export function ProductCatalogView({
                             }}
                             onClick={() => {
                               if (!canChoose) return;
-                              setDetailProduct(product);
-                              setDetailOpen(true);
+                              handleOpenProduct(product);
                             }}
                           >
                             <SlidersHorizontal className="h-3 w-3 mr-1" />
@@ -1637,8 +1621,7 @@ export function ProductCatalogView({
                             }}
                             onClick={() => {
                               if (!canChoose) return;
-                              setDetailProduct(product);
-                              setDetailOpen(true);
+                              handleOpenProduct(product);
                             }}
                           >
                             <SlidersHorizontal className="h-3 w-3 mr-1" />
@@ -1655,19 +1638,25 @@ export function ProductCatalogView({
         )}
       </div>
 
-      {!readOnly && mode === "page" && basket.items.length > 0 && (
-        <CatalogCartStickyBar
-          items={basket.items}
-          total={basket.getTotalPrice()}
-          projectId={basket.projectId ?? locationProjectId}
-          sidebarOffset={sidebarWidth}
-          onPrimaryAction={cartPrimaryAction}
-          onClearCart={basket.clearBasket}
-          onContinueShopping={continueShopping}
-          onUpdateQuantity={basket.updateQuantity}
-          onRemoveItem={basket.removeItem}
-        />
-      )}
+      {/* Escondida enquanto a cesta global (ProjectBasketDrawer) ou o
+          detalhe do produto estiverem abertos — evita dois resumos de
+          cesta na tela ao mesmo tempo e a barra brigando visualmente com
+          o painel de detalhe. */}
+      {!readOnly &&
+        mode === "page" &&
+        basket.items.length > 0 &&
+        !basket.isOpen &&
+        !detailOpen && (
+          <CatalogCartStickyBar
+            items={basket.items}
+            total={basket.getTotalPrice()}
+            projectId={basket.projectId ?? locationProjectId}
+            onPrimaryAction={cartPrimaryAction}
+            onClearCart={basket.clearBasket}
+            onUpdateQuantity={basket.updateQuantity}
+            onRemoveItem={basket.removeItem}
+          />
+        )}
 
       {/* ── Sticky footer (panel mode only) ─────────────────── */}
       {/* Detail sheet */}

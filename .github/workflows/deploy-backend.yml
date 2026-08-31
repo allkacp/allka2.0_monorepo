@@ -67,6 +67,7 @@ jobs:
           # ${repo} ja vem em minusculas (GHCR exige); reaproveitar aqui evita
           # repetir a normalizacao na referencia do cache.
           echo "backend_buildcache=${REGISTRY}/${repo}/backend:buildcache" >> "$GITHUB_OUTPUT"
+          echo "backend_tools=${REGISTRY}/${repo}/backend:tools" >> "$GITHUB_OUTPUT"
           echo "frontend_image=${REGISTRY}/${repo}/frontend:dev" >> "$GITHUB_OUTPUT"
 
       - name: Set up Docker Buildx
@@ -103,6 +104,20 @@ jobs:
           cache-from: type=registry,ref=${{ steps.images.outputs.backend_buildcache }}
           cache-to: type=registry,ref=${{ steps.images.outputs.backend_buildcache }},mode=max
 
+      - name: Build and push backend tools image (stage "build" — tem devDependencies e src/, usado só para rodar scripts pontuais como seed:qa-demo)
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: docker/backend.prod.Dockerfile
+          target: build
+          push: true
+          tags: |
+            ${{ steps.images.outputs.backend_tools }}
+          # Mesmo cache do build normal — o Dockerfile é multi-stage e o
+          # estágio "build" já é compilado de qualquer forma para gerar o
+          # runtime; isto só adiciona a tag/push de uma imagem que já existia
+          # como camada intermediária, sem rebuildar nada do zero.
+          cache-from: type=registry,ref=${{ steps.images.outputs.backend_buildcache }}
 
       - name: Validate required deploy secrets
         shell: bash

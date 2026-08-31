@@ -12,9 +12,6 @@ import {
   User,
   CreditCard,
   FolderOpen,
-  Award,
-  Shield,
-  DollarSign,
   CheckSquare,
   Building2,
   Users,
@@ -44,12 +41,12 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { useAccountType } from "@/contexts/account-type-context";
 import { useSidebar } from "@/contexts/sidebar-context";
-import { NotificationPreferencesPanel } from "@/components/notification-preferences-panel";
-import { UserViewSlidePanel } from "@/components/user-view-slide-panel";
+import { NotificationsPanel } from "@/components/notifications-panel";
 import { usePartner } from "@/contexts/partner-context";
 import { useEmpresa } from "@/contexts/empresa-context";
 import { useAgencia } from "@/contexts/agencia-context";
 import { apiClient } from "@/lib/api-client";
+import { isCatalogRoute } from "@/lib/catalog-access";
 import { useProjectBasket } from "@/contexts/project-basket-context";
 import { ProjectBasketDrawer } from "@/components/project-basket-drawer";
 import { useNotificationsPanel } from "@/contexts/notifications-panel-context";
@@ -124,31 +121,23 @@ export function Header({ transparent = false }: { transparent?: boolean } = {}) 
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
   const { open: notifOpen, setOpen: setNotifOpen, tab: notifTab, setTab: setNotifTab } = useNotificationsPanel();
-  // Contagem real de pendências (SystemAlert não-lido e não-arquivado) —
-  // era um "2" fixo antes, sem relação nenhuma com dado de verdade.
+  // Correção visual (ata 2026-08, revisão do responsável): o sino conta só
+  // `category: "notificacao"` — nunca soma alerta (regra "o contador de
+  // notificação não pode incluir alertas"). O contador/ícone de Alertas
+  // saiu daqui de vez: agora vive em AlertsFloatingIcon, na barra vertical
+  // direita, com seu próprio polling (não duplica esta chamada).
   const [bellUnreadCount, setBellUnreadCount] = useState(0);
   useEffect(() => {
     const fetchUnread = () => {
-      apiClient.getUnreadSystemAlertsCount().then((r) => setBellUnreadCount(r?.count ?? 0)).catch(() => {});
+      apiClient
+        .getUnreadSystemAlertsCount({ category: "notificacao" })
+        .then((r) => setBellUnreadCount(r?.count ?? 0))
+        .catch(() => {});
     };
     fetchUnread();
     const id = setInterval(fetchUnread, 60_000);
     return () => clearInterval(id);
   }, []);
-  // Sinal de urgência do sino: só pulsa quando há algo na categoria "alerta"
-  // (precisa de decisão), não pra qualquer não-lido genérico — o sino
-  // absorveu o ícone flutuante de Alertas, que já usava esse mesmo pulso.
-  const [bellHasUrgentAlert, setBellHasUrgentAlert] = useState(false);
-  useEffect(() => {
-    const fetchUrgent = () => {
-      apiClient.getUnreadSystemAlertsCount({ category: "alerta" }).then((r) => setBellHasUrgentAlert((r?.count ?? 0) > 0)).catch(() => {});
-    };
-    fetchUrgent();
-    const id = setInterval(fetchUrgent, 60_000);
-    return () => clearInterval(id);
-  }, []);
-  const [profileOpen, setProfileOpen] = useState(false);
-  const [selfUser, setSelfUser] = useState<any>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [searchResults, setSearchResults] = useState<
     { type: string; label: string; sub: string; path: string; icon: any; navState?: Record<string, string> }[]
@@ -439,20 +428,22 @@ export function Header({ transparent = false }: { transparent?: boolean } = {}) 
     return () => clearTimeout(t);
   }, [searchQuery, doSearch]);
 
-  const openProfile = async () => {
-    setProfileOpen(true);
-    // Only fetch the real authenticated user for admin.
-    // Other account types (empresa, agencia, parceiro, nomades) build their
-    // profile object directly from their respective context — so we never
-    // accidentally show admin data (e.g. Vinícius Guardia) inside company view.
-    if (accountType === "admin" && !selfUser) {
-      try {
-        const u = await apiClient.getCurrentUser();
-        setSelfUser(u);
-      } catch {
-        /* use fallback */
-      }
+  // "Meu Perfil" (ata 2026-08, reparo "Meu Perfil no container padrão"):
+  // NAVEGA para a rota pessoal do portal — nunca mais abre o slide-over
+  // administrativo (UserViewSlidePanel) por cima da rota atual. A rota
+  // renderiza o mesmo painel em modo `asPage` (container padrão), lendo
+  // sempre a identidade da sessão.
+  const selfProfilePath = (() => {
+    switch (accountType) {
+      case "empresas": return "/company/perfil";
+      case "agencias": return "/agency/perfil";
+      case "nomades": return "/nomades/perfil";
+      case "lider": return "/leader/perfil";
+      default: return "/admin/perfil";
     }
+  })();
+  const openProfile = () => {
+    navigate(selfProfilePath);
   };
 
   const handleLogout = () => {
@@ -479,7 +470,6 @@ export function Header({ transparent = false }: { transparent?: boolean } = {}) 
     nextLevel: null,
     tasks: null,
     settingsPath: path,
-    menuItems: [],
   });
 
   let ctx = (() => {
@@ -511,30 +501,11 @@ export function Header({ transparent = false }: { transparent?: boolean } = {}) 
         nextLevel: null,
         tasks: `${activeCount} projetos ativos`,
         settingsPath: "/company/dashboard",
-        menuItems: [
-          {
-            label: "Minha Empresa",
-            icon: Building2,
-            path: "/company/dashboard",
-          },
-          { label: "Projetos", icon: FolderOpen, path: "/company/projetos" },
-          { label: "Tarefas", icon: CheckSquare, path: "/company/tarefas" },
-          { label: "Faturas", icon: CreditCard, path: "/company/faturas" },
-        ],
       };
     }
     if (accountType === "agencias") {
       const p = agencia.profile;
       if (!p) return PLACEHOLDER("Agência", "/agency/dashboard");
-      // Partner é um upgrade da Agency (PartnerProfile.status "active") —
-      // quando ativo, anexa os atalhos de Partner ao menu da própria Agency.
-      const partnerMenuItems = isPartnerActive
-        ? [
-            { label: "Comissões", icon: DollarSign, path: "/partner/comissoes" },
-            { label: "Saques", icon: Wallet, path: "/partner/saques" },
-            { label: "Agências lideradas", icon: Building2, path: "/partner/agencias" },
-          ]
-        : [];
       return {
         name: p.name,
         email: p.email,
@@ -557,17 +528,6 @@ export function Header({ transparent = false }: { transparent?: boolean } = {}) 
         nextLevel: null,
         tasks: `${p.totalProjects} projetos no total`,
         settingsPath: "/agency/dashboard",
-        menuItems: [
-          {
-            label: "Minha Agência",
-            icon: Building2,
-            path: "/agency/dashboard",
-          },
-          { label: "Projetos", icon: FolderOpen, path: "/agency/projetos" },
-          { label: "Tarefas", icon: CheckSquare, path: "/agency/tarefas" },
-          { label: "Financeiro", icon: Wallet, path: "/agency/financeiro" },
-          ...partnerMenuItems,
-        ],
       };
     }
     if (accountType === "nomades") {
@@ -590,16 +550,6 @@ export function Header({ transparent = false }: { transparent?: boolean } = {}) 
         nextLevel: "Prata",
         tasks: "5 tarefas pendentes",
         settingsPath: "/nomades/perfil",
-        menuItems: [
-          { label: "Meu Perfil", icon: User, path: "/nomades/perfil" },
-          {
-            label: "Minhas Tarefas",
-            icon: CheckSquare,
-            path: "/nomades/minhastarefas",
-          },
-          { label: "Ganhos", icon: DollarSign, path: "/nomades/ganhos" },
-          { label: "Habilitações", icon: Award, path: "/nomades/habilitacoes" },
-        ],
       };
     }
     if (accountType === "lider") {
@@ -617,20 +567,6 @@ export function Header({ transparent = false }: { transparent?: boolean } = {}) 
         nextLevel: null,
         tasks: null,
         settingsPath: "/leader/perfil",
-        menuItems: [
-          { label: "Meu Perfil", icon: User, path: "/leader/perfil" },
-          { label: "Dashboard", icon: Activity, path: "/leader/dashboard" },
-          {
-            label: "Para Qualificar",
-            icon: CheckSquare,
-            path: "/leader/qualificacao",
-          },
-          {
-            label: "Tarefas da Área",
-            icon: FolderOpen,
-            path: "/leader/tarefas",
-          },
-        ],
       };
     }
     const name = userProfile.name || "Admin Sistema";
@@ -647,16 +583,6 @@ export function Header({ transparent = false }: { transparent?: boolean } = {}) 
       nextLevel: null,
       tasks: null,
       settingsPath: "/admin/configuracoes",
-      menuItems: [
-        { label: "Meu Perfil", icon: User, path: "/admin/dashboard" },
-        { label: "Usuários", icon: Shield, path: "/admin/usuarios" },
-        { label: "Permissões", icon: Shield, path: "/admin/permissoes" },
-        {
-          label: "Configurações",
-          icon: Settings,
-          path: "/admin/configuracoes",
-        },
-      ],
     };
   })();
 
@@ -874,12 +800,22 @@ export function Header({ transparent = false }: { transparent?: boolean } = {}) 
               )}
             </div>
 
-            {/* Alertas, modo escuro e tamanho de fonte agora vivem como ícones
-                flutuantes abaixo da Bandeja de Telas (ver HeaderFloatingTools
-                em App.tsx) — não ficam mais no cabeçalho. */}
+            {/* Modo escuro e tamanho de fonte vivem como ícones flutuantes
+                abaixo da Bandeja de Telas (ver HeaderFloatingTools em
+                App.tsx) — não ficam mais no cabeçalho. Alertas voltou a ter
+                acionador próprio aqui no cabeçalho (ver botões logo abaixo),
+                ao lado de Notificações — este comentário estava
+                desatualizado (achava que Alertas também tinha virado ícone
+                flutuante; na verdade virou aba do mesmo painel do sino). */}
 
-            {/* ── Cesta de projeto (oculta para líder) ───────────── */}
-            {accountType !== "lider" && (() => {
+            {/* ── Cesta de projeto ───────────────────────────────────
+                A cesta pertence ao ambiente de catálogo/loja (ata 2026-08,
+                bloco interface/usabilidade) — NÃO é um componente global. O
+                ícone só aparece nas rotas de catálogo (`isCatalogRoute`),
+                mesmo quando há itens salvos: sair do catálogo esconde o
+                ícone sem apagar a cesta; voltar mostra de novo. Oculta para
+                líder sempre (não contrata). */}
+            {accountType !== "lider" && isCatalogRoute(location.pathname) && (() => {
               const totalItems = basket.getTotalItems();
               const hasItems = totalItems > 0;
               return (
@@ -952,16 +888,22 @@ export function Header({ transparent = false }: { transparent?: boolean } = {}) 
               );
             })()}
 
+            {/* Notificações — eventos em tempo real (tarefa atribuída, comentário,
+                mudança de status, convite...). Único acionador aqui no cabeçalho —
+                correção visual (ata 2026-08): Alertas saiu daqui e foi para a barra
+                vertical direita (ver AlertsFloatingIcon), com painel próprio. */}
             <div className="relative">
               <Button
                 variant="ghost"
                 size="sm"
                 onClick={() => { setNotifTab("inbox"); setNotifOpen(true); }}
                 className="p-0 h-9 w-9 relative text-white/80 hover:bg-white/20 hover:text-white rounded-xl bg-white/10 border border-white/15"
+                aria-label={`Notificações${bellUnreadCount > 0 ? ` — ${bellUnreadCount} não lida${bellUnreadCount === 1 ? "" : "s"}` : ""}`}
+                title="Notificações"
               >
-                <Bell className={cn("h-4 w-4", bellHasUrgentAlert && "animate-pulse")} />
+                <Bell className="h-4 w-4" />
                 {bellUnreadCount > 0 && (
-                  <span className="absolute top-1 right-1 h-4 w-4 flex items-center justify-center rounded-full bg-red-500 text-white text-[9px] font-bold leading-none pointer-events-none">
+                  <span className="absolute top-1 right-1 h-4 w-4 flex items-center justify-center rounded-full bg-blue-500 text-white text-[9px] font-bold leading-none pointer-events-none">
                     {bellUnreadCount > 99 ? "99+" : bellUnreadCount}
                   </span>
                 )}
@@ -1196,84 +1138,15 @@ export function Header({ transparent = false }: { transparent?: boolean } = {}) 
         )}
       </header>
 
-      <NotificationPreferencesPanel
+      <NotificationsPanel
         open={notifOpen}
         onClose={() => setNotifOpen(false)}
         initialTab={notifTab}
       />
-      <UserViewSlidePanel
-        open={profileOpen}
-        onClose={() => setProfileOpen(false)}
-        viewerRole={
-          accountType === "agencias" ? "agency"
-          : accountType === "empresas" ? "company"
-          : accountType === "nomades" ? "nomad"
-          // Partner nao e um account_type proprio: e uma Agency com
-          // PartnerProfile ativo, entao cai no ramo "agency" acima.
-          : "admin"
-        }
-        agencyFinancial={accountType === "agencias" && agencia.profile ? {
-          invoices: agencia.invoices,
-          projectRevenue: agencia.projects.reduce((s, p) => s + (p.value ?? 0), 0),
-          currentMrr: agencia.profile.currentMrr,
-          plan: agencia.profile.plan,
-          planDiscount: agencia.profile.planDiscount,
-        } : undefined}
-        user={(() => {
-          // Build profile object from context — each account type uses its own data source.
-          if (accountType === "empresas" && empresa.profile) {
-            const p = empresa.profile;
-            return {
-              id: p.id,
-              name: p.name,
-              email: p.email,
-              role: "company_admin",
-              account_type: "company",
-              cnpj: p.cnpj,
-              phone: p.phone,
-              is_active: p.status === "active",
-              is_admin: false,
-              permissions: [],
-              created_at: p.createdAt ?? "",
-              updated_at: p.createdAt ?? "",
-            };
-          }
-          if (accountType === "agencias" && agencia.profile) {
-            const p = agencia.profile;
-            return {
-              id: p.id,
-              name: p.name,
-              email: p.email,
-              role: "agency_admin",
-              account_type: "agency",
-              phone: p.phone ?? "",
-              is_active: true,
-              is_admin: false,
-              permissions: [],
-              created_at: p.createdAt ?? "",
-              updated_at: p.createdAt ?? "",
-              currentMrr: p.currentMrr,
-              totalProjects: p.totalProjects,
-              partnerLevel: p.partnerLevel,
-            };
-          }
-          // admin + nomades: use real authenticated user (or context fallback)
-          return (
-            selfUser ?? {
-              id: 0,
-              name: ctx.name,
-              email: ctx.email,
-              role: accountType,
-              account_type: accountType,
-              is_active: true,
-              is_admin: accountType === "admin",
-              permissions: [],
-              created_at: "",
-              updated_at: "",
-            }
-          );
-        })()}
-      />
+      {/* "Meu Perfil" não abre mais aqui um slide-over — vira uma rota
+          dedicada (ver `openProfile` acima e app/perfil/page.tsx). O
+          UserViewSlidePanel segue sendo usado só em Admin › Usuários e no
+          company-edit, para visualizar/editar OUTRA pessoa. */}
 
       {/* ── Basket drawer ─────────────────────────────────────────────── */}
       <ProjectBasketDrawer />

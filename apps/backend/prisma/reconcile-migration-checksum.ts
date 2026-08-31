@@ -24,9 +24,12 @@
  *     (nada pra reconciliar — provavelmente engano de uso);
  *   - host remoto (só localhost/127.0.0.1).
  *
- * Uso (dry-run):
+ * Uso (dry-run) — <nome> é sempre uma pasta que precisa existir HOJE em
+ * prisma/migrations/ (a árvore histórica pré-2026-09-08 foi arquivada em
+ * prisma/migrations-archive-pre-2026-09-08/ e não é mais lida pelo Prisma —
+ * ver docs/migrations-baseline-2026-09.md):
  *   npx tsx prisma/reconcile-migration-checksum.ts \
- *     --migration=0_baseline \
+ *     --migration=20260908000000_baseline_consolidated \
  *     --expected-old-checksum=4f783b5946bdb8ebbbf60d72768e903a1080af69699e8d5343ab71ae9a1b79c7
  *
  * Uso (aplicar de verdade):

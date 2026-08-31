@@ -146,12 +146,27 @@ interface UserViewSlidePanelProps {
   open: boolean;
   onClose: () => void;
   onRefresh?: () => void;
+  /** Chamado depois de QUALQUER salvamento bem-sucedido dentro deste painel
+   * (dados pessoais, financeiro, permissões, conta), com o usuário canônico
+   * devolvido pelo servidor — pra quem renderiza a linha na tabela poder
+   * atualizar só esse registro em vez de refazer a consulta inteira
+   * (`onRefresh`). Prop nova e opcional: quem não passar continua caindo
+   * só no `onRefresh?.()` de sempre, comportamento inalterado. */
+  onUserSaved?: (updated: any) => void;
   user: UserType | null;
   agencyFinancial?: AgencyFinancialData;
   viewerRole?: "admin" | "partner" | "agency" | "company" | "nomad";
   /** Abre já em modo de edição — usado pelo ícone "Editar" da tabela, que é
    * o mesmo painel de sempre, só pulando direto pro isEditMode=true. */
   startInEditMode?: boolean;
+  /** "Meu Perfil" como PÁGINA dedicada dentro do container padrão (ata
+   * 2026-08) — em vez do slide-over administrativo por cima da rota. Nesse
+   * modo: card no fluxo normal (sem overlay/animação/Escape/X), um único
+   * cabeçalho sem ações de "admin gerenciando outra pessoa", e o `user`
+   * SEMPRE vem da sessão atual (quem chama não passa id externo). O uso do
+   * painel em Admin › Usuários e no company-edit continua igual (asPage
+   * omitido = comportamento de sempre). */
+  asPage?: boolean;
 }
 
 // Return user data with safe defaults
@@ -276,10 +291,12 @@ export function UserViewSlidePanel({
   open,
   onClose,
   onRefresh,
+  onUserSaved,
   user,
   agencyFinancial,
   viewerRole = "admin",
   startInEditMode = false,
+  asPage = false,
 }: UserViewSlidePanelProps) {
   const {
     getUserById,
@@ -918,7 +935,7 @@ export function UserViewSlidePanel({
     if (!user?.id) return;
     setIsSaving(true);
     try {
-      await apiClient.updateUser(String(user.id), {
+      const updated = await apiClient.updateUser(String(user.id), {
         name: editedData.name,
         email: editedData.email,
         phone: editedData.phone || undefined,
@@ -931,7 +948,8 @@ export function UserViewSlidePanel({
       });
       setIsEditMode(false);
       setEditedData({});
-      onRefresh?.();
+      if (onUserSaved) onUserSaved(updated);
+      else onRefresh?.();
     } catch (error: any) {
       toast({
         title: "Erro ao salvar",
@@ -1094,7 +1112,8 @@ export function UserViewSlidePanel({
       });
       setIsDadosEditMode(false);
       setDadosEditedData({});
-      onRefresh?.();
+      if (onUserSaved) onUserSaved(updated);
+      else onRefresh?.();
     } catch (error: any) {
       toast({
         title: "Erro ao salvar",
@@ -1144,8 +1163,9 @@ export function UserViewSlidePanel({
       if (!user?.id) throw new Error("ID do usuário não encontrado");
       const payload: Record<string, any> = {};
       if (financialEditedData.phone) payload.phone = financialEditedData.phone;
+      let updated: any = undefined;
       if (Object.keys(payload).length > 0) {
-        await apiClient.updateUser(String(user.id), payload);
+        updated = await apiClient.updateUser(String(user.id), payload);
       }
       setPersistedUserData((prev) => ({ ...prev, ...financialEditedData }));
       toast({
@@ -1154,7 +1174,11 @@ export function UserViewSlidePanel({
       });
       setIsFinancialEditMode(false);
       setFinancialEditedData({});
-      onRefresh?.();
+      // Payload pode ter ficado vazio (nada de fato mudou) — nesse caso não
+      // há resposta do servidor pra usar; `{ id }` é um merge inofensivo,
+      // só reafirma a linha como está.
+      if (onUserSaved) onUserSaved(updated ?? { id: user.id, ...payload });
+      else onRefresh?.();
     } catch (error: any) {
       toast({
         title: "Erro ao salvar",
@@ -1666,7 +1690,7 @@ export function UserViewSlidePanel({
           ? permissionsEditedData.admin_profile_id
           : (displayUser.admin_profile_id ?? null);
 
-      await apiClient.updateUser(String(user.id), {
+      const updated = await apiClient.updateUser(String(user.id), {
         role: updatedRole,
         admin_profile_id: perfilEscolhido,
       });
@@ -1681,7 +1705,8 @@ export function UserViewSlidePanel({
       });
       setIsPermissionsEditMode(false);
       setPermissionsEditedData({});
-      onRefresh?.();
+      if (onUserSaved) onUserSaved(updated);
+      else onRefresh?.();
     } catch (error: any) {
       toast({
         title: "Erro ao salvar",
@@ -1765,13 +1790,17 @@ export function UserViewSlidePanel({
     // dadosEditedData (CPF, RG, endereço, etc.) ficava só no estado local
     // (optimistic update) e sumia ao recarregar a página.
     try {
-      await apiClient.updateUser(String(displayUser.id), {
+      const updated = await apiClient.updateUser(String(displayUser.id), {
         ...dadosEditedData,
         ...contaEditedData,
         name: nameToSave,
         email: emailToSave,
       });
-      onRefresh?.();
+      // A linha da TABELA (fora deste painel) só é corrigida depois da
+      // confirmação do servidor — o `setPersistedUserData` acima é só o
+      // estado otimista deste painel, que já existia antes.
+      if (onUserSaved) onUserSaved(updated);
+      else onRefresh?.();
     } catch (error: any) {
       toast({
         title: "Erro ao sincronizar",
@@ -1898,7 +1927,15 @@ export function UserViewSlidePanel({
       open={open}
       onClose={handleClose}
       hideHeader
-      pin={{
+      asPage={asPage}
+      // Slide-over (uso administrativo): é aberto por cima do conteúdo de
+      // qualquer página — sem um zIndex maior que o padrão (30) ele fica
+      // escondido atrás. 45 fica acima do padrão e do único outro valor
+      // customizado (40, project-create-new-panel.tsx). No modo `asPage`
+      // (rota dedicada "Meu Perfil") não há overlay nem empilhamento — o
+      // zIndex é irrelevante e não há pin (a própria rota/URL é o marcador).
+      zIndex={45}
+      pin={asPage ? undefined : {
         id: `usuarios-view-${user?.id ?? "none"}`,
         label: user?.name ? `Usuário: ${user.name}` : "Detalhes do usuário",
         icon: UserIcon,
@@ -1923,6 +1960,7 @@ export function UserViewSlidePanel({
           userPlan={userPlan}
           showBalance={showBalanceAllka}
           onToggleBalance={() => setShowBalanceAllka(!showBalanceAllka)}
+          asPage={asPage}
         />
 
         {/* Content with Tabs */}
@@ -1933,9 +1971,19 @@ export function UserViewSlidePanel({
           {/* Tab Navigation - Fixed */}
           <div className="flex-shrink-0 bg-white px-[50px] pt-0 pb-[10px] overflow-x-auto">
             {(() => {
+              // "Permissões" gerencia perfil de acesso ADMIN, vínculo com
+              // outras empresas e permissões por projeto — função exclusiva
+              // de administração. Só quem está OLHANDO como admin/partner
+              // (viewerRole, nunca o tipo de conta do usuário sendo exibido)
+              // pode ver essa aba; caso contrário um usuário comum veria e
+              // poderia tentar editar seu próprio nível de acesso global no
+              // autoatendimento "Meu Perfil".
+              const canSeePermissoes = viewerRole === "admin" || viewerRole === "partner";
               const tabs = userAccountType === "agency" && agencyFinancial
                 ? ["visao-geral", "conta", "carteira", "seguranca"]
-                : ["visao-geral", "conta", "permissoes", "seguranca", "lgpd"];
+                : canSeePermissoes
+                  ? ["visao-geral", "conta", "permissoes", "seguranca", "lgpd"]
+                  : ["visao-geral", "conta", "seguranca", "lgpd"];
               return (
                 <TabsList className={`grid w-max gap-1 bg-transparent p-0 h-auto grid-cols-${tabs.length}`}>
                   {tabs.map((tab) => (

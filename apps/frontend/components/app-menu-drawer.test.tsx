@@ -120,3 +120,29 @@ describe("AppMenuDrawer (mobile) — item Roadmap e chamados", () => {
     openSpy.mockRestore();
   });
 });
+
+// Lote de navegação de perfil (ata 2026-08-21): mesmo link real usado no
+// sidebar desktop, agora conferido também no menu "Mais" do celular.
+describe("AppMenuDrawer (mobile) — item 'Perfil' (Líder e Nômade)", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("13. Líder no celular: o link 'Perfil' aponta pra /leader/perfil, sem cortar o item", async () => {
+    mockAccountType.value = "lider";
+    getCurrentUser.mockResolvedValue({ admin_profile: null });
+    renderDrawer();
+    const link = await screen.findByRole("link", { name: /^perfil$/i });
+    expect(link).toHaveAttribute("href", "/leader/perfil");
+    expect(link).toBeVisible();
+  });
+
+  it("13. Nômade no celular: o link 'Perfil' aponta pra /nomades/perfil", async () => {
+    mockAccountType.value = "nomades";
+    getCurrentUser.mockResolvedValue({ admin_profile: null });
+    renderDrawer();
+    const link = await screen.findByRole("link", { name: /^perfil$/i });
+    expect(link).toHaveAttribute("href", "/nomades/perfil");
+    expect(link).toBeVisible();
+  });
+});

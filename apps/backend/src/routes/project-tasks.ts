@@ -4,11 +4,13 @@ import { z } from "zod";
 import { prisma } from "../lib/prisma";
 import { verifyToken, requireRole } from "../middleware/auth";
 import { validate } from "../middleware/validate";
-import { selecionarNomadeParaTarefa } from "../lib/selecionar-nomade";
+import { getRotationStatus, restartRotation, RotationError, startTaskRotation } from "../lib/task-rotation-engine";
 import { atribuirLiderParaTarefa } from "../lib/atribuir-lider";
 import { withZeroDateRecovery } from "../lib/clean-zero-datetimes";
-import { combinedProjectWhere } from "../lib/project-scope";
+import { combinedProjectWhere, isAdminUser } from "../lib/project-scope";
 import { recalculateProjectValue } from "../lib/project-value";
+import { findUnmetCatalog2Dependency, transitionNeedsDependencyGate, CATALOG2_STARTED_STATUSES } from "../lib/catalog2-task-dependencies";
+import { writeAccessAudit } from "../lib/product-feedback-service";
 import {
   iniciarEtapasDaTarefa,
   concluirEtapa,
@@ -175,7 +177,7 @@ function buildStatusSideEffects(
 
 type ScopeWhere = Record<string, unknown>;
 
-async function getTaskScopeWhere(
+export async function getTaskScopeWhere(
   userId: string,
   accountType: string,
   role: string,
@@ -210,7 +212,7 @@ async function getTaskScopeWhere(
 
 // Merges a base `where` with the scope filter using Prisma AND so neither
 // overwrites the other (important when both have a `project` key).
-function applyScope(
+export function applyScope(
   base: Record<string, unknown>,
   scope: ScopeWhere,
 ): Record<string, unknown> {
@@ -358,6 +360,40 @@ router.get(
       const agenciaMap = new Map(agenciaUsers.map((u) => [u.id, u]));
       const nomadeMap = new Map(nomadeUsers.map((n) => [n.id, n]));
 
+      // ── Dependência real entre tarefas do catalog2 (em lote, sem N+1) ────
+      const pendingCatalog2 = tasks.filter((t) => t.catalog2_task_id && !CATALOG2_STARTED_STATUSES.has(t.status));
+      const dependencyBlockedById = new Map<string, { task_id: string; title: string; status: string }>();
+      if (pendingCatalog2.length > 0) {
+        const catalog2TaskIds = [...new Set(pendingCatalog2.map((t) => t.catalog2_task_id as string))];
+        const deps = await prisma.catalog2TaskDependency.findMany({
+          where: { task_id: { in: catalog2TaskIds } },
+        });
+        if (deps.length > 0) {
+          const projectProductIds = [...new Set(pendingCatalog2.map((t) => t.project_product_id))];
+          const siblings = await prisma.projectTask.findMany({
+            where: { project_product_id: { in: projectProductIds }, catalog2_task_id: { not: null } },
+            select: { id: true, title: true, status: true, project_product_id: true, catalog2_task_id: true },
+          });
+          const siblingByKey = new Map(siblings.map((s) => [`${s.project_product_id}:${s.catalog2_task_id}`, s]));
+          const depsByTask = new Map<string, string[]>();
+          for (const d of deps) {
+            if (!depsByTask.has(d.task_id)) depsByTask.set(d.task_id, []);
+            depsByTask.get(d.task_id)!.push(d.depends_on_task_id);
+          }
+          for (const t of pendingCatalog2) {
+            const dependsOn = depsByTask.get(t.catalog2_task_id as string);
+            if (!dependsOn) continue;
+            for (const depCatalogTaskId of dependsOn) {
+              const sibling = siblingByKey.get(`${t.project_product_id}:${depCatalogTaskId}`);
+              if (sibling && sibling.status !== "CONCLUIDA") {
+                dependencyBlockedById.set(t.id, { task_id: sibling.id, title: sibling.title, status: sibling.status });
+                break;
+              }
+            }
+          }
+        }
+      }
+
       const enriched = tasks.map((t) => ({
         ...t,
         responsavel_agencia: t.responsavel_agencia_id
@@ -366,6 +402,7 @@ router.get(
         nomade_responsavel: t.nomade_responsavel_id
           ? (nomadeMap.get(t.nomade_responsavel_id) ?? null)
           : null,
+        dependency_blocked_by: dependencyBlockedById.get(t.id) ?? null,
       }));
 
       res.json({ data: enriched, total: enriched.length });
@@ -469,7 +506,14 @@ router.get(
         return;
       }
 
-      res.json(task);
+      // Dependência real do catalog2 — mostra PROATIVAMENTE por que a tarefa
+      // está bloqueada, antes mesmo de tentar liberar (a UI usa isto pra
+      // desabilitar o botão e explicar o motivo, sem precisar de um 409).
+      const dependency_blocked_by = CATALOG2_STARTED_STATUSES.has(task.status)
+        ? null
+        : await findUnmetCatalog2Dependency(prisma, task);
+
+      res.json({ ...task, dependency_blocked_by });
     } catch (err) {
       next(err);
     }
@@ -622,6 +666,33 @@ router.patch(
       if (req.body.fase !== undefined) data.fase = req.body.fase;
 
       if (req.body.status !== undefined) {
+        // ── Dependência real entre tarefas do catalog2 ──────────────────────
+        // Mesmo gate de PATCH /:id/release — esta rota genérica permite
+        // setar qualquer status diretamente (usada pelo modo de edição do
+        // admin), então é uma chamada de API que também precisa ser
+        // bloqueada quando a dependência não foi cumprida.
+        if (transitionNeedsDependencyGate(existing.status, req.body.status)) {
+          const blocker = await findUnmetCatalog2Dependency(prisma, existing);
+          if (blocker) {
+            const overrideReason = typeof req.body.dependency_override_reason === "string" ? req.body.dependency_override_reason.trim() : "";
+            const canOverride = isAdminUser(req.user) && overrideReason.length > 0;
+            if (!canOverride) {
+              res.status(409).json({
+                error: `Esta tarefa depende de "${blocker.title}", que ainda não foi concluída.`,
+                code: "dependency_not_met",
+                blocked_by: blocker,
+              });
+              return;
+            }
+            await writeAccessAudit({
+              actorId: req.user!.id,
+              action: "project_task.dependency_override",
+              after: { task_id: existing.id, blocked_by_task_id: blocker.task_id },
+              reason: overrideReason,
+            });
+          }
+        }
+
         data.status = req.body.status;
         Object.assign(
           data,
@@ -780,6 +851,30 @@ router.patch(
         return;
       }
 
+      // ── Dependência real entre tarefas do catalog2 ────────────────────────
+      // Tarefa dependente não pode iniciar enquanto a anterior obrigatória
+      // não estiver concluída. Autoridade é sempre o servidor — bloqueia
+      // aqui mesmo que a chamada venha direto da API, sem passar pela UI.
+      const blocker = await findUnmetCatalog2Dependency(prisma, task);
+      if (blocker) {
+        const overrideReason = typeof req.body?.dependency_override_reason === "string" ? req.body.dependency_override_reason.trim() : "";
+        const canOverride = isAdminUser(req.user) && overrideReason.length > 0;
+        if (!canOverride) {
+          res.status(409).json({
+            error: `Esta tarefa depende de "${blocker.title}", que ainda não foi concluída.`,
+            code: "dependency_not_met",
+            blocked_by: blocker,
+          });
+          return;
+        }
+        await writeAccessAudit({
+          actorId: req.user!.id,
+          action: "project_task.dependency_override",
+          after: { task_id: task.id, blocked_by_task_id: blocker.task_id },
+          reason: overrideReason,
+        });
+      }
+
       const updated = await prisma.projectTask.update({
         where: { id: req.params.id as string },
         data: {
@@ -798,12 +893,13 @@ router.patch(
         );
       }
 
-      // Sem etapas, o comportamento antigo segue valendo: seleção de nômade no
-      // nível da tarefa. Fire-and-forget — a resposta sai como
-      // LIBERADA_PARA_EXECUCAO e a transição acontece em seguida.
+      // Sem etapas: a tarefa entra no RODÍZIO de ofertas de Nômade (ata
+      // 2026-08, bloco 4/5) — uma oferta individual por vez, não mais
+      // atribuição automática do "melhor". Fire-and-forget: a resposta sai
+      // como LIBERADA_PARA_EXECUCAO e o rodízio começa em seguida.
       if (!abertura) {
-        selecionarNomadeParaTarefa(updated.id).catch((err) =>
-          console.error("[selecionar-nomade] Error:", err),
+        startTaskRotation(updated.id).catch((err) =>
+          console.error("[task-rotation] start:", err),
         );
       }
 
@@ -813,6 +909,63 @@ router.patch(
     }
   },
 );
+
+// ── GET /api/project-tasks/:id/rotation ─────────────────────────────────────
+// Situação do rodízio de ofertas de Nômade — para o responsável entender por
+// que ninguém assumiu. Mesmo escopo de leitura da tarefa.
+router.get("/:id/rotation", verifyToken, async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const scopeWhere = await getTaskScopeWhere(req.user!.id, req.user!.account_type, req.user!.role);
+    if (scopeWhere === null) {
+      res.status(404).json({ error: "Tarefa não encontrada" });
+      return;
+    }
+    const task = await prisma.projectTask.findFirst({
+      where: applyScope({ id: req.params.id as string }, scopeWhere),
+      select: { id: true },
+    });
+    if (!task) {
+      res.status(404).json({ error: "Tarefa não encontrada" });
+      return;
+    }
+    const status = await getRotationStatus(task.id);
+    res.json(status);
+  } catch (err) {
+    next(err);
+  }
+});
+
+// ── POST /api/project-tasks/:id/rotation/restart ───────────────────────────
+// Reinicia o rodízio quando há candidatos de novo. Autorização REAL no
+// servidor: admin, ou Líder responsável pela tarefa, ou Admin responsável do
+// projeto (validado dentro de restartRotation).
+router.post("/:id/rotation/restart", verifyToken, async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const scopeWhere = await getTaskScopeWhere(req.user!.id, req.user!.account_type, req.user!.role);
+    if (scopeWhere === null) {
+      res.status(404).json({ error: "Tarefa não encontrada" });
+      return;
+    }
+    const task = await prisma.projectTask.findFirst({
+      where: applyScope({ id: req.params.id as string }, scopeWhere),
+      select: { id: true },
+    });
+    if (!task) {
+      res.status(404).json({ error: "Tarefa não encontrada" });
+      return;
+    }
+    const isAdmin = req.user!.account_type === "admin" || req.user!.role === "admin";
+    await restartRotation(task.id, req.user!.id, isAdmin);
+    const status = await getRotationStatus(task.id);
+    res.json({ ok: true, rotation: status });
+  } catch (err) {
+    if (err instanceof RotationError) {
+      res.status(err.httpStatus).json({ error: err.message, code: err.code });
+      return;
+    }
+    next(err);
+  }
+});
 
 // ── POST /api/project-tasks/:id/transfer ─────────────────────────────────────
 // Transfere uma tarefa PAGA e NÃO USADA pra outro projeto — o pagamento

@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { z } from "zod";
 import { prisma } from "../lib/prisma";
-import { verifyToken } from "../middleware/auth";
+import { verifyToken, requireRole, requirePermission } from "../middleware/auth";
 import { validate } from "../middleware/validate";
 
 const router = Router();
@@ -69,13 +69,28 @@ router.put("/:id", verifyToken, validate(levelSchema.partial()), async (req, res
 });
 
 // DELETE /api/nomade-levels/:id
-router.delete("/:id", verifyToken, async (req, res, next) => {
-  try {
-    await prisma.nomadeLevel.delete({ where: { id: (req.params.id as string) } });
-    res.status(204).send();
-  } catch (err) {
-    next(err);
-  }
-});
+// Mesma regra adotada para produtos/níveis de parceiro: exclusão física
+// exige permissão administrativa explícita (module "sistema", action
+// "delete") — ver comentário equivalente em routes/products.ts.
+router.delete(
+  "/:id",
+  verifyToken,
+  requireRole("admin"),
+  requirePermission("sistema", "delete"),
+  async (req, res, next) => {
+    try {
+      const { id } = req.params;
+      if (!id || typeof id !== "string") {
+        res.status(400).json({ error: "Identificador de nível inválido" });
+        return;
+      }
+
+      await prisma.nomadeLevel.delete({ where: { id } });
+      res.status(204).send();
+    } catch (err) {
+      next(err);
+    }
+  },
+);
 
 export default router;

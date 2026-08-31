@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { z } from "zod";
 import { prisma } from "../lib/prisma";
-import { verifyToken } from "../middleware/auth";
+import { verifyToken, requireRole, requirePermission } from "../middleware/auth";
 import { validate, parsePagination } from "../middleware/validate";
 import { assertProductContractable, getProductContractability } from "../lib/product-contractability";
 import { generateNextProductCode } from "../lib/product-code";
@@ -396,16 +396,43 @@ router.post(
 );
 
 // DELETE /api/products/:id
-router.delete("/:id", verifyToken, async (req, res, next) => {
-  try {
-    await prisma.product.delete({
-      where: { id: req.params.id as string as string as string },
-    });
-    res.status(204).send();
-  } catch (err) {
-    next(err);
-  }
-});
+// Exclusão física de produto exige, além de sessão válida, permissão
+// administrativa explícita (module "sistema", action "delete") — o mesmo
+// par já usado em outras ações administrativas destrutivas (ver
+// routes/permissions.ts DELETE /profiles/:id). Não existia ainda uma
+// permissão granular dedicada a "produtos"; em vez de inventar um módulo
+// novo sem uso em nenhum outro lugar do sistema, reaproveitamos "sistema",
+// que já é o módulo usado para ações de administração sensíveis. Admin
+// Master e admins sem perfil atribuído continuam liberados pela própria
+// regra de requirePermission() — nada mudou nesse comportamento.
+router.delete(
+  "/:id",
+  verifyToken,
+  requireRole("admin"),
+  requirePermission("sistema", "delete"),
+  async (req, res, next) => {
+    try {
+      const { id } = req.params;
+      if (!id || typeof id !== "string") {
+        res.status(400).json({ error: "Identificador de produto inválido" });
+        return;
+      }
+
+      await prisma.product.delete({ where: { id } });
+      res.status(204).send();
+    } catch (err) {
+      const code = (err as { code?: string }).code;
+      if (code === "P2003") {
+        res.status(409).json({
+          error:
+            "Este produto está vinculado a projetos, pedidos ou pacotes existentes e não pode ser excluído.",
+        });
+        return;
+      }
+      next(err);
+    }
+  },
+);
 
 // POST /api/products/:id/variations
 router.post(

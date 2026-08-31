@@ -34,6 +34,10 @@ import { ChatWidget } from "@/components/chat-widget";
 import { OpenScreensProvider } from "@/contexts/open-screens-context";
 import { OpenScreensTray } from "@/components/open-screens-tray";
 import { HeaderFloatingTools } from "@/components/header-floating-tools";
+import { AlertsFloatingIcon } from "@/components/alerts-floating-icon";
+import { TaskOfferPrompt } from "@/components/task-offer-prompt";
+import { MandatoryBannerGate } from "@/components/mandatory-banner-gate";
+import { usePresenceHeartbeat } from "@/hooks/use-presence-heartbeat";
 import { PinActivationListener } from "@/components/pin-activation-listener";
 import { ProductFeedbackWidget } from "@/components/product-feedback-widget";
 import { isStandardShellRoute } from "@/components/standard-page-shell";
@@ -69,7 +73,6 @@ const AdminUsuariosInternosPage = React.lazy(
   () => import("@/app/admin/usuarios-internos/page"),
 );
 const AdminEmpresasPage = React.lazy(() => import("@/app/admin/empresas/page"));
-const AdminNomadesPg = React.lazy(() => import("@/app/admin/nomades/page"));
 const AdminProjetosPage = React.lazy(() => import("@/app/admin/projetos/page"));
 const AdminProdutosPage = React.lazy(() => import("@/app/admin/produtos/page"));
 const AdminCatalogoProdutosPage = React.lazy(
@@ -125,6 +128,39 @@ const AdminTermsPage = React.lazy(() => import("@/app/admin/terms/page"));
 const AdminNotificationsPage = React.lazy(
   () => import("@/app/admin/notifications/page"),
 );
+// Central de Comunicação — canais, campanhas e banners obrigatórios
+// (ata 2026-08, bloco 5/5).
+const AdminComunicacaoPage = React.lazy(
+  () => import("@/app/admin/comunicacao/page"),
+);
+// Legacy — Plataforma Anterior: consulta somente leitura, somente Admin Master
+// (sprint de produtos, bloco 1/6; renomeada de "Consulta da Plataforma
+// Anterior" no bloco 2/6). Endereço principal /admin/legacy;
+// /admin/consulta-legado redireciona para cá.
+const AdminLegacyPage = React.lazy(() => import("@/app/admin/legacy/page"));
+// Fundação do novo catálogo — tela de validação, só Admin Master
+// (sprint de produtos, bloco 2/6).
+const AdminNovoCatalogoPage = React.lazy(
+  () => import("@/app/admin/produtos/novo-catalogo/page"),
+);
+// Catálogo do CLIENTE do novo catálogo (sprint de produtos, bloco 5/6) —
+// componente único compartilhado pelos portais elegíveis.
+const Catalog2AdminPreviewPage = React.lazy(() =>
+  import("@/app/catalog2/page").then((m) => ({ default: m.Catalog2AdminPreviewPage })),
+);
+const Catalog2CompanyPage = React.lazy(() =>
+  import("@/app/catalog2/page").then((m) => ({ default: m.Catalog2CompanyPage })),
+);
+const Catalog2AgencyPage = React.lazy(() =>
+  import("@/app/catalog2/page").then((m) => ({ default: m.Catalog2AgencyPage })),
+);
+// Checkout do novo catálogo (sprint de produtos, bloco 6/6).
+const Catalog2CheckoutCompanyPage = React.lazy(() =>
+  import("@/app/catalog2-checkout/page").then((m) => ({ default: m.Catalog2CheckoutCompanyPage })),
+);
+const Catalog2CheckoutAgencyPage = React.lazy(() =>
+  import("@/app/catalog2-checkout/page").then((m) => ({ default: m.Catalog2CheckoutAgencyPage })),
+);
 const AdminClientesPage = React.lazy(() => import("@/app/admin/clientes/page"));
 // Lista de agências no Admin — a pasta existia vazia até 2026-08-04.
 const AdminAgenciasPage = React.lazy(() => import("@/app/admin/agencias/page"));
@@ -136,6 +172,7 @@ const AdminAlertasPage = React.lazy(() => import("@/app/admin/alertas/page"));
 const AdminLinksCompartilhadosPage = React.lazy(() => import("@/app/admin/links-compartilhados/page"));
 const AdminDashboardTemplatesPage = React.lazy(() => import("@/app/admin/dashboard-templates/page"));
 const AdminAcessoChamadosPage = React.lazy(() => import("@/app/admin/acesso-chamados/page"));
+const AdminGruposNotificacaoPage = React.lazy(() => import("@/app/admin/grupos-notificacao/page"));
 
 // ─── Nômades Pages ────────────────────────────────────────────────────────────
 const NomadDashboardPage = React.lazy(
@@ -161,6 +198,10 @@ const NomadesHistoricoPage = React.lazy(
   () => import("@/app/nomades/historico/page"),
 );
 const NomadesPerfilPage = React.lazy(() => import("@/app/nomades/perfil/page"));
+// "Meu Perfil" como página dedicada (ata 2026-08) — compartilhada por
+// Admin/Company/Agency/Partner; escolhe a fonte de identidade pelo
+// account_type da sessão. Nomad e Leader mantêm as próprias páginas.
+const SelfProfilePage = React.lazy(() => import("@/app/perfil/page"));
 
 // ─── Parceiro Pages ──────────────────────────────────────────────────────────
 const PartnerDashboardPage = React.lazy(
@@ -443,6 +484,9 @@ class PageErrorBoundary extends React.Component<
 // ─── Pending terms: loaded from API ──────────────────────────────────────────
 
 function AppLayout({ children }: { children: React.ReactNode }) {
+  // Presença online — heartbeat autenticado enquanto o shell está montado
+  // (ata 2026-08, bloco 4/5).
+  usePresenceHeartbeat();
   const [termsAccepted, setTermsAccepted] = useState<boolean>(true); // default true to avoid flash
   const [pendingTerms, setPendingTerms] = useState<PendingTerm[]>([]);
   // Fundo único contínuo do shell (ver globals.css .admin-empresas-shell-bg)
@@ -571,11 +615,20 @@ function AppLayout({ children }: { children: React.ReactNode }) {
                             <ChatWidget />
                             {/* Bandeja de telas abertas — logo abaixo do chat */}
                             <OpenScreensTray />
-                            {/* Modo escuro e tamanho de fonte — logo abaixo da bandeja.
-                                Alertas do sistema virou aba dentro do painel do sino
-                                (Notificações), não é mais um ícone flutuante à parte. */}
+                            {/* Modo escuro e tamanho de fonte — logo abaixo da bandeja. */}
                             <HeaderFloatingTools />
                             <ProductFeedbackWidget />
+                            {/* Alertas — barra vertical direita (correção visual, ata
+                                2026-08): saiu do cabeçalho, ao lado do sino, e ganhou
+                                painel próprio (AlertsPanel), nunca mais uma aba do
+                                painel de Notificações. */}
+                            <AlertsFloatingIcon />
+                            {/* Oferta de tarefa ao Nômade (ata 2026-08, bloco 4/5) */}
+                            <TaskOfferPrompt />
+                            {/* Banner obrigatório (ata 2026-08, bloco 5/5) —
+                                overlay dentro do container padrão, bloqueia o
+                                conteúdo atrás enquanto exige ciência. */}
+                            <MandatoryBannerGate />
                             <PinActivationListener />
                           </NotificationsPanelProvider>
                           </ProjectBasketProvider>
@@ -733,6 +786,7 @@ export default function App() {
                     path="/admin/dashboard-config"
                     element={<AdminDashboardConfigPage />}
                   />
+                  <Route path="/admin/perfil" element={<SelfProfilePage />} />
                   <Route
                     path="/admin/usuarios"
                     element={<AdminUsuariosPage />}
@@ -753,7 +807,16 @@ export default function App() {
                     path="/admin/empresas/:empresaId"
                     element={<AdminEmpresasPage />}
                   />
-                  <Route path="/admin/nomades" element={<AdminNomadesPg />} />
+                  {/* Nomad é uma empresa (CNPJ, gerida junto de Company/Agência) —
+                      a tela oficial é /admin/empresas com a aba Nomad. Esta rota
+                      antiga tratava Nomad como profissional individual isolado;
+                      preservada só como redirecionamento pra não quebrar links
+                      salvos (sidebar, dashboard, menu móvel já apontam direto
+                      pra /admin/empresas?type=nomad). */}
+                  <Route
+                    path="/admin/nomades"
+                    element={<Navigate to="/admin/empresas?type=nomad" replace />}
+                  />
                   <Route
                     path="/admin/projetos"
                     element={<AdminProjetosPage />}
@@ -855,6 +918,27 @@ export default function App() {
                     element={<AdminNotificationsPage />}
                   />
                   <Route
+                    path="/admin/comunicacao"
+                    element={<AdminComunicacaoPage />}
+                  />
+                  <Route path="/admin/legacy" element={<AdminLegacyPage />} />
+                  {/* Compatibilidade com favoritos/links salvos do bloco 1. */}
+                  <Route
+                    path="/admin/consulta-legado"
+                    element={<Navigate to="/admin/legacy" replace />}
+                  />
+                  <Route
+                    path="/admin/produtos/novo-catalogo"
+                    element={<AdminNovoCatalogoPage />}
+                  />
+                  {/* Pré-visualizar como cliente (bloco 5/6) — Admin Master;
+                      o backend recusa preview de rascunho para quem não for
+                      Master, mesmo via ?preview=1 na URL. */}
+                  <Route
+                    path="/admin/catalog2"
+                    element={<Catalog2AdminPreviewPage />}
+                  />
+                  <Route
                     path="/admin/clientes"
                     element={<AdminClientesPage />}
                   />
@@ -871,6 +955,7 @@ export default function App() {
                   <Route path="/admin/links-compartilhados" element={<AdminLinksCompartilhadosPage />} />
                   <Route path="/admin/dashboard-templates" element={<AdminDashboardTemplatesPage />} />
                   <Route path="/admin/acesso-chamados" element={<AdminAcessoChamadosPage />} />
+                  <Route path="/admin/grupos-notificacao" element={<AdminGruposNotificacaoPage />} />
                   {/* ─── Nômade dashboard (replica do admin) ────────────── */}
                   <Route
                     path="/nomad/dashboard"
@@ -1000,6 +1085,21 @@ export default function App() {
                     element={<EmpresaProdutosPage />}
                   />
                   <Route
+                    path="/company/produtos/:produtoId"
+                    element={<EmpresaProdutosPage />}
+                  />
+                  {/* Novo catálogo do cliente (bloco 5/6) — coexiste com o
+                      catálogo operacional acima; produto aberto via ?produto=. */}
+                  <Route
+                    path="/company/catalog2"
+                    element={<Catalog2CompanyPage />}
+                  />
+                  {/* Checkout do novo catálogo (bloco 6/6). */}
+                  <Route
+                    path="/company/catalog2/checkout"
+                    element={<Catalog2CheckoutCompanyPage />}
+                  />
+                  <Route
                     path="/company/relatorios"
                     element={<CompanyRelatoriosPage />}
                   />
@@ -1010,6 +1110,15 @@ export default function App() {
                   <Route
                     path="/company/usuarios"
                     element={<CompanyUsuariosPage />}
+                  />
+                  {/* "Meu Perfil" (página dedicada, ata 2026-08) — Company,
+                      Partner e Agency. Partner = Agency com PartnerProfile;
+                      `/parceiro/perfil` é alias de `/partner/perfil`. */}
+                  <Route path="/company/perfil" element={<SelfProfilePage />} />
+                  <Route path="/partner/perfil" element={<SelfProfilePage />} />
+                  <Route
+                    path="/parceiro/perfil"
+                    element={<Navigate to="/partner/perfil" replace />}
                   />
                   {/* Partner não tem gestão de usuários própria — colaboradores
                       são geridos pela própria Agency. */}
@@ -1044,6 +1153,21 @@ export default function App() {
                     element={<AgencyCatalogoPage />}
                   />
                   <Route
+                    path="/agency/catalogo/:produtoId"
+                    element={<AgencyCatalogoPage />}
+                  />
+                  {/* Novo catálogo do cliente (bloco 5/6) — coexiste com o
+                      catálogo operacional acima; produto aberto via ?produto=. */}
+                  <Route
+                    path="/agency/catalog2"
+                    element={<Catalog2AgencyPage />}
+                  />
+                  {/* Checkout do novo catálogo (bloco 6/6). */}
+                  <Route
+                    path="/agency/catalog2/checkout"
+                    element={<Catalog2CheckoutAgencyPage />}
+                  />
+                  <Route
                     path="/agency/combos"
                     element={<AgencyCombosPage />}
                   />
@@ -1063,8 +1187,13 @@ export default function App() {
                     path="/agency/usuarios"
                     element={<AgencyUsuariosPage />}
                   />
+                  <Route path="/agency/perfil" element={<SelfProfilePage />} />
 
                   {/* ─── Agência ──────────────────────────────────────────── */}
+                  <Route
+                    path="/agencia/perfil"
+                    element={<RedirectToAgency />}
+                  />
                   <Route
                     path="/agencia/dashboard"
                     element={<RedirectToAgency />}
@@ -1087,6 +1216,10 @@ export default function App() {
                   />
                   <Route
                     path="/agencia/catalogo"
+                    element={<RedirectToAgency />}
+                  />
+                  <Route
+                    path="/agencia/catalogo/:produtoId"
                     element={<RedirectToAgency />}
                   />
                   <Route

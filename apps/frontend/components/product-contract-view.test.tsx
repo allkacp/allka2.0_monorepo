@@ -1,0 +1,812 @@
+import { describe, expect, it, vi, beforeEach } from "vitest";
+import { render, screen, fireEvent, act } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import { setTestViewportWidth } from "@/vitest.setup";
+
+// Simula o arrasto do divisor: mousedown no separador, mousemove/mouseup na
+// window (o componente escuta na window, não no elemento, pra continuar
+// recebendo movimento mesmo se o cursor sair da faixa estreita do handle).
+// O mousedown só troca o estado "isDraggingDivider" — o useEffect que
+// registra o listener de mousemove na window roda depois, num efeito
+// passivo; por isso é preciso esperar um tick antes de disparar o move. O
+// próprio dispatchEvent também precisa estar dentro de act(), senão a
+// atualização de estado do mousemove não é refletida no DOM a tempo da
+// asserção seguinte.
+function fireMouseDown(el: HTMLElement) {
+  act(() => {
+    fireEvent.mouseDown(el);
+  });
+}
+async function flushEffects() {
+  await act(async () => {
+    await new Promise((resolve) => setTimeout(resolve, 0));
+  });
+}
+function fireWindowMouseMove(clientX: number) {
+  act(() => {
+    window.dispatchEvent(new MouseEvent("mousemove", { clientX, bubbles: true }));
+  });
+}
+function fireWindowMouseUp() {
+  act(() => {
+    window.dispatchEvent(new MouseEvent("mouseup", { bubbles: true }));
+  });
+}
+
+// Lote 2D (ata 2026-08-21): "Escolher" deve abrir uma tela cheia do produto,
+// e SÓ o clique explícito em "Contratar" pode chamar onContratar (o único
+// caminho até basket.addItem) — abrir, selecionar, trocar de opção, trocar
+// de aba ou voltar nunca podem disparar isso.
+//
+// Lote 2E (ata 2026-08-21, corretivo): a primeira versão desta tela
+// simplificou demais o conteúdo em relação ao antigo ProductDetailSheet
+// (modal). Este arquivo também prova que o conteúdo rico foi recuperado:
+// abas (Detalhes/Portfólio/Nômades), descrição expansível, portfólio real,
+// profissionais relacionados, produtos complementares — sem que nada disso
+// jamais adicione à cesta sozinho.
+
+const { accountConfig, productsConfig } = vi.hoisted(() => ({
+  accountConfig: { accountType: "empresas" as string },
+  productsConfig: { products: [] as any[] },
+}));
+
+vi.mock("@/contexts/account-type-context", () => ({
+  useAccountType: () => ({ accountType: accountConfig.accountType, accountSubType: null }),
+}));
+
+vi.mock("@/lib/contexts/product-context", () => ({
+  useProducts: () => productsConfig,
+}));
+
+vi.mock("@/components/admin/product-nomads-tab", () => ({
+  ProductNomadsTab: ({ productId }: { productId: string }) => (
+    <div data-testid="nomads-tab-stub">Nômades do produto {productId}</div>
+  ),
+}));
+
+vi.mock("@/components/product-rating-display", () => ({
+  ProductRatingDisplay: () => <span data-testid="rating-stub" />,
+}));
+
+vi.mock("@/components/copy-link-button", () => ({
+  CopyLinkButton: () => <button type="button">Copiar link</button>,
+}));
+
+import { ProductContractView } from "@/components/product-contract-view";
+
+const LONG_DESCRIPTION =
+  "Este é um serviço completo de gestão de mídias sociais, incluindo criação de conteúdo, agendamento de posts, resposta a comentários, relatórios mensais de desempenho, análise de concorrência, sugestões de melhoria contínua e acompanhamento próximo com o time de marketing do cliente ao longo de todo o contrato.";
+
+function productFixture(overrides: Record<string, any> = {}): any {
+  return {
+    id: "prod-1",
+    name: "Alteração de Materiais Diversos",
+    category: "Design e Criação",
+    finalPrice: 90.72,
+    deliveryDays: 2,
+    description: "",
+    variations: [],
+    presentation: {
+      tagline: "Resumo curto do produto",
+      highlights: ["Destaque 1", "Destaque 2"],
+      whatIsIncluded: [{ title: "Item incluído 1" }],
+      notIncluded: ["Item não incluído"],
+      deliverables: ["Entregável 1"],
+    },
+    ...overrides,
+  };
+}
+
+function renderView(props: Partial<React.ComponentProps<typeof ProductContractView>> = {}) {
+  const onContratar = vi.fn();
+  const onBack = vi.fn();
+  const isItemInBasket = vi.fn().mockReturnValue(false);
+  const utils = render(
+    <ProductContractView
+      product={productFixture()}
+      isItemInBasket={isItemInBasket}
+      onContratar={onContratar}
+      onBack={onBack}
+      {...props}
+    />,
+  );
+  return { ...utils, onContratar, onBack, isItemInBasket };
+}
+
+describe("ProductContractView", () => {
+  beforeEach(() => {
+    setTestViewportWidth(1280);
+    accountConfig.accountType = "empresas";
+    productsConfig.products = [];
+    window.localStorage.clear();
+  });
+
+  it("4. cabeçalho é o nome do produto, categoria aparece como informação secundária", () => {
+    renderView();
+    expect(screen.getByRole("heading", { name: "Alteração de Materiais Diversos" })).toBeInTheDocument();
+    expect(screen.getByText("Design e Criação")).toBeInTheDocument();
+  });
+
+  it("4. só existe um único cabeçalho (h1) na tela", () => {
+    renderView();
+    expect(screen.getAllByRole("heading", { level: 1 })).toHaveLength(1);
+  });
+
+  it("7. abrir a tela (montar o componente) não chama onContratar", () => {
+    const { onContratar } = renderView();
+    expect(onContratar).not.toHaveBeenCalled();
+  });
+
+  it("8/9. selecionar e trocar de opção não chama onContratar", async () => {
+    const user = userEvent.setup();
+    const { onContratar } = renderView({
+      product: productFixture({
+        variations: [
+          { id: "v1", name: "Plano Básico", price: 90.72, isActive: true },
+          { id: "v2", name: "Plano Avançado", price: 150, isActive: true },
+        ],
+      }),
+    });
+    await user.click(screen.getByRole("button", { name: /plano básico/i }));
+    expect(onContratar).not.toHaveBeenCalled();
+    await user.click(screen.getByRole("button", { name: /plano avançado/i }));
+    expect(onContratar).not.toHaveBeenCalled();
+  });
+
+  it("10. voltar (onBack) não chama onContratar nem altera nada da cesta", async () => {
+    const user = userEvent.setup();
+    const { onContratar, onBack } = renderView();
+    await user.click(screen.getByRole("button", { name: /voltar ao catálogo/i }));
+    expect(onBack).toHaveBeenCalledTimes(1);
+    expect(onContratar).not.toHaveBeenCalled();
+  });
+
+  it("18. botão 'Adicionar à cesta' fica desabilitado sem uma opção válida selecionada", () => {
+    renderView({
+      product: productFixture({
+        variations: [{ id: "v1", name: "Plano Básico", price: 90.72, isActive: true }],
+      }),
+    });
+    const btn = screen.getByRole("button", { name: /^selecione uma opção$/i });
+    expect(btn).toBeDisabled();
+  });
+
+  it("17/19. somente clicar em 'Adicionar à cesta' chama onContratar, exatamente um item — produto sem variações", async () => {
+    const user = userEvent.setup();
+    const { onContratar } = renderView();
+    const btn = screen.getByRole("button", { name: /^adicionar à cesta$/i });
+    expect(btn).toBeEnabled();
+    await user.click(btn);
+    expect(onContratar).toHaveBeenCalledTimes(1);
+    expect(onContratar).toHaveBeenCalledWith(
+      expect.objectContaining({ selectedVariation: null, finalPrice: 90.72 }),
+    );
+  });
+
+  it("11/17. com variações, precisa selecionar antes — só então 'Adicionar à cesta' funciona", async () => {
+    const user = userEvent.setup();
+    const { onContratar } = renderView({
+      product: productFixture({
+        variations: [{ id: "v1", name: "Plano Básico", price: 90.72, isActive: true }],
+      }),
+    });
+    await user.click(screen.getByRole("button", { name: /plano básico/i }));
+    expect(onContratar).not.toHaveBeenCalled();
+    await user.click(screen.getByRole("button", { name: /^adicionar à cesta$/i }));
+    expect(onContratar).toHaveBeenCalledTimes(1);
+    expect(onContratar).toHaveBeenCalledWith(
+      expect.objectContaining({ selectedVariation: expect.objectContaining({ id: "v1" }), finalPrice: 90.72 }),
+    );
+  });
+
+  it("20. clique duplicado rápido só chama onContratar uma vez (botão desabilita ao clicar)", async () => {
+    const user = userEvent.setup();
+    const { onContratar } = renderView();
+    const btn = screen.getByRole("button", { name: /^adicionar à cesta$/i });
+    await user.dblClick(btn);
+    expect(onContratar).toHaveBeenCalledTimes(1);
+  });
+
+  it("21. confirmação 'Adicionado à cesta' aparece depois de adicionar", async () => {
+    const user = userEvent.setup();
+    renderView();
+    await user.click(screen.getByRole("button", { name: /^adicionar à cesta$/i }));
+    expect(screen.getByRole("status")).toHaveTextContent(/adicionado à cesta/i);
+  });
+
+  it("21. 'Já está na cesta' só aparece quando isItemInBasket retorna true pra essa opção", () => {
+    renderView({ isItemInBasket: vi.fn().mockReturnValue(true) });
+    expect(screen.getByRole("button", { name: /já está na cesta/i })).toBeDisabled();
+  });
+
+  it("sem estar na cesta, mostra 'Adicionar à cesta' normalmente (nunca 'Remover' aqui — essa tela não remove)", () => {
+    renderView();
+    expect(screen.queryByText(/remover/i)).not.toBeInTheDocument();
+  });
+
+  it("18. não renderiza nenhuma barra flutuante de cesta nesta tela", () => {
+    renderView();
+    expect(screen.queryByRole("button", { name: /criar projeto com estes itens/i })).not.toBeInTheDocument();
+  });
+
+  it("19. mesmo comportamento em largura mobile", async () => {
+    setTestViewportWidth(375);
+    const user = userEvent.setup();
+    const { onContratar } = renderView();
+    expect(screen.getByRole("heading", { name: "Alteração de Materiais Diversos" })).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: /^adicionar à cesta$/i }));
+    expect(onContratar).toHaveBeenCalledTimes(1);
+  });
+
+  // ── Conteúdo recuperado (Lote 2E) ─────────────────────────────────────
+
+  it("6. aba Detalhes é a padrão e mostra o conteúdo da apresentação", () => {
+    renderView();
+    expect(screen.getByRole("tab", { name: /detalhes/i })).toHaveAttribute("aria-selected", "true");
+    expect(screen.getByText("Item incluído 1")).toBeInTheDocument();
+  });
+
+  it("7. aba Portfólio funciona — troca de aba não chama onContratar", async () => {
+    const user = userEvent.setup();
+    const { onContratar } = renderView({
+      product: productFixture({ demonstrations: ["/images/a.png", "/images/b.png"] }),
+    });
+    await user.click(screen.getByRole("tab", { name: /portfólio/i }));
+    expect(screen.getByRole("tab", { name: /portfólio/i })).toHaveAttribute("aria-selected", "true");
+    expect(onContratar).not.toHaveBeenCalled();
+  });
+
+  it("8. aba Nômades aparece para admin e funciona; não aparece para outros perfis", async () => {
+    accountConfig.accountType = "admin";
+    const user = userEvent.setup();
+    const first = renderView();
+    await user.click(screen.getByRole("tab", { name: /nômades/i }));
+    expect(screen.getByTestId("nomads-tab-stub")).toHaveTextContent("prod-1");
+    first.unmount();
+
+    accountConfig.accountType = "empresas";
+    renderView();
+    expect(screen.queryByRole("tab", { name: /nômades/i })).not.toBeInTheDocument();
+  });
+
+  it("9. estado vazio do portfólio aparece quando não há imagens", async () => {
+    const user = userEvent.setup();
+    renderView({ product: productFixture({ demonstrations: [] }) });
+    await user.click(screen.getByRole("tab", { name: /portfólio/i }));
+    expect(screen.getByText(/nenhuma imagem de portfólio ainda/i)).toBeInTheDocument();
+  });
+
+  it("9. estado vazio de 'O que você recebe' aparece pra empresas sem deliverables cadastrados", () => {
+    accountConfig.accountType = "empresas";
+    renderView({
+      product: productFixture({
+        presentation: { highlights: [], whatIsIncluded: [], deliverables: [] },
+      }),
+    });
+    expect(screen.getByText(/entregas não especificadas/i)).toBeInTheDocument();
+  });
+
+  it("10. descrição completa (sem presentation estruturada) pode ser expandida e recolhida", async () => {
+    const user = userEvent.setup();
+    renderView({ product: productFixture({ presentation: null, description: LONG_DESCRIPTION }) });
+    const toggle = screen.getByRole("button", { name: /ver descrição completa/i });
+    await user.click(toggle);
+    expect(screen.getByRole("button", { name: /mostrar menos/i })).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: /mostrar menos/i }));
+    expect(screen.getByRole("button", { name: /ver descrição completa/i })).toBeInTheDocument();
+  });
+
+  it("11. portfólio real é renderizado quando existem imagens (demonstrations)", async () => {
+    const user = userEvent.setup();
+    renderView({
+      product: productFixture({ demonstrations: ["/images/alk-des-002-01.svg", "/images/alk-des-002-02.svg"] }),
+    });
+    await user.click(screen.getByRole("tab", { name: /portfólio/i }));
+    const images = screen.getAllByRole("img");
+    expect(images.length).toBeGreaterThan(0);
+    expect(screen.getByText("1 / 2")).toBeInTheDocument();
+  });
+
+  it("12. profissionais (nômades) reais são renderizados quando existem, dentro da aba", async () => {
+    accountConfig.accountType = "admin";
+    const user = userEvent.setup();
+    renderView({ product: productFixture({ id: "prod-com-nomades" }) });
+    await user.click(screen.getByRole("tab", { name: /nômades/i }));
+    expect(screen.getByText(/nômades do produto prod-com-nomades/i)).toBeInTheDocument();
+  });
+
+  it("15. navegar entre abas nunca chama onContratar", async () => {
+    accountConfig.accountType = "admin";
+    const user = userEvent.setup();
+    const { onContratar } = renderView({ product: productFixture({ demonstrations: ["/images/a.png"] }) });
+    await user.click(screen.getByRole("tab", { name: /portfólio/i }));
+    await user.click(screen.getByRole("tab", { name: /nômades/i }));
+    await user.click(screen.getByRole("tab", { name: /detalhes/i }));
+    expect(onContratar).not.toHaveBeenCalled();
+  });
+
+  it("produtos complementares com opções navegam via onViewComplementaryProduct, sem adicionar nada sozinhos", async () => {
+    const user = userEvent.setup();
+    productsConfig.products = [
+      { id: "comp-1", name: "Produto Complementar", category: "Design", finalPrice: 50, variations: [{ id: "cv1", isActive: true, price: 50 }] },
+    ];
+    const onViewComplementaryProduct = vi.fn();
+    const { onContratar } = renderView({
+      product: productFixture({ complementaryProductIds: ["comp-1"] }),
+      onViewComplementaryProduct,
+    });
+    await user.click(screen.getByRole("button", { name: /ver opções/i }));
+    expect(onViewComplementaryProduct).toHaveBeenCalledWith("comp-1");
+    expect(onContratar).not.toHaveBeenCalled();
+  });
+
+  it("produto complementar sem opções soma via onAddComplementaryProduct (ação própria, distinta do produto principal)", async () => {
+    const user = userEvent.setup();
+    productsConfig.products = [
+      { id: "comp-2", name: "Produto Complementar Simples", category: "Design", finalPrice: 30, variations: [] },
+    ];
+    const onAddComplementaryProduct = vi.fn();
+    const { onContratar } = renderView({
+      product: productFixture({ complementaryProductIds: ["comp-2"] }),
+      onAddComplementaryProduct,
+    });
+    await user.click(screen.getByRole("button", { name: /^adicionar$/i }));
+    expect(onAddComplementaryProduct).toHaveBeenCalledTimes(1);
+    expect(onAddComplementaryProduct).toHaveBeenCalledWith(expect.objectContaining({ id: "comp-2" }));
+    expect(onContratar).not.toHaveBeenCalled();
+  });
+
+  it("13. opções mostram nome, preço e prazo com clareza", () => {
+    renderView({
+      product: productFixture({
+        variations: [{ id: "v1", name: "Plano Básico", price: 123.45, deadlineDays: 5, isActive: true }],
+      }),
+    });
+    expect(screen.getByText("Plano Básico")).toBeInTheDocument();
+    expect(screen.getAllByText(/123,45/).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/5 dias/).length).toBeGreaterThan(0);
+  });
+});
+
+// ── Lote 2F (corretivo de layout): cabeçalho institucional em degradê,
+// destaques recolhíveis, colunas ajustáveis com divisor, e a troca de
+// "Contratar" por "Adicionar à cesta" + "Continuar comprando". O conteúdo
+// recuperado no lote anterior continua intacto — só a disposição mudou.
+describe("ProductContractView — cabeçalho institucional e destaques", () => {
+  beforeEach(() => {
+    setTestViewportWidth(1280);
+    accountConfig.accountType = "empresas";
+    productsConfig.products = [];
+    window.localStorage.clear();
+  });
+
+  it("1. cabeçalho mostra o nome do produto", () => {
+    renderView();
+    expect(screen.getByRole("heading", { name: "Alteração de Materiais Diversos" })).toBeInTheDocument();
+  });
+
+  it("2. badges essenciais aparecem (categoria, código, prazo)", () => {
+    renderView();
+    expect(screen.getByText("Design e Criação")).toBeInTheDocument();
+    expect(screen.getByText("prod-1")).toBeInTheDocument();
+    expect(screen.getAllByText(/2 dias/).length).toBeGreaterThan(0);
+  });
+
+  it("3/4. descrição começa resumida e expande/recolhe", async () => {
+    const user = userEvent.setup();
+    renderView({
+      product: productFixture({
+        presentation: { tagline: "a".repeat(200), highlights: [] },
+      }),
+    });
+    const toggle = screen.getByRole("button", { name: /ver descrição completa/i });
+    expect(toggle).toBeInTheDocument();
+    await user.click(toggle);
+    expect(screen.getByRole("button", { name: /mostrar menos/i })).toBeInTheDocument();
+  });
+
+  it("5/6/7. destaques excedentes começam recolhidos, 'Ver todos' expande, 'Mostrar menos' recolhe", async () => {
+    const user = userEvent.setup();
+    renderView({
+      product: productFixture({
+        presentation: {
+          tagline: "",
+          highlights: ["D1", "D2", "D3", "D4", "D5", "D6"],
+        },
+      }),
+    });
+    expect(screen.getByText("D1")).toBeInTheDocument();
+    expect(screen.getByText("D4")).toBeInTheDocument();
+    expect(screen.queryByText("D5")).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: /ver todos os destaques/i }));
+    expect(screen.getByText("D5")).toBeInTheDocument();
+    expect(screen.getByText("D6")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: /mostrar menos/i }));
+    expect(screen.queryByText("D5")).not.toBeInTheDocument();
+  });
+
+  it("destaques em quantidade que cabe (≤4) não mostram 'Ver todos'", () => {
+    renderView({
+      product: productFixture({ presentation: { tagline: "", highlights: ["D1", "D2", "D3"] } }),
+    });
+    expect(screen.queryByRole("button", { name: /ver todos os destaques/i })).not.toBeInTheDocument();
+  });
+
+  it("8. abas e conteúdos continuam disponíveis", () => {
+    renderView();
+    expect(screen.getByRole("tab", { name: /detalhes/i })).toBeInTheDocument();
+    expect(screen.getByRole("tab", { name: /portfólio/i })).toBeInTheDocument();
+    expect(screen.getByText("Item incluído 1")).toBeInTheDocument();
+  });
+});
+
+describe("ProductContractView — divisor ajustável entre colunas", () => {
+  beforeEach(() => {
+    setTestViewportWidth(1280);
+    accountConfig.accountType = "empresas";
+    productsConfig.products = [];
+    window.localStorage.clear();
+  });
+
+  it("9. divisor aparece somente no desktop (some no celular/tablet estreito)", () => {
+    setTestViewportWidth(1280);
+    const { unmount } = renderView();
+    expect(screen.getByRole("separator")).toBeInTheDocument();
+    unmount();
+
+    setTestViewportWidth(768);
+    renderView();
+    expect(screen.queryByRole("separator")).not.toBeInTheDocument();
+  });
+
+  it("10. arrastar o divisor altera a proporção das colunas", async () => {
+    renderView();
+    const separator = screen.getByRole("separator");
+    const container = separator.parentElement as HTMLElement;
+    container.getBoundingClientRect = vi.fn().mockReturnValue({
+      left: 0,
+      right: 1000,
+      width: 1000,
+      top: 0,
+      bottom: 600,
+      height: 600,
+      x: 0,
+      y: 0,
+      toJSON() {},
+    });
+
+    const before = Number(separator.getAttribute("aria-valuenow"));
+    fireMouseDown(separator);
+    await flushEffects();
+    fireWindowMouseMove(600); // arrasta bem pra esquerda -> coluna direita cresce
+    fireWindowMouseUp();
+
+    const after = Number(separator.getAttribute("aria-valuenow"));
+    expect(after).not.toBe(before);
+    expect(after).toBe(40);
+  });
+
+  it("11. limites mínimos são respeitados (não passa de ~55% nem cai abaixo de ~22%)", async () => {
+    renderView();
+    const separator = screen.getByRole("separator");
+    const container = separator.parentElement as HTMLElement;
+    vi.spyOn(container, "getBoundingClientRect").mockReturnValue({
+      left: 0,
+      right: 1000,
+      width: 1000,
+      top: 0,
+      bottom: 600,
+      height: 600,
+      x: 0,
+      y: 0,
+      toJSON() {},
+    });
+
+    fireMouseDown(separator);
+    await flushEffects();
+    fireWindowMouseMove(999); // tenta jogar quase tudo pra direita
+    fireWindowMouseUp();
+    expect(Number(separator.getAttribute("aria-valuenow"))).toBeLessThanOrEqual(65);
+
+    fireMouseDown(separator);
+    await flushEffects();
+    fireWindowMouseMove(1); // tenta jogar quase tudo pra esquerda
+    fireWindowMouseUp();
+    expect(Number(separator.getAttribute("aria-valuenow"))).toBeGreaterThanOrEqual(35);
+  });
+
+  it("12. teclado ajusta o divisor (setas) sem alterar a cesta", async () => {
+    const user = userEvent.setup();
+    const { onContratar } = renderView();
+    const separator = screen.getByRole("separator");
+    separator.focus();
+    const before = Number(separator.getAttribute("aria-valuenow"));
+    await user.keyboard("{ArrowLeft}");
+    expect(Number(separator.getAttribute("aria-valuenow"))).toBeGreaterThan(before);
+    await user.keyboard("{ArrowRight}{ArrowRight}");
+    expect(Number(separator.getAttribute("aria-valuenow"))).toBeLessThan(before);
+    expect(onContratar).not.toHaveBeenCalled();
+  });
+
+  it("13. duplo clique ou Enter restaura a proporção padrão (opções maiores, 58%)", async () => {
+    const user = userEvent.setup();
+    renderView();
+    const separator = screen.getByRole("separator");
+    separator.focus();
+    await user.keyboard("{ArrowLeft}{ArrowLeft}{ArrowLeft}");
+    expect(Number(separator.getAttribute("aria-valuenow"))).not.toBe(58);
+    await user.keyboard("{Enter}");
+    expect(Number(separator.getAttribute("aria-valuenow"))).toBe(58);
+  });
+
+  it("14. valor salvo localmente inválido (texto ou fora dos limites) é ignorado, cai no padrão", () => {
+    window.localStorage.setItem("allka:product-detail-right-fraction-v2", "not-a-number");
+    const first = renderView();
+    expect(Number(screen.getByRole("separator").getAttribute("aria-valuenow"))).toBe(58);
+    first.unmount();
+
+    window.localStorage.setItem("allka:product-detail-right-fraction-v2", "0.99");
+    renderView();
+    expect(Number(screen.getByRole("separator").getAttribute("aria-valuenow"))).toBe(58);
+  });
+
+  it("valor salvo localmente válido é aplicado ao reabrir", () => {
+    window.localStorage.setItem("allka:product-detail-right-fraction-v2", "0.45");
+    renderView();
+    expect(Number(screen.getByRole("separator").getAttribute("aria-valuenow"))).toBe(45);
+  });
+
+  it("uma preferência antiga (chave v1, proporção pré-lote-de-densidade) não quebra o layout nem é usada", () => {
+    window.localStorage.setItem("allka:product-detail-right-fraction", "0.34");
+    renderView();
+    // A chave nova não existe ainda — cai no padrão novo, ignorando a v1.
+    expect(Number(screen.getByRole("separator").getAttribute("aria-valuenow"))).toBe(58);
+  });
+
+  it("15. celular usa coluna única, sem divisor, e mantém as opções acessíveis", () => {
+    setTestViewportWidth(375);
+    renderView();
+    expect(screen.queryByRole("separator")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /^adicionar à cesta$/i })).toBeInTheDocument();
+  });
+});
+
+describe("ProductContractView — 'Adicionar à cesta' e 'Continuar comprando'", () => {
+  beforeEach(() => {
+    setTestViewportWidth(1280);
+    accountConfig.accountType = "empresas";
+    productsConfig.products = [];
+    window.localStorage.clear();
+  });
+
+  it("16. selecionar opção não altera a cesta", async () => {
+    const user = userEvent.setup();
+    const { onContratar } = renderView({
+      product: productFixture({ variations: [{ id: "v1", name: "Plano Básico", price: 90.72, isActive: true }] }),
+    });
+    await user.click(screen.getByRole("button", { name: /plano básico/i }));
+    expect(onContratar).not.toHaveBeenCalled();
+  });
+
+  it("17. botão mostra 'Adicionar à cesta'", () => {
+    renderView();
+    expect(screen.getByRole("button", { name: /^adicionar à cesta$/i })).toBeInTheDocument();
+  });
+
+  it("18. botão fica desabilitado sem opção válida", () => {
+    renderView({
+      product: productFixture({ variations: [{ id: "v1", name: "Plano Básico", price: 90.72, isActive: true }] }),
+    });
+    expect(screen.getByRole("button", { name: /^selecione uma opção$/i })).toBeDisabled();
+  });
+
+  it("19. clique adiciona exatamente um item", async () => {
+    const user = userEvent.setup();
+    const { onContratar } = renderView();
+    await user.click(screen.getByRole("button", { name: /^adicionar à cesta$/i }));
+    expect(onContratar).toHaveBeenCalledTimes(1);
+  });
+
+  it("20. clique duplo não duplica", async () => {
+    const user = userEvent.setup();
+    const { onContratar } = renderView();
+    await user.dblClick(screen.getByRole("button", { name: /^adicionar à cesta$/i }));
+    expect(onContratar).toHaveBeenCalledTimes(1);
+  });
+
+  it("21. estado muda para 'Adicionado à cesta' após o clique", async () => {
+    const user = userEvent.setup();
+    renderView();
+    await user.click(screen.getByRole("button", { name: /^adicionar à cesta$/i }));
+    expect(screen.getByRole("status")).toHaveTextContent(/adicionado à cesta/i);
+  });
+
+  it("21. estado mostra 'Já está na cesta' quando já estava adicionado", () => {
+    renderView({ isItemInBasket: vi.fn().mockReturnValue(true) });
+    expect(screen.getByRole("button", { name: /já está na cesta/i })).toBeDisabled();
+  });
+
+  it("22. 'Continuar comprando' só aparece depois de adicionar", async () => {
+    const user = userEvent.setup();
+    renderView();
+    expect(screen.queryByRole("button", { name: /continuar comprando/i })).not.toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: /^adicionar à cesta$/i }));
+    expect(screen.getByRole("button", { name: /continuar comprando/i })).toBeInTheDocument();
+  });
+
+  it("23/24. 'Continuar comprando' volta ao catálogo (onBack) sem adicionar de novo nem remover", async () => {
+    const user = userEvent.setup();
+    const { onContratar, onBack } = renderView();
+    await user.click(screen.getByRole("button", { name: /^adicionar à cesta$/i }));
+    expect(onContratar).toHaveBeenCalledTimes(1);
+    await user.click(screen.getByRole("button", { name: /continuar comprando/i }));
+    expect(onBack).toHaveBeenCalledTimes(1);
+    expect(onContratar).toHaveBeenCalledTimes(1);
+  });
+});
+
+// ── Lote 2H (corretivo de densidade): margens, proporção inicial das
+// colunas, resumo compacto de preço/prazo/modalidade e opções compactas e
+// expansíveis. Nenhum conteúdo foi removido — só a disposição mudou.
+describe("ProductContractView — densidade e opções compactas", () => {
+  beforeEach(() => {
+    setTestViewportWidth(1280);
+    accountConfig.accountType = "empresas";
+    productsConfig.products = [];
+    window.localStorage.clear();
+  });
+
+  const twoOptionsFixture = () =>
+    productFixture({
+      deliveryDays: undefined,
+      variations: [
+        {
+          id: "v1",
+          name: "Até 10 slides",
+          price: 296.35,
+          deadlineDays: 5,
+          description: "Descrição detalhada da opção básica.",
+          features: ["Diferencial 1", "Diferencial 2"],
+          isActive: true,
+        },
+        {
+          id: "v2",
+          name: "Até 20 slides",
+          price: 465.7,
+          deadlineDays: 8,
+          description: "Descrição detalhada da opção avançada.",
+          features: ["Diferencial 3"],
+          isActive: true,
+        },
+      ],
+    });
+
+  it("1. container não tem margem extra além do padrão da plataforma (sem mx-4/mx-6 no cabeçalho)", () => {
+    const { container } = renderView();
+    const header = container.querySelector('[style*="linear-gradient(90deg"]') as HTMLElement;
+    expect(header).toBeTruthy();
+    expect(header.className).not.toMatch(/\bmx-4\b|\bmx-6\b|\bmt-4\b/);
+  });
+
+  it("2. proporção inicial favorece a coluna de opções (58%, contra 42% de detalhes)", () => {
+    renderView();
+    const separator = screen.getByRole("separator");
+    const value = Number(separator.getAttribute("aria-valuenow"));
+    expect(value).toBe(58);
+    expect(value).toBeGreaterThan(50);
+  });
+
+  it("5. preferência nova é salva no localStorage sob a chave v2", async () => {
+    const user = userEvent.setup();
+    renderView();
+    const separator = screen.getByRole("separator");
+    separator.focus();
+    await user.keyboard("{ArrowLeft}");
+    expect(window.localStorage.getItem("allka:product-detail-right-fraction-v2")).not.toBeNull();
+  });
+
+  it("6. resumo de preço/prazo/modalidade não se repete dentro do próprio painel de opções (só uma faixa 'Prazo:'/'Modalidade:', sem o bloco antigo empilhado por baixo)", () => {
+    renderView({
+      product: productFixture({ recurrence: "Mensal", deliveryDays: 7, itemLimit: 2 }),
+    });
+    // "Prazo:"/"Modalidade:" só existem na faixa compacta — uma vez cada,
+    // não uma vez na faixa e outra vez num bloco empilhado logo abaixo dela
+    // (o bloco antigo com "Prazo:" + linha de recorrência separada foi
+    // removido; o aviso de limite de contratos também saiu daqui, pois
+    // virou o "Contrato:" da própria faixa).
+    expect(screen.getAllByText(/^prazo:/i).length).toBe(1);
+    expect(screen.getAllByText(/^modalidade:/i).length).toBe(1);
+    expect(screen.queryByText(/contrato simultâneo/i)).not.toBeInTheDocument();
+    expect(screen.getByText(/^contrato:/i)).toBeInTheDocument();
+  });
+
+  it("7. opções começam recolhidas (sem descrição nem diferenciais visíveis)", () => {
+    renderView({ product: twoOptionsFixture() });
+    expect(screen.queryByText("Descrição detalhada da opção básica.")).not.toBeInTheDocument();
+    expect(screen.queryByText("Diferencial 1")).not.toBeInTheDocument();
+    expect(screen.getAllByRole("button", { name: /ver detalhes/i }).length).toBe(2);
+  });
+
+  it("8/9. 'Ver detalhes' expande e 'Ocultar detalhes' recolhe", async () => {
+    const user = userEvent.setup();
+    renderView({ product: twoOptionsFixture() });
+    const toggles = screen.getAllByRole("button", { name: /ver detalhes/i });
+    await user.click(toggles[0]);
+    expect(screen.getByText("Descrição detalhada da opção básica.")).toBeInTheDocument();
+    expect(screen.getByText("Diferencial 1")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /ocultar detalhes/i })).toHaveAttribute("aria-expanded", "true");
+
+    await user.click(screen.getByRole("button", { name: /ocultar detalhes/i }));
+    expect(screen.queryByText("Descrição detalhada da opção básica.")).not.toBeInTheDocument();
+  });
+
+  it("10. expandir uma opção não a seleciona, nem chama onContratar", async () => {
+    const user = userEvent.setup();
+    const { onContratar } = renderView({ product: twoOptionsFixture() });
+    await user.click(screen.getAllByRole("button", { name: /ver detalhes/i })[0]);
+    expect(screen.queryByRole("button", { name: /^ocultar detalhes$/i })).toBeInTheDocument();
+    // Continua sem seleção — botão principal ainda pede pra escolher.
+    expect(screen.getByRole("button", { name: /^selecione uma opção$/i })).toBeDisabled();
+    expect(onContratar).not.toHaveBeenCalled();
+  });
+
+  it("11. selecionar uma opção não adiciona à cesta", async () => {
+    const user = userEvent.setup();
+    const { onContratar } = renderView({ product: twoOptionsFixture() });
+    await user.click(screen.getByRole("button", { name: /até 10 slides/i }));
+    expect(onContratar).not.toHaveBeenCalled();
+  });
+
+  it("12. apenas uma opção fica expandida por vez", async () => {
+    const user = userEvent.setup();
+    renderView({ product: twoOptionsFixture() });
+    const toggles = screen.getAllByRole("button", { name: /ver detalhes/i });
+    await user.click(toggles[0]);
+    expect(screen.getByText("Descrição detalhada da opção básica.")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: /ver detalhes/i }));
+    expect(screen.queryByText("Descrição detalhada da opção básica.")).not.toBeInTheDocument();
+    expect(screen.getByText("Descrição detalhada da opção avançada.")).toBeInTheDocument();
+  });
+
+  it("13. nenhuma informação da opção foi perdida (nome, preço, prazo, descrição, diferenciais seguem acessíveis)", async () => {
+    const user = userEvent.setup();
+    renderView({ product: twoOptionsFixture() });
+    expect(screen.getByText("Até 10 slides")).toBeInTheDocument();
+    expect(screen.getAllByText(/296,35/).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/5 dias/).length).toBeGreaterThan(0);
+    await user.click(screen.getAllByRole("button", { name: /ver detalhes/i })[0]);
+    expect(screen.getByText("Descrição detalhada da opção básica.")).toBeInTheDocument();
+    expect(screen.getByText("Diferencial 1")).toBeInTheDocument();
+    expect(screen.getByText("Diferencial 2")).toBeInTheDocument();
+  });
+
+  it("14. sem seleção existe apenas uma orientação (nada de card amarelo duplicando a mensagem do botão)", () => {
+    renderView({ product: twoOptionsFixture() });
+    // A única pista deve ser o texto discreto acima do botão OU o próprio
+    // rótulo do botão — nunca as duas variantes de texto ao mesmo tempo.
+    const hints = screen.queryAllByText(/escolha uma opção acima para continuar/i);
+    expect(hints.length).toBeLessThanOrEqual(1);
+    expect(screen.queryByText(/selecione uma opção acima para continuar/i)).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /^selecione uma opção$/i })).toBeInTheDocument();
+  });
+
+  it("com seleção válida, a orientação desaparece e resta só 'Adicionar à cesta'", async () => {
+    const user = userEvent.setup();
+    renderView({ product: twoOptionsFixture() });
+    await user.click(screen.getByRole("button", { name: /até 10 slides/i }));
+    expect(screen.queryByText(/escolha uma opção acima para continuar/i)).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /^adicionar à cesta$/i })).toBeEnabled();
+  });
+
+  it("teclado: 'Ver detalhes' funciona por Enter/Espaço (é um botão nativo)", async () => {
+    const user = userEvent.setup();
+    renderView({ product: twoOptionsFixture() });
+    const toggle = screen.getAllByRole("button", { name: /ver detalhes/i })[0];
+    toggle.focus();
+    await user.keyboard("{Enter}");
+    expect(screen.getByText("Descrição detalhada da opção básica.")).toBeInTheDocument();
+  });
+});

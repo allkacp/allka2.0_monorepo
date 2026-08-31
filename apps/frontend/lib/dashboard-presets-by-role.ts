@@ -13,6 +13,7 @@
  */
 
 import type { DashboardRole } from "./dashboard-widget-roles";
+import { getCurrentUserScopedStorageKey } from "./dashboard-storage-scope";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -44,28 +45,55 @@ export function buildWidgets(types: string[]) {
 }
 
 // ─── localStorage namespace per role ─────────────────────────────────────────
+//
+// Isolamento por usuário (lote 5, ata 2026-08-24): as chaves de base abaixo
+// só isolavam por PORTAL — duas contas diferentes do mesmo tipo de portal,
+// no mesmo navegador, liam/escreviam a mesma chave. `DASHBOARD_STORAGE_KEY`
+// e `CURRENT_DASHBOARD_KEY` agora são objetos com getter: cada acesso
+// (`DASHBOARD_STORAGE_KEY.COMPANY`) relê a identidade da sessão atual e
+// deriva a chave final na hora — nenhum dos ~50 pontos de leitura/escrita
+// espalhados pelas 4 páginas de dashboard (agency/company/partner/leader)
+// precisou mudar, já que continuam acessando exatamente do mesmo jeito
+// (`DASHBOARD_STORAGE_KEY["COMPANY"]`); só o valor retornado mudou. A chave
+// antiga (só-portal) nunca é lida, escrita ou apagada por este caminho —
+// ver dashboard-storage-scope.ts pra estratégia completa de migração.
+function makeUserScopedKeyMap<K extends string>(
+  baseKeys: Record<K, string>,
+): Record<K, string> {
+  const scoped = {} as Record<K, string>;
+  for (const role of Object.keys(baseKeys) as K[]) {
+    const baseKey = baseKeys[role];
+    Object.defineProperty(scoped, role, {
+      enumerable: true,
+      get() {
+        return getCurrentUserScopedStorageKey(baseKey);
+      },
+    });
+  }
+  return scoped;
+}
 
 export const DASHBOARD_STORAGE_KEY: Record<
   Exclude<DashboardRole, "ADMIN">,
   string
-> = {
+> = makeUserScopedKeyMap({
   AGENCY: "saved-dashboards-agency",
   NOMAD: "saved-dashboards-nomad",
   COMPANY: "saved-dashboards-company",
   PARTNER: "saved-dashboards-partner",
   LEADER: "saved-dashboards-leader",
-};
+});
 
 export const CURRENT_DASHBOARD_KEY: Record<
   Exclude<DashboardRole, "ADMIN">,
   string
-> = {
+> = makeUserScopedKeyMap({
   AGENCY: "current-dashboard-id-agency",
   NOMAD: "current-dashboard-id-nomad",
   COMPANY: "current-dashboard-id-company",
   PARTNER: "current-dashboard-id-partner",
   LEADER: "current-dashboard-id-leader",
-};
+});
 
 // ─── Presets by role ─────────────────────────────────────────────────────────
 

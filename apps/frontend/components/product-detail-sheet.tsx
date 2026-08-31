@@ -13,8 +13,6 @@ import {
   ShoppingCart,
   AlertCircle,
   MessageCircle,
-  ChevronDown,
-  ChevronUp,
   Layers,
   ClipboardList,
   Target,
@@ -23,7 +21,6 @@ import {
   CalendarClock,
   Repeat2,
   X,
-  ChevronLeft,
   Images,
   FileText,
   Sparkles,
@@ -38,250 +35,16 @@ import { useProducts } from "@/lib/contexts/product-context";
 import { ProductNomadsTab } from "@/components/admin/product-nomads-tab";
 import { ProductRatingDisplay } from "@/components/product-rating-display";
 import { CopyLinkButton } from "@/components/copy-link-button";
-
-function fmtBRL(n: number) {
-  return new Intl.NumberFormat("pt-BR", {
-    style: "currency",
-    currency: "BRL",
-  }).format(n);
-}
-
-// Extrai quantidade de plataformas do scopeDescription ("em até X plataformas")
-function parsePlatforms(scope: string | undefined): string | null {
-  if (!scope) return null;
-  const m = scope.match(/em até (\d+) plataforma/i);
-  return m ? m[1] : null;
-}
-
-// Extrai quantidade de campanhas do nome da variação ("Até X campanhas")
-function parseCampaigns(name: string): string | null {
-  const m = name.match(/[Aa]té (\d+) campanha/i);
-  return m ? m[1] : null;
-}
-
-// Extrai quantidade de páginas do nome da variação ("Até X páginas")
-function parsePages(name: string): string | null {
-  const m = name.match(/[Aa]té (\d+) página/i);
-  return m ? m[1] : null;
-}
-
-// Retorna o label de prazo público correto (ex: "28 dias úteis") usando
-// variationsInternal do produto pai, com fallback para "{n} dias".
-function getDeadlineLabel(
-  name: string,
-  days: number | undefined,
-  variationsInternal: Record<string, any>,
-): string | null {
-  if (!days) return null;
-  const entry = Object.values(variationsInternal).find(
-    (v: any) => v.label === name,
-  ) as any;
-  if (entry?.publicDeadlineLabel) return entry.publicDeadlineLabel;
-  return `${days} dias`;
-}
-
-// ─── FAQ accordion ────────────────────────────────────────────────────────────
-function FaqItem({ question, answer }: { question: string; answer: string }) {
-  const [open, setOpen] = useState(false);
-  return (
-    <div className="border border-border/60 rounded-xl overflow-hidden">
-      <button
-        className="w-full flex items-center justify-between gap-3 px-4 py-3.5 text-left hover:bg-muted/40 transition-colors"
-        onClick={() => setOpen((v) => !v)}
-      >
-        <span className="text-sm font-medium">{question}</span>
-        {open ? (
-          <ChevronUp className="h-4 w-4 text-muted-foreground shrink-0" />
-        ) : (
-          <ChevronDown className="h-4 w-4 text-muted-foreground shrink-0" />
-        )}
-      </button>
-      {open && (
-        <div className="px-4 pb-4 text-sm text-muted-foreground leading-relaxed border-t bg-muted/10">
-          <p className="pt-3">{answer}</p>
-        </div>
-      )}
-    </div>
-  );
-}
-
-// ─── Section heading ──────────────────────────────────────────────────────────
-function Section({
-  icon: Icon,
-  title,
-  color = "text-blue-600",
-  bg = "bg-blue-100 dark:bg-blue-900/40",
-  children,
-}: any) {
-  return (
-    <div className="space-y-3">
-      <div className="flex items-center gap-2.5">
-        <div
-          className={cn(
-            "h-7 w-7 rounded-lg flex items-center justify-center shrink-0",
-            bg,
-          )}
-        >
-          <Icon className={cn("h-3.5 w-3.5", color)} />
-        </div>
-        <h3 className="text-sm font-bold tracking-tight">{title}</h3>
-      </div>
-      {children}
-    </div>
-  );
-}
-
-// ─── Portfolio Gallery ────────────────────────────────────────────────────────
-function PortfolioGallery({
-  images,
-  productName,
-  coverImage,
-}: {
-  images: string[];
-  productName: string;
-  coverImage?: string;
-}) {
-  const [activeIdx, setActiveIdx] = useState(0);
-
-  // Merge cover image + demonstrations (deduplicated)
-  const allImages = Array.from(
-    new Set([...(coverImage ? [coverImage] : []), ...images]),
-  );
-
-  const hasPrev = activeIdx > 0;
-  const hasNext = activeIdx < allImages.length - 1;
-
-  if (allImages.length === 0) {
-    return (
-      <div className="flex flex-col items-center justify-center py-20 text-center text-slate-400 gap-4">
-        <div className="w-16 h-16 rounded-2xl bg-slate-100 dark:bg-slate-800 flex items-center justify-center">
-          <Images className="h-8 w-8 opacity-40" />
-        </div>
-        <div>
-          <p className="text-sm font-medium text-slate-500">
-            Nenhuma imagem de portfólio ainda
-          </p>
-          <p className="text-xs text-slate-400 mt-1">
-            As imagens serão adicionadas conforme os trabalhos forem concluídos.
-          </p>
-        </div>
-      </div>
-    );
-  }
-
-  return (
-    <div className="space-y-4">
-      {/* ── Main image ── */}
-      <div className="relative rounded-2xl overflow-hidden bg-slate-900 border border-border/50 shadow-sm group">
-        <img
-          key={activeIdx}
-          src={allImages[activeIdx]}
-          alt={`${productName} — portfólio ${activeIdx + 1}`}
-          className="w-full object-contain max-h-85 min-h-55"
-          style={{
-            background: "linear-gradient(135deg,#0f1f5c,#1a2a6f,#7b1850)",
-          }}
-        />
-
-        {/* Counter badge */}
-        <span className="absolute top-3 right-3 text-[11px] font-bold bg-black/50 text-white backdrop-blur-sm rounded-full px-2.5 py-1">
-          {activeIdx + 1} / {allImages.length}
-        </span>
-
-        {/* Prev / Next navigation — always visible on hover */}
-        {allImages.length > 1 && (
-          <>
-            <button
-              type="button"
-              onClick={() => setActiveIdx((i) => Math.max(0, i - 1))}
-              disabled={!hasPrev}
-              className={cn(
-                "absolute left-3 top-1/2 -translate-y-1/2 h-9 w-9 rounded-full flex items-center justify-center shadow-md transition-all",
-                "bg-black/50 hover:bg-black/70 text-white backdrop-blur-sm",
-                !hasPrev && "opacity-30 cursor-not-allowed",
-              )}
-              aria-label="Imagem anterior"
-            >
-              <ChevronLeft className="h-4 w-4" />
-            </button>
-            <button
-              type="button"
-              onClick={() =>
-                setActiveIdx((i) => Math.min(allImages.length - 1, i + 1))
-              }
-              disabled={!hasNext}
-              className={cn(
-                "absolute right-3 top-1/2 -translate-y-1/2 h-9 w-9 rounded-full flex items-center justify-center shadow-md transition-all",
-                "bg-black/50 hover:bg-black/70 text-white backdrop-blur-sm",
-                !hasNext && "opacity-30 cursor-not-allowed",
-              )}
-              aria-label="Próxima imagem"
-            >
-              <ChevronRight className="h-4 w-4" />
-            </button>
-          </>
-        )}
-      </div>
-
-      {/* ── Thumbnails ── */}
-      {allImages.length > 1 && (
-        <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-none">
-          {allImages.map((src, i) => (
-            <button
-              key={i}
-              type="button"
-              onClick={() => setActiveIdx(i)}
-              className={cn(
-                "shrink-0 w-20 h-14 rounded-xl overflow-hidden border-2 transition-all",
-                i === activeIdx
-                  ? "border-blue-500 shadow-md ring-2 ring-blue-200 dark:ring-blue-900"
-                  : "border-border/40 hover:border-slate-400 opacity-60 hover:opacity-100",
-              )}
-            >
-              <img
-                src={src}
-                alt={`Miniatura ${i + 1}`}
-                className="w-full h-full object-cover"
-                style={{
-                  background: "linear-gradient(135deg,#0f1f5c,#1a2a6f)",
-                }}
-              />
-            </button>
-          ))}
-        </div>
-      )}
-
-      {/* ── Dot navigation ── */}
-      {allImages.length > 1 && (
-        <div className="flex justify-center gap-1.5">
-          {allImages.map((_, i) => (
-            <button
-              key={i}
-              type="button"
-              onClick={() => setActiveIdx(i)}
-              className={cn(
-                "rounded-full transition-all",
-                i === activeIdx
-                  ? "w-4 h-1.5 bg-blue-500"
-                  : "w-1.5 h-1.5 bg-slate-300 dark:bg-slate-600 hover:bg-slate-400",
-              )}
-              aria-label={`Ir para imagem ${i + 1}`}
-            />
-          ))}
-        </div>
-      )}
-
-      {/* ── Coming soon note ── */}
-      <div className="rounded-xl border border-dashed border-slate-200 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-900/30 px-4 py-3 flex items-center gap-3">
-        <Images className="h-4 w-4 text-slate-400 shrink-0" />
-        <p className="text-xs text-slate-500 leading-relaxed">
-          Este portfólio será enriquecido com cases e resultados reais conforme
-          os trabalhos forem concluídos pela plataforma.
-        </p>
-      </div>
-    </div>
-  );
-}
+import {
+  fmtBRL,
+  parsePlatforms,
+  parseCampaigns,
+  parsePages,
+  getDeadlineLabel,
+  FaqItem,
+  Section,
+  PortfolioGallery,
+} from "@/components/product-detail-shared";
 
 // ─── Props ────────────────────────────────────────────────────────────────────
 interface ProductDetailSheetProps {
@@ -307,6 +70,7 @@ export function ProductDetailSheet({
   const [nestedDetailProduct, setNestedDetailProduct] = useState<any | null>(
     null,
   );
+  const [descriptionExpanded, setDescriptionExpanded] = useState(false);
   const { accountType } = useAccountType();
   const isAdmin = accountType === "admin";
   const { products: allProducts } = useProducts();
@@ -322,6 +86,7 @@ export function ProductDetailSheet({
       setSelectedVariation(null);
       setActiveTab("detalhes");
       setNestedDetailProduct(null);
+      setDescriptionExpanded(false);
     }
   }, [open]);
 
@@ -383,19 +148,18 @@ export function ProductDetailSheet({
 
   return (
     <>
-      <EmbeddedSlideScreen
-        open={open}
-        onClose={handleClose}
-        title={product.name}
-        subtitle={product.category || undefined}
-      >
+      <EmbeddedSlideScreen open={open} onClose={handleClose} hideHeader>
         <div className="flex flex-col flex-1 min-h-0 overflow-hidden w-full">
           {/* ══════════════════════════════════════════════════════════════
-              IDENTITY BAR — categoria, variações, descrição, chips, destaques
+              IDENTITY BAR — único cabeçalho de contexto: nome, categoria,
+              variações, descrição (recolhível), chips, destaques, fechar
           ══════════════════════════════════════════════════════════════ */}
           <div className="shrink-0 px-6 pt-4 pb-4 border-b border-border/50 bg-muted/20">
             <div className="flex items-start justify-between gap-4">
               <div className="min-w-0 flex-1">
+                <h2 className="text-lg font-bold leading-tight text-foreground truncate mb-1.5">
+                  {product.name}
+                </h2>
                 <div className="flex items-center gap-2 mb-1.5 flex-wrap">
                   <Badge className="bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300 border-blue-200 dark:border-blue-800 text-[10px] font-semibold tracking-wider uppercase">
                     {product.category || "Serviço"}
@@ -416,9 +180,25 @@ export function ProductDetailSheet({
                 )}
                 {!hasPresentation &&
                   (product.summaryDescription || product.description) && (
-                    <p className="text-xs text-muted-foreground leading-snug max-w-2xl line-clamp-2">
-                      {product.summaryDescription || product.description}
-                    </p>
+                    <div className="max-w-2xl">
+                      <p
+                        className={cn(
+                          "text-xs text-muted-foreground leading-snug",
+                          !descriptionExpanded && "line-clamp-2",
+                        )}
+                      >
+                        {product.summaryDescription || product.description}
+                      </p>
+                      <button
+                        type="button"
+                        onClick={() => setDescriptionExpanded((v) => !v)}
+                        className="mt-1 text-[11px] font-semibold text-blue-600 dark:text-blue-400 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 rounded"
+                      >
+                        {descriptionExpanded
+                          ? "Mostrar menos"
+                          : "Ver descrição completa"}
+                      </button>
+                    </div>
                   )}
 
                 <div className="flex flex-wrap gap-1.5 mt-2">
@@ -455,6 +235,14 @@ export function ProductDetailSheet({
 
               <div className="flex items-center gap-1.5 shrink-0">
                 <CopyLinkButton />
+                <button
+                  type="button"
+                  onClick={handleClose}
+                  aria-label="Fechar detalhe do produto"
+                  className="flex items-center justify-center h-8 w-8 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+                >
+                  <X className="h-4 w-4" />
+                </button>
               </div>
             </div>
 

@@ -1,5 +1,6 @@
 import type { Request, Response, NextFunction } from "express";
 import { ZodError } from "zod";
+import multer from "multer";
 
 export function errorHandler(
   err: unknown,
@@ -8,6 +9,11 @@ export function errorHandler(
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   _next: NextFunction
 ): void {
+  if (err instanceof multer.MulterError) {
+    res.status(400).json({ error: err.code === "LIMIT_FILE_SIZE" ? "Arquivo excede o tamanho máximo permitido" : err.message });
+    return;
+  }
+
   if (err instanceof ZodError) {
     res.status(400).json({
       error: "Dados inválidos",

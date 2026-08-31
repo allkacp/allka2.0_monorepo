@@ -7,6 +7,9 @@ import { ensureDefaultKnowledgeCategories } from "./lib/ai-knowledge-base";
 import { ensureDefaultAIServices } from "./lib/ai-usage-tracker";
 import { isMetaIntegrationConfigured } from "./lib/meta-ads-client";
 import { runDailySyncForAllConnections } from "./lib/meta-ads-sync";
+import { ensureDefaultAlertStandardsAndRules, runAlertEngineOnceGuarded } from "./lib/alert-engine";
+import { runTaskRotationOnceGuarded } from "./lib/task-rotation-engine";
+import { runCommsSchedulerOnceGuarded } from "./lib/comms";
 
 // Mascara a URL do banco: mantém apenas o caminho do arquivo, omite credenciais
 function maskDatabaseUrl(url: string): string {
@@ -75,6 +78,13 @@ async function main() {
   // Registro de custo de IA (AIServiceConfig "gemini" + preço de partida dos
   // modelos) — ver Configurações > Uso e Custos de IA.
   await ensureDefaultAIServices();
+  // Padrões/Regras obrigatórios da Central de Alertas (tarefa próxima do
+  // prazo / tarefa atrasada) — idempotente por `key`, ver alert-engine.ts.
+  await ensureDefaultAlertStandardsAndRules();
+  // (bloco 3/6, correção 1.2) O novo catálogo NÃO é semeado no boot. As
+  // classificações dinâmicas vêm de `npm run catalog2:seed-classifications`
+  // (comando explícito, idempotente, recusa host remoto); as 4 fases 4Fs
+  // vêm da migration. O backend inicia sem tocar em dados do catálogo.
 
   await logStartupState();
 
@@ -92,6 +102,40 @@ async function main() {
   } else {
     console.log("ℹ️  Integração Meta Ads não configurada — sincronização diária desativada.");
   }
+
+  // Motor de alertas automáticos (tarefa próxima do prazo/atrasada) — varre
+  // em intervalo fixo, configurável via ALERT_ENGINE_INTERVAL_MS (padrão
+  // 5 min). Registrado só aqui — nunca em módulo importado pelos testes —
+  // pra ficar naturalmente desligado em test:* sem precisar de guarda por
+  // NODE_ENV (mesmo raciocínio do cron do Meta Ads acima).
+  setInterval(() => {
+    runAlertEngineOnceGuarded().catch((err) =>
+      console.error("❌ Falha na varredura do motor de alertas:", err),
+    );
+  }, config.ALERT_ENGINE_INTERVAL_MS).unref();
+  console.log(`🔔 Motor de alertas automáticos ativo (intervalo: ${config.ALERT_ENGINE_INTERVAL_MS}ms).`);
+
+  // Motor do rodízio de ofertas de tarefa (ata 2026-08, bloco 4/5) — expira
+  // ofertas vencidas e avança para o próximo Nômade / escala. Mesmo padrão
+  // do motor de alertas: registrado só aqui, naturalmente desligado nos
+  // testes. Não exige que ninguém mantenha uma tela aberta.
+  setInterval(() => {
+    runTaskRotationOnceGuarded().catch((err) =>
+      console.error("❌ Falha na varredura do rodízio de tarefas:", err),
+    );
+  }, config.TASK_ROTATION_INTERVAL_MS).unref();
+  console.log(`🔁 Motor do rodízio de tarefas ativo (intervalo: ${config.TASK_ROTATION_INTERVAL_MS}ms).`);
+
+  // Motor de comunicação (ata 2026-08, bloco 5/5) — ativa campanhas/banners
+  // agendados, cria as entregas idempotentes em lote e processa a outbox.
+  // Não depende de nenhuma página aberta no navegador. Mesmo padrão dos
+  // motores acima: registrado só aqui, naturalmente desligado nos testes.
+  setInterval(() => {
+    runCommsSchedulerOnceGuarded().catch((err) =>
+      console.error("❌ Falha na varredura do motor de comunicação:", err),
+    );
+  }, config.COMMS_SCHEDULER_INTERVAL_MS).unref();
+  console.log(`📣 Motor de comunicação ativo (intervalo: ${config.COMMS_SCHEDULER_INTERVAL_MS}ms).`);
 
   // Passenger/cPanel sets PORT as a socket path or port number
   // Use process.env.PORT directly to support both TCP and Unix socket

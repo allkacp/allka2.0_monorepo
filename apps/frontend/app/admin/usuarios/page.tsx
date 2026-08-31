@@ -192,13 +192,21 @@ export default function UsuariosPage() {
     error: usersError,
     refetch: refetchUsers,
     createUser,
-    updateUser,
-    deleteUser: apiDeleteUser,
   } = useUsers({
     admin: true,
     limit: 1000,
     is_active: statusFilter === "active" ? true : statusFilter === "inactive" ? false : undefined,
   });
+  // Fica `true` depois da primeira vez que `usersLoading` termina (com
+  // resultado ou vazio) e nunca mais volta a `false` — é o que distingue
+  // "carregando pela primeira vez" (deve mostrar o loader de página cheia,
+  // ver gate mais abaixo) de "atualizando em segundo plano" (não deve —
+  // era exatamente esse gate incondicional que fazia qualquer ação de
+  // linha piscar a tela inteira e mostrar o loader de novo).
+  const hasLoadedUsersOnceRef = useRef(false);
+  useEffect(() => {
+    if (!usersLoading) hasLoadedUsersOnceRef.current = true;
+  }, [usersLoading]);
   const { toast } = useToast();
   const { sidebarWidth, sidebarSettings, previewTheme } = useSidebar();
   const { headerHeight: infoModalHeaderHeight } = useAppFrameMetrics();
@@ -255,6 +263,52 @@ type UsuarioDaLista = User & {
   auto_paused?: boolean;
 };
 
+  // Única normalização de um registro cru da API pro formato que a tabela
+  // usa — extraída da carga inicial (useEffect abaixo) pra ser reaproveitada
+  // também por qualquer patch localizado depois de editar/criar/trocar
+  // vínculo (ver `upsertUserRow`), sem duplicar a regra de
+  // inactivity_bucket/auto_paused em cada callback.
+  const mapApiUserToRow = (u: any): UsuarioDaLista => {
+    const bucket = computeInactivityBucket(u.last_login);
+    return {
+      ...u,
+      is_active: u.is_active ?? true,
+      online_status: u.online_status ?? "offline",
+      account_type: u.account_type || "empresas",
+      inactivity_bucket: bucket,
+      auto_paused: bucket === "inactive_90" || u.reactivation_review_required === true,
+    };
+  };
+
+  // Fonte única pra "inserir ou substituir um usuário por id" — usada por
+  // toda ação que precisa atualizar só um registro (editar em qualquer uma
+  // das abas do painel lateral, trocar vínculo, criar) em vez de refazer
+  // GET /api/admin/users?limit=1000 inteiro. SEMPRE mescla com a linha
+  // existente (nunca substitui por inteiro): `PUT /users/:id` devolve um
+  // subconjunto (safeSelect, sem company_name/agency_name/has_profile_link
+  // etc.) — substituir a linha por esse subconjunto apagaria colunas que
+  // GET /api/admin/users enriquece e que a tabela mostra. Reaplica
+  // `mapApiUserToRow` sempre, pra recalcular inactivity_bucket/auto_paused
+  // se last_login/reactivation_review_required vieram na resposta.
+  const upsertUserRow = (updated: any) => {
+    if (!updated?.id) return;
+    setUsers((prev) => {
+      const idx = prev.findIndex((u) => u.id === updated.id);
+      if (idx === -1) {
+        // Sem linha existente pra mesclar (ex.: usuário recém-criado) —
+        // normaliza o que veio e insere no topo.
+        return [mapApiUserToRow(updated), ...prev];
+      }
+      const next = [...prev];
+      next[idx] = mapApiUserToRow({ ...prev[idx], ...updated });
+      return next;
+    });
+  };
+
+  const removeUserRow = (id: string) => {
+    setUsers((prev) => prev.filter((u) => u.id !== id));
+  };
+
   const [users, setUsers] = useState<UsuarioDaLista[]>([]);
   const [filteredUsers, setFilteredUsers] = useState<UsuarioDaLista[]>([]);
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
@@ -265,6 +319,9 @@ type UsuarioDaLista = User & {
   const [isDeleteLoading, setIsDeleteLoading] = useState(false);
   const [deletionReason, setDeletionReason] = useState("");
   const [deletionReasonError, setDeletionReasonError] = useState("");
+  // Exclusão física real (irreversível) exige confirmação em DUAS etapas —
+  // a 1ª só coleta o motivo e avança, a 2ª é a única que chama DELETE.
+  const [deleteStep, setDeleteStep] = useState<1 | 2>(1);
   const [searchTerm, setSearchTerm] = useState("");
   /**
    * Funções que existem de fato na plataforma (conferido contra o banco).
@@ -284,7 +341,25 @@ type UsuarioDaLista = User & {
     { value: "nomad", label: "Nômade" },
     { value: "nomad_admin", label: "Admin de nômades" },
   ];
-  const [currentUserId] = useState("1");
+  // ID de quem está logado, pra impedir autoexclusão pela interface — vinha
+  // fixo em "1" (nunca era o id de ninguém de verdade, então a proteção
+  // visual nunca disparava). `allka_user` é gravado no login/primeiro
+  // acesso (ver POST /api/auth/login) e lido de forma síncrona antes do
+  // primeiro render em todo o app (mesmo padrão de sidebar.tsx pra
+  // role/nomadUser/isPartnerActive) — não existe uma janela de "id ainda
+  // não chegou" pra essa leitura, diferente do `GET /api/auth/me`
+  // assíncrono (que só seria necessário se precisássemos de admin_profile/
+  // is_master aqui, o que não é o caso deste guard). O servidor continua
+  // sendo a autoridade final — isto é só a explicação na interface antes
+  // de chegar lá.
+  const [currentUserId] = useState<string | null>(() => {
+    try {
+      const stored = JSON.parse(localStorage.getItem("allka_user") || "{}");
+      return typeof stored?.id === "string" ? stored.id : null;
+    } catch {
+      return null;
+    }
+  });
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
 
   const [isCreateUserModalOpen, setIsCreateUserModalOpen] = useState(false);
@@ -372,7 +447,10 @@ type UsuarioDaLista = User & {
       if (infoPanelUser && infoPanelUser.id === linkTargetUser.id) {
         setInfoPanelUser(updated);
       }
-      refetchUsers();
+      // `updateAdminUserCompanyLink` já devolve o formato canônico
+      // enriquecido (mesmo mapUser() de GET /admin/users) — dá pra
+      // atualizar só esta linha sem refazer a consulta inteira.
+      upsertUserRow(updated);
     } catch (e: any) {
       toast({
         title: "Não foi possível salvar o vínculo",
@@ -435,20 +513,15 @@ type UsuarioDaLista = User & {
     // /api/auth/login). auto_paused é "grudento": fica true tanto pelo
     // bucket ao vivo quanto por reactivation_review_required persistido,
     // pra não voltar a "Ativo" sozinho só porque o usuário logou de novo.
-    const mapped = apiUsers.map((u: any) => {
-      const bucket = computeInactivityBucket(u.last_login);
-      return {
-        ...u,
-        is_active: u.is_active ?? true,
-        online_status: "offline",
-        account_type: u.account_type || "empresas",
-        inactivity_bucket: bucket,
-        auto_paused: bucket === "inactive_90" || u.reactivation_review_required === true,
-      };
-    });
+    const mapped = apiUsers.map(mapApiUserToRow);
     setUsers(mapped);
     setFilteredUsers(mapped);
-    setCurrentPage(1);
+    // Não reseta `currentPage` aqui — isso incluiria qualquer atualização
+    // localizada de uma linha (bloquear/desbloquear/excluir, que também
+    // passam por `setUsers`) nesse reset, jogando o usuário de volta pra
+    // página 1 no meio de uma ação. A página só reseta quando um filtro de
+    // verdade muda (ver efeito abaixo) e só cai pra um valor menor quando
+    // deixa de existir (ver o clamp de validade, mais abaixo ainda).
   }, [apiUsers]);
 
   // Reabre a tela certa quando o usuário chega aqui clicando num pin de
@@ -672,8 +745,16 @@ type UsuarioDaLista = User & {
     });
 
     setFilteredUsers(filtered);
-    setCurrentPage(1);
+    // Reset de página fica só no efeito de baixo, disparado por mudança de
+    // filtro de verdade — `users` sozinho mudar (ação localizada numa
+    // linha) não deve mais voltar a página pra 1.
   }, [users, searchTerm, statusFilter, advancedFilters]);
+
+  // Volta pra página 1 só quando um filtro de verdade muda — nunca quando
+  // `users` muda sozinho (ação localizada numa linha).
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm, statusFilter, advancedFilters]);
 
   // Pagination effect
   useEffect(() => {
@@ -681,6 +762,14 @@ type UsuarioDaLista = User & {
     const endIndex = startIndex + pageSize;
     setPaginatedUsers(sortUsers(filteredUsers).slice(startIndex, endIndex));
   }, [filteredUsers, currentPage, pageSize, userSortKey, userSortDir]);
+
+  // Se a página atual deixou de existir (ex.: excluir o último usuário da
+  // última página), volta pra última página válida — nunca deixa a tela
+  // "vazia" mostrando uma página que não tem mais nenhum resultado.
+  useEffect(() => {
+    const totalPages = Math.max(1, Math.ceil(filteredUsers.length / pageSize));
+    if (currentPage > totalPages) setCurrentPage(totalPages);
+  }, [filteredUsers, pageSize, currentPage]);
 
   // Measure header/footer heights for modal positioning
   useEffect(() => {
@@ -975,41 +1064,60 @@ type UsuarioDaLista = User & {
       case "delete":
         setDeletionReason("");
         setDeletionReasonError("");
+        setDeleteStep(1);
         setIsDeleteUserAlertOpen(true);
         break;
     }
   };
 
-  const handleDeleteUser = async () => {
+  // 1ª etapa: só valida o motivo e avança pra 2ª tela — nenhuma chamada de
+  // API acontece aqui.
+  const handleContinueToDeleteConfirmation = () => {
     if (!selectedUser) return;
 
-    // Validate deletion reason
     if (!deletionReason.trim()) {
       setDeletionReasonError("O motivo da exclusão é obrigatório");
       return;
     }
-
     if (deletionReason.trim().length < 10) {
       setDeletionReasonError("O motivo deve ter no mínimo 10 caracteres");
       return;
     }
-
-    // Security check: prevent deletion of current user
-    if (selectedUser.id === currentUserId) {
-      console.error("Cannot delete current logged-in user");
+    // Defesa em profundidade — o item do menu já vem desabilitado pra esse
+    // caso (ver `canDelete`/`isSelf` na renderização da linha), então isto
+    // não deveria disparar por um clique normal; existe só pra não deixar
+    // a tela seguir em frente se algo chamar esta função por outro
+    // caminho. O servidor continua sendo a autoridade final de qualquer
+    // forma (PUT/DELETE /api/users/:id já bloqueiam autoexclusão e
+    // exclusão do Admin Master do lado de lá).
+    if (currentUserId !== null && selectedUser.id === currentUserId) {
+      setDeletionReasonError("Você não pode excluir sua própria conta.");
       return;
     }
-
-    // Security check: prevent deletion of main admin accounts
     if (selectedUser.is_admin && selectedUser.role === "admin") {
-      console.error("Cannot delete main admin account");
+      setDeletionReasonError("Não é possível excluir a conta principal de administrador por aqui.");
       return;
     }
+
+    setDeleteStep(2);
+  };
+
+  // 2ª etapa (única que chama DELETE): "Excluir usuário definitivamente".
+  const handleDeleteUser = async () => {
+    if (!selectedUser) return;
 
     setIsDeleteLoading(true);
+    const targetId = String(selectedUser.id);
     try {
-      // Real API call to delete user
-      await apiDeleteUser(String(selectedUser.id));
+      // Chama a API direto (não o `deleteUser` do hook) — o do hook refaz
+      // um fetch da lista inteira depois, o que reacende `usersLoading` e
+      // piscava a tela inteira. O motivo digitado acima chega no backend e
+      // é gravado no log de auditoria (writeAccessAudit), não fica só
+      // decorativo na tela. Só remove da lista local DEPOIS da resposta do
+      // servidor confirmar — nunca antes.
+      await apiClient.deleteUser(targetId, deletionReason.trim());
+
+      removeUserRow(targetId);
 
       toast({
         title: "Usuário excluído",
@@ -1022,6 +1130,7 @@ type UsuarioDaLista = User & {
       setSelectedUser(null);
       setDeletionReason("");
       setDeletionReasonError("");
+      setDeleteStep(1);
     } catch (error: any) {
       console.error("Error deleting user:", error);
       toast({
@@ -1045,6 +1154,17 @@ type UsuarioDaLista = User & {
     // Remove formatting and open WhatsApp
     const cleanPhone = phone.replace(/\D/g, "");
     window.open(`https://wa.me/${cleanPhone}`, "_blank");
+  };
+
+  // Mostrado nas confirmações de bloqueio/desbloqueio — confirma a pessoa
+  // certa sem expor o e-mail inteiro na tela. "ab***@dominio.com" (mantém
+  // domínio inteiro, útil pra reconhecer a organização; mascara só a parte
+  // local depois dos 2 primeiros caracteres).
+  const maskEmail = (email: string) => {
+    const [local, domain] = email.split("@");
+    if (!domain) return email;
+    const visible = local.slice(0, 2);
+    return `${visible}${"*".repeat(Math.max(local.length - visible.length, 3))}@${domain}`;
   };
 
   const getAccountTypeLabel = (type: string) => {
@@ -1147,30 +1267,30 @@ type UsuarioDaLista = User & {
     }
   };
 
-  const handleStatusConfirmation = async (
-    reason: string,
-    duration: "indefinite" | Date,
-  ) => {
+  // Ação reversível (bloquear/desbloquear login) — não deve engolir o erro:
+  // deixar o `ConfirmationDialog` receber a rejeição é o que faz ele manter
+  // o diálogo aberto com a mensagem amigável (403/409/rede) em vez de
+  // fechar como se tivesse dado certo (bug corrigido neste lote — antes o
+  // catch aqui só mostrava um toast e a Promise resolvia normalmente).
+  const handleStatusConfirmation = async () => {
     if (!selectedUser) return;
 
-    try {
-      const newStatus = !selectedUser.is_active;
-      await updateUser(String(selectedUser.id), { is_active: newStatus });
-      // Sync into PlatformUsersContext so company tabs reflect the change immediately
-      updatePlatformUser(String(selectedUser.id), { is_active: newStatus });
+    const newStatus = !selectedUser.is_active;
+    const targetId = String(selectedUser.id);
+    // Chama a API direto (não o `updateUser` do hook) — o do hook refaz um
+    // fetch da lista inteira depois, o que reacende `usersLoading` e (antes
+    // deste lote) piscava a tela inteira. Atualiza só a linha afetada aqui.
+    await apiClient.updateUser(targetId, { is_active: newStatus });
+    // Sync into PlatformUsersContext so company tabs reflect the change immediately
+    updatePlatformUser(targetId, { is_active: newStatus });
 
-      setSelectedUser({ ...selectedUser, is_active: newStatus });
-      toast({
-        title: newStatus ? "Usuário desbloqueado" : "Usuário bloqueado",
-        description: `O usuário "${selectedUser.name}" foi ${newStatus ? "desbloqueado" : "bloqueado"} com sucesso.`,
-      });
-    } catch (error: any) {
-      toast({
-        title: "Erro",
-        description: error.message || "Erro ao atualizar status do usuário.",
-        variant: "destructive",
-      });
-    }
+    upsertUserRow({ id: targetId, is_active: newStatus });
+    setSelectedUser({ ...selectedUser, is_active: newStatus });
+    toast({
+      title: newStatus ? "Usuário desbloqueado" : "Usuário bloqueado",
+      description: `O usuário "${selectedUser.name}" foi ${newStatus ? "desbloqueado" : "bloqueado"} com sucesso.`,
+    });
+    window.dispatchEvent(new Event("allka:admin-counts-changed"));
 
     // Close dialog
     setIsDeleteAlertOpen(false);
@@ -1467,7 +1587,10 @@ type UsuarioDaLista = User & {
     );
   };
 
-  if (usersLoading) {
+  // Só a carga INICIAL bloqueia a tela inteira — depois que a lista já
+  // apareceu uma vez, nenhuma ação de linha (bloquear, excluir, editar,
+  // criar) pode mais substituir a página inteira por um loader.
+  if (usersLoading && !hasLoadedUsersOnceRef.current) {
     return <PageLoader text="Carregando usuários…" />;
   }
 
@@ -2851,9 +2974,14 @@ type UsuarioDaLista = User & {
                       user.account_type,
                       user.role,
                     );
+                    const isSelf = currentUserId !== null && user.id === currentUserId;
                     const canDelete =
-                      user.id !== currentUserId &&
-                      !(user.is_admin && user.role === "admin");
+                      !isSelf && !(user.is_admin && user.role === "admin");
+                    const deleteBlockedReason = isSelf
+                      ? "Você não pode excluir sua própria conta"
+                      : !canDelete
+                        ? "Não pode deletar este usuário"
+                        : undefined;
 
                     return (
                       <tr
@@ -2915,6 +3043,8 @@ type UsuarioDaLista = User & {
                               <DropdownMenuTrigger asChild>
                                 <button
                                   onClick={(e) => e.stopPropagation()}
+                                  aria-label={`Mais ações — ${user.name}`}
+                                  title="Mais ações"
                                   className="h-[26px] w-[26px] flex items-center justify-center rounded-[8px] bg-white dark:bg-slate-800 border border-[#e8edf5] dark:border-slate-700 text-slate-400 dark:text-slate-500 shadow-[0_4px_10px_rgba(15,23,42,0.06)] hover:bg-gradient-to-br hover:from-[#2558FF] hover:via-[#6E2C96] hover:to-[#D92293] hover:text-white dark:hover:text-[#0a1628] hover:border-transparent hover:shadow-[0_8px_18px_rgba(15,23,42,0.18)] hover:-translate-y-px transition-all duration-150"
                                 >
                                   <MoreHorizontal className="h-3.5 w-3.5" />
@@ -2969,12 +3099,14 @@ type UsuarioDaLista = User & {
                                 <DropdownMenuItem
                                   className="gap-2.5 rounded-lg py-2 px-2.5 text-sm cursor-pointer text-red-600 dark:text-red-400 focus:text-red-600 dark:focus:text-red-400"
                                   disabled={!canDelete}
+                                  aria-label={canDelete ? undefined : deleteBlockedReason}
+                                  title={canDelete ? undefined : deleteBlockedReason}
                                   onClick={() => handleUserAction(user, "delete")}
                                 >
                                   <span className="flex h-6 w-6 items-center justify-center rounded-md bg-red-100 dark:bg-red-900/30 shrink-0">
                                     <Trash2 className="h-3.5 w-3.5 text-red-600 dark:text-red-400" />
                                   </span>
-                                  {canDelete ? "Deletar usuário" : "Não pode deletar este usuário"}
+                                  {canDelete ? "Deletar usuário" : deleteBlockedReason}
                                 </DropdownMenuItem>
                               </DropdownMenuContent>
                             </DropdownMenu>
@@ -3651,6 +3783,13 @@ type UsuarioDaLista = User & {
           navigate("/admin/usuarios", { replace: true });
         }}
         onRefresh={refetchUsers}
+        onUserSaved={(updated) => {
+          upsertUserRow(updated);
+          if (updated?.id) {
+            setSelectedUser((prev) => (prev && String(prev.id) === String(updated.id) ? { ...prev, ...updated } : prev));
+          }
+          window.dispatchEvent(new Event("allka:admin-counts-changed"));
+        }}
         user={selectedUser}
         startInEditMode={viewStartInEditMode}
       />
@@ -3658,8 +3797,16 @@ type UsuarioDaLista = User & {
       <UserCreateSlidePanel
         open={showCreateUser}
         onClose={() => setShowCreateUser(false)}
-        onUserCreated={() => {
-          refetchUsers();
+        onUserCreated={(created) => {
+          // `POST /users` devolve o formato "seguro" (safeSelect) — sem os
+          // campos que só GET /admin/users enriquece (company_name,
+          // agency_name, has_profile_link...). Como é um registro novo, não
+          // há linha existente pra mesclar; a normalização oficial
+          // (mapApiUserToRow, dentro de upsertUserRow) preenche os campos
+          // obrigatórios com os mesmos defaults da carga inicial — o vínculo
+          // detalhado só aparece completo na próxima vez que a lista
+          // recarregar de verdade (ex.: trocar o filtro de status).
+          upsertUserRow(created);
           window.dispatchEvent(new Event("allka:admin-counts-changed"));
           setShowCreateUser(false);
         }}
@@ -3668,14 +3815,21 @@ type UsuarioDaLista = User & {
       <ConfirmationDialog
         open={isDeleteAlertOpen && !!selectedUser}
         onClose={() => setIsDeleteAlertOpen(false)}
-        onConfirm={() => handleStatusConfirmation("Desconhecido", "indefinite")}
+        onConfirm={handleStatusConfirmation}
         title={
           selectedUser?.is_active ? "Bloquear Usuário" : "Desbloquear Usuário"
         }
         message={
           selectedUser?.is_active
-            ? `Tem certeza que deseja bloquear o usuário "${selectedUser?.name}"? Ele não poderá acessar a plataforma enquanto estiver bloqueado.`
-            : `Tem certeza que deseja desbloquear o usuário "${selectedUser?.name}"? Ele voltará a ter acesso à plataforma.`
+            ? "O usuário não poderá acessar a plataforma enquanto estiver bloqueado. A conta e todo o histórico permanecem no sistema — é possível desbloquear a qualquer momento."
+            : "O usuário volta a ter acesso à plataforma imediatamente, com o mesmo histórico e permissões de antes do bloqueio."
+        }
+        targetName={selectedUser?.name}
+        targetDetail={selectedUser ? `${maskEmail(selectedUser.email)} · ${getAccountTypeLabel(selectedUser.account_type)}` : undefined}
+        consequences={
+          selectedUser?.is_active
+            ? ["O login fica bloqueado até alguém desbloquear pela mesma tela.", "Nenhum dado é apagado."]
+            : ["O usuário consegue fazer login normalmente de novo."]
         }
         confirmText={selectedUser?.is_active ? "Bloquear" : "Desbloquear"}
         cancelText="Cancelar"
@@ -3700,83 +3854,125 @@ type UsuarioDaLista = User & {
         <StandardModalDialog
           open={isDeleteUserAlertOpen}
           onClose={() => {
-            if (!isDeleteLoading) setIsDeleteUserAlertOpen(false);
+            if (!isDeleteLoading) {
+              setIsDeleteUserAlertOpen(false);
+              setDeleteStep(1);
+            }
           }}
-          title="Excluir Usuário"
+          title={deleteStep === 1 ? "Excluir Usuário" : "Excluir Usuário — confirmação final"}
           size="compact"
           footer={
-            <div className="flex gap-3 w-full">
-              <Button
-                variant="outline"
-                className="flex-1 h-9 text-sm border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800"
-                onClick={() => setIsDeleteUserAlertOpen(false)}
-                disabled={isDeleteLoading}
-              >
-                Cancelar
-              </Button>
-              <Button
-                className="flex-1 h-9 text-sm font-semibold text-white border-0 shadow-sm bg-gradient-to-r from-red-500 to-rose-600 hover:from-red-600 hover:to-rose-700 disabled:opacity-50 disabled:cursor-not-allowed"
-                onClick={handleDeleteUser}
-                disabled={isDeleteLoading || !deletionReason.trim()}
-              >
-                {isDeleteLoading ? (
-                  <ButtonLoader text="Excluindo..." />
-                ) : (
-                  <>
-                    <Trash2 className="h-3.5 w-3.5 mr-1.5" />
-                    Excluir Definitivamente
-                  </>
-                )}
-              </Button>
-            </div>
+            deleteStep === 1 ? (
+              <div className="flex gap-3 w-full">
+                <Button
+                  variant="outline"
+                  className="flex-1 h-9 text-sm border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800"
+                  onClick={() => setIsDeleteUserAlertOpen(false)}
+                >
+                  Cancelar
+                </Button>
+                <Button
+                  className="flex-1 h-9 text-sm font-semibold"
+                  onClick={handleContinueToDeleteConfirmation}
+                  disabled={!deletionReason.trim()}
+                >
+                  Continuar para confirmação
+                </Button>
+              </div>
+            ) : (
+              <div className="flex gap-3 w-full">
+                <Button
+                  variant="outline"
+                  className="flex-1 h-9 text-sm border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800"
+                  onClick={() => setDeleteStep(1)}
+                  disabled={isDeleteLoading}
+                >
+                  Voltar
+                </Button>
+                <Button
+                  className="flex-1 h-9 text-sm font-semibold text-white border-0 shadow-sm bg-gradient-to-r from-red-500 to-rose-600 hover:from-red-600 hover:to-rose-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                  onClick={handleDeleteUser}
+                  disabled={isDeleteLoading}
+                >
+                  {isDeleteLoading ? (
+                    <ButtonLoader text="Excluindo..." />
+                  ) : (
+                    <>
+                      <Trash2 className="h-3.5 w-3.5 mr-1.5" />
+                      Excluir usuário definitivamente
+                    </>
+                  )}
+                </Button>
+              </div>
+            )
           }
         >
-          <div className="px-6 py-5 space-y-4">
-            <div className="flex items-start gap-3">
-              <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-red-50 dark:bg-red-900/20">
-                <Trash2 className="h-5 w-5 text-red-500" />
-              </div>
-              <p className="text-sm text-slate-500 dark:text-slate-400 leading-relaxed pt-2">
-                Tem certeza que deseja excluir este usuário? Esta ação é{" "}
-                <strong>irreversível</strong>.
-              </p>
-            </div>
-
-            <div className="bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 rounded-xl p-3">
-              <div className="text-sm font-semibold text-slate-900 dark:text-white">
-                {selectedUser.name}
-              </div>
-              <div className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                {selectedUser.email}
-              </div>
-            </div>
-
-            <div className="space-y-1.5">
-              <label className="text-sm font-semibold text-slate-700 dark:text-slate-300 flex items-center gap-1">
-                Motivo da Exclusão <span className="text-red-500">*</span>
-              </label>
-              <Textarea
-                placeholder="Descreva o motivo da exclusão para fins de auditoria (mínimo 10 caracteres)"
-                value={deletionReason}
-                onChange={(e) => {
-                  setDeletionReason(e.target.value);
-                  if (deletionReasonError) setDeletionReasonError("");
-                }}
-                disabled={isDeleteLoading}
-                className="text-sm resize-none focus-visible:ring-red-500"
-                rows={3}
-              />
-              {deletionReasonError && (
-                <p className="text-xs text-red-500 flex items-center gap-1">
-                  <AlertCircle className="h-3 w-3" />
-                  {deletionReasonError}
+          {deleteStep === 1 ? (
+            <div className="px-6 py-5 space-y-4">
+              <div className="flex items-start gap-3">
+                <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-red-50 dark:bg-red-900/20">
+                  <Trash2 className="h-5 w-5 text-red-500" />
+                </div>
+                <p className="text-sm text-slate-500 dark:text-slate-400 leading-relaxed pt-2">
+                  Esta ação apaga a conta do banco de dados — o usuário deixa de existir e não pode ser restaurado.
+                  Se ele for dono de uma agência ou empresa vinculada, a exclusão será bloqueada até esses vínculos serem resolvidos.
                 </p>
-              )}
-              <p className="text-xs text-slate-400">
-                Caracteres: {deletionReason.length}/10 (mínimo)
-              </p>
+              </div>
+
+              <div className="bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 rounded-xl p-3">
+                <div className="text-sm font-semibold text-slate-900 dark:text-white">
+                  {selectedUser.name}
+                </div>
+                <div className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                  {selectedUser.email}
+                </div>
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-sm font-semibold text-slate-700 dark:text-slate-300 flex items-center gap-1">
+                  Motivo da Exclusão <span className="text-red-500">*</span>
+                </label>
+                <Textarea
+                  placeholder="Descreva o motivo da exclusão para fins de auditoria (mínimo 10 caracteres)"
+                  value={deletionReason}
+                  onChange={(e) => {
+                    setDeletionReason(e.target.value);
+                    if (deletionReasonError) setDeletionReasonError("");
+                  }}
+                  className="text-sm resize-none focus-visible:ring-red-500"
+                  rows={3}
+                />
+                {deletionReasonError && (
+                  <p className="text-xs text-red-500 flex items-center gap-1">
+                    <AlertCircle className="h-3 w-3" />
+                    {deletionReasonError}
+                  </p>
+                )}
+                <p className="text-xs text-slate-400">
+                  Caracteres: {deletionReason.length}/10 (mínimo)
+                </p>
+              </div>
             </div>
-          </div>
+          ) : (
+            <div className="px-6 py-5 space-y-4">
+              <div className="flex items-start gap-3">
+                <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-red-50 dark:bg-red-900/20">
+                  <Trash2 className="h-5 w-5 text-red-500" />
+                </div>
+                <p className="text-sm text-slate-500 dark:text-slate-400 leading-relaxed pt-2">
+                  Esta é a confirmação final — a conta será apagada assim que você clicar abaixo.
+                </p>
+              </div>
+              <div className="bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 rounded-xl p-3">
+                <div className="text-sm font-semibold text-slate-900 dark:text-white">
+                  {selectedUser.name}
+                </div>
+                <div className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                  {selectedUser.email}
+                </div>
+              </div>
+            </div>
+          )}
         </StandardModalDialog>
       )}
     </div>

@@ -27,6 +27,69 @@ const baseEnvSchema = z.object({
   ROADMAP_HMAC_SECRET: z.string().optional(),
   ROADMAP_REQUEST_TIMEOUT_MS: z.coerce.number().int().positive().default(5000),
   ROADMAP_INTERNAL_URL: z.string().optional(),
+
+  // ── Motor de alertas automáticos (Padrão → Regra → Ocorrência) ──────────
+  // Intervalo do job que varre tarefas ativas em busca de prazo próximo/
+  // atrasado. Desligado em testes (o job só é registrado a partir de
+  // src/index.ts — nunca importado pelos testes, ver run-db-tests.ts).
+  ALERT_ENGINE_INTERVAL_MS: z.coerce.number().int().positive().default(300000),
+
+  // ── Presença online + rodízio de ofertas de tarefa (ata 2026-08, bloco 4/5) ──
+  // Heartbeat: o frontend chama POST /api/presence/heartbeat neste intervalo
+  // enquanto a plataforma está aberta.
+  PRESENCE_HEARTBEAT_MS: z.coerce.number().int().positive().default(30_000),
+  // Janela de presença: sem heartbeat há mais que isto → offline automático.
+  PRESENCE_OFFLINE_AFTER_MS: z.coerce.number().int().positive().default(120_000),
+  // Quanto tempo cada Nômade tem para responder a uma oferta antes de expirar.
+  // Em produção ~5 min; em dev pode-se reduzir via env SEM baixar o padrão.
+  TASK_OFFER_TTL_MS: z.coerce.number().int().positive().default(300_000),
+  // Intervalo do job que expira ofertas vencidas e avança o rodízio. Como o
+  // motor de alertas, só é registrado em src/index.ts (nunca nos testes).
+  TASK_ROTATION_INTERVAL_MS: z.coerce.number().int().positive().default(60_000),
+
+  // ── Canais, campanhas e banners (ata 2026-08, bloco 5/5) ────────────────
+  // Intervalo do job que ativa campanhas/banners agendados, cria as entregas
+  // idempotentes em lote e processa a outbox. Só registrado em src/index.ts.
+  COMMS_SCHEDULER_INTERVAL_MS: z.coerce.number().int().positive().default(60_000),
+  // Quantas entregas a outbox processa por rodada (lote) — evita varredura
+  // longa travando o event loop.
+  COMMS_DELIVERY_BATCH_SIZE: z.coerce.number().int().positive().default(200),
+  // Tentativas máximas por entrega antes de marcar "failed" definitivo.
+  COMMS_MAX_DELIVERY_ATTEMPTS: z.coerce.number().int().positive().default(3),
+  // Timeout de uma tentativa de envio por canal externo (ms).
+  COMMS_CHANNEL_TIMEOUT_MS: z.coerce.number().int().positive().default(10_000),
+  // Provedor de e-mail. Só "smtp" quando de fato houver credenciais; qualquer
+  // outro valor (ou vazio) → canal "não configurado" + captura de preview
+  // local, NUNCA finge sucesso. Os campos SMTP ficam opcionais de propósito.
+  EMAIL_PROVIDER: z.enum(["none", "smtp", "capture"]).default("none"),
+  EMAIL_SMTP_HOST: z.string().optional(),
+  EMAIL_SMTP_PORT: z.coerce.number().int().positive().optional(),
+  EMAIL_SMTP_USER: z.string().optional(),
+  EMAIL_SMTP_PASSWORD: z.string().optional(),
+  EMAIL_FROM_ADDRESS: z.string().optional(),
+  // Provedor de WhatsApp. Só "cloud_api" (API oficial do WhatsApp Business)
+  // ou "provider" (provedor oficial já configurado). Qualquer outro → "não
+  // configurado" + preview. NUNCA automação de WhatsApp Web / QR informal.
+  WHATSAPP_PROVIDER: z.enum(["none", "cloud_api", "provider", "capture"]).default("none"),
+  WHATSAPP_API_URL: z.string().optional(),
+  WHATSAPP_API_TOKEN: z.string().optional(),
+  WHATSAPP_PHONE_NUMBER_ID: z.string().optional(),
+  // Web Push (VAPID). Sem o par de chaves → canal "não configurado"; a
+  // assinatura é guardada mas nenhum envio real acontece.
+  WEB_PUSH_VAPID_PUBLIC_KEY: z.string().optional(),
+  WEB_PUSH_VAPID_PRIVATE_KEY: z.string().optional(),
+  WEB_PUSH_CONTACT: z.string().optional(),
+  // Ambiente reportado para a guarda de público das campanhas
+  // ("local" | "qa" | "production"). Nunca inferido de NODE_ENV.
+  COMMS_ENVIRONMENT: z.enum(["local", "qa", "production"]).default("local"),
+
+  // ── Consulta da Plataforma Anterior (sprint de produtos, bloco 1/6) ─────
+  // Banco LEGADO separado. `LEGACY_DATABASE_URL` é a conexão da APLICAÇÃO
+  // (credencial somente leitura); vazia/ausente = Consulta desativada (as
+  // rotas respondem 503). `LEGACY_IMPORT_DATABASE_URL` é usada APENAS pelo
+  // importador offline e pelas migrations do legado — nunca por rota HTTP.
+  LEGACY_DATABASE_URL: z.string().optional(),
+  LEGACY_IMPORT_DATABASE_URL: z.string().optional(),
   // Purpose-separated from ROADMAP_HMAC_* — only ever signs the SSO
   // handoff (POST .../allka/sso/tickets on the Roadmap), never ticket
   // creation/lookup. Deliberately optional: lib/roadmap-client.ts falls

@@ -29,6 +29,11 @@ export function useProjects(options: UseProjectsOptions = {}): UseProjectsReturn
       if (companyId) filters.client_id = String(companyId)
       // Request a large page to get all projects (pagination handled in frontend)
       filters.limit = "1000"
+      // O backend esconde projetos arquivados por padrão (novidade do lote
+      // de arquivamento) — pedimos "all" aqui pra preservar o comportamento
+      // anterior deste hook (sempre trouxe tudo) em todas as telas que o
+      // usam; quem precisa esconder arquivados por padrão filtra no cliente.
+      filters.archived = "all"
 
       const response: any = await apiClient.getProjects(filters)
       const adapted = (response.data || []).map(adaptApiProject)

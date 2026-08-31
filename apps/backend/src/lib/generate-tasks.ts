@@ -117,7 +117,16 @@ export async function gerarTarefasDoProjeto(
   let stages_generated = 0;
 
   for (const pp of projectProducts) {
-    const productName = pp.product_name_snapshot || pp.product.name;
+    const productName = pp.product_name_snapshot || pp.product?.name || "produto";
+    if (!pp.product) {
+      // Não deveria acontecer — o chamador (confirm-payment.ts) só passa
+      // aqui os ProjectProduct com product_id preenchido (origem legada).
+      // Robustez, não fluxo esperado.
+      produtos_sem_modelo.push(productName);
+      warnings.push(`Produto "${productName}" não é do catálogo antigo — ignorado por este gerador.`);
+      continue;
+    }
+    const product = pp.product;
     // Modelo amarrado a uma variação só vale para a variação contratada. Os
     // sem variação (variation_id null) valem sempre — é o caso do pacote, em
     // que todos os modelos nascem juntos.
@@ -125,7 +134,7 @@ export async function gerarTarefasDoProjeto(
     // Sem este filtro, produto consolidado da base antiga ("Análise de UX até
     // 5/10/20/50 páginas", 4 faixas num produto só) gerava as 4 tarefas para
     // quem contratou uma faixa.
-    let activeLinks = pp.product.task_links.filter(
+    let activeLinks = product.task_links.filter(
       (l) => l.variation_id === null || l.variation_id === pp.variation_id,
     );
 
@@ -134,9 +143,9 @@ export async function gerarTarefasDoProjeto(
     // variação (a que o base_price do produto representa) e avisa. Acontece em
     // fluxos que criam o vínculo sem passar variation_id.
     if (activeLinks.length === 0 && pp.variation_id === null) {
-      const primeiraVariacao = pp.product.variations[0]?.id;
+      const primeiraVariacao = product.variations[0]?.id;
       if (primeiraVariacao) {
-        activeLinks = pp.product.task_links.filter((l) => l.variation_id === primeiraVariacao);
+        activeLinks = product.task_links.filter((l) => l.variation_id === primeiraVariacao);
         if (activeLinks.length > 0) {
           warnings.push(
             `Produto "${productName}" foi contratado sem variação definida; assumida a variação padrão para gerar as tarefas.`,
@@ -188,7 +197,7 @@ export async function gerarTarefasDoProjeto(
             // (em vez de consultar o produto na hora de aprovar) é o mesmo
             // princípio dos outros `_snapshot` acima: mudar o produto depois
             // não pode alterar o que já foi vendido.
-            exige_aprovacao_cliente: pp.product.exige_aprovacao_cliente,
+            exige_aprovacao_cliente: product.exige_aprovacao_cliente,
             priority: ct.default_priority || "medium",
             sort_order: link.sort_order,
             phase: link.phase || null,

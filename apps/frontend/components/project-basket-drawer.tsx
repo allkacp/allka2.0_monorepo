@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { useSidebar } from "@/contexts/sidebar-context";
 import { HeaderSlideScreen } from "@/components/header-slide-screen";
@@ -36,10 +36,12 @@ import {
   Info,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { isCatalogRoute } from "@/lib/catalog-access";
 import { useProjectBasket } from "@/contexts/project-basket-context";
 import { ProjectCreateNewPanel } from "@/components/project-create-new-panel";
 import { ProductDetailSheet } from "@/components/product-detail-sheet";
 import { ButtonLoader } from "@/components/ui/loading";
+import { ConfirmationDialog } from "@/components/confirmation-dialog";
 
 // ─── Category → icon map (mirrors product-catalog-view) ─────────────────────
 const CATEGORY_ICONS: Record<string, any> = {
@@ -136,6 +138,28 @@ const VIEW_MODE_OPTIONS: Array<{
   { value: "grid4", label: "4 colunas", Icon: Columns4, minWidth: 1280 },
 ];
 
+// ─── Portal → catálogo ────────────────────────────────────────────────────
+// Mesmo estilo de detecção de portal por prefixo já usado no onCreate()
+// deste componente (linhas abaixo, redirecionamento pós-criação de
+// projeto) — aqui mapeando pro catálogo de cada portal, não pra tela de
+// projetos. Cobre só os portais que realmente têm catálogo próprio e
+// adicionam itens à cesta hoje (admin, empresa/company, agência —
+// confirmado em app/admin/catalogo-produtos, app/company/produtos e
+// app/agencia/catalogo, este último servindo tanto /agencia quanto
+// /agency). Líder nunca vê o botão da cesta no cabeçalho; nômade e
+// parceiro não têm tela de catálogo nem adicionam item à cesta hoje — pra
+// esses casos retorna null de propósito, pra nunca navegar pra uma rota
+// que não existe (o clique ainda fecha a cesta normalmente).
+function resolveCatalogPath(pathname: string): string | null {
+  if (pathname.startsWith("/admin")) return "/admin/catalogo-produtos";
+  if (pathname.startsWith("/company")) return "/company/produtos";
+  if (pathname.startsWith("/agencia")) return "/agencia/catalogo";
+  if (pathname.startsWith("/agency")) return "/agency/catalogo";
+  if (pathname.startsWith("/leader")) return "/leader/catalogo";
+  if (pathname.startsWith("/lider")) return "/lider/catalogo";
+  return null;
+}
+
 // ─── Component ───────────────────────────────────────────────────────────────
 
 export function ProjectBasketDrawer() {
@@ -147,6 +171,8 @@ export function ProjectBasketDrawer() {
   /** Loading state when preparing/opening the project creation drawer */
   const [isPreparingProject, setIsPreparingProject] = useState(false);
   const [prepareError, setPrepareError] = useState<string | null>(null);
+  /** Confirmação dupla antes de limpar a cesta — ver ConfirmationDialog. */
+  const [clearConfirmOpen, setClearConfirmOpen] = useState(false);
   /** Product currently being inspected via the detail sheet. */
   const [detailProduct, setDetailProduct] = useState<any | null>(null);
   /** View mode for the basket items — persisted in localStorage. */
@@ -212,12 +238,53 @@ export function ProjectBasketDrawer() {
     basket.setOpen(false);
   };
 
-  // Fecha ao navegar para outra página
+  // Vai pro catálogo do portal atual e fecha a cesta — usado só pelo botão
+  // "Ir para o catálogo" do estado de cesta vazia. Com itens na cesta, o
+  // painel mostra apenas "Criar projeto com estes itens" (e "Limpar"); não
+  // existe "Continuar adicionando"/"Continuar comprando" aqui — essa ação
+  // pertence só à tela do produto, depois de uma adição confirmada.
+  // Não mexe em items/clearBasket: só navega e fecha o painel.
+  const handleGoToCatalog = () => {
+    const target = resolveCatalogPath(location.pathname);
+    if (target) {
+      navigate(target);
+    }
+    handleClose();
+  };
+
+  // Fecha ao navegar para outra página — a cesta é global (persiste entre
+  // rotas via contexto), então sem isto ela ficaria "presa" aberta por
+  // cima de qualquer página nova ao navegar por outro lugar (ex.: um link
+  // da sidebar). handleGoToCatalog() já dispara essa mesma troca de rota
+  // de propósito, então este efeito também cobre (de forma redundante e
+  // inofensiva) o fechamento depois do clique em "ir pro catálogo".
+  //
+  // `isMountedRef` evita fechar a cesta na PRÓPRIA montagem: todo efeito
+  // roda uma vez após o primeiro render, independente da lista de
+  // dependências — sem essa guarda, montar este componente com a cesta já
+  // aberta (ex.: navegação para uma rota que a mantém aberta) a fechava
+  // imediatamente, sem nenhuma troca de rota de verdade ter acontecido.
+  const isMountedRef = useRef(false);
   useEffect(() => {
+    if (!isMountedRef.current) {
+      isMountedRef.current = true;
+      return;
+    }
     if (basket.isOpen) {
       basket.setOpen(false);
     }
   }, [location.pathname]);
+
+  // A cesta pertence ao catálogo (ata 2026-08): fora das rotas de catálogo
+  // ela NUNCA é renderizada como aberta — mesmo que `basket.isOpen` esteja
+  // com um valor antigo (atalho da bandeja, estado remanescente). Fechar
+  // aqui não apaga itens (só `clearBasket` faz isso), então voltar ao
+  // catálogo mantém a compra intacta.
+  const onCatalog = isCatalogRoute(location.pathname);
+  useEffect(() => {
+    if (!onCatalog && basket.isOpen) basket.setOpen(false);
+  }, [onCatalog, basket.isOpen]);
+  const drawerOpen = basket.isOpen && onCatalog;
 
   // ── Helpers
   const getCategoryIcon = (cat: string) => CATEGORY_ICONS[cat] || Package;
@@ -228,14 +295,16 @@ export function ProjectBasketDrawer() {
     <>
       {/* ── Tela Slide ──────────────────────────────────────────── */}
       <HeaderSlideScreen
-        open={basket.isOpen}
+        open={drawerOpen}
         onClose={handleClose}
         hideHeader
         pin={{
           id: "global-cesta",
           label: "Cesta do Projeto",
           icon: Briefcase,
-          path: location.pathname,
+          // Reativar pela bandeja sempre leva de volta ao catálogo do
+          // portal — nunca reabre a cesta "solta" numa tela sem contexto.
+          path: resolveCatalogPath(location.pathname) ?? location.pathname,
           activateKey: "open-cesta",
         }}
       >
@@ -319,7 +388,7 @@ export function ProjectBasketDrawer() {
                 </div>
                 <button
                   type="button"
-                  onClick={handleClose}
+                  onClick={handleGoToCatalog}
                   className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-900/30 hover:bg-indigo-100 dark:hover:bg-indigo-900/50 transition-colors"
                 >
                   <ArrowRight className="h-4 w-4" />
@@ -813,18 +882,11 @@ export function ProjectBasketDrawer() {
                 </div>
               )}
 
-              {/* Single row: [← Continuar] [Criar projeto →] [Limpar]  |  TOTAL */}
+              {/* Single row: [Criar projeto →] [Limpar]  |  TOTAL — este
+                  resumo serve pra concluir a cesta existente, não pra
+                  continuar adicionando produtos (isso já existe no estado
+                  vazio, via "Ir para o catálogo"). Ação principal única. */}
               <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap">
-                {/* Continuar adicionando */}
-                <button
-                  type="button"
-                  onClick={handleClose}
-                  className="shrink-0 flex items-center gap-1.5 h-8 px-3 rounded-lg text-xs font-semibold text-slate-600 dark:text-white/50 bg-slate-50 dark:bg-white/5 border border-slate-100 dark:border-white/8 hover:bg-slate-100 dark:hover:bg-white/10 transition-colors whitespace-nowrap"
-                >
-                  <ArrowRight className="h-3 w-3 rotate-180 shrink-0" />
-                  Continuar adicionando
-                </button>
-
                 {/* Criar projeto — botão principal */}
                 <button
                   type="button"
@@ -863,16 +925,16 @@ export function ProjectBasketDrawer() {
                   ) : (
                     <>
                       <FolderPlus className="h-3 w-3 shrink-0" />
-                      Criar projeto com esses itens
+                      Criar projeto com estes itens
                       <ChevronRight className="h-3 w-3 opacity-70 shrink-0" />
                     </>
                   )}
                 </button>
 
-                {/* Limpar */}
+                {/* Limpar — confirmação dupla antes de apagar tudo (ver ConfirmationDialog) */}
                 <button
                   type="button"
-                  onClick={() => basket.clearBasket()}
+                  onClick={() => setClearConfirmOpen(true)}
                   className="shrink-0 flex items-center gap-1 h-8 px-2.5 rounded-lg text-xs font-semibold text-red-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors whitespace-nowrap"
                 >
                   <Trash2 className="h-3 w-3 shrink-0" />
@@ -1016,6 +1078,22 @@ export function ProjectBasketDrawer() {
           if (!v) setDetailProduct(null);
         }}
         isSelected={true}
+      />
+
+      {/* ── Confirmação dupla antes de limpar a cesta ─────────────────────── */}
+      <ConfirmationDialog
+        open={clearConfirmOpen}
+        onClose={() => setClearConfirmOpen(false)}
+        onConfirm={() => basket.clearBasket()}
+        title="Limpar cesta"
+        message="Isso remove todos os itens da cesta. Nenhum projeto será criado a partir deles."
+        twoStep
+        targetName={`${totalItems} ${totalItems === 1 ? "item" : "itens"} na cesta`}
+        consequences={[
+          "Todos os produtos selecionados saem da cesta.",
+          "Nenhum projeto é criado — a cesta só fica vazia.",
+        ]}
+        finalConfirmText="Limpar todos os itens da cesta"
       />
     </>
   );

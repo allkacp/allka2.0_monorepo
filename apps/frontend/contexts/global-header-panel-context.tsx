@@ -1,12 +1,17 @@
 /**
- * Coordena os painéis globais do cabeçalho (Cesta, Notificações, Alertas —
- * todos usam <HeaderSlideScreen>, a Tela Slide) pra só um ficar aberto por
- * vez. Sem isso cada um tinha seu próprio estado isolado e dava pra abrir
- * os três empilhados ao mesmo tempo.
+ * Coordena os painéis globais do cabeçalho (Cesta, Notificações, Alertas,
+ * Ajuda — todos usam <HeaderSlideScreen>, a Tela Slide) pra só um ficar
+ * aberto por vez. Sem isso cada um tinha seu próprio estado isolado e dava
+ * pra abrir vários empilhados ao mesmo tempo.
+ *
+ * "alerts" (lote de correção visual, ata 2026-08): Alertas passou a ser um
+ * painel de verdade separado de Notificações (chave própria aqui), não mais
+ * uma aba dentro do painel de notificações — abrir um agora fecha o outro
+ * automaticamente, de graça, por já usarem esta mesma central de exclusão.
  */
 import { createContext, useContext, useState, type ReactNode } from "react";
 
-export type GlobalHeaderPanelKey = "cesta" | "notifications" | "product-feedback";
+export type GlobalHeaderPanelKey = "cesta" | "notifications" | "alerts" | "product-feedback";
 
 interface GlobalHeaderPanelContextValue {
   isActive: (key: GlobalHeaderPanelKey) => boolean;

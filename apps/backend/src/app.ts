@@ -35,6 +35,8 @@ import levelsRouter from "./routes/levels";
 import taskTemplatesRouter from "./routes/task-templates";
 import projectProductsRouter from "./routes/project-products";
 import projectTasksRouter from "./routes/project-tasks";
+import presenceRouter from "./routes/presence";
+import taskOffersRouter from "./routes/task-offers";
 import projectConnectionsRouter from "./routes/project-connections";
 import metaIntegrationRouter from "./routes/meta-integration";
 import systemAlertsRouter from "./routes/system-alerts";
@@ -46,6 +48,7 @@ import liderRouter from "./routes/lider";
 import habilidadesRouter from "./routes/habilidades";
 import shareRouter from "./routes/share";
 import dashboardSharesRouter from "./routes/dashboard-shares";
+import plannerRouter from "./routes/planner";
 import dashboardTemplatesRouter, { dashboardTemplatesPublicRouter } from "./routes/dashboard-templates";
 import expensesRouter from "./routes/expenses";
 import walletsRouter from "./routes/wallets";
@@ -57,6 +60,13 @@ import productFeedbackRouter from "./routes/product-feedback";
 import productFeedbackAdminRouter from "./routes/product-feedback-admin";
 import roadmapSsoRouter from "./routes/roadmap-sso";
 import centralChamadosAdminRouter from "./routes/central-chamados-admin";
+import commsRouter from "./routes/comms";
+import commsAdminRouter from "./routes/comms-admin";
+import legacyConsultationRouter from "./routes/legacy-consultation";
+import catalog2AdminRouter from "./routes/catalog2-admin";
+import catalog2CatalogRouter from "./routes/catalog2-catalog";
+import catalog2CheckoutRouter from "./routes/catalog2-checkout";
+import catalog2ChangeOrdersRouter from "./routes/catalog2-change-orders";
 import { prisma } from "./lib/prisma";
 import { errorHandler } from "./middleware/error";
 
@@ -178,6 +188,8 @@ app.use("/api/product-bundles", productBundlesRouter);
 app.use("/api/iallka", iallkaRouter);
 // Canonical CRUD for operational execution tasks
 app.use("/api/project-tasks", projectTasksRouter);
+app.use("/api/presence", presenceRouter);
+app.use("/api/task-offers", taskOffersRouter);
 app.use("/api/project-connections", projectConnectionsRouter);
 app.use("/api/integrations/meta", metaIntegrationRouter);
 // Admin system alerts (nomad not found, etc.)
@@ -195,6 +207,8 @@ app.use("/api/habilidades", habilidadesRouter);
 // listagem/revogação do link mora em /api/dashboard-shares e exige sessão.
 app.use("/api/share", shareRouter);
 app.use("/api/dashboard-shares", dashboardSharesRouter);
+// Planejador (Admin → Projetos) — quadro pessoal do usuário autenticado.
+app.use("/api/planner", plannerRouter);
 // Público (sem auth) primeiro, específico só pra imagem de banner; o router
 // autenticado cobre o resto do CRUD no mesmo prefixo.
 app.use("/api/dashboard-templates", dashboardTemplatesPublicRouter);
@@ -222,6 +236,22 @@ app.use("/api/product-feedback", productFeedbackRouter);
 app.use("/api/product-feedback", roadmapSsoRouter);
 app.use("/api/admin/product-feedback", productFeedbackAdminRouter);
 app.use("/api/admin/central-chamados", centralChamadosAdminRouter);
+// Canais, campanhas e banners obrigatórios (ata 2026-08, bloco 5/5).
+app.use("/api/comms", commsRouter);
+app.use("/api/admin/comms", commsAdminRouter);
+// Consulta da Plataforma Anterior — somente leitura, somente Admin Master
+// (sprint de produtos, bloco 1/6).
+app.use("/api/admin/legacy", legacyConsultationRouter);
+// Fundação do novo catálogo — somente Admin Master (sprint de produtos, bloco 2/6).
+app.use("/api/admin/catalog2", catalog2AdminRouter);
+// Checkout/aditivos do catalog2 (bloco 6/6) — montados ANTES do mount
+// genérico "/api/catalog2" abaixo, para o Express casar os prefixos mais
+// específicos primeiro.
+app.use("/api/catalog2/checkout", catalog2CheckoutRouter);
+app.use("/api/catalog2/change-orders", catalog2ChangeOrdersRouter);
+// Catálogo do cliente do catalog2 (bloco 5/6) — visibilidade/configurador/
+// cotação/cesta. Permissão resolvida no servidor.
+app.use("/api/catalog2", catalog2CatalogRouter);
 
 // ─── 404 Handler ──────────────────────────────────────────────────────────────
 

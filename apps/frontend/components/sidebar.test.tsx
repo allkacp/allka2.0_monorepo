@@ -170,3 +170,30 @@ describe("Sidebar — item Roadmap e chamados", () => {
     openSpy.mockRestore();
   });
 });
+
+// Lote de navegação de perfil (ata 2026-08-21): auditoria de código
+// confirmou que /leader/perfil é a rota REAL e funcional do perfil do
+// líder (renderiza LiderPerfilPage — ver App.tsx) e /lider/perfil é só um
+// redirect pra ela; e /nomades/perfil já era a rota real do nômade. Estes
+// testes travam esses links pra não regredir.
+describe("Sidebar — item 'Perfil' (Líder e Nômade)", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("2/3. Líder: o link 'Perfil' aponta pra /leader/perfil (rota real, não /lider/perfil nem qualquer rota inexistente)", async () => {
+    mockAccountType.value = "lider";
+    getCurrentUser.mockResolvedValue({ admin_profile: null });
+    renderSidebar();
+    const link = await screen.findByRole("link", { name: /^perfil$/i });
+    expect(link).toHaveAttribute("href", "/leader/perfil");
+  });
+
+  it("4. Nômade: o link 'Perfil' aponta pra /nomades/perfil (rota real e funcional)", async () => {
+    mockAccountType.value = "nomades";
+    getCurrentUser.mockResolvedValue({ admin_profile: null });
+    renderSidebar();
+    const link = await screen.findByRole("link", { name: /^perfil$/i });
+    expect(link).toHaveAttribute("href", "/nomades/perfil");
+  });
+});

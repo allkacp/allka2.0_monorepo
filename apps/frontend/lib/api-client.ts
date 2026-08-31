@@ -101,6 +101,35 @@ export type ShareLinkActivityEntry = {
   createdAt: string;
 };
 
+export type PlannerColumn = {
+  id: string;
+  label: string;
+  color: string;
+  position: number;
+  /** Coluna principal (Backlog) — não pode ser excluída. Nunca aceito de
+   * volta num payload de criação/edição, só lido do backend. */
+  isDefault: boolean;
+  updatedAt: string;
+};
+
+export type PlannerCard = {
+  id: string;
+  columnId: string | null;
+  title: string;
+  description: string | null;
+  priority: "low" | "medium" | "high" | "urgent";
+  dueDate: string | null;
+  projectId: string | null;
+  position: number;
+  archivedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
+/** Card arquivado, com o rótulo da coluna anterior (`null` se a coluna já
+ * foi excluída — o card sobrevive, só perde a referência). */
+export type PlannerArchivedCard = PlannerCard & { columnLabel: string | null };
+
 class ApiClient {
   // ─── Token Management ─────────────────────────────────────────────────────
   setToken(token: string) {
@@ -129,6 +158,7 @@ class ApiClient {
     path: string,
     body?: unknown,
     params?: Record<string, any>,
+    signal?: AbortSignal,
   ): Promise<T> {
     let url = `${API_BASE_URL}${path}`;
     if (params) {
@@ -152,6 +182,7 @@ class ApiClient {
       method,
       headers,
       body: body !== undefined ? JSON.stringify(body) : undefined,
+      signal,
     });
 
     if (!res.ok) {
@@ -185,8 +216,8 @@ class ApiClient {
     return res.json();
   }
 
-  private get<T = any>(path: string, params?: Record<string, any>) {
-    return this.request<T>("GET", path, undefined, params);
+  private get<T = any>(path: string, params?: Record<string, any>, signal?: AbortSignal) {
+    return this.request<T>("GET", path, undefined, params, signal);
   }
   private post<T = any>(path: string, body?: unknown) {
     return this.request<T>("POST", path, body);
@@ -252,6 +283,9 @@ class ApiClient {
   }
 
   async logout() {
+    // Encerra a presença online imediatamente (ata 2026-08, bloco 4/5).
+    // Best-effort — nunca impede o logout.
+    await this.post("/presence/offline", {}).catch(() => {});
     const res = await this.post("/auth/logout");
     this.clearToken();
     return res;
@@ -440,6 +474,89 @@ class ApiClient {
     return this.post("/auth/identify-account", { email });
   }
 
+  // ── Planejador (Admin → Projetos → Planejador) ──────────────────────────
+  // Quadro pessoal — escopo (owner) é sempre resolvido pelo backend a
+  // partir de quem está autenticado, nunca aceito do frontend.
+  async getPlannerBoard(): Promise<{ columns: PlannerColumn[]; cards: PlannerCard[] }> {
+    return this.get("/planner/board");
+  }
+  async createPlannerColumn(data: { label: string; color?: string }): Promise<{ column: PlannerColumn }> {
+    return this.post("/planner/columns", data);
+  }
+  async updatePlannerColumn(id: string, data: { label?: string; color?: string }): Promise<{ column: PlannerColumn }> {
+    return this.put(`/planner/columns/${id}`, data);
+  }
+  async reorderPlannerColumns(orderedIds: string[]): Promise<{ columns: PlannerColumn[] }> {
+    return this.put("/planner/columns/reorder", { orderedIds });
+  }
+  /** Exclusão FÍSICA e irreversível da coluna. Bloqueada pelo backend com
+   * 409 se for a coluna principal (`isDefault`) ou se tiver cards ativos —
+   * cards arquivados não bloqueiam, sobrevivem com `columnId: null`. */
+  async deletePlannerColumn(id: string): Promise<void> {
+    return this.del(`/planner/columns/${id}`);
+  }
+  /** Contagem de cards ativos/arquivados vinculados à coluna — usado na 1ª
+   * etapa da confirmação dupla de exclusão, pra mostrar números reais
+   * antes do usuário decidir. */
+  async getPlannerColumnCounts(id: string): Promise<{ activeCount: number; archivedCount: number }> {
+    return this.get(`/planner/columns/${id}/counts`);
+  }
+  async createPlannerCard(data: {
+    columnId: string;
+    title: string;
+    description?: string;
+    priority?: PlannerCard["priority"];
+    dueDate?: string | null;
+    projectId?: string | null;
+  }): Promise<{ card: PlannerCard }> {
+    return this.post("/planner/cards", data);
+  }
+  async updatePlannerCard(
+    id: string,
+    data: {
+      title?: string;
+      description?: string | null;
+      priority?: PlannerCard["priority"];
+      dueDate?: string | null;
+      projectId?: string | null;
+      /** Última `updatedAt` conhecida pelo cliente — habilita a checagem de conflito (409) no backend. */
+      updatedAt?: string;
+    },
+  ): Promise<{ card: PlannerCard }> {
+    return this.put(`/planner/cards/${id}`, data);
+  }
+  async movePlannerCard(
+    id: string,
+    data: { columnId: string; position: number; updatedAt?: string },
+  ): Promise<{ card: PlannerCard }> {
+    return this.put(`/planner/cards/${id}/position`, data);
+  }
+  /** Arquivamento lógico (reversível) — preenche `archived_at`, nunca
+   * apaga a linha. Card continua existindo, some do quadro ativo e
+   * aparece em "Cards arquivados"; ver `restorePlannerCard`. */
+  async archivePlannerCard(id: string): Promise<{ ok: boolean; card: PlannerCard }> {
+    return this.patch(`/planner/cards/${id}/archive`);
+  }
+  /** Exclusão FÍSICA e irreversível — apaga a linha de `planner_cards` de
+   * vez (nunca mais aparece em nenhuma listagem, nunca mais pode ser
+   * restaurado). Diferente de `archivePlannerCard`: exige a permissão
+   * `projetos:delete`, não `projetos:edit`. Funciona tanto num card ativo
+   * quanto num já arquivado. */
+  async deletePlannerCard(id: string): Promise<{ ok: boolean }> {
+    return this.del(`/planner/cards/${id}`);
+  }
+  /** `usedFallbackColumn: true` quando a coluna original do card não
+   * existia mais e a restauração caiu pro Backlog/coluna padrão. */
+  async restorePlannerCard(id: string): Promise<{ ok: boolean; card: PlannerCard; usedFallbackColumn: boolean }> {
+    return this.post(`/planner/cards/${id}/restore`);
+  }
+  async getPlannerArchivedCards(
+    page = 1,
+    limit = 20,
+  ): Promise<{ data: PlannerArchivedCard[]; total: number; page: number; limit: number }> {
+    return this.get("/planner/cards/archived", { page, limit });
+  }
+
   // ─── Nômade: o próprio trabalho ───────────────────────────────────────────
   // O nômade não tem acesso a /project-tasks (escopo nega "nomades"); o
   // trabalho dele vem por estas rotas, já recortado por etapa.
@@ -482,6 +599,332 @@ class ApiClient {
 
   async aceitarEtapa(stageId: string) {
     return this.patch(`/nomades/me/etapas/${stageId}/aceitar`, {});
+  }
+
+  // ── Presença online + rodízio de ofertas (ata 2026-08, bloco 4/5) ──────
+  async presenceHeartbeat() {
+    return this.post<{ ok: boolean; heartbeat_ms: number; offline_after_ms: number }>("/presence/heartbeat", {});
+  }
+  async presenceOffline() {
+    return this.post("/presence/offline", {});
+  }
+  async getMyTaskOffers() {
+    return this.get<{
+      data: Array<{
+        offer_id: string;
+        rotation_order: number;
+        offered_at: string;
+        expires_at: string;
+        seconds_left: number;
+        already_taken: boolean;
+        task: {
+          id: string;
+          title: string;
+          description: string | null;
+          due_date: string | null;
+          project: { id: string; name: string } | null;
+          product: string | null;
+          category: string | null;
+        };
+      }>;
+      offer_ttl_ms: number;
+    }>("/task-offers/mine");
+  }
+  async acceptTaskOffer(offerId: string) {
+    return this.post<{ ok: boolean; task_id: string }>(`/task-offers/${offerId}/accept`, {});
+  }
+  async declineTaskOffer(offerId: string, reason?: string) {
+    return this.post(`/task-offers/${offerId}/decline`, reason ? { reason } : {});
+  }
+  async getTaskRotation(taskId: string) {
+    return this.get(`/project-tasks/${taskId}/rotation`);
+  }
+  async restartTaskRotation(taskId: string) {
+    return this.post(`/project-tasks/${taskId}/rotation/restart`, {});
+  }
+
+  // ── Canais, campanhas e banners obrigatórios (ata 2026-08, bloco 5/5) ──
+  async getCommsPreferences() {
+    return this.get<{
+      preferences: {
+        platform_enabled: boolean;
+        email_enabled: boolean;
+        whatsapp_enabled: boolean;
+        push_enabled: boolean;
+        marketing_opt_in: boolean;
+      };
+      channel_status: Array<{ channel: string; state: "working" | "not_configured"; detail: string }>;
+      availability: { email: boolean; whatsapp: boolean; push: boolean };
+    }>("/comms/preferences");
+  }
+  async updateCommsPreferences(patch: Record<string, boolean>) {
+    return this.put<{ preferences: Record<string, boolean> }>("/comms/preferences", patch);
+  }
+  async getCommsPushStatus() {
+    return this.get<{
+      configured: boolean;
+      vapid_public_key: string | null;
+      detail: string;
+      subscriptions: Array<{ id: string; enabled: boolean; user_agent: string | null; created_at: string; last_used_at: string | null }>;
+    }>("/comms/push/status");
+  }
+  async subscribeWebPush(sub: { endpoint: string; keys: { p256dh: string; auth: string } }) {
+    return this.post<{ ok: boolean; configured: boolean }>("/comms/push/subscribe", sub);
+  }
+  async unsubscribeWebPush(endpoint?: string) {
+    return this.post("/comms/push/unsubscribe", endpoint ? { endpoint } : {});
+  }
+  async getMyMandatoryBanners() {
+    return this.get<{
+      data: Array<{
+        id: string;
+        title: string;
+        body: string;
+        kind: "obrigatorio" | "informativo";
+        version: number;
+        ack_button_label: string;
+        link_url: string | null;
+        image_url: string | null;
+        image_alt: string | null;
+      }>;
+    }>("/comms/banners/me");
+  }
+  async acknowledgeBanner(bannerId: string, version?: number) {
+    return this.post<{ acknowledged: boolean; banner_id: string; version: number }>(
+      `/comms/banners/${bannerId}/ack`,
+      version ? { version } : {},
+    );
+  }
+
+  // Central Administrativa de Comunicação.
+  async getCommsChannelAudit() {
+    return this.get<{ data: Array<{ channel: string; state: string; detail: string }> }>("/admin/comms/channels");
+  }
+  async listCommsCampaigns(status?: string) {
+    return this.get<{ data: any[] }>(`/admin/comms/campaigns${status ? `?status=${encodeURIComponent(status)}` : ""}`);
+  }
+  async getCommsCampaign(id: string) {
+    return this.get<any>(`/admin/comms/campaigns/${id}`);
+  }
+  async createCommsCampaign(body: Record<string, any>) {
+    return this.post<any>("/admin/comms/campaigns", body);
+  }
+  async updateCommsCampaign(id: string, body: Record<string, any>) {
+    return this.put<any>(`/admin/comms/campaigns/${id}`, body);
+  }
+  async deleteCommsCampaign(id: string) {
+    return this.del(`/admin/comms/campaigns/${id}`);
+  }
+  async estimateCommsAudience(body: { audience: Record<string, any>; channels: string[]; is_reengagement?: boolean }) {
+    return this.post<any>("/admin/comms/campaigns/estimate", body);
+  }
+  async previewCommsCampaign(id: string) {
+    return this.get<any>(`/admin/comms/campaigns/${id}/preview`);
+  }
+  async activateCommsCampaign(id: string) {
+    return this.post<any>(`/admin/comms/campaigns/${id}/activate`, {});
+  }
+  async pauseCommsCampaign(id: string) {
+    return this.post<any>(`/admin/comms/campaigns/${id}/pause`, {});
+  }
+  async cancelCommsCampaign(id: string) {
+    return this.post<any>(`/admin/comms/campaigns/${id}/cancel`, {});
+  }
+  async getCommsCampaignDeliveries(id: string) {
+    return this.get<any>(`/admin/comms/campaigns/${id}/deliveries`);
+  }
+  async listMandatoryBanners() {
+    return this.get<{ data: any[] }>("/admin/comms/banners");
+  }
+  async getMandatoryBanner(id: string) {
+    return this.get<any>(`/admin/comms/banners/${id}`);
+  }
+  async createMandatoryBanner(body: Record<string, any>) {
+    return this.post<any>("/admin/comms/banners", body);
+  }
+  async updateMandatoryBanner(id: string, body: Record<string, any>) {
+    return this.put<any>(`/admin/comms/banners/${id}`, body);
+  }
+  async publishBannerVersion(id: string) {
+    return this.post<{ ok: boolean; version: number }>(`/admin/comms/banners/${id}/publish-version`, {});
+  }
+  async cancelMandatoryBanner(id: string) {
+    return this.post<any>(`/admin/comms/banners/${id}/cancel`, {});
+  }
+  async uploadCommsImage(file: File): Promise<{ file_name: string }> {
+    return this.uploadFile("/admin/comms/images", file);
+  }
+
+  // ── Consulta da Plataforma Anterior (sprint de produtos, bloco 1/6) ────
+  async getLegacySummary() {
+    return this.get<any>("/admin/legacy/summary");
+  }
+  async getLegacyProducts(params?: {
+    q?: string;
+    status?: string;
+    category?: string;
+    page?: number;
+    page_size?: number;
+    sort_by?: string;
+    sort_dir?: "asc" | "desc";
+  }) {
+    const qs = new URLSearchParams();
+    for (const [k, v] of Object.entries(params ?? {})) {
+      if (v !== undefined && v !== null && v !== "") qs.set(k, String(v));
+    }
+    const suffix = qs.toString() ? `?${qs.toString()}` : "";
+    return this.get<any>(`/admin/legacy/products${suffix}`);
+  }
+  async getLegacyRecord(id: string) {
+    return this.get<any>(`/admin/legacy/records/${id}`);
+  }
+
+  // ── Novo catálogo — fundação (sprint de produtos, bloco 2/6) ───────────
+  async getCatalog2Overview() {
+    return this.get<any>("/admin/catalog2/overview");
+  }
+  async getCatalog2Pillars() {
+    return this.get<{ data: any[] }>("/admin/catalog2/pillars");
+  }
+  async getCatalog2FourF() {
+    return this.get<{ data: any[] }>("/admin/catalog2/four-f");
+  }
+  async getCatalog2Categories() {
+    return this.get<{ data: any[] }>("/admin/catalog2/categories");
+  }
+  async getCatalog2Specialties() {
+    return this.get<{ data: any[] }>("/admin/catalog2/specialties");
+  }
+  async getCatalog2Products(params?: Record<string, string | number | undefined>) {
+    const qs = new URLSearchParams();
+    for (const [k, v] of Object.entries(params ?? {})) if (v !== undefined && v !== "") qs.set(k, String(v));
+    return this.get<{ data: any[]; total: number; page: number; page_size: number }>(
+      `/admin/catalog2/products${qs.toString() ? `?${qs}` : ""}`,
+    );
+  }
+  async getCatalog2Product(id: string) {
+    return this.get<any>(`/admin/catalog2/products/${id}`);
+  }
+
+  // ── Construtor do novo catálogo (sprint de produtos, bloco 3/6) ────────
+  private c2<T = any>(m: "GET" | "POST" | "PUT" | "PATCH" | "DELETE", path: string, body?: unknown): Promise<T> {
+    if (m === "GET") return this.get<T>(`/admin/catalog2${path}`);
+    if (m === "POST") return this.post<T>(`/admin/catalog2${path}`, body ?? {});
+    if (m === "PUT") return this.put<T>(`/admin/catalog2${path}`, body ?? {});
+    if (m === "PATCH") return this.patch<T>(`/admin/catalog2${path}`, body ?? {});
+    return this.del<T>(`/admin/catalog2${path}`);
+  }
+  createCatalog2Product(body: Record<string, any>) { return this.c2("POST", "/products", body); }
+  updateCatalog2VersionInfo(versionId: string, body: Record<string, any>) { return this.c2("PUT", `/versions/${versionId}`, body); }
+  updateCatalog2Classifications(productId: string, body: Record<string, any>) { return this.c2("PUT", `/products/${productId}/classifications`, body); }
+  setCatalog2ProductStatus(productId: string, status: string) { return this.c2("PATCH", `/products/${productId}/status`, { status }); }
+  archiveCatalog2Product(productId: string) { return this.c2("POST", `/products/${productId}/archive`); }
+  newCatalog2Version(productId: string) { return this.c2("POST", `/products/${productId}/versions`); }
+  validateCatalog2Version(versionId: string) { return this.c2("GET", `/versions/${versionId}/validate`); }
+  publishCatalog2Version(versionId: string, body: Record<string, any>) { return this.c2("POST", `/versions/${versionId}/publish`, body); }
+  simulateCatalog2(versionId: string, selection: Record<string, any>) { return this.c2("POST", `/versions/${versionId}/simulate`, selection); }
+  previewCatalog2Version(versionId: string) { return this.c2("GET", `/versions/${versionId}/preview`); }
+  getCatalog2PricingSettings() { return this.c2("GET", "/pricing-settings"); }
+  updateCatalog2PricingSettings(body: Record<string, any>) { return this.c2("PUT", "/pricing-settings", body); }
+  updateCatalog2Specialty(id: string, body: Record<string, any>) { return this.c2("PUT", `/specialties/${id}`, body); }
+  // variações / opções / efeitos
+  addCatalog2Variation(versionId: string, body: Record<string, any>) { return this.c2("POST", `/versions/${versionId}/variations`, body); }
+  updateCatalog2Variation(id: string, body: Record<string, any>) { return this.c2("PUT", `/variations/${id}`, body); }
+  deleteCatalog2Variation(id: string) { return this.c2("DELETE", `/variations/${id}`); }
+  addCatalog2Option(variationId: string, body: Record<string, any>) { return this.c2("POST", `/variations/${variationId}/options`, body); }
+  updateCatalog2Option(id: string, body: Record<string, any>) { return this.c2("PUT", `/options/${id}`, body); }
+  deleteCatalog2Option(id: string) { return this.c2("DELETE", `/options/${id}`); }
+  addCatalog2OptionEffect(optionId: string, body: Record<string, any>) { return this.c2("POST", `/options/${optionId}/effects`, body); }
+  deleteCatalog2OptionEffect(id: string) { return this.c2("DELETE", `/option-effects/${id}`); }
+  // adicionais
+  addCatalog2Addon(versionId: string, body: Record<string, any>) { return this.c2("POST", `/versions/${versionId}/addons`, body); }
+  updateCatalog2Addon(id: string, body: Record<string, any>) { return this.c2("PUT", `/addons/${id}`, body); }
+  deleteCatalog2Addon(id: string) { return this.c2("DELETE", `/addons/${id}`); }
+  addCatalog2AddonEffect(addonId: string, body: Record<string, any>) { return this.c2("POST", `/addons/${addonId}/effects`, body); }
+  deleteCatalog2AddonEffect(id: string) { return this.c2("DELETE", `/addon-effects/${id}`); }
+  // tarefas / etapas
+  addCatalog2Task(versionId: string, body: Record<string, any>) { return this.c2("POST", `/versions/${versionId}/tasks`, body); }
+  updateCatalog2Task(id: string, body: Record<string, any>) { return this.c2("PUT", `/tasks/${id}`, body); }
+  deleteCatalog2Task(id: string) { return this.c2("DELETE", `/tasks/${id}`); }
+  duplicateCatalog2Task(id: string) { return this.c2("POST", `/tasks/${id}/duplicate`); }
+  reorderCatalog2Tasks(versionId: string, order: string[]) { return this.c2("PUT", `/versions/${versionId}/tasks/order`, { order }); }
+  updateCatalog2TaskAI(taskId: string, body: Record<string, any>) { return this.c2("PUT", `/tasks/${taskId}/ai`, body); }
+  addCatalog2TaskDependency(taskId: string, dependsOn: string) { return this.c2("POST", `/tasks/${taskId}/dependencies`, { depends_on_task_id: dependsOn }); }
+  deleteCatalog2TaskDependency(taskId: string, depId: string) { return this.c2("DELETE", `/tasks/${taskId}/dependencies/${depId}`); }
+  addCatalog2Step(taskId: string, body: Record<string, any>) { return this.c2("POST", `/tasks/${taskId}/steps`, body); }
+  updateCatalog2Step(id: string, body: Record<string, any>) { return this.c2("PUT", `/steps/${id}`, body); }
+  deleteCatalog2Step(id: string) { return this.c2("DELETE", `/steps/${id}`); }
+  reorderCatalog2Steps(taskId: string, order: string[]) { return this.c2("PUT", `/tasks/${taskId}/steps/order`, { order }); }
+  // condições
+  addCatalog2Condition(versionId: string, body: Record<string, any>) { return this.c2("POST", `/versions/${versionId}/conditions`, body); }
+  updateCatalog2Condition(id: string, body: Record<string, any>) { return this.c2("PUT", `/conditions/${id}`, body); }
+  deleteCatalog2Condition(id: string) { return this.c2("DELETE", `/conditions/${id}`); }
+  // importação dos 36 produtos (sprint de produtos, bloco 4/6)
+  getCatalog2ImportSummary() { return this.c2("GET", "/import/summary"); }
+  getCatalog2ImportQuality() { return this.c2("GET", "/import/quality"); }
+  getCatalog2ImportBatches() { return this.c2<{ data: any[] }>("GET", "/import/batches"); }
+  getCatalog2ProductOrigin(productId: string) { return this.c2("GET", `/products/${productId}/origin`); }
+  resolveCatalog2Pendency(productId: string, body: { pendency_key: string; decision: string }) {
+    return this.c2("POST", `/products/${productId}/resolve-pendency`, body);
+  }
+  /** Prontidão dos produtos para o catálogo do cliente (bloco 5/6). */
+  getCatalog2Readiness() { return this.c2("GET", "/readiness"); }
+
+  // ── Catálogo do CLIENTE do catalog2 (sprint de produtos, bloco 5/6) ────
+  private cc<T = any>(m: "GET" | "POST" | "PUT" | "DELETE", path: string, body?: unknown): Promise<T> {
+    if (m === "GET") return this.get<T>(`/catalog2${path}`);
+    if (m === "POST") return this.post<T>(`/catalog2${path}`, body ?? {});
+    if (m === "PUT") return this.put<T>(`/catalog2${path}`, body ?? {});
+    return this.del<T>(`/catalog2${path}`);
+  }
+  getClientCatalog2Refs() { return this.cc("GET", "/refs"); }
+  getClientCatalog2Products(params?: Record<string, string | number | undefined>) {
+    const qs = new URLSearchParams();
+    for (const [k, v] of Object.entries(params ?? {})) if (v !== undefined && v !== "") qs.set(k, String(v));
+    return this.cc<{ data: any[]; total: number; page: number; page_size: number }>("GET", `/products${qs.toString() ? `?${qs}` : ""}`);
+  }
+  getClientCatalog2Product(slug: string, preview?: boolean) {
+    return this.cc("GET", `/products/${encodeURIComponent(slug)}${preview ? "?preview=1" : ""}`);
+  }
+  configureClientCatalog2(slug: string, selection: Record<string, any>, preview?: boolean) {
+    return this.cc("POST", `/products/${encodeURIComponent(slug)}/configure${preview ? "?preview=1" : ""}`, selection);
+  }
+  listClientCatalog2Quotes() { return this.cc<{ data: any[] }>("GET", "/quotes"); }
+  createClientCatalog2Quote(product: string, selection: Record<string, any>) { return this.cc("POST", "/quotes", { product, selection }); }
+  getClientCatalog2Quote(id: string) { return this.cc("GET", `/quotes/${id}`); }
+  revalidateClientCatalog2Quote(id: string) { return this.cc("POST", `/quotes/${id}/revalidate`); }
+  cancelClientCatalog2Quote(id: string) { return this.cc("POST", `/quotes/${id}/cancel`); }
+  getClientCatalog2Cart() { return this.cc<{ items: any[]; count: number; needs_revalidation: boolean }>("GET", "/cart"); }
+  addClientCatalog2CartItem(product: string, selection: Record<string, any>) { return this.cc("POST", "/cart/items", { product, selection }); }
+  updateClientCatalog2CartItem(id: string, selection: Record<string, any>) { return this.cc("PUT", `/cart/items/${id}`, selection); }
+  removeClientCatalog2CartItem(id: string) { return this.cc("DELETE", `/cart/items/${id}`); }
+  clearClientCatalog2Cart() { return this.cc("POST", "/cart/clear"); }
+
+  // ── Checkout / pedido / aditivos do catalog2 (sprint de produtos, bloco 6/6) ──
+  checkoutCatalog2(body: { quote_ids: string[]; checkout_client_action_id: string }) {
+    return this.cc<{ project: any; project_products: any[]; next_step: string; payment_endpoint: string; already_processed: boolean }>("POST", "/checkout", body);
+  }
+  cancelCatalog2ProjectProduct(projectProductId: string) {
+    return this.cc("POST", `/checkout/${projectProductId}/cancel`);
+  }
+  requestCatalog2ChangeOrder(body: { project_id: string; original_project_product_id?: string; quote_id: string; request_note?: string }) {
+    return this.cc("POST", "/change-orders", body);
+  }
+  listCatalog2ChangeOrders(projectId: string) {
+    return this.cc<{ data: any[] }>("GET", `/change-orders?project_id=${projectId}`);
+  }
+  approveCatalog2ChangeOrder(id: string, body: { decision_note?: string; approval_client_action_id: string }) {
+    return this.cc("POST", `/change-orders/${id}/approve`, body);
+  }
+  rejectCatalog2ChangeOrder(id: string, body: { decision_note: string }) {
+    return this.cc("POST", `/change-orders/${id}/reject`, body);
+  }
+  checkoutCatalog2ChangeOrder(id: string) {
+    return this.cc("POST", `/change-orders/${id}/checkout`);
+  }
+  /** URL autenticada da imagem de um banner obrigatório (uso admin). */
+  mandatoryBannerImageUrl(id: string): string {
+    return `${API_BASE_URL}/admin/comms/banners/${id}/image`;
   }
 
   /**
@@ -638,8 +1081,8 @@ class ApiClient {
     return this.put(`/users/${id}`, data);
   }
 
-  async deleteUser(id: string | number) {
-    return this.del(`/users/${id}`);
+  async deleteUser(id: string | number, reason?: string) {
+    return this.del(`/users/${id}`, reason ? { reason } : undefined);
   }
 
   // ─── Companies ────────────────────────────────────────────────────────────
@@ -799,6 +1242,12 @@ class ApiClient {
     return this.put(`/projects/${id}`, data);
   }
 
+  // Admin-only — Admins internos ativos elegíveis pra "Admin responsável"
+  // do projeto (ata 2026-08).
+  async getAdminResponsibleOptions() {
+    return this.get("/projects/admin-responsible-options");
+  }
+
   // Admin-only — define/troca/remove o vínculo NOVO do Project com
   // Agency/Company/Partner (agency_id/company_id/partner_id). Não mexe no
   // vínculo legado (agency/client_id). Envie { agency_id } ou { company_id }
@@ -809,6 +1258,11 @@ class ApiClient {
 
   async deleteProject(id: string | number) {
     return this.del(`/projects/${id}`);
+  }
+
+  // Arquivamento (soft state, nunca exclusão física) — motivo obrigatório.
+  async archiveProject(id: string | number, reason: string) {
+    return this.patch(`/projects/${id}/archive`, { reason });
   }
 
   // ─── Conexões do projeto (Meta Ads e, no futuro, Google/TikTok) ────────────
@@ -943,8 +1397,17 @@ class ApiClient {
     return this.put(`/nomades/${id}`, data);
   }
 
-  async deleteNomade(id: string | number) {
-    return this.del(`/nomades/${id}`);
+  /** Desativar/reativar (reversível) — mantém o perfil (histórico,
+   * qualificações, carteira) intacto, só bloqueia/libera o login vinculado. */
+  async updateNomadeStatus(id: string | number, status: "ativo" | "inativo", reason?: string) {
+    return this.patch(`/nomades/${id}/status`, { status, ...(reason ? { reason } : {}) });
+  }
+
+  /** Remove SÓ o perfil profissional — nunca a conta global. Bloqueado
+   * (409) quando há histórico real vinculado (carteira, qualificações,
+   * saques, tarefas). A conta global vinculada é desativada, nunca apagada. */
+  async deleteNomade(id: string | number, reason?: string) {
+    return this.del(`/nomades/${id}`, reason ? { reason } : undefined);
   }
 
   // ─── Nomade Levels ────────────────────────────────────────────────────────
@@ -1457,23 +1920,59 @@ class ApiClient {
     return this.post("/permissions", { profile_id: profileId, permissions });
   }
 
-  // ─── Chat ─────────────────────────────────────────────────────────────────
-  async getConversations() {
-    return this.get("/chat/conversations");
+  // ─── Chat (restaurado — ata 2026-08, bloco 3/5) ──────────────────────────
+  async getConversations(params?: { page?: number; limit?: number }) {
+    return this.get<{ data: any[]; total: number; page: number; limit: number }>("/chat/conversations", params);
   }
 
-  async createConversation(data: Record<string, any>) {
+  async getConversation(conversationId: string) {
+    return this.get(`/chat/conversations/${conversationId}`);
+  }
+
+  async createConversation(data: { title?: string; type?: "direct" | "support"; participant_ids: string[] }) {
     return this.post("/chat/conversations", data);
   }
 
-  async getMessages(conversationId: string | number) {
-    return this.get(`/chat/conversations/${conversationId}/messages`);
+  async getMessages(conversationId: string | number, params?: { page?: number; limit?: number }) {
+    return this.get<{ data: any[]; total: number; page: number; limit: number; read_only?: boolean }>(
+      `/chat/conversations/${conversationId}/messages`,
+      params,
+    );
   }
 
-  async sendMessage(conversationId: string | number, content: string) {
-    return this.post(`/chat/conversations/${conversationId}/messages`, {
-      content,
-    });
+  async sendMessage(
+    conversationId: string | number,
+    body: { content: string; client_message_id?: string },
+  ) {
+    return this.post(`/chat/conversations/${conversationId}/messages`, body);
+  }
+
+  async markConversationRead(conversationId: string) {
+    return this.post(`/chat/conversations/${conversationId}/read`, {});
+  }
+
+  async getChatUnreadCount() {
+    return this.get<{ count: number }>("/chat/unread-count");
+  }
+
+  // ─── Grupos de Notificação — ciclo de aprovação (ata 2026-08, bloco 3/5) ──
+  async getNotificationGroupsList(params?: { status?: string; q?: string }) {
+    return this.get<{ data: any[]; role: "master" | "leader" | "other" }>("/notification-groups", params);
+  }
+  async requestNotificationGroup(data: { name: string; description?: string; purpose: string; member_user_ids: string[] }) {
+    return this.post("/notification-groups/requests", data);
+  }
+  async approveNotificationGroup(id: string) {
+    return this.post(`/notification-groups/${id}/approve`, {});
+  }
+  async rejectNotificationGroup(id: string, reason: string) {
+    return this.post(`/notification-groups/${id}/reject`, { reason });
+  }
+  async cancelNotificationGroupRequest(id: string) {
+    return this.post(`/notification-groups/${id}/cancel`, {});
+  }
+  async archiveNotificationGroup(id: string) {
+    return this.patch(`/notification-groups/${id}/archive`, {});
   }
 
   // ─── Reports ──────────────────────────────────────────────────────────────
@@ -1664,8 +2163,8 @@ class ApiClient {
   // Item único — mesmo modelo/include rico usado pela listagem (project,
   // project_product, stages, briefing_answers, attachments). Nunca usar
   // getTask() (rota /tasks/:id, outro model/router mais pobre) aqui.
-  async getOperationalTask(id: string) {
-    return this.get(`/project-tasks/${id}`);
+  async getOperationalTask(id: string, signal?: AbortSignal) {
+    return this.get(`/project-tasks/${id}`, undefined, signal);
   }
   async launchProjectTask(id: string) {
     return this.patch(`/project-tasks/${id}/launch`, {});
@@ -1901,6 +2400,33 @@ class ApiClient {
     return this.get("/system-alerts", filters);
   }
 
+  // Monitoramento da liderança (ata 2026-08, bloco 2/5) — alertas críticos
+  // de terceiros no escopo autorizado. 403 quando o usuário não tem função
+  // de acompanhamento (a aba nem aparece).
+  async getAlertMonitoring(filters?: Record<string, any>) {
+    return this.get<{
+      data: any[];
+      total: number;
+      page: number;
+      page_size: number;
+      total_pages: number;
+      scope_level: "master" | "admin" | "leader";
+      scope_note: string | null;
+    }>("/system-alerts/monitoring", filters);
+  }
+
+  async getAlertMonitoringSummary(filters?: Record<string, any>) {
+    return this.get<{
+      criticos_ativos: number;
+      resolvidos_no_periodo: number;
+      automaticos_pendentes: number;
+      manuais_pendentes: number;
+      oldest_open_at: string | null;
+      oldest_open_ms: number | null;
+      filtered: boolean;
+    }>("/system-alerts/monitoring/summary", filters);
+  }
+
   async markSystemAlertRead(id: string) {
     return this.patch(`/system-alerts/${id}/read`, {});
   }
@@ -1914,7 +2440,12 @@ class ApiClient {
   }
 
   async getUnreadSystemAlertsCount(filters?: Record<string, any>) {
-    return this.get<{ count: number }>("/system-alerts/unread-count", filters);
+    // bySeverity só vem preenchido quando filters.category === "alerta" — é
+    // a quebra por criticidade (info→verde, warning→amarelo, error→vermelho).
+    return this.get<{ count: number; bySeverity?: { info: number; warning: number; error: number } }>(
+      "/system-alerts/unread-count",
+      filters,
+    );
   }
 
   async archiveSystemAlert(id: string) {
@@ -1923,6 +2454,231 @@ class ApiClient {
 
   async unarchiveSystemAlert(id: string) {
     return this.patch(`/system-alerts/${id}/unarchive`, {});
+  }
+
+  // ─── Detalhes e histórico (ata 2026-08, 8º lote) ───────────────────────────
+  async getSystemAlertDetail(id: string, signal?: AbortSignal) {
+    return this.get(`/system-alerts/${id}`, undefined, signal);
+  }
+
+  // "detalhes abertos"/"origem clicada" — eventos de visualização. Nunca
+  // disparados por polling/re-render (ver AlertDetailDrawer). A garantia
+  // real contra duplicação é o `clientEventId` (ver
+  // recordClientTriggeredEventIdempotent no backend, protegido por índice
+  // único) — obrigatório aqui, nunca opcional (ata 2026-08, 9º lote:
+  // "a proteção não pode depender somente de useRef").
+  async recordSystemAlertEvent(id: string, eventType: "details_opened" | "origin_clicked", clientEventId: string) {
+    return this.post(`/system-alerts/${id}/events`, { event_type: eventType, client_event_id: clientEventId });
+  }
+
+  // Resolução formal de alerta crítico (ata 2026-08, 10º lote). Mesma
+  // garantia de idempotência dos eventos: clientActionId obrigatório,
+  // gerado uma vez por submissão intencional do formulário — repetir com o
+  // MESMO valor (retry, clique duplo) devolve o resultado já existente sem
+  // duplicar. Erros usam o corpo da resposta (400/403/404/409) pra
+  // mensagens amigáveis — nunca só "request failed".
+  async resolveSystemAlert(
+    id: string,
+    data: { action: string; description: string },
+    clientActionId: string,
+  ) {
+    return this.post(`/system-alerts/${id}/resolve`, {
+      action: data.action,
+      description: data.description,
+      client_action_id: clientActionId,
+    });
+  }
+
+  // ─── Central de Alertas (Admin Master) — ata 2026-08 ───────────────────────
+  async getAdminSystemAlerts(filters?: Record<string, any>) {
+    return this.get("/system-alerts/admin", filters);
+  }
+
+  async createAdminSystemAlert(data: {
+    title: string;
+    message: string;
+    severity: "info" | "warning" | "error";
+    user_id?: string | null;
+    image_file_name?: string | null;
+    image_alt?: string | null;
+    expires_at?: string | null;
+    destination_type?: "none" | "project" | "task";
+    destination_id?: string | null;
+  }) {
+    return this.post("/system-alerts/admin", data);
+  }
+
+  // Seletor buscável de "Destino opcional" do Avulso (ata 2026-08, 6º lote)
+  // — nunca URL/id digitado, só busca por nome/código entre registros
+  // reais. Leve e paginado (20 no backend) de propósito.
+  async getAlertDestinationOptions(type: "project" | "task", search?: string) {
+    return this.get("/system-alerts/admin/destination-options", { type, search });
+  }
+
+  async updateAdminSystemAlert(
+    id: string,
+    data: {
+      title?: string;
+      message?: string;
+      image_file_name?: string | null;
+      image_alt?: string | null;
+      expires_at?: string | null;
+    },
+  ) {
+    return this.patch(`/system-alerts/admin/${id}`, data);
+  }
+
+  // Upload de imagem de alerta (Padrão/Avulso/Programado — ata 2026-08, 4º
+  // lote). Retorna { file_name, url } — `file_name` é o que se manda de
+  // volta pros endpoints de criação/edição, `url` já vem com o prefixo
+  // "/api/..." do backend (ver resolveAlertImageUrl abaixo pra montar o
+  // <img src> correto).
+  async uploadAlertImage(file: File): Promise<{ file_name: string; url: string }> {
+    return this.uploadFile("/system-alerts/admin/images", file);
+  }
+
+  // O backend devolve `image_url` já prefixado com "/api/..." (mesmo
+  // prefixo que API_BASE_URL normalmente inclui — ver VITE_API_URL nos
+  // .env.example, sempre termina em "/api"). Prependar API_BASE_URL direto
+  // duplicaria o "/api". Em vez disso, tira o "/api" final de API_BASE_URL
+  // (sobra a origem: "" no dev com proxy, ou "https://host" em produção) e
+  // prependa só isso.
+  resolveAlertImageUrl(url: string | null | undefined): string | null {
+    if (!url) return null;
+    if (/^https?:\/\//.test(url)) return url;
+    const origin = API_BASE_URL.replace(/\/api\/?$/, "");
+    return `${origin}${url}`;
+  }
+
+  // A rota que serve a imagem exige Bearer token E autorização por recurso
+  // (ver GET /system-alerts/:id/image, /admin/standards/:id/image e
+  // /admin/schedules/:id/image no backend — cada uma amarrada ao dono do
+  // recurso, nunca um nome de arquivo solto) — uma tag <img src="..."> comum
+  // não tem como mandar esse header. Cross-origin
+  // (frontend:8081 x backend:3001 neste dev, ou domínios diferentes em
+  // produção) isso derruba a imagem com ERR_BLOCKED_BY_ORB: o navegador
+  // recebe um 401 (corpo JSON) onde esperava bytes de imagem e bloqueia a
+  // resposta opaca. Mesmo problema que anexos de projeto já tinham (ver
+  // `downloadBlob` acima) — a solução é a mesma: buscar com fetch()
+  // autenticado e converter pra Object URL, nunca um <img src> direto pra
+  // uma rota protegida por header.
+  async fetchAlertImageBlobUrl(resolvedUrl: string): Promise<string> {
+    const token = this.getToken();
+    const res = await fetch(resolvedUrl, {
+      headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+    });
+    if (!res.ok) throw new ApiError(`HTTP ${res.status}`, res.status);
+    const blob = await res.blob();
+    return URL.createObjectURL(blob);
+  }
+
+  async reclassifyAdminSystemAlert(id: string, severity: "info" | "warning" | "error") {
+    return this.patch(`/system-alerts/admin/${id}/severity`, { severity });
+  }
+
+  async archiveAdminSystemAlert(id: string) {
+    return this.patch(`/system-alerts/admin/${id}/archive`, {});
+  }
+
+  async unarchiveAdminSystemAlert(id: string) {
+    return this.patch(`/system-alerts/admin/${id}/unarchive`, {});
+  }
+
+  // ─── Padrões e Regras (ata 2026-08, 2º lote) ───────────────────────────────
+  async getAdminAlertStandards() {
+    return this.get("/system-alerts/admin/standards");
+  }
+  async updateAdminAlertStandard(
+    id: string,
+    data: {
+      name?: string;
+      title?: string;
+      message?: string;
+      default_severity?: "info" | "warning" | "error";
+      is_active?: boolean;
+      image_file_name?: string | null;
+      image_alt?: string | null;
+      // Governança do Admin Master (ata 2026-08, bloco 2/5)
+      is_mandatory?: boolean;
+      mandatory_min_severity?: "info" | "warning" | "error" | null;
+      personal_prefs_allowed?: boolean;
+      additional_channels?: string[];
+      governed_event_types?: string[];
+    },
+  ) {
+    return this.patch(`/system-alerts/admin/standards/${id}`, data);
+  }
+  async previewAdminAlertStandard(id: string) {
+    return this.post(`/system-alerts/admin/standards/${id}/preview`, {});
+  }
+  async getAdminAlertRules() {
+    return this.get("/system-alerts/admin/rules");
+  }
+  async updateAdminAlertRule(
+    id: string,
+    data: {
+      is_active?: boolean;
+      lead_time_minutes?: number | null;
+      severity_override?: "info" | "warning" | "error" | null;
+      recipient_roles?: string[];
+    },
+  ) {
+    return this.patch(`/system-alerts/admin/rules/${id}`, data);
+  }
+
+  // ─── Alertas Programados (Admin Master) — ata 2026-08, 4º lote ─────────────
+  async getAdminAlertSchedules() {
+    return this.get("/system-alerts/admin/schedules");
+  }
+
+  async createAdminAlertSchedule(data: {
+    name: string;
+    title: string;
+    message: string;
+    severity: "info" | "warning" | "error";
+    user_id?: string | null;
+    image_file_name?: string | null;
+    image_alt?: string | null;
+    recurrence_type: "once" | "daily" | "weekly";
+    weekdays?: number[];
+    time_of_day: string;
+    timezone: string;
+    start_date: string;
+    end_date?: string | null;
+    occurrence_expires_minutes?: number | null;
+  }) {
+    return this.post("/system-alerts/admin/schedules", data);
+  }
+
+  async updateAdminAlertSchedule(
+    id: string,
+    data: Partial<{
+      name: string;
+      title: string;
+      message: string;
+      severity: "info" | "warning" | "error";
+      user_id: string | null;
+      image_file_name: string | null;
+      image_alt: string | null;
+      recurrence_type: "once" | "daily" | "weekly";
+      weekdays: number[];
+      time_of_day: string;
+      timezone: string;
+      start_date: string;
+      end_date: string | null;
+      occurrence_expires_minutes: number | null;
+      is_active: boolean;
+    }>,
+  ) {
+    return this.patch(`/system-alerts/admin/schedules/${id}`, data);
+  }
+
+  async archiveAdminAlertSchedule(id: string) {
+    return this.patch(`/system-alerts/admin/schedules/${id}/archive`, {});
+  }
+
+  async previewAdminAlertSchedule(id: string) {
+    return this.post(`/system-alerts/admin/schedules/${id}/preview`, {});
   }
 
   // ─── Preferências pessoais de notificação (evento × canal) ────────────────
@@ -1946,10 +2702,13 @@ class ApiClient {
     }>("/notification-groups");
   }
 
-  async getNotificationGroupEligibleMembers() {
-    return this.get<{ data: Array<{ id: string; name: string; email: string }> }>(
-      "/notification-groups/eligible-members",
-    );
+  async getNotificationGroupEligibleMembers(params?: { q?: string; page?: number; page_size?: number }) {
+    return this.get<{
+      data: Array<{ id: string; name: string; email: string; account_type: string; is_active: boolean }>;
+      total: number;
+      page: number;
+      page_size: number;
+    }>("/notification-groups/eligible-members", params);
   }
 
   async getNotificationGroup(id: string) {

@@ -7,6 +7,8 @@ import { verifyToken } from "../middleware/auth";
 import { validate, parsePagination } from "../middleware/validate";
 import { gerarTarefasDoProjeto } from "../lib/generate-tasks";
 import { withProjectCode } from "../lib/create-project";
+import { writeAccessAudit } from "../lib/product-feedback-service";
+import { validateAdminResponsibleUserId } from "../lib/admin-responsible";
 import { ensureUploadDir, generateStoredFileName, uploadedFilePath, deleteUploadedFile } from "../lib/file-storage";
 import {
   getProjectScope,
@@ -31,6 +33,10 @@ const createSchema = z.object({
   agency_id: z.string().optional(),
   company_id: z.string().optional(),
   partner_id: z.string().optional(),
+  // Admin responsável da Allka (ata 2026-08) — só honrado quando o
+  // chamador é Admin (ver handlers abaixo); ignorado do mesmo jeito que
+  // agency_id/company_id/partner_id são pra quem não é Admin.
+  admin_responsible_user_id: z.string().nullable().optional(),
   status: z
     .enum([
       "draft",
@@ -73,6 +79,26 @@ const createSchema = z.object({
 });
 
 const updateSchema = createSchema.partial();
+
+// GET /api/projects/admin-responsible-options — Admins internos ativos
+// elegíveis pra "Admin responsável" (ata 2026-08). Admin-only: expõe o
+// roster administrativo interno, não é uma lista pública de usuários.
+router.get("/admin-responsible-options", verifyToken, async (req, res, next) => {
+  try {
+    if (!isAdminUser(req.user)) {
+      res.status(403).json({ error: "Somente administradores podem consultar esta lista" });
+      return;
+    }
+    const users = await prisma.user.findMany({
+      where: { account_type: "admin", is_active: true },
+      select: { id: true, name: true, email: true },
+      orderBy: { name: "asc" },
+    });
+    res.json({ data: users });
+  } catch (err) {
+    next(err);
+  }
+});
 
 // GET /api/projects/check-name — check if a project name is already in use
 router.get("/check-name", verifyToken, async (req, res, next) => {
@@ -128,6 +154,15 @@ router.get("/", verifyToken, async (req, res, next) => {
       where = orConditions.length > 1 ? { OR: orConditions } : orConditions[0];
     }
     if (status) where["status"] = status;
+    // Projetos arquivados ficam de fora da listagem por padrão — só
+    // aparecem se pedidos explicitamente (?archived=true mostra só os
+    // arquivados; ?archived=all mostra os dois juntos).
+    const archivedParam = req.query.archived as string | undefined;
+    if (archivedParam === "true") {
+      where["archived_at"] = { not: null };
+    } else if (archivedParam !== "all") {
+      where["archived_at"] = null;
+    }
     if (search) where["title"] = { contains: search };
     // client_id filter is only applied for admin/open — scoped users already have their scope locked
     if (client_id && (scope.kind === "admin" || scope.kind === "open")) {
@@ -171,6 +206,7 @@ router.get("/", verifyToken, async (req, res, next) => {
           agency_owner: { select: { id: true, name: true } },
           company_owner: { select: { id: true, name: true } },
           partner_owner: { select: { id: true, agency: { select: { owner: { select: { name: true } } } } } },
+          archived_by: { select: { id: true, name: true } },
         },
         skip,
         take: limit,
@@ -268,6 +304,10 @@ router.get("/:id", verifyToken, async (req, res, next) => {
         client: true,
         agency_owner: { select: { id: true, name: true } },
         company_owner: { select: { id: true, name: true } },
+        archived_by: { select: { id: true, name: true } },
+        // Admin responsável (ata 2026-08) — devolve nome/e-mail/perfil já
+        // resolvidos, sem exigir um segundo fetch no frontend.
+        admin_responsible: { select: { id: true, name: true, email: true, admin_profile: { select: { is_master: true } } } },
         products: {
           include: {
             product: {
@@ -1358,6 +1398,21 @@ router.post(
       // intenção e protege caso o schema mude no futuro.
       delete (rest as Record<string, unknown>).created_by_user_id;
 
+      // Admin responsável só é honrado se quem está criando é Admin —
+      // mesmo tratamento de agency_id/company_id/partner_id acima. Vazio
+      // ("sem responsável") é permitido; string precisa ser um Admin
+      // interno ativo de verdade, nunca Company/Agency/Nômade/comum.
+      let adminResponsibleData: { admin_responsible_user_id?: string | null } = {};
+      if (isAdminUser(req.user) && rest.admin_responsible_user_id !== undefined) {
+        const validated = await validateAdminResponsibleUserId(rest.admin_responsible_user_id);
+        if (!validated.ok) {
+          res.status(400).json({ error: validated.error });
+          return;
+        }
+        adminResponsibleData = { admin_responsible_user_id: validated.value ?? null };
+      }
+      delete (rest as Record<string, unknown>).admin_responsible_user_id;
+
       // Autoria + código sequencial persistente na mesma transação da
       // criação — se qualquer um falhar, nenhum dos dois fica parcialmente
       // aplicado.
@@ -1367,12 +1422,18 @@ router.post(
             ...rest,
             agency: agencyName || rest.agency,
             ...newScopeData,
+            ...adminResponsibleData,
             start_date: toDate(start_date),
             end_date: toDate(end_date),
             created_by_user_id: req.user!.id,
             project_code: projectCode,
           },
-          include: { client: { select: { id: true, name: true, cnpj: true } } },
+          include: {
+            client: { select: { id: true, name: true, cnpj: true } },
+            // Admin responsável (ata 2026-08) — devolve nome/e-mail/perfil
+            // já resolvidos, sem exigir um segundo fetch no frontend.
+            admin_responsible: { select: { id: true, name: true, email: true, admin_profile: { select: { is_master: true } } } },
+          },
         }),
       );
       res.status(201).json(project);
@@ -1415,7 +1476,7 @@ router.put(
       // Capture previous status and validate scope before update
       const before = await prisma.project.findUnique({
         where: { id },
-        select: { status: true, agency: true, client_id: true, agency_id: true, company_id: true, partner_id: true },
+        select: { status: true, agency: true, client_id: true, agency_id: true, company_id: true, partner_id: true, admin_responsible_user_id: true },
       });
 
       if (!before) {
@@ -1440,6 +1501,34 @@ router.put(
         }
       }
 
+      // Admin responsável só é editável por Admin — mesma regra do POST /.
+      // Erro aqui não pode apagar a seleção anterior: `return` antes de
+      // qualquer `update()`, então o projeto não muda de estado nenhum.
+      //
+      // Reparo "editar Admin responsável de projeto já existente" (ata
+      // 2026-08): auditado antes de implementar — este PUT já aceita
+      // atualização parcial com segurança (updateSchema é createSchema
+      // .partial(); campos ausentes do body viram `undefined` em `rest` e o
+      // Prisma nunca escreve `undefined`, só o que foi de fato enviado), e
+      // já tinha essa validação inteira desde o lote anterior. Por isso a
+      // nova seção "Admin responsável" do frontend reaproveita esta MESMA
+      // rota, enviando só `{ admin_responsible_user_id }` — nenhuma rota
+      // nova foi necessária.
+      let adminResponsibleChanged = false;
+      if (rest.admin_responsible_user_id !== undefined) {
+        if (!isAdminUser(req.user)) {
+          delete rest.admin_responsible_user_id;
+        } else {
+          const validated = await validateAdminResponsibleUserId(rest.admin_responsible_user_id);
+          if (!validated.ok) {
+            res.status(400).json({ error: validated.error });
+            return;
+          }
+          rest.admin_responsible_user_id = validated.value ?? null;
+          adminResponsibleChanged = rest.admin_responsible_user_id !== before.admin_responsible_user_id;
+        }
+      }
+
       const project = await prisma.project.update({
         where: { id },
         data: {
@@ -1447,13 +1536,116 @@ router.put(
           start_date: toDate(start_date),
           end_date: toDate(end_date),
         },
-        include: { client: { select: { id: true, name: true, cnpj: true } } },
+        include: {
+          client: { select: { id: true, name: true, cnpj: true } },
+          admin_responsible: { select: { id: true, name: true, email: true, admin_profile: { select: { is_master: true } } } },
+        },
       });
+
+      if (adminResponsibleChanged) {
+        await writeAccessAudit({
+          actorId: req.user!.id,
+          action: "project.admin_responsible_changed",
+          before: { project_id: id, admin_responsible_user_id: before.admin_responsible_user_id },
+          after: { project_id: id, admin_responsible_user_id: project.admin_responsible_user_id },
+        });
+      }
 
       // Mudar o status do projeto (inclusive para "planning") NUNCA gera
       // tarefas sozinho — a única origem permitida de geração automática
       // nesta fase é pagamento confirmado como PAGO (ver
       // src/lib/confirm-payment.ts). Chamada removida de propósito.
+
+      res.json(project);
+    } catch (err) {
+      next(err);
+    }
+  },
+);
+
+const archiveProjectSchema = z.object({
+  reason: z
+    .string()
+    .trim()
+    .min(5, "O motivo do arquivamento deve ter no mínimo 5 caracteres")
+    .max(500, "O motivo do arquivamento deve ter no máximo 500 caracteres"),
+});
+
+// PATCH /api/projects/:id/archive — arquiva um projeto real (soft state,
+// nunca exclusão física). Não mexe em `status`: "cancelled"/"completed" já
+// têm significado próprio e distinto de "arquivado". Ver ata 2026-08
+// ("Arquivar Projetos: ... registrar o motivo do arquivamento").
+router.patch(
+  "/:id/archive",
+  verifyToken,
+  validate(archiveProjectSchema),
+  async (req, res, next) => {
+    try {
+      if (isLeaderUser(req.user)) {
+        res.status(403).json({ error: "Permissão insuficiente" });
+        return;
+      }
+
+      const id = req.params.id as string;
+      const before = await prisma.project.findUnique({
+        where: { id },
+        select: {
+          status: true,
+          agency: true,
+          client_id: true,
+          agency_id: true,
+          company_id: true,
+          partner_id: true,
+          archived_at: true,
+        },
+      });
+
+      if (!before) {
+        res.status(404).json({ error: "Projeto não encontrado" });
+        return;
+      }
+
+      if (!(await projectVisibleToUser(prisma, req.user!, before))) {
+        res.status(403).json({ error: "Acesso negado" });
+        return;
+      }
+
+      if (before.archived_at) {
+        res.status(409).json({ error: "Este projeto já está arquivado" });
+        return;
+      }
+
+      // reason já vem aparado (trim) pelo schema acima.
+      const { reason } = req.body as { reason: string };
+      const archivedAt = new Date();
+
+      const project = await prisma.$transaction(async (tx) => {
+        const updated = await tx.project.update({
+          where: { id },
+          data: {
+            archived_at: archivedAt,
+            archive_reason: reason,
+            archived_by_user_id: req.user!.id,
+          },
+          include: {
+            client: { select: { id: true, name: true, cnpj: true } },
+            agency_owner: { select: { id: true, name: true } },
+            company_owner: { select: { id: true, name: true } },
+            partner_owner: { select: { id: true, agency: { select: { owner: { select: { name: true } } } } } },
+            archived_by: { select: { id: true, name: true } },
+          },
+        });
+
+        await writeAccessAudit({
+          actorId: req.user!.id,
+          action: "project.archived",
+          before: { project_id: id, status: before.status, archived_at: null },
+          after: { project_id: id, status: before.status, archived_at: archivedAt.toISOString() },
+          reason,
+        });
+
+        return updated;
+      });
 
       res.json(project);
     } catch (err) {
@@ -1529,6 +1721,24 @@ router.put("/:id/link", verifyToken, validate(updateProjectLinkSchema), async (r
 });
 
 // DELETE /api/projects/:id
+//
+// Revisão de segurança (lote 2A, ata 2026-08-20): o gate de autorização
+// aqui é `projectVisibleToUser`, o mesmo usado para leitura — ou seja,
+// qualquer usuário vinculado à agência/empresa dona do projeto pode
+// apagá-lo, não só quem o criou. Confirmado que isso NÃO é uma falha de
+// isolamento entre contas (um usuário de uma agência não enxerga nem
+// apaga projeto de outra agência/empresa) — é a mesma regra de escopo já
+// usada em toda a tela de projetos. Mantida sem alteração: decidir se
+// exclusão exige um papel mais restrito que "membro da organização dona"
+// é uma decisão de negócio do Lote 3 (arquivamento/ciclo de vida de
+// projeto), não deste lote de segurança.
+//
+// O único ajuste feito aqui é de tratamento de erro: `Project` tem FKs
+// sem onDelete:Cascade a partir de TaskExecution, Invoice e Payment
+// (schema.prisma) — ou seja, o banco já impede fisicamente apagar um
+// projeto com tarefas executadas, faturas ou pagamentos (P2003). Antes,
+// esse caso vazava como erro 500 genérico do Prisma; agora retorna uma
+// mensagem clara, sem mudar quem pode ou não apagar.
 router.delete("/:id", verifyToken, async (req, res, next) => {
   try {
     const project = await prisma.project.findUnique({
@@ -1546,6 +1756,14 @@ router.delete("/:id", verifyToken, async (req, res, next) => {
     await prisma.project.delete({ where: { id: req.params.id as string } });
     res.status(204).send();
   } catch (err) {
+    const code = (err as { code?: string }).code;
+    if (code === "P2003") {
+      res.status(409).json({
+        error:
+          "Este projeto possui tarefas executadas, faturas ou pagamentos vinculados e não pode ser excluído.",
+      });
+      return;
+    }
     next(err);
   }
 });

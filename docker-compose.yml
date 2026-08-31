@@ -29,6 +29,11 @@ services:
       NODE_ENV: development
       PORT: 3001
       DATABASE_URL: mysql://allka:allka_dev@mysql:3306/allka
+      # Consulta da Plataforma Anterior (sprint de produtos, bloco 1/6) — a
+      # APLICAÇÃO usa credencial SOMENTE LEITURA no banco legado separado.
+      # Só existe se o banco/usuário forem criados (ver docs/consulta-legado.md);
+      # ausente/errada → as rotas /api/admin/legacy respondem 503.
+      LEGACY_DATABASE_URL: mysql://allka_legacy_ro:legacy_ro_dev@mysql:3306/allka_legacy
       JWT_SECRET: local-development-secret
       CHOKIDAR_USEPOLLING: "true"
       CHOKIDAR_INTERVAL: "300"

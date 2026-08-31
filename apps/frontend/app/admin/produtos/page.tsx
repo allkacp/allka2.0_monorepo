@@ -134,6 +134,7 @@ import {
 import { Switch } from "@/components/ui/switch"; // Import Switch
 import { ConfirmationDialog } from "@/components/confirmation-dialog"; // Import ConfirmationDialog
 import { apiClient } from "@/lib/api-client";
+import { hasAdminModulePermission } from "@/lib/admin-permissions";
 import { backendToFrontendProduct } from "@/lib/product-adapter";
 // Removed: import { ProductSheet } from "@/components/admin/product-sheet"
 // Removed: import { QuestionnaireSheet } from "@/components/admin/questionnaire-sheet"
@@ -701,6 +702,24 @@ export default function AdminProdutosPage() {
   const { toast } = useToast();
   const { sidebarWidth } = useSidebar();
   const { headerHeight, footerHeight } = useAppFrameMetrics();
+
+  // Produto selecionado para exclusão (abre o ConfirmationDialog em modo
+  // twoStep) — null quando nenhum diálogo de exclusão está aberto.
+  const [deletingProduct, setDeletingProduct] = useState<Product | null>(null);
+  // Perfil admin atual, só para decidir se o botão "Excluir" fica habilitado
+  // (module "sistema", action "delete" — mesmo par que o backend já exige
+  // em DELETE /api/products/:id). É só um sinal de UI: a permissão de
+  // verdade continua sendo aplicada no servidor.
+  const [adminProfile, setAdminProfile] = useState<any>(undefined);
+  useEffect(() => {
+    let cancelled = false;
+    apiClient
+      .getCurrentUser()
+      .then((me: any) => { if (!cancelled) setAdminProfile(me?.admin_profile ?? null); })
+      .catch(() => { if (!cancelled) setAdminProfile(null); });
+    return () => { cancelled = true; };
+  }, []);
+  const canDeleteProduct = hasAdminModulePermission(adminProfile, "sistema", "delete");
 
   // Filters and view mode state
   const [searchTerm, setSearchTerm] = useState("");
@@ -1655,29 +1674,18 @@ export default function AdminProdutosPage() {
     navigate(`/admin/produtos/${urlCode}`, { replace: true });
   };
 
-  const handleDeleteProduct = async (productId: string) => {
-    // Implement deletion logic here, e.g., show a confirmation dialog
-    if (
-      !confirm(
-        "Tem certeza que deseja excluir este produto? Esta ação não pode ser desfeita.",
-      )
-    )
-      return;
-
-    try {
-      await deleteProduct(productId);
-      // Optionally show a success message
-      toast({
-        title: "Sucesso",
-        description: "Produto excluído com sucesso!",
-      });
-    } catch (error) {
-      toast({
-        title: "Erro",
-        description: "Erro ao excluir produto",
-        variant: "destructive",
-      });
-    }
+  // Exclusão de produto: confirmação dupla (ver ConfirmationDialog) — o
+  // produto só é excluído de verdade no clique final da 2ª etapa. Erro
+  // (ex.: 409 por vínculo existente) fica exibido dentro do próprio
+  // diálogo, sem apagar nada; a lista só é atualizada depois do sucesso
+  // real (useProducts.deleteProduct já refaz o fetch só nesse caso).
+  const confirmDeleteProduct = async () => {
+    if (!deletingProduct) return;
+    await deleteProduct(deletingProduct.id);
+    toast({
+      title: "Produto excluído",
+      description: `"${deletingProduct.name}" foi removido do catálogo.`,
+    });
   };
 
   const calculateAutomaticPrice = () => {
@@ -2898,6 +2906,16 @@ export default function AdminProdutosPage() {
                 <TooltipContent side="bottom" sideOffset={6}>Criar novo produto</TooltipContent>
               </Tooltip>
             </TooltipProvider>
+            {/* Acesso à fundação do NOVO catálogo — só Admin Master (o backend
+                reaplica a checagem). Não substitui o catálogo atual. */}
+            {adminProfile?.is_master === true && adminProfile?.is_active !== false && (
+              <button
+                onClick={() => navigate("/admin/produtos/novo-catalogo")}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-white/70 text-white bg-white/10 hover:bg-white/20 transition-colors text-xs font-semibold whitespace-nowrap"
+              >
+                Novo catálogo (fundação)
+              </button>
+            )}
             <PinToTrayButton id="page-produtos" label="Cadastro de Produtos" icon={Package} path="/admin/produtos" />
           </>
         }
@@ -3281,6 +3299,23 @@ export default function AdminProdutosPage() {
                               <TooltipContent className="text-xs font-medium">Editar produto</TooltipContent>
                             </Tooltip>
                           </TooltipProvider>
+                          <TooltipProvider delayDuration={400}>
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <button
+                                  onClick={() => canDeleteProduct && setDeletingProduct(product)}
+                                  disabled={!canDeleteProduct}
+                                  aria-label={canDeleteProduct ? "Excluir produto" : "Sem permissão para excluir produtos"}
+                                  className="h-[26px] w-[26px] flex items-center justify-center rounded-[8px] bg-white dark:bg-slate-800 border border-[#e8edf5] dark:border-slate-700 text-red-500 dark:text-red-400/70 shadow-[0_4px_10px_rgba(15,23,42,0.06)] hover:bg-red-600 hover:text-white hover:border-transparent hover:shadow-[0_8px_18px_rgba(15,23,42,0.18)] hover:-translate-y-px transition-all duration-150 disabled:opacity-40 disabled:pointer-events-none disabled:hover:translate-y-0"
+                                >
+                                  <Trash2 className="h-3.5 w-3.5" />
+                                </button>
+                              </TooltipTrigger>
+                              <TooltipContent className="text-xs font-medium">
+                                {canDeleteProduct ? "Excluir produto" : "Sem permissão para excluir produtos"}
+                              </TooltipContent>
+                            </Tooltip>
+                          </TooltipProvider>
                         </div>
                       </td>
                     </tr>
@@ -3576,6 +3611,24 @@ export default function AdminProdutosPage() {
                           </TooltipTrigger>
                           <TooltipContent>
                             <p>Abrir formulário de edição</p>
+                          </TooltipContent>
+                        </Tooltip>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => canDeleteProduct && setDeletingProduct(product)}
+                              disabled={!canDeleteProduct}
+                              aria-label={canDeleteProduct ? "Excluir produto" : "Sem permissão para excluir produtos"}
+                              className="h-8 px-3 text-xs gap-1.5 text-slate-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/30 disabled:opacity-40"
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                              Excluir
+                            </Button>
+                          </TooltipTrigger>
+                          <TooltipContent>
+                            <p>{canDeleteProduct ? "Excluir produto" : "Sem permissão para excluir produtos"}</p>
                           </TooltipContent>
                         </Tooltip>
                       </div>
@@ -4413,6 +4466,27 @@ export default function AdminProdutosPage() {
             </StandardModalDialog>
           );
         })()}
+
+      {/* ConfirmationDialog for deleting a product — confirmação em duas etapas */}
+      <ConfirmationDialog
+        open={deletingProduct !== null}
+        onClose={() => setDeletingProduct(null)}
+        onConfirm={confirmDeleteProduct}
+        title="Excluir produto"
+        message="Esta ação é permanente e não pode ser desfeita."
+        twoStep
+        targetName={deletingProduct?.name}
+        targetDetail={
+          (deletingProduct as any)?.productCode
+            ? `Código: ${(deletingProduct as any).productCode}`
+            : undefined
+        }
+        consequences={[
+          "O produto sai do catálogo imediatamente.",
+          "Se estiver vinculado a projetos, pedidos ou pacotes existentes, a exclusão será recusada.",
+        ]}
+        finalConfirmText="Excluir produto definitivamente"
+      />
 
       {/* ConfirmationDialog for toggling product status */}
       <ConfirmationDialog

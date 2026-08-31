@@ -12,6 +12,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { ModalBrandHeader } from "@/components/ui/modal-brand-header";
+import { Catalog2AdditivesPanel } from "@/components/catalog2/catalog2-additives-panel";
 import { EmbeddedSlideScreen } from "@/components/embedded-slide-screen";
 import {
   Select,
@@ -1485,7 +1486,7 @@ export function ProjectViewSlidePanel({
               >
                 {/* Tab bar */}
                 <div className="flex-shrink-0 bg-white dark:bg-background px-[50px] pt-0 pb-[10px] overflow-x-auto">
-                  <TabsList className="grid w-max grid-cols-8 gap-1 bg-transparent p-0 h-auto">
+                  <TabsList className="grid w-max grid-cols-9 gap-1 bg-transparent p-0 h-auto">
                     {[
                       { value: "visao-geral", label: "Visão Geral" },
                       {
@@ -1496,6 +1497,7 @@ export function ProjectViewSlidePanel({
                         value: "tarefas",
                         label: `Tarefas${projectTasks.length > 0 ? ` (${projectTasks.length})` : ""}`,
                       },
+                      { value: "aditivos", label: "Aditivos" },
                       { value: "financeiro", label: "Financeiro" },
                       { value: "equipe", label: "Equipe" },
                       { value: "nomades", label: "Nômades" },
@@ -2622,6 +2624,15 @@ export function ProjectViewSlidePanel({
                       </div>
                     )}
                   </div>
+                </TabsContent>
+                {/* ══════════════════════════════════════════════════════════
+                    TAB: ADITIVOS (fechamento técnico do sprint de produtos)
+                ══════════════════════════════════════════════════════════ */}
+                <TabsContent
+                  value="aditivos"
+                  className="flex-1 overflow-y-auto bg-slate-200 mt-0"
+                >
+                  <Catalog2AdditivesPanel projectId={String(project.id)} />
                 </TabsContent>
                 {/* ══════════════════════════════════════════════════════════
                     TAB: FINANCEIRO

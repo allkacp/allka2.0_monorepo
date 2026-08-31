@@ -40,6 +40,7 @@ import {
 import { apiClient, ApiError } from "@/lib/api-client";
 import { Button } from "@/components/ui/button";
 import { EmbeddedSlideScreen } from "@/components/embedded-slide-screen";
+import { TaskRotationPanel } from "@/components/task-rotation-panel";
 import { CopyLinkButton } from "@/components/copy-link-button";
 import {
   Select,
@@ -483,6 +484,7 @@ export function TarefaDetailDrawer({
   updatingId,
   onLaunch,
   startInEditMode = false,
+  actionError,
 }: {
   tarefa: any | null;
   open: boolean;
@@ -491,6 +493,7 @@ export function TarefaDetailDrawer({
   updatingId: string | null;
   onLaunch?: (tarefa: any) => void;
   startInEditMode?: boolean;
+  actionError?: string | null;
 }) {
   const [tab, setTab] = useState<TabKey>("dados");
   const [isEditMode, setIsEditMode] = useState(false);
@@ -948,8 +951,20 @@ export function TarefaDetailDrawer({
             </div>
           </div>
 
+          {/* ── Dependência do catalog2 (fechamento técnico do sprint de
+              produtos) — bloqueia visualmente antes mesmo de tentar liberar,
+              o backend é quem decide de verdade. ─────────────────────────── */}
+          {tarefa.dependency_blocked_by && (
+            <div className="px-6 py-3 bg-amber-50 border-b border-amber-200 dark:bg-amber-900/20 dark:border-amber-700 shrink-0 flex items-center gap-2">
+              <Lock className="h-4 w-4 text-amber-600 shrink-0" />
+              <p className="text-sm font-semibold text-amber-800 dark:text-amber-200">
+                Bloqueada — aguardando a conclusão de "{tarefa.dependency_blocked_by.title}" ({tarefa.dependency_blocked_by.status}).
+              </p>
+            </div>
+          )}
+
           {/* ── Launch Banner (PARA_LANCAMENTO / EM_LANCAMENTO) ────────── */}
-          {onLaunch && (tarefa.status === "PARA_LANCAMENTO" || tarefa.status === "EM_LANCAMENTO") && (
+          {onLaunch && !tarefa.dependency_blocked_by && (tarefa.status === "PARA_LANCAMENTO" || tarefa.status === "EM_LANCAMENTO") && (
             <div className="px-6 py-3 bg-indigo-50 border-b border-indigo-200 dark:bg-indigo-900/20 dark:border-indigo-700 shrink-0 flex items-center justify-between gap-3">
               <div className="flex items-center gap-2">
                 <Rocket className="h-4 w-4 text-indigo-600 shrink-0" />
@@ -1047,7 +1062,13 @@ export function TarefaDetailDrawer({
                         ))}
                       </SelectContent>
                     </Select>
-                  ) : (
+                  ) : null}
+                  {isEditMode && actionError && (
+                    <p className="flex items-center gap-1.5 text-xs text-red-600 bg-red-50 border border-red-200 rounded-lg px-2.5 py-2">
+                      <Lock className="h-3.5 w-3.5 shrink-0" /> {actionError}
+                    </p>
+                  )}
+                  {!isEditMode && (
                     (() => {
                       const sc = getStatusStyle(tarefa.status);
                       return (
@@ -1065,6 +1086,12 @@ export function TarefaDetailDrawer({
                     })()
                   )}
                 </div>
+
+                {/* Rodízio de ofertas de Nômade (ata 2026-08, bloco 4/5) —
+                    só relevante enquanto a tarefa procura executor. */}
+                {tarefa.status === "AGUARDANDO_NOMADE" && !tarefa.nomade_responsavel_id && (
+                  <TaskRotationPanel taskId={tarefa.id} />
+                )}
 
                 <div className="grid grid-cols-2 gap-4">
                   {/* Projeto */}

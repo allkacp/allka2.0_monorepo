@@ -40,6 +40,42 @@ export interface Conversation {
   is_archived: boolean
 }
 
+// ─── Chat real (ata 2026-08, bloco 3/5 — restaurado) ─────────────────────
+
+export interface ChatRoomParticipant {
+  id: string
+  name: string
+  avatar?: string | null
+  role: string
+}
+
+export interface ChatRoomMessage {
+  id: string
+  conversation_id: string
+  sender_id: string
+  sender: { id: string; name: string; avatar?: string | null }
+  content: string
+  created_at: string
+  client_message_id?: string | null
+  /** UI local: aguardando confirmação do servidor */
+  pending?: boolean
+  /** UI local: envio falhou, pode tentar de novo */
+  failed?: boolean
+}
+
+export interface ChatRoom {
+  id: string
+  title: string | null
+  type: string
+  status: "active" | "archived"
+  read_only: boolean
+  notification_group?: { id: string; name: string; status: string } | null
+  participants: ChatRoomParticipant[]
+  last_message: { id: string; content: string; created_at: string; sender_id: string } | null
+  unread_count: number
+  updated_at: string
+}
+
 // ─── Scheduled Messages ──────────────────────────────────────────────────────
 
 export type ScheduledChannel = "whatsapp" | "email" | "platform"

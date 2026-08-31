@@ -1,9 +1,10 @@
 import { Router } from "express";
 import { z } from "zod";
 import { prisma } from "../lib/prisma";
-import { verifyToken } from "../middleware/auth";
+import { verifyToken, requireRole, requirePermission } from "../middleware/auth";
 import { concluirEtapa, atribuirExecutorDaEtapa } from "../lib/stage-engine";
 import { validate, parsePagination } from "../middleware/validate";
+import { writeAccessAudit } from "../lib/product-feedback-service";
 // Lista canônica de áreas — mesma fonte usada pelo cadastro do admin, para a
 // tela do nômade não inventar um universo próprio de habilitações.
 import { AREAS_CANONICAS } from "./habilidades";
@@ -880,7 +881,13 @@ router.delete("/me/etapas/:stageId/entregas/:anexoId", verifyToken, async (req, 
 });
 
 // GET /api/nomades/:id
-router.get("/:id", verifyToken, async (req, res, next) => {
+// Rota administrativa (vê/edita/remove QUALQUER nômade por id) — exige
+// admin + permissão granular. Antes deste lote tinha só `verifyToken`,
+// então qualquer conta autenticada (inclusive um Nômade comum) conseguia
+// consultar/editar/apagar o perfil de qualquer outro nômade por id — as
+// rotas `/me/*` acima é que são o self-service de verdade, escopadas por
+// `req.user.id`.
+router.get("/:id", verifyToken, requireRole("admin"), requirePermission("nomades", "view"), async (req, res, next) => {
   try {
     const nomade = await prisma.nomade.findUnique({
       where: { id: (req.params.id as string) },
@@ -888,7 +895,18 @@ router.get("/:id", verifyToken, async (req, res, next) => {
         qualifications: true,
         bank_account: true,
         wallet_transactions: { orderBy: { date: "desc" }, take: 20 },
-        _count: { select: { task_executions: true, withdrawal_requests: true } },
+        // Conta global vinculada — a tela de confirmação precisa saber se o
+        // login está ativo e qual o e-mail, sem inventar uma segunda
+        // consulta.
+        user: { select: { id: true, email: true, is_active: true, status: true } },
+        _count: {
+          select: {
+            task_executions: true,
+            withdrawal_requests: true,
+            qualifications: true,
+            wallet_transactions: true,
+          },
+        },
       },
     });
 
@@ -904,7 +922,7 @@ router.get("/:id", verifyToken, async (req, res, next) => {
 });
 
 // POST /api/nomades
-router.post("/", verifyToken, validate(createSchema), async (req, res, next) => {
+router.post("/", verifyToken, requireRole("admin"), requirePermission("nomades", "create"), validate(createSchema), async (req, res, next) => {
   try {
     const nomade = await prisma.nomade.create({ data: req.body });
     res.status(201).json(nomade);
@@ -913,23 +931,163 @@ router.post("/", verifyToken, validate(createSchema), async (req, res, next) => 
   }
 });
 
-// PUT /api/nomades/:id
-router.put("/:id", verifyToken, validate(updateSchema), async (req, res, next) => {
+// PUT /api/nomades/:id — edição administrativa geral (nível, pontuação,
+// status de aprovação etc.). `user_id` é deliberadamente removido do body
+// antes do update: reatribuir a quem um perfil de nômade pertence é uma
+// ação distinta e perigosa demais pra caber num payload de edição genérico
+// (permitiria uma conta “roubar” o histórico/carteira de outra só
+// reapontando o vínculo).
+router.put("/:id", verifyToken, requireRole("admin"), requirePermission("nomades", "edit"), validate(updateSchema), async (req, res, next) => {
   try {
-    const nomade = await prisma.nomade.update({
-      where: { id: (req.params.id as string) },
-      data: req.body,
-    });
+    const id = req.params.id as string;
+    const { user_id: _ignoredUserId, ...data } = req.body as Record<string, unknown>;
+
+    const found = await prisma.nomade.findUnique({ where: { id }, select: { id: true } });
+    if (!found) {
+      res.status(404).json({ error: "Nômade não encontrado" });
+      return;
+    }
+
+    const nomade = await prisma.nomade.update({ where: { id }, data });
     res.json(nomade);
   } catch (err) {
     next(err);
   }
 });
 
-// DELETE /api/nomades/:id
-router.delete("/:id", verifyToken, async (req, res, next) => {
+// ─── PATCH /api/nomades/:id/status — desativar/reativar empresa Nomad (reversível) ──
+// Nomad é um tipo de empresa (CNPJ), gerida junto de Company/Agência — não um
+// perfil profissional individual. Ação DISTINTA de "excluir" (DELETE abaixo):
+// aqui o registro `Nomade` inteiro continua intacto (histórico, qualificações,
+// carteira, habilidades) — só `status` muda, e a conta de login vinculada é
+// bloqueada/desbloqueada junto (`User.is_active`), porque hoje o login não
+// olha `Nomade.status` (só `User.is_active` bloqueia de verdade) — sem essa
+// sincronização, "desativar a empresa" não impediria o login de fato.
+const statusToggleSchema = z.object({
+  status: z.enum(["ativo", "inativo"]),
+  reason: z.string().trim().max(2000).optional(),
+});
+
+router.patch(
+  "/:id/status",
+  verifyToken,
+  requireRole("admin"),
+  requirePermission("nomades", "edit"),
+  validate(statusToggleSchema),
+  async (req, res, next) => {
+    try {
+      const id = req.params.id as string;
+      const { status, reason } = req.body as z.infer<typeof statusToggleSchema>;
+
+      const found = await prisma.nomade.findUnique({
+        where: { id },
+        select: { id: true, user_id: true, status: true },
+      });
+      if (!found) {
+        res.status(404).json({ error: "Nômade não encontrado" });
+        return;
+      }
+
+      const updated = await prisma.$transaction(async (tx) => {
+        const n = await tx.nomade.update({ where: { id }, data: { status } });
+        if (found.user_id) {
+          await tx.user.update({
+            where: { id: found.user_id },
+            data: { is_active: status === "ativo", status: status === "ativo" ? "ativo" : "inativo" },
+          });
+        }
+        return n;
+      });
+
+      if (found.user_id && found.status !== status) {
+        await writeAccessAudit({
+          actorId: req.user!.id,
+          targetUserId: found.user_id,
+          action: status === "ativo" ? "nomad_profile.reactivated" : "nomad_profile.deactivated",
+          before: { status: found.status },
+          after: { status },
+          reason,
+        });
+      }
+
+      res.json(updated);
+    } catch (err) {
+      next(err);
+    }
+  },
+);
+
+// ─── DELETE /api/nomades/:id — exclui SOMENTE o cadastro empresarial ──────
+// Nunca apaga a conta de login (`User`) — só o registro `Nomade` (a empresa
+// Nomad em si: CNPJ, nível, dados de cadastro). Bloqueado (409) quando há
+// histórico real vinculado (carteira, conta bancária, qualificações, saques,
+// tarefas executadas): excluir a empresa nesse caso apagaria histórico de
+// negócio, o que este lote proíbe explicitamente — a saída correta pra esses
+// casos é desativar (rota acima), não excluir.
+// Quando a exclusão é permitida (sem histórico vinculado), a conta de login
+// vinculada é desativada na mesma transação — sem isso, a pessoa continuaria
+// logando e sendo roteada pro portal Nomad (`account_type`/`role` continuam
+// apontando pra lá) sem nenhuma empresa por trás.
+router.delete("/:id", verifyToken, requireRole("admin"), requirePermission("nomades", "delete"), async (req, res, next) => {
   try {
-    await prisma.nomade.delete({ where: { id: (req.params.id as string) } });
+    const id = req.params.id as string;
+    const nomade = await prisma.nomade.findUnique({
+      where: { id },
+      select: {
+        id: true,
+        name: true,
+        user_id: true,
+        bank_account: { select: { id: true } },
+        _count: {
+          select: {
+            wallet_transactions: true,
+            qualifications: true,
+            withdrawal_requests: true,
+            task_executions: true,
+          },
+        },
+      },
+    });
+    if (!nomade) {
+      res.status(404).json({ error: "Nômade não encontrado" });
+      return;
+    }
+
+    const blockers: string[] = [];
+    if (nomade._count.wallet_transactions > 0) blockers.push(`${nomade._count.wallet_transactions} lançamento(s) de carteira`);
+    if (nomade.bank_account) blockers.push("conta bancária cadastrada");
+    if (nomade._count.qualifications > 0) blockers.push(`${nomade._count.qualifications} qualificação(ões)`);
+    if (nomade._count.withdrawal_requests > 0) blockers.push(`${nomade._count.withdrawal_requests} solicitação(ões) de saque`);
+    if (nomade._count.task_executions > 0) blockers.push(`${nomade._count.task_executions} tarefa(s) executada(s)`);
+
+    if (blockers.length > 0) {
+      res.status(409).json({
+        error: `Esta empresa Nomad tem histórico vinculado (${blockers.join(", ")}) e não pode ser excluída — desative a empresa Nomad em vez de excluí-la.`,
+      });
+      return;
+    }
+
+    const reason = typeof (req.body as { reason?: unknown } | undefined)?.reason === "string"
+      ? (req.body as { reason?: string }).reason
+      : undefined;
+
+    await prisma.$transaction(async (tx) => {
+      await tx.nomade.delete({ where: { id } });
+      if (nomade.user_id) {
+        await tx.user.update({ where: { id: nomade.user_id }, data: { is_active: false, status: "inativo" } });
+      }
+    });
+
+    if (nomade.user_id) {
+      await writeAccessAudit({
+        actorId: req.user!.id,
+        targetUserId: nomade.user_id,
+        action: "nomad_profile.removed",
+        before: { nomade_id: nomade.id, name: nomade.name },
+        reason,
+      });
+    }
+
     res.status(204).send();
   } catch (err) {
     next(err);

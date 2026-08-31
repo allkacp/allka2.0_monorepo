@@ -1,6 +1,7 @@
 ﻿// @ts-nocheck
 import { useState, useEffect, useCallback } from "react";
 import { apiClient } from "@/lib/api-client";
+import { hasAdminModulePermission } from "@/lib/admin-permissions";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -155,6 +156,20 @@ export default function NiveisPage() {
   }>({ open: false, id: null, name: "" });
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
+  // Perfil admin atual, só pra decidir se o botão "Excluir" fica habilitado
+  // (module "sistema", action "delete" — mesmo par que o backend já exige
+  // em DELETE /api/levels/:id). É só um sinal de UI: a permissão de verdade
+  // continua sendo aplicada no servidor.
+  const [adminProfile, setAdminProfile] = useState<any>(undefined);
+  useEffect(() => {
+    let cancelled = false;
+    apiClient
+      .getCurrentUser()
+      .then((me: any) => { if (!cancelled) setAdminProfile(me?.admin_profile ?? null); })
+      .catch(() => { if (!cancelled) setAdminProfile(null); });
+    return () => { cancelled = true; };
+  }, []);
+  const canDeleteLevel = hasAdminModulePermission(adminProfile, "sistema", "delete");
 
   const loadLevels = useCallback(async () => {
     setLoading(true);
@@ -214,13 +229,16 @@ export default function NiveisPage() {
     setIsDialogOpen(false);
   };
 
-  const handleDeleteLevel = async (id: number) => {
-    try {
-      await apiClient.deleteLevel(id);
-    } catch (err) {
-      console.error("[NiveisPage] Failed to delete level:", err);
-    }
-    setPartnerLevels((levels) => levels.filter((level) => level.id !== id));
+  // Exclusão de nível: confirmação dupla (ver ConfirmationDialog) — o nível
+  // só é removido da lista depois que a API confirma sucesso. Antes, o
+  // catch aqui engolia o erro e a lista era filtrada de qualquer forma —
+  // ou seja, um 403/409/erro de rede fazia o nível "sumir" da tela mesmo
+  // sem ter sido excluído de verdade no backend. Agora o erro sobe pro
+  // ConfirmationDialog, que mostra a mensagem amigável e mantém o nível.
+  const confirmDeleteLevel = async () => {
+    if (deleteDialog.id == null) return;
+    await apiClient.deleteLevel(String(deleteDialog.id));
+    setPartnerLevels((levels) => levels.filter((level) => level.id !== deleteDialog.id));
   };
 
   const confirmDelete = (id: number, name: string) => {
@@ -416,14 +434,25 @@ export default function NiveisPage() {
                       >
                         <Edit className="h-3.5 w-3.5" />
                       </Button>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => confirmDelete(level.id, level.name)}
-                        className="h-7 w-7 p-0 border-red-100 dark:border-red-900/40 bg-white dark:bg-slate-800/50 hover:bg-red-50 dark:hover:bg-red-950/30 text-red-400 hover:text-red-600"
-                      >
-                        <Trash2 className="h-3.5 w-3.5" />
-                      </Button>
+                      <TooltipProvider delayDuration={400}>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => canDeleteLevel && confirmDelete(level.id, level.name)}
+                              disabled={!canDeleteLevel}
+                              aria-label={canDeleteLevel ? "Excluir nível" : "Sem permissão para excluir níveis"}
+                              className="h-7 w-7 p-0 border-red-100 dark:border-red-900/40 bg-white dark:bg-slate-800/50 hover:bg-red-50 dark:hover:bg-red-950/30 text-red-400 hover:text-red-600 disabled:opacity-40 disabled:pointer-events-none"
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </Button>
+                          </TooltipTrigger>
+                          <TooltipContent side="bottom" sideOffset={6}>
+                            {canDeleteLevel ? "Excluir nível" : "Sem permissão para excluir níveis"}
+                          </TooltipContent>
+                        </Tooltip>
+                      </TooltipProvider>
                     </div>
                   </div>
                 </CardHeader>
@@ -589,15 +618,17 @@ export default function NiveisPage() {
       <ConfirmationDialog
         open={deleteDialog.open}
         onClose={() => setDeleteDialog({ open: false, id: null, name: "" })}
-        onConfirm={() => {
-          handleDeleteLevel(deleteDialog.id!);
-          setDeleteDialog({ open: false, id: null, name: "" });
-        }}
+        onConfirm={confirmDeleteLevel}
         title="Excluir nível"
-        message={`Tem certeza que deseja excluir o nível "${deleteDialog.name}"? Esta ação não pode ser desfeita.`}
-        confirmText="Excluir"
-        cancelText="Cancelar"
-        destructive
+        message="Esta ação é permanente e não pode ser desfeita."
+        twoStep
+        targetName={deleteDialog.name}
+        targetDetail="Nível do Programa Partner"
+        consequences={[
+          "O nível sai da lista de configuração do Programa Partner imediatamente.",
+          "Se houver parceiros ou vínculos associados a este nível, a exclusão será recusada.",
+        ]}
+        finalConfirmText="Excluir nível definitivamente"
       />
     </div>
     </div>

@@ -5,13 +5,22 @@
   "main": "dist/index.js",
   "scripts": {
     "dev": "tsx watch src/index.ts",
-    "build": "tsc",
+    "build": "npm run db:legacy:generate && tsc",
+    "postinstall": "prisma generate && npm run db:legacy:generate",
     "start": "node dist/index.js",
     "test:roadmap-contract": "tsx --test src/lib/roadmap-integration-contract.test.ts",
     "test:unit": "tsx --test src/test-support/require-test-database.test.ts src/lib/product-feedback-access-decision.test.ts src/lib/hmac.test.ts src/lib/product-feedback-config-validation.test.ts src/middleware/auth.test.ts",
     "test:product-feedback": "tsx scripts/run-db-tests.ts src/routes/product-feedback.integration.test.ts",
+    "test:e2e:leader-account": "tsx src/scripts/e2e-test-leader-account.ts",
+    "test:e2e:agency-seed-repair": "tsx src/scripts/e2e-test-agency-seed-repair.ts",
     "db:migrate": "prisma migrate dev",
     "db:deploy": "prisma migrate deploy",
+    "db:legacy:generate": "prisma generate --schema prisma/legacy/schema.prisma",
+    "db:legacy:deploy": "prisma migrate deploy --schema prisma/legacy/schema.prisma",
+    "import:legacy-snapshot": "tsx src/scripts/import-legacy-snapshot.ts",
+    "catalog2:analyze-spreadsheets": "tsx src/scripts/analyze-catalog-spreadsheets.ts",
+    "catalog2:seed-classifications": "tsx src/scripts/seed-catalog2-classifications.ts",
+    "catalog2:seed-demo": "tsx src/scripts/seed-catalog2-demo.ts",
     "db:seed": "tsx prisma/seed.ts",
     "db:seed:test-users": "tsx seed-test-users.ts",
     "reset:users-password": "node reset-users-password.cjs",
@@ -39,7 +48,12 @@
     "db:seed:demo-partner-projects": "tsx prisma/seed-demo-partner-projects.ts",
     "db:studio": "prisma studio",
     "db:reset": "echo '⛔  Proibido em automação. Use: prisma migrate reset --force (manualmente)'",
-    "db:healthcheck": "node -e \"require('dotenv').config();const {PrismaClient}=require('@prisma/client');const p=new PrismaClient();Promise.all([p.product.count(),p.project.count(),p.catalogTask.count(),p.projectTask.count()]).then(([pr,pj,ct,pt])=>console.log(JSON.stringify({products:pr,projects:pj,catalogTasks:ct,projectTasks:pt}))).finally(()=>p.$disconnect())\""
+    "db:healthcheck": "node -e \"require('dotenv').config();const {PrismaClient}=require('@prisma/client');const p=new PrismaClient();Promise.all([p.product.count(),p.project.count(),p.catalogTask.count(),p.projectTask.count()]).then(([pr,pj,ct,pt])=>console.log(JSON.stringify({products:pr,projects:pj,catalogTasks:ct,projectTasks:pt}))).finally(()=>p.$disconnect())\"",
+    "catalog2:import-products": "tsx src/scripts/import-catalog2-products.ts",
+    "catalog2:cutover-plan": "tsx src/scripts/catalog2-cutover-plan.ts",
+    "catalog2:commercial-cutover-plan": "tsx src/scripts/catalog2-commercial-cutover-plan.ts",
+    "catalog2:client-demo": "tsx src/scripts/seed-catalog2-client-demo.ts",
+    "seed:qa-demo": "tsx src/scripts/seed-qa-demo.ts"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"
@@ -59,6 +73,7 @@
     "pdf-parse": "^2.4.5",
     "prisma": "^5.22.0",
     "sanitize-html": "^2.17.7",
+    "xlsx": "^0.18.5",
     "zod": "^3.24.1"
   },
   "devDependencies": {

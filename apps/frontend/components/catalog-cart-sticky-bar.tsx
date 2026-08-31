@@ -1,8 +1,11 @@
 import { useMemo, useState } from "react";
-import { ArrowRight, FolderPlus, ShoppingCart, Trash2, X } from "lucide-react";
+import { useLocation } from "react-router-dom";
+import { FolderPlus, ShoppingCart, Trash2, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
+import { useAppFrameMetrics } from "@/hooks/useAppFrameMetrics";
+import { isStandardShellRoute } from "@/components/standard-page-shell";
 import {
   Dialog,
   DialogContent,
@@ -26,10 +29,8 @@ interface CatalogCartStickyBarProps {
   items: CatalogCartStickyBarItem[];
   total: number;
   projectId?: string | null;
-  sidebarOffset?: number;
   onPrimaryAction: () => void;
   onClearCart: () => void;
-  onContinueShopping?: () => void;
   onUpdateQuantity?: (id: string, qty: number) => void;
   onRemoveItem?: (id: string) => void;
 }
@@ -45,26 +46,35 @@ export function CatalogCartStickyBar({
   items,
   total,
   projectId,
-  sidebarOffset = 0,
   onPrimaryAction,
   onClearCart,
-  onContinueShopping,
   onUpdateQuantity,
   onRemoveItem,
 }: CatalogCartStickyBarProps) {
   const [itemsDialogOpen, setItemsDialogOpen] = useState(false);
   const totalItems = items.reduce((sum, item) => sum + item.quantity, 0);
   const summary = useMemo(() => items.slice(0, 3), [items]);
-  const primaryLabel = projectId ? "VER PROJETO" : "CRIAR PROJETO COM ESTES ITENS";
+  const primaryLabel = projectId ? "Ver projeto" : "Criar projeto com estes itens";
+
+  // Mesma métrica usada por HeaderSlideScreen (useAppFrameMetrics) — nunca
+  // reserva espaço de sidebar que está fora de tela no mobile — e mesmo
+  // padding de container branco (isStandardShellRoute) das outras telas
+  // administrativas, pra a barra não vazar pra fora do card arredondado.
+  const { sidebarWidth } = useAppFrameMetrics();
+  const { pathname } = useLocation();
+  const isShellRoute = isStandardShellRoute(pathname);
 
   if (items.length === 0) return null;
 
   return (
     <div
-      className="fixed bottom-0 z-30 px-3 pb-3 sm:px-4 lg:px-6 pointer-events-none"
-      style={{ left: sidebarOffset, right: 0 }}
+      className={cn(
+        "fixed bottom-0 z-30 flex px-4 sm:px-6 pb-4 pointer-events-none",
+        isShellRoute ? "lg:pb-[25px] lg:pl-[20px] lg:pr-14" : "lg:px-14 lg:pb-12",
+      )}
+      style={{ left: sidebarWidth, right: 0 }}
     >
-      <div className="pointer-events-auto">
+      <div className="pointer-events-auto w-full">
         <div className="relative overflow-hidden rounded-2xl border border-white/60 bg-white/88 shadow-[0_16px_40px_rgba(15,23,42,0.16)] backdrop-blur-xl dark:border-slate-700/60 dark:bg-slate-950/88">
           <div
             className="absolute inset-x-0 top-0 h-1"
@@ -107,24 +117,17 @@ export function CatalogCartStickyBar({
               </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-2 sm:max-w-xs lg:min-w-0 lg:grid-cols-2">
-              <Button
-                variant="outline"
-                onClick={onClearCart}
-                className="h-9 gap-1.5 rounded-xl border-slate-200 bg-white/80 px-3 text-xs text-slate-700 hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-900/70 dark:text-slate-200 dark:hover:bg-slate-800"
-              >
-                <Trash2 className="h-3.5 w-3.5" />
-                Limpar
-              </Button>
-              <Button
-                variant="ghost"
-                onClick={onContinueShopping}
-                className="h-9 gap-1.5 rounded-xl px-3 text-xs text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800"
-              >
-                Continuar
-                <ArrowRight className="h-3.5 w-3.5" />
-              </Button>
-            </div>
+            {/* Ação secundária única — este resumo serve pra concluir a
+                cesta, não pra continuar comprando (isso já é o botão "Ir
+                para o catálogo"/"Continuar adicionando" na própria cesta). */}
+            <Button
+              variant="outline"
+              onClick={onClearCart}
+              className="h-9 shrink-0 gap-1.5 rounded-xl border-slate-200 bg-white/80 px-3 text-xs text-slate-700 hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-900/70 dark:text-slate-200 dark:hover:bg-slate-800"
+            >
+              <Trash2 className="h-3.5 w-3.5" />
+              Limpar
+            </Button>
 
             <Button
               onClick={onPrimaryAction}
@@ -147,9 +150,9 @@ export function CatalogCartStickyBar({
         <DialogContent
           className="w-[min(98vw,1900px)] max-w-none overflow-hidden rounded-3xl border-slate-200 bg-white p-0 shadow-[0_30px_90px_rgba(15,23,42,0.28)] dark:border-slate-700 dark:bg-slate-950"
           style={{
-            left: `calc(${sidebarOffset}px + 28px)`,
-            width: `calc(100vw - ${sidebarOffset + 56}px)`,
-            maxWidth: `calc(100vw - ${sidebarOffset + 56}px)`,
+            left: `calc(${sidebarWidth}px + 28px)`,
+            width: `calc(100vw - ${sidebarWidth + 56}px)`,
+            maxWidth: `calc(100vw - ${sidebarWidth + 56}px)`,
             translate: "0 -50%",
           }}
         >

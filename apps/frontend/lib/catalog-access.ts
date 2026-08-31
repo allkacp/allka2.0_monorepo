@@ -95,6 +95,25 @@ export function getCatalogBasketStorageKey(identity: CatalogIdentity): string {
     .join(".");
 }
 
+// ── Onde a cesta de projeto pode aparecer (ata 2026-08, bloco
+// interface/usabilidade) ─────────────────────────────────────────────────
+// A cesta pertence ao ambiente de CATÁLOGO/LOJA — nunca é um componente
+// global. Regra ÚNICA e testável, reusada por Header, drawer e mobile —
+// nada de regex espalhado. Cobre só os catálogos de COMPRA (as telas que
+// de fato usam `useProjectBasket`: admin/catalogo-produtos, company/produtos,
+// agency|agencia/catalogo, leader|lider/catalogo) e a página de detalhe do
+// produto dentro deles (`/:produtoId`). NÃO inclui: gestão de produtos
+// (`/admin/produtos`), combos (não usam cesta), nem qualquer tela
+// administrativa/dashboard/financeiro/perfil. Não existe rota dedicada de
+// checkout/revisão — o fluxo "criar projeto com estes itens" abre num
+// painel sobre a própria rota do catálogo.
+const CATALOG_ROUTE_RE =
+  /^\/(?:admin\/catalogo-produtos|company\/produtos|agency\/catalogo|agencia\/catalogo|leader\/catalogo|lider\/catalogo)(?:\/[^/]+)?\/?$/;
+
+export function isCatalogRoute(pathname: string): boolean {
+  return CATALOG_ROUTE_RE.test(pathname.split("?")[0].split("#")[0]);
+}
+
 export function getCatalogProductLimitations(
   product: CatalogProductLike,
   identity: CatalogIdentity,

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { hasAdminModulePermission, canOpenRoadmapPanel } from "./admin-permissions";
+import { hasAdminModulePermission, canOpenRoadmapPanel, canManageAlertsAdmin } from "./admin-permissions";
 
 describe("hasAdminModulePermission", () => {
   it("libera quando não há perfil atribuído (comportamento legado)", () => {
@@ -89,5 +89,34 @@ describe("canOpenRoadmapPanel", () => {
 
   it("is_master fora de admin ainda libera (flag de super-perfil, não depende de account_type)", () => {
     expect(canOpenRoadmapPanel("agencias", { is_active: true, is_master: true, permissions: [] })).toBe(true);
+  });
+});
+
+// Lote "Central de Alertas" (ata 2026-08) — "Somente Admin Master" é uma
+// restrição estrita, sem a regra do avô (diferente de
+// hasAdminModulePermission/canOpenRoadmapPanel). Mesma regra que o backend
+// aplica em evaluateAdminMasterAccess (middleware/auth.ts).
+describe("canManageAlertsAdmin", () => {
+  it("admin com is_master vê a área administrativa", () => {
+    expect(canManageAlertsAdmin("admin", { is_active: true, is_master: true, permissions: [] })).toBe(true);
+  });
+
+  it("admin SEM perfil atribuído NÃO vê — nunca a regra do avô aqui", () => {
+    expect(canManageAlertsAdmin("admin", undefined)).toBe(false);
+    expect(canManageAlertsAdmin("admin", null)).toBe(false);
+  });
+
+  it("admin com perfil inativo NÃO vê", () => {
+    expect(canManageAlertsAdmin("admin", { is_active: false, is_master: true, permissions: [] })).toBe(false);
+  });
+
+  it("admin com perfil ativo mas is_master false NÃO vê, mesmo com uma permissão granular qualquer", () => {
+    const profile = { is_active: true, is_master: false, permissions: [{ module: "alertas", action: "create" }] };
+    expect(canManageAlertsAdmin("admin", profile)).toBe(false);
+  });
+
+  it("usuário comum (empresas/agencias) NUNCA vê, mesmo com is_master true (não é account_type admin)", () => {
+    expect(canManageAlertsAdmin("empresas", { is_active: true, is_master: true, permissions: [] })).toBe(false);
+    expect(canManageAlertsAdmin("agencias", { is_active: true, is_master: true, permissions: [] })).toBe(false);
   });
 });

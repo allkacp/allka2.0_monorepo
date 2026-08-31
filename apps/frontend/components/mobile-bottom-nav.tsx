@@ -68,7 +68,7 @@ const mobileNavigationConfig = {
   admin: [
     { name: "Início", href: "/admin/dashboard", icon: Home },
     { name: "Empresas", href: "/admin/empresas", icon: Building2 },
-    { name: "Nômades", href: "/admin/nomades", icon: UserCheck },
+    { name: "Nômades", href: "/admin/empresas?type=nomad", icon: UserCheck },
     { name: "Projetos", href: "/admin/projetos", icon: FolderOpen },
     { name: "Mais", href: "#", icon: MoreHorizontal, isMenu: true },
   ],

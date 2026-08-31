@@ -50,7 +50,7 @@ interface UseUsersReturn {
   refetch: () => void
   createUser: (data: { email: string; password: string; name: string; role?: string; account_type?: string; phone?: string }) => Promise<ApiUser>
   updateUser: (id: string, data: Partial<{ email: string; name: string; role: string; account_type: string; is_active: boolean; phone: string; password: string }>) => Promise<ApiUser>
-  deleteUser: (id: string) => Promise<void>
+  deleteUser: (id: string, reason?: string) => Promise<void>
 }
 
 export function useUsers(options: UseUsersOptions = {}): UseUsersReturn {
@@ -99,8 +99,8 @@ export function useUsers(options: UseUsersOptions = {}): UseUsersReturn {
     return result
   }, [fetchUsers])
 
-  const deleteUser = useCallback(async (id: string) => {
-    await apiClient.deleteUser(id)
+  const deleteUser = useCallback(async (id: string, reason?: string) => {
+    await apiClient.deleteUser(id, reason)
     await fetchUsers()
   }, [fetchUsers])
 
