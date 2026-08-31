@@ -3478,4 +3478,3 @@ ON DUPLICATE KEY UPDATE `currency` = `currency`;
 -- para PROJETOS PRÉ-EXISTENTES sem código — é um no-op comprovado em banco
 -- vazio (0 linhas afetadas) e não se aplica a nenhum ambiente novo; não foi
 -- reproduzida aqui de propósito. Ver docs/migrations-baseline-2026-09.md.
-
