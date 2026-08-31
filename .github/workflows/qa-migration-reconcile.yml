@@ -52,6 +52,9 @@ jobs:
     runs-on: ubuntu-latest
     environment: dev
     steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
       - name: Validate inputs and secrets
         shell: bash
         env:
@@ -83,6 +86,26 @@ jobs:
           touch ~/.ssh/known_hosts
           chmod 600 ~/.ssh/known_hosts
 
+      - name: Render remote diff script
+        shell: bash
+        run: |
+          mkdir -p .deploy
+          cat > .deploy/remote-diff.sh <<'SCRIPT'
+          set -euo pipefail
+          deploy_path="$1"
+          cd "$deploy_path"
+          set -a
+          source ./.env
+          set +a
+          db_url="mysql://${MYSQL_USER:-allka}:${MYSQL_PASSWORD}@mysql:3306/${MYSQL_DATABASE:-allka}"
+          docker compose --env-file .env -f docker-compose.yml run --rm --no-deps \
+            -e DATABASE_URL="$db_url" \
+            backend npx prisma migrate diff \
+              --from-url "$db_url" \
+              --to-schema-datamodel prisma/schema.prisma \
+              --script
+          SCRIPT
+
       - name: Compute diff (schema real vs prisma/schema.prisma)
         id: diff
         shell: bash
@@ -105,21 +128,10 @@ jobs:
             -o StrictHostKeyChecking=accept-new
             -o UserKnownHostsFile="$HOME/.ssh/known_hosts"
           )
-          ssh "${SSH_OPTS[@]}" "$remote" bash -s -- "$VPS_DEPLOY_PATH" <<'REMOTE' > diff_output.sql
-            set -euo pipefail
-            deploy_path="$1"
-            cd "$deploy_path"
-            set -a
-            source ./.env
-            set +a
-            db_url="mysql://${MYSQL_USER:-allka}:${MYSQL_PASSWORD}@mysql:3306/${MYSQL_DATABASE:-allka}"
-            docker compose --env-file .env -f docker-compose.yml run --rm --no-deps \
-              -e DATABASE_URL="$db_url" \
-              backend npx prisma migrate diff \
-                --from-url "$db_url" \
-                --to-schema-datamodel prisma/schema.prisma \
-                --script
-REMOTE
+          scp -i "$HOME/.ssh/allka_deploy_key" -P "$VPS_SSH_PORT" \
+            -o StrictHostKeyChecking=accept-new -o UserKnownHostsFile="$HOME/.ssh/known_hosts" \
+            .deploy/remote-diff.sh "$remote:/tmp/allka-remote-diff.sh"
+          ssh "${SSH_OPTS[@]}" "$remote" "bash /tmp/allka-remote-diff.sh '${VPS_DEPLOY_PATH}'; rm -f /tmp/allka-remote-diff.sh" > diff_output.sql
           echo "---- DIFF (schema real -> schema.prisma) ----"
           cat diff_output.sql
           {
@@ -151,6 +163,54 @@ REMOTE
           echo "Modo diff — nada foi escrito no banco. Leia o resumo do job acima."
           echo "is_empty=${{ steps.diff.outputs.is_empty }}"
 
+      - name: Render remote apply script
+        if: inputs.mode == 'apply' && steps.diff.outputs.is_empty == 'false'
+        shell: bash
+        run: |
+          mkdir -p .deploy
+          cat > .deploy/remote-apply.sh <<'SCRIPT'
+          set -euo pipefail
+          deploy_path="$1"
+          cd "$deploy_path"
+          set -a
+          source ./.env
+          set +a
+
+          echo "== Aplicando o diff (DDL aditivo) =="
+          docker compose --env-file .env -f docker-compose.yml exec -T mysql \
+            sh -c 'exec mysql -uroot -p"$MYSQL_ROOT_PASSWORD" "$MYSQL_DATABASE"' \
+            < reconcile_diff.sql
+
+          echo "== Garantindo as linhas estruturais do catalog2 (four_f + pricing_settings), sem duplicar =="
+          docker compose --env-file .env -f docker-compose.yml exec -T mysql \
+            sh -c 'exec mysql -uroot -p"$MYSQL_ROOT_PASSWORD" "$MYSQL_DATABASE"' \
+            < reconcile_seed_rows.sql
+
+          echo "== Confirmando diff vazio pós-aplicação =="
+          db_url="mysql://${MYSQL_USER:-allka}:${MYSQL_PASSWORD}@mysql:3306/${MYSQL_DATABASE:-allka}"
+          docker compose --env-file .env -f docker-compose.yml run --rm --no-deps \
+            -e DATABASE_URL="$db_url" \
+            backend npx prisma migrate diff \
+              --from-url "$db_url" \
+              --to-schema-datamodel prisma/schema.prisma \
+              --script > post_diff.sql
+          cat post_diff.sql
+          if ! grep -q 'This is an empty migration' post_diff.sql; then
+            echo "ERRO: diff pós-aplicação não está vazio — NAO vou marcar a baseline como resolvida. Investigar manualmente." >&2
+            exit 1
+          fi
+
+          echo "== Marcando a baseline consolidada como aplicada (equivalencia comprovada acima) =="
+          docker compose --env-file .env -f docker-compose.yml run --rm --no-deps \
+            -e DATABASE_URL="$db_url" \
+            backend npx prisma migrate resolve --applied 20260908000000_baseline_consolidated
+
+          echo "== migrate status =="
+          docker compose --env-file .env -f docker-compose.yml run --rm --no-deps \
+            -e DATABASE_URL="$db_url" \
+            backend npx prisma migrate status
+          SCRIPT
+
       - name: Apply diff and resolve baseline (mode=apply)
         if: inputs.mode == 'apply' && steps.diff.outputs.is_empty == 'false'
         shell: bash
@@ -176,59 +236,15 @@ REMOTE
           scp -i "$HOME/.ssh/allka_deploy_key" -P "$VPS_SSH_PORT" \
             -o StrictHostKeyChecking=accept-new -o UserKnownHostsFile="$HOME/.ssh/known_hosts" \
             diff_output.sql "$remote:${VPS_DEPLOY_PATH}/reconcile_diff.sql"
-          ssh "${SSH_OPTS[@]}" "$remote" bash -s -- "$VPS_DEPLOY_PATH" <<'REMOTE'
-            set -euo pipefail
-            deploy_path="$1"
-            cd "$deploy_path"
-            set -a
-            source ./.env
-            set +a
-
-            echo "== Aplicando o diff (DDL aditivo) =="
-            docker compose --env-file .env -f docker-compose.yml exec -T mysql \
-              sh -c 'exec mysql -uroot -p"$MYSQL_ROOT_PASSWORD" "$MYSQL_DATABASE"' \
-              < reconcile_diff.sql
-
-            echo "== Garantindo as linhas estruturais do catalog2 (four_f + pricing_settings), sem duplicar =="
-            docker compose --env-file .env -f docker-compose.yml exec -T mysql \
-              sh -c 'exec mysql -uroot -p"$MYSQL_ROOT_PASSWORD" "$MYSQL_DATABASE"' <<'SQL'
-INSERT IGNORE INTO `catalog2_four_f` (`id`, `key`, `name`, `sort_order`, `created_at`, `updated_at`)
-VALUES
-  ('c2ff_fazer', 'fazer', 'Fazer', 1, NOW(3), NOW(3)),
-  ('c2ff_falar', 'falar', 'Falar', 2, NOW(3), NOW(3)),
-  ('c2ff_financiar', 'financiar', 'Financiar', 3, NOW(3), NOW(3)),
-  ('c2ff_facilitar', 'facilitar', 'Facilitar', 4, NOW(3), NOW(3));
-
-INSERT IGNORE INTO `catalog2_pricing_settings` (`id`, `currency`, `updated_at`, `created_at`)
-VALUES ('default', 'BRL', NOW(3), NOW(3));
-SQL
-
-            echo "== Confirmando diff vazio pós-aplicação =="
-            db_url="mysql://${MYSQL_USER:-allka}:${MYSQL_PASSWORD}@mysql:3306/${MYSQL_DATABASE:-allka}"
-            docker compose --env-file .env -f docker-compose.yml run --rm --no-deps \
-              -e DATABASE_URL="$db_url" \
-              backend npx prisma migrate diff \
-                --from-url "$db_url" \
-                --to-schema-datamodel prisma/schema.prisma \
-                --script > post_diff.sql
-            cat post_diff.sql
-            if ! grep -q 'This is an empty migration' post_diff.sql; then
-              echo "ERRO: diff pós-aplicação não está vazio — NÃO vou marcar a baseline como resolvida. Investigar manualmente." >&2
-              exit 1
-            fi
-
-            echo "== Marcando a baseline consolidada como aplicada (equivalência comprovada acima) =="
-            docker compose --env-file .env -f docker-compose.yml run --rm --no-deps \
-              -e DATABASE_URL="$db_url" \
-              backend npx prisma migrate resolve --applied 20260908000000_baseline_consolidated
-
-            echo "== migrate status =="
-            docker compose --env-file .env -f docker-compose.yml run --rm --no-deps \
-              -e DATABASE_URL="$db_url" \
-              backend npx prisma migrate status
-REMOTE
+          scp -i "$HOME/.ssh/allka_deploy_key" -P "$VPS_SSH_PORT" \
+            -o StrictHostKeyChecking=accept-new -o UserKnownHostsFile="$HOME/.ssh/known_hosts" \
+            .github/workflows/qa-catalog2-seed-rows.sql "$remote:${VPS_DEPLOY_PATH}/reconcile_seed_rows.sql"
+          scp -i "$HOME/.ssh/allka_deploy_key" -P "$VPS_SSH_PORT" \
+            -o StrictHostKeyChecking=accept-new -o UserKnownHostsFile="$HOME/.ssh/known_hosts" \
+            .deploy/remote-apply.sh "$remote:/tmp/allka-remote-apply.sh"
+          ssh "${SSH_OPTS[@]}" "$remote" "bash /tmp/allka-remote-apply.sh '${VPS_DEPLOY_PATH}' && rm -f /tmp/allka-remote-apply.sh"
 
       - name: Nothing to apply
         if: inputs.mode == 'apply' && steps.diff.outputs.is_empty == 'true'
         run: |
-          echo "Diff já está vazio — schema real já bate com schema.prisma. Só marcando a baseline como aplicada, sem executar SQL."
+          echo "Diff ja esta vazio — schema real ja bate com schema.prisma. Rode a etapa de apply mesmo assim se quiser só marcar a baseline (sem SQL para executar)."

@@ -60,6 +60,22 @@ jobs:
           touch ~/.ssh/known_hosts
           chmod 600 ~/.ssh/known_hosts
 
+      - name: Render remote seed script
+        shell: bash
+        run: |
+          mkdir -p .deploy
+          cat > .deploy/remote-seed.sh <<'SCRIPT'
+          set -euo pipefail
+          deploy_path="$1"
+          pwd_value="$2"
+          extra_arg="$3"
+          cd "$deploy_path"
+          docker compose --env-file .env -f docker-compose.yml run --rm --no-deps \
+            -e SEED_QA_ENVIRONMENT=qa \
+            -e SEED_QA_PASSWORD="$pwd_value" \
+            backend npm run seed:qa-demo -- $extra_arg
+          SCRIPT
+
       - name: Run seed:qa-demo on the VPS
         shell: bash
         env:
@@ -87,14 +103,7 @@ jobs:
           if [ "$REMOVE_FLAG" = "true" ]; then
             extra_arg="--remove"
           fi
-          ssh "${SSH_OPTS[@]}" "$remote" bash -s -- "$VPS_DEPLOY_PATH" "$SEED_QA_PASSWORD" "$extra_arg" <<'REMOTE'
-            set -euo pipefail
-            deploy_path="$1"
-            pwd_value="$2"
-            extra_arg="$3"
-            cd "$deploy_path"
-            docker compose --env-file .env -f docker-compose.yml run --rm --no-deps \
-              -e SEED_QA_ENVIRONMENT=qa \
-              -e SEED_QA_PASSWORD="$pwd_value" \
-              backend npm run seed:qa-demo -- $extra_arg
-REMOTE
+          scp -i "$HOME/.ssh/allka_deploy_key" -P "$VPS_SSH_PORT" \
+            -o StrictHostKeyChecking=accept-new -o UserKnownHostsFile="$HOME/.ssh/known_hosts" \
+            .deploy/remote-seed.sh "$remote:/tmp/allka-remote-seed.sh"
+          ssh "${SSH_OPTS[@]}" "$remote" "bash /tmp/allka-remote-seed.sh '${VPS_DEPLOY_PATH}' '${SEED_QA_PASSWORD}' '${extra_arg}' && rm -f /tmp/allka-remote-seed.sh"

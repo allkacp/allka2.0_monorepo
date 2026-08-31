@@ -82,6 +82,8 @@ operacao-tarefas-legado.json
 *.sql
 !apps/backend/prisma/migrations/**/*.sql
 !apps/backend/prisma/legacy/migrations/**/*.sql
+# SQL estático versionado (não é dump) usado pelo workflow de reconciliação de baseline
+!.github/workflows/qa-catalog2-seed-rows.sql
 
 # Cliente Prisma gerado do banco legado (regerado via `npm run db:legacy:generate`)
 apps/backend/src/legacy/generated/

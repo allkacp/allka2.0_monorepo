@@ -33,7 +33,6 @@ jobs:
           VPS_USER: ${{ secrets.VPS_USER }}
           VPS_SSH_PORT: ${{ secrets.VPS_SSH_PORT }}
           VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
-          VPS_DEPLOY_PATH: ${{ secrets.VPS_DEPLOY_PATH }}
         run: |
           : "${VPS_HOST:?Set the VPS_HOST secret}"
           : "${VPS_USER:?Set the VPS_USER secret}"
@@ -51,6 +50,31 @@ jobs:
           printf '%s\n' "$VPS_SSH_KEY" > ~/.ssh/allka_deploy_key
           touch ~/.ssh/known_hosts
           chmod 600 ~/.ssh/known_hosts
+
+      - name: Render remote backup script
+        shell: bash
+        run: |
+          mkdir -p .deploy
+          cat > .deploy/remote-backup.sh <<'SCRIPT'
+          set -euo pipefail
+          deploy_path="$1"
+          cd "$deploy_path"
+          set -a
+          source ./.env
+          set +a
+          mkdir -p backups
+          ts="$(date -u +%Y%m%dT%H%M%SZ)"
+          file="backups/allka-backup-${ts}.sql.gz"
+          docker compose --env-file .env -f docker-compose.yml exec -T mysql \
+            sh -c 'exec mysqldump -uroot -p"$MYSQL_ROOT_PASSWORD" --single-transaction --routines --triggers "$MYSQL_DATABASE"' \
+            | gzip > "$file"
+          size_bytes="$(stat -c%s "$file")"
+          checksum="$(sha256sum "$file" | cut -d' ' -f1)"
+          echo "backup_file=${file}"
+          echo "backup_size_bytes=${size_bytes}"
+          echo "backup_sha256=${checksum}"
+          echo "backup_count=$(ls -1 backups/*.sql.gz | wc -l)"
+          SCRIPT
 
       - name: Run mysqldump on the VPS and report metadata
         shell: bash
@@ -73,27 +97,11 @@ jobs:
             -o StrictHostKeyChecking=accept-new
             -o UserKnownHostsFile="$HOME/.ssh/known_hosts"
           )
-          # Todo o comando roda remotamente numa única sessão SSH — a senha do
-          # MySQL é lida do .env já existente no VPS (nunca declarada de novo
-          # aqui) e nunca sai do processo remoto: só o eco final (arquivo,
-          # tamanho, sha256) volta pelo stdout do SSH.
-          ssh "${SSH_OPTS[@]}" "$remote" bash -s -- "$VPS_DEPLOY_PATH" <<'REMOTE'
-            set -euo pipefail
-            deploy_path="$1"
-            cd "$deploy_path"
-            set -a
-            source ./.env
-            set +a
-            mkdir -p backups
-            ts="$(date -u +%Y%m%dT%H%M%SZ)"
-            file="backups/allka-backup-${ts}.sql.gz"
-            docker compose --env-file .env -f docker-compose.yml exec -T mysql \
-              sh -c 'exec mysqldump -uroot -p"$MYSQL_ROOT_PASSWORD" --single-transaction --routines --triggers "$MYSQL_DATABASE"' \
-              | gzip > "$file"
-            size_bytes="$(stat -c%s "$file")"
-            checksum="$(sha256sum "$file" | cut -d' ' -f1)"
-            echo "backup_file=${file}"
-            echo "backup_size_bytes=${size_bytes}"
-            echo "backup_sha256=${checksum}"
-            echo "backup_count=$(ls -1 backups/*.sql.gz | wc -l)"
-REMOTE
+          # O script roda inteiro remotamente numa única sessão SSH — a senha
+          # do MySQL é lida do .env já existente no VPS (nunca declarada de
+          # novo aqui) e nunca sai do processo remoto: só o eco final
+          # (arquivo, tamanho, sha256) volta pelo stdout do SSH.
+          scp -i "$HOME/.ssh/allka_deploy_key" -P "$VPS_SSH_PORT" \
+            -o StrictHostKeyChecking=accept-new -o UserKnownHostsFile="$HOME/.ssh/known_hosts" \
+            .deploy/remote-backup.sh "$remote:/tmp/allka-remote-backup.sh"
+          ssh "${SSH_OPTS[@]}" "$remote" "bash /tmp/allka-remote-backup.sh '${VPS_DEPLOY_PATH}' && rm -f /tmp/allka-remote-backup.sh"
