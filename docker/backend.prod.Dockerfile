@@ -35,6 +35,13 @@ COPY --from=build /app/node_modules/.prisma /app/node_modules/.prisma
 COPY --from=build /app/node_modules/@prisma/client /app/node_modules/@prisma/client
 COPY --from=build /app/apps/backend/dist /app/apps/backend/dist
 COPY --from=build /app/apps/backend/prisma /app/apps/backend/prisma
+# Cliente Prisma do Legacy (schema separado, gerado por `db:legacy:generate`
+# durante o build acima) sai em src/legacy/generated/ -- tsc nunca copia isso
+# pra dist/ (não é .ts, então não passa pela compilação). dist/legacy/
+# legacy-prisma.js faz `require("./generated")` esperando encontrar em
+# dist/legacy/generated -- sem esta linha o backend crasha no boot com
+# "Cannot find module './generated'" (visto em produção: run 33509916614).
+COPY --from=build /app/apps/backend/src/legacy/generated /app/apps/backend/dist/legacy/generated
 COPY apps/backend/reset-users-password.cjs /app/apps/backend/reset-users-password.cjs
 
 WORKDIR /app/apps/backend
