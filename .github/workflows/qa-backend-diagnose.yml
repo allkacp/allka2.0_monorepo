@@ -1,0 +1,152 @@
+name: Backend Diagnose (manual, read-only)
+
+# Disparo manual, SOMENTE LEITURA — nenhum comando aqui reinicia, recria,
+# remove ou altera qualquer contêiner, volume, variável ou dado. Existe
+# para investigar por que o backend responde 502 mesmo com o deploy
+# "verde" (o workflow de deploy só confirma que o contêiner iniciou, nunca
+# que a aplicação ficou de pé — é exatamente essa lacuna que motivou isto).
+#
+# Sanitização: todo texto que pode conter segredo (logs do backend, curl
+# verbose) passa por um filtro antes de qualquer echo/GITHUB_STEP_SUMMARY —
+# mascara qualquer "usuario:senha@" em URL mysql://, e qualquer valor de
+# JWT_SECRET/GEMINI_API_KEY/MYSQL_*PASSWORD/ROADMAP_*SECRET caso apareça
+# literalmente numa linha de log (ex.: erro do Prisma que ecoa a connection
+# string inteira). Nenhuma env var do container é impressa diretamente.
+
+on:
+  workflow_dispatch: {}
+
+concurrency:
+  group: deploy-vps
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    environment: dev
+    steps:
+      - name: Validate required secrets
+        shell: bash
+        env:
+          VPS_HOST: ${{ secrets.VPS_HOST }}
+          VPS_USER: ${{ secrets.VPS_USER }}
+          VPS_SSH_PORT: ${{ secrets.VPS_SSH_PORT }}
+          VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+        run: |
+          : "${VPS_HOST:?Set the VPS_HOST secret}"
+          : "${VPS_USER:?Set the VPS_USER secret}"
+          : "${VPS_SSH_PORT:?Set the VPS_SSH_PORT secret}"
+          : "${VPS_SSH_KEY:?Set the VPS_SSH_KEY secret}"
+
+      - name: Configure SSH
+        shell: bash
+        env:
+          VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+        run: |
+          mkdir -p ~/.ssh
+          touch ~/.ssh/allka_deploy_key
+          chmod 600 ~/.ssh/allka_deploy_key
+          printf '%s\n' "$VPS_SSH_KEY" > ~/.ssh/allka_deploy_key
+          touch ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/known_hosts
+
+      - name: Render remote diagnose script (só leitura)
+        shell: bash
+        run: |
+          mkdir -p .deploy
+          cat > .deploy/remote-diagnose.sh <<'SCRIPT'
+          set -uo pipefail
+          deploy_path="$1"
+          cd "$deploy_path"
+
+          echo "===== docker compose ps --all ====="
+          docker compose --env-file .env -f docker-compose.yml ps --all
+
+          echo ""
+          echo "===== inspect: backend (state/exitcode/restarts/health) ====="
+          cid="$(docker compose --env-file .env -f docker-compose.yml ps -q backend)"
+          if [ -z "$cid" ]; then
+            echo "Nenhum container 'backend' encontrado pelo compose."
+          else
+            docker inspect "$cid" --format '
+          Status:        {{.State.Status}}
+          Running:       {{.State.Running}}
+          ExitCode:      {{.State.ExitCode}}
+          OOMKilled:     {{.State.OOMKilled}}
+          RestartCount:  {{.RestartCount}}
+          StartedAt:     {{.State.StartedAt}}
+          FinishedAt:    {{.State.FinishedAt}}
+          Health:        {{if .State.Health}}{{.State.Health.Status}}{{else}}(nenhum healthcheck configurado){{end}}'
+          fi
+
+          echo ""
+          echo "===== últimas 300 linhas de log do backend (sem cores) ====="
+          docker compose --env-file .env -f docker-compose.yml logs --no-color --tail 300 backend
+
+          echo ""
+          echo "===== HTTP dentro da rede docker (container caddy -> backend:3001) ====="
+          docker compose --env-file .env -f docker-compose.yml exec -T caddy wget -qS -O /dev/null http://backend:3001/api/health 2>&1 || echo "(falhou — ver acima)"
+
+          echo ""
+          echo "===== HTTP local no VPS (via caddy, porta 80 do host) ====="
+          curl -s -o /dev/null -w 'HTTP local (porta 80): %{http_code}\n' http://127.0.0.1/api/health || echo "(curl falhou)"
+          curl -sk -o /dev/null -w 'HTTPS local (porta 443, -k): %{http_code}\n' https://127.0.0.1/api/health || echo "(curl falhou)"
+          SCRIPT
+
+      - name: Coleta diagnóstico do VPS (sanitizado antes de qualquer output)
+        shell: bash
+        env:
+          VPS_HOST: ${{ secrets.VPS_HOST }}
+          VPS_USER: ${{ secrets.VPS_USER }}
+          VPS_SSH_PORT: ${{ secrets.VPS_SSH_PORT }}
+          VPS_DEPLOY_PATH: ${{ secrets.VPS_DEPLOY_PATH || '/opt/allka-2026' }}
+        run: |
+          VPS_HOST="$(echo -n "$VPS_HOST" | tr -d '[:space:]')"
+          VPS_USER="$(echo -n "$VPS_USER" | tr -d '[:space:]')"
+          VPS_SSH_PORT="$(echo -n "$VPS_SSH_PORT" | tr -d '[:space:]')"
+          remote="${VPS_USER}@${VPS_HOST}"
+          SSH_OPTS=(-i "$HOME/.ssh/allka_deploy_key" -p "$VPS_SSH_PORT" -o ConnectTimeout=15 -o ConnectionAttempts=2 -o BatchMode=yes -o StrictHostKeyChecking=accept-new -o UserKnownHostsFile="$HOME/.ssh/known_hosts")
+          scp -i "$HOME/.ssh/allka_deploy_key" -P "$VPS_SSH_PORT" -o StrictHostKeyChecking=accept-new -o UserKnownHostsFile="$HOME/.ssh/known_hosts" \
+            .deploy/remote-diagnose.sh "$remote:/tmp/allka-remote-diagnose.sh"
+          ssh "${SSH_OPTS[@]}" "$remote" "bash /tmp/allka-remote-diagnose.sh '${VPS_DEPLOY_PATH}'; rm -f /tmp/allka-remote-diagnose.sh" > raw_diagnose.txt 2>&1
+
+          # Sanitização — nunca imprimir isto sem passar por aqui primeiro.
+          sed -E \
+            -e 's#(mysql://[^:/@[:space:]]+):[^@[:space:]]+@#\1:***@#g' \
+            -e 's#(JWT_SECRET|GEMINI_API_KEY|MYSQL_ROOT_PASSWORD|MYSQL_PASSWORD|ROADMAP_HMAC_SECRET|ROADMAP_SSO_HMAC_SECRET|SEED_QA_PASSWORD)=[^[:space:]]+#\1=***REDACTED***#g' \
+            raw_diagnose.txt > sanitized_diagnose.txt
+          rm -f raw_diagnose.txt
+
+          echo "===== teste público (fora do VPS) ====="
+          curl -s -o /dev/null -w 'https://api.allka.store/api/health: %{http_code}\n' https://api.allka.store/api/health | tee -a sanitized_diagnose.txt
+
+          cat sanitized_diagnose.txt
+          {
+            echo "## Diagnóstico do backend (sanitizado)"
+            echo '```'
+            cat sanitized_diagnose.txt
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Se o backend parecer saudável, também coleta logs do Caddy
+        shell: bash
+        env:
+          VPS_HOST: ${{ secrets.VPS_HOST }}
+          VPS_USER: ${{ secrets.VPS_USER }}
+          VPS_SSH_PORT: ${{ secrets.VPS_SSH_PORT }}
+          VPS_DEPLOY_PATH: ${{ secrets.VPS_DEPLOY_PATH || '/opt/allka-2026' }}
+        run: |
+          if ! grep -qi "Status:        running" sanitized_diagnose.txt || ! grep -qE "HTTP local \(porta 80\): 200|HTTP local \(porta 80\): 30[0-9]" sanitized_diagnose.txt; then
+            echo "Backend não parece saudável pelos sinais acima — pulando logs do Caddy (item 7 só se aplica quando o backend está ok)."
+            exit 0
+          fi
+          VPS_HOST="$(echo -n "$VPS_HOST" | tr -d '[:space:]')"
+          VPS_USER="$(echo -n "$VPS_USER" | tr -d '[:space:]')"
+          VPS_SSH_PORT="$(echo -n "$VPS_SSH_PORT" | tr -d '[:space:]')"
+          remote="${VPS_USER}@${VPS_HOST}"
+          SSH_OPTS=(-i "$HOME/.ssh/allka_deploy_key" -p "$VPS_SSH_PORT" -o ConnectTimeout=15 -o ConnectionAttempts=2 -o BatchMode=yes -o StrictHostKeyChecking=accept-new -o UserKnownHostsFile="$HOME/.ssh/known_hosts")
+          logs="$(ssh "${SSH_OPTS[@]}" "$remote" "cd '${VPS_DEPLOY_PATH}' && docker compose --env-file .env -f docker-compose.yml logs --no-color --tail 100 caddy")"
+          echo "$logs" | sed -E 's#(JWT_SECRET|GEMINI_API_KEY|MYSQL_ROOT_PASSWORD|MYSQL_PASSWORD)=[^[:space:]]+#\1=***REDACTED***#g'
