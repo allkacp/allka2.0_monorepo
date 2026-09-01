@@ -269,6 +269,20 @@ jobs:
           VPS_USER="$(echo -n "$VPS_USER" | tr -d '[:space:]')"
           VPS_SSH_PORT="$(echo -n "$VPS_SSH_PORT" | tr -d '[:space:]')"
           remote="${VPS_USER}@${VPS_HOST}"
+          # ControlMaster/ControlPersist: a PRIMEIRA chamada ssh/scp abaixo
+          # autentica de verdade e abre um socket de controle; TODAS as
+          # chamadas seguintes (inclusive as do step "Deploy backend on
+          # VPS" mais adiante, que usa exatamente o mesmo ControlPath)
+          # reaproveitam essa mesma conexão já autenticada em vez de abrir
+          # handshake+auth novos a cada scp/ssh. Isso reduz o job inteiro de
+          # ~12 conexões SSH separadas em poucos segundos pra 1 — sem mudar
+          # nada do lado do VPS (SSH/firewall do servidor intocados; isto é
+          # só opção do cliente ssh rodando no runner).
+          SSH_CM_OPTS=(
+            -o ControlMaster=auto
+            -o ControlPath="$HOME/.ssh/allka-cm-%r@%h:%p"
+            -o ControlPersist=180s
+          )
           SSH_OPTS=(
             -i "$HOME/.ssh/allka_deploy_key"
             -p "$VPS_SSH_PORT"
@@ -277,6 +291,7 @@ jobs:
             -o BatchMode=yes
             -o StrictHostKeyChecking=accept-new
             -o UserKnownHostsFile="$HOME/.ssh/known_hosts"
+            "${SSH_CM_OPTS[@]}"
           )
           SCP_OPTS=(
             -i "$HOME/.ssh/allka_deploy_key"
@@ -286,6 +301,7 @@ jobs:
             -o BatchMode=yes
             -o StrictHostKeyChecking=accept-new
             -o UserKnownHostsFile="$HOME/.ssh/known_hosts"
+            "${SSH_CM_OPTS[@]}"
           )
           for i in 1 2 3; do
             if ssh "${SSH_OPTS[@]}" "$remote" "true"; then
@@ -338,6 +354,24 @@ jobs:
           VPS_USER="$(echo -n "$VPS_USER" | tr -d '[:space:]')"
           VPS_SSH_PORT="$(echo -n "$VPS_SSH_PORT" | tr -d '[:space:]')"
           remote="${VPS_USER}@${VPS_HOST}"
+          # Mesmo ControlPath do step "Upload compose files" (mesmo
+          # remote=user@host e mesma porta => %r@%h:%p resolve idêntico) —
+          # reaproveita a conexão já autenticada lá em vez de abrir uma nova.
+          # BUG anterior (causa real do "Permission denied" que derrubou o
+          # deploy): este step definia SSH_OPTS mas nunca SCP_OPTS, e a
+          # chamada de scp abaixo rodava com `"${SCP_OPTS[@]}"` vazio — sem
+          # -i (identidade), sem -p (porta), sem BatchMode. O scp caía nos
+          # métodos de auth padrão do sistema (nenhum configurado no runner
+          # limpo), daí "Permission denied, please try again" (chave
+          # ausente) seguido de tentativa de senha (também ausente) e
+          # rejeição final "(publickey,password)" — não tinha relação com
+          # fail2ban/MaxStartups do lado do VPS. Corrigido definindo
+          # SCP_OPTS espelhando SSH_OPTS, e reduzindo pra menos chamadas.
+          SSH_CM_OPTS=(
+            -o ControlMaster=auto
+            -o ControlPath="$HOME/.ssh/allka-cm-%r@%h:%p"
+            -o ControlPersist=180s
+          )
           SSH_OPTS=(
             -i "$HOME/.ssh/allka_deploy_key"
             -p "$VPS_SSH_PORT"
@@ -346,21 +380,41 @@ jobs:
             -o BatchMode=yes
             -o StrictHostKeyChecking=accept-new
             -o UserKnownHostsFile="$HOME/.ssh/known_hosts"
+            "${SSH_CM_OPTS[@]}"
+          )
+          SCP_OPTS=(
+            -i "$HOME/.ssh/allka_deploy_key"
+            -P "$VPS_SSH_PORT"
+            -o ConnectTimeout=15
+            -o ConnectionAttempts=2
+            -o BatchMode=yes
+            -o StrictHostKeyChecking=accept-new
+            -o UserKnownHostsFile="$HOME/.ssh/known_hosts"
+            "${SSH_CM_OPTS[@]}"
           )
           printf '%s' "$GHCR_PAT" | ssh "${SSH_OPTS[@]}" "$remote" \
             "docker login ghcr.io -u '$GHCR_USERNAME' --password-stdin"
-          # Idempotent: the network may already exist (created by this same
-          # step on a previous run, or by the Roadmap QA deploy running
-          # first) — `inspect` short-circuits the `create` in that case, so
-          # this never errors on a re-run either way.
-          ssh "${SSH_OPTS[@]}" "$remote" \
-            "docker network inspect allka-proxy-shared >/dev/null 2>&1 || docker network create allka-proxy-shared"
 
+          # Um único script remoto: cria a network compartilhada (idempotente),
+          # sobe mysql/migrate/backend, e só então testa saúde de verdade —
+          # tudo numa chamada de scp + uma de ssh, em vez de 4 separadas.
           mkdir -p .deploy
-          cat > .deploy/remote-health-check.sh <<'SCRIPT'
+          cat > .deploy/remote-deploy-and-healthcheck.sh <<'SCRIPT'
           set -uo pipefail
           deploy_path="$1"
           cd "$deploy_path"
+
+          docker network inspect allka-proxy-shared >/dev/null 2>&1 || docker network create allka-proxy-shared
+
+          docker compose --env-file .env -f docker-compose.yml pull backend \
+            && docker compose --env-file .env -f docker-compose.yml up -d mysql \
+            && docker compose --env-file .env -f docker-compose.yml run --rm migrate \
+            && docker compose --env-file .env -f docker-compose.yml up -d --no-deps backend
+          if [ $? -ne 0 ]; then
+            echo "##[error]pull/up mysql/migrate/up backend falhou antes mesmo do health check." >&2
+            exit 1
+          fi
+
           max_attempts=30
           delay=2
           attempt=1
@@ -383,7 +437,7 @@ jobs:
             -e 's#(JWT_SECRET|GEMINI_API_KEY|MYSQL_ROOT_PASSWORD|MYSQL_PASSWORD|ROADMAP_HMAC_SECRET|ROADMAP_SSO_HMAC_SECRET|SEED_QA_PASSWORD)=[^[:space:]]+#\1=***REDACTED***#g' >&2
           exit 1
           SCRIPT
-          scp "${SCP_OPTS[@]}" .deploy/remote-health-check.sh "$remote:/tmp/allka-remote-health-check.sh"
+          scp "${SCP_OPTS[@]}" .deploy/remote-deploy-and-healthcheck.sh "$remote:/tmp/allka-remote-deploy-and-healthcheck.sh"
 
           # O `&&` propaga falha do health check pra falha do workflow — se o
           # backend não ficar saudável, caddy NUNCA é atualizado (continua
@@ -391,12 +445,7 @@ jobs:
           # "Container Running" (docker compose up -d) nunca é o critério de
           # sucesso sozinho — só a resposta HTTP real conta.
           ssh "${SSH_OPTS[@]}" "$remote" \
-            "cd '${VPS_DEPLOY_PATH}' && \
-             docker compose --env-file .env -f docker-compose.yml pull backend && \
-             docker compose --env-file .env -f docker-compose.yml up -d mysql && \
-             docker compose --env-file .env -f docker-compose.yml run --rm migrate && \
-             docker compose --env-file .env -f docker-compose.yml up -d --no-deps backend && \
-             bash /tmp/allka-remote-health-check.sh '${VPS_DEPLOY_PATH}'; rc=\$?; rm -f /tmp/allka-remote-health-check.sh; exit \$rc"
+            "bash /tmp/allka-remote-deploy-and-healthcheck.sh '${VPS_DEPLOY_PATH}'; rc=\$?; rm -f /tmp/allka-remote-deploy-and-healthcheck.sh; exit \$rc"
 
           ssh "${SSH_OPTS[@]}" "$remote" \
             "cd '${VPS_DEPLOY_PATH}' && \
