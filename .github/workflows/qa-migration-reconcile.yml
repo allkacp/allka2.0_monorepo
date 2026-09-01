@@ -83,36 +83,40 @@ jobs:
     runs-on: ubuntu-latest
     environment: dev
     steps:
-      - name: Checkout no commit exato a reconciliar
+      - name: Checkout (ref do próprio workflow — nunca o commit_sha sendo reconciliado)
         uses: actions/checkout@v4
-        with:
-          ref: ${{ inputs.commit_sha }}
-          fetch-depth: 1
+        # SEM `ref: inputs.commit_sha` de propósito: checkout no commit exato
+        # trocaria a árvore inteira por como ela era NAQUELE commit —
+        # inclusive este classificador (.github/scripts/*.mjs), que pode não
+        # existir ainda lá. As ferramentas deste workflow sempre vêm do ref
+        # que disparou o dispatch; só o schema/migration do commit_sha são
+        # extraídos pontualmente no próximo passo, via `git show`/`git
+        # ls-tree`, sem tocar no resto da árvore.
 
-      - name: Confirma que o checkout bateu no commit pedido
+      - name: Extrai schema.prisma e nome da migration exatamente do commit_sha
+        id: schema
         shell: bash
         env:
           COMMIT_SHA: ${{ inputs.commit_sha }}
         run: |
-          actual="$(git rev-parse HEAD)"
-          if [ "$actual" != "$COMMIT_SHA" ]; then
-            echo "::error::Checkout resultou em $actual, esperado $COMMIT_SHA (SHA precisa ser completo, 40 chars, e existir em main)"
+          if ! [[ "$COMMIT_SHA" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "::error::commit_sha precisa ser o SHA completo (40 chars hex), recebido: '$COMMIT_SHA'"
             exit 1
           fi
+          git fetch origin "$COMMIT_SHA" --depth 1
+          if ! git cat-file -e "${COMMIT_SHA}^{commit}" 2>/dev/null; then
+            echo "::error::commit_sha $COMMIT_SHA não foi encontrado no remoto (precisa existir em main)"
+            exit 1
+          fi
+          git show "${COMMIT_SHA}:apps/backend/prisma/schema.prisma" > pinned-schema.prisma
+          schema_sha256="$(sha256sum pinned-schema.prisma | cut -d' ' -f1)"
+          migration_name="$(git ls-tree --name-only "${COMMIT_SHA}" apps/backend/prisma/migrations/ | xargs -n1 basename | grep -v '^migration_lock\.toml$' | sort | tail -1)"
           echo "commit_short=${COMMIT_SHA:0:7}" >> "$GITHUB_OUTPUT"
-        id: commit
-
-      - name: Calcula checksum do schema.prisma e nome da migration
-        id: schema
-        shell: bash
-        run: |
-          schema_sha256="$(sha256sum apps/backend/prisma/schema.prisma | cut -d' ' -f1)"
-          migration_name="$(ls apps/backend/prisma/migrations | grep -v '^migration_lock\.toml$' | sort | tail -1)"
           echo "schema_sha256=${schema_sha256}" >> "$GITHUB_OUTPUT"
           echo "migration_name=${migration_name}" >> "$GITHUB_OUTPUT"
           {
-            echo "## Reconciliação de baseline — commit \`${{ inputs.commit_sha }}\`"
-            echo "- schema.prisma sha256: \`${schema_sha256}\`"
+            echo "## Reconciliação de baseline — commit \`${COMMIT_SHA}\`"
+            echo "- schema.prisma sha256 (extraído exatamente deste commit, não da HEAD do branch): \`${schema_sha256}\`"
             echo "- migration alvo: \`${migration_name}\`"
           } >> "$GITHUB_STEP_SUMMARY"
 
@@ -264,7 +268,7 @@ jobs:
           VPS_DEPLOY_PATH: ${{ secrets.VPS_DEPLOY_PATH || '/opt/allka-2026' }}
           GHCR_PAT: ${{ secrets.GHCR_PAT }}
           GHCR_USERNAME: ${{ secrets.GHCR_USERNAME }}
-          COMMIT_SHORT: ${{ steps.commit.outputs.commit_short }}
+          COMMIT_SHORT: ${{ steps.schema.outputs.commit_short }}
           SCHEMA_SHA256: ${{ steps.schema.outputs.schema_sha256 }}
         run: |
           VPS_HOST="$(echo -n "$VPS_HOST" | tr -d '[:space:]')"
