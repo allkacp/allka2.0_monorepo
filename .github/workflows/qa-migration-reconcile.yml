@@ -2,27 +2,42 @@ name: Migration Baseline Reconcile (manual)
 
 # Disparo manual, sempre em duas etapas separadas e nunca automáticas:
 #
-#   1. mode=diff  (padrão) — só CALCULA e imprime a diferença entre o schema
-#      real do banco e prisma/schema.prisma. Não escreve nada no banco.
-#      Rode isso primeiro e leia o resultado no resumo do job antes de
-#      qualquer outra coisa.
+#   1. mode=diff  (padrão) — calcula o diff, classifica cada statement
+#      (safe/review/blocked — ver .github/scripts/validate-migration-diff.mjs),
+#      publica no resumo do job: SHA do commit, checksum do schema.prisma
+#      usado, checksum do diff gerado, e a contagem por nível. Não escreve
+#      nada no banco. Leia o resumo inteiro antes de considerar mode=apply.
 #
-#   2. mode=apply — só depois de ler o diff de (1) e confirmar que é
-#      puramente aditivo (sem DROP/DELETE/TRUNCATE). Aplica exatamente esse
-#      SQL contra o banco real, confirma que o diff pós-aplicação é vazio, e
-#      só então marca `20260908000000_baseline_consolidated` como aplicada
-#      (`migrate resolve --applied`) — nunca antes de provar equivalência.
+#   2. mode=apply — exige, como input, o MESMO commit_sha e os MESMOS dois
+#      checksums (schema e diff) impressos pela rodada de diff que você
+#      revisou. Se qualquer um dos três não bater com o que é recalculado
+#      nesta execução, a aplicação é recusada — isso impede aplicar um SQL
+#      diferente do que foi de fato lido por um humano. Statements
+#      classificados como "blocked" NUNCA são aplicáveis por aqui, com
+#      qualquer confirmação (DROP TABLE/DATABASE, DELETE, TRUNCATE, DROP
+#      COLUMN, RENAME de tabela/coluna — precisam de intervenção manual fora
+#      desta ferramenta). Statements "review" (ex.: MODIFY/CHANGE de coluna,
+#      que o diff não permite provar como não-destrutivos só pelo texto)
+#      exigem o input explicit_review_ack=true além do checksum-lock.
 #
-# Este workflow existe porque o banco de produção real (único ambiente de
-# deploy que existe hoje, ver auditoria do destino) já tem a árvore antiga de
-# migrations aplicada, mas NENHUMA das tabelas novas deste sprint — não é
+# ATENÇÃO SOBRE O DESTINO: a auditoria de infraestrutura feita para preparar
+# este deploy não encontrou nenhum ambiente de QA/teste separado da
+# produção real — os dois workflows de deploy existentes (deploy-backend.yml
+# / deploy-frontend.yml) publicam SEMPRE no mesmo domínio, mesmo VPS, mesmo
+# banco (ver passo "Confirmar destino" abaixo, que imprime os valores não
+# secretos — domínio, caminho no VPS, nome do banco — para conferência
+# manual). O GitHub Environment usado aqui chama-se "dev", não "qa"; não foi
+# renomeado unilateralmente porque isso seria rotular como QA algo que a
+# evidência disponível indica ser produção real. Decisão sobre criar um
+# ambiente QA genuinamente separado é do responsável pelo projeto, não desta
+# automação.
+#
+# Este workflow existe porque o banco real já tem a árvore antiga de
+# migrations aplicada, mas nenhuma das tabelas novas deste sprint — não é
 # nem "banco vazio" nem "banco já 100% equivalente", os dois únicos casos
 # cobertos em docs/migrations-baseline-2026-09.md. `migrate deploy` sozinho
-# tentaria recriar TODAS as tabelas (inclusive as que já existem) e falharia.
-#
-# mode=apply recusa se o diff calculado contiver DROP/DELETE/TRUNCATE — se
-# isso acontecer, o procedimento correto é parar e investigar manualmente,
-# nunca forçar por aqui.
+# tentaria recriar todas as tabelas (inclusive as que já existem) e falharia
+# (comprovado: run 33452356620, "Table 'users' already exists").
 
 on:
   workflow_dispatch:
@@ -35,10 +50,26 @@ on:
         options:
           - diff
           - apply
+      commit_sha:
+        description: "SHA completo (40 chars) do commit em main a reconciliar — precisa ter uma imagem backend:<7 chars> já publicada por um run do Deploy Backend"
+        required: true
+      expected_schema_sha256:
+        description: "Só para mode=apply: sha256 de apps/backend/prisma/schema.prisma impresso pela rodada de diff revisada"
+        required: false
+        default: ""
+      expected_diff_sha256:
+        description: "Só para mode=apply: sha256 do diff_output.sql impresso pela rodada de diff revisada"
+        required: false
+        default: ""
       confirm_phrase:
         description: "Só para mode=apply: digite exatamente RECONCILIAR BASELINE PRODUCAO"
         required: false
         default: ""
+      explicit_review_ack:
+        description: "Só para mode=apply, só se o diff revisado tiver statements 'review' (MODIFY/CHANGE): marque true confirmando que revisou cada um manualmente"
+        required: true
+        default: false
+        type: boolean
 
 concurrency:
   group: deploy-vps
@@ -52,27 +83,98 @@ jobs:
     runs-on: ubuntu-latest
     environment: dev
     steps:
-      - name: Checkout
+      - name: Checkout (ref do próprio workflow — nunca o commit_sha sendo reconciliado)
         uses: actions/checkout@v4
+        # SEM `ref: inputs.commit_sha` de propósito: checkout no commit exato
+        # trocaria a árvore inteira por como ela era NAQUELE commit —
+        # inclusive este classificador (.github/scripts/*.mjs), que pode não
+        # existir ainda lá. As ferramentas deste workflow sempre vêm do ref
+        # que disparou o dispatch; só o schema/migration do commit_sha são
+        # extraídos pontualmente no próximo passo, via `git show`/`git
+        # ls-tree`, sem tocar no resto da árvore.
 
-      - name: Validate inputs and secrets
+      - name: Extrai schema.prisma e nome da migration exatamente do commit_sha
+        id: schema
         shell: bash
         env:
-          MODE: ${{ inputs.mode }}
+          COMMIT_SHA: ${{ inputs.commit_sha }}
+        run: |
+          if ! [[ "$COMMIT_SHA" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "::error::commit_sha precisa ser o SHA completo (40 chars hex), recebido: '$COMMIT_SHA'"
+            exit 1
+          fi
+          git fetch origin "$COMMIT_SHA" --depth 1
+          if ! git cat-file -e "${COMMIT_SHA}^{commit}" 2>/dev/null; then
+            echo "::error::commit_sha $COMMIT_SHA não foi encontrado no remoto (precisa existir em main)"
+            exit 1
+          fi
+          git show "${COMMIT_SHA}:apps/backend/prisma/schema.prisma" > pinned-schema.prisma
+          schema_sha256="$(sha256sum pinned-schema.prisma | cut -d' ' -f1)"
+          migration_name="$(git ls-tree --name-only "${COMMIT_SHA}" apps/backend/prisma/migrations/ | xargs -n1 basename | grep -v '^migration_lock\.toml$' | sort | tail -1)"
+          echo "commit_short=${COMMIT_SHA:0:7}" >> "$GITHUB_OUTPUT"
+          echo "schema_sha256=${schema_sha256}" >> "$GITHUB_OUTPUT"
+          echo "migration_name=${migration_name}" >> "$GITHUB_OUTPUT"
+          {
+            echo "## Reconciliação de baseline — commit \`${COMMIT_SHA}\`"
+            echo "- schema.prisma sha256 (extraído exatamente deste commit, não da HEAD do branch): \`${schema_sha256}\`"
+            echo "- migration alvo: \`${migration_name}\`"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Confirma destino (valores não secretos, para conferência manual)
+        shell: bash
+        run: |
+          frontend_domain="$(grep -m1 -E '^\s*FRONTEND_DOMAIN:' .github/workflows/deploy-backend.yml | sed -E 's/^[^:]*:\s*//')"
+          api_domain="$(grep -m1 -E '^\s*API_DOMAIN:' .github/workflows/deploy-backend.yml | sed -E 's/^[^:]*:\s*//')"
+          deploy_path_default="$(grep -m1 -E "VPS_DEPLOY_PATH:.*\\|\\|" .github/workflows/deploy-backend.yml | sed -E "s/.*'([^']+)'.*/\\1/")"
+          mysql_db_default="$(grep -m1 -E "MYSQL_DATABASE:.*\\|\\|" .github/workflows/deploy-backend.yml | sed -E "s/.*'([^']+)'.*/\\1/")"
+          {
+            echo "### Destino (evidência não secreta, extraída de deploy-backend.yml no commit sendo reconciliado)"
+            echo "- FRONTEND_DOMAIN: \`${frontend_domain}\`"
+            echo "- API_DOMAIN: \`${api_domain}\`"
+            echo "- VPS_DEPLOY_PATH (default, pode estar sobrescrito por secret): \`${deploy_path_default}\`"
+            echo "- MYSQL_DATABASE (default, pode estar sobrescrito por secret): \`${mysql_db_default}\`"
+            echo "- GitHub Environment usado neste run: \`dev\`"
+            echo ""
+            echo "**Nenhuma evidência de ambiente QA separado da produção foi encontrada na auditoria de infraestrutura.** Os valores acima são o único destino de deploy existente no repositório. Confirme por fora (DNS, acesso ao VPS) se isso é o que você espera antes de revisar o diff abaixo."
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Validação de inputs para mode=apply
+        if: inputs.mode == 'apply'
+        shell: bash
+        env:
           CONFIRM_PHRASE: ${{ inputs.confirm_phrase }}
+          EXPECTED_SCHEMA_SHA256: ${{ inputs.expected_schema_sha256 }}
+          COMPUTED_SCHEMA_SHA256: ${{ steps.schema.outputs.schema_sha256 }}
+        run: |
+          if [ "$CONFIRM_PHRASE" != "RECONCILIAR BASELINE PRODUCAO" ]; then
+            echo "::error::mode=apply exige confirm_phrase exata: RECONCILIAR BASELINE PRODUCAO"
+            exit 1
+          fi
+          if [ -z "$EXPECTED_SCHEMA_SHA256" ]; then
+            echo "::error::mode=apply exige expected_schema_sha256 (copie do resumo da rodada de diff revisada)"
+            exit 1
+          fi
+          if [ "$EXPECTED_SCHEMA_SHA256" != "$COMPUTED_SCHEMA_SHA256" ]; then
+            echo "::error::expected_schema_sha256 ($EXPECTED_SCHEMA_SHA256) não bate com o schema.prisma do commit $COMMIT_SHA ($COMPUTED_SCHEMA_SHA256). O commit_sha não corresponde ao diff que você revisou — recusando."
+            exit 1
+          fi
+
+      - name: Validate required secrets
+        shell: bash
+        env:
           VPS_HOST: ${{ secrets.VPS_HOST }}
           VPS_USER: ${{ secrets.VPS_USER }}
           VPS_SSH_PORT: ${{ secrets.VPS_SSH_PORT }}
           VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+          GHCR_PAT: ${{ secrets.GHCR_PAT }}
+          GHCR_USERNAME: ${{ secrets.GHCR_USERNAME }}
         run: |
           : "${VPS_HOST:?Set the VPS_HOST secret}"
           : "${VPS_USER:?Set the VPS_USER secret}"
           : "${VPS_SSH_PORT:?Set the VPS_SSH_PORT secret}"
           : "${VPS_SSH_KEY:?Set the VPS_SSH_KEY secret}"
-          if [ "$MODE" = "apply" ] && [ "$CONFIRM_PHRASE" != "RECONCILIAR BASELINE PRODUCAO" ]; then
-            echo "::error::mode=apply exige confirm_phrase exata: RECONCILIAR BASELINE PRODUCAO"
-            exit 1
-          fi
+          : "${GHCR_PAT:?Set the GHCR_PAT secret}"
+          : "${GHCR_USERNAME:?Set the GHCR_USERNAME secret}"
 
       - name: Configure SSH
         shell: bash
@@ -86,19 +188,69 @@ jobs:
           touch ~/.ssh/known_hosts
           chmod 600 ~/.ssh/known_hosts
 
-      - name: Render remote diff script
+      - name: Verifica backup existente no VPS (nunca imprime conteúdo/credenciais)
+        id: backup
+        shell: bash
+        env:
+          VPS_HOST: ${{ secrets.VPS_HOST }}
+          VPS_USER: ${{ secrets.VPS_USER }}
+          VPS_SSH_PORT: ${{ secrets.VPS_SSH_PORT }}
+          VPS_DEPLOY_PATH: ${{ secrets.VPS_DEPLOY_PATH || '/opt/allka-2026' }}
+        run: |
+          VPS_HOST="$(echo -n "$VPS_HOST" | tr -d '[:space:]')"
+          VPS_USER="$(echo -n "$VPS_USER" | tr -d '[:space:]')"
+          VPS_SSH_PORT="$(echo -n "$VPS_SSH_PORT" | tr -d '[:space:]')"
+          remote="${VPS_USER}@${VPS_HOST}"
+          SSH_OPTS=(-i "$HOME/.ssh/allka_deploy_key" -p "$VPS_SSH_PORT" -o ConnectTimeout=15 -o ConnectionAttempts=2 -o BatchMode=yes -o StrictHostKeyChecking=accept-new -o UserKnownHostsFile="$HOME/.ssh/known_hosts")
+          info="$(ssh "${SSH_OPTS[@]}" "$remote" "cd '${VPS_DEPLOY_PATH}' && f=\$(ls -t backups/*.sql.gz 2>/dev/null | head -1); if [ -z \"\$f\" ]; then echo NONE; else echo \"\$f|\$(stat -c%s \"\$f\")|\$(date -r \"\$f\" -u +%Y-%m-%dT%H:%M:%SZ)|\$(sha256sum \"\$f\" | cut -d' ' -f1)\"; fi")"
+          if [ "$info" = "NONE" ]; then
+            echo "backup_ok=false" >> "$GITHUB_OUTPUT"
+            echo "::warning::Nenhum backup encontrado em ${VPS_DEPLOY_PATH}/backups/"
+            echo "### Backup: NENHUM ENCONTRADO" >> "$GITHUB_STEP_SUMMARY"
+          else
+            file="$(echo "$info" | cut -d'|' -f1)"
+            size="$(echo "$info" | cut -d'|' -f2)"
+            date="$(echo "$info" | cut -d'|' -f3)"
+            sha="$(echo "$info" | cut -d'|' -f4)"
+            ok="true"
+            if [ "$size" -le 0 ]; then ok="false"; fi
+            echo "backup_ok=${ok}" >> "$GITHUB_OUTPUT"
+            {
+              echo "### Backup mais recente"
+              echo "- arquivo: \`${file}\`"
+              echo "- tamanho: ${size} bytes"
+              echo "- data: ${date}"
+              echo "- sha256: \`${sha}\`"
+            } >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Recusa apply sem backup provado
+        if: inputs.mode == 'apply' && steps.backup.outputs.backup_ok != 'true'
+        run: |
+          echo "::error::mode=apply exige um backup existente e não-vazio em backups/*.sql.gz no VPS. Rode o workflow 'DB Backup (manual)' antes."
+          exit 1
+
+      - name: Render remote diff script (usa a imagem backend:<commit curto>, nunca a que estiver em .env)
         shell: bash
         run: |
           mkdir -p .deploy
           cat > .deploy/remote-diff.sh <<'SCRIPT'
           set -euo pipefail
           deploy_path="$1"
+          image="$2"
+          expected_schema_sha256="$3"
           cd "$deploy_path"
           set -a
           source ./.env
           set +a
+          docker pull "$image" >&2
+          actual_schema_sha256="$(docker run --rm --entrypoint sha256sum "$image" /app/apps/backend/prisma/schema.prisma | cut -d' ' -f1)"
+          if [ "$actual_schema_sha256" != "$expected_schema_sha256" ]; then
+            echo "ERRO: schema.prisma dentro da imagem $image (sha256=$actual_schema_sha256) não bate com o esperado ($expected_schema_sha256). A imagem publicada não corresponde ao commit pedido — abortando sem tocar no banco." >&2
+            exit 1
+          fi
           db_url="mysql://${MYSQL_USER:-allka}:${MYSQL_PASSWORD}@mysql:3306/${MYSQL_DATABASE:-allka}"
-          docker compose --env-file .env -f docker-compose.yml run --rm --no-deps \
+          BACKEND_IMAGE="$image" docker compose --env-file .env -f docker-compose.yml run --rm --no-deps \
             -e DATABASE_URL="$db_url" \
             backend npx prisma migrate diff \
               --from-url "$db_url" \
@@ -106,7 +258,7 @@ jobs:
               --script
           SCRIPT
 
-      - name: Compute diff (schema real vs prisma/schema.prisma)
+      - name: Computa o diff (imagem pinada no commit, schema verificado antes de tocar no banco)
         id: diff
         shell: bash
         env:
@@ -114,107 +266,164 @@ jobs:
           VPS_USER: ${{ secrets.VPS_USER }}
           VPS_SSH_PORT: ${{ secrets.VPS_SSH_PORT }}
           VPS_DEPLOY_PATH: ${{ secrets.VPS_DEPLOY_PATH || '/opt/allka-2026' }}
+          GHCR_PAT: ${{ secrets.GHCR_PAT }}
+          GHCR_USERNAME: ${{ secrets.GHCR_USERNAME }}
+          COMMIT_SHORT: ${{ steps.schema.outputs.commit_short }}
+          SCHEMA_SHA256: ${{ steps.schema.outputs.schema_sha256 }}
         run: |
           VPS_HOST="$(echo -n "$VPS_HOST" | tr -d '[:space:]')"
           VPS_USER="$(echo -n "$VPS_USER" | tr -d '[:space:]')"
           VPS_SSH_PORT="$(echo -n "$VPS_SSH_PORT" | tr -d '[:space:]')"
           remote="${VPS_USER}@${VPS_HOST}"
-          SSH_OPTS=(
-            -i "$HOME/.ssh/allka_deploy_key"
-            -p "$VPS_SSH_PORT"
-            -o ConnectTimeout=15
-            -o ConnectionAttempts=2
-            -o BatchMode=yes
-            -o StrictHostKeyChecking=accept-new
-            -o UserKnownHostsFile="$HOME/.ssh/known_hosts"
-          )
-          scp -i "$HOME/.ssh/allka_deploy_key" -P "$VPS_SSH_PORT" \
-            -o StrictHostKeyChecking=accept-new -o UserKnownHostsFile="$HOME/.ssh/known_hosts" \
+          SSH_OPTS=(-i "$HOME/.ssh/allka_deploy_key" -p "$VPS_SSH_PORT" -o ConnectTimeout=15 -o ConnectionAttempts=2 -o BatchMode=yes -o StrictHostKeyChecking=accept-new -o UserKnownHostsFile="$HOME/.ssh/known_hosts")
+          repo="${GITHUB_REPOSITORY,,}"
+          image="ghcr.io/${repo}/backend:${COMMIT_SHORT}"
+          echo "reconcile_image=${image}" >> "$GITHUB_OUTPUT"
+          scp -i "$HOME/.ssh/allka_deploy_key" -P "$VPS_SSH_PORT" -o StrictHostKeyChecking=accept-new -o UserKnownHostsFile="$HOME/.ssh/known_hosts" \
             .deploy/remote-diff.sh "$remote:/tmp/allka-remote-diff.sh"
-          ssh "${SSH_OPTS[@]}" "$remote" "bash /tmp/allka-remote-diff.sh '${VPS_DEPLOY_PATH}'; rm -f /tmp/allka-remote-diff.sh" > diff_output.sql
-          echo "---- DIFF (schema real -> schema.prisma) ----"
-          cat diff_output.sql
-          {
-            echo '## Diff de migration (produção -> schema.prisma)'
-            echo '```sql'
-            cat diff_output.sql
-            echo '```'
-          } >> "$GITHUB_STEP_SUMMARY"
-          # DROP FOREIGN KEY / DROP INDEX não apagam dado (só metadado de
-          # constraint/estrutura de busca) — não contam como destrutivo aqui.
-          # Só DROP TABLE/DATABASE, DELETE e TRUNCATE realmente perdem linhas.
-          if grep -qiE '^\s*(DROP TABLE|DROP DATABASE|DELETE |TRUNCATE )' diff_output.sql; then
-            echo "has_destructive=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "has_destructive=false" >> "$GITHUB_OUTPUT"
-          fi
+          # GHCR_PAT nunca vira argumento de linha de comando (ficaria visível
+          # via `ps` no VPS) — vai só pelo stdin local do ssh, exatamente como
+          # em deploy-backend.yml. Login e execução em sessões ssh separadas:
+          # a sessão de credenciais do docker persiste em ~/.docker/config.json
+          # no VPS entre uma sessão e outra.
+          printf '%s' "$GHCR_PAT" | ssh "${SSH_OPTS[@]}" "$remote" "docker login ghcr.io -u '${GHCR_USERNAME}' --password-stdin"
+          ssh "${SSH_OPTS[@]}" "$remote" \
+            "bash /tmp/allka-remote-diff.sh '${VPS_DEPLOY_PATH}' '${image}' '${SCHEMA_SHA256}'; rc=\$?; rm -f /tmp/allka-remote-diff.sh; exit \$rc" \
+            > diff_output.sql
+          diff_sha256="$(sha256sum diff_output.sql | cut -d' ' -f1)"
+          echo "diff_sha256=${diff_sha256}" >> "$GITHUB_OUTPUT"
           if grep -q 'This is an empty migration' diff_output.sql; then
             echo "is_empty=true" >> "$GITHUB_OUTPUT"
           else
             echo "is_empty=false" >> "$GITHUB_OUTPUT"
           fi
+          {
+            echo "### Diff calculado"
+            echo "- imagem usada (schema conferido antes do diff): \`${image}\`"
+            echo "- diff sha256: \`${diff_sha256}\`"
+            echo '```sql'
+            cat diff_output.sql
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
 
-      - name: Stop if diff is destructive
-        if: steps.diff.outputs.has_destructive == 'true'
+      - name: Classifica o diff (allowlist aditiva — ver .github/scripts/validate-migration-diff.mjs)
+        id: classify
+        shell: bash
         run: |
-          echo "::error::O diff contém DROP/DELETE/TRUNCATE. Parando — isso exige revisão manual, nunca aplicação automática."
+          set +e
+          output="$(node .github/scripts/validate-migration-diff.mjs diff_output.sql)"
+          status=$?
+          set -e
+          echo "$output"
+          safe="$(echo "$output" | grep -oE 'safe=[0-9]+' | cut -d= -f2)"
+          review="$(echo "$output" | grep -oE 'review=[0-9]+' | cut -d= -f2)"
+          blocked="$(echo "$output" | grep -oE 'blocked=[0-9]+' | cut -d= -f2)"
+          echo "safe_count=${safe:-0}" >> "$GITHUB_OUTPUT"
+          echo "review_count=${review:-0}" >> "$GITHUB_OUTPUT"
+          echo "blocked_count=${blocked:-0}" >> "$GITHUB_OUTPUT"
+          {
+            echo "### Classificação estática (allowlist aditiva)"
+            echo '```'
+            echo "$output"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+          exit 0
+
+      - name: Recusa incondicional se houver statement bloqueado
+        if: steps.classify.outputs.blocked_count != '0'
+        run: |
+          echo "::error::${{ steps.classify.outputs.blocked_count }} statement(s) classificados como BLOCKED (potencialmente destrutivos ou de rename). Nunca aplicáveis por este workflow, com nenhuma confirmação — resolva manualmente fora daqui."
           exit 1
 
       - name: Report-only (mode=diff)
         if: inputs.mode == 'diff'
         run: |
-          echo "Modo diff — nada foi escrito no banco. Leia o resumo do job acima."
-          echo "is_empty=${{ steps.diff.outputs.is_empty }}"
+          echo "Modo diff — nada foi escrito no banco."
+          echo "Para aplicar, rode de novo com mode=apply e:"
+          echo "  commit_sha=${{ inputs.commit_sha }}"
+          echo "  expected_schema_sha256=${{ steps.schema.outputs.schema_sha256 }}"
+          echo "  expected_diff_sha256=${{ steps.diff.outputs.diff_sha256 }}"
+          if [ "${{ steps.classify.outputs.review_count }}" != "0" ]; then
+            echo "  explicit_review_ack=true  (obrigatório: ${{ steps.classify.outputs.review_count }} statement(s) 'review' no diff acima — revise cada um antes de marcar true)"
+          fi
+
+      - name: Valida checksum do diff e ack de review para mode=apply
+        if: inputs.mode == 'apply'
+        shell: bash
+        env:
+          EXPECTED_DIFF_SHA256: ${{ inputs.expected_diff_sha256 }}
+          COMPUTED_DIFF_SHA256: ${{ steps.diff.outputs.diff_sha256 }}
+          REVIEW_COUNT: ${{ steps.classify.outputs.review_count }}
+          EXPLICIT_REVIEW_ACK: ${{ inputs.explicit_review_ack }}
+        run: |
+          if [ -z "$EXPECTED_DIFF_SHA256" ] || [ "$EXPECTED_DIFF_SHA256" != "$COMPUTED_DIFF_SHA256" ]; then
+            echo "::error::expected_diff_sha256 não bate com o diff recém-calculado ($COMPUTED_DIFF_SHA256). O banco pode ter mudado desde a rodada de diff revisada, ou o checksum informado está errado — recusando. Rode mode=diff de novo e revise o novo resultado."
+            exit 1
+          fi
+          if [ "$REVIEW_COUNT" != "0" ] && [ "$EXPLICIT_REVIEW_ACK" != "true" ]; then
+            echo "::error::O diff contém $REVIEW_COUNT statement(s) 'review' (MODIFY/CHANGE de coluna) — exige explicit_review_ack=true confirmando que você revisou cada um manualmente (ver seção 'REVIEW' no resumo do job)."
+            exit 1
+          fi
 
       - name: Render remote apply script
         if: inputs.mode == 'apply' && steps.diff.outputs.is_empty == 'false'
         shell: bash
+        env:
+          MIGRATION_NAME: ${{ steps.schema.outputs.migration_name }}
         run: |
           mkdir -p .deploy
-          cat > .deploy/remote-apply.sh <<'SCRIPT'
+          cat > .deploy/remote-apply.sh <<SCRIPT
           set -euo pipefail
-          deploy_path="$1"
-          cd "$deploy_path"
+          deploy_path="\$1"
+          image="\$2"
+          cd "\$deploy_path"
           set -a
           source ./.env
           set +a
 
-          echo "== Aplicando o diff (DDL aditivo) =="
-          docker compose --env-file .env -f docker-compose.yml exec -T mysql \
-            sh -c 'exec mysql -uroot -p"$MYSQL_ROOT_PASSWORD" "$MYSQL_DATABASE"' \
+          echo "== Aplicando o diff (statements ja classificados e com checksum conferido) =="
+          docker compose --env-file .env -f docker-compose.yml exec -T mysql \\
+            sh -c 'exec mysql -uroot -p"\$MYSQL_ROOT_PASSWORD" "\$MYSQL_DATABASE"' \\
             < reconcile_diff.sql
 
           echo "== Garantindo as linhas estruturais do catalog2 (four_f + pricing_settings), sem duplicar =="
-          docker compose --env-file .env -f docker-compose.yml exec -T mysql \
-            sh -c 'exec mysql -uroot -p"$MYSQL_ROOT_PASSWORD" "$MYSQL_DATABASE"' \
+          docker compose --env-file .env -f docker-compose.yml exec -T mysql \\
+            sh -c 'exec mysql -uroot -p"\$MYSQL_ROOT_PASSWORD" "\$MYSQL_DATABASE"' \\
             < reconcile_seed_rows.sql
 
-          echo "== Confirmando diff vazio pós-aplicação =="
-          db_url="mysql://${MYSQL_USER:-allka}:${MYSQL_PASSWORD}@mysql:3306/${MYSQL_DATABASE:-allka}"
-          docker compose --env-file .env -f docker-compose.yml run --rm --no-deps \
-            -e DATABASE_URL="$db_url" \
-            backend npx prisma migrate diff \
-              --from-url "$db_url" \
-              --to-schema-datamodel prisma/schema.prisma \
+          echo "== Confirmando diff vazio pos-aplicacao =="
+          db_url="mysql://\${MYSQL_USER:-allka}:\${MYSQL_PASSWORD}@mysql:3306/\${MYSQL_DATABASE:-allka}"
+          BACKEND_IMAGE="\$image" docker compose --env-file .env -f docker-compose.yml run --rm --no-deps \\
+            -e DATABASE_URL="\$db_url" \\
+            backend npx prisma migrate diff \\
+              --from-url "\$db_url" \\
+              --to-schema-datamodel prisma/schema.prisma \\
               --script > post_diff.sql
           cat post_diff.sql
           if ! grep -q 'This is an empty migration' post_diff.sql; then
-            echo "ERRO: diff pós-aplicação não está vazio — NAO vou marcar a baseline como resolvida. Investigar manualmente." >&2
+            echo "ERRO: diff pos-aplicacao nao esta vazio -- NAO vou marcar a baseline como resolvida. Investigar manualmente." >&2
             exit 1
           fi
 
-          echo "== Marcando a baseline consolidada como aplicada (equivalencia comprovada acima) =="
-          docker compose --env-file .env -f docker-compose.yml run --rm --no-deps \
-            -e DATABASE_URL="$db_url" \
-            backend npx prisma migrate resolve --applied 20260908000000_baseline_consolidated
+          echo "== Confirmando que $MIGRATION_NAME ainda nao esta marcada como aplicada =="
+          status_before="\$(BACKEND_IMAGE="\$image" docker compose --env-file .env -f docker-compose.yml run --rm --no-deps -e DATABASE_URL="\$db_url" backend npx prisma migrate status || true)"
+          echo "\$status_before"
+          if echo "\$status_before" | grep -q "$MIGRATION_NAME" && echo "\$status_before" | grep -qi "up to date"; then
+            echo "AVISO: $MIGRATION_NAME ja aparece aplicada -- pulando resolve para nao sobrescrever registro existente."
+          else
+            echo "== Marcando $MIGRATION_NAME como aplicada (equivalencia comprovada acima) =="
+            BACKEND_IMAGE="\$image" docker compose --env-file .env -f docker-compose.yml run --rm --no-deps \\
+              -e DATABASE_URL="\$db_url" \\
+              backend npx prisma migrate resolve --applied "$MIGRATION_NAME"
+          fi
 
-          echo "== migrate status =="
-          docker compose --env-file .env -f docker-compose.yml run --rm --no-deps \
-            -e DATABASE_URL="$db_url" \
+          echo "== migrate status final =="
+          BACKEND_IMAGE="\$image" docker compose --env-file .env -f docker-compose.yml run --rm --no-deps \\
+            -e DATABASE_URL="\$db_url" \\
             backend npx prisma migrate status
           SCRIPT
 
-      - name: Apply diff and resolve baseline (mode=apply)
+      - name: Apply diff e resolve a baseline (mode=apply)
         if: inputs.mode == 'apply' && steps.diff.outputs.is_empty == 'false'
         shell: bash
         env:
@@ -222,32 +431,50 @@ jobs:
           VPS_USER: ${{ secrets.VPS_USER }}
           VPS_SSH_PORT: ${{ secrets.VPS_SSH_PORT }}
           VPS_DEPLOY_PATH: ${{ secrets.VPS_DEPLOY_PATH || '/opt/allka-2026' }}
+          IMAGE: ${{ steps.diff.outputs.reconcile_image }}
         run: |
           VPS_HOST="$(echo -n "$VPS_HOST" | tr -d '[:space:]')"
           VPS_USER="$(echo -n "$VPS_USER" | tr -d '[:space:]')"
           VPS_SSH_PORT="$(echo -n "$VPS_SSH_PORT" | tr -d '[:space:]')"
           remote="${VPS_USER}@${VPS_HOST}"
-          SSH_OPTS=(
-            -i "$HOME/.ssh/allka_deploy_key"
-            -p "$VPS_SSH_PORT"
-            -o ConnectTimeout=15
-            -o ConnectionAttempts=2
-            -o BatchMode=yes
-            -o StrictHostKeyChecking=accept-new
-            -o UserKnownHostsFile="$HOME/.ssh/known_hosts"
-          )
-          scp -i "$HOME/.ssh/allka_deploy_key" -P "$VPS_SSH_PORT" \
-            -o StrictHostKeyChecking=accept-new -o UserKnownHostsFile="$HOME/.ssh/known_hosts" \
+          SSH_OPTS=(-i "$HOME/.ssh/allka_deploy_key" -p "$VPS_SSH_PORT" -o ConnectTimeout=15 -o ConnectionAttempts=2 -o BatchMode=yes -o StrictHostKeyChecking=accept-new -o UserKnownHostsFile="$HOME/.ssh/known_hosts")
+          scp -i "$HOME/.ssh/allka_deploy_key" -P "$VPS_SSH_PORT" -o StrictHostKeyChecking=accept-new -o UserKnownHostsFile="$HOME/.ssh/known_hosts" \
             diff_output.sql "$remote:${VPS_DEPLOY_PATH}/reconcile_diff.sql"
-          scp -i "$HOME/.ssh/allka_deploy_key" -P "$VPS_SSH_PORT" \
-            -o StrictHostKeyChecking=accept-new -o UserKnownHostsFile="$HOME/.ssh/known_hosts" \
+          scp -i "$HOME/.ssh/allka_deploy_key" -P "$VPS_SSH_PORT" -o StrictHostKeyChecking=accept-new -o UserKnownHostsFile="$HOME/.ssh/known_hosts" \
             .github/workflows/qa-catalog2-seed-rows.sql "$remote:${VPS_DEPLOY_PATH}/reconcile_seed_rows.sql"
-          scp -i "$HOME/.ssh/allka_deploy_key" -P "$VPS_SSH_PORT" \
-            -o StrictHostKeyChecking=accept-new -o UserKnownHostsFile="$HOME/.ssh/known_hosts" \
+          scp -i "$HOME/.ssh/allka_deploy_key" -P "$VPS_SSH_PORT" -o StrictHostKeyChecking=accept-new -o UserKnownHostsFile="$HOME/.ssh/known_hosts" \
             .deploy/remote-apply.sh "$remote:/tmp/allka-remote-apply.sh"
-          ssh "${SSH_OPTS[@]}" "$remote" "bash /tmp/allka-remote-apply.sh '${VPS_DEPLOY_PATH}' && rm -f /tmp/allka-remote-apply.sh"
+          ssh "${SSH_OPTS[@]}" "$remote" "bash /tmp/allka-remote-apply.sh '${VPS_DEPLOY_PATH}' '${IMAGE}'; rc=\$?; rm -f /tmp/allka-remote-apply.sh; exit \$rc"
 
-      - name: Nothing to apply
+      - name: Nada a aplicar (diff vazio) — só confirma/marca a baseline
         if: inputs.mode == 'apply' && steps.diff.outputs.is_empty == 'true'
+        shell: bash
+        env:
+          VPS_HOST: ${{ secrets.VPS_HOST }}
+          VPS_USER: ${{ secrets.VPS_USER }}
+          VPS_SSH_PORT: ${{ secrets.VPS_SSH_PORT }}
+          VPS_DEPLOY_PATH: ${{ secrets.VPS_DEPLOY_PATH || '/opt/allka-2026' }}
+          IMAGE: ${{ steps.diff.outputs.reconcile_image }}
+          MIGRATION_NAME: ${{ steps.schema.outputs.migration_name }}
         run: |
-          echo "Diff ja esta vazio — schema real ja bate com schema.prisma. Rode a etapa de apply mesmo assim se quiser só marcar a baseline (sem SQL para executar)."
+          VPS_HOST="$(echo -n "$VPS_HOST" | tr -d '[:space:]')"
+          VPS_USER="$(echo -n "$VPS_USER" | tr -d '[:space:]')"
+          VPS_SSH_PORT="$(echo -n "$VPS_SSH_PORT" | tr -d '[:space:]')"
+          remote="${VPS_USER}@${VPS_HOST}"
+          SSH_OPTS=(-i "$HOME/.ssh/allka_deploy_key" -p "$VPS_SSH_PORT" -o ConnectTimeout=15 -o ConnectionAttempts=2 -o BatchMode=yes -o StrictHostKeyChecking=accept-new -o UserKnownHostsFile="$HOME/.ssh/known_hosts")
+          ssh "${SSH_OPTS[@]}" "$remote" bash -s -- "$VPS_DEPLOY_PATH" "$IMAGE" "$MIGRATION_NAME" <<'REMOTE'
+          set -euo pipefail
+          deploy_path="$1"; image="$2"; migration_name="$3"
+          cd "$deploy_path"
+          set -a; source ./.env; set +a
+          db_url="mysql://${MYSQL_USER:-allka}:${MYSQL_PASSWORD}@mysql:3306/${MYSQL_DATABASE:-allka}"
+          status="$(BACKEND_IMAGE="$image" docker compose --env-file .env -f docker-compose.yml run --rm --no-deps -e DATABASE_URL="$db_url" backend npx prisma migrate status || true)"
+          echo "$status"
+          if echo "$status" | grep -qi "up to date"; then
+            echo "Schema ja bate e a baseline ja esta marcada como aplicada -- nada a fazer."
+            exit 0
+          fi
+          echo "== Diff vazio (schema ja bate) mas baseline ainda nao registrada -- marcando =="
+          BACKEND_IMAGE="$image" docker compose --env-file .env -f docker-compose.yml run --rm --no-deps -e DATABASE_URL="$db_url" backend npx prisma migrate resolve --applied "$migration_name"
+          BACKEND_IMAGE="$image" docker compose --env-file .env -f docker-compose.yml run --rm --no-deps -e DATABASE_URL="$db_url" backend npx prisma migrate status
+          REMOTE
