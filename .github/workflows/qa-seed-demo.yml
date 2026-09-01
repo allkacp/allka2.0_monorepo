@@ -12,15 +12,23 @@ name: Seed QA Demo (manual)
 # está operando o QA (nunca pelo Claude/CI) — assim a senha nunca passa por
 # nenhum log, nenhuma mensagem, nenhum arquivo deste repositório.
 #
-# Roda com a imagem `backend:tools` (estágio "build" do Dockerfile, publicada
+# Roda com a imagem de ferramentas (estágio "build" do Dockerfile, publicada
 # por deploy-backend.yml), não a imagem de runtime que está de fato no ar:
 # a imagem de runtime roda `npm ci --omit=dev` (sem tsx, que é devDependency)
 # e o Dockerfile não copia `src/` pro runtime (só `dist/`, e
 # `src/scripts/**` é explicitamente excluído do build TypeScript em
 # tsconfig.json) — então `tsx src/scripts/seed-qa-demo.ts` não existe nem
-# roda na imagem de produção. A imagem tools tem devDependencies + src/
-# completos e roda dentro da mesma rede/serviço via `BACKEND_IMAGE`
+# roda na imagem de produção. A imagem de ferramentas tem devDependencies +
+# src/ completos e roda dentro da mesma rede/serviço via `BACKEND_IMAGE`
 # sobrescrito só para este `docker compose run`.
+#
+# Pinada pelo commit, nunca pela tag móvel `backend:tools`: lê o
+# BACKEND_IMAGE que está de fato gravado no .env do VPS (a imagem de runtime
+# realmente publicada), extrai o SHA de lá, e usa `backend:tools-<mesmo
+# SHA>` — garante que o seed roda com código da MESMA versão que está no ar,
+# nunca "o que main tiver agora" (que pode estar à frente do que foi
+# deployado de verdade). O digest resolvido é impresso no resumo do job como
+# prova.
 
 on:
   workflow_dispatch:
@@ -85,10 +93,27 @@ jobs:
           extra_arg="$3"
           ghcr_user="$4"
           ghcr_pat="$5"
-          tools_image="$6"
+          repo="$6"
           cd "$deploy_path"
+
+          runtime_image="$(grep '^BACKEND_IMAGE=' .env | cut -d= -f2-)"
+          if [ -z "$runtime_image" ]; then
+            echo "ERRO: nao encontrei BACKEND_IMAGE em ${deploy_path}/.env -- nao ha deploy de backend registrado para descobrir o commit." >&2
+            exit 1
+          fi
+          commit_sha="${runtime_image##*:}"
+          tools_image="ghcr.io/${repo}/backend:tools-${commit_sha}"
+
           printf '%s' "$ghcr_pat" | docker login ghcr.io -u "$ghcr_user" --password-stdin
-          docker pull "$tools_image"
+          if ! docker pull "$tools_image"; then
+            echo "ERRO: ${tools_image} nao existe no registry. O backend rodando em producao (${runtime_image}) foi deployado antes desta imagem de ferramentas pinada por commit existir, ou o deploy daquele commit nao chegou a publicar a imagem de ferramentas. Rode 'Deploy Backend' de novo (ou workflow_dispatch) pra publicar ${tools_image} antes de repetir o seed." >&2
+            exit 1
+          fi
+          digest="$(docker inspect "$tools_image" --format '{{index .RepoDigests 0}}' 2>/dev/null || echo '(sem digest -- imagem só local)')"
+          echo "tools_image=${tools_image}"
+          echo "tools_image_digest=${digest}"
+          echo "runtime_image_no_ar=${runtime_image}"
+
           BACKEND_IMAGE="$tools_image" docker compose --env-file .env -f docker-compose.yml run --rm --no-deps \
             -e SEED_QA_ENVIRONMENT=qa \
             -e SEED_QA_PASSWORD="$pwd_value" \
@@ -125,8 +150,14 @@ jobs:
             extra_arg="--remove"
           fi
           repo="${GITHUB_REPOSITORY,,}"
-          tools_image="ghcr.io/${repo}/backend:tools"
           scp -i "$HOME/.ssh/allka_deploy_key" -P "$VPS_SSH_PORT" \
             -o StrictHostKeyChecking=accept-new -o UserKnownHostsFile="$HOME/.ssh/known_hosts" \
             .deploy/remote-seed.sh "$remote:/tmp/allka-remote-seed.sh"
-          ssh "${SSH_OPTS[@]}" "$remote" "bash /tmp/allka-remote-seed.sh '${VPS_DEPLOY_PATH}' '${SEED_QA_PASSWORD}' '${extra_arg}' '${GHCR_USERNAME}' '${GHCR_PAT}' '${tools_image}' && rm -f /tmp/allka-remote-seed.sh"
+          output="$(ssh "${SSH_OPTS[@]}" "$remote" "bash /tmp/allka-remote-seed.sh '${VPS_DEPLOY_PATH}' '${SEED_QA_PASSWORD}' '${extra_arg}' '${GHCR_USERNAME}' '${GHCR_PAT}' '${repo}'; rc=\$?; rm -f /tmp/allka-remote-seed.sh; exit \$rc")"
+          echo "$output"
+          {
+            echo "## Seed QA — imagem usada (prova de commit)"
+            echo '```'
+            echo "$output" | grep -E "^(tools_image|tools_image_digest|runtime_image_no_ar)="
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"

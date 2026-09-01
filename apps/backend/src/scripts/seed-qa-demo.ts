@@ -265,17 +265,35 @@ async function main() {
 
   // ── 2. Produto completo do catalog2 (nunca um dos 36 importados) ────────
   await seedCatalog2Classifications(db);
+  // A migration de baseline já garante a EXISTÊNCIA da linha singleton
+  // `catalog2_pricing_settings` (id="default") — mas só com `currency`
+  // preenchido, de propósito (as demais colunas ficam "aguardando definição
+  // comercial", nunca inventadas por uma migration). Isso significa que o
+  // upsert abaixo NUNCA cai no branch `create` num banco já migrado — e um
+  // `update: {}` (como era antes) deixava as % de taxa/comissão/margem/
+  // revisão e a ordem de incidência permanentemente `null`, o que bloqueia
+  // TODO produto do catalog2 (não só o de teste) via
+  // `computePricing().commercial_ready` (visto em produção: "Produto
+  // indisponível para cotação." mesmo com specialty/tarefas/preço corretos).
+  // Preenche só os campos que ainda estão null — nunca sobrescreve um valor
+  // que um admin real já tenha configurado.
+  const existingPricingSettings = await db.catalog2PricingSettings.findUnique({ where: { id: "default" } });
+  const pricingSettingsNeedsFill = !existingPricingSettings || existingPricingSettings.tax_percent == null;
   await db.catalog2PricingSettings.upsert({
     where: { id: "default" },
     create: {
       id: "default",
       tax_percent: 6, commission_percent: 10, operational_fee_percent: 5, profit_margin_percent: 30, human_review_percent: 10,
       component_order_json: JSON.stringify(["tax", "commission", "operational", "margin"]),
-      notes: "[TESTE QA] valores fictícios — nunca sobrescreve config real já definida (só preenchido na criação).",
+      notes: "[TESTE QA] valores fictícios — nunca sobrescreve config real já definida (só preenchido na criação/complemento).",
     },
-    // Nunca sobrescreve config comercial real já configurada num QA de longa
-    // duração — só garante que existe alguma coisa preenchida na 1ª vez.
-    update: {},
+    update: pricingSettingsNeedsFill
+      ? {
+          tax_percent: 6, commission_percent: 10, operational_fee_percent: 5, profit_margin_percent: 30, human_review_percent: 10,
+          component_order_json: JSON.stringify(["tax", "commission", "operational", "margin"]),
+          notes: "[TESTE QA] valores fictícios — nunca sobrescreve config real já definida (só preenchido na criação/complemento).",
+        }
+      : {},
   });
   const designer = await db.catalog2Specialty.findFirst({ where: { key: "designer" } });
   if (designer && designer.max_hourly_rate == null) {

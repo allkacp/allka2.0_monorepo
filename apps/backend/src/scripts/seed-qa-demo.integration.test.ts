@@ -5,6 +5,8 @@ import path from "node:path";
 import { requireTestDatabaseUrl } from "../test-support/require-test-database";
 import { prisma } from "../lib/prisma";
 import { seedCatalog2FourFForTests } from "../lib/catalog2-classifications-seed";
+import { checkClientVisibility } from "../lib/catalog2-client";
+import { computePricing, defaultSelection } from "../lib/catalog2-pricing";
 
 // Preparação pré-deploy QA — garantias do seed:qa-demo: recusa produção,
 // é idempotente, e --remove apaga só a fixture (nunca uma busca ampla).
@@ -95,5 +97,43 @@ describe("seed:qa-demo — garantias de segurança e idempotência", () => {
     assert.equal(productAfterRemove, null);
     const productsAfterRemove = await prisma.product.count();
     assert.equal(productsAfterRemove, productsBefore, "--remove nunca toca nos produtos operacionais");
+  });
+
+  it("produto criado é REALMENTE cotável — mesmo quando catalog2_pricing_settings já existe parcial (como a migration de baseline deixa em produção)", async () => {
+    // Reproduz exatamente a condição que causou "Produto indisponível para
+    // cotação." em produção (nunca detectada antes porque os testes usam
+    // `db push`, que nunca roda o INSERT da migration — o singleton
+    // simplesmente não existia nos testes, então o upsert do seed sempre
+    // caía no branch `create`, preenchendo tudo certo por acidente). A
+    // migration real só garante `currency`, deixando as % comerciais e a
+    // ordem de incidência null "aguardando definição comercial" — pré-cria
+    // esse mesmo estado parcial aqui antes de rodar o seed.
+    await prisma.catalog2PricingSettings.deleteMany({ where: { id: "default" } });
+    await prisma.catalog2PricingSettings.create({ data: { id: "default", currency: "BRL" } });
+
+    const r = run([], { SEED_QA_ENVIRONMENT: "local", SEED_QA_PASSWORD: "Teste123" });
+    assert.equal(r.status, 0, r.output);
+
+    const settings = await prisma.catalog2PricingSettings.findUniqueOrThrow({ where: { id: "default" } });
+    assert.notEqual(settings.tax_percent, null, "seed precisa completar % que a migration deixou pendente, nunca deixar null pra sempre");
+    assert.notEqual(settings.commission_percent, null);
+    assert.notEqual(settings.operational_fee_percent, null);
+    assert.notEqual(settings.profit_margin_percent, null);
+    assert.notEqual(settings.human_review_percent, null);
+    assert.notEqual(settings.component_order_json, null);
+
+    const product = await prisma.catalog2Product.findUniqueOrThrow({ where: { slug: "teste-qa-servico-completo" } });
+    assert.equal(product.status, "disponivel");
+    assert.notEqual(product.published_version_id, null);
+
+    // Não basta checar campos isolados — exercita as MESMAS funções reais
+    // que o catálogo do cliente usa (é exatamente onde "Produto indisponível
+    // para cotação." foi lançado).
+    const visibility = await checkClientVisibility(product as any);
+    assert.equal(visibility.visible, true, `produto devia estar visível/cotável, motivos: ${visibility.reasons.join("; ")}`);
+
+    const selection = await defaultSelection(product.published_version_id!);
+    const pricing = await computePricing(product.published_version_id!, selection);
+    assert.equal(pricing.commercial_ready, true, `preço devia estar comercialmente pronto, bloqueios: ${pricing.quote_blockers.join("; ")}`);
   });
 });
