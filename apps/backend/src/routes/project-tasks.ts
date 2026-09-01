@@ -11,6 +11,7 @@ import { combinedProjectWhere, isAdminUser } from "../lib/project-scope";
 import { recalculateProjectValue } from "../lib/project-value";
 import { findUnmetCatalog2Dependency, transitionNeedsDependencyGate, CATALOG2_STARTED_STATUSES } from "../lib/catalog2-task-dependencies";
 import { writeAccessAudit } from "../lib/product-feedback-service";
+import { recordApprovedTask } from "../lib/memory-service";
 import {
   iniciarEtapasDaTarefa,
   concluirEtapa,
@@ -1740,12 +1741,35 @@ router.patch(
         return;
       }
 
-      const resultado = await prisma.$transaction((tx) =>
-        aprovarTarefa(tx, req.params.id as string, {
+      // Memória (acabamento do bloco 1/4): o registro da entrega aprovada
+      // roda DENTRO da MESMA transação do aceite — nunca depois, separado.
+      // Aceite e memória cometem juntos ou nenhum dos dois: se o registro de
+      // memória falhar por qualquer motivo, a transação inteira volta atrás
+      // e a tarefa continua exatamente como estava antes deste PATCH (nunca
+      // fica "aprovada só no aceite, sem memória"). Uma nova tentativa deste
+      // mesmo PATCH então refaz os dois passos do zero, com a
+      // idempotency_key garantindo que não duplica se algum passo intermediário
+      // já tiver comprometido antes de uma falha de rede na resposta.
+      const resultado = await prisma.$transaction(async (tx) => {
+        const r = await aprovarTarefa(tx, req.params.id as string, {
           userId: req.user!.id,
           nivel,
-        }),
-      );
+        });
+        if (r.concluida) {
+          await recordApprovedTask(
+            {
+              projectId: task.project_id,
+              projectTaskId: task.id,
+              approvedAt: new Date(),
+              approvedByUserId: req.user!.id,
+              idempotencyKey: `memory-approved-task:${task.id}`,
+            },
+            tx,
+          );
+        }
+        return r;
+      });
+
       res.json(resultado);
     } catch (err) {
       next(err);

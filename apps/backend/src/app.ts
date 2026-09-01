@@ -67,6 +67,7 @@ import catalog2AdminRouter from "./routes/catalog2-admin";
 import catalog2CatalogRouter from "./routes/catalog2-catalog";
 import catalog2CheckoutRouter from "./routes/catalog2-checkout";
 import catalog2ChangeOrdersRouter from "./routes/catalog2-change-orders";
+import memoryRouter from "./routes/memory";
 import { prisma } from "./lib/prisma";
 import { errorHandler } from "./middleware/error";
 
@@ -249,6 +250,7 @@ app.use("/api/admin/catalog2", catalog2AdminRouter);
 // específicos primeiro.
 app.use("/api/catalog2/checkout", catalog2CheckoutRouter);
 app.use("/api/catalog2/change-orders", catalog2ChangeOrdersRouter);
+app.use("/api/memory", memoryRouter);
 // Catálogo do cliente do catalog2 (bloco 5/6) — visibilidade/configurador/
 // cotação/cesta. Permissão resolvida no servidor.
 app.use("/api/catalog2", catalog2CatalogRouter);

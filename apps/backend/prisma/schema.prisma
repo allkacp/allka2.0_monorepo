@@ -1505,6 +1505,7 @@ model ProjectTask {
   assignment_history TaskAssignmentHistory[]
   credentials        ProjectCredential[]
   task_offers        TaskOffer[]
+  memory_approved_records MemoryApprovedTaskRecord[]
   lider_responsavel  User?                   @relation("TaskLiderResponsavel", fields: [lider_responsavel_id], references: [id])
 
   // ── Rastreio da plataforma antiga ─────────────────────────────────────
@@ -1669,6 +1670,127 @@ model ProjectAttachment {
 
   @@index([project_id])
   @@map("project_attachments")
+}
+
+// ─── Memory (Sprint Memória e Automação por IA, bloco 1/4) ──────────────────
+// Memória hierárquica: Projeto > Company/Agência. Este bloco só guarda dado
+// estruturado com origem/escopo/histórico — NENHUMA montagem de prompt,
+// chamada de IA ou resolução de conflito de hierarquia acontece aqui (bloco
+// 2). Uma linha por escopo (@@unique[scope_type, scope_id]) — "memória
+// principal" com itens relacionados (arquivos, tarefas aprovadas, histórico),
+// nunca um texto único sem origem/tipo/histórico.
+model Memory {
+  id         String @id @default(cuid())
+  scope_type String
+  // "project" | "company" | "agency" — nunca comparado por string solta fora
+  // de memory-permissions.ts; ver MEMORY_SCOPE_TYPES ali.
+  scope_id   String
+
+  // Instruções positivas/negativas: texto livre, sempre editado POR SEÇÃO
+  // (nunca um blob único) — resumo é síntese manual neste bloco (a
+  // consolidação por IA fica pro bloco 2).
+  positive_instructions String? @db.LongText
+  negative_instructions String? @db.LongText
+  summary                String? @db.LongText
+
+  is_archived      Boolean   @default(false)
+  archived_at      DateTime?
+  archived_by_user_id String?
+
+  created_by_user_id String
+  created_at          DateTime @default(now())
+  updated_by_user_id  String?
+  // Token de concorrência otimista (mesmo padrão de planner.ts:
+  // PUT /cards/:id) — cliente reenvia o updated_at que leu por último;
+  // servidor recusa com 409 se não bater mais, nunca sobrescreve em silêncio.
+  updated_at          DateTime @updatedAt
+
+  files                  MemoryFile[]
+  approved_task_records  MemoryApprovedTaskRecord[]
+  history                MemoryHistoryEvent[]
+
+  @@unique([scope_type, scope_id])
+  @@index([scope_type, scope_id])
+  @@map("memories")
+}
+
+// Arquivos de referência da memória. Upload próprio (nunca reaproveita a
+// LINHA de ProjectAttachment/TaskAttachment — só a mesma BIBLIOTECA de disco,
+// lib/file-storage.ts) para que "remover da memória" nunca risque apagar um
+// anexo que outra entidade também referencia. Disco:
+// uploads/memory/<scope_type>/<scope_id>/<file_name>.
+model MemoryFile {
+  id        String @id @default(cuid())
+  memory_id String
+  memory    Memory @relation(fields: [memory_id], references: [id], onDelete: Cascade)
+
+  name        String
+  // nome original mostrado ao usuário
+  file_name   String
+  // nome gerado em disco (evita colisão/traversal)
+  mime_type   String?
+  size        Int
+  uploaded_by_user_id String
+
+  created_at  DateTime  @default(now())
+  // Arquivamento lógico — "remover" nunca apaga o arquivo em disco na hora,
+  // só marca; a limpeza física fica pra uma rotina futura (fora deste bloco),
+  // evitando apagar em cima de uma leitura concorrente.
+  archived_at DateTime?
+
+  @@index([memory_id])
+  @@map("memory_files")
+}
+
+// Referência estruturada de UMA tarefa/entrega aprovada — só dado seguro e
+// necessário (nunca conteúdo livre da tarefa). A síntese por IA a partir
+// disso é do bloco 2; aqui só se prepara o dado. idempotency_key evita
+// registrar o mesmo evento de aprovação duas vezes em retry/duplo clique.
+model MemoryApprovedTaskRecord {
+  id        String @id @default(cuid())
+  memory_id String
+  memory    Memory @relation(fields: [memory_id], references: [id], onDelete: Cascade)
+
+  project_task_id String
+  project_task    ProjectTask @relation(fields: [project_task_id], references: [id], onDelete: Cascade)
+
+  approved_at      DateTime
+  approved_by_user_id String?
+  approval_note    String? @db.Text
+
+  idempotency_key String @unique
+
+  created_at DateTime @default(now())
+
+  @@index([memory_id])
+  @@map("memory_approved_task_records")
+}
+
+// Histórico imutável — nunca UPDATE/DELETE em produção, só INSERT. Nunca
+// guarda senha/token/segredo de infra nem binário de arquivo (só metadado).
+model MemoryHistoryEvent {
+  id        String @id @default(cuid())
+  memory_id String
+  memory    Memory @relation(fields: [memory_id], references: [id], onDelete: Cascade)
+
+  section String
+  // "positive_instructions" | "negative_instructions" | "summary" | "file" |
+  // "archive" | "approved_task"
+  action  String
+  // "created" | "updated" | "archived" | "unarchived" | "file_added" |
+  // "file_removed" | "approved_task_added"
+
+  actor_user_id String
+  before_json   String? @db.LongText
+  after_json    String? @db.LongText
+  reason        String? @db.Text
+  origin        String  @default("manual")
+  // "manual" | "task_approval"
+
+  created_at DateTime @default(now())
+
+  @@index([memory_id, created_at])
+  @@map("memory_history_events")
 }
 
 // ─── AIKnowledgeCategory / AIKnowledgeDocument ────────────────────────────────

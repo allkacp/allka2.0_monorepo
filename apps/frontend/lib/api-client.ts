@@ -2212,6 +2212,28 @@ class ApiClient {
   async getProjectDashboard(projectId: string) {
     return this.get(`/projects/${projectId}/dashboard`);
   }
+
+  // ─── Memória hierárquica (Projeto/Company/Agência — sprint bloco 1/4) ──────
+  // Bloco 1: só armazenamento/histórico/arquivo/concorrência. Nenhuma chamada
+  // de IA acontece a partir daqui ainda (bloco 2).
+  async getMemory(scopeType: "project" | "company" | "agency", scopeId: string) {
+    return this.get(`/memory/${scopeType}/${scopeId}`);
+  }
+  async updateMemorySection(scopeType: "project" | "company" | "agency", scopeId: string, section: "positive_instructions" | "negative_instructions" | "summary", value: string, updatedAt: string | null) {
+    return this.patch(`/memory/${scopeType}/${scopeId}`, { section, value, updatedAt });
+  }
+  async getMemoryHistory(scopeType: "project" | "company" | "agency", scopeId: string) {
+    return this.get(`/memory/${scopeType}/${scopeId}/history`);
+  }
+  async uploadMemoryFile(scopeType: "project" | "company" | "agency", scopeId: string, file: File) {
+    return this.uploadFile(`/memory/${scopeType}/${scopeId}/files`, file);
+  }
+  async deleteMemoryFile(scopeType: "project" | "company" | "agency", scopeId: string, fileId: string) {
+    return this.del(`/memory/${scopeType}/${scopeId}/files/${fileId}`);
+  }
+  async downloadMemoryFile(scopeType: "project" | "company" | "agency", scopeId: string, fileId: string) {
+    return this.downloadBlob(`/memory/${scopeType}/${scopeId}/files/${fileId}/download`);
+  }
   async getProjectBilling(projectId: string) {
     return this.get(`/projects/${projectId}/billing`);
   }
