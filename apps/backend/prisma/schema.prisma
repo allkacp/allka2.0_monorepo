@@ -762,6 +762,8 @@ model Project {
   iallka_session  IallkaSession?
   planner_cards   PlannerCard[]
   change_orders   Catalog2ChangeOrder[]
+  ai_context_snapshots  AIContextSnapshot[]
+  hallucination_reports HallucinationReport[]
 
   // ── Rastreio da plataforma antiga ─────────────────────────────────────
   // id numérico do registro equivalente no dump legado (Dump20260423.sql).
@@ -1506,6 +1508,7 @@ model ProjectTask {
   credentials        ProjectCredential[]
   task_offers        TaskOffer[]
   memory_approved_records MemoryApprovedTaskRecord[]
+  hallucination_reports HallucinationReport[]
   lider_responsavel  User?                   @relation("TaskLiderResponsavel", fields: [lider_responsavel_id], references: [id])
 
   // ── Rastreio da plataforma antiga ─────────────────────────────────────
@@ -1791,6 +1794,159 @@ model MemoryHistoryEvent {
 
   @@index([memory_id, created_at])
   @@map("memory_history_events")
+}
+
+// ─── AIContextSnapshot / HallucinationReport (bloco 2/4) ──────────────────────
+// Compilador hierárquico de memória (Projeto > Company > Agência) e defesa
+// contra alucinação. Nenhuma chamada de IA externa é fabricada aqui — o
+// snapshot registra uma execução REAL do nosso próprio compilador (a prévia
+// "Visualizar contexto que a IA utilizará" na aba Memória). `response_text`/
+// `provider`/`model` ficam nulos até um bloco futuro plugar isto numa
+// chamada de IA de verdade.
+model AIContextSnapshot {
+  id         String  @id @default(cuid())
+  project_id String
+  project    Project @relation(fields: [project_id], references: [id], onDelete: Cascade)
+
+  requested_by_user_id String
+  action                String @default("preview")
+  // "preview" (única usada neste bloco) | "execution" (reservado p/ quando
+  // uma chamada de IA real consumir o contexto compilado)
+
+  provider String?
+  // nulo neste bloco — nenhuma IA externa é chamada
+  model    String?
+
+  checksum        String
+  // sha256 do conteúdo estruturado das camadas (determinístico — mesmo
+  // conteúdo sempre gera o mesmo checksum, independente de quando foi
+  // gerado)
+  compiled_text   String @db.LongText
+  // texto final entregue à IA, já delimitado/saneado — nunca contém binário
+  structured_json String @db.LongText
+  // JSON de MemoryContextLayer[] (escopo, memory_id, updated_at, presente,
+  // truncado) — nunca guarda segredo nem o texto bruto não-saneado
+  missing_layers      String? @db.Text
+  // JSON string[] das camadas ausentes (nunca é erro, só transparência)
+  approved_task_refs  String? @db.Text
+  // JSON de referências a tarefas aprovadas consideradas (id/título/data)
+
+  response_text String? @db.LongText
+  // nulo neste bloco — reservado pra quando existir resposta de IA vinculada
+  status        String  @default("compiled")
+  // "compiled" (única usada neste bloco) | "sent" | "failed"
+
+  // Idempotência de criação — retry da mesma prévia (rede instável, duplo
+  // clique em "Visualizar contexto") nunca duplica o snapshot.
+  create_client_action_id String? @unique
+
+  created_at DateTime @default(now())
+
+  hallucination_reports HallucinationReport[]
+
+  @@index([project_id, created_at])
+  @@map("ai_context_snapshots")
+}
+
+// Relato de "possível alucinação" — nunca afirma que houve alucinação de
+// fato, só registra a suspeita pra análise administrativa. Nunca corrige
+// memória sozinho: qualquer edição de memória feita a partir daqui passa
+// pela API oficial do Bloco 1 e gera o MemoryHistoryEvent normal.
+model HallucinationReport {
+  id         String  @id @default(cuid())
+  project_id String
+  project    Project @relation(fields: [project_id], references: [id], onDelete: Cascade)
+
+  reported_by_user_id String
+
+  snapshot_id String?
+  snapshot    AIContextSnapshot? @relation(fields: [snapshot_id], references: [id], onDelete: SetNull)
+
+  project_task_id String?
+  project_task    ProjectTask? @relation(fields: [project_task_id], references: [id], onDelete: SetNull)
+
+  description         String  @db.LongText
+  questioned_response  String? @db.LongText
+  category             String
+  // "informacao_incorreta" | "instrucao_ignorada" | "tom_inadequado" |
+  // "dado_inventado" | "outro"
+  impact               String
+  // "baixo" | "medio" | "alto"
+
+  status                 String    @default("novo")
+  // "novo" | "em_analise" | "resolvido" | "descartado"
+  assigned_admin_user_id String?
+  assigned_at            DateTime?
+  suspected_origin_layer  String?
+  // "project" | "company" | "agency" — marcado pelo admin, nunca inferido
+  suspected_origin_memory_id String?
+  diagnosis_note          String? @db.LongText
+
+  resolution_note              String?   @db.LongText
+  resolved_by_user_id          String?
+  resolved_at                  DateTime?
+  // Idempotência de fechamento (mesmo padrão de SystemAlert.resolve —
+  // client_action_id único; repetir a mesma requisição devolve o resultado
+  // já existente em vez de duplicar ou dar erro).
+  resolution_client_action_id  String?   @unique
+
+  // Idempotência de criação — clique duplo no formulário nunca duplica.
+  create_client_action_id String? @unique
+
+  created_at DateTime @default(now())
+  // Concorrência otimista nas transições administrativas (mesmo padrão de
+  // Memory.updated_at — o admin reenvia o que leu por último).
+  updated_at DateTime @updatedAt
+
+  files  HallucinationReportFile[]
+  events HallucinationReportEvent[]
+
+  @@index([project_id, status])
+  @@index([status, created_at])
+  @@map("hallucination_reports")
+}
+
+// Anexo do relato — mesma biblioteca de disco de MemoryFile (lib/file-storage.ts),
+// linha própria (nunca reaproveita ProjectAttachment/TaskAttachment/MemoryFile),
+// arquivamento lógico, nunca apaga o binário na hora.
+model HallucinationReportFile {
+  id        String              @id @default(cuid())
+  report_id String
+  report    HallucinationReport @relation(fields: [report_id], references: [id], onDelete: Cascade)
+
+  name      String
+  file_name String
+  mime_type String?
+  size      Int
+  uploaded_by_user_id String
+
+  created_at  DateTime  @default(now())
+  archived_at DateTime?
+
+  @@index([report_id])
+  @@map("hallucination_report_files")
+}
+
+// Timeline imutável do relato — nunca UPDATE/DELETE, só INSERT. Mesmo
+// formato de SystemAlertEvent ({id, event_type, description, created_at}),
+// reaproveitado diretamente pelo componente de timeline do frontend
+// (AlertTimeline).
+model HallucinationReportEvent {
+  id        String              @id @default(cuid())
+  report_id String
+  report    HallucinationReport @relation(fields: [report_id], references: [id], onDelete: Cascade)
+
+  event_type    String
+  // "created" | "assumed_analysis" | "marked_suspected_origin" |
+  // "diagnosis_recorded" | "resolved" | "discarded"
+  actor_user_id String
+  description   String  @db.Text
+  metadata_json String? @db.LongText
+
+  created_at DateTime @default(now())
+
+  @@index([report_id, created_at])
+  @@map("hallucination_report_events")
 }
 
 // ─── AIKnowledgeCategory / AIKnowledgeDocument ────────────────────────────────

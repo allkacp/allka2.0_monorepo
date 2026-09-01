@@ -16,6 +16,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { ConfirmationDialog } from "@/components/confirmation-dialog";
 import { useToast } from "@/components/ui/use-toast";
 import { apiClient, ApiError } from "@/lib/api-client";
+import { MemoryContextPreview } from "@/components/memory-context-preview";
 
 export type MemoryScopeType = "project" | "company" | "agency";
 
@@ -295,6 +296,8 @@ export function MemoryPanel({ scopeType, scopeId, compact }: MemoryPanelProps) {
           Esta memória está arquivada.
         </div>
       )}
+
+      {scopeType === "project" && <MemoryContextPreview projectId={scopeId} />}
 
       {renderSection("summary")}
       {renderSection("positive_instructions")}

@@ -2234,6 +2234,55 @@ class ApiClient {
   async downloadMemoryFile(scopeType: "project" | "company" | "agency", scopeId: string, fileId: string) {
     return this.downloadBlob(`/memory/${scopeType}/${scopeId}/files/${fileId}/download`);
   }
+  // ── Compilador hierárquico + defesa contra alucinação (bloco 2/4) ────────
+  async previewMemoryContext(projectId: string, createClientActionId: string) {
+    return this.post(`/memory-context/${projectId}/preview`, { createClientActionId });
+  }
+  async getMemoryContextSnapshot(projectId: string, snapshotId: string) {
+    return this.get(`/memory-context/${projectId}/snapshots/${snapshotId}`);
+  }
+  async createHallucinationReport(payload: {
+    project_id: string;
+    description: string;
+    questioned_response?: string | null;
+    snapshot_id?: string | null;
+    project_task_id?: string | null;
+    category: string;
+    impact: string;
+    create_client_action_id: string;
+  }) {
+    return this.post(`/hallucination-reports`, payload);
+  }
+  async listHallucinationReports(params: { project_id?: string; status?: string; limit?: number; offset?: number } = {}) {
+    return this.get(`/hallucination-reports`, params);
+  }
+  async getHallucinationReport(id: string) {
+    return this.get(`/hallucination-reports/${id}`);
+  }
+  async getHallucinationReportHistory(id: string) {
+    return this.get(`/hallucination-reports/${id}/history`);
+  }
+  async uploadHallucinationReportFile(id: string, file: File) {
+    return this.uploadFile(`/hallucination-reports/${id}/files`, file);
+  }
+  async deleteHallucinationReportFile(id: string, fileId: string) {
+    return this.del(`/hallucination-reports/${id}/files/${fileId}`);
+  }
+  async downloadHallucinationReportFile(id: string, fileId: string) {
+    return this.downloadBlob(`/hallucination-reports/${id}/files/${fileId}/download`);
+  }
+  async assumeHallucinationAnalysis(id: string, updatedAt: string | null) {
+    return this.post(`/hallucination-reports/${id}/assume`, { updated_at: updatedAt });
+  }
+  async markHallucinationSuspectedOrigin(id: string, layer: "project" | "company" | "agency", memoryId: string | null, updatedAt: string | null) {
+    return this.post(`/hallucination-reports/${id}/suspected-origin`, { layer, memory_id: memoryId, updated_at: updatedAt });
+  }
+  async recordHallucinationDiagnosis(id: string, note: string, updatedAt: string | null) {
+    return this.post(`/hallucination-reports/${id}/diagnosis`, { note, updated_at: updatedAt });
+  }
+  async closeHallucinationReport(id: string, outcome: "resolvido" | "descartado", justification: string, clientActionId: string, updatedAt: string | null) {
+    return this.post(`/hallucination-reports/${id}/close`, { outcome, justification, client_action_id: clientActionId, updated_at: updatedAt });
+  }
   async getProjectBilling(projectId: string) {
     return this.get(`/projects/${projectId}/billing`);
   }

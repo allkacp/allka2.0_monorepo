@@ -68,6 +68,8 @@ import catalog2CatalogRouter from "./routes/catalog2-catalog";
 import catalog2CheckoutRouter from "./routes/catalog2-checkout";
 import catalog2ChangeOrdersRouter from "./routes/catalog2-change-orders";
 import memoryRouter from "./routes/memory";
+import memoryContextRouter from "./routes/memory-context";
+import hallucinationReportsRouter from "./routes/hallucination-reports";
 import { prisma } from "./lib/prisma";
 import { errorHandler } from "./middleware/error";
 
@@ -251,6 +253,8 @@ app.use("/api/admin/catalog2", catalog2AdminRouter);
 app.use("/api/catalog2/checkout", catalog2CheckoutRouter);
 app.use("/api/catalog2/change-orders", catalog2ChangeOrdersRouter);
 app.use("/api/memory", memoryRouter);
+app.use("/api/memory-context", memoryContextRouter);
+app.use("/api/hallucination-reports", hallucinationReportsRouter);
 // Catálogo do cliente do catalog2 (bloco 5/6) — visibilidade/configurador/
 // cotação/cesta. Permissão resolvida no servidor.
 app.use("/api/catalog2", catalog2CatalogRouter);
