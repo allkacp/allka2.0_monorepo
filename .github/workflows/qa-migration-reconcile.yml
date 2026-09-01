@@ -140,7 +140,10 @@ jobs:
             cat diff_output.sql
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
-          if grep -qiE '^\s*(DROP |DELETE |TRUNCATE )' diff_output.sql; then
+          # DROP FOREIGN KEY / DROP INDEX não apagam dado (só metadado de
+          # constraint/estrutura de busca) — não contam como destrutivo aqui.
+          # Só DROP TABLE/DATABASE, DELETE e TRUNCATE realmente perdem linhas.
+          if grep -qiE '^\s*(DROP TABLE|DROP DATABASE|DELETE |TRUNCATE )' diff_output.sql; then
             echo "has_destructive=true" >> "$GITHUB_OUTPUT"
           else
             echo "has_destructive=false" >> "$GITHUB_OUTPUT"
