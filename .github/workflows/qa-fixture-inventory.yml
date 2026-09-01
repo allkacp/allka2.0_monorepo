@@ -1,0 +1,142 @@
+name: QA Fixture Inventory (manual, read-only)
+
+# Disparo manual, SOMENTE LEITURA — nenhuma query aqui escreve, atualiza ou
+# apaga nada. Existe para confirmar, direto no banco (não só no texto que o
+# próprio seed imprime), que a fixture de QA tem exatamente a contagem
+# esperada, sem duplicação, e que os 162 produtos operacionais continuam
+# intactos. Roda com a imagem de RUNTIME (a que está realmente no ar — tem
+# @prisma/client gerado, não precisa de tsx/src para uma contagem simples).
+#
+# Nunca imprime e-mail completo, senha, hash ou qualquer dado de conta real
+# — só contagens e os identificadores fixos/públicos da própria fixture
+# (slug do produto de teste, código do projeto de teste).
+
+on:
+  workflow_dispatch: {}
+
+concurrency:
+  group: deploy-vps
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  inventory:
+    runs-on: ubuntu-latest
+    environment: dev
+    steps:
+      - name: Validate required secrets
+        shell: bash
+        env:
+          VPS_HOST: ${{ secrets.VPS_HOST }}
+          VPS_USER: ${{ secrets.VPS_USER }}
+          VPS_SSH_PORT: ${{ secrets.VPS_SSH_PORT }}
+          VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+        run: |
+          : "${VPS_HOST:?Set the VPS_HOST secret}"
+          : "${VPS_USER:?Set the VPS_USER secret}"
+          : "${VPS_SSH_PORT:?Set the VPS_SSH_PORT secret}"
+          : "${VPS_SSH_KEY:?Set the VPS_SSH_KEY secret}"
+
+      - name: Configure SSH
+        shell: bash
+        env:
+          VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+        run: |
+          mkdir -p ~/.ssh
+          touch ~/.ssh/allka_deploy_key
+          chmod 600 ~/.ssh/allka_deploy_key
+          printf '%s\n' "$VPS_SSH_KEY" > ~/.ssh/allka_deploy_key
+          touch ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/known_hosts
+
+      - name: Render remote inventory script (só leitura, só contagens)
+        shell: bash
+        run: |
+          mkdir -p .deploy
+          cat > .deploy/remote-inventory.mjs <<'SCRIPT'
+          const { PrismaClient } = require("@prisma/client");
+          const db = new PrismaClient();
+
+          async function main() {
+            const usersByRole = await db.user.groupBy({
+              by: ["role"],
+              where: { email: { endsWith: "@allka-qa.test" } },
+              _count: { _all: true },
+            });
+            const usersTotal = usersByRole.reduce((a, r) => a + r._count._all, 0);
+
+            const product = await db.catalog2Product.findUnique({
+              where: { slug: "teste-qa-servico-completo" },
+              select: { id: true, status: true, published_version_id: true },
+            });
+
+            const projects = await db.project.findMany({
+              where: { catalog2_checkout_client_action_id: "qa-demo-checkout" },
+              select: { id: true, project_code: true },
+            });
+            const projectIds = projects.map((p) => p.id);
+
+            const tasks = projectIds.length
+              ? await db.projectTask.count({ where: { project_id: { in: projectIds } } })
+              : 0;
+            const changeOrders = projectIds.length
+              ? await db.catalog2ChangeOrder.count({ where: { project_id: { in: projectIds } } })
+              : 0;
+            const alerts = projectIds.length
+              ? await db.systemAlert.count({ where: { entity_type: "project", entity_id: { in: projectIds } } })
+              : 0;
+
+            const operationalProducts = await db.product.count();
+            const draftCatalog2Products = await db.catalog2Product.count({ where: { status: { not: "disponivel" } } });
+            const publishedCatalog2Products = await db.catalog2Product.count({ where: { status: "disponivel" } });
+
+            console.log(JSON.stringify({
+              qa_users_total: usersTotal,
+              qa_users_by_role: usersByRole.map((r) => ({ role: r.role, count: r._count._all })),
+              qa_product_found: Boolean(product),
+              qa_product_status: product?.status ?? null,
+              qa_product_published_version_set: Boolean(product?.published_version_id),
+              qa_projects_count: projects.length,
+              qa_project_codes: projects.map((p) => p.project_code),
+              qa_tasks_count: tasks,
+              qa_change_orders_count: changeOrders,
+              qa_alerts_count: alerts,
+              operational_products_total: operationalProducts,
+              catalog2_products_disponivel_total: publishedCatalog2Products,
+              catalog2_products_nao_disponivel_total: draftCatalog2Products,
+            }, null, 2));
+          }
+
+          main().then(() => db.$disconnect()).catch((e) => { console.error(e); db.$disconnect(); process.exit(1); });
+          SCRIPT
+
+      - name: Coleta inventário do VPS
+        shell: bash
+        env:
+          VPS_HOST: ${{ secrets.VPS_HOST }}
+          VPS_USER: ${{ secrets.VPS_USER }}
+          VPS_SSH_PORT: ${{ secrets.VPS_SSH_PORT }}
+          VPS_DEPLOY_PATH: ${{ secrets.VPS_DEPLOY_PATH || '/opt/allka-2026' }}
+        run: |
+          VPS_HOST="$(echo -n "$VPS_HOST" | tr -d '[:space:]')"
+          VPS_USER="$(echo -n "$VPS_USER" | tr -d '[:space:]')"
+          VPS_SSH_PORT="$(echo -n "$VPS_SSH_PORT" | tr -d '[:space:]')"
+          remote="${VPS_USER}@${VPS_HOST}"
+          SSH_OPTS=(-i "$HOME/.ssh/allka_deploy_key" -p "$VPS_SSH_PORT" -o ConnectTimeout=15 -o ConnectionAttempts=2 -o BatchMode=yes -o StrictHostKeyChecking=accept-new -o UserKnownHostsFile="$HOME/.ssh/known_hosts")
+          scp -i "$HOME/.ssh/allka_deploy_key" -P "$VPS_SSH_PORT" -o StrictHostKeyChecking=accept-new -o UserKnownHostsFile="$HOME/.ssh/known_hosts" \
+            .deploy/remote-inventory.mjs "$remote:/tmp/allka-remote-inventory.cjs"
+          # O container não tem o diretório do VPS montado -- o script vive
+          # só no filesystem do HOST. Em vez de tentar copiar pra dentro da
+          # imagem, o `docker compose run` herda o stdin do processo que o
+          # chama: redirecionar o arquivo pra stdin do `node` (sem nome de
+          # arquivo) faz o Node executar o conteúdo recebido por stdin.
+          output="$(ssh "${SSH_OPTS[@]}" "$remote" "cd '${VPS_DEPLOY_PATH}' && docker compose --env-file .env -f docker-compose.yml run --rm --no-deps -T backend node < /tmp/allka-remote-inventory.cjs; rc=\$?; rm -f /tmp/allka-remote-inventory.cjs; exit \$rc" 2>&1 || true)"
+          echo "$output"
+          {
+            echo "## Inventário da fixture QA (só contagens, nada sensível)"
+            echo '```json'
+            echo "$output"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
