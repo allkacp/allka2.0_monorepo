@@ -68,6 +68,11 @@ jobs:
           # repetir a normalizacao na referencia do cache.
           echo "backend_buildcache=${REGISTRY}/${repo}/backend:buildcache" >> "$GITHUB_OUTPUT"
           echo "backend_tools=${REGISTRY}/${repo}/backend:tools" >> "$GITHUB_OUTPUT"
+          # Tag fixa pelo commit, além da móvel "tools" — sem isto, qualquer
+          # workflow que precise da imagem de ferramentas (ex.: seed:qa-demo)
+          # só consegue referenciar a tag móvel, sem nenhuma prova de qual
+          # commit ela representa de fato.
+          echo "backend_tools_pinned=${REGISTRY}/${repo}/backend:tools-${short_sha}" >> "$GITHUB_OUTPUT"
           echo "frontend_image=${REGISTRY}/${repo}/frontend:dev" >> "$GITHUB_OUTPUT"
 
       - name: Set up Docker Buildx
@@ -113,6 +118,7 @@ jobs:
           push: true
           tags: |
             ${{ steps.images.outputs.backend_tools }}
+            ${{ steps.images.outputs.backend_tools_pinned }}
           # Mesmo cache do build normal — o Dockerfile é multi-stage e o
           # estágio "build" já é compilado de qualquer forma para gerar o
           # runtime; isto só adiciona a tag/push de uma imagem que já existia
