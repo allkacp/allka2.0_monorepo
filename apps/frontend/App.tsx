@@ -41,6 +41,8 @@ import { usePresenceHeartbeat } from "@/hooks/use-presence-heartbeat";
 import { PinActivationListener } from "@/components/pin-activation-listener";
 import { ProductFeedbackWidget } from "@/components/product-feedback-widget";
 import { isStandardShellRoute } from "@/components/standard-page-shell";
+import { OnboardingProvider } from "@/contexts/onboarding-context";
+import { HelpFloatingIcon } from "@/components/help-floating-icon";
 
 import { PartnerProvider } from "@/contexts/partner-context";
 import { EmpresaProvider } from "@/contexts/empresa-context";
@@ -631,6 +633,15 @@ function AppLayout({ children }: { children: React.ReactNode }) {
                                 conteúdo atrás enquanto exige ciência. */}
                             <MandatoryBannerGate />
                             <PinActivationListener />
+                            {/* Onboarding: tour guiado (sprint de onboarding, bloco
+                                1/3) — janela de boas-vindas no primeiro acesso +
+                                motor do tour + botão de Ajuda com "Tours da
+                                plataforma". Depois do MandatoryBannerGate de
+                                propósito: a oferta automática nunca abre em cima
+                                de um banner obrigatório pendente. */}
+                            <OnboardingProvider>
+                              <HelpFloatingIcon />
+                            </OnboardingProvider>
                           </NotificationsPanelProvider>
                           </ProjectBasketProvider>
                           </GlobalHeaderPanelProvider>

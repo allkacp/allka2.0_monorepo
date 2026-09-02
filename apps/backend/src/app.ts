@@ -42,6 +42,7 @@ import metaIntegrationRouter from "./routes/meta-integration";
 import systemAlertsRouter from "./routes/system-alerts";
 import notificationsRouter from "./routes/notifications";
 import notificationPreferencesRouter from "./routes/notification-preferences";
+import tourProgressRouter from "./routes/tour-progress";
 import notificationGroupsRouter from "./routes/notification-groups";
 import paymentsRouter from "./routes/payments";
 import liderRouter from "./routes/lider";
@@ -201,6 +202,7 @@ app.use("/api/integrations/meta", metaIntegrationRouter);
 app.use("/api/system-alerts", systemAlertsRouter);
 app.use("/api/notifications", notificationsRouter);
 app.use("/api/notification-preferences", notificationPreferencesRouter);
+app.use("/api/tour-progress", tourProgressRouter);
 app.use("/api/notification-groups", notificationGroupsRouter);
 // Payments — sandbox/fake checkout + real gateway future
 app.use("/api/payments", paymentsRouter);

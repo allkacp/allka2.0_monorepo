@@ -97,6 +97,7 @@ model User {
   dashboard_templates                DashboardTemplate[]
   share_comments                     ShareComment[]
   notification_preferences           NotificationPreference[]
+  tour_progress                      TourProgress[]
   notification_groups_owned          NotificationGroup[]                @relation("NotificationGroupOwner")
   notification_group_memberships     NotificationGroupMember[]          @relation("NotificationGroupMemberUser")
   iallka_sessions                    IallkaSession[]
@@ -2960,6 +2961,46 @@ model NotificationPreference {
   @@unique([user_id, event_type, channel])
   @@index([user_id])
   @@map("notification_preferences")
+}
+
+// ─── Onboarding: progresso de tour guiado por usuário (sprint de onboarding,
+// bloco 1/3) ──────────────────────────────────────────────────────────────
+// Mesmo espírito de BannerAcknowledgement (uma linha por conteúdo+usuário+
+// versão, reaparece quando a versão sobe) — nunca só localStorage, pra
+// funcionar em outro navegador/dispositivo. `tour_key` é o identificador
+// estável do TourDefinition no registro do frontend (nunca validado contra
+// uma lista no backend — o backend só guarda progresso, quem decide QUAIS
+// tours existem e para quem é o registro do frontend).
+model TourProgress {
+  id      String @id @default(cuid())
+  user_id String
+  user    User   @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  tour_key String
+  version  Int
+
+  status String @default("nao_iniciado")
+  // nao_iniciado | em_andamento | concluido | adiado | dispensado
+
+  // Chave estável do último passo concluído/visto (id do TourStep, nunca um
+  // índice numérico — a ordem dos passos pode mudar entre reaberturas sem
+  // invalidar o progresso salvo).
+  last_step_key String?
+
+  started_at   DateTime?
+  completed_at DateTime?
+  dismissed_at DateTime?
+  postponed_at DateTime?
+  // "Agora não": até quando a oferta automática fica em espera — passado
+  // esse horário, o motor pode oferecer de novo. Nunca usado pra bloquear
+  // reabertura manual pela Central de Ajuda.
+  postponed_until DateTime?
+
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  @@unique([user_id, tour_key, version])
+  @@index([user_id])
+  @@map("tour_progress")
 }
 
 // Grupo pessoal de pessoas do próprio time do usuário (ex.: "Líderes de

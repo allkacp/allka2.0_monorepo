@@ -896,6 +896,7 @@ export function Header({ transparent = false }: { transparent?: boolean } = {}) 
               <Button
                 variant="ghost"
                 size="sm"
+                data-tour-id="notifications-button"
                 onClick={() => { setNotifTab("inbox"); setNotifOpen(true); }}
                 className="p-0 h-9 w-9 relative text-white/80 hover:bg-white/20 hover:text-white rounded-xl bg-white/10 border border-white/15"
                 aria-label={`Notificações${bellUnreadCount > 0 ? ` — ${bellUnreadCount} não lida${bellUnreadCount === 1 ? "" : "s"}` : ""}`}
@@ -913,7 +914,7 @@ export function Header({ transparent = false }: { transparent?: boolean } = {}) 
             {/* User card */}
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <button className="flex items-center gap-3 pl-2.5 pr-3 py-2 rounded-xl hover:bg-white/10 transition-all group outline-none border border-white/15 hover:border-white/30">
+                <button data-tour-id="user-profile-menu" className="flex items-center gap-3 pl-2.5 pr-3 py-2 rounded-xl hover:bg-white/10 transition-all group outline-none border border-white/15 hover:border-white/30">
                   <Avatar className="h-9 w-9 shrink-0 ring-2 ring-white/30 ring-offset-1 ring-offset-transparent">
                     <AvatarImage src={undefined} />
                     <AvatarFallback className="bg-linear-to-br from-blue-500 to-purple-600 text-white text-sm font-bold">

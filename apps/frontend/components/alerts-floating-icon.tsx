@@ -114,6 +114,7 @@ export function AlertsFloatingIcon() {
       <div className="hidden lg:block fixed top-[285px] right-[8px] z-65 group">
         <button
           type="button"
+          data-tour-id="alerts-button"
           onClick={() => setOpen(true)}
           aria-label={ariaLabel}
           title={ariaLabel}
@@ -146,6 +147,7 @@ export function AlertsFloatingIcon() {
           product-feedback-widget.tsx). */}
       <button
         type="button"
+        data-tour-id="alerts-button"
         onClick={() => setOpen(true)}
         aria-label={ariaLabel}
         className="lg:hidden fixed right-4 z-45 flex items-center justify-center h-14 w-14 rounded-full text-white shadow-[0_8px_24px_-4px_rgba(0,0,0,0.35)] active:scale-95 transition-transform"

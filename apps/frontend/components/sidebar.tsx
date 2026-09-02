@@ -1574,6 +1574,7 @@ export function Sidebar({ transparent = false }: { transparent?: boolean } = {})
 
           <nav
             ref={navRef}
+            data-tour-id="main-navigation"
             className={cn(
               "relative flex-1 px-2 py-4 space-y-1 backdrop-blur-sm overflow-y-auto sidebar-scrollbar scroll-fade-top scroll-fade-bottom",
               isScrolled && "scrolled",

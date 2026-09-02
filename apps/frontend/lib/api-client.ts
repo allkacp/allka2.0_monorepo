@@ -11,6 +11,22 @@ const API_BASE_URL =
 
 const TOKEN_KEY = "allka_token";
 
+export interface TourProgressDto {
+  id: string;
+  user_id: string;
+  tour_key: string;
+  version: number;
+  status: "nao_iniciado" | "em_andamento" | "concluido" | "adiado" | "dispensado";
+  last_step_key: string | null;
+  started_at: string | null;
+  completed_at: string | null;
+  dismissed_at: string | null;
+  postponed_at: string | null;
+  postponed_until: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
 // Erro estruturado — extends Error de propósito, então `catch (err) { err.message }`
 // (o padrão usado em toda a base hoje) continua funcionando sem mudança
 // nenhuma. Quem precisar dos campos extras (code/client/supportRequestAvailable
@@ -2848,6 +2864,32 @@ class ApiClient {
     channels: Partial<Record<"in_app" | "email" | "whatsapp" | "push", boolean>>,
   ) {
     return this.put("/notification-preferences", { event_type, channels });
+  }
+
+  // ─── Onboarding: progresso de tour guiado (bloco 1/3) ───────────────────
+  async listTourProgress() {
+    return this.get<{ data: TourProgressDto[] }>("/tour-progress");
+  }
+  async getTourProgress(tourKey: string, version: number) {
+    return this.get<{ data: TourProgressDto | null }>(`/tour-progress/${tourKey}`, { version });
+  }
+  async startTour(tourKey: string, version: number) {
+    return this.post<{ data: TourProgressDto }>(`/tour-progress/${tourKey}/start`, { version });
+  }
+  async saveTourStep(tourKey: string, version: number, stepKey: string) {
+    return this.patch<{ data: TourProgressDto }>(`/tour-progress/${tourKey}/step`, { version, step_key: stepKey });
+  }
+  async completeTour(tourKey: string, version: number) {
+    return this.post<{ data: TourProgressDto }>(`/tour-progress/${tourKey}/complete`, { version });
+  }
+  async postponeTour(tourKey: string, version: number) {
+    return this.post<{ data: TourProgressDto }>(`/tour-progress/${tourKey}/postpone`, { version });
+  }
+  async dismissTour(tourKey: string, version: number) {
+    return this.post<{ data: TourProgressDto }>(`/tour-progress/${tourKey}/dismiss`, { version });
+  }
+  async restartTour(tourKey: string, version: number) {
+    return this.post<{ data: TourProgressDto }>(`/tour-progress/${tourKey}/restart`, { version });
   }
 
   // ─── Grupos pessoais de notificação ────────────────────────────────────────
