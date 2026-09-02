@@ -21,4 +21,3 @@ CREATE TABLE `tour_progress` (
 
 -- AddForeignKey
 ALTER TABLE `tour_progress` ADD CONSTRAINT `tour_progress_user_id_fkey` FOREIGN KEY (`user_id`) REFERENCES `users`(`id`) ON DELETE CASCADE ON UPDATE CASCADE;
-

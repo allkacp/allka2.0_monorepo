@@ -117,4 +117,3 @@ ALTER TABLE `task_dependency_overrides` ADD CONSTRAINT `task_dependency_override
 
 -- AddForeignKey
 ALTER TABLE `task_release_events` ADD CONSTRAINT `task_release_events_task_id_fkey` FOREIGN KEY (`task_id`) REFERENCES `project_tasks`(`id`) ON DELETE CASCADE ON UPDATE CASCADE;
-
