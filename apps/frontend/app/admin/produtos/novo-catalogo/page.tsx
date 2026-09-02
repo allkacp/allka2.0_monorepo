@@ -138,7 +138,7 @@ export default function AdminNovoCatalogoPage() {
 
   return (
     <div className="mx-auto max-w-5xl space-y-5 p-4 md:p-6">
-      <header className="flex flex-wrap items-start justify-between gap-3">
+      <header className="flex flex-wrap items-start justify-between gap-3" data-tour-id="catalog2-admin-header">
         <div className="space-y-1">
           <h1 className="flex items-center gap-2 text-xl font-semibold text-neutral-900 dark:text-neutral-50">
             <Boxes className="h-5 w-5" /> Novo catálogo
@@ -242,7 +242,7 @@ export default function AdminNovoCatalogoPage() {
           <option value="updated">Alterado recentemente</option>
           <option value="created">Criado recentemente</option>
         </select>
-        <Button size="sm" onClick={() => setConfirm({ title: "Criar produto", message: "Um novo produto (em preparação) com uma versão rascunho será criado.", onConfirm: () => createProduct() })}>
+        <Button data-tour-id="catalog2-admin-create" size="sm" onClick={() => setConfirm({ title: "Criar produto", message: "Um novo produto (em preparação) com uma versão rascunho será criado.", onConfirm: () => createProduct() })}>
           <Plus className="h-4 w-4" /> Criar produto
         </Button>
       </div>

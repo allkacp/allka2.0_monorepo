@@ -42,6 +42,7 @@ import metaIntegrationRouter from "./routes/meta-integration";
 import systemAlertsRouter from "./routes/system-alerts";
 import notificationsRouter from "./routes/notifications";
 import notificationPreferencesRouter from "./routes/notification-preferences";
+import tourProgressRouter from "./routes/tour-progress";
 import notificationGroupsRouter from "./routes/notification-groups";
 import paymentsRouter from "./routes/payments";
 import liderRouter from "./routes/lider";
@@ -67,6 +68,11 @@ import catalog2AdminRouter from "./routes/catalog2-admin";
 import catalog2CatalogRouter from "./routes/catalog2-catalog";
 import catalog2CheckoutRouter from "./routes/catalog2-checkout";
 import catalog2ChangeOrdersRouter from "./routes/catalog2-change-orders";
+import memoryRouter from "./routes/memory";
+import memoryContextRouter from "./routes/memory-context";
+import hallucinationReportsRouter from "./routes/hallucination-reports";
+import launchSessionsRouter from "./routes/launch-sessions";
+import taskReleaseRouter from "./routes/task-release";
 import { prisma } from "./lib/prisma";
 import { errorHandler } from "./middleware/error";
 
@@ -196,6 +202,7 @@ app.use("/api/integrations/meta", metaIntegrationRouter);
 app.use("/api/system-alerts", systemAlertsRouter);
 app.use("/api/notifications", notificationsRouter);
 app.use("/api/notification-preferences", notificationPreferencesRouter);
+app.use("/api/tour-progress", tourProgressRouter);
 app.use("/api/notification-groups", notificationGroupsRouter);
 // Payments — sandbox/fake checkout + real gateway future
 app.use("/api/payments", paymentsRouter);
@@ -249,6 +256,11 @@ app.use("/api/admin/catalog2", catalog2AdminRouter);
 // específicos primeiro.
 app.use("/api/catalog2/checkout", catalog2CheckoutRouter);
 app.use("/api/catalog2/change-orders", catalog2ChangeOrdersRouter);
+app.use("/api/memory", memoryRouter);
+app.use("/api/memory-context", memoryContextRouter);
+app.use("/api/hallucination-reports", hallucinationReportsRouter);
+app.use("/api/launch-sessions", launchSessionsRouter);
+app.use("/api/task-release", taskReleaseRouter);
 // Catálogo do cliente do catalog2 (bloco 5/6) — visibilidade/configurador/
 // cotação/cesta. Permissão resolvida no servidor.
 app.use("/api/catalog2", catalog2CatalogRouter);

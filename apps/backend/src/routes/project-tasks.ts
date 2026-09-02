@@ -11,6 +11,9 @@ import { combinedProjectWhere, isAdminUser } from "../lib/project-scope";
 import { recalculateProjectValue } from "../lib/project-value";
 import { findUnmetCatalog2Dependency, transitionNeedsDependencyGate, CATALOG2_STARTED_STATUSES } from "../lib/catalog2-task-dependencies";
 import { writeAccessAudit } from "../lib/product-feedback-service";
+import { recordApprovedTask } from "../lib/memory-service";
+import { assertTaskStatusTransitionAllowed, TaskStatusGuardError } from "../lib/task-release-guard";
+import { reevaluateSuccessors, DependencyInUseError, TaskReleaseError } from "../lib/task-release-service";
 import {
   iniciarEtapasDaTarefa,
   concluirEtapa,
@@ -24,7 +27,7 @@ const router = Router();
 
 // ── Valid operational statuses ────────────────────────────────────────────────
 
-const TASK_STATUSES = [
+export const TASK_STATUSES = [
   // ── Pipeline original (mantidos para compatibilidade com dados existentes) ──
   "PARA_LANCAMENTO",
   "EM_LANCAMENTO",
@@ -53,6 +56,14 @@ const TASK_STATUSES = [
   "LANCAMENTO_ENVIADO_PARA_ANALISE",
   "DEVOLVIDA_PARA_AGENCIA",
   "LIBERADA_PELO_LIDER",
+  // ── Materialização da IA de Lançamento (bloco 4/4) ───────────────────────────
+  // RASCUNHO_OPERACIONAL: tarefa real criada, mas "Salvar como rascunho
+  // operacional" nunca libera nada — fica aqui até alguém explicitamente
+  // mandar pra execução. PENDENTE_DE_LIBERACAO: mandada pra execução, mas
+  // ainda tem gatilho/dependência/seleção de especialidade-responsável não
+  // satisfeitos — sai daqui exclusivamente via task-release-service.ts.
+  "RASCUNHO_OPERACIONAL",
+  "PENDENTE_DE_LIBERACAO",
 ] as const;
 
 type TaskStatus = (typeof TASK_STATUSES)[number];
@@ -666,6 +677,13 @@ router.patch(
       if (req.body.fase !== undefined) data.fase = req.body.fase;
 
       if (req.body.status !== undefined) {
+        // ── Dependência OPERACIONAL (bloco 4/4) + guarda contra "porta dos
+        // fundos" ────────────────────────────────────────────────────────
+        // Uma tarefa PENDENTE_DE_LIBERACAO/RASCUNHO_OPERACIONAL nunca sai
+        // desse estado por aqui — só pelos mecanismos dedicados do bloco 4.
+        // Cancelar uma tarefa usada como pré-requisito também é bloqueado.
+        await assertTaskStatusTransitionAllowed(prisma, existing, req.body.status);
+
         // ── Dependência real entre tarefas do catalog2 ──────────────────────
         // Mesmo gate de PATCH /:id/release — esta rota genérica permite
         // setar qualquer status diretamente (usada pelo modo de edição do
@@ -732,6 +750,10 @@ router.patch(
 
       res.json(updated);
     } catch (err) {
+      if (err instanceof TaskStatusGuardError || err instanceof DependencyInUseError) {
+        res.status(err.httpStatus).json({ error: err.message, code: err.code });
+        return;
+      }
       next(err);
     }
   },
@@ -1740,12 +1762,41 @@ router.patch(
         return;
       }
 
-      const resultado = await prisma.$transaction((tx) =>
-        aprovarTarefa(tx, req.params.id as string, {
+      // Memória (acabamento do bloco 1/4): o registro da entrega aprovada
+      // roda DENTRO da MESMA transação do aceite — nunca depois, separado.
+      // Aceite e memória cometem juntos ou nenhum dos dois: se o registro de
+      // memória falhar por qualquer motivo, a transação inteira volta atrás
+      // e a tarefa continua exatamente como estava antes deste PATCH (nunca
+      // fica "aprovada só no aceite, sem memória"). Uma nova tentativa deste
+      // mesmo PATCH então refaz os dois passos do zero, com a
+      // idempotency_key garantindo que não duplica se algum passo intermediário
+      // já tiver comprometido antes de uma falha de rede na resposta.
+      const resultado = await prisma.$transaction(async (tx) => {
+        const r = await aprovarTarefa(tx, req.params.id as string, {
           userId: req.user!.id,
           nivel,
-        }),
-      );
+        });
+        if (r.concluida) {
+          await recordApprovedTask(
+            {
+              projectId: task.project_id,
+              projectTaskId: task.id,
+              approvedAt: new Date(),
+              approvedByUserId: req.user!.id,
+              idempotencyKey: `memory-approved-task:${task.id}`,
+            },
+            tx,
+          );
+          // Liberação por tarefa aprovada (bloco 4/4): mesma transação do
+          // aceite + memória — localiza sucessoras, reavalia TODOS os
+          // bloqueadores e libera só quando estiverem satisfeitos. Retry ou
+          // duas aprovações concorrentes nunca liberam/notificam duas vezes
+          // (CAS dentro de tryReleaseTask, chamada por reevaluateSuccessors).
+          await reevaluateSuccessors(task.id, tx);
+        }
+        return r;
+      });
+
       res.json(resultado);
     } catch (err) {
       next(err);

@@ -11,6 +11,22 @@ const API_BASE_URL =
 
 const TOKEN_KEY = "allka_token";
 
+export interface TourProgressDto {
+  id: string;
+  user_id: string;
+  tour_key: string;
+  version: number;
+  status: "nao_iniciado" | "em_andamento" | "concluido" | "adiado" | "dispensado";
+  last_step_key: string | null;
+  started_at: string | null;
+  completed_at: string | null;
+  dismissed_at: string | null;
+  postponed_at: string | null;
+  postponed_until: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
 // Erro estruturado — extends Error de propósito, então `catch (err) { err.message }`
 // (o padrão usado em toda a base hoje) continua funcionando sem mudança
 // nenhuma. Quem precisar dos campos extras (code/client/supportRequestAvailable
@@ -2212,6 +2228,161 @@ class ApiClient {
   async getProjectDashboard(projectId: string) {
     return this.get(`/projects/${projectId}/dashboard`);
   }
+
+  // ─── Memória hierárquica (Projeto/Company/Agência — sprint bloco 1/4) ──────
+  // Bloco 1: só armazenamento/histórico/arquivo/concorrência. Nenhuma chamada
+  // de IA acontece a partir daqui ainda (bloco 2).
+  async getMemory(scopeType: "project" | "company" | "agency", scopeId: string) {
+    return this.get(`/memory/${scopeType}/${scopeId}`);
+  }
+  async updateMemorySection(scopeType: "project" | "company" | "agency", scopeId: string, section: "positive_instructions" | "negative_instructions" | "summary", value: string, updatedAt: string | null) {
+    return this.patch(`/memory/${scopeType}/${scopeId}`, { section, value, updatedAt });
+  }
+  async getMemoryHistory(scopeType: "project" | "company" | "agency", scopeId: string) {
+    return this.get(`/memory/${scopeType}/${scopeId}/history`);
+  }
+  async uploadMemoryFile(scopeType: "project" | "company" | "agency", scopeId: string, file: File) {
+    return this.uploadFile(`/memory/${scopeType}/${scopeId}/files`, file);
+  }
+  async deleteMemoryFile(scopeType: "project" | "company" | "agency", scopeId: string, fileId: string) {
+    return this.del(`/memory/${scopeType}/${scopeId}/files/${fileId}`);
+  }
+  async downloadMemoryFile(scopeType: "project" | "company" | "agency", scopeId: string, fileId: string) {
+    return this.downloadBlob(`/memory/${scopeType}/${scopeId}/files/${fileId}/download`);
+  }
+  // ── Compilador hierárquico + defesa contra alucinação (bloco 2/4) ────────
+  async previewMemoryContext(projectId: string, createClientActionId: string) {
+    return this.post(`/memory-context/${projectId}/preview`, { createClientActionId });
+  }
+  async getMemoryContextSnapshot(projectId: string, snapshotId: string) {
+    return this.get(`/memory-context/${projectId}/snapshots/${snapshotId}`);
+  }
+  async createHallucinationReport(payload: {
+    project_id: string;
+    description: string;
+    questioned_response?: string | null;
+    snapshot_id?: string | null;
+    launch_execution_id?: string | null;
+    project_task_id?: string | null;
+    category: string;
+    impact: string;
+    create_client_action_id: string;
+  }) {
+    return this.post(`/hallucination-reports`, payload);
+  }
+  async listHallucinationReports(params: { project_id?: string; status?: string; limit?: number; offset?: number } = {}) {
+    return this.get(`/hallucination-reports`, params);
+  }
+  async getHallucinationReport(id: string) {
+    return this.get(`/hallucination-reports/${id}`);
+  }
+  async getHallucinationReportHistory(id: string) {
+    return this.get(`/hallucination-reports/${id}/history`);
+  }
+  async uploadHallucinationReportFile(id: string, file: File) {
+    return this.uploadFile(`/hallucination-reports/${id}/files`, file);
+  }
+  async deleteHallucinationReportFile(id: string, fileId: string) {
+    return this.del(`/hallucination-reports/${id}/files/${fileId}`);
+  }
+  async downloadHallucinationReportFile(id: string, fileId: string) {
+    return this.downloadBlob(`/hallucination-reports/${id}/files/${fileId}/download`);
+  }
+  async assumeHallucinationAnalysis(id: string, updatedAt: string | null) {
+    return this.post(`/hallucination-reports/${id}/assume`, { updated_at: updatedAt });
+  }
+  async markHallucinationSuspectedOrigin(id: string, layer: "project" | "company" | "agency", memoryId: string | null, updatedAt: string | null) {
+    return this.post(`/hallucination-reports/${id}/suspected-origin`, { layer, memory_id: memoryId, updated_at: updatedAt });
+  }
+  async recordHallucinationDiagnosis(id: string, note: string, updatedAt: string | null) {
+    return this.post(`/hallucination-reports/${id}/diagnosis`, { note, updated_at: updatedAt });
+  }
+  async closeHallucinationReport(id: string, outcome: "resolvido" | "descartado", justification: string, clientActionId: string, updatedAt: string | null) {
+    return this.post(`/hallucination-reports/${id}/close`, { outcome, justification, client_action_id: clientActionId, updated_at: updatedAt });
+  }
+  // ── IA de Lançamento / Plano Tático (bloco 3/4) ──────────────────────────
+  async listLaunchSessions(projectId: string) {
+    return this.get(`/launch-sessions`, { project_id: projectId });
+  }
+  async createLaunchSession(projectId: string) {
+    return this.post(`/launch-sessions`, { project_id: projectId });
+  }
+  async getLaunchSession(id: string) {
+    return this.get(`/launch-sessions/${id}`);
+  }
+  async postLaunchMessage(sessionId: string, content: string) {
+    return this.post(`/launch-sessions/${sessionId}/messages`, { content });
+  }
+  async uploadLaunchMessageFile(sessionId: string, messageId: string, file: File) {
+    return this.uploadFile(`/launch-sessions/${sessionId}/messages/${messageId}/files`, file);
+  }
+  async downloadLaunchMessageFile(sessionId: string, messageId: string, fileId: string) {
+    return this.downloadBlob(`/launch-sessions/${sessionId}/messages/${messageId}/files/${fileId}/download`);
+  }
+  async deleteLaunchMessageFile(sessionId: string, messageId: string, fileId: string) {
+    return this.del(`/launch-sessions/${sessionId}/messages/${messageId}/files/${fileId}`);
+  }
+  async generateLaunchProposal(sessionId: string, clientActionId: string) {
+    return this.post(`/launch-sessions/${sessionId}/generate`, { client_action_id: clientActionId });
+  }
+  async getLaunchExecution(sessionId: string, executionId: string) {
+    return this.get(`/launch-sessions/${sessionId}/executions/${executionId}`);
+  }
+  async cancelLaunchGeneration(sessionId: string, executionId: string) {
+    return this.post(`/launch-sessions/${sessionId}/executions/${executionId}/cancel`, {});
+  }
+  async listLaunchVersions(sessionId: string) {
+    return this.get(`/launch-sessions/${sessionId}/versions`);
+  }
+  async getLaunchVersion(sessionId: string, versionId: string) {
+    return this.get(`/launch-sessions/${sessionId}/versions/${versionId}`);
+  }
+  async getLaunchEligibleAssignments(sessionId: string) {
+    return this.get(`/launch-sessions/${sessionId}/eligible-assignments`);
+  }
+  async submitLaunchHumanEdit(sessionId: string, plan: unknown, updatedAt: string | null) {
+    return this.post(`/launch-sessions/${sessionId}/versions`, { plan, updated_at: updatedAt });
+  }
+  async approveLaunchSession(sessionId: string, updatedAt: string | null, versionId?: string) {
+    return this.post(`/launch-sessions/${sessionId}/approve`, { updated_at: updatedAt, version_id: versionId });
+  }
+  async cancelLaunchSession(sessionId: string, updatedAt: string | null) {
+    return this.post(`/launch-sessions/${sessionId}/cancel`, { updated_at: updatedAt });
+  }
+  // ── Materialização em tarefas reais (bloco 4/4) ──────────────────────────
+  async getLaunchMaterializationPreview(sessionId: string, versionId: string) {
+    return this.get(`/launch-sessions/${sessionId}/versions/${versionId}/materialization-preview`);
+  }
+  async materializeLaunchVersion(
+    sessionId: string,
+    versionId: string,
+    mode: "rascunho_operacional" | "execucao",
+    clientActionId: string,
+  ) {
+    return this.post(`/launch-sessions/${sessionId}/materialize`, { version_id: versionId, mode, client_action_id: clientActionId });
+  }
+  // ── Dependências, gatilhos e liberação de tarefa (bloco 4/4) ─────────────
+  async getTaskReleaseGates(taskId: string) {
+    return this.get(`/task-release/tasks/${taskId}/gates`);
+  }
+  async listTaskDependencies(taskId: string) {
+    return this.get(`/task-release/tasks/${taskId}/dependencies`);
+  }
+  async addTaskDependency(taskId: string, dependsOnTaskId: string) {
+    return this.post(`/task-release/tasks/${taskId}/dependencies`, { depends_on_task_id: dependsOnTaskId });
+  }
+  async removeTaskDependency(taskId: string, dependencyId: string) {
+    return this.del(`/task-release/tasks/${taskId}/dependencies/${dependencyId}`);
+  }
+  async satisfyManualApprovalTrigger(triggerId: string, note: string) {
+    return this.post(`/task-release/triggers/${triggerId}/manual-approval`, { note });
+  }
+  async satisfySelectionTrigger(triggerId: string, data: { specialty_id?: string; responsible_user_id?: string }) {
+    return this.post(`/task-release/triggers/${triggerId}/selection`, data);
+  }
+  async applyTaskReleaseAdminOverride(taskId: string, reason: string) {
+    return this.post(`/task-release/tasks/${taskId}/admin-override`, { reason });
+  }
   async getProjectBilling(projectId: string) {
     return this.get(`/projects/${projectId}/billing`);
   }
@@ -2693,6 +2864,32 @@ class ApiClient {
     channels: Partial<Record<"in_app" | "email" | "whatsapp" | "push", boolean>>,
   ) {
     return this.put("/notification-preferences", { event_type, channels });
+  }
+
+  // ─── Onboarding: progresso de tour guiado (bloco 1/3) ───────────────────
+  async listTourProgress() {
+    return this.get<{ data: TourProgressDto[] }>("/tour-progress");
+  }
+  async getTourProgress(tourKey: string, version: number) {
+    return this.get<{ data: TourProgressDto | null }>(`/tour-progress/${tourKey}`, { version });
+  }
+  async startTour(tourKey: string, version: number) {
+    return this.post<{ data: TourProgressDto }>(`/tour-progress/${tourKey}/start`, { version });
+  }
+  async saveTourStep(tourKey: string, version: number, stepKey: string) {
+    return this.patch<{ data: TourProgressDto }>(`/tour-progress/${tourKey}/step`, { version, step_key: stepKey });
+  }
+  async completeTour(tourKey: string, version: number) {
+    return this.post<{ data: TourProgressDto }>(`/tour-progress/${tourKey}/complete`, { version });
+  }
+  async postponeTour(tourKey: string, version: number) {
+    return this.post<{ data: TourProgressDto }>(`/tour-progress/${tourKey}/postpone`, { version });
+  }
+  async dismissTour(tourKey: string, version: number) {
+    return this.post<{ data: TourProgressDto }>(`/tour-progress/${tourKey}/dismiss`, { version });
+  }
+  async restartTour(tourKey: string, version: number) {
+    return this.post<{ data: TourProgressDto }>(`/tour-progress/${tourKey}/restart`, { version });
   }
 
   // ─── Grupos pessoais de notificação ────────────────────────────────────────

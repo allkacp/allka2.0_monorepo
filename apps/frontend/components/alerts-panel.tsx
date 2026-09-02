@@ -378,6 +378,7 @@ export function AlertsPanel({ open = false, onClose }: AlertsPanelProps) {
             {isMaster && (
               <button
                 role="tab"
+                data-tour-id="alerts-manage-tab"
                 aria-selected={view === "manage"}
                 onClick={() => setView("manage")}
                 className={cn(

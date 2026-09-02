@@ -97,6 +97,7 @@ model User {
   dashboard_templates                DashboardTemplate[]
   share_comments                     ShareComment[]
   notification_preferences           NotificationPreference[]
+  tour_progress                      TourProgress[]
   notification_groups_owned          NotificationGroup[]                @relation("NotificationGroupOwner")
   notification_group_memberships     NotificationGroupMember[]          @relation("NotificationGroupMemberUser")
   iallka_sessions                    IallkaSession[]
@@ -762,6 +763,10 @@ model Project {
   iallka_session  IallkaSession?
   planner_cards   PlannerCard[]
   change_orders   Catalog2ChangeOrder[]
+  ai_context_snapshots  AIContextSnapshot[]
+  hallucination_reports HallucinationReport[]
+  launch_sessions       LaunchSession[]
+  task_dependencies     TaskDependency[]
 
   // ── Rastreio da plataforma antiga ─────────────────────────────────────
   // id numérico do registro equivalente no dump legado (Dump20260423.sql).
@@ -885,6 +890,7 @@ model Specialty {
   updated_at      DateTime @updatedAt
 
   task_templates TaskTemplate[]
+  project_tasks_requiring ProjectTask[]
 
   @@map("specialties")
 }
@@ -1280,6 +1286,13 @@ model ProjectProduct {
   // Preenchido só quando origin = "CATALOG2_ADDITIVE" — rastreia o aditivo
   // (Catalog2ChangeOrder) que originou esta linha.
   origin_catalog2_change_order_id String?                 @unique
+  // Preenchido só quando origin = "AI_LAUNCH" (bloco 4/4) — container de
+  // ProjectProduct exigido porque ProjectTask.project_product_id nunca é
+  // nulo; um plano de lançamento da IA não é uma compra de catálogo, mas
+  // precisa do mesmo "balde" pra suas tarefas existirem. @unique = a MESMA
+  // versão aprovada nunca materializa duas vezes (mesmo espírito de
+  // origin_catalog2_quote_id acima).
+  origin_launch_version_id        String?                 @unique
 
   // Snapshot: preserves commercial history even if product is later edited
   product_name_snapshot     String
@@ -1505,7 +1518,30 @@ model ProjectTask {
   assignment_history TaskAssignmentHistory[]
   credentials        ProjectCredential[]
   task_offers        TaskOffer[]
+  memory_approved_records MemoryApprovedTaskRecord[]
+  hallucination_reports HallucinationReport[]
   lider_responsavel  User?                   @relation("TaskLiderResponsavel", fields: [lider_responsavel_id], references: [id])
+
+  // ── IA de Lançamento — materialização (bloco 4/4) ──────────────────────
+  // Ponteiros "soft" (sem FK, mesmo padrão de outros vínculos com sessão/
+  // versão espalhados pelo schema) — só rastreabilidade/link de UI, nunca
+  // usados em cascade.
+  launch_session_id         String?
+  launch_version_id         String?
+  launch_materialization_id String?
+  // Fotografia dos campos como a IA propôs originalmente, antes de qualquer
+  // edição humana — permite a UI mostrar "isto foi alterado por humano"
+  // comparando com o valor atual da linha.
+  launch_ai_snapshot_json   String?    @db.LongText
+
+  required_specialty_id String?
+  required_specialty    Specialty? @relation(fields: [required_specialty_id], references: [id], onDelete: SetNull)
+
+  dependencies_as_successor    TaskDependency[]         @relation("TaskDependencySuccessor")
+  dependencies_as_prerequisite TaskDependency[]         @relation("TaskDependencyPrerequisite")
+  release_triggers             TaskReleaseTrigger[]
+  release_events                TaskReleaseEvent[]
+  dependency_overrides           TaskDependencyOverride[]
 
   // ── Rastreio da plataforma antiga ─────────────────────────────────────
   // id numérico do registro equivalente no dump legado (Dump20260423.sql).
@@ -1669,6 +1705,608 @@ model ProjectAttachment {
 
   @@index([project_id])
   @@map("project_attachments")
+}
+
+// ─── Memory (Sprint Memória e Automação por IA, bloco 1/4) ──────────────────
+// Memória hierárquica: Projeto > Company/Agência. Este bloco só guarda dado
+// estruturado com origem/escopo/histórico — NENHUMA montagem de prompt,
+// chamada de IA ou resolução de conflito de hierarquia acontece aqui (bloco
+// 2). Uma linha por escopo (@@unique[scope_type, scope_id]) — "memória
+// principal" com itens relacionados (arquivos, tarefas aprovadas, histórico),
+// nunca um texto único sem origem/tipo/histórico.
+model Memory {
+  id         String @id @default(cuid())
+  scope_type String
+  // "project" | "company" | "agency" — nunca comparado por string solta fora
+  // de memory-permissions.ts; ver MEMORY_SCOPE_TYPES ali.
+  scope_id   String
+
+  // Instruções positivas/negativas: texto livre, sempre editado POR SEÇÃO
+  // (nunca um blob único) — resumo é síntese manual neste bloco (a
+  // consolidação por IA fica pro bloco 2).
+  positive_instructions String? @db.LongText
+  negative_instructions String? @db.LongText
+  summary                String? @db.LongText
+
+  is_archived      Boolean   @default(false)
+  archived_at      DateTime?
+  archived_by_user_id String?
+
+  created_by_user_id String
+  created_at          DateTime @default(now())
+  updated_by_user_id  String?
+  // Token de concorrência otimista (mesmo padrão de planner.ts:
+  // PUT /cards/:id) — cliente reenvia o updated_at que leu por último;
+  // servidor recusa com 409 se não bater mais, nunca sobrescreve em silêncio.
+  updated_at          DateTime @updatedAt
+
+  files                  MemoryFile[]
+  approved_task_records  MemoryApprovedTaskRecord[]
+  history                MemoryHistoryEvent[]
+
+  @@unique([scope_type, scope_id])
+  @@index([scope_type, scope_id])
+  @@map("memories")
+}
+
+// Arquivos de referência da memória. Upload próprio (nunca reaproveita a
+// LINHA de ProjectAttachment/TaskAttachment — só a mesma BIBLIOTECA de disco,
+// lib/file-storage.ts) para que "remover da memória" nunca risque apagar um
+// anexo que outra entidade também referencia. Disco:
+// uploads/memory/<scope_type>/<scope_id>/<file_name>.
+model MemoryFile {
+  id        String @id @default(cuid())
+  memory_id String
+  memory    Memory @relation(fields: [memory_id], references: [id], onDelete: Cascade)
+
+  name        String
+  // nome original mostrado ao usuário
+  file_name   String
+  // nome gerado em disco (evita colisão/traversal)
+  mime_type   String?
+  size        Int
+  uploaded_by_user_id String
+
+  created_at  DateTime  @default(now())
+  // Arquivamento lógico — "remover" nunca apaga o arquivo em disco na hora,
+  // só marca; a limpeza física fica pra uma rotina futura (fora deste bloco),
+  // evitando apagar em cima de uma leitura concorrente.
+  archived_at DateTime?
+
+  @@index([memory_id])
+  @@map("memory_files")
+}
+
+// Referência estruturada de UMA tarefa/entrega aprovada — só dado seguro e
+// necessário (nunca conteúdo livre da tarefa). A síntese por IA a partir
+// disso é do bloco 2; aqui só se prepara o dado. idempotency_key evita
+// registrar o mesmo evento de aprovação duas vezes em retry/duplo clique.
+model MemoryApprovedTaskRecord {
+  id        String @id @default(cuid())
+  memory_id String
+  memory    Memory @relation(fields: [memory_id], references: [id], onDelete: Cascade)
+
+  project_task_id String
+  project_task    ProjectTask @relation(fields: [project_task_id], references: [id], onDelete: Cascade)
+
+  approved_at      DateTime
+  approved_by_user_id String?
+  approval_note    String? @db.Text
+
+  idempotency_key String @unique
+
+  created_at DateTime @default(now())
+
+  @@index([memory_id])
+  @@map("memory_approved_task_records")
+}
+
+// Histórico imutável — nunca UPDATE/DELETE em produção, só INSERT. Nunca
+// guarda senha/token/segredo de infra nem binário de arquivo (só metadado).
+model MemoryHistoryEvent {
+  id        String @id @default(cuid())
+  memory_id String
+  memory    Memory @relation(fields: [memory_id], references: [id], onDelete: Cascade)
+
+  section String
+  // "positive_instructions" | "negative_instructions" | "summary" | "file" |
+  // "archive" | "approved_task"
+  action  String
+  // "created" | "updated" | "archived" | "unarchived" | "file_added" |
+  // "file_removed" | "approved_task_added"
+
+  actor_user_id String
+  before_json   String? @db.LongText
+  after_json    String? @db.LongText
+  reason        String? @db.Text
+  origin        String  @default("manual")
+  // "manual" | "task_approval"
+
+  created_at DateTime @default(now())
+
+  @@index([memory_id, created_at])
+  @@map("memory_history_events")
+}
+
+// ─── AIContextSnapshot / HallucinationReport (bloco 2/4) ──────────────────────
+// Compilador hierárquico de memória (Projeto > Company > Agência) e defesa
+// contra alucinação. Nenhuma chamada de IA externa é fabricada aqui — o
+// snapshot registra uma execução REAL do nosso próprio compilador (a prévia
+// "Visualizar contexto que a IA utilizará" na aba Memória). `response_text`/
+// `provider`/`model` ficam nulos até um bloco futuro plugar isto numa
+// chamada de IA de verdade.
+model AIContextSnapshot {
+  id         String  @id @default(cuid())
+  project_id String
+  project    Project @relation(fields: [project_id], references: [id], onDelete: Cascade)
+
+  requested_by_user_id String
+  action                String @default("preview")
+  // "preview" (única usada neste bloco) | "execution" (reservado p/ quando
+  // uma chamada de IA real consumir o contexto compilado)
+
+  provider String?
+  // nulo neste bloco — nenhuma IA externa é chamada
+  model    String?
+
+  checksum        String
+  // sha256 do conteúdo estruturado das camadas (determinístico — mesmo
+  // conteúdo sempre gera o mesmo checksum, independente de quando foi
+  // gerado)
+  compiled_text   String @db.LongText
+  // texto final entregue à IA, já delimitado/saneado — nunca contém binário
+  structured_json String @db.LongText
+  // JSON de MemoryContextLayer[] (escopo, memory_id, updated_at, presente,
+  // truncado) — nunca guarda segredo nem o texto bruto não-saneado
+  missing_layers      String? @db.Text
+  // JSON string[] das camadas ausentes (nunca é erro, só transparência)
+  approved_task_refs  String? @db.Text
+  // JSON de referências a tarefas aprovadas consideradas (id/título/data)
+
+  response_text String? @db.LongText
+  // nulo neste bloco — reservado pra quando existir resposta de IA vinculada
+  status        String  @default("compiled")
+  // "compiled" (única usada neste bloco) | "sent" | "failed"
+
+  // Idempotência de criação — retry da mesma prévia (rede instável, duplo
+  // clique em "Visualizar contexto") nunca duplica o snapshot.
+  create_client_action_id String? @unique
+
+  created_at DateTime @default(now())
+
+  hallucination_reports HallucinationReport[]
+  launch_executions     LaunchGenerationExecution[]
+
+  @@index([project_id, created_at])
+  @@map("ai_context_snapshots")
+}
+
+// Relato de "possível alucinação" — nunca afirma que houve alucinação de
+// fato, só registra a suspeita pra análise administrativa. Nunca corrige
+// memória sozinho: qualquer edição de memória feita a partir daqui passa
+// pela API oficial do Bloco 1 e gera o MemoryHistoryEvent normal.
+model HallucinationReport {
+  id         String  @id @default(cuid())
+  project_id String
+  project    Project @relation(fields: [project_id], references: [id], onDelete: Cascade)
+
+  reported_by_user_id String
+
+  snapshot_id String?
+  snapshot    AIContextSnapshot? @relation(fields: [snapshot_id], references: [id], onDelete: SetNull)
+
+  // Bloco 3/4: quando o relato nasce direto da resposta da IA de lançamento,
+  // vincula a execução real (prompt/resposta/checksum), não só o snapshot de
+  // memória usado por ela.
+  launch_execution_id String?
+  launch_execution     LaunchGenerationExecution? @relation(fields: [launch_execution_id], references: [id], onDelete: SetNull)
+
+  project_task_id String?
+  project_task    ProjectTask? @relation(fields: [project_task_id], references: [id], onDelete: SetNull)
+
+  description         String  @db.LongText
+  questioned_response  String? @db.LongText
+  category             String
+  // "informacao_incorreta" | "instrucao_ignorada" | "tom_inadequado" |
+  // "dado_inventado" | "outro"
+  impact               String
+  // "baixo" | "medio" | "alto"
+
+  status                 String    @default("novo")
+  // "novo" | "em_analise" | "resolvido" | "descartado"
+  assigned_admin_user_id String?
+  assigned_at            DateTime?
+  suspected_origin_layer  String?
+  // "project" | "company" | "agency" — marcado pelo admin, nunca inferido
+  suspected_origin_memory_id String?
+  diagnosis_note          String? @db.LongText
+
+  resolution_note              String?   @db.LongText
+  resolved_by_user_id          String?
+  resolved_at                  DateTime?
+  // Idempotência de fechamento (mesmo padrão de SystemAlert.resolve —
+  // client_action_id único; repetir a mesma requisição devolve o resultado
+  // já existente em vez de duplicar ou dar erro).
+  resolution_client_action_id  String?   @unique
+
+  // Idempotência de criação — clique duplo no formulário nunca duplica.
+  create_client_action_id String? @unique
+
+  created_at DateTime @default(now())
+  // Concorrência otimista nas transições administrativas (mesmo padrão de
+  // Memory.updated_at — o admin reenvia o que leu por último).
+  updated_at DateTime @updatedAt
+
+  files  HallucinationReportFile[]
+  events HallucinationReportEvent[]
+
+  @@index([project_id, status])
+  @@index([status, created_at])
+  @@map("hallucination_reports")
+}
+
+// Anexo do relato — mesma biblioteca de disco de MemoryFile (lib/file-storage.ts),
+// linha própria (nunca reaproveita ProjectAttachment/TaskAttachment/MemoryFile),
+// arquivamento lógico, nunca apaga o binário na hora.
+model HallucinationReportFile {
+  id        String              @id @default(cuid())
+  report_id String
+  report    HallucinationReport @relation(fields: [report_id], references: [id], onDelete: Cascade)
+
+  name      String
+  file_name String
+  mime_type String?
+  size      Int
+  uploaded_by_user_id String
+
+  created_at  DateTime  @default(now())
+  archived_at DateTime?
+
+  @@index([report_id])
+  @@map("hallucination_report_files")
+}
+
+// Timeline imutável do relato — nunca UPDATE/DELETE, só INSERT. Mesmo
+// formato de SystemAlertEvent ({id, event_type, description, created_at}),
+// reaproveitado diretamente pelo componente de timeline do frontend
+// (AlertTimeline).
+model HallucinationReportEvent {
+  id        String              @id @default(cuid())
+  report_id String
+  report    HallucinationReport @relation(fields: [report_id], references: [id], onDelete: Cascade)
+
+  event_type    String
+  // "created" | "assumed_analysis" | "marked_suspected_origin" |
+  // "diagnosis_recorded" | "resolved" | "discarded"
+  actor_user_id String
+  description   String  @db.Text
+  metadata_json String? @db.LongText
+
+  created_at DateTime @default(now())
+
+  @@index([report_id, created_at])
+  @@map("hallucination_report_events")
+}
+
+// ─── IA de Lançamento / Plano Tático (bloco 3/4) ──────────────────────────────
+// Conversa persistente DENTRO de um projeto que usa o compilador hierárquico
+// do bloco 2 pra propor um plano tático de tarefas. Este bloco NUNCA
+// materializa tarefa/etapa operacional real — só produz e versiona uma
+// PROPOSTA revisável. "Aprovar como rascunho" aqui significa "plano revisado
+// e pronto para materialização", nunca "tarefas liberadas" (isso é o bloco 4,
+// junto do motor de dependências).
+model LaunchSession {
+  id         String  @id @default(cuid())
+  project_id String
+  project    Project @relation(fields: [project_id], references: [id], onDelete: Cascade)
+
+  created_by_user_id String
+
+  status String @default("coletando_informacoes")
+  // coletando_informacoes | aguardando_respostas | proposta_gerada |
+  // em_revisao | aprovada_como_rascunho | cancelada — nunca texto livre.
+
+  // Ponteiros "soft" (sem FK) pra versão de trabalho atual e pra versão
+  // aprovada — validados em código, mesmo padrão de outros ponteiros
+  // opcionais já usados no schema (ex.: User.admin_profile_id).
+  current_version_id  String?
+  approved_version_id String?
+
+  pending_questions_json String? @db.LongText
+  // JSON string[] — perguntas da IA por informação crítica ausente ainda sem
+  // resposta. Enquanto não vazio, a IA não pode ter inventado cliente,
+  // responsável, data, orçamento ou requisito nas seções que dependem disso.
+
+  plan_duration_months      Int?
+  // 2 | 3 | 6 | null quando plan_duration_days_custom preenchido
+  plan_duration_days_custom Int?
+  // só preenchido quando duração personalizada foi autorizada
+
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+  // Concorrência otimista (mesmo padrão do bloco 1/2): quem edita reenvia o
+  // updated_at que leu por último.
+
+  participants LaunchSessionParticipant[]
+  messages     LaunchMessage[]
+  versions     LaunchProposalVersion[]
+  executions   LaunchGenerationExecution[]
+  materializations LaunchMaterialization[]
+
+  @@index([project_id])
+  @@map("launch_sessions")
+}
+
+// Participantes autorizados além do criador — quem tem vínculo real com o
+// projeto sempre pode VER (ver launch-permissions.ts), isto é só pra
+// controlar quem além do criador pode efetivamente interagir/gerar/aprovar.
+model LaunchSessionParticipant {
+  id                String        @id @default(cuid())
+  session_id        String
+  session           LaunchSession @relation(fields: [session_id], references: [id], onDelete: Cascade)
+  user_id           String
+  added_by_user_id  String
+  added_at          DateTime      @default(now())
+
+  @@unique([session_id, user_id])
+  @@map("launch_session_participants")
+}
+
+// Mensagem da conversa (usuário, IA, ou sistema). Histórico persistente e
+// imutável — nunca editado depois de criado.
+model LaunchMessage {
+  id         String        @id @default(cuid())
+  session_id String
+  session    LaunchSession @relation(fields: [session_id], references: [id], onDelete: Cascade)
+
+  role String
+  // user | assistant | system
+  actor_user_id String?
+  // preenchido só quando role = "user"
+
+  content String @db.LongText
+
+  status String @default("ok")
+  // ok | error — falha de geração vira uma mensagem "assistant" com status
+  // "error" (mensagem de erro local, nunca falha silenciosa)
+
+  execution_id String?
+  // qual LaunchGenerationExecution gerou esta mensagem (role=assistant) —
+  // é o vínculo real que "Reportar possível alucinação" usa a partir daqui.
+
+  created_at DateTime @default(now())
+
+  files LaunchMessageFile[]
+
+  @@index([session_id, created_at])
+  @@map("launch_messages")
+}
+
+// Anexo de uma mensagem — biblioteca de disco própria (lib/file-storage.ts),
+// nunca reaproveita linha de outro anexo. Texto extraído (PDF/DOCX/TXT/MD,
+// mesma extração de lib/ai-knowledge-base.ts) fica salvo à parte — é o único
+// conteúdo do arquivo que pode ir pro prompt da IA, sempre saneado/delimitado
+// como conteúdo não confiável; o binário em si nunca é enviado.
+model LaunchMessageFile {
+  id         String        @id @default(cuid())
+  message_id String
+  message    LaunchMessage @relation(fields: [message_id], references: [id], onDelete: Cascade)
+
+  name      String
+  file_name String
+  mime_type String?
+  size      Int
+  uploaded_by_user_id String
+
+  extracted_text           String?  @db.LongText
+  extracted_text_truncated Boolean  @default(false)
+
+  created_at  DateTime  @default(now())
+  archived_at DateTime?
+
+  @@index([message_id])
+  @@map("launch_message_files")
+}
+
+// Uma versão IMUTÁVEL da proposta de plano tático — cada geração da IA ou
+// edição humana cria uma versão NOVA, nunca sobrescreve uma existente.
+// Permite comparar versões e proteger a versão aprovada contra sobrescrita.
+model LaunchProposalVersion {
+  id         String        @id @default(cuid())
+  session_id String
+  session    LaunchSession @relation(fields: [session_id], references: [id], onDelete: Cascade)
+
+  version_number Int
+  source         String
+  // ia_gerada | humano_editado
+  based_on_version_id String?
+  // versão anterior sobre a qual esta foi construída (edição humana de uma
+  // proposta da IA, ou nova geração da IA em cima de uma edição humana)
+
+  structured_json String @db.LongText
+  // plano tático completo já validado (schema estruturado — nunca Markdown
+  // livre): ondas/marcos, tarefas com todos os campos exigidos
+
+  created_by_user_id String
+  created_at          DateTime @default(now())
+
+  execution_id String?
+  // preenchido só quando source = "ia_gerada" — qual execução produziu isto
+
+  materialization LaunchMaterialization?
+
+  @@unique([session_id, version_number])
+  @@map("launch_proposal_versions")
+}
+
+// Execução real de geração de IA — snapshot de auditoria completo (bloco 2 +
+// bloco 3): provedor/modelo/checksum/prompt/resposta permitida. Idempotente
+// por client_action_id (clique duplo nunca duplica nem gera custo duplicado).
+model LaunchGenerationExecution {
+  id         String        @id @default(cuid())
+  session_id String
+  session    LaunchSession @relation(fields: [session_id], references: [id], onDelete: Cascade)
+
+  requested_by_user_id String
+
+  snapshot_id String?
+  snapshot    AIContextSnapshot? @relation(fields: [snapshot_id], references: [id], onDelete: SetNull)
+
+  based_on_version_id String?
+  // versão de trabalho usada como base desta geração, quando houver
+
+  provider String?
+  model    String?
+  checksum String?
+  // checksum do contexto de memória efetivamente usado (bloco 2)
+
+  prompt_sent   String? @db.LongText
+  // prompt final enviado, já saneado (nunca contém segredo/caminho interno)
+  response_json String? @db.LongText
+  // resposta estruturada permitida (nunca o "raciocínio" bruto do modelo)
+
+  status String @default("pending")
+  // pending | succeeded | failed | cancelled | timeout
+
+  error_message String? @db.Text
+  // mensagem segura — nunca guarda credencial/API key
+
+  client_action_id String @unique
+
+  started_at  DateTime  @default(now())
+  finished_at DateTime?
+
+  hallucination_reports HallucinationReport[]
+
+  @@index([session_id, started_at])
+  @@map("launch_generation_executions")
+}
+
+// ─── Materialização, dependências e liberação automática (bloco 4/4) ─────────
+// Transforma uma LaunchProposalVersion APROVADA em ProjectTask/ProjectTaskStage
+// reais. Dependência OPERACIONAL (TaskDependency) é entidade PRÓPRIA — nunca
+// reaproveita Catalog2TaskDependency (que é só template-a-template do
+// catálogo/catalog2, nunca aponta pra um ProjectTask real).
+
+model LaunchMaterialization {
+  id         String        @id @default(cuid())
+  session_id String
+  session    LaunchSession @relation(fields: [session_id], references: [id], onDelete: Cascade)
+
+  version_id String                @unique
+  // Único = "a proposta aprovada só pode ser materializada uma vez" —
+  // a MESMA constraint garante idempotência de clique duplo/retry.
+  version    LaunchProposalVersion @relation(fields: [version_id], references: [id], onDelete: Cascade)
+
+  mode                 String
+  // rascunho_operacional | execucao
+  requested_by_user_id String
+  client_action_id     String @unique
+
+  created_task_ids_json String @db.LongText
+  // JSON string[] dos ProjectTask.id criados nesta materialização
+  summary_json           String @db.LongText
+  // contagem de tarefas/etapas/dependências/ondas/pendências — usado na
+  // confirmação antes de materializar e na tela de sucesso
+
+  created_at DateTime @default(now())
+
+  @@index([session_id])
+  @@map("launch_materializations")
+}
+
+model TaskDependency {
+  id         String  @id @default(cuid())
+  project_id String
+  project    Project @relation(fields: [project_id], references: [id], onDelete: Cascade)
+  // Denormalizado de propósito — permite validar "nunca entre projetos
+  // diferentes" e detectar ciclo carregando só as arestas do projeto, sem
+  // precisar de join a cada checagem.
+
+  task_id            String
+  task               ProjectTask @relation("TaskDependencySuccessor", fields: [task_id], references: [id], onDelete: Cascade)
+  depends_on_task_id String
+  depends_on_task    ProjectTask @relation("TaskDependencyPrerequisite", fields: [depends_on_task_id], references: [id], onDelete: Restrict)
+  // Restrict: proteção de BANCO contra apagar (hard delete) uma tarefa usada
+  // como pré-requisito — nunca some silenciosamente uma dependência.
+
+  created_by_user_id String
+  created_at          DateTime @default(now())
+
+  @@unique([task_id, depends_on_task_id])
+  @@index([depends_on_task_id])
+  @@index([project_id])
+  @@map("task_dependencies")
+}
+
+// Gatilhos que NÃO são "esperar outra tarefa" (isso já é TaskDependency) —
+// data programada, pagamento de nova etapa, aprovação manual do gestor, e a
+// confirmação humana de especialidade/responsável quando a IA não conseguiu
+// resolver um id estável (ver launch-proposal-schema.ts).
+model TaskReleaseTrigger {
+  id      String      @id @default(cuid())
+  task_id String
+  task    ProjectTask @relation(fields: [task_id], references: [id], onDelete: Cascade)
+
+  trigger_type String
+  // scheduled_date | payment | manual_approval | specialty_selection | responsible_selection
+  status       String @default("pending")
+  // pending | satisfied
+
+  scheduled_at       DateTime?
+  scheduled_timezone String?
+
+  payment_reference_type String?
+  // "payment" | "catalog2_change_order" — nunca um gateway novo, só aponta
+  // pra um evento financeiro real já existente
+  payment_reference_id   String?
+
+  satisfied_by_user_id String?
+  satisfied_at          DateTime?
+  satisfaction_note     String?   @db.Text
+
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  @@index([task_id])
+  @@index([trigger_type, status, scheduled_at])
+  @@map("task_release_triggers")
+}
+
+// Exceção administrativa auditada — só permissão elevada oficial, nunca por
+// parâmetro escondido no payload (ver task-release-service.ts).
+model TaskDependencyOverride {
+  id      String      @id @default(cuid())
+  task_id String
+  task    ProjectTask @relation(fields: [task_id], references: [id], onDelete: Cascade)
+
+  reason                String   @db.Text
+  authorized_by_user_id String
+  created_at            DateTime @default(now())
+
+  @@index([task_id])
+  @@map("task_dependency_overrides")
+}
+
+// Histórico imutável de liberação — preenche a lacuna real encontrada na
+// auditoria (não existia nenhuma tabela genérica de histórico de status de
+// tarefa). Nunca UPDATE/DELETE em produção, só INSERT.
+model TaskReleaseEvent {
+  id      String      @id @default(cuid())
+  task_id String
+  task    ProjectTask @relation(fields: [task_id], references: [id], onDelete: Cascade)
+
+  event_type    String
+  // gate_created | trigger_satisfied | released | release_blocked_notice |
+  // admin_override | dependency_added | dependency_removed
+  actor_user_id String?
+  description   String  @db.Text
+  metadata_json String? @db.LongText
+
+  created_at DateTime @default(now())
+
+  @@index([task_id, created_at])
+  @@map("task_release_events")
 }
 
 // ─── AIKnowledgeCategory / AIKnowledgeDocument ────────────────────────────────
@@ -2323,6 +2961,46 @@ model NotificationPreference {
   @@unique([user_id, event_type, channel])
   @@index([user_id])
   @@map("notification_preferences")
+}
+
+// ─── Onboarding: progresso de tour guiado por usuário (sprint de onboarding,
+// bloco 1/3) ──────────────────────────────────────────────────────────────
+// Mesmo espírito de BannerAcknowledgement (uma linha por conteúdo+usuário+
+// versão, reaparece quando a versão sobe) — nunca só localStorage, pra
+// funcionar em outro navegador/dispositivo. `tour_key` é o identificador
+// estável do TourDefinition no registro do frontend (nunca validado contra
+// uma lista no backend — o backend só guarda progresso, quem decide QUAIS
+// tours existem e para quem é o registro do frontend).
+model TourProgress {
+  id      String @id @default(cuid())
+  user_id String
+  user    User   @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  tour_key String
+  version  Int
+
+  status String @default("nao_iniciado")
+  // nao_iniciado | em_andamento | concluido | adiado | dispensado
+
+  // Chave estável do último passo concluído/visto (id do TourStep, nunca um
+  // índice numérico — a ordem dos passos pode mudar entre reaberturas sem
+  // invalidar o progresso salvo).
+  last_step_key String?
+
+  started_at   DateTime?
+  completed_at DateTime?
+  dismissed_at DateTime?
+  postponed_at DateTime?
+  // "Agora não": até quando a oferta automática fica em espera — passado
+  // esse horário, o motor pode oferecer de novo. Nunca usado pra bloquear
+  // reabertura manual pela Central de Ajuda.
+  postponed_until DateTime?
+
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  @@unique([user_id, tour_key, version])
+  @@index([user_id])
+  @@map("tour_progress")
 }
 
 // Grupo pessoal de pessoas do próprio time do usuário (ex.: "Líderes de

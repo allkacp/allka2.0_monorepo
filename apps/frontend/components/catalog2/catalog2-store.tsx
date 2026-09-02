@@ -79,7 +79,7 @@ export function Catalog2Store({ portal }: { portal: Portal }) {
             </p>
           )}
         </div>
-        <Button size="sm" variant="outline" onClick={() => { setCartOpen(true); void loadCart(); }}>
+        <Button data-tour-id="catalog2-cart-button" size="sm" variant="outline" onClick={() => { setCartOpen(true); void loadCart(); }}>
           <ShoppingCart className="h-4 w-4" /> Cesta{cart.count > 0 ? ` (${cart.count})` : ""}
         </Button>
       </div>
@@ -136,7 +136,7 @@ function CatalogList({ refs, sp, setParam, setParams, onOpen }: any) {
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap items-center gap-2">
+      <div className="flex flex-wrap items-center gap-2" data-tour-id="catalog2-client-filters">
         <div className="relative min-w-[200px] flex-1">
           <Search className="absolute left-2 top-2.5 h-4 w-4 text-neutral-400" />
           <Input className="pl-8" placeholder="Buscar produto" value={q} onChange={(e) => setParams({ q: e.target.value, pagina: null })} />

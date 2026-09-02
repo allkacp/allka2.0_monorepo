@@ -314,11 +314,11 @@ export function NotificationsPanel({
                     </span>
                   )}
                 </TabsTrigger>
-                <TabsTrigger value="prefs"
+                <TabsTrigger value="prefs" data-tour-id="notifications-prefs-tab"
                   className="flex-1 gap-1.5 text-xs rounded-lg data-[state=active]:bg-white dark:data-[state=active]:bg-slate-700 data-[state=active]:shadow-sm py-2">
                   <Settings className="h-3.5 w-3.5" />Preferências
                 </TabsTrigger>
-                <TabsTrigger value="groups"
+                <TabsTrigger value="groups" data-tour-id="notifications-groups-tab"
                   className="flex-1 gap-1.5 text-xs rounded-lg data-[state=active]:bg-white dark:data-[state=active]:bg-slate-700 data-[state=active]:shadow-sm py-2">
                   <Users className="h-3.5 w-3.5" />Grupos
                 </TabsTrigger>

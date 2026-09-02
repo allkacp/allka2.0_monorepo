@@ -81,6 +81,7 @@ import { TermsManagementTab } from "@/components/terms-management-tab";
 import { ProjectsManagementTab } from "@/components/projects-management-tab";
 import { CompanyTasksTab } from "@/components/company-tasks-tab";
 import { CompanyLogsTab } from "@/components/company-logs-tab";
+import { MemoryPanel } from "@/components/memory-panel";
 import { ExportExtratoModal } from "@/components/export-extrato-modal";
 import { CompanyStatusSelector } from "@/components/company-status-selector";
 import {
@@ -1568,7 +1569,7 @@ export function CompanyViewSlidePanel({
                 className="flex-1 flex flex-col min-h-0"
               >
                 <div className="flex-shrink-0 bg-slate-200 dark:bg-background px-[50px] pt-2 pb-2 border-b border-slate-300 dark:border-slate-700 overflow-x-auto">
-                  <TabsList className="grid w-max grid-cols-11 gap-1 bg-transparent p-0 h-auto">
+                  <TabsList className="grid w-max grid-cols-12 gap-1 bg-transparent p-0 h-auto">
                     <TabsTrigger
                       value="visao-geral"
                       className="px-4 py-2 text-xs font-medium rounded-lg border border-transparent data-[state=active]:bg-blue-100 data-[state=active]:text-blue-700 data-[state=active]:border-blue-300 hover:bg-white/70"
@@ -1634,6 +1635,12 @@ export function CompanyViewSlidePanel({
                       className="px-4 py-2 text-xs font-medium rounded-lg border border-transparent data-[state=active]:bg-blue-100 data-[state=active]:text-blue-700 data-[state=active]:border-blue-300 hover:bg-white/70"
                     >
                       LGPD
+                    </TabsTrigger>
+                    <TabsTrigger
+                      value="memoria"
+                      className="px-4 py-2 text-xs font-medium rounded-lg border border-transparent data-[state=active]:bg-blue-100 data-[state=active]:text-blue-700 data-[state=active]:border-blue-300 hover:bg-white/70"
+                    >
+                      Memória
                     </TabsTrigger>
                   </TabsList>
                 </div>
@@ -4881,6 +4888,18 @@ export function CompanyViewSlidePanel({
                   <CompanyLogsTab company={company} />
                 </TabsContent>
                 <CompanyLgpdTab company={company} />
+
+                {/* Memória Tab (sprint Memória e Automação por IA, bloco 1/4) — este
+                    painel é compartilhado por Company E Agency (mesma tabela/drawer,
+                    ver company.type acima); o escopo real tem que seguir o tipo real
+                    da entidade aberta, nunca "company" fixo, senão a memória de toda
+                    Agência seria gravada (e checada) no escopo errado. */}
+                <TabsContent
+                  value="memoria"
+                  className="flex-1 overflow-y-auto bg-slate-200 px-[50px] pt-[25px] pb-[80px]"
+                >
+                  <MemoryPanel scopeType={company.type === "agency" ? "agency" : "company"} scopeId={companyApiId} compact />
+                </TabsContent>
               </Tabs>
             </div>
           </div>

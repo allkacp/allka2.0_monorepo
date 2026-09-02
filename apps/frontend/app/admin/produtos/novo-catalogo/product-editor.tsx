@@ -91,7 +91,7 @@ export function ProductEditor({ productId, onBack }: { productId: string; onBack
 
       {version && (
         <Tabs defaultValue="geral">
-          <TabsList className="flex-wrap">
+          <TabsList className="flex-wrap" data-tour-id="catalog2-editor-tabs">
             <TabsTrigger value="geral">1. Geral</TabsTrigger>
             <TabsTrigger value="class">2. Classificações</TabsTrigger>
             <TabsTrigger value="var">3. Variações</TabsTrigger>

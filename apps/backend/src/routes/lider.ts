@@ -3,6 +3,7 @@ import type { Request, Response, NextFunction } from "express";
 import { prisma } from "../lib/prisma";
 import { concluirEtapa, atribuirExecutorDaEtapa } from "../lib/stage-engine";
 import { verifyToken } from "../middleware/auth";
+import { reevaluateSuccessors } from "../lib/task-release-service";
 
 const router = Router();
 
@@ -252,6 +253,10 @@ router.patch("/tasks/:id/approve", async (req: Request, res: Response, next: Nex
         where: { id },
         data: { status: "APROVADA", updated_at: new Date() },
       });
+      // Liberação por tarefa aprovada (bloco 4/4) — este é um caminho de
+      // aprovação REAL e distinto do de stage-engine.ts (tarefa sem etapa),
+      // também precisa localizar/reavaliar sucessoras.
+      await reevaluateSuccessors(task.id);
       return res.json({ task });
     }
 

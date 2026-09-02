@@ -9,6 +9,7 @@ import { isMetaIntegrationConfigured } from "./lib/meta-ads-client";
 import { runDailySyncForAllConnections } from "./lib/meta-ads-sync";
 import { ensureDefaultAlertStandardsAndRules, runAlertEngineOnceGuarded } from "./lib/alert-engine";
 import { runTaskRotationOnceGuarded } from "./lib/task-rotation-engine";
+import { runTaskReleaseSchedulerOnceGuarded } from "./lib/task-release-scheduler";
 import { runCommsSchedulerOnceGuarded } from "./lib/comms";
 
 // Mascara a URL do banco: mantém apenas o caminho do arquivo, omite credenciais
@@ -125,6 +126,17 @@ async function main() {
     );
   }, config.TASK_ROTATION_INTERVAL_MS).unref();
   console.log(`🔁 Motor do rodízio de tarefas ativo (intervalo: ${config.TASK_ROTATION_INTERVAL_MS}ms).`);
+
+  // Worker de gatilho por data programada (bloco 4/4, IA de Lançamento) —
+  // mecanismo DURÁVEL do servidor (nunca timer só em memória): reavalia
+  // gatilhos vencidos direto do banco a cada tick, então atraso/reinício do
+  // servidor nunca perde a liberação. Mesmo padrão dos motores acima.
+  setInterval(() => {
+    runTaskReleaseSchedulerOnceGuarded().catch((err) =>
+      console.error("❌ Falha no worker de liberação por data programada:", err),
+    );
+  }, config.TASK_RELEASE_SCHEDULER_INTERVAL_MS).unref();
+  console.log(`📅 Worker de liberação por data programada ativo (intervalo: ${config.TASK_RELEASE_SCHEDULER_INTERVAL_MS}ms).`);
 
   // Motor de comunicação (ata 2026-08, bloco 5/5) — ativa campanhas/banners
   // agendados, cria as entregas idempotentes em lote e processa a outbox.

@@ -7,6 +7,10 @@ import { validate } from "../middleware/validate";
 import { assertProductContractable } from "../lib/product-contractability";
 import { recalculateProjectValue } from "../lib/project-value";
 import { parseProductMetadata } from "../lib/product-metadata";
+import { getTaskScopeWhere, applyScope } from "./project-tasks";
+import { findUnmetCatalog2Dependency, transitionNeedsDependencyGate } from "../lib/catalog2-task-dependencies";
+import { assertTaskStatusTransitionAllowed, TaskStatusGuardError } from "../lib/task-release-guard";
+import { DependencyInUseError } from "../lib/task-release-service";
 
 const router = Router();
 
@@ -449,8 +453,20 @@ router.patch(
   validate(updateProjectTaskSchema),
   async (req, res, next) => {
     try {
-      const task = await prisma.projectTask.findUnique({
-        where: { id: req.params.id as string as string as string },
+      // Fechamento de "porta dos fundos" (auditoria do bloco 4/4): esta rota
+      // legada não tinha NENHUM escopo/permissão nem checagem de dependência
+      // — qualquer usuário autenticado podia liberar/mudar status de
+      // qualquer tarefa de qualquer projeto. Agora reaproveita exatamente o
+      // mesmo escopo e os mesmos gates de PATCH /api/project-tasks/:id,
+      // nunca uma segunda implementação divergente.
+      const scopeWhere = await getTaskScopeWhere(req.user!.id, req.user!.account_type, req.user!.role);
+      if (scopeWhere === null) {
+        res.status(404).json({ error: "Tarefa não encontrada" });
+        return;
+      }
+
+      const task = await prisma.projectTask.findFirst({
+        where: applyScope({ id: req.params.id as string }, scopeWhere),
       });
       if (!task) {
         res.status(404).json({ error: "Tarefa não encontrada" });
@@ -459,6 +475,19 @@ router.patch(
 
       const data: Record<string, unknown> = {};
       if (req.body.status !== undefined) {
+        await assertTaskStatusTransitionAllowed(prisma, task, req.body.status);
+        if (transitionNeedsDependencyGate(task.status, req.body.status)) {
+          const blocker = await findUnmetCatalog2Dependency(prisma, task);
+          if (blocker) {
+            res.status(409).json({
+              error: `Esta tarefa depende de "${blocker.title}", que ainda não foi concluída.`,
+              code: "dependency_not_met",
+              blocked_by: blocker,
+            });
+            return;
+          }
+        }
+
         data.status = req.body.status;
         if (req.body.status === "CONCLUIDA") {
           data.completed_at = new Date();
@@ -480,7 +509,7 @@ router.patch(
         data.observations = req.body.observations;
 
       const updated = await prisma.projectTask.update({
-        where: { id: req.params.id as string as string as string },
+        where: { id: req.params.id as string },
         data,
         include: {
           project: { select: { id: true, title: true } },
@@ -491,6 +520,10 @@ router.patch(
       });
       res.json(updated);
     } catch (err) {
+      if (err instanceof TaskStatusGuardError || err instanceof DependencyInUseError) {
+        res.status(err.httpStatus).json({ error: err.message, code: err.code });
+        return;
+      }
       next(err);
     }
   },

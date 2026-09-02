@@ -41,6 +41,8 @@ import { usePresenceHeartbeat } from "@/hooks/use-presence-heartbeat";
 import { PinActivationListener } from "@/components/pin-activation-listener";
 import { ProductFeedbackWidget } from "@/components/product-feedback-widget";
 import { isStandardShellRoute } from "@/components/standard-page-shell";
+import { OnboardingProvider } from "@/contexts/onboarding-context";
+import { HelpFloatingIcon } from "@/components/help-floating-icon";
 
 import { PartnerProvider } from "@/contexts/partner-context";
 import { EmpresaProvider } from "@/contexts/empresa-context";
@@ -169,6 +171,7 @@ const AdminConfiguracoesPage = React.lazy(
 );
 const AdminSistemaPage = React.lazy(() => import("@/app/admin/sistema/page"));
 const AdminAlertasPage = React.lazy(() => import("@/app/admin/alertas/page"));
+const AdminRelatosIAPage = React.lazy(() => import("@/app/admin/relatos-ia/page"));
 const AdminLinksCompartilhadosPage = React.lazy(() => import("@/app/admin/links-compartilhados/page"));
 const AdminDashboardTemplatesPage = React.lazy(() => import("@/app/admin/dashboard-templates/page"));
 const AdminAcessoChamadosPage = React.lazy(() => import("@/app/admin/acesso-chamados/page"));
@@ -630,6 +633,15 @@ function AppLayout({ children }: { children: React.ReactNode }) {
                                 conteúdo atrás enquanto exige ciência. */}
                             <MandatoryBannerGate />
                             <PinActivationListener />
+                            {/* Onboarding: tour guiado (sprint de onboarding, bloco
+                                1/3) — janela de boas-vindas no primeiro acesso +
+                                motor do tour + botão de Ajuda com "Tours da
+                                plataforma". Depois do MandatoryBannerGate de
+                                propósito: a oferta automática nunca abre em cima
+                                de um banner obrigatório pendente. */}
+                            <OnboardingProvider>
+                              <HelpFloatingIcon />
+                            </OnboardingProvider>
                           </NotificationsPanelProvider>
                           </ProjectBasketProvider>
                           </GlobalHeaderPanelProvider>
@@ -952,6 +964,7 @@ export default function App() {
                   />
                   <Route path="/admin/sistema" element={<AdminSistemaPage />} />
                   <Route path="/admin/alertas" element={<AdminAlertasPage />} />
+                  <Route path="/admin/relatos-ia" element={<AdminRelatosIAPage />} />
                   <Route path="/admin/links-compartilhados" element={<AdminLinksCompartilhadosPage />} />
                   <Route path="/admin/dashboard-templates" element={<AdminDashboardTemplatesPage />} />
                   <Route path="/admin/acesso-chamados" element={<AdminAcessoChamadosPage />} />

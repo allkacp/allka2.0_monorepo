@@ -24,6 +24,7 @@ Checklists práticas para cada fase do trabalho.
 - [ ] Mobile testado (< 640px)
 - [ ] Nenhum `any` não justificado
 - [ ] Nenhum `console.log` esquecido
+- [ ] Esta alteração cria ou modifica uma funcionalidade visível? Verificar se o tour correspondente precisa ser criado ou versionado (ver `docs/onboarding-tours.md`)
 
 ### Desenvolvimento (backend)
 

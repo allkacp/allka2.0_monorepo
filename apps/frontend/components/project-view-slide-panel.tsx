@@ -47,6 +47,9 @@ import {
 import { apiClient } from "@/lib/api-client";
 import { TaskLaunchDrawer } from "@/components/task-launch-drawer";
 import { ProjectConnectionsTab } from "@/components/project-connections-tab";
+import { ProjectMemoriaTab } from "@/components/project-memoria-tab";
+import { LaunchSessionPanel } from "@/components/launch-session-panel";
+import { TaskReleaseBlockersPanel } from "@/components/task-release-blockers-panel";
 import { ProjectMetaAdsWidget } from "@/components/project-meta-ads-widget";
 import { cn } from "@/lib/utils";
 import {
@@ -388,10 +391,12 @@ function TaskDetailDrawer({
   task,
   onClose,
   onLaunch,
+  onOpenTask,
 }: {
   task: any;
   onClose: () => void;
   onLaunch?: (task: any) => void;
+  onOpenTask?: (taskId: string) => void;
 }) {
   const pc = PRIORITY_CFG[task.priority] ?? PRIORITY_CFG.medium;
   const overdue = isTaskOverdue(task);
@@ -501,6 +506,11 @@ function TaskDetailDrawer({
         {/* ── Scrollable body ── */}
         <div className="flex-1 overflow-y-auto bg-slate-50">
           <div className="px-6 py-5 space-y-6">
+
+            {/* Liberação automática por dependência/gatilho (bloco 4/4) */}
+            {(task.status === "PENDENTE_DE_LIBERACAO" || task.launch_materialization_id) && (
+              <TaskReleaseBlockersPanel taskId={task.id} canManage onOpenTask={onOpenTask} isAdmin={false} />
+            )}
 
             {/* Projeto + Cliente */}
             {(proj || client) && (
@@ -1203,6 +1213,28 @@ export function ProjectViewSlidePanel({
     }
   }, [project?.id]);
 
+  // Abre o drawer de uma tarefa por id — usado pelos links de tarefa
+  // recém-materializada (IA de Lançamento, bloco 4/4) e pelos pré-requisitos
+  // clicáveis do painel de bloqueadores. Busca fresca (a tarefa pode não
+  // estar em `projectTasks` ainda) em vez de confiar no estado desatualizado.
+  const openTaskById = useCallback(
+    async (taskId: string) => {
+      setActiveTab("tarefas");
+      if (!project?.id) return;
+      try {
+        const res = await apiClient.getOperationalTasks({ project_id: String(project.id) });
+        const tasks = res?.data ?? [];
+        setProjectTasks(tasks);
+        const target = tasks.find((t: any) => t.id === taskId);
+        if (target) {
+          setSelectedTask(target);
+          setTaskDrawerOpen(true);
+        }
+      } catch (_) {}
+    },
+    [project?.id],
+  );
+
   useEffect(() => {
     if (open && project?.id) {
       fetchProducts();
@@ -1486,7 +1518,7 @@ export function ProjectViewSlidePanel({
               >
                 {/* Tab bar */}
                 <div className="flex-shrink-0 bg-white dark:bg-background px-[50px] pt-0 pb-[10px] overflow-x-auto">
-                  <TabsList className="grid w-max grid-cols-9 gap-1 bg-transparent p-0 h-auto">
+                  <TabsList className="grid w-max grid-cols-11 gap-1 bg-transparent p-0 h-auto">
                     {[
                       { value: "visao-geral", label: "Visão Geral" },
                       {
@@ -1502,6 +1534,8 @@ export function ProjectViewSlidePanel({
                       { value: "equipe", label: "Equipe" },
                       { value: "nomades", label: "Nômades" },
                       { value: "conexoes", label: "Conexões" },
+                      { value: "memoria", label: "Memória" },
+                      { value: "lancamento-ia", label: "IA de Lançamento" },
                       { value: "logs", label: "Logs" },
                     ].map(({ value, label }) => (
                       <TabsTrigger
@@ -2989,6 +3023,32 @@ export function ProjectViewSlidePanel({
                 </TabsContent>
 
                 {/* ══════════════════════════════════════════════════════════
+                    TAB: MEMÓRIA (sprint Memória e Automação por IA, bloco 1/4)
+                ══════════════════════════════════════════════════════════ */}
+                <TabsContent
+                  value="memoria"
+                  className="flex-1 overflow-y-auto bg-slate-200 mt-0"
+                >
+                  <div className="px-[50px] py-[30px] pb-[80px] space-y-4">
+                    <ProjectMemoriaTab projectId={project.id} />
+                  </div>
+                </TabsContent>
+
+                {/* ══════════════════════════════════════════════════════════
+                    TAB: IA DE LANÇAMENTO (sprint Memória e Automação por IA,
+                    bloco 3/4) — conversa que propõe um plano tático; nunca
+                    materializa tarefa/etapa real (isso é o bloco 4).
+                ══════════════════════════════════════════════════════════ */}
+                <TabsContent
+                  value="lancamento-ia"
+                  className="flex-1 overflow-y-auto bg-slate-200 mt-0"
+                >
+                  <div className="px-[50px] py-[30px] pb-[80px] space-y-4">
+                    <LaunchSessionPanel projectId={project.id} onOpenTask={openTaskById} />
+                  </div>
+                </TabsContent>
+
+                {/* ══════════════════════════════════════════════════════════
                     TAB: LOGS
                 ══════════════════════════════════════════════════════════ */}
                 <TabsContent
@@ -3100,6 +3160,7 @@ export function ProjectViewSlidePanel({
             setLaunchDrawerTask(task);
             setLaunchDrawerOpen(true);
           }}
+          onOpenTask={openTaskById}
         />
       )}
 

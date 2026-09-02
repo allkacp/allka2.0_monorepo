@@ -17,6 +17,7 @@ import { Catalog2Error } from "./catalog2-service";
 import { revalidateQuote, type ClientContext } from "./catalog2-client";
 import { gerarTarefasCatalog2DoProjeto } from "./generate-tasks-catalog2";
 import type { GerarTarefasResult } from "./generate-tasks";
+import { satisfyPaymentTriggersByReference } from "./task-release-service";
 
 export class Catalog2CheckoutError extends Catalog2Error {}
 
@@ -226,6 +227,13 @@ export async function confirmCatalog2AdditivePayment(
     billingCycleKey: cycleKey,
     projectProductIds: [pp.id],
   });
+
+  // Gatilho de pagamento (bloco 4/4) — "pagamento de nova etapa" real: se
+  // este item veio de um Catalog2ChangeOrder (aditivo), satisfaz qualquer
+  // TaskReleaseTrigger que esperava exatamente este aditivo ser pago.
+  if (pp.origin_catalog2_change_order_id) {
+    await satisfyPaymentTriggersByReference({ referenceType: "catalog2_change_order", referenceId: pp.origin_catalog2_change_order_id }, tx);
+  }
 
   return { payment: confirmedPayment, alreadyProcessed: false, tasksResult };
 }
