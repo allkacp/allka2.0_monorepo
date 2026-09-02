@@ -26,7 +26,8 @@ import {
   LaunchSessionClosedError,
   LaunchGenerationInProgressError,
 } from "../lib/launch-session-service";
-import { launchPlanSchema, LaunchProposalValidationError } from "../lib/launch-proposal-schema";
+import { launchPlanSchema, LaunchProposalValidationError, listUsersEligibleForProjectResponsible, type LaunchPlan } from "../lib/launch-proposal-schema";
+import { materializeLaunchVersion, previewMaterializationSummary, MaterializationError } from "../lib/launch-materialization-service";
 
 const router = Router();
 
@@ -50,6 +51,10 @@ function handleServiceError(err: unknown, res: any, next: any): boolean {
   }
   if (err instanceof LaunchProposalValidationError) {
     res.status(err.httpStatus).json({ error: err.message, code: err.code, issues: err.issues });
+    return true;
+  }
+  if (err instanceof MaterializationError) {
+    res.status(err.httpStatus).json({ error: err.message, code: err.code });
     return true;
   }
   next(err);
@@ -383,6 +388,25 @@ router.get("/:id/versions/:versionId", verifyToken, async (req, res, next) => {
   }
 });
 
+// GET /api/launch-sessions/:id/eligible-assignments — especialidades ativas
+// (catálogo real, plataforma inteira) + responsáveis elegíveis (só quem tem
+// vínculo real com a EMPRESA/AGÊNCIA dona deste projeto específico, nunca a
+// plataforma inteira) — pro editor humano oferecer como opções reais, nunca
+// associar por texto parecido nem inventar id.
+router.get("/:id/eligible-assignments", verifyToken, async (req, res, next) => {
+  try {
+    const loaded = await loadSessionWithView(req, res);
+    if (!loaded) return;
+    const [specialties, responsibles] = await Promise.all([
+      prisma.specialty.findMany({ where: { is_active: true }, select: { id: true, name: true }, orderBy: { name: "asc" } }),
+      listUsersEligibleForProjectResponsible(loaded.project_id),
+    ]);
+    res.json({ specialties, responsibles });
+  } catch (err) {
+    next(err);
+  }
+});
+
 // POST /api/launch-sessions/:id/versions — edição humana. body: { plan, updated_at }
 router.post("/:id/versions", verifyToken, async (req, res, next) => {
   try {
@@ -429,6 +453,67 @@ router.post("/:id/cancel", verifyToken, async (req, res, next) => {
     if (!ok) return;
     const session = await cancelLaunchSession({ sessionId: req.params.id as string, actorUserId: req.user!.id, expectedUpdatedAt: req.body?.updated_at ?? null });
     res.json({ session });
+  } catch (err) {
+    handleServiceError(err, res, next);
+  }
+});
+
+// GET /api/launch-sessions/:id/versions/:versionId/materialization-preview —
+// resumo (tarefas/etapas/dependências/ondas/pendências) ANTES de confirmar.
+// Nunca cria nada — só leitura, calculada em cima do JSON já salvo.
+router.get("/:id/versions/:versionId/materialization-preview", verifyToken, async (req, res, next) => {
+  try {
+    const ok = await loadSessionWithManage(req, res);
+    if (!ok) return;
+    const version = await getLaunchVersion(req.params.versionId as string);
+    if (!version || version.session_id !== req.params.id) {
+      res.status(404).json({ error: "Versão não encontrada" });
+      return;
+    }
+    let plan: LaunchPlan;
+    try {
+      plan = JSON.parse(version.structured_json);
+    } catch {
+      res.status(422).json({ error: "Versão não contém um plano JSON válido" });
+      return;
+    }
+    res.json({ summary: previewMaterializationSummary(plan) });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// POST /api/launch-sessions/:id/materialize — body: { version_id, mode,
+// client_action_id }. Transforma a proposta APROVADA em tarefas/etapas reais
+// numa única transação (tudo ou nada), idempotente por client_action_id E
+// por version_id (uma proposta aprovada só materializa uma vez).
+router.post("/:id/materialize", verifyToken, async (req, res, next) => {
+  try {
+    const ok = await loadSessionWithManage(req, res);
+    if (!ok) return;
+    const mode = req.body?.mode === "execucao" ? "execucao" : req.body?.mode === "rascunho_operacional" ? "rascunho_operacional" : null;
+    if (!mode) {
+      res.status(400).json({ error: "mode deve ser 'rascunho_operacional' ou 'execucao'" });
+      return;
+    }
+    const clientActionId = String(req.body?.client_action_id ?? "");
+    if (!clientActionId) {
+      res.status(400).json({ error: "client_action_id é obrigatório" });
+      return;
+    }
+    const versionId = String(req.body?.version_id ?? "");
+    if (!versionId) {
+      res.status(400).json({ error: "version_id é obrigatório" });
+      return;
+    }
+    const result = await materializeLaunchVersion({
+      sessionId: req.params.id as string,
+      versionId,
+      mode,
+      requestedByUserId: req.user!.id,
+      clientActionId,
+    });
+    res.status(result.duplicate ? 200 : 201).json(result);
   } catch (err) {
     handleServiceError(err, res, next);
   }

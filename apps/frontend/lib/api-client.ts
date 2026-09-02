@@ -2321,6 +2321,9 @@ class ApiClient {
   async getLaunchVersion(sessionId: string, versionId: string) {
     return this.get(`/launch-sessions/${sessionId}/versions/${versionId}`);
   }
+  async getLaunchEligibleAssignments(sessionId: string) {
+    return this.get(`/launch-sessions/${sessionId}/eligible-assignments`);
+  }
   async submitLaunchHumanEdit(sessionId: string, plan: unknown, updatedAt: string | null) {
     return this.post(`/launch-sessions/${sessionId}/versions`, { plan, updated_at: updatedAt });
   }
@@ -2329,6 +2332,40 @@ class ApiClient {
   }
   async cancelLaunchSession(sessionId: string, updatedAt: string | null) {
     return this.post(`/launch-sessions/${sessionId}/cancel`, { updated_at: updatedAt });
+  }
+  // ── Materialização em tarefas reais (bloco 4/4) ──────────────────────────
+  async getLaunchMaterializationPreview(sessionId: string, versionId: string) {
+    return this.get(`/launch-sessions/${sessionId}/versions/${versionId}/materialization-preview`);
+  }
+  async materializeLaunchVersion(
+    sessionId: string,
+    versionId: string,
+    mode: "rascunho_operacional" | "execucao",
+    clientActionId: string,
+  ) {
+    return this.post(`/launch-sessions/${sessionId}/materialize`, { version_id: versionId, mode, client_action_id: clientActionId });
+  }
+  // ── Dependências, gatilhos e liberação de tarefa (bloco 4/4) ─────────────
+  async getTaskReleaseGates(taskId: string) {
+    return this.get(`/task-release/tasks/${taskId}/gates`);
+  }
+  async listTaskDependencies(taskId: string) {
+    return this.get(`/task-release/tasks/${taskId}/dependencies`);
+  }
+  async addTaskDependency(taskId: string, dependsOnTaskId: string) {
+    return this.post(`/task-release/tasks/${taskId}/dependencies`, { depends_on_task_id: dependsOnTaskId });
+  }
+  async removeTaskDependency(taskId: string, dependencyId: string) {
+    return this.del(`/task-release/tasks/${taskId}/dependencies/${dependencyId}`);
+  }
+  async satisfyManualApprovalTrigger(triggerId: string, note: string) {
+    return this.post(`/task-release/triggers/${triggerId}/manual-approval`, { note });
+  }
+  async satisfySelectionTrigger(triggerId: string, data: { specialty_id?: string; responsible_user_id?: string }) {
+    return this.post(`/task-release/triggers/${triggerId}/selection`, data);
+  }
+  async applyTaskReleaseAdminOverride(taskId: string, reason: string) {
+    return this.post(`/task-release/tasks/${taskId}/admin-override`, { reason });
   }
   async getProjectBilling(projectId: string) {
     return this.get(`/projects/${projectId}/billing`);

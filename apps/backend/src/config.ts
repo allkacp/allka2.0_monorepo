@@ -46,6 +46,7 @@ const baseEnvSchema = z.object({
   // Intervalo do job que expira ofertas vencidas e avança o rodízio. Como o
   // motor de alertas, só é registrado em src/index.ts (nunca nos testes).
   TASK_ROTATION_INTERVAL_MS: z.coerce.number().int().positive().default(60_000),
+  TASK_RELEASE_SCHEDULER_INTERVAL_MS: z.coerce.number().int().positive().default(60_000),
 
   // ── Canais, campanhas e banners (ata 2026-08, bloco 5/5) ────────────────
   // Intervalo do job que ativa campanhas/banners agendados, cria as entregas

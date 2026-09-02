@@ -71,6 +71,7 @@ import memoryRouter from "./routes/memory";
 import memoryContextRouter from "./routes/memory-context";
 import hallucinationReportsRouter from "./routes/hallucination-reports";
 import launchSessionsRouter from "./routes/launch-sessions";
+import taskReleaseRouter from "./routes/task-release";
 import { prisma } from "./lib/prisma";
 import { errorHandler } from "./middleware/error";
 
@@ -257,6 +258,7 @@ app.use("/api/memory", memoryRouter);
 app.use("/api/memory-context", memoryContextRouter);
 app.use("/api/hallucination-reports", hallucinationReportsRouter);
 app.use("/api/launch-sessions", launchSessionsRouter);
+app.use("/api/task-release", taskReleaseRouter);
 // Catálogo do cliente do catalog2 (bloco 5/6) — visibilidade/configurador/
 // cotação/cesta. Permissão resolvida no servidor.
 app.use("/api/catalog2", catalog2CatalogRouter);

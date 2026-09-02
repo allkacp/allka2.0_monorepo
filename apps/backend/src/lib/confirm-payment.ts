@@ -4,6 +4,7 @@ import { projectVisibleToUser } from "./project-scope";
 import { recalculateProjectValue } from "./project-value";
 import { gerarTarefasDoProjeto, type GerarTarefasResult } from "./generate-tasks";
 import { gerarTarefasCatalog2DoProjeto, mergeGerarTarefasResults } from "./generate-tasks-catalog2";
+import { satisfyPaymentTriggersByReference } from "./task-release-service";
 
 export class PaymentValidationError extends Error {
   statusCode: number;
@@ -267,6 +268,11 @@ export async function confirmPaymentAndGenerateProjectTasks(
     where: { id: project.id },
     data: { status: "in-progress" },
   });
+
+  // Gatilho de pagamento (bloco 4/4) — evento financeiro REAL (nunca um
+  // gateway novo): qualquer TaskReleaseTrigger esperando este Payment
+  // específico é satisfeito aqui, dentro da MESMA transação da confirmação.
+  await satisfyPaymentTriggersByReference({ referenceType: "payment", referenceId: confirmedPayment.id }, tx);
 
   return { payment: confirmedPayment, project: updatedProject, alreadyProcessed: false, tasksResult };
 }

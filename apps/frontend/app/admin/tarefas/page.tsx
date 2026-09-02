@@ -1963,6 +1963,7 @@ export default function AdminTarefasPage({
         }}
         onStatusChange={handleStatusChange}
         updatingId={updatingId}
+        isAdmin
         startInEditMode={drawerStartInEditMode}
         actionError={taskActionError}
       />

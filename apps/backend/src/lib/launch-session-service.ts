@@ -13,7 +13,7 @@ import {
   type LaunchAIAdapter,
   type LaunchAIContent,
 } from "./launch-ai-client";
-import { parseLaunchAIResponse, validateLaunchPlanReferences, LaunchProposalValidationError, type LaunchPlan } from "./launch-proposal-schema";
+import { parseLaunchAIResponse, resolveTaskAssignments, validateLaunchPlanReferences, LaunchProposalValidationError, type LaunchPlan } from "./launch-proposal-schema";
 
 // ─── IA de Lançamento — sessão, conversa, geração e versionamento (bloco 3/4) ─
 // Nenhuma tarefa/etapa operacional é criada aqui — "aprovar como rascunho"
@@ -86,6 +86,7 @@ export async function findLaunchSession(id: string, db: DbClient = prisma) {
       messages: { orderBy: { created_at: "asc" }, include: { files: { where: { archived_at: null } } } },
       versions: { orderBy: { version_number: "desc" } },
       executions: { orderBy: { started_at: "desc" }, take: 10 },
+      materializations: { orderBy: { created_at: "desc" } },
     },
   });
 }
@@ -287,11 +288,16 @@ async function finalizeGeneration(
     return;
   }
 
-  // succeeded — valida estrutura + referências antes de aceitar QUALQUER coisa.
-  let payload;
+  // succeeded — valida estrutura, RESOLVE especialidade/responsável contra o
+  // cadastro real (nunca por "parece parecido" — ver launch-proposal-schema.ts)
+  // e só então valida referências, antes de aceitar QUALQUER coisa.
+  let payload: { reply_text: string; stage: "coletando_informacoes" | "proposta_gerada"; pending_questions: string[]; plan: LaunchPlan };
   try {
-    payload = parseLaunchAIResponse(outcome.text);
-    await validateLaunchPlanReferences(payload.plan, db);
+    const raw = parseLaunchAIResponse(outcome.text);
+    const sessionForProject = await db.launchSession.findUniqueOrThrow({ where: { id: execution.session_id }, select: { project_id: true } });
+    const resolvedPlan = await resolveTaskAssignments(raw.plan, sessionForProject.project_id, db);
+    await validateLaunchPlanReferences(resolvedPlan, db);
+    payload = { reply_text: raw.reply_text, stage: raw.stage, pending_questions: raw.pending_questions, plan: resolvedPlan };
   } catch (err) {
     const message = err instanceof LaunchProposalValidationError ? err.message : "A IA devolveu uma proposta em formato inválido.";
     const cas = await db.launchGenerationExecution.updateMany({

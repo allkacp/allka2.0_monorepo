@@ -6,13 +6,17 @@
  * Memória).
  */
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Loader2, Send, Paperclip, X, AlertTriangle, CheckCircle2, Ban, RefreshCw, ChevronDown, ChevronUp, ArrowUp, ArrowDown, Trash2, Plus, History } from "lucide-react";
+import { Loader2, Send, Paperclip, X, AlertTriangle, CheckCircle2, Ban, RefreshCw, ChevronDown, ChevronUp, ArrowUp, ArrowDown, Trash2, Plus, History, Rocket, ExternalLink } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import { ConfirmationDialog } from "@/components/confirmation-dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { HallucinationReportDialog } from "@/components/hallucination-report-dialog";
+import { SearchableSelect } from "@/components/ui/searchable-select";
 import { apiClient, ApiError } from "@/lib/api-client";
+
+const NO_RESPONSIBLE_VALUE = "__sem_responsavel__";
 
 interface LaunchTask {
   title: string;
@@ -21,8 +25,15 @@ interface LaunchTask {
   deliverable: string;
   steps: string[];
   suggested_duration_days: number;
-  required_specialty: string;
-  responsible_user_id?: string | null;
+  // Especialidade/responsável: id estável só quando confirmado pelo backend
+  // (match exato contra o cadastro real); senão sugestão em texto + flag
+  // pedindo seleção humana — nunca uma associação automática "parecida".
+  specialty_id: string | null;
+  specialty_suggestion: string | null;
+  specialty_requires_selection: boolean;
+  responsible_user_id: string | null;
+  responsible_suggestion: string | null;
+  responsible_requires_selection: boolean;
   prerequisites: string[];
   approval_criteria: string[];
   references: string[];
@@ -79,6 +90,15 @@ interface LaunchVersionDto {
   created_at: string;
 }
 
+interface LaunchMaterializationDto {
+  id: string;
+  version_id: string;
+  mode: "rascunho_operacional" | "execucao";
+  created_task_ids_json: string;
+  summary_json: string;
+  created_at: string;
+}
+
 interface LaunchSessionDto {
   id: string;
   project_id: string;
@@ -90,6 +110,7 @@ interface LaunchSessionDto {
   messages: LaunchMessageDto[];
   versions: LaunchVersionDto[];
   executions: LaunchExecutionDto[];
+  materializations: LaunchMaterializationDto[];
 }
 
 const STATUS_LABEL: Record<string, string> = {
@@ -119,7 +140,7 @@ function currentVersionPlan(session: LaunchSessionDto): { version: LaunchVersion
   }
 }
 
-export function LaunchSessionPanel({ projectId }: { projectId: string }) {
+export function LaunchSessionPanel({ projectId, onOpenTask }: { projectId: string; onOpenTask?: (taskId: string) => void }) {
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [sessionId, setSessionId] = useState<string | null>(null);
@@ -146,6 +167,16 @@ export function LaunchSessionPanel({ projectId }: { projectId: string }) {
   const [confirmCancel, setConfirmCancel] = useState(false);
   const [confirmApprove, setConfirmApprove] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
+
+  // ── Materialização (bloco 4/4) ────────────────────────────────────────
+  const [materializeOpen, setMaterializeOpen] = useState(false);
+  const [materializeMode, setMaterializeMode] = useState<"rascunho_operacional" | "execucao">("execucao");
+  const [materializePreview, setMaterializePreview] = useState<{ tasks: number; stages: number; dependencies: number; waves: number; pending_selections: number } | null>(null);
+  const [materializePreviewError, setMaterializePreviewError] = useState<string | null>(null);
+  const [materializing, setMaterializing] = useState(false);
+  const [materializeError, setMaterializeError] = useState<string | null>(null);
+  const [materializeClientActionId, setMaterializeClientActionId] = useState<string | null>(null);
+  const [materializeResult, setMaterializeResult] = useState<{ createdTaskIds: string[]; duplicate: boolean } | null>(null);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -318,6 +349,38 @@ export function LaunchSessionPanel({ projectId }: { projectId: string }) {
     }
   }
 
+  async function openMaterializeDialog() {
+    if (!session?.approved_version_id) return;
+    setMaterializeError(null);
+    setMaterializeResult(null);
+    setMaterializePreviewError(null);
+    setMaterializePreview(null);
+    setMaterializeClientActionId(crypto.randomUUID());
+    setMaterializeOpen(true);
+    try {
+      const res = await apiClient.getLaunchMaterializationPreview(session.id, session.approved_version_id);
+      setMaterializePreview(res.summary);
+    } catch (err) {
+      setMaterializePreviewError(err instanceof ApiError ? err.message : "Não foi possível calcular o resumo agora.");
+    }
+  }
+
+  async function handleMaterialize() {
+    if (!session?.approved_version_id || !materializeClientActionId) return;
+    setMaterializing(true);
+    setMaterializeError(null);
+    try {
+      const res = await apiClient.materializeLaunchVersion(session.id, session.approved_version_id, materializeMode, materializeClientActionId);
+      const createdTaskIds: string[] = res.createdTaskIds ?? [];
+      setMaterializeResult({ createdTaskIds, duplicate: Boolean(res.duplicate) });
+      await loadSession(session.id);
+    } catch (err) {
+      setMaterializeError(err instanceof ApiError ? err.message : "Não foi possível materializar agora. Nenhuma tarefa parcial foi criada — pode tentar de novo.");
+    } finally {
+      setMaterializing(false);
+    }
+  }
+
   if (loading) {
     return (
       <div className="flex items-center justify-center py-10">
@@ -377,8 +440,17 @@ export function LaunchSessionPanel({ projectId }: { projectId: string }) {
               )}
             </>
           )}
+          {canManage && session.status === "aprovada_como_rascunho" && session.materializations.length === 0 && (
+            <Button size="sm" className="h-7 text-xs btn-brand border-0" onClick={() => void openMaterializeDialog()}>
+              <Rocket className="h-3.5 w-3.5 mr-1" /> Materializar proposta aprovada
+            </Button>
+          )}
         </div>
       </div>
+
+      {session.materializations.length > 0 && (
+        <MaterializationSummaryBanner materialization={session.materializations[0]} />
+      )}
 
       {actionError && <p className="text-xs text-red-500">{actionError}</p>}
 
@@ -494,7 +566,7 @@ export function LaunchSessionPanel({ projectId }: { projectId: string }) {
         </div>
       )}
 
-      {editingPlan && <LaunchPlanEditor plan={editingPlan} onCancel={() => setEditingPlan(null)} onSubmit={(p) => void handleSubmitEdit(p)} />}
+      {editingPlan && <LaunchPlanEditor sessionId={session.id} plan={editingPlan} onCancel={() => setEditingPlan(null)} onSubmit={(p) => void handleSubmitEdit(p)} />}
 
       {reportDialog && (
         <HallucinationReportDialog
@@ -524,6 +596,92 @@ export function LaunchSessionPanel({ projectId }: { projectId: string }) {
         message="Isto marca o plano como revisado e pronto — nenhuma tarefa é criada agora. A materialização real acontece em outra etapa."
         confirmText="Aprovar como rascunho"
       />
+
+      <Dialog open={materializeOpen} onOpenChange={(v) => { if (!v && !materializing) setMaterializeOpen(false); }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Materializar proposta aprovada</DialogTitle>
+          </DialogHeader>
+
+          {!materializeResult ? (
+            <div className="space-y-4">
+              {materializePreviewError && <p className="text-xs text-red-500">{materializePreviewError}</p>}
+              {!materializePreview && !materializePreviewError && (
+                <div className="flex items-center gap-2 text-sm text-slate-500">
+                  <Loader2 className="h-4 w-4 animate-spin" /> Calculando resumo...
+                </div>
+              )}
+              {materializePreview && (
+                <div className="rounded-lg border border-slate-200 dark:border-slate-700 p-3 text-sm space-y-1">
+                  <p>{materializePreview.tasks} tarefa(s) — {materializePreview.stages} etapa(s)</p>
+                  <p>{materializePreview.dependencies} dependência(s) entre tarefas — {materializePreview.waves} onda(s)</p>
+                  {materializePreview.pending_selections > 0 && (
+                    <p className="text-amber-600">{materializePreview.pending_selections} tarefa(s) com especialidade/responsável pendente de seleção humana.</p>
+                  )}
+                </div>
+              )}
+
+              <div className="space-y-1.5">
+                <p className="text-xs font-semibold text-slate-600 dark:text-slate-300">Modo</p>
+                <div className="flex flex-col gap-1.5">
+                  <label className="flex items-start gap-2 text-xs">
+                    <input type="radio" className="mt-0.5" checked={materializeMode === "execucao"} onChange={() => setMaterializeMode("execucao")} disabled={materializing} />
+                    <span><strong>Enviar para execução</strong> — tarefas sem bloqueador vão direto para o início oficial; as demais ficam pendentes de liberação.</span>
+                  </label>
+                  <label className="flex items-start gap-2 text-xs">
+                    <input type="radio" className="mt-0.5" checked={materializeMode === "rascunho_operacional"} onChange={() => setMaterializeMode("rascunho_operacional")} disabled={materializing} />
+                    <span><strong>Salvar como rascunho operacional</strong> — cria as tarefas reais, mas não libera nenhuma ainda.</span>
+                  </label>
+                </div>
+              </div>
+
+              {materializeError && <p className="text-xs text-red-500">{materializeError}</p>}
+            </div>
+          ) : (
+            <div className="space-y-3">
+              <p className="text-sm text-emerald-600 flex items-center gap-1.5">
+                <CheckCircle2 className="h-4 w-4" /> {materializeResult.duplicate ? "Esta proposta já havia sido materializada." : "Tarefas criadas com sucesso."}
+              </p>
+              <ul className="space-y-1 max-h-48 overflow-y-auto">
+                {materializeResult.createdTaskIds.map((id) => (
+                  <li key={id}>
+                    <button type="button" className="text-xs text-blue-600 hover:underline flex items-center gap-1" onClick={() => { onOpenTask?.(id); setMaterializeOpen(false); }}>
+                      <ExternalLink className="h-3 w-3" /> Ver tarefa {id}
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          <DialogFooter>
+            {!materializeResult ? (
+              <>
+                <Button size="sm" variant="outline" disabled={materializing} onClick={() => setMaterializeOpen(false)}>Cancelar</Button>
+                <Button size="sm" className="btn-brand border-0" disabled={materializing || !materializePreview} onClick={() => void handleMaterialize()}>
+                  {materializing ? <Loader2 className="h-4 w-4 animate-spin mr-1.5" /> : null}
+                  Confirmar materialização
+                </Button>
+              </>
+            ) : (
+              <Button size="sm" onClick={() => setMaterializeOpen(false)}>Fechar</Button>
+            )}
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+}
+
+function MaterializationSummaryBanner({ materialization }: { materialization: LaunchMaterializationDto }) {
+  let taskCount = 0;
+  try {
+    taskCount = (JSON.parse(materialization.created_task_ids_json) as string[]).length;
+  } catch {}
+  return (
+    <div className="rounded-xl border border-emerald-200 dark:border-emerald-900/40 bg-emerald-50 dark:bg-emerald-900/20 p-3 text-xs text-emerald-700 dark:text-emerald-400 flex items-center gap-2">
+      <Rocket className="h-4 w-4 shrink-0" />
+      Proposta materializada em {taskCount} tarefa(s) real(is) — modo: {materialization.mode === "execucao" ? "enviada para execução" : "rascunho operacional"}. Veja a aba Tarefas do projeto.
     </div>
   );
 }
@@ -565,8 +723,15 @@ function LaunchPlanView({ version, plan, canManage, onEdit }: { version: LaunchV
             <div key={i} className="rounded-lg border border-slate-100 dark:border-slate-700 p-2 text-xs space-y-0.5">
               <p className="font-medium text-slate-700 dark:text-slate-200">{t.title}</p>
               <p className="text-slate-500">{t.objective}</p>
-              <p className="text-slate-400">Entregável: {t.deliverable} — {t.suggested_duration_days} dia(s) — especialidade: {t.required_specialty}</p>
-              {t.responsible_user_id && <p className="text-slate-400">Responsável: {t.responsible_user_id}</p>}
+              <p className="text-slate-400">Entregável: {t.deliverable} — {t.suggested_duration_days} dia(s)</p>
+              <p className="text-slate-400">
+                Especialidade: {t.specialty_id ? t.specialty_id : t.specialty_suggestion ? `"${t.specialty_suggestion}" (requer seleção humana)` : "—"}
+              </p>
+              {t.responsible_user_id ? (
+                <p className="text-slate-400">Responsável: {t.responsible_user_id}</p>
+              ) : t.responsible_suggestion ? (
+                <p className="text-amber-600">Responsável mencionado: "{t.responsible_suggestion}" (requer seleção humana)</p>
+              ) : null}
               {t.open_questions.length > 0 && (
                 <p className="text-amber-600">Dúvidas: {t.open_questions.join("; ")}</p>
               )}
@@ -578,8 +743,17 @@ function LaunchPlanView({ version, plan, canManage, onEdit }: { version: LaunchV
   );
 }
 
-function LaunchPlanEditor({ plan, onCancel, onSubmit }: { plan: LaunchPlan; onCancel: () => void; onSubmit: (plan: LaunchPlan) => void }) {
+function LaunchPlanEditor({ sessionId, plan, onCancel, onSubmit }: { sessionId: string; plan: LaunchPlan; onCancel: () => void; onSubmit: (plan: LaunchPlan) => void }) {
   const [draft, setDraft] = useState<LaunchPlan>(() => JSON.parse(JSON.stringify(plan)));
+  const [assignments, setAssignments] = useState<{ specialties: { id: string; name: string }[]; responsibles: { id: string; name: string }[] } | null>(null);
+  const [assignmentsError, setAssignmentsError] = useState<string | null>(null);
+
+  useEffect(() => {
+    apiClient
+      .getLaunchEligibleAssignments(sessionId)
+      .then((res: any) => setAssignments({ specialties: res.specialties ?? [], responsibles: res.responsibles ?? [] }))
+      .catch((err) => setAssignmentsError(err instanceof ApiError ? err.message : "Não foi possível carregar especialidades/responsáveis reais agora."));
+  }, [sessionId]);
 
   function updateTask(index: number, patch: Partial<LaunchTask>) {
     setDraft((d) => ({ ...d, tasks: d.tasks.map((t, i) => (i === index ? { ...t, ...patch } : t)) }));
@@ -601,7 +775,25 @@ function LaunchPlanEditor({ plan, onCancel, onSubmit }: { plan: LaunchPlan; onCa
       ...d,
       tasks: [
         ...d.tasks,
-        { title: "Nova tarefa", objective: "", description: "", deliverable: "", steps: [""], suggested_duration_days: 1, required_specialty: "", prerequisites: [], approval_criteria: [""], references: [], justification: "Adicionada manualmente na revisão humana.", open_questions: [] },
+        {
+          title: "Nova tarefa",
+          objective: "",
+          description: "",
+          deliverable: "",
+          steps: [""],
+          suggested_duration_days: 1,
+          specialty_id: null,
+          specialty_suggestion: null,
+          specialty_requires_selection: false,
+          responsible_user_id: null,
+          responsible_suggestion: null,
+          responsible_requires_selection: false,
+          prerequisites: [],
+          approval_criteria: [""],
+          references: [],
+          justification: "Adicionada manualmente na revisão humana.",
+          open_questions: [],
+        },
       ],
     }));
   }
@@ -615,6 +807,12 @@ function LaunchPlanEditor({ plan, onCancel, onSubmit }: { plan: LaunchPlan; onCa
         </Button>
       </div>
       <Textarea value={draft.plan_summary} onChange={(e) => setDraft((d) => ({ ...d, plan_summary: e.target.value }))} rows={2} className="text-xs" placeholder="Resumo do plano" />
+
+      {draft.tasks.some((t) => t.specialty_requires_selection || t.responsible_requires_selection) && (
+        <p className="text-[11px] text-amber-600 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg px-2.5 py-1.5">
+          {draft.tasks.filter((t) => t.specialty_requires_selection || t.responsible_requires_selection).length} tarefa(s) ainda precisam de especialidade/responsável escolhidos antes de materializar.
+        </p>
+      )}
 
       <div className="space-y-2">
         {draft.tasks.map((t, i) => (
@@ -631,7 +829,50 @@ function LaunchPlanEditor({ plan, onCancel, onSubmit }: { plan: LaunchPlan; onCa
                 <Trash2 className="h-3 w-3 text-red-400" />
               </Button>
             </div>
-            <Input value={t.required_specialty} onChange={(e) => updateTask(i, { required_specialty: e.target.value })} className="h-7 text-xs" placeholder="Especialidade necessária" />
+            {assignmentsError ? (
+              <p className="text-[11px] text-red-500">{assignmentsError}</p>
+            ) : (
+              <div className="grid grid-cols-2 gap-1.5">
+                <div>
+                  <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-400 mb-0.5">
+                    Especialidade {t.specialty_id ? "" : "— obrigatória"}
+                  </p>
+                  <SearchableSelect
+                    items={(assignments?.specialties ?? []).map((s) => ({ value: s.id, label: s.name }))}
+                    value={t.specialty_id ?? ""}
+                    onValueChange={(v) =>
+                      updateTask(i, v ? { specialty_id: v, specialty_suggestion: null, specialty_requires_selection: false } : { specialty_id: null, specialty_requires_selection: true })
+                    }
+                    placeholder={t.specialty_suggestion ? `Sugestão da IA: "${t.specialty_suggestion}" — escolher` : "Escolher especialidade"}
+                    loading={!assignments}
+                    className="h-7 text-xs"
+                  />
+                  {t.specialty_requires_selection && <p className="text-[10px] text-amber-600 mt-0.5">Bloqueia a materialização até ser escolhida.</p>}
+                </div>
+                <div>
+                  <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-400 mb-0.5">Responsável</p>
+                  <SearchableSelect
+                    items={[
+                      ...(!t.responsible_requires_selection ? [{ value: NO_RESPONSIBLE_VALUE, label: "Ainda sem responsável" }] : []),
+                      ...(assignments?.responsibles ?? []).map((u) => ({ value: u.id, label: u.name })),
+                    ]}
+                    value={t.responsible_user_id ?? (t.responsible_requires_selection ? "" : NO_RESPONSIBLE_VALUE)}
+                    onValueChange={(v) =>
+                      updateTask(
+                        i,
+                        !v || v === NO_RESPONSIBLE_VALUE
+                          ? { responsible_user_id: null, responsible_suggestion: null, responsible_requires_selection: false }
+                          : { responsible_user_id: v, responsible_suggestion: null, responsible_requires_selection: false },
+                      )
+                    }
+                    placeholder={t.responsible_suggestion ? `Sugestão da IA: "${t.responsible_suggestion}" — escolher` : "Escolher responsável"}
+                    loading={!assignments}
+                    className="h-7 text-xs"
+                  />
+                  {t.responsible_requires_selection && <p className="text-[10px] text-amber-600 mt-0.5">Bloqueia a materialização até ser escolhido.</p>}
+                </div>
+              </div>
+            )}
             <Input type="number" min={1} value={t.suggested_duration_days} onChange={(e) => updateTask(i, { suggested_duration_days: Number(e.target.value) || 1 })} className="h-7 text-xs w-32" placeholder="Dias" />
           </div>
         ))}

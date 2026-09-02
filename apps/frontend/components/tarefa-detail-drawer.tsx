@@ -42,6 +42,7 @@ import { Button } from "@/components/ui/button";
 import { EmbeddedSlideScreen } from "@/components/embedded-slide-screen";
 import { TaskRotationPanel } from "@/components/task-rotation-panel";
 import { CopyLinkButton } from "@/components/copy-link-button";
+import { TaskReleaseBlockersPanel } from "@/components/task-release-blockers-panel";
 import {
   Select,
   SelectContent,
@@ -485,6 +486,9 @@ export function TarefaDetailDrawer({
   onLaunch,
   startInEditMode = false,
   actionError,
+  isAdmin = false,
+  canManageRelease = true,
+  onOpenTask,
 }: {
   tarefa: any | null;
   open: boolean;
@@ -494,6 +498,15 @@ export function TarefaDetailDrawer({
   onLaunch?: (tarefa: any) => void;
   startInEditMode?: boolean;
   actionError?: string | null;
+  /** Só true nas telas do Admin Master — habilita a exceção administrativa
+   * de dependência. Backend sempre revalida (nunca confia só nesta prop). */
+  isAdmin?: boolean;
+  /** Otimista (backend sempre revalida na escrita, ver launch-permissions.ts) — só
+   * controla se os controles de aprovação manual aparecem na interface. */
+  canManageRelease?: boolean;
+  /** Navega o drawer para outra tarefa, usado pelo link de pré-requisito
+   * clicável do painel de bloqueadores. */
+  onOpenTask?: (taskId: string) => void;
 }) {
   const [tab, setTab] = useState<TabKey>("dados");
   const [isEditMode, setIsEditMode] = useState(false);
@@ -1091,6 +1104,18 @@ export function TarefaDetailDrawer({
                     só relevante enquanto a tarefa procura executor. */}
                 {tarefa.status === "AGUARDANDO_NOMADE" && !tarefa.nomade_responsavel_id && (
                   <TaskRotationPanel taskId={tarefa.id} />
+                )}
+
+                {/* Liberação automática por dependência/gatilho (bloco 4/4,
+                    IA de Lançamento) — só relevante pra tarefa pendente de
+                    liberação ou já materializada por essa via. */}
+                {(tarefa.status === "PENDENTE_DE_LIBERACAO" || tarefa.launch_materialization_id) && (
+                  <TaskReleaseBlockersPanel
+                    taskId={tarefa.id}
+                    canManage={canManageRelease}
+                    isAdmin={isAdmin}
+                    onOpenTask={onOpenTask}
+                  />
                 )}
 
                 <div className="grid grid-cols-2 gap-4">

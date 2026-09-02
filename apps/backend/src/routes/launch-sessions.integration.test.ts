@@ -43,7 +43,7 @@ async function waitForExecution(sessionId: string, executionId: string, token: s
   throw new Error("timed out waiting for execution to finish");
 }
 
-function validPlanResponse(overrides: Partial<{ specialty: string; responsibleId: string | null }> = {}) {
+function validPlanResponse(overrides: Partial<{ specialty: string; responsibleName: string | null }> = {}) {
   return JSON.stringify({
     reply_text: "Aqui está o plano tático proposto.",
     stage: "proposta_gerada",
@@ -64,7 +64,7 @@ function validPlanResponse(overrides: Partial<{ specialty: string; responsibleId
           steps: ["Criar contas", "Validar acessos"],
           suggested_duration_days: 3,
           required_specialty: overrides.specialty ?? "Gestão de Tráfego",
-          responsible_user_id: overrides.responsibleId ?? null,
+          responsible_name_mentioned: overrides.responsibleName ?? null,
           prerequisites: [],
           approval_criteria: ["Acessos validados pelo time"],
           references: [],
@@ -286,7 +286,7 @@ describe("IA de Lançamento / Plano Tático (bloco 3/4)", () => {
     assert.ok(detail.json.session.messages.some((m: any) => m.status === "error"));
   });
 
-  it("saída estruturada inválida (referência inexistente) é rejeitada — nenhuma versão criada", async () => {
+  it("especialidade sem correspondência exata nunca associa automaticamente — vira 'requer seleção humana' com a sugestão preservada, nunca rejeitada", async () => {
     setDefaultLaunchAIAdapter(async () => ({ text: validPlanResponse({ specialty: "Especialidade Inexistente XYZ" }) }));
     const company = await mkCompany();
     const project = await mkProject({ company_id: company.id });
@@ -297,11 +297,14 @@ describe("IA de Lançamento / Plano Tático (bloco 3/4)", () => {
 
     const gen = await api(`/api/launch-sessions/${sessionId}/generate`, { method: "POST", token, body: { client_action_id: crypto.randomUUID() } });
     const finished = await waitForExecution(sessionId, gen.json.execution.id, token);
-    assert.equal(finished.status, "failed");
-    assert.match(finished.error_message, /especialidade referenciada não existe/);
+    assert.equal(finished.status, "succeeded");
 
     const detail = await api(`/api/launch-sessions/${sessionId}`, { token });
-    assert.equal(detail.json.session.versions.length, 0);
+    assert.equal(detail.json.session.versions.length, 1);
+    const plan = JSON.parse(detail.json.session.versions[0].structured_json);
+    assert.equal(plan.tasks[0].specialty_id, null);
+    assert.equal(plan.tasks[0].specialty_suggestion, "Especialidade Inexistente XYZ");
+    assert.equal(plan.tasks[0].specialty_requires_selection, true);
   });
 
   it("timeout: geração que nunca responde é interrompida e marcada 'timeout'", async () => {

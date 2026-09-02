@@ -765,6 +765,7 @@ model Project {
   ai_context_snapshots  AIContextSnapshot[]
   hallucination_reports HallucinationReport[]
   launch_sessions       LaunchSession[]
+  task_dependencies     TaskDependency[]
 
   // ── Rastreio da plataforma antiga ─────────────────────────────────────
   // id numérico do registro equivalente no dump legado (Dump20260423.sql).
@@ -888,6 +889,7 @@ model Specialty {
   updated_at      DateTime @updatedAt
 
   task_templates TaskTemplate[]
+  project_tasks_requiring ProjectTask[]
 
   @@map("specialties")
 }
@@ -1283,6 +1285,13 @@ model ProjectProduct {
   // Preenchido só quando origin = "CATALOG2_ADDITIVE" — rastreia o aditivo
   // (Catalog2ChangeOrder) que originou esta linha.
   origin_catalog2_change_order_id String?                 @unique
+  // Preenchido só quando origin = "AI_LAUNCH" (bloco 4/4) — container de
+  // ProjectProduct exigido porque ProjectTask.project_product_id nunca é
+  // nulo; um plano de lançamento da IA não é uma compra de catálogo, mas
+  // precisa do mesmo "balde" pra suas tarefas existirem. @unique = a MESMA
+  // versão aprovada nunca materializa duas vezes (mesmo espírito de
+  // origin_catalog2_quote_id acima).
+  origin_launch_version_id        String?                 @unique
 
   // Snapshot: preserves commercial history even if product is later edited
   product_name_snapshot     String
@@ -1511,6 +1520,27 @@ model ProjectTask {
   memory_approved_records MemoryApprovedTaskRecord[]
   hallucination_reports HallucinationReport[]
   lider_responsavel  User?                   @relation("TaskLiderResponsavel", fields: [lider_responsavel_id], references: [id])
+
+  // ── IA de Lançamento — materialização (bloco 4/4) ──────────────────────
+  // Ponteiros "soft" (sem FK, mesmo padrão de outros vínculos com sessão/
+  // versão espalhados pelo schema) — só rastreabilidade/link de UI, nunca
+  // usados em cascade.
+  launch_session_id         String?
+  launch_version_id         String?
+  launch_materialization_id String?
+  // Fotografia dos campos como a IA propôs originalmente, antes de qualquer
+  // edição humana — permite a UI mostrar "isto foi alterado por humano"
+  // comparando com o valor atual da linha.
+  launch_ai_snapshot_json   String?    @db.LongText
+
+  required_specialty_id String?
+  required_specialty    Specialty? @relation(fields: [required_specialty_id], references: [id], onDelete: SetNull)
+
+  dependencies_as_successor    TaskDependency[]         @relation("TaskDependencySuccessor")
+  dependencies_as_prerequisite TaskDependency[]         @relation("TaskDependencyPrerequisite")
+  release_triggers             TaskReleaseTrigger[]
+  release_events                TaskReleaseEvent[]
+  dependency_overrides           TaskDependencyOverride[]
 
   // ── Rastreio da plataforma antiga ─────────────────────────────────────
   // id numérico do registro equivalente no dump legado (Dump20260423.sql).
@@ -2000,6 +2030,7 @@ model LaunchSession {
   messages     LaunchMessage[]
   versions     LaunchProposalVersion[]
   executions   LaunchGenerationExecution[]
+  materializations LaunchMaterialization[]
 
   @@index([project_id])
   @@map("launch_sessions")
@@ -2101,6 +2132,8 @@ model LaunchProposalVersion {
   execution_id String?
   // preenchido só quando source = "ia_gerada" — qual execução produziu isto
 
+  materialization LaunchMaterialization?
+
   @@unique([session_id, version_number])
   @@map("launch_proposal_versions")
 }
@@ -2146,6 +2179,133 @@ model LaunchGenerationExecution {
 
   @@index([session_id, started_at])
   @@map("launch_generation_executions")
+}
+
+// ─── Materialização, dependências e liberação automática (bloco 4/4) ─────────
+// Transforma uma LaunchProposalVersion APROVADA em ProjectTask/ProjectTaskStage
+// reais. Dependência OPERACIONAL (TaskDependency) é entidade PRÓPRIA — nunca
+// reaproveita Catalog2TaskDependency (que é só template-a-template do
+// catálogo/catalog2, nunca aponta pra um ProjectTask real).
+
+model LaunchMaterialization {
+  id         String        @id @default(cuid())
+  session_id String
+  session    LaunchSession @relation(fields: [session_id], references: [id], onDelete: Cascade)
+
+  version_id String                @unique
+  // Único = "a proposta aprovada só pode ser materializada uma vez" —
+  // a MESMA constraint garante idempotência de clique duplo/retry.
+  version    LaunchProposalVersion @relation(fields: [version_id], references: [id], onDelete: Cascade)
+
+  mode                 String
+  // rascunho_operacional | execucao
+  requested_by_user_id String
+  client_action_id     String @unique
+
+  created_task_ids_json String @db.LongText
+  // JSON string[] dos ProjectTask.id criados nesta materialização
+  summary_json           String @db.LongText
+  // contagem de tarefas/etapas/dependências/ondas/pendências — usado na
+  // confirmação antes de materializar e na tela de sucesso
+
+  created_at DateTime @default(now())
+
+  @@index([session_id])
+  @@map("launch_materializations")
+}
+
+model TaskDependency {
+  id         String  @id @default(cuid())
+  project_id String
+  project    Project @relation(fields: [project_id], references: [id], onDelete: Cascade)
+  // Denormalizado de propósito — permite validar "nunca entre projetos
+  // diferentes" e detectar ciclo carregando só as arestas do projeto, sem
+  // precisar de join a cada checagem.
+
+  task_id            String
+  task               ProjectTask @relation("TaskDependencySuccessor", fields: [task_id], references: [id], onDelete: Cascade)
+  depends_on_task_id String
+  depends_on_task    ProjectTask @relation("TaskDependencyPrerequisite", fields: [depends_on_task_id], references: [id], onDelete: Restrict)
+  // Restrict: proteção de BANCO contra apagar (hard delete) uma tarefa usada
+  // como pré-requisito — nunca some silenciosamente uma dependência.
+
+  created_by_user_id String
+  created_at          DateTime @default(now())
+
+  @@unique([task_id, depends_on_task_id])
+  @@index([depends_on_task_id])
+  @@index([project_id])
+  @@map("task_dependencies")
+}
+
+// Gatilhos que NÃO são "esperar outra tarefa" (isso já é TaskDependency) —
+// data programada, pagamento de nova etapa, aprovação manual do gestor, e a
+// confirmação humana de especialidade/responsável quando a IA não conseguiu
+// resolver um id estável (ver launch-proposal-schema.ts).
+model TaskReleaseTrigger {
+  id      String      @id @default(cuid())
+  task_id String
+  task    ProjectTask @relation(fields: [task_id], references: [id], onDelete: Cascade)
+
+  trigger_type String
+  // scheduled_date | payment | manual_approval | specialty_selection | responsible_selection
+  status       String @default("pending")
+  // pending | satisfied
+
+  scheduled_at       DateTime?
+  scheduled_timezone String?
+
+  payment_reference_type String?
+  // "payment" | "catalog2_change_order" — nunca um gateway novo, só aponta
+  // pra um evento financeiro real já existente
+  payment_reference_id   String?
+
+  satisfied_by_user_id String?
+  satisfied_at          DateTime?
+  satisfaction_note     String?   @db.Text
+
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  @@index([task_id])
+  @@index([trigger_type, status, scheduled_at])
+  @@map("task_release_triggers")
+}
+
+// Exceção administrativa auditada — só permissão elevada oficial, nunca por
+// parâmetro escondido no payload (ver task-release-service.ts).
+model TaskDependencyOverride {
+  id      String      @id @default(cuid())
+  task_id String
+  task    ProjectTask @relation(fields: [task_id], references: [id], onDelete: Cascade)
+
+  reason                String   @db.Text
+  authorized_by_user_id String
+  created_at            DateTime @default(now())
+
+  @@index([task_id])
+  @@map("task_dependency_overrides")
+}
+
+// Histórico imutável de liberação — preenche a lacuna real encontrada na
+// auditoria (não existia nenhuma tabela genérica de histórico de status de
+// tarefa). Nunca UPDATE/DELETE em produção, só INSERT.
+model TaskReleaseEvent {
+  id      String      @id @default(cuid())
+  task_id String
+  task    ProjectTask @relation(fields: [task_id], references: [id], onDelete: Cascade)
+
+  event_type    String
+  // gate_created | trigger_satisfied | released | release_blocked_notice |
+  // admin_override | dependency_added | dependency_removed
+  actor_user_id String?
+  description   String  @db.Text
+  metadata_json String? @db.LongText
+
+  created_at DateTime @default(now())
+
+  @@index([task_id, created_at])
+  @@map("task_release_events")
 }
 
 // ─── AIKnowledgeCategory / AIKnowledgeDocument ────────────────────────────────

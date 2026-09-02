@@ -22,7 +22,10 @@ vi.mock("@/lib/api-client", () => ({
     cancelLaunchGeneration: vi.fn(),
     listLaunchVersions: vi.fn(),
     getLaunchVersion: vi.fn(),
+    getLaunchEligibleAssignments: vi.fn(),
     submitLaunchHumanEdit: vi.fn(),
+    getLaunchMaterializationPreview: vi.fn(),
+    materializeLaunchVersion: vi.fn(),
     approveLaunchSession: vi.fn(),
     cancelLaunchSession: vi.fn(),
     createHallucinationReport: vi.fn(),
@@ -36,7 +39,7 @@ vi.mock("@/lib/api-client", () => ({
   },
 }));
 
-import { apiClient } from "@/lib/api-client";
+import { apiClient, ApiError } from "@/lib/api-client";
 
 function renderPanel() {
   return render(
@@ -58,6 +61,7 @@ function baseSession(overrides: Partial<any> = {}) {
     messages: [],
     versions: [],
     executions: [],
+    materializations: [],
     ...overrides,
   };
 }
@@ -162,8 +166,12 @@ describe("LaunchSessionPanel", () => {
           deliverable: "Ambiente pronto",
           steps: ["a"],
           suggested_duration_days: 3,
-          required_specialty: "Gestão de Tráfego",
+          specialty_id: "spec-1",
+          specialty_suggestion: null,
+          specialty_requires_selection: false,
           responsible_user_id: null,
+          responsible_suggestion: null,
+          responsible_requires_selection: false,
           prerequisites: [],
           approval_criteria: ["ok"],
           references: [],
@@ -186,6 +194,145 @@ describe("LaunchSessionPanel", () => {
     expect(await screen.findByText("Lançamento em duas ondas.")).toBeInTheDocument();
     expect(screen.getByText("Onda 1")).toBeInTheDocument();
     expect(screen.getByText("Configurar ambiente")).toBeInTheDocument();
+  });
+
+  function unresolvedPlan() {
+    return {
+      plan_summary: "Plano com pendências de seleção.",
+      plan_duration_months: 1,
+      waves: [],
+      tasks: [
+        {
+          title: "Tarefa Única",
+          objective: "Objetivo",
+          description: "desc",
+          deliverable: "Entregável",
+          steps: ["a"],
+          suggested_duration_days: 2,
+          specialty_id: "spec-1",
+          specialty_suggestion: null,
+          specialty_requires_selection: false,
+          responsible_user_id: null,
+          responsible_suggestion: "Fulano Que Não Existe",
+          responsible_requires_selection: true,
+          prerequisites: [],
+          approval_criteria: ["ok"],
+          references: [],
+          justification: "necessário",
+          open_questions: [],
+        },
+      ],
+    };
+  }
+
+  function mockSessionWithEditablePlan() {
+    (apiClient.listLaunchSessions as any).mockResolvedValue({ sessions: [{ id: "sess-1" }] });
+    (apiClient.getLaunchSession as any).mockResolvedValue({
+      session: baseSession({
+        status: "proposta_gerada",
+        current_version_id: "v1",
+        versions: [{ id: "v1", version_number: 1, source: "ia_gerada", structured_json: JSON.stringify(unresolvedPlan()), created_at: "2026-09-01T10:00:00.000Z" }],
+      }),
+      can_manage: true,
+    });
+    (apiClient.getLaunchEligibleAssignments as any).mockResolvedValue({
+      specialties: [
+        { id: "spec-1", name: "Gestão de Tráfego" },
+        { id: "spec-2", name: "SEO" },
+      ],
+      responsibles: [{ id: "user-1", name: "Ana" }],
+    });
+  }
+
+  it("editor: especialidade sempre oferece as opções reais; responsável com seleção pendente não oferece 'ainda sem responsável'", async () => {
+    const user = userEvent.setup();
+    mockSessionWithEditablePlan();
+    renderPanel();
+
+    await user.click(await screen.findByRole("button", { name: /editar/i }));
+    await screen.findByText("Editando plano (revisão humana)");
+
+    const comboboxes = await screen.findAllByRole("combobox");
+    expect(comboboxes).toHaveLength(2); // especialidade + responsável
+
+    // especialidade: já resolvida (spec-1), mas ainda pode ser trocada
+    await user.click(comboboxes[0]);
+    expect(await screen.findByText("SEO")).toBeInTheDocument();
+    expect(screen.getAllByText("Gestão de Tráfego").length).toBeGreaterThan(0);
+    await user.keyboard("{Escape}");
+
+    // responsável: seleção humana obrigatória (nome mencionado não resolvido)
+    // -> "Ainda sem responsável" NUNCA aparece como opção
+    await user.click(comboboxes[1]);
+    expect(await screen.findByText("Ana")).toBeInTheDocument();
+    expect(screen.queryByText("Ainda sem responsável")).not.toBeInTheDocument();
+  });
+
+  it("editor: troca de especialidade e seleção de responsável são salvas e persistem ao reabrir a versão", async () => {
+    const user = userEvent.setup();
+    mockSessionWithEditablePlan();
+    (apiClient.submitLaunchHumanEdit as any).mockResolvedValue({ session: baseSession({ status: "em_revisao" }) });
+    renderPanel();
+
+    await user.click(await screen.findByRole("button", { name: /editar/i }));
+    await screen.findByText("Editando plano (revisão humana)");
+    const comboboxes = await screen.findAllByRole("combobox");
+
+    // troca a especialidade de spec-1 -> spec-2
+    await user.click(comboboxes[0]);
+    await user.click(await screen.findByText("SEO"));
+
+    // escolhe o responsável real sugerido pela lista (não por texto parecido)
+    await user.click(comboboxes[1]);
+    await user.click(await screen.findByText("Ana"));
+
+    await user.click(screen.getByRole("button", { name: /salvar como nova versão/i }));
+
+    await waitFor(() => expect(apiClient.submitLaunchHumanEdit).toHaveBeenCalled());
+    const [, submittedPlan] = (apiClient.submitLaunchHumanEdit as any).mock.calls[0];
+    expect(submittedPlan.tasks[0].specialty_id).toBe("spec-2");
+    expect(submittedPlan.tasks[0].specialty_suggestion).toBeNull();
+    expect(submittedPlan.tasks[0].responsible_user_id).toBe("user-1");
+    expect(submittedPlan.tasks[0].responsible_requires_selection).toBe(false);
+    // "reabrir" a mesma versão é responsabilidade do backend (a UI só manda o
+    // payload correto) — coberto por teste de integração no backend.
+  });
+
+  it("editor: 'Ainda sem responsável' só aparece quando a regra de negócio permite, e remove a atribuição corretamente", async () => {
+    const user = userEvent.setup();
+    const plan = unresolvedPlan();
+    plan.tasks[0].responsible_user_id = "user-1";
+    plan.tasks[0].responsible_suggestion = null;
+    plan.tasks[0].responsible_requires_selection = false; // já não é mais obrigatório
+    (apiClient.listLaunchSessions as any).mockResolvedValue({ sessions: [{ id: "sess-1" }] });
+    (apiClient.getLaunchSession as any).mockResolvedValue({
+      session: baseSession({ status: "proposta_gerada", current_version_id: "v1", versions: [{ id: "v1", version_number: 1, source: "ia_gerada", structured_json: JSON.stringify(plan), created_at: "2026-09-01T10:00:00.000Z" }] }),
+      can_manage: true,
+    });
+    (apiClient.getLaunchEligibleAssignments as any).mockResolvedValue({ specialties: [{ id: "spec-1", name: "Gestão de Tráfego" }], responsibles: [{ id: "user-1", name: "Ana" }] });
+    (apiClient.submitLaunchHumanEdit as any).mockResolvedValue({ session: baseSession({ status: "em_revisao" }) });
+
+    renderPanel();
+    await user.click(await screen.findByRole("button", { name: /editar/i }));
+    const comboboxes = await screen.findAllByRole("combobox");
+
+    await user.click(comboboxes[1]);
+    await user.click(await screen.findByText("Ainda sem responsável"));
+
+    await user.click(screen.getByRole("button", { name: /salvar como nova versão/i }));
+    await waitFor(() => expect(apiClient.submitLaunchHumanEdit).toHaveBeenCalled());
+    const [, submittedPlan] = (apiClient.submitLaunchHumanEdit as any).mock.calls[0];
+    expect(submittedPlan.tasks[0].responsible_user_id).toBeNull();
+  });
+
+  it("editor: sem permissão real (endpoint de opções falha/404) mostra erro claro e não trava a tela", async () => {
+    const user = userEvent.setup();
+    mockSessionWithEditablePlan();
+    (apiClient.getLaunchEligibleAssignments as any).mockRejectedValue(new ApiError("Projeto não encontrado", 404));
+    renderPanel();
+
+    await user.click(await screen.findByRole("button", { name: /editar/i }));
+    expect(await screen.findByText("Projeto não encontrado")).toBeInTheDocument();
   });
 
   it("reportar possível alucinação abre o formulário vinculado ao snapshot da execução real", async () => {
