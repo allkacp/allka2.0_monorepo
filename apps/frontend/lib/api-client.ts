@@ -2246,6 +2246,7 @@ class ApiClient {
     description: string;
     questioned_response?: string | null;
     snapshot_id?: string | null;
+    launch_execution_id?: string | null;
     project_task_id?: string | null;
     category: string;
     impact: string;
@@ -2282,6 +2283,52 @@ class ApiClient {
   }
   async closeHallucinationReport(id: string, outcome: "resolvido" | "descartado", justification: string, clientActionId: string, updatedAt: string | null) {
     return this.post(`/hallucination-reports/${id}/close`, { outcome, justification, client_action_id: clientActionId, updated_at: updatedAt });
+  }
+  // ── IA de Lançamento / Plano Tático (bloco 3/4) ──────────────────────────
+  async listLaunchSessions(projectId: string) {
+    return this.get(`/launch-sessions`, { project_id: projectId });
+  }
+  async createLaunchSession(projectId: string) {
+    return this.post(`/launch-sessions`, { project_id: projectId });
+  }
+  async getLaunchSession(id: string) {
+    return this.get(`/launch-sessions/${id}`);
+  }
+  async postLaunchMessage(sessionId: string, content: string) {
+    return this.post(`/launch-sessions/${sessionId}/messages`, { content });
+  }
+  async uploadLaunchMessageFile(sessionId: string, messageId: string, file: File) {
+    return this.uploadFile(`/launch-sessions/${sessionId}/messages/${messageId}/files`, file);
+  }
+  async downloadLaunchMessageFile(sessionId: string, messageId: string, fileId: string) {
+    return this.downloadBlob(`/launch-sessions/${sessionId}/messages/${messageId}/files/${fileId}/download`);
+  }
+  async deleteLaunchMessageFile(sessionId: string, messageId: string, fileId: string) {
+    return this.del(`/launch-sessions/${sessionId}/messages/${messageId}/files/${fileId}`);
+  }
+  async generateLaunchProposal(sessionId: string, clientActionId: string) {
+    return this.post(`/launch-sessions/${sessionId}/generate`, { client_action_id: clientActionId });
+  }
+  async getLaunchExecution(sessionId: string, executionId: string) {
+    return this.get(`/launch-sessions/${sessionId}/executions/${executionId}`);
+  }
+  async cancelLaunchGeneration(sessionId: string, executionId: string) {
+    return this.post(`/launch-sessions/${sessionId}/executions/${executionId}/cancel`, {});
+  }
+  async listLaunchVersions(sessionId: string) {
+    return this.get(`/launch-sessions/${sessionId}/versions`);
+  }
+  async getLaunchVersion(sessionId: string, versionId: string) {
+    return this.get(`/launch-sessions/${sessionId}/versions/${versionId}`);
+  }
+  async submitLaunchHumanEdit(sessionId: string, plan: unknown, updatedAt: string | null) {
+    return this.post(`/launch-sessions/${sessionId}/versions`, { plan, updated_at: updatedAt });
+  }
+  async approveLaunchSession(sessionId: string, updatedAt: string | null, versionId?: string) {
+    return this.post(`/launch-sessions/${sessionId}/approve`, { updated_at: updatedAt, version_id: versionId });
+  }
+  async cancelLaunchSession(sessionId: string, updatedAt: string | null) {
+    return this.post(`/launch-sessions/${sessionId}/cancel`, { updated_at: updatedAt });
   }
   async getProjectBilling(projectId: string) {
     return this.get(`/projects/${projectId}/billing`);

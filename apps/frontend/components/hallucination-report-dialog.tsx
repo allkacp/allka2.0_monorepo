@@ -31,11 +31,12 @@ interface HallucinationReportDialogProps {
   onClose: () => void;
   projectId: string;
   snapshotId?: string | null;
+  launchExecutionId?: string | null;
   projectTaskId?: string | null;
   onSubmitted?: () => void;
 }
 
-export function HallucinationReportDialog({ open, onClose, projectId, snapshotId, projectTaskId, onSubmitted }: HallucinationReportDialogProps) {
+export function HallucinationReportDialog({ open, onClose, projectId, snapshotId, launchExecutionId, projectTaskId, onSubmitted }: HallucinationReportDialogProps) {
   const [description, setDescription] = useState("");
   const [questionedResponse, setQuestionedResponse] = useState("");
   const [category, setCategory] = useState("");
@@ -75,6 +76,7 @@ export function HallucinationReportDialog({ open, onClose, projectId, snapshotId
         description: description.trim(),
         questioned_response: questionedResponse.trim() || null,
         snapshot_id: snapshotId ?? null,
+        launch_execution_id: launchExecutionId ?? null,
         project_task_id: projectTaskId ?? null,
         category,
         impact,

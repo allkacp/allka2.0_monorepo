@@ -48,6 +48,7 @@ import { apiClient } from "@/lib/api-client";
 import { TaskLaunchDrawer } from "@/components/task-launch-drawer";
 import { ProjectConnectionsTab } from "@/components/project-connections-tab";
 import { ProjectMemoriaTab } from "@/components/project-memoria-tab";
+import { LaunchSessionPanel } from "@/components/launch-session-panel";
 import { ProjectMetaAdsWidget } from "@/components/project-meta-ads-widget";
 import { cn } from "@/lib/utils";
 import {
@@ -1487,7 +1488,7 @@ export function ProjectViewSlidePanel({
               >
                 {/* Tab bar */}
                 <div className="flex-shrink-0 bg-white dark:bg-background px-[50px] pt-0 pb-[10px] overflow-x-auto">
-                  <TabsList className="grid w-max grid-cols-10 gap-1 bg-transparent p-0 h-auto">
+                  <TabsList className="grid w-max grid-cols-11 gap-1 bg-transparent p-0 h-auto">
                     {[
                       { value: "visao-geral", label: "Visão Geral" },
                       {
@@ -1504,6 +1505,7 @@ export function ProjectViewSlidePanel({
                       { value: "nomades", label: "Nômades" },
                       { value: "conexoes", label: "Conexões" },
                       { value: "memoria", label: "Memória" },
+                      { value: "lancamento-ia", label: "IA de Lançamento" },
                       { value: "logs", label: "Logs" },
                     ].map(({ value, label }) => (
                       <TabsTrigger
@@ -2999,6 +3001,20 @@ export function ProjectViewSlidePanel({
                 >
                   <div className="px-[50px] py-[30px] pb-[80px] space-y-4">
                     <ProjectMemoriaTab projectId={project.id} />
+                  </div>
+                </TabsContent>
+
+                {/* ══════════════════════════════════════════════════════════
+                    TAB: IA DE LANÇAMENTO (sprint Memória e Automação por IA,
+                    bloco 3/4) — conversa que propõe um plano tático; nunca
+                    materializa tarefa/etapa real (isso é o bloco 4).
+                ══════════════════════════════════════════════════════════ */}
+                <TabsContent
+                  value="lancamento-ia"
+                  className="flex-1 overflow-y-auto bg-slate-200 mt-0"
+                >
+                  <div className="px-[50px] py-[30px] pb-[80px] space-y-4">
+                    <LaunchSessionPanel projectId={project.id} />
                   </div>
                 </TabsContent>
 

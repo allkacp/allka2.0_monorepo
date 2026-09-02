@@ -73,9 +73,14 @@ const INTERNAL_PATH_PATTERNS: { re: RegExp; label: string }[] = [
   { re: /https?:\/\/(?:localhost|127\.0\.0\.1|0\.0\.0\.0|10\.\d{1,3}\.\d{1,3}\.\d{1,3}|192\.168\.\d{1,3}\.\d{1,3}|172\.(?:1[6-9]|2\d|3[01])\.\d{1,3}\.\d{1,3})(?::\d+)?[^\s"'<>]*/gi, label: "URL/endereço interno" },
 ];
 
-function sanitizeMemoryText(raw: string | null): { text: string | null; truncated: boolean; redactions: string[] } {
-  if (!raw) return { text: null, truncated: false, redactions: [] };
-
+/**
+ * Redige padrões de segredo/caminho interno/URL privada e neutraliza
+ * qualquer tentativa de forjar o marcador de fronteira — SEM truncar.
+ * Exportado pro bloco 3/4 (IA de lançamento) reaproveitar a mesma defesa
+ * pra mensagens de conversa e texto extraído de anexo, que têm limites de
+ * tamanho diferentes da memória.
+ */
+export function redactUntrustedText(raw: string): { text: string; redactions: string[] } {
   let text = raw;
   const redactions: string[] = [];
 
@@ -91,6 +96,15 @@ function sanitizeMemoryText(raw: string | null): { text: string | null; truncate
   // aleatório por compilação (impossível de prever com antecedência), nunca
   // deixamos o usuário escrever algo que pareça nosso marcador de fronteira.
   text = text.replace(/##ALLKA-MEMORY-BOUNDARY[^\s#]*##/gi, "[REDIGIDO]");
+
+  return { text, redactions };
+}
+
+function sanitizeMemoryText(raw: string | null): { text: string | null; truncated: boolean; redactions: string[] } {
+  if (!raw) return { text: null, truncated: false, redactions: [] };
+
+  const { text: redacted, redactions } = redactUntrustedText(raw);
+  let text = redacted;
 
   let truncated = false;
   if (text.length > MAX_SECTION_CHARS) {

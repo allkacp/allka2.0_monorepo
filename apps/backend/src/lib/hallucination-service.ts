@@ -54,6 +54,7 @@ export async function createHallucinationReport(
     description: string;
     questionedResponse?: string | null;
     snapshotId?: string | null;
+    launchExecutionId?: string | null;
     projectTaskId?: string | null;
     category: HallucinationCategory;
     impact: HallucinationImpact;
@@ -75,6 +76,7 @@ export async function createHallucinationReport(
           description: params.description,
           questioned_response: params.questionedResponse ?? null,
           snapshot_id: params.snapshotId ?? null,
+          launch_execution_id: params.launchExecutionId ?? null,
           project_task_id: params.projectTaskId ?? null,
           category: params.category,
           impact: params.impact,

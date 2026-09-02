@@ -2,11 +2,13 @@ import assert from "node:assert/strict";
 import { after, before, describe, it } from "node:test";
 import type { AddressInfo } from "node:net";
 import crypto from "node:crypto";
+import fs from "fs";
 import jwt from "jsonwebtoken";
 import { requireTestDatabaseUrl } from "../test-support/require-test-database";
 import app from "../app";
 import { prisma } from "../lib/prisma";
 import { config } from "../config";
+import { uploadedFilePath } from "../lib/file-storage";
 
 // Defesa contra alucinação (bloco 2/4, sprint 2026-09) — relato de "possível
 // alucinação" + prévia de contexto ("Visualizar contexto que a IA
@@ -27,6 +29,14 @@ async function api(path: string, options: { method?: string; token?: string; bod
     headers: { "content-type": "application/json", ...(options.token ? { authorization: `Bearer ${options.token}` } : {}) },
     body: options.body !== undefined ? JSON.stringify(options.body) : undefined,
   });
+  const json = await res.json().catch(() => null);
+  return { status: res.status, json };
+}
+
+async function uploadFile(path: string, token: string, buffer: Buffer, filename: string) {
+  const form = new FormData();
+  form.append("file", new Blob([new Uint8Array(buffer)]), filename);
+  const res = await fetch(`${baseUrl}${path}`, { method: "POST", headers: { authorization: `Bearer ${token}` }, body: form });
   const json = await res.json().catch(() => null);
   return { status: res.status, json };
 }
@@ -283,5 +293,44 @@ describe("Defesa contra alucinação — relato + prévia de contexto (bloco 2/4
     const newPreview = await api(`/api/memory-context/${project.id}/preview`, { method: "POST", token: tokenFor(owner), body: { createClientActionId: crypto.randomUUID() } });
     assert.ok(newPreview.json.text.includes("Resumo alterado depois do snapshot"));
     assert.notEqual(newPreview.json.checksum, first.json.checksum);
+  });
+
+  it("acabamento do bloco 2: anexos do relato funcionam e são protegidos (autorizado baixa; outra conta recebe 404; remover só arquiva)", async () => {
+    const company = await mkCompany();
+    const project = await mkProject({ company_id: company.id });
+    const reporter = await mkUser({ company_id: company.id });
+    const outsider = await mkUser({ company_id: (await mkCompany()).id });
+
+    const created = await api("/api/hallucination-reports", {
+      method: "POST",
+      token: tokenFor(reporter),
+      body: { project_id: project.id, description: "Relato com anexo", category: "outro", impact: "baixo", create_client_action_id: crypto.randomUUID() },
+    });
+    const reportId = created.json.report.id;
+
+    const upload = await uploadFile(`/api/hallucination-reports/${reportId}/files`, tokenFor(reporter), Buffer.from("print da conversa"), "evidencia.txt");
+    assert.equal(upload.status, 201);
+    const fileId = upload.json.file.id;
+    const storedName = upload.json.file.file_name;
+    const diskPath = uploadedFilePath(`hallucination-reports/${reportId}`, storedName);
+    assert.ok(fs.existsSync(diskPath));
+
+    // upload por quem não tem acesso ao relato → 404 (nunca revela existência)
+    const blockedUpload = await uploadFile(`/api/hallucination-reports/${reportId}/files`, tokenFor(outsider), Buffer.from("x"), "x.txt");
+    assert.equal(blockedUpload.status, 404);
+
+    const okDownload = await api(`/api/hallucination-reports/${reportId}/files/${fileId}/download`, { token: tokenFor(reporter) });
+    assert.equal(okDownload.status, 200);
+
+    const blockedDownload = await api(`/api/hallucination-reports/${reportId}/files/${fileId}/download`, { token: tokenFor(outsider) });
+    assert.equal(blockedDownload.status, 404);
+
+    // remover só arquiva — o binário continua no disco, some da listagem viva
+    const del = await api(`/api/hallucination-reports/${reportId}/files/${fileId}`, { method: "DELETE", token: tokenFor(reporter) });
+    assert.equal(del.status, 200);
+    assert.ok(fs.existsSync(diskPath));
+
+    const detail = await api(`/api/hallucination-reports/${reportId}`, { token: tokenFor(reporter) });
+    assert.equal(detail.json.report.files.some((f: any) => f.id === fileId), false);
   });
 });

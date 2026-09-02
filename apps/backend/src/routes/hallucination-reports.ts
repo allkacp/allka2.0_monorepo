@@ -80,6 +80,7 @@ router.post("/", verifyToken, async (req, res, next) => {
       description,
       questionedResponse: body.questioned_response ? String(body.questioned_response) : null,
       snapshotId: body.snapshot_id ? String(body.snapshot_id) : null,
+      launchExecutionId: body.launch_execution_id ? String(body.launch_execution_id) : null,
       projectTaskId: body.project_task_id ? String(body.project_task_id) : null,
       category,
       impact,

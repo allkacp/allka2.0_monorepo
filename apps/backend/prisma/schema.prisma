@@ -764,6 +764,7 @@ model Project {
   change_orders   Catalog2ChangeOrder[]
   ai_context_snapshots  AIContextSnapshot[]
   hallucination_reports HallucinationReport[]
+  launch_sessions       LaunchSession[]
 
   // ── Rastreio da plataforma antiga ─────────────────────────────────────
   // id numérico do registro equivalente no dump legado (Dump20260423.sql).
@@ -1843,6 +1844,7 @@ model AIContextSnapshot {
   created_at DateTime @default(now())
 
   hallucination_reports HallucinationReport[]
+  launch_executions     LaunchGenerationExecution[]
 
   @@index([project_id, created_at])
   @@map("ai_context_snapshots")
@@ -1861,6 +1863,12 @@ model HallucinationReport {
 
   snapshot_id String?
   snapshot    AIContextSnapshot? @relation(fields: [snapshot_id], references: [id], onDelete: SetNull)
+
+  // Bloco 3/4: quando o relato nasce direto da resposta da IA de lançamento,
+  // vincula a execução real (prompt/resposta/checksum), não só o snapshot de
+  // memória usado por ela.
+  launch_execution_id String?
+  launch_execution     LaunchGenerationExecution? @relation(fields: [launch_execution_id], references: [id], onDelete: SetNull)
 
   project_task_id String?
   project_task    ProjectTask? @relation(fields: [project_task_id], references: [id], onDelete: SetNull)
@@ -1947,6 +1955,197 @@ model HallucinationReportEvent {
 
   @@index([report_id, created_at])
   @@map("hallucination_report_events")
+}
+
+// ─── IA de Lançamento / Plano Tático (bloco 3/4) ──────────────────────────────
+// Conversa persistente DENTRO de um projeto que usa o compilador hierárquico
+// do bloco 2 pra propor um plano tático de tarefas. Este bloco NUNCA
+// materializa tarefa/etapa operacional real — só produz e versiona uma
+// PROPOSTA revisável. "Aprovar como rascunho" aqui significa "plano revisado
+// e pronto para materialização", nunca "tarefas liberadas" (isso é o bloco 4,
+// junto do motor de dependências).
+model LaunchSession {
+  id         String  @id @default(cuid())
+  project_id String
+  project    Project @relation(fields: [project_id], references: [id], onDelete: Cascade)
+
+  created_by_user_id String
+
+  status String @default("coletando_informacoes")
+  // coletando_informacoes | aguardando_respostas | proposta_gerada |
+  // em_revisao | aprovada_como_rascunho | cancelada — nunca texto livre.
+
+  // Ponteiros "soft" (sem FK) pra versão de trabalho atual e pra versão
+  // aprovada — validados em código, mesmo padrão de outros ponteiros
+  // opcionais já usados no schema (ex.: User.admin_profile_id).
+  current_version_id  String?
+  approved_version_id String?
+
+  pending_questions_json String? @db.LongText
+  // JSON string[] — perguntas da IA por informação crítica ausente ainda sem
+  // resposta. Enquanto não vazio, a IA não pode ter inventado cliente,
+  // responsável, data, orçamento ou requisito nas seções que dependem disso.
+
+  plan_duration_months      Int?
+  // 2 | 3 | 6 | null quando plan_duration_days_custom preenchido
+  plan_duration_days_custom Int?
+  // só preenchido quando duração personalizada foi autorizada
+
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+  // Concorrência otimista (mesmo padrão do bloco 1/2): quem edita reenvia o
+  // updated_at que leu por último.
+
+  participants LaunchSessionParticipant[]
+  messages     LaunchMessage[]
+  versions     LaunchProposalVersion[]
+  executions   LaunchGenerationExecution[]
+
+  @@index([project_id])
+  @@map("launch_sessions")
+}
+
+// Participantes autorizados além do criador — quem tem vínculo real com o
+// projeto sempre pode VER (ver launch-permissions.ts), isto é só pra
+// controlar quem além do criador pode efetivamente interagir/gerar/aprovar.
+model LaunchSessionParticipant {
+  id                String        @id @default(cuid())
+  session_id        String
+  session           LaunchSession @relation(fields: [session_id], references: [id], onDelete: Cascade)
+  user_id           String
+  added_by_user_id  String
+  added_at          DateTime      @default(now())
+
+  @@unique([session_id, user_id])
+  @@map("launch_session_participants")
+}
+
+// Mensagem da conversa (usuário, IA, ou sistema). Histórico persistente e
+// imutável — nunca editado depois de criado.
+model LaunchMessage {
+  id         String        @id @default(cuid())
+  session_id String
+  session    LaunchSession @relation(fields: [session_id], references: [id], onDelete: Cascade)
+
+  role String
+  // user | assistant | system
+  actor_user_id String?
+  // preenchido só quando role = "user"
+
+  content String @db.LongText
+
+  status String @default("ok")
+  // ok | error — falha de geração vira uma mensagem "assistant" com status
+  // "error" (mensagem de erro local, nunca falha silenciosa)
+
+  execution_id String?
+  // qual LaunchGenerationExecution gerou esta mensagem (role=assistant) —
+  // é o vínculo real que "Reportar possível alucinação" usa a partir daqui.
+
+  created_at DateTime @default(now())
+
+  files LaunchMessageFile[]
+
+  @@index([session_id, created_at])
+  @@map("launch_messages")
+}
+
+// Anexo de uma mensagem — biblioteca de disco própria (lib/file-storage.ts),
+// nunca reaproveita linha de outro anexo. Texto extraído (PDF/DOCX/TXT/MD,
+// mesma extração de lib/ai-knowledge-base.ts) fica salvo à parte — é o único
+// conteúdo do arquivo que pode ir pro prompt da IA, sempre saneado/delimitado
+// como conteúdo não confiável; o binário em si nunca é enviado.
+model LaunchMessageFile {
+  id         String        @id @default(cuid())
+  message_id String
+  message    LaunchMessage @relation(fields: [message_id], references: [id], onDelete: Cascade)
+
+  name      String
+  file_name String
+  mime_type String?
+  size      Int
+  uploaded_by_user_id String
+
+  extracted_text           String?  @db.LongText
+  extracted_text_truncated Boolean  @default(false)
+
+  created_at  DateTime  @default(now())
+  archived_at DateTime?
+
+  @@index([message_id])
+  @@map("launch_message_files")
+}
+
+// Uma versão IMUTÁVEL da proposta de plano tático — cada geração da IA ou
+// edição humana cria uma versão NOVA, nunca sobrescreve uma existente.
+// Permite comparar versões e proteger a versão aprovada contra sobrescrita.
+model LaunchProposalVersion {
+  id         String        @id @default(cuid())
+  session_id String
+  session    LaunchSession @relation(fields: [session_id], references: [id], onDelete: Cascade)
+
+  version_number Int
+  source         String
+  // ia_gerada | humano_editado
+  based_on_version_id String?
+  // versão anterior sobre a qual esta foi construída (edição humana de uma
+  // proposta da IA, ou nova geração da IA em cima de uma edição humana)
+
+  structured_json String @db.LongText
+  // plano tático completo já validado (schema estruturado — nunca Markdown
+  // livre): ondas/marcos, tarefas com todos os campos exigidos
+
+  created_by_user_id String
+  created_at          DateTime @default(now())
+
+  execution_id String?
+  // preenchido só quando source = "ia_gerada" — qual execução produziu isto
+
+  @@unique([session_id, version_number])
+  @@map("launch_proposal_versions")
+}
+
+// Execução real de geração de IA — snapshot de auditoria completo (bloco 2 +
+// bloco 3): provedor/modelo/checksum/prompt/resposta permitida. Idempotente
+// por client_action_id (clique duplo nunca duplica nem gera custo duplicado).
+model LaunchGenerationExecution {
+  id         String        @id @default(cuid())
+  session_id String
+  session    LaunchSession @relation(fields: [session_id], references: [id], onDelete: Cascade)
+
+  requested_by_user_id String
+
+  snapshot_id String?
+  snapshot    AIContextSnapshot? @relation(fields: [snapshot_id], references: [id], onDelete: SetNull)
+
+  based_on_version_id String?
+  // versão de trabalho usada como base desta geração, quando houver
+
+  provider String?
+  model    String?
+  checksum String?
+  // checksum do contexto de memória efetivamente usado (bloco 2)
+
+  prompt_sent   String? @db.LongText
+  // prompt final enviado, já saneado (nunca contém segredo/caminho interno)
+  response_json String? @db.LongText
+  // resposta estruturada permitida (nunca o "raciocínio" bruto do modelo)
+
+  status String @default("pending")
+  // pending | succeeded | failed | cancelled | timeout
+
+  error_message String? @db.Text
+  // mensagem segura — nunca guarda credencial/API key
+
+  client_action_id String @unique
+
+  started_at  DateTime  @default(now())
+  finished_at DateTime?
+
+  hallucination_reports HallucinationReport[]
+
+  @@index([session_id, started_at])
+  @@map("launch_generation_executions")
 }
 
 // ─── AIKnowledgeCategory / AIKnowledgeDocument ────────────────────────────────

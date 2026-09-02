@@ -50,3 +50,33 @@ export async function createContextSnapshotPreview(
 export async function getContextSnapshot(id: string, db: DbClient = prisma) {
   return db.aIContextSnapshot.findUnique({ where: { id } });
 }
+
+/**
+ * Snapshot de uma execução de IA REAL (bloco 3/4 — IA de Lançamento). Ao
+ * contrário da prévia acima, `action` aqui é sempre "execution": esta
+ * chamada só acontece imediatamente antes de uma chamada de IA de verdade
+ * usar o contexto, nunca como visualização. Sem idempotência própria — a
+ * idempotência da GERAÇÃO inteira (bloco 3) já é resolvida um nível acima,
+ * por `LaunchGenerationExecution.client_action_id`, antes deste ponto ser
+ * alcançado; um retry legítimo nunca chega até aqui duas vezes.
+ */
+export async function createContextSnapshotForExecution(
+  params: { projectId: string; requestedByUserId: string },
+  db: DbClient = prisma,
+): Promise<{ snapshot: Awaited<ReturnType<typeof db.aIContextSnapshot.findUniqueOrThrow>>; compiled: CompiledMemoryContext }> {
+  const compiled = await compileProjectMemoryContext(params.projectId, db);
+  const snapshot = await db.aIContextSnapshot.create({
+    data: {
+      project_id: params.projectId,
+      requested_by_user_id: params.requestedByUserId,
+      action: "execution",
+      checksum: compiled.checksum,
+      compiled_text: compiled.text,
+      structured_json: JSON.stringify(compiled.layers),
+      missing_layers: JSON.stringify(compiled.missingLayers),
+      approved_task_refs: JSON.stringify(compiled.approvedTaskRefs),
+      status: "compiled",
+    },
+  });
+  return { snapshot, compiled };
+}

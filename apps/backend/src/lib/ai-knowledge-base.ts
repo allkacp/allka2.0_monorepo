@@ -52,7 +52,9 @@ export const DEFAULT_CATEGORIES: { key: string; name: string; description: strin
   },
 ];
 
-async function extractFileText(filePath: string): Promise<string> {
+/** Exportado pro bloco 3/4 (IA de lançamento) reaproveitar a mesma extração
+ * de texto de anexo (PDF/DOCX/TXT/MD) — nunca duplicar pdf-parse/mammoth. */
+export async function extractFileText(filePath: string): Promise<string> {
   const ext = path.extname(filePath).toLowerCase();
   if (ext === ".pdf") {
     const buf = fs.readFileSync(filePath);
