@@ -130,6 +130,13 @@ export function HelpFloatingIcon() {
                           </span>
                         </div>
                         <p className="text-xs text-slate-500 dark:text-slate-400">{tour.description}</p>
+                        {/* Indicação de indisponibilidade de CONTEXTO (nunca de permissão — um
+                            tour sem permissão simplesmente não aparece na lista). Só pra tours
+                            que vivem dentro de um registro específico (projeto/empresa/agência)
+                            sem rota fixa — nunca revela um recurso secreto, só explica onde ver. */}
+                        {tour.noDataMessage && (
+                          <p className="text-[11px] text-slate-400 italic">Disponível dentro de um projeto, empresa ou agência aberto.</p>
+                        )}
                         {doneSteps > 0 && status !== "concluido" && (
                           <p className="text-[11px] text-slate-400">
                             Passo {doneSteps} de {tour.steps.length}

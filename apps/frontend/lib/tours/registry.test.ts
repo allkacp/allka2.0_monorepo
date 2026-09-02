@@ -1,5 +1,22 @@
 import { describe, expect, it } from "vitest";
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import { TOURS, findTour, toursForAccountType } from "@/lib/tours/registry";
+import { validateTourCatalog } from "@/lib/tours/catalog-validation";
+import type { TourDefinition } from "@/lib/tours/types";
+
+function brokenTour(overrides: Partial<TourDefinition>): TourDefinition {
+  return {
+    key: "tour-sintetico-quebrado",
+    version: 1,
+    title: "Tour sintético quebrado",
+    description: "usado só pra provar que o validador falha de verdade",
+    category: "primeiros-passos",
+    routes: [],
+    steps: [{ id: "s1", target: null, title: "t", description: "d" }],
+    ...overrides,
+  };
+}
 
 describe("Registro de tours (sprint de onboarding, bloco 1/3)", () => {
   it("tour piloto 'Primeiros passos na Allka' existe na versão 1 com os 6 passos esperados", () => {
@@ -134,5 +151,94 @@ describe("Registro de tours (sprint de onboarding, bloco 1/3)", () => {
       expect(step.description.toLowerCase()).not.toMatch(/clique em materializar|confirme o pagamento|aprove agora/);
     }
     expect(tour.steps.some((s) => s.id === "never-automatic")).toBe(true);
+  });
+
+  it("nenhum passo tem mais de duas frases curtas na descrição (bloco 3/3 — texto e linguagem)", () => {
+    for (const tour of TOURS) {
+      for (const step of tour.steps) {
+        const sentences = step.description.split(/(?<=[.!?])\s+/).filter(Boolean);
+        expect(sentences.length, `tour "${tour.key}", passo "${step.id}": "${step.description}"`).toBeLessThanOrEqual(2);
+      }
+    }
+  });
+
+  it("nenhum tour afirma que presença/monitoramento mede produtividade (Monitoramento e presença não tem tour — nunca deveria ter essa afirmação em lugar nenhum)", () => {
+    for (const tour of TOURS) {
+      for (const step of tour.steps) {
+        expect(step.description.toLowerCase()).not.toMatch(/mede (a )?produtividade|mede o desempenho/);
+      }
+    }
+  });
+
+  it("tours que vivem dentro de um projeto/empresa/agência específico (sem rota fixa) declaram noDataMessage — nunca assumem um registro fixo nem inventam um quando não há nenhum aberto", () => {
+    for (const key of ["aditivos", "memoria", "ia-lancamento", "plano-tatico", "materializacao-execucao"]) {
+      const tour = findTour(key)!;
+      expect(tour.noDataMessage, `tour "${key}" deveria ter noDataMessage`).toBeTruthy();
+      expect(tour.noDataMessage!.length).toBeGreaterThan(10);
+    }
+  });
+});
+
+describe("Validador do catálogo (sprint de onboarding, bloco 3/3)", () => {
+  it("o registro REAL passa no validador sem nenhum problema", () => {
+    expect(validateTourCatalog(TOURS)).toEqual([]);
+  });
+
+  it("todo tour tem título único (auditoria explícita do bloco 3, além da chave)", () => {
+    const titles = TOURS.map((t) => t.title);
+    expect(new Set(titles).size).toBe(titles.length);
+  });
+
+  it("toda rota declarada por um tour existe de verdade em App.tsx — nenhuma rota órfã", () => {
+    const appTsxPath = resolve(process.cwd(), "App.tsx");
+    const appSource = readFileSync(appTsxPath, "utf8");
+    const realRoutes = new Set([...appSource.matchAll(/path="([^"]+)"/g)].map((m) => m[1]));
+    for (const tour of TOURS) {
+      for (const route of tour.routes) {
+        expect(realRoutes.has(route), `rota "${route}" do tour "${tour.key}" não existe em App.tsx`).toBe(true);
+      }
+    }
+  });
+
+  it("falha automaticamente com CHAVE DUPLICADA", () => {
+    const catalog = [brokenTour({ key: "duplicada" }), brokenTour({ key: "duplicada", title: "Outro título" })];
+    const problems = validateTourCatalog(catalog);
+    expect(problems.some((p) => /chave duplicada/i.test(p))).toBe(true);
+  });
+
+  it("falha automaticamente com VERSÃO INVÁLIDA (zero, negativa ou fracionária)", () => {
+    for (const version of [0, -1, 1.5]) {
+      const problems = validateTourCatalog([brokenTour({ version })]);
+      expect(problems.some((p) => /versão inválida/i.test(p))).toBe(true);
+    }
+  });
+
+  it("falha automaticamente com TOUR SEM PASSOS", () => {
+    const problems = validateTourCatalog([brokenTour({ steps: [] })]);
+    expect(problems.some((p) => /nenhum passo definido/i.test(p))).toBe(true);
+  });
+
+  it("falha automaticamente com CATEGORIA DESCONHECIDA", () => {
+    const problems = validateTourCatalog([brokenTour({ category: "categoria-inventada" as any })]);
+    expect(problems.some((p) => /categoria desconhecida/i.test(p))).toBe(true);
+  });
+
+  it("falha automaticamente com TOUR SEM PÚBLICO ELEGÍVEL (nenhum perfil real consegue ver)", () => {
+    const problems = validateTourCatalog([brokenTour({ allowedAccountTypes: ["admin"], isEligible: () => false })]);
+    expect(problems.some((p) => /público elegível vazio/i.test(p))).toBe(true);
+  });
+
+  it("também detecta título duplicado, id de passo repetido e target frágil (não só os 5 casos obrigatórios)", () => {
+    expect(validateTourCatalog([brokenTour({ key: "a" }), brokenTour({ key: "b" })]).some((p) => /título duplicado/i.test(p))).toBe(true);
+    expect(
+      validateTourCatalog([
+        brokenTour({ steps: [{ id: "x", target: null, title: "t", description: "d" }, { id: "x", target: null, title: "t2", description: "d2" }] }),
+      ]).some((p) => /id de passo duplicado/i.test(p)),
+    ).toBe(true);
+    expect(
+      validateTourCatalog([brokenTour({ steps: [{ id: "x", target: "Alvo Com Espaço", title: "t", description: "d" }] })]).some((p) =>
+        /não é uma chave estável/i.test(p),
+      ),
+    ).toBe(true);
   });
 });

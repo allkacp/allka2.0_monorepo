@@ -19,6 +19,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useRef, use
 import { useLocation, useNavigate } from "react-router-dom";
 import { apiClient, type TourProgressDto } from "@/lib/api-client";
 import { TOURS } from "@/lib/tours/registry";
+import { isTourEligible } from "@/lib/tours/eligibility";
 import type { TourDefinition, TourEligibilityContext } from "@/lib/tours/types";
 import { TourRunner } from "@/components/onboarding/tour-runner";
 import { WelcomeModal } from "@/components/onboarding/welcome-modal";
@@ -57,11 +58,7 @@ export function useOnboarding(): OnboardingContextValue {
   return ctx;
 }
 
-export function isTourEligible(tour: TourDefinition, ctx: TourEligibilityContext): boolean {
-  if (tour.allowedAccountTypes && !tour.allowedAccountTypes.includes(ctx.accountType as any)) return false;
-  if (tour.isEligible && !tour.isEligible(ctx)) return false;
-  return true;
-}
+export { isTourEligible };
 
 function matchesRoute(tour: TourDefinition, pathname: string): boolean {
   if (tour.routes.length === 0) return true; // sem rota associada (ex.: primeiros-passos) — sempre "na rota certa"

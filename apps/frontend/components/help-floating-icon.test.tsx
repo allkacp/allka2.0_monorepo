@@ -139,4 +139,23 @@ describe("HelpFloatingIcon — Tours da plataforma", () => {
     expect(await within(card).findByText("Dispensado")).toBeInTheDocument();
     expect(within(card).getByRole("button", { name: /refazer/i })).toBeInTheDocument();
   });
+
+  it("tours de registro específico (Memória, Aditivos...) mostram uma nota de contexto — nunca revelam que falta permissão, só onde o tour vive (bloco 3/3)", async () => {
+    api.getCurrentUser.mockResolvedValue({ id: "u1", account_type: "empresas" });
+    api.listTourProgress.mockResolvedValue({ data: [] });
+    await openHelp();
+    const card = findTourCard("Memória");
+    expect(within(card).getByText(/dispon[íi]vel dentro de um projeto, empresa ou agência aberto/i)).toBeInTheDocument();
+    // um tour de rota fixa normal (sem noDataMessage) nunca ganha essa nota
+    const catalogCard = findTourCard("Catálogo do cliente e configurador");
+    expect(within(catalogCard).queryByText(/dispon[íi]vel dentro de um projeto/i)).not.toBeInTheDocument();
+  });
+
+  it("a Central de Ajuda nunca se mistura com Allkademy, Roadmap e chamados ou Ajuda e sugestões (sistemas diferentes)", async () => {
+    api.listTourProgress.mockResolvedValue({ data: [] });
+    await openHelp();
+    for (const foreignText of [/allkademy/i, /roadmap/i, /chamados/i, /ajuda e sugest/i]) {
+      expect(screen.queryByText(foreignText)).not.toBeInTheDocument();
+    }
+  });
 });

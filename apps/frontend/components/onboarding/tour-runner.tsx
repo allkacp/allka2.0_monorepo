@@ -19,6 +19,13 @@ import type { TourDefinition, TourStep } from "@/lib/tours/types";
 const RECHECK_INTERVAL_MS = 400;
 const BALLOON_MARGIN = 12;
 const BALLOON_WIDTH = 320;
+// Tempo máximo esperando a pessoa abrir um painel fechado (ver
+// `requiresOpening` em lib/tours/types.ts) antes de explicar e liberar saída
+// — nunca trava esperando pra sempre.
+const PREPARE_OPEN_TIMEOUT_MS = 30000;
+const DEFAULT_UNAVAILABLE_MESSAGE = "Este conteúdo não está disponível no momento.";
+const PREPARE_TIMEOUT_MESSAGE =
+  "Não detectamos que o painel foi aberto a tempo. Você pode sair e tentar de novo pela Central de Ajuda, ou seguir para o próximo passo.";
 
 interface TourRunnerProps {
   tour: TourDefinition;
@@ -28,6 +35,8 @@ interface TourRunnerProps {
   onComplete: () => void;
   /** Saiu sem concluir (Escape ou botão "Sair") — progresso do passo atual já foi salvo via onStepChange. */
   onExit: () => void;
+  /** Só para teste — sobrepõe PREPARE_OPEN_TIMEOUT_MS pra não esperar 30s de verdade. */
+  prepareOpenTimeoutMs?: number;
 }
 
 // Alguns alvos existem em DUAS versões no DOM ao mesmo tempo (desktop/mobile,
@@ -35,16 +44,40 @@ interface TourRunnerProps {
 // help-floating-icon.tsx) com o MESMO data-tour-id. `querySelector` sozinho
 // pegaria sempre a primeira, mesmo se ela estiver `display:none` no viewport
 // atual — por isso escolhe a primeira que realmente tem tamanho (visível).
-function resolveTarget(step: TourStep): HTMLElement | null {
-  if (!step.target) return null;
-  const candidates = document.querySelectorAll<HTMLElement>(`[data-tour-id="${CSS.escape(step.target)}"]`);
+function resolveByDataTourId(id: string): HTMLElement | null {
+  const candidates = document.querySelectorAll<HTMLElement>(`[data-tour-id="${CSS.escape(id)}"]`);
   for (const el of candidates) {
     if (el.offsetParent !== null || el.getClientRects().length > 0) return el;
   }
   return candidates[0] ?? null;
 }
 
-export function TourRunner({ tour, startStepId, onStepChange, onComplete, onExit }: TourRunnerProps) {
+function resolveTarget(step: TourStep): HTMLElement | null {
+  if (!step.target) return null;
+  return resolveByDataTourId(step.target);
+}
+
+function prefersReducedMotion(): boolean {
+  return typeof window !== "undefined" && window.matchMedia?.("(prefers-reduced-motion: reduce)").matches === true;
+}
+
+// Alguns tours (Aditivos, Memória, IA de Lançamento...) vivem dentro de um
+// projeto/empresa/agência específico, sem rota fixa — se a pessoa abrir um
+// desses tours sem nenhum registro do tipo certo aberto agora, NENHUM alvo
+// real (nem o botão de abrir um painel) existe em lugar nenhum da tela.
+// Nunca escolhe um registro sozinho nem inventa um — só detecta esse estado
+// pra mostrar `tour.noDataMessage` em vez de percorrer passos impossíveis.
+function tourHasNoDataAnywhere(tour: TourDefinition): boolean {
+  return !tour.steps.some((s) => {
+    if (s.target === null) return false; // passo central não conta como "dado"
+    if (resolveTarget(s)) return true;
+    if (s.requiresOpening && resolveByDataTourId(s.requiresOpening.openerTarget)) return true;
+    return false;
+  });
+}
+
+export function TourRunner({ tour, startStepId, onStepChange, onComplete, onExit, prepareOpenTimeoutMs }: TourRunnerProps) {
+  const openTimeoutMs = prepareOpenTimeoutMs ?? PREPARE_OPEN_TIMEOUT_MS;
   const initialIndex = useMemo(() => {
     if (!startStepId) return 0;
     const idx = tour.steps.findIndex((s) => s.id === startStepId);
@@ -53,7 +86,12 @@ export function TourRunner({ tour, startStepId, onStepChange, onComplete, onExit
 
   const [stepIndex, setStepIndex] = useState(initialIndex);
   const [rect, setRect] = useState<DOMRect | null>(null);
-  const [unavailable, setUnavailable] = useState(false);
+  const [unavailableMessage, setUnavailableMessage] = useState<string | null>(null);
+  // Passo necessário cujo alvo real está dentro de um painel fechado (ver
+  // `requiresOpening`) — motor destaca o botão que abre o painel e espera a
+  // pessoa clicar; nunca clica sozinho, nunca trava (tem timeout).
+  const [preparingInstruction, setPreparingInstruction] = useState<string | null>(null);
+  const preparingSince = useRef<number | null>(null);
   const balloonRef = useRef<HTMLDivElement>(null);
   const previouslyFocused = useRef<Element | null>(null);
   const skipGuard = useRef(0);
@@ -82,18 +120,48 @@ export function TourRunner({ tour, startStepId, onStepChange, onComplete, onExit
       onExit();
       return;
     }
+    if (tour.noDataMessage && tourHasNoDataAnywhere(tour)) {
+      setRect(null);
+      setPreparingInstruction(null);
+      preparingSince.current = null;
+      setUnavailableMessage(tour.noDataMessage);
+      onStepChange(step.id);
+      return;
+    }
     if (step.target === null) {
       setRect(null);
-      setUnavailable(false);
+      setUnavailableMessage(null);
+      setPreparingInstruction(null);
+      preparingSince.current = null;
       onStepChange(step.id);
       skipGuard.current = 0;
       return;
     }
     const el = resolveTarget(step);
     if (!el) {
+      // Alvo real ausente, mas o passo sabe qual botão abre o painel que o
+      // contém (ex.: aba "Gerenciar" só existe depois do painel de Alertas
+      // ser aberto uma vez) — destaca o botão de abertura e espera a pessoa
+      // clicar, em vez de pular o passo (perderia a garantia) ou travar.
+      if (step.requiresOpening) {
+        const opener = resolveByDataTourId(step.requiresOpening.openerTarget);
+        if (opener) {
+          skipGuard.current = 0;
+          setUnavailableMessage(null);
+          setPreparingInstruction(step.requiresOpening.instruction);
+          preparingSince.current = Date.now();
+          onStepChange(step.id);
+          setRect(opener.getBoundingClientRect());
+          return;
+        }
+        // Nem o botão de abertura existe (perfil sem acesso ao módulo) —
+        // segue pro tratamento padrão abaixo.
+      }
       if (step.optional) {
         // Nunca deixa a página travada: se TODOS os passos restantes
-        // estiverem ausentes, sai do tour em vez de girar pra sempre.
+        // estiverem ausentes, sai do tour em vez de girar pra sempre (o caso
+        // "nenhum dado em lugar nenhum" já foi tratado acima, antes deste
+        // bloco, via `tourHasNoDataAnywhere` + `noDataMessage`).
         skipGuard.current += 1;
         if (skipGuard.current > tour.steps.length) {
           onExit();
@@ -110,27 +178,56 @@ export function TourRunner({ tour, startStepId, onStepChange, onComplete, onExit
       // Passo obrigatório sem alvo — nunca quebra a plataforma: informa e
       // segue pro próximo em vez de travar.
       setRect(null);
-      setUnavailable(true);
+      setPreparingInstruction(null);
+      preparingSince.current = null;
+      setUnavailableMessage(DEFAULT_UNAVAILABLE_MESSAGE);
       onStepChange(step.id);
       return;
     }
     skipGuard.current = 0;
-    setUnavailable(false);
+    setUnavailableMessage(null);
+    setPreparingInstruction(null);
+    preparingSince.current = null;
     onStepChange(step.id);
-    el.scrollIntoView({ behavior: "smooth", block: "center", inline: "nearest" });
-    // Recalcula depois do scroll suave assentar.
-    const t = setTimeout(() => setRect(el.getBoundingClientRect()), 260);
+    el.scrollIntoView({ behavior: prefersReducedMotion() ? "auto" : "smooth", block: "center", inline: "nearest" });
+    // Recalcula depois do scroll assentar (instantâneo se movimento reduzido).
+    const t = setTimeout(() => setRect(el.getBoundingClientRect()), prefersReducedMotion() ? 0 : 260);
     return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [stepIndex, tour]);
 
   // Recalcula posição em resize/scroll/mudança responsiva, e por um
   // intervalo curto como rede de segurança pra reflows sem scroll/resize.
+  // O MESMO intervalo também faz o trabalho de "esperar o painel abrir":
+  // enquanto `preparingInstruction` está ativo, cada tick verifica se o
+  // alvo real já montou (a pessoa abriu o painel) — nunca clica sozinho,
+  // só observa o DOM. Depois de PREPARE_OPEN_TIMEOUT_MS sem sucesso, explica
+  // e libera saída em vez de esperar pra sempre.
   useEffect(() => {
     if (!step || step.target === null) return;
     const recompute = () => {
       const el = resolveTarget(step);
-      if (el) setRect(el.getBoundingClientRect());
+      if (el) {
+        if (preparingInstruction) {
+          setPreparingInstruction(null);
+          preparingSince.current = null;
+          setUnavailableMessage(null);
+          onStepChange(step.id);
+        }
+        setRect(el.getBoundingClientRect());
+        return;
+      }
+      if (preparingInstruction && step.requiresOpening) {
+        if (preparingSince.current && Date.now() - preparingSince.current > openTimeoutMs) {
+          setPreparingInstruction(null);
+          preparingSince.current = null;
+          setRect(null);
+          setUnavailableMessage(PREPARE_TIMEOUT_MESSAGE);
+          return;
+        }
+        const opener = resolveByDataTourId(step.requiresOpening.openerTarget);
+        if (opener) setRect(opener.getBoundingClientRect());
+      }
     };
     window.addEventListener("resize", recompute);
     window.addEventListener("scroll", recompute, true);
@@ -140,7 +237,7 @@ export function TourRunner({ tour, startStepId, onStepChange, onComplete, onExit
       window.removeEventListener("scroll", recompute, true);
       clearInterval(interval);
     };
-  }, [step]);
+  }, [step, preparingInstruction, openTimeoutMs]);
 
   const goNext = useCallback(() => {
     direction.current = 1;
@@ -209,12 +306,22 @@ export function TourRunner({ tour, startStepId, onStepChange, onComplete, onExit
   const balloonStyle = computeBalloonStyle(rect, step.placement);
 
   return (
-    <div className="fixed inset-0 z-[130]" role="dialog" aria-modal="true" aria-label={`Tour: ${tour.title}`}>
+    <div
+      // z-115: acima da interface ensinada (inclusive modais como o de
+      // detalhe do Legacy, em z-[110]) mas SEMPRE abaixo do
+      // MandatoryBannerGate (z-[120] — avisos obrigatórios da plataforma
+      // nunca podem ficar escondidos atrás de um tour).
+      className="fixed inset-0 z-[115]"
+      role="dialog"
+      aria-modal="true"
+      aria-label={`Tour: ${tour.title}`}
+      aria-describedby="tour-step-description tour-step-progress"
+    >
       {/* Fundo escurecido — recorte "spotlight" via box-shadow gigante quando há alvo. */}
       {rect ? (
         <div
           aria-hidden="true"
-          className="absolute rounded-lg transition-all duration-200 pointer-events-none"
+          className={cn("absolute rounded-lg pointer-events-none", !prefersReducedMotion() && "transition-all duration-200")}
           style={{
             top: rect.top - 6,
             left: rect.left - 6,
@@ -247,13 +354,13 @@ export function TourRunner({ tour, startStepId, onStepChange, onComplete, onExit
           </button>
         </div>
 
-        <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed">
-          {unavailable ? "Este conteúdo não está disponível no momento." : step.description}
+        <p id="tour-step-description" className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed" aria-live="polite">
+          {unavailableMessage ?? preparingInstruction ?? step.description}
         </p>
 
         <div className="space-y-1.5">
           <Progress value={progressPct} className="h-1.5" />
-          <p className="text-[11px] text-slate-400" aria-live="polite">
+          <p id="tour-step-progress" className="text-[11px] text-slate-400" aria-live="polite">
             {stepIndex + 1} de {tour.steps.length}
           </p>
         </div>

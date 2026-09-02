@@ -89,7 +89,7 @@ export const TOURS: TourDefinition[] = [
       { id: "notifications-explain", target: null, title: "O que uma Notificação avisa", description: "Ex.: uma tarefa foi liberada para execução, ou alguém te adicionou a um grupo. Nunca pede uma ação sua." },
       { id: "alerts-button", target: "alerts-button", title: "Alertas", description: "Diferente das Notificações: aqui ficam itens que pedem atenção ou uma decisão — abrem um painel próprio.", placement: "bottom" },
       { id: "alerts-colors", target: null, title: "Verde, amarelo e vermelho", description: "Verde é informativo, amarelo pede atenção em breve, vermelho é crítico e pode exigir uma resolução real." },
-      { id: "alerts-actions", target: null, title: "Dispensar, arquivar e resolver", description: "Dispensar só marca como lido. Arquivar tira da lista ativa. Resolver é um registro administrativo, só para alertas críticos que não se corrigem sozinhos." },
+      { id: "alerts-actions", target: null, title: "Dispensar, arquivar e resolver", description: "Dispensar só marca como lido; arquivar tira da lista ativa. Resolver é um registro administrativo, só para alertas críticos que não se corrigem sozinhos." },
       { id: "alerts-resolve-honesty", target: null, title: "Resolver não conserta a causa", description: "Um alerta vermelho pode continuar exigindo que a tarefa ou situação real seja corrigida — clicar em Resolver só fecha o registro do alerta." },
       { id: "alerts-origin", target: null, title: "Ver origem e detalhes", description: "Cada alerta pode abrir de onde ele veio (a tarefa, o projeto) e um histórico completo do que aconteceu com ele." },
     ],
@@ -105,7 +105,17 @@ export const TOURS: TourDefinition[] = [
     routes: [], // vive numa aba dentro do painel global de Alertas, não numa rota própria
     steps: [
       { id: "alerts-button", target: "alerts-button", title: "Abra o painel de Alertas", description: "A administração fica dentro do próprio painel de Alertas, na aba \"Gerenciar\".", placement: "bottom" },
-      { id: "alerts-manage-tab", target: "alerts-manage-tab", title: "Aba Gerenciar", description: "Só visível para Admin Master — reúne Padrões, Regras, Programados e Avulsos.", placement: "bottom", optional: true },
+      {
+        id: "alerts-manage-tab",
+        target: "alerts-manage-tab",
+        title: "Aba Gerenciar",
+        description: "Só visível para Admin Master — reúne Padrões, Regras, Programados e Avulsos.",
+        placement: "bottom",
+        // O painel de Alertas só monta o conteúdo interno depois de aberto ao
+        // menos uma vez (HeaderSlideScreen) — sem isto, este passo seria
+        // silenciosamente pulado mesmo pra quem tem a permissão.
+        requiresOpening: { openerTarget: "alerts-button", instruction: "Para continuar, abra o painel de Alertas pelo ícone de triângulo à direita." },
+      },
       { id: "standards", target: null, title: "Padrões", description: "Condições automáticas (ex.: tarefa atrasada) que o sistema já reconhece e pode transformar em alerta." },
       { id: "rules", target: null, title: "Regras", description: "Reaproveitam um padrão definindo destinatários e criticidade — a mesma regra pode valer para vários casos." },
       { id: "schedules", target: null, title: "Programados", description: "Alertas/banners agendados, com data de expiração e imagem opcional." },
@@ -121,7 +131,16 @@ export const TOURS: TourDefinition[] = [
     category: "alertas-comunicacao",
     routes: [],
     steps: [
-      { id: "groups-tab", target: "notifications-groups-tab", title: "Grupos", description: "Uma lista de pessoas do seu time que recebem os mesmos avisos — dentro do painel de Notificações.", placement: "bottom" },
+      {
+        id: "groups-tab",
+        target: "notifications-groups-tab",
+        title: "Grupos",
+        description: "Uma lista de pessoas do seu time que recebem os mesmos avisos — dentro do painel de Notificações.",
+        placement: "bottom",
+        // Mesmo motivo do "alerts-manage-tab" acima — o painel de
+        // Notificações só monta a aba depois de aberto ao menos uma vez.
+        requiresOpening: { openerTarget: "notifications-button", instruction: "Para continuar, abra o painel de Notificações pelo sino." },
+      },
       { id: "participants", target: null, title: "Participantes", description: "Cada grupo tem membros reais da plataforma — nunca um contato externo avulso." },
       { id: "approval", target: null, title: "Aprovação", description: "Um líder solicita a criação de um grupo; só o Admin Master aprova ou rejeita, sempre com justificativa quando rejeita." },
       { id: "chat", target: "chat-widget-button", title: "Conversa interna", description: "Um grupo aprovado ganha uma sala de conversa própria, dentro da plataforma.", placement: "bottom" },
@@ -137,10 +156,29 @@ export const TOURS: TourDefinition[] = [
     category: "alertas-comunicacao",
     routes: [],
     steps: [
-      { id: "prefs-tab", target: "notifications-prefs-tab", title: "Canal interno da plataforma", description: "O único canal que já entrega avisos de verdade hoje — sempre dentro da própria Allka.", placement: "bottom" },
+      {
+        id: "prefs-tab",
+        target: "notifications-prefs-tab",
+        title: "Canal interno da plataforma",
+        description: "O único canal que já entrega avisos de verdade hoje — sempre dentro da própria Allka.",
+        placement: "bottom",
+        // O painel de Notificações só monta a aba depois de aberto ao menos
+        // uma vez (ver notifications-groups-tab acima, mesmo componente).
+        requiresOpening: { openerTarget: "notifications-button", instruction: "Para continuar, abra o painel de Notificações pelo sino." },
+      },
       { id: "external-channels", target: null, title: "Canais externos", description: "E-mail, WhatsApp e notificação push aparecem aqui como preferência, mas ainda não enviam de verdade neste ambiente." },
       { id: "channel-honesty", target: null, title: "Nada é prometido sem estar pronto", description: "Se um canal aparece como \"não configurado\", nenhum envio real acontece por ele ainda — só fica guardada a sua preferência." },
-      { id: "prefs-location", target: "notifications-prefs-tab", title: "Onde escolher", description: "Suas preferências por tipo de aviso e canal ficam nesta mesma aba.", placement: "bottom" },
+      {
+        id: "prefs-location",
+        target: "notifications-prefs-tab",
+        title: "Onde escolher",
+        description: "Suas preferências por tipo de aviso e canal ficam nesta mesma aba.",
+        placement: "bottom",
+        // A esta altura do tour o painel já foi aberto no passo "prefs-tab"
+        // acima, mas o campo continua declarado — se a pessoa saiu e voltou
+        // (retomada após F5), o painel pode estar fechado de novo.
+        requiresOpening: { openerTarget: "notifications-button", instruction: "Para continuar, abra o painel de Notificações pelo sino." },
+      },
     ],
   },
 
@@ -239,8 +277,19 @@ export const TOURS: TourDefinition[] = [
     category: "produtos-catalogo",
     allowedAccountTypes: ["empresas", "agencias", "admin"],
     routes: [], // aba dentro do painel de detalhe do projeto, sem rota própria
+    // Nunca assume um projeto fixo nem escolhe o primeiro sozinho — se
+    // nenhum projeto estiver aberto agora, explica em vez de desaparecer.
+    noDataMessage:
+      "Não encontramos um projeto aberto agora. Abra um projeto do qual você participa para ver o histórico de aditivos — os passos aparecem assim que houver um projeto disponível.",
     steps: [
-      { id: "history", target: "catalog2-additives-history", title: "Histórico de aditivos", description: "Toda solicitação de aditivo deste projeto fica registrada aqui, com seu status atual.", placement: "bottom" },
+      {
+        id: "history",
+        target: "catalog2-additives-history",
+        title: "Histórico de aditivos",
+        description: "Toda solicitação de aditivo deste projeto fica registrada aqui, com seu status atual.",
+        placement: "bottom",
+        optional: true, // só existe dentro de um projeto aberto — nunca um ID fixo
+      },
       { id: "request", target: null, title: "Solicitar alteração adicional", description: "A configuração do aditivo usa o mesmo configurador do catálogo — depois volte aqui para vincular a cotação gerada." },
       { id: "choose-quote", target: null, title: "Escolher a cotação", description: "A cotação recém-gerada precisa ser vinculada explicitamente à solicitação do aditivo." },
       { id: "approval", target: null, title: "Aprovação ou rejeição", description: "Só o Admin decide — Company e Agency nunca aprovam o próprio aditivo. O preço é reconferido nesse momento." },
@@ -258,12 +307,51 @@ export const TOURS: TourDefinition[] = [
     category: "memoria-lancamento",
     allowedAccountTypes: ["admin", "empresas", "agencias"],
     routes: [],
+    // Nunca assume um projeto/empresa/agência fixo — se nenhum escopo de
+    // Memória estiver aberto agora, explica em vez de desaparecer.
+    noDataMessage:
+      "Não encontramos um projeto, empresa ou agência com Memória aberta agora. Abra um desses registros para ver o conteúdo real — os passos aparecem assim que houver um contexto de memória disponível.",
     steps: [
-      { id: "summary", target: "memory-section-summary", title: "Resumo", description: "Um resumo consolidado, para qualquer pessoa nova entender o contexto rapidamente.", placement: "bottom" },
-      { id: "positive", target: "memory-section-positive_instructions", title: "O que a IA deve fazer", description: "Instruções positivas — orientações que devem sempre ser seguidas.", placement: "bottom" },
-      { id: "negative", target: "memory-section-negative_instructions", title: "O que a IA deve evitar", description: "Instruções negativas — o que nunca deve acontecer.", placement: "bottom" },
-      { id: "approved", target: "memory-approved-facts", title: "Fatos aprovados", description: "Aprendizados registrados automaticamente quando uma tarefa é aprovada de verdade.", placement: "bottom" },
-      { id: "history", target: "memory-history", title: "Histórico", description: "Toda alteração de memória fica registrada aqui, com autor e data.", placement: "bottom" },
+      {
+        id: "summary",
+        target: "memory-section-summary",
+        title: "Resumo",
+        description: "Um resumo consolidado, para qualquer pessoa nova entender o contexto rapidamente.",
+        placement: "bottom",
+        optional: true, // só existe dentro de um escopo de memória aberto — nunca um ID fixo
+      },
+      {
+        id: "positive",
+        target: "memory-section-positive_instructions",
+        title: "O que a IA deve fazer",
+        description: "Instruções positivas — orientações que devem sempre ser seguidas.",
+        placement: "bottom",
+        optional: true,
+      },
+      {
+        id: "negative",
+        target: "memory-section-negative_instructions",
+        title: "O que a IA deve evitar",
+        description: "Instruções negativas — o que nunca deve acontecer.",
+        placement: "bottom",
+        optional: true,
+      },
+      {
+        id: "approved",
+        target: "memory-approved-facts",
+        title: "Fatos aprovados",
+        description: "Aprendizados registrados automaticamente quando uma tarefa é aprovada de verdade.",
+        placement: "bottom",
+        optional: true,
+      },
+      {
+        id: "history",
+        target: "memory-history",
+        title: "Histórico",
+        description: "Toda alteração de memória fica registrada aqui, com autor e data.",
+        placement: "bottom",
+        optional: true,
+      },
       { id: "preview", target: "memory-context-preview-button", title: "Como a IA usa este contexto", description: "É possível visualizar exatamente o que seria enviado à IA antes de qualquer geração.", placement: "bottom", optional: true },
       { id: "no-invention", target: null, title: "Nunca inventa informação", description: "A memória só guarda o que foi escrito ou aprovado de verdade — ela nunca deve conter algo inventado." },
     ],
@@ -276,6 +364,7 @@ export const TOURS: TourDefinition[] = [
     category: "memoria-lancamento",
     allowedAccountTypes: ["admin", "empresas", "agencias"],
     routes: [],
+    noDataMessage: "Não encontramos um projeto aberto com IA de Lançamento agora. Abra um projeto para continuar — os passos aparecem assim que houver um projeto disponível.",
     steps: [
       { id: "start", target: "launch-start-button", title: "Iniciar sessão", description: "Começa uma conversa persistente dentro do projeto — pode ser retomada depois.", placement: "bottom", optional: true },
       { id: "context", target: "launch-session-status", title: "Contexto utilizado", description: "A IA usa a Memória do projeto (e da empresa/agência) como parte do que ela já sabe.", placement: "bottom", optional: true },
@@ -293,6 +382,7 @@ export const TOURS: TourDefinition[] = [
     category: "memoria-lancamento",
     allowedAccountTypes: ["admin", "empresas", "agencias"],
     routes: [],
+    noDataMessage: "Não encontramos um plano tático em revisão agora. Ele aparece depois que uma sessão de IA de Lançamento gerar uma proposta dentro de um projeto.",
     steps: [
       { id: "editor", target: "launch-plan-editor", title: "Etapas e tarefas", description: "Cada tarefa proposta tem etapas, um objetivo e um critério de aprovação.", placement: "bottom", optional: true },
       { id: "specialty", target: null, title: "Especialidade", description: "Cada tarefa indica qual especialidade real deve executá-la." },
@@ -312,6 +402,7 @@ export const TOURS: TourDefinition[] = [
     category: "memoria-lancamento",
     allowedAccountTypes: ["admin", "empresas", "agencias"],
     routes: [],
+    noDataMessage: "Não encontramos um plano aprovado pronto para materializar agora. Esta etapa acontece depois que um plano tático é revisado e aprovado dentro de um projeto.",
     steps: [
       { id: "materialize-button", target: "launch-materialize-button", title: "Aprovar não é materializar", description: "Aprovar o plano só marca como revisado. Materializar é o passo que realmente cria as tarefas.", placement: "bottom", optional: true },
       { id: "draft-vs-execution", target: null, title: "Rascunho operacional x enviar para execução", description: "Rascunho cria as tarefas sem liberar nenhuma. Enviar para execução já libera as que não têm bloqueio." },
