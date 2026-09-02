@@ -51,7 +51,7 @@ export function MemoryContextPreview({ projectId }: { projectId: string }) {
 
   return (
     <div className="flex flex-wrap items-center gap-2">
-      <Button size="sm" variant="outline" className="h-7 text-xs gap-1.5" onClick={() => void openPreview()}>
+      <Button data-tour-id="memory-context-preview-button" size="sm" variant="outline" className="h-7 text-xs gap-1.5" onClick={() => void openPreview()}>
         <Eye className="h-3.5 w-3.5" />
         Visualizar contexto que a IA utilizará
       </Button>

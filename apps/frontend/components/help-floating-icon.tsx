@@ -7,22 +7,27 @@
  * PRODUCT_FEEDBACK_ENABLED está desligado. Onboarding precisa estar sempre
  * acessível, então ganha um ícone próprio em vez de reaproveitar aquele.
  *
- * Conteúdo (bloco 1/3): só a seção "Tours da plataforma". Nenhum editor
- * administrativo de conteúdo aqui ainda.
+ * Bloco 2/3: "Tours da plataforma" ganha categorias (Primeiros passos /
+ * Alertas e comunicação / Produtos e catálogo / Memória e lançamento) e
+ * busca pelo nome — nunca vira um LMS, nunca se mistura com a Allkademy
+ * (curso/conteúdo estático, outro sistema). Nenhum editor administrativo de
+ * conteúdo dos tours ainda.
  */
-import { HelpCircle, PlayCircle, RotateCcw, CheckCircle2 } from "lucide-react";
+import { HelpCircle, PlayCircle, RotateCcw, CheckCircle2, Search, Ban } from "lucide-react";
 import { HeaderSlideScreen } from "@/components/header-slide-screen";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { useOnboarding } from "@/contexts/onboarding-context";
+import type { TourCategory, TourDefinition } from "@/lib/tours/types";
 import { cn } from "@/lib/utils";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 
 const STATUS_LABEL: Record<string, string> = {
   nao_iniciado: "Novo",
   em_andamento: "Em andamento",
   concluido: "Concluído",
   adiado: "Novo",
-  dispensado: "Novo",
+  dispensado: "Dispensado",
 };
 
 const STATUS_CLASS: Record<string, string> = {
@@ -30,12 +35,32 @@ const STATUS_CLASS: Record<string, string> = {
   em_andamento: "bg-amber-50 text-amber-600 border-amber-200",
   concluido: "bg-emerald-50 text-emerald-600 border-emerald-200",
   adiado: "bg-blue-50 text-blue-600 border-blue-200",
-  dispensado: "bg-blue-50 text-blue-600 border-blue-200",
+  dispensado: "bg-slate-100 text-slate-500 border-slate-200",
 };
+
+const CATEGORY_LABEL: Record<TourCategory, string> = {
+  "primeiros-passos": "Primeiros passos",
+  "alertas-comunicacao": "Alertas e comunicação",
+  "produtos-catalogo": "Produtos e catálogo",
+  "memoria-lancamento": "Memória e lançamento",
+};
+
+const CATEGORY_ORDER: TourCategory[] = ["primeiros-passos", "alertas-comunicacao", "produtos-catalogo", "memoria-lancamento"];
 
 export function HelpFloatingIcon() {
   const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState("");
   const { availableTours, progressFor, requestStartTour, requestRestartTour } = useOnboarding();
+
+  const grouped = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    const filtered = q ? availableTours.filter((t) => t.title.toLowerCase().includes(q) || t.description.toLowerCase().includes(q)) : availableTours;
+    const byCategory = new Map<TourCategory, TourDefinition[]>();
+    for (const tour of filtered) {
+      byCategory.set(tour.category, [...(byCategory.get(tour.category) ?? []), tour]);
+    }
+    return CATEGORY_ORDER.map((cat) => ({ category: cat, tours: byCategory.get(cat) ?? [] })).filter((g) => g.tours.length > 0);
+  }, [availableTours, query]);
 
   return (
     <>
@@ -69,47 +94,67 @@ export function HelpFloatingIcon() {
       </button>
 
       <HeaderSlideScreen open={open} onClose={() => setOpen(false)} title="Ajuda" subtitle="Tours da plataforma">
-        <div className="p-4 space-y-3">
-          {availableTours.length === 0 ? (
-            <p className="text-sm text-slate-400">Nenhum tour disponível para o seu perfil no momento.</p>
+        <div className="p-4 space-y-4">
+          <div className="relative">
+            <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-slate-400" />
+            <Input
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Buscar tour pelo nome"
+              className="pl-8 h-9 text-sm"
+              aria-label="Buscar tour"
+            />
+          </div>
+
+          {grouped.length === 0 ? (
+            <p className="text-sm text-slate-400">
+              {query ? "Nenhum tour encontrado para essa busca." : "Nenhum tour disponível para o seu perfil no momento."}
+            </p>
           ) : (
-            availableTours.map((tour) => {
-              const progress = progressFor(tour.key);
-              const status = progress?.status ?? "nao_iniciado";
-              const doneSteps = progress?.last_step_key ? tour.steps.findIndex((s) => s.id === progress.last_step_key) + 1 : 0;
-              const actionLabel = status === "em_andamento" ? "Continuar" : status === "concluido" ? "Refazer" : "Começar";
-              const Icon = status === "concluido" ? CheckCircle2 : status === "em_andamento" ? RotateCcw : PlayCircle;
-              return (
-                <div key={tour.key} className="rounded-xl border border-slate-200 dark:border-slate-700 p-3 space-y-2">
-                  <div className="flex items-center justify-between gap-2">
-                    <h4 className="text-sm font-semibold text-slate-800 dark:text-white">{tour.title}</h4>
-                    <span className={cn("text-[10px] font-semibold px-2 py-0.5 rounded-full border shrink-0", STATUS_CLASS[status])}>
-                      {STATUS_LABEL[status]}
-                    </span>
-                  </div>
-                  <p className="text-xs text-slate-500 dark:text-slate-400">{tour.description}</p>
-                  {doneSteps > 0 && status !== "concluido" && (
-                    <p className="text-[11px] text-slate-400">
-                      Passo {doneSteps} de {tour.steps.length}
-                    </p>
-                  )}
-                  <Button
-                    size="sm"
-                    className="h-7 text-xs btn-brand border-0"
-                    onClick={() => {
-                      setOpen(false);
-                      if (status === "concluido" || status === "dispensado") {
-                        requestRestartTour(tour.key);
-                      } else {
-                        requestStartTour(tour.key);
-                      }
-                    }}
-                  >
-                    <Icon className="h-3.5 w-3.5 mr-1" /> {actionLabel}
-                  </Button>
+            grouped.map(({ category, tours }) => (
+              <div key={category} className="space-y-2">
+                <h3 className="text-[11px] font-bold uppercase tracking-wide text-slate-400">{CATEGORY_LABEL[category]}</h3>
+                <div className="space-y-2">
+                  {tours.map((tour) => {
+                    const progress = progressFor(tour.key);
+                    const status = progress?.status ?? "nao_iniciado";
+                    const doneSteps = progress?.last_step_key ? tour.steps.findIndex((s) => s.id === progress.last_step_key) + 1 : 0;
+                    const actionLabel = status === "em_andamento" ? "Continuar" : status === "concluido" || status === "dispensado" ? "Refazer" : "Começar";
+                    const Icon = status === "concluido" ? CheckCircle2 : status === "em_andamento" ? RotateCcw : status === "dispensado" ? Ban : PlayCircle;
+                    return (
+                      <div key={tour.key} className="rounded-xl border border-slate-200 dark:border-slate-700 p-3 space-y-2">
+                        <div className="flex items-center justify-between gap-2">
+                          <h4 className="text-sm font-semibold text-slate-800 dark:text-white">{tour.title}</h4>
+                          <span className={cn("text-[10px] font-semibold px-2 py-0.5 rounded-full border shrink-0", STATUS_CLASS[status])}>
+                            {STATUS_LABEL[status]}
+                          </span>
+                        </div>
+                        <p className="text-xs text-slate-500 dark:text-slate-400">{tour.description}</p>
+                        {doneSteps > 0 && status !== "concluido" && (
+                          <p className="text-[11px] text-slate-400">
+                            Passo {doneSteps} de {tour.steps.length}
+                          </p>
+                        )}
+                        <Button
+                          size="sm"
+                          className="h-7 text-xs btn-brand border-0"
+                          onClick={() => {
+                            setOpen(false);
+                            if (status === "concluido" || status === "dispensado") {
+                              requestRestartTour(tour.key);
+                            } else {
+                              requestStartTour(tour.key);
+                            }
+                          }}
+                        >
+                          <Icon className="h-3.5 w-3.5 mr-1" /> {actionLabel}
+                        </Button>
+                      </div>
+                    );
+                  })}
                 </div>
-              );
-            })
+              </div>
+            ))
           )}
         </div>
       </HeaderSlideScreen>

@@ -15,6 +15,8 @@ function threeStepTour(overrides: Partial<TourDefinition> = {}): TourDefinition 
     version: 1,
     title: "Tour de teste",
     description: "desc",
+    category: "primeiros-passos",
+    routes: [],
     steps: [
       { id: "step-a", target: "alvo-a", title: "Passo A", description: "Descrição A", placement: "bottom" },
       { id: "step-missing", target: "alvo-inexistente", title: "Passo ausente", description: "nunca deveria aparecer", optional: true },

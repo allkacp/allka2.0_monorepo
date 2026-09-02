@@ -106,7 +106,7 @@ export function Catalog2AdditivesPanel({ projectId }: { projectId: string }) {
         />
       ) : null}
 
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between" data-tour-id="catalog2-additives-history">
         <h3 className="text-sm font-semibold text-neutral-800 dark:text-neutral-200">Histórico de aditivos</h3>
         <Button size="sm" variant="ghost" onClick={load}>
           <RefreshCw className="h-3.5 w-3.5" /> Atualizar

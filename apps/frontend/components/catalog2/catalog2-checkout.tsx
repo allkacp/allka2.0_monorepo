@@ -106,7 +106,7 @@ export function Catalog2Checkout({ portal }: { portal: Portal }) {
 
   return (
     <div className="mx-auto max-w-2xl p-4 md:p-6">
-      <div className="mb-4 flex items-center gap-3">
+      <div className="mb-4 flex items-center gap-3" data-tour-id="catalog2-checkout-header">
         <Button size="sm" variant="ghost" onClick={() => navigate(`/${portal}/catalog2`)}>
           <ArrowLeft className="h-4 w-4" /> Voltar ao catálogo
         </Button>

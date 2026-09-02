@@ -1,6 +1,7 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { MemoryRouter, useNavigate } from "react-router-dom";
 import { OnboardingProvider, useOnboarding } from "@/contexts/onboarding-context";
 
 // Onboarding: orquestração do tour guiado (sprint de onboarding, bloco 1/3) —
@@ -23,25 +24,41 @@ const { api } = vi.hoisted(() => ({
 vi.mock("@/lib/api-client", () => ({ apiClient: api, ApiError: class ApiError extends Error {} }));
 
 function Harness() {
-  const { requestStartTour, requestRestartTour } = useOnboarding();
+  const { requestStartTour, requestRestartTour, availableTours } = useOnboarding();
+  const navigate = useNavigate();
   return (
     <div>
+      {/* Navegação real (sem trocar de pathname de fato) só pra disparar o
+          efeito de reavaliação de elegibilidade — simula "voltar pra mesma
+          tela depois que a permissão mudou no servidor". */}
+      <button onClick={() => navigate("/admin/legacy?revalidate=1")}>revalidate-route</button>
       <nav data-tour-id="main-navigation" style={{ width: 10, height: 10 }} />
       <button data-tour-id="notifications-button">Notif</button>
       <button data-tour-id="alerts-button">Alerts</button>
       <button data-tour-id="user-profile-menu">Perfil</button>
       <button data-tour-id="help-button">Ajuda</button>
+      {/* Alvos de "legacy", usados só nos testes de permissão/rota abaixo. */}
+      <div data-tour-id="legacy-header" style={{ width: 10, height: 10 }} />
+      <div data-tour-id="legacy-tabs" style={{ width: 10, height: 10 }} />
+      <ul data-testid="available-tour-keys">
+        {availableTours.map((t) => (
+          <li key={t.key}>{t.key}</li>
+        ))}
+      </ul>
       <button onClick={() => requestStartTour("primeiros-passos")}>start-from-help</button>
       <button onClick={() => requestRestartTour("primeiros-passos")}>restart-from-help</button>
+      <button onClick={() => requestStartTour("legacy")}>start-legacy-from-help</button>
     </div>
   );
 }
 
-function renderProvider() {
+function renderProvider(initialEntries: string[] = ["/"]) {
   return render(
-    <OnboardingProvider>
-      <Harness />
-    </OnboardingProvider>,
+    <MemoryRouter initialEntries={initialEntries}>
+      <OnboardingProvider>
+        <Harness />
+      </OnboardingProvider>
+    </MemoryRouter>,
   );
 }
 
@@ -163,5 +180,56 @@ describe("OnboardingProvider — concluir tour real", () => {
       await user.click(screen.getByRole("button", { name: /próximo/i }));
     }
     await waitFor(() => expect(api.completeTour).toHaveBeenCalledWith("primeiros-passos", 1));
+  });
+});
+
+describe("OnboardingProvider — permissão real (bloco 2/3)", () => {
+  it("mesmo account_type 'admin', SEM is_master: 'legacy' nunca aparece em availableTours", async () => {
+    api.getCurrentUser.mockResolvedValue({ id: "u1", account_type: "admin", admin_profile: { is_active: true, is_master: false, permissions: [] } });
+    renderProvider();
+    await screen.findByText("Ajuda");
+    await waitFor(() => expect(screen.getByTestId("available-tour-keys").textContent).not.toContain("legacy"));
+    expect(within(screen.getByTestId("available-tour-keys")).queryByText("legacy")).not.toBeInTheDocument();
+  });
+
+  it("account_type 'admin' COM is_master: 'legacy' aparece em availableTours", async () => {
+    api.getCurrentUser.mockResolvedValue({ id: "u1", account_type: "admin", admin_profile: { is_active: true, is_master: true, permissions: [] } });
+    renderProvider();
+    await waitFor(() => expect(within(screen.getByTestId("available-tour-keys")).queryByText("legacy")).toBeInTheDocument());
+  });
+
+  it("permissão perdida DURANTE o tour em andamento encerra com segurança (nunca trava tentando avançar num passo não autorizado)", async () => {
+    api.getCurrentUser.mockResolvedValue({ id: "u1", account_type: "admin", admin_profile: { is_active: true, is_master: true, permissions: [] } });
+    const user = userEvent.setup();
+    renderProvider(["/admin/legacy"]);
+    await user.click(await screen.findByText("start-legacy-from-help"));
+    expect(await screen.findByText("Consulta da plataforma anterior")).toBeInTheDocument(); // tour realmente em andamento
+
+    // perde is_master no meio do tour (ex.: revogado por outro admin) —
+    // busca de novo no servidor a cada navegação, nunca confia num valor
+    // antigo já guardado no cliente.
+    api.getCurrentUser.mockResolvedValue({ id: "u1", account_type: "admin", admin_profile: { is_active: true, is_master: false, permissions: [] } });
+    await user.click(screen.getByText("revalidate-route"));
+
+    await waitFor(() => expect(screen.queryByText("Consulta da plataforma anterior")).not.toBeInTheDocument());
+  });
+});
+
+describe("OnboardingProvider — oferta contextual por rota (bloco 2/3)", () => {
+  it("oferece um tour de módulo quando a rota bate, mesmo sem ser o primeiro acesso (progresso do piloto já concluído)", async () => {
+    api.getCurrentUser.mockResolvedValue({ id: "u1", account_type: "admin", admin_profile: { is_active: true, is_master: true, permissions: [] } });
+    api.listTourProgress.mockResolvedValue({
+      data: [{ id: "p1", user_id: "u1", tour_key: "primeiros-passos", version: 1, status: "concluido", last_step_key: "help-button", started_at: "x", completed_at: "x", dismissed_at: null, postponed_at: null, postponed_until: null, created_at: "x", updated_at: "x" }],
+    });
+    renderProvider(["/admin/legacy"]);
+    expect(await screen.findByText("Quer conhecer este recurso?", {}, { timeout: 3000 })).toBeInTheDocument();
+  });
+
+  it("nunca oferece duas coisas ao mesmo tempo: com o tour piloto ainda pendente, a oferta contextual não aparece junto", async () => {
+    api.getCurrentUser.mockResolvedValue({ id: "u1", account_type: "admin", admin_profile: { is_active: true, is_master: true, permissions: [] } });
+    renderProvider(["/admin/legacy"]);
+    // primeiro acesso tem prioridade — só a janela de boas-vindas do piloto aparece
+    expect(await screen.findByText("Conheça a plataforma Allka")).toBeInTheDocument();
+    expect(screen.queryByText("Quer conhecer este recurso?")).not.toBeInTheDocument();
   });
 });

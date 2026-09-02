@@ -245,7 +245,7 @@ export function MemoryPanel({ scopeType, scopeId, compact }: MemoryPanelProps) {
     const err = sectionError[section];
 
     return (
-      <div key={section} className="rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 p-4 space-y-2">
+      <div key={section} data-tour-id={`memory-section-${section}`} className="rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 p-4 space-y-2">
         <div className="flex items-center justify-between gap-2">
           <h4 className="text-sm font-semibold text-slate-800 dark:text-white">{SECTION_LABELS[section]}</h4>
           {canEdit && !isEditing && (
@@ -359,7 +359,7 @@ export function MemoryPanel({ scopeType, scopeId, compact }: MemoryPanelProps) {
             )}
           </div>
 
-          <div className="rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 p-4 space-y-2">
+          <div className="rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 p-4 space-y-2" data-tour-id="memory-approved-facts">
             <h4 className="text-sm font-semibold text-slate-800 dark:text-white flex items-center gap-1.5">
               <CheckCircle2 className="h-3.5 w-3.5" />
               Aprendizados de tarefas aprovadas
@@ -380,7 +380,7 @@ export function MemoryPanel({ scopeType, scopeId, compact }: MemoryPanelProps) {
         </>
       )}
 
-      <div className="rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 p-4 space-y-2">
+      <div className="rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 p-4 space-y-2" data-tour-id="memory-history">
         <button type="button" className="flex items-center justify-between w-full" onClick={() => void toggleHistory()}>
           <h4 className="text-sm font-semibold text-slate-800 dark:text-white flex items-center gap-1.5">
             <History className="h-3.5 w-3.5" />

@@ -398,7 +398,7 @@ export function LaunchSessionPanel({ projectId, onOpenTask }: { projectId: strin
       <div className="rounded-xl border border-dashed border-slate-300 dark:border-slate-700 p-8 text-center space-y-3">
         <p className="text-sm text-slate-500">Nenhuma conversa de lançamento iniciada ainda para este projeto.</p>
         {canManage && (
-          <Button size="sm" className="btn-brand border-0" disabled={starting} onClick={() => void handleStart()}>
+          <Button data-tour-id="launch-start-button" size="sm" className="btn-brand border-0" disabled={starting} onClick={() => void handleStart()}>
             {starting ? <Loader2 className="h-4 w-4 animate-spin mr-1.5" /> : null}
             Iniciar IA de Lançamento
           </Button>
@@ -423,7 +423,7 @@ export function LaunchSessionPanel({ projectId, onOpenTask }: { projectId: strin
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between flex-wrap gap-2">
+      <div className="flex items-center justify-between flex-wrap gap-2" data-tour-id="launch-session-status">
         <span className="text-xs font-semibold px-2 py-1 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300">
           {STATUS_LABEL[session.status] ?? session.status}
         </span>
@@ -441,7 +441,7 @@ export function LaunchSessionPanel({ projectId, onOpenTask }: { projectId: strin
             </>
           )}
           {canManage && session.status === "aprovada_como_rascunho" && session.materializations.length === 0 && (
-            <Button size="sm" className="h-7 text-xs btn-brand border-0" onClick={() => void openMaterializeDialog()}>
+            <Button data-tour-id="launch-materialize-button" size="sm" className="h-7 text-xs btn-brand border-0" onClick={() => void openMaterializeDialog()}>
               <Rocket className="h-3.5 w-3.5 mr-1" /> Materializar proposta aprovada
             </Button>
           )}
@@ -520,7 +520,7 @@ export function LaunchSessionPanel({ projectId, onOpenTask }: { projectId: strin
                 </Button>
               </>
             ) : (
-              <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => void handleGenerate()}>
+              <Button data-tour-id="launch-generate-button" size="sm" variant="outline" className="h-7 text-xs" onClick={() => void handleGenerate()}>
                 <RefreshCw className="h-3.5 w-3.5 mr-1" /> Gerar plano tático
               </Button>
             )}
@@ -799,7 +799,7 @@ function LaunchPlanEditor({ sessionId, plan, onCancel, onSubmit }: { sessionId: 
   }
 
   return (
-    <div className="rounded-xl border-2 border-blue-200 dark:border-blue-900 bg-white dark:bg-slate-800 p-4 space-y-3">
+    <div className="rounded-xl border-2 border-blue-200 dark:border-blue-900 bg-white dark:bg-slate-800 p-4 space-y-3" data-tour-id="launch-plan-editor">
       <div className="flex items-center justify-between">
         <h4 className="text-sm font-semibold text-slate-800 dark:text-white">Editando plano (revisão humana)</h4>
         <Button size="sm" variant="ghost" className="h-7 w-7 p-0" onClick={onCancel}>

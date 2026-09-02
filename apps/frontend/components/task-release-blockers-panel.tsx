@@ -120,7 +120,7 @@ export function TaskReleaseBlockersPanel({
   if (!gate) return null;
 
   return (
-    <div className="rounded-xl border border-amber-200 dark:border-amber-800 bg-amber-50/60 dark:bg-amber-900/10 p-4 space-y-3">
+    <div className="rounded-xl border border-amber-200 dark:border-amber-800 bg-amber-50/60 dark:bg-amber-900/10 p-4 space-y-3" data-tour-id="task-release-blockers-panel">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
           <Lock className="h-4 w-4 text-amber-600" />

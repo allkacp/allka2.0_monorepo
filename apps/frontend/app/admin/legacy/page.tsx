@@ -65,7 +65,7 @@ export default function AdminConsultaLegadoPage() {
 
   return (
     <div className="mx-auto max-w-5xl space-y-5 p-4 md:p-6">
-      <header className="space-y-1">
+      <header className="space-y-1" data-tour-id="legacy-header">
         <div className="flex items-center gap-2">
           <h1 className="flex items-center gap-2 text-xl font-semibold text-neutral-900 dark:text-neutral-50">
             <History className="h-5 w-5" /> Legacy — Plataforma Anterior
@@ -81,7 +81,7 @@ export default function AdminConsultaLegadoPage() {
       </header>
 
       <Tabs defaultValue="resumo">
-        <TabsList className="flex-wrap">
+        <TabsList className="flex-wrap" data-tour-id="legacy-tabs">
           <TabsTrigger value="resumo">Resumo</TabsTrigger>
           <TabsTrigger value="produtos">Produtos</TabsTrigger>
           {PENDING_TABS.map(([v, label]) => (
