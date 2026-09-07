@@ -33,7 +33,7 @@ export function WelcomeModal({
               Agora não
             </Button>
             <Button variant="ghost" className="flex-1 text-slate-500" onClick={onDismiss}>
-              Não quero ver este tutorial
+              Não quero ver mais este tutorial
             </Button>
           </div>
         </DialogFooter>

@@ -58,7 +58,7 @@ function renderHelp() {
 async function openHelp() {
   renderHelp();
   const user = userEvent.setup();
-  await user.click(screen.getAllByRole("button", { name: "Ajuda" })[0]);
+  await user.click(screen.getAllByRole("button", { name: "Tutoriais guiados" })[0]);
   // Aguarda a transição de abertura do painel assentar (data-state="open")
   // antes de qualquer consulta por role, senão a árvore de acessibilidade
   // ainda reflete o estado "fechado" por um instante.

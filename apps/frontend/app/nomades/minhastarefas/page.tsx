@@ -1,8 +1,11 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useLocation } from "react-router-dom";
 import {
   AlertTriangle,
   CheckCircle2,
+  Columns3,
   Clock,
+  List,
   ExternalLink,
   Loader2,
   Lock,
@@ -11,6 +14,7 @@ import {
   Trash2,
   Wallet,
 } from "lucide-react";
+import { HeaderSlideScreen } from "@/components/header-slide-screen";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   STANDARD_SHELL_PANEL_CLASS,
@@ -103,13 +107,33 @@ const ETAPA_CFG: Record<string, { label: string; cls: string; Icon: any }> = {
   },
 };
 
+type ViewMode = "lista" | "kanban";
+
+function taskViewStatus(task: Tarefa): "em_execucao" | "bloqueada" | "fila" | "concluida" {
+  const statuses = task.minhas_etapas.map((stage) => stage.status);
+  if (statuses.includes("EM_ANDAMENTO")) return "em_execucao";
+  if (statuses.includes("BLOQUEADA")) return "bloqueada";
+  if (statuses.includes("CONCLUIDA") || task.status === "CONCLUIDA") return "concluida";
+  return "fila";
+}
+
+const KANBAN_COLUMNS = [
+  { id: "fila", title: "Na fila", className: "border-slate-200 bg-slate-50/70" },
+  { id: "em_execucao", title: "Em execução", className: "border-blue-200 bg-blue-50/60" },
+  { id: "bloqueada", title: "Bloqueadas", className: "border-amber-200 bg-amber-50/60" },
+  { id: "concluida", title: "Concluídas", className: "border-emerald-200 bg-emerald-50/60" },
+] as const;
+
 export default function MinhasTarefasPage() {
+  const location = useLocation();
   const [tab, setTab] = useState<"abertas" | "concluidas">("abertas");
   const [tarefas, setTarefas] = useState<Tarefa[]>([]);
   const [carregando, setCarregando] = useState(true);
   const [erro, setErro] = useState<string | null>(null);
   const [entregando, setEntregando] = useState<string | null>(null);
   const [aviso, setAviso] = useState<string | null>(null);
+  const [viewMode, setViewMode] = useState<ViewMode>("lista");
+  const [selectedTask, setSelectedTask] = useState<Tarefa | null>(null);
 
   // Entregas da etapa. Ficam por etapa (não por tarefa) porque é o anexo da
   // etapa que libera a conclusão quando ela exige arquivo.
@@ -206,6 +230,18 @@ export default function MinhasTarefasPage() {
     }),
     [tarefas],
   );
+  // A busca global chega aqui pelo state de navegação (não pela URL, para
+  // não deixar uma pesquisa antiga presa após F5). Filtra só o que já foi
+  // autorizado e carregado para o próprio Nômade.
+  const termoBusca = String((location.state as { search?: string } | null)?.search ?? "").trim();
+  const tarefasVisiveis = useMemo(() => {
+    if (!termoBusca) return tarefas;
+    const termo = termoBusca.toLocaleLowerCase("pt-BR");
+    return tarefas.filter((t) =>
+      t.title.toLocaleLowerCase("pt-BR").includes(termo) ||
+      String(t.project?.title ?? "").toLocaleLowerCase("pt-BR").includes(termo),
+    );
+  }, [tarefas, termoBusca]);
 
   return (
     <div className={STANDARD_SHELL_PANEL_CLASS}>
@@ -233,10 +269,30 @@ export default function MinhasTarefasPage() {
         <div className="flex-1 min-h-0 overflow-y-auto">
           <div className="p-4 sm:p-6 space-y-5">
             <Tabs value={tab} onValueChange={(v) => setTab(v as any)}>
-              <TabsList>
-                <TabsTrigger value="abertas">Em aberto</TabsTrigger>
-                <TabsTrigger value="concluidas">Concluídas</TabsTrigger>
-              </TabsList>
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <TabsList>
+                  <TabsTrigger value="abertas">Em aberto</TabsTrigger>
+                  <TabsTrigger value="concluidas">Concluídas</TabsTrigger>
+                </TabsList>
+                <div className="inline-flex rounded-lg border border-slate-200 bg-white p-1 dark:border-slate-700 dark:bg-slate-900" aria-label="Visualização das tarefas">
+                  <button
+                    type="button"
+                    onClick={() => setViewMode("lista")}
+                    aria-pressed={viewMode === "lista"}
+                    className={cn("inline-flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs font-medium", viewMode === "lista" ? "bg-slate-900 text-white dark:bg-white dark:text-slate-900" : "text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800")}
+                  >
+                    <List className="h-3.5 w-3.5" /> Lista
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setViewMode("kanban")}
+                    aria-pressed={viewMode === "kanban"}
+                    className={cn("inline-flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs font-medium", viewMode === "kanban" ? "bg-slate-900 text-white dark:bg-white dark:text-slate-900" : "text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800")}
+                  >
+                    <Columns3 className="h-3.5 w-3.5" /> Kanban
+                  </button>
+                </div>
+              </div>
             </Tabs>
 
             {aviso && (
@@ -254,21 +310,70 @@ export default function MinhasTarefasPage() {
               <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 dark:border-amber-800 dark:bg-amber-900/20">
                 <p className="text-sm text-amber-800 dark:text-amber-300">{erro}</p>
               </div>
-            ) : tarefas.length === 0 ? (
+            ) : tarefasVisiveis.length === 0 ? (
               <div className="py-16 text-center">
                 <CheckCircle2 className="h-8 w-8 text-slate-300 mx-auto mb-2" />
                 <p className="text-sm text-slate-500">
-                  {tab === "abertas"
+                  {termoBusca
+                    ? `Nenhuma tarefa em aberto corresponde a “${termoBusca}”.`
+                    : tab === "abertas"
                     ? "Você não tem nenhuma etapa em aberto no momento."
                     : "Nenhuma tarefa concluída ainda."}
                 </p>
               </div>
+            ) : viewMode === "kanban" ? (
+              <div className="grid gap-3 xl:grid-cols-4 lg:grid-cols-2">
+                {KANBAN_COLUMNS.map((column) => {
+                  const columnTasks = tarefasVisiveis.filter((task) => taskViewStatus(task) === column.id);
+                  return (
+                    <section key={column.id} className={cn("min-h-44 rounded-xl border p-3", column.className)}>
+                      <div className="mb-3 flex items-center justify-between gap-2">
+                        <h2 className="text-xs font-bold text-slate-700 dark:text-slate-200">{column.title}</h2>
+                        <span className="rounded-full bg-white/80 px-2 py-0.5 text-[11px] font-semibold text-slate-500 dark:bg-slate-900/70">{columnTasks.length}</span>
+                      </div>
+                      <div className="space-y-2">
+                        {columnTasks.length === 0 ? (
+                          <p className="py-4 text-center text-[11px] text-slate-400">Nenhuma tarefa aqui.</p>
+                        ) : columnTasks.map((task) => {
+                          const currentStage = task.etapa_atual ?? task.minhas_etapas[0] ?? null;
+                          const stageConfig = currentStage ? (ETAPA_CFG[currentStage.status] ?? ETAPA_CFG.PENDENTE) : null;
+                          return (
+                            <button
+                              key={task.id}
+                              type="button"
+                              onClick={() => setSelectedTask(task)}
+                              className="w-full rounded-lg border border-slate-200 bg-white p-3 text-left shadow-sm transition-shadow hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#2558FF] dark:border-slate-700 dark:bg-slate-900"
+                            >
+                              <p className="text-sm font-semibold text-slate-800 dark:text-slate-100">{task.title}</p>
+                              <p className="mt-1 text-[11px] text-slate-400">{task.project?.title ?? "—"}</p>
+                              {stageConfig && <span className={cn("mt-2 inline-flex rounded-full border px-2 py-0.5 text-[10px] font-medium", stageConfig.cls)}>{stageConfig.label}</span>}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </section>
+                  );
+                })}
+              </div>
             ) : (
               <div className="space-y-3">
-                {tarefas.map((t) => (
+                {tarefasVisiveis.map((t) => (
                   <div
                     key={t.id}
-                    className="rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 shadow-sm overflow-hidden"
+                    role="button"
+                    tabIndex={0}
+                    onClick={(event) => {
+                      if ((event.target as HTMLElement).closest("button, a, input, textarea")) return;
+                      setSelectedTask(t);
+                    }}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter" || event.key === " ") {
+                        event.preventDefault();
+                        setSelectedTask(t);
+                      }
+                    }}
+                    aria-label={`Abrir detalhes da tarefa ${t.title}`}
+                    className="rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 shadow-sm overflow-hidden cursor-pointer transition-shadow hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#2558FF]"
                   >
                     <div className="p-4">
                       <div className="flex items-start justify-between gap-3">
@@ -480,6 +585,61 @@ export default function MinhasTarefasPage() {
           </div>
         </div>
       </div>
+      <HeaderSlideScreen
+        open={selectedTask !== null}
+        onClose={() => setSelectedTask(null)}
+        title={selectedTask?.title ?? "Tarefa"}
+        subtitle={selectedTask?.project?.title ?? "Detalhes da tarefa"}
+        pin={selectedTask ? {
+          id: `nomad-task-detail-${selectedTask.id}`,
+          label: selectedTask.title,
+          icon: CheckCircle2,
+          path: "/nomades/minhastarefas",
+        } : undefined}
+      >
+        {selectedTask && (
+          <div className="flex h-full w-full flex-col overflow-y-auto bg-white p-5 dark:bg-slate-900 sm:p-6">
+            <div className="mx-auto w-full max-w-5xl space-y-5">
+            <div className="grid grid-cols-2 gap-3 text-xs">
+              <div className="rounded-lg bg-slate-50 p-3 dark:bg-slate-800">
+                <p className="text-slate-400">Prazo</p>
+                <p className="mt-1 font-semibold text-slate-700 dark:text-slate-200">{fmtData(selectedTask.due_date)}</p>
+              </div>
+              <div className="rounded-lg bg-slate-50 p-3 dark:bg-slate-800">
+                <p className="text-slate-400">Etapas sob sua responsabilidade</p>
+                <p className="mt-1 font-semibold text-slate-700 dark:text-slate-200">{selectedTask.minhas_etapas.length}</p>
+              </div>
+            </div>
+            <div>
+              <h3 className="text-sm font-bold text-slate-800 dark:text-white">Etapas</h3>
+              <div className="mt-3 space-y-2">
+                {selectedTask.minhas_etapas.length === 0 ? (
+                  <p className="text-xs text-slate-400">Nenhuma etapa atribuída diretamente a você.</p>
+                ) : selectedTask.minhas_etapas.map((stage) => {
+                  const cfg = ETAPA_CFG[stage.status] ?? ETAPA_CFG.PENDENTE;
+                  const Icon = cfg.Icon;
+                  return (
+                    <div key={stage.id} className="rounded-lg border border-slate-200 p-3 dark:border-slate-700">
+                      <div className="flex items-start justify-between gap-2">
+                        <div>
+                          <p className="text-sm font-medium text-slate-800 dark:text-slate-100">{stage.titulo}</p>
+                          {stage.descricao && <p className="mt-1 text-xs text-slate-500">{stage.descricao}</p>}
+                        </div>
+                        <span className={cn("inline-flex shrink-0 items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-medium", cfg.cls)}><Icon className="h-3 w-3" /> {cfg.label}</span>
+                      </div>
+                      <p className="mt-2 text-[11px] text-slate-400">Entregar até {fmtData(stage.prazo_execucao)}</p>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+            <p className="rounded-lg border border-blue-100 bg-blue-50 p-3 text-xs text-blue-800 dark:border-blue-900 dark:bg-blue-950/30 dark:text-blue-200">
+              A entrega continua disponível apenas na lista, para etapas que estiverem liberadas. Etapas bloqueadas não podem ser concluídas por aqui.
+            </p>
+            </div>
+          </div>
+        )}
+      </HeaderSlideScreen>
     </div>
   );
 }

@@ -13,7 +13,7 @@
  * (curso/conteúdo estático, outro sistema). Nenhum editor administrativo de
  * conteúdo dos tours ainda.
  */
-import { HelpCircle, PlayCircle, RotateCcw, CheckCircle2, Search, Ban } from "lucide-react";
+import { Map as MapIcon, PlayCircle, RotateCcw, CheckCircle2, Search, Ban } from "lucide-react";
 import { HeaderSlideScreen } from "@/components/header-slide-screen";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -70,14 +70,14 @@ export function HelpFloatingIcon() {
           type="button"
           data-tour-id="help-button"
           onClick={() => setOpen(true)}
-          aria-label="Ajuda"
-          title="Ajuda"
+          aria-label="Tutoriais guiados"
+          title="Tutoriais guiados"
           className="relative flex items-center justify-center h-10 w-10 text-white/70 hover:text-white transition-colors"
         >
-          <HelpCircle className="h-5 w-5 shrink-0" />
+          <MapIcon className="h-5 w-5 shrink-0" />
         </button>
         <span className="pointer-events-none absolute top-full right-0 mt-2 whitespace-nowrap rounded-lg bg-gray-900/95 px-2.5 py-1.5 text-[11px] text-white opacity-0 shadow-xl border border-white/10 transition-opacity duration-150 group-hover:opacity-100">
-          Ajuda
+          Tutoriais guiados
         </span>
       </div>
 
@@ -86,15 +86,15 @@ export function HelpFloatingIcon() {
         type="button"
         data-tour-id="help-button"
         onClick={() => setOpen(true)}
-        aria-label="Ajuda"
+          aria-label="Tutoriais guiados"
         className="lg:hidden fixed right-4 z-45 flex items-center justify-center h-14 w-14 rounded-full bg-slate-700 text-white shadow-[0_8px_24px_-4px_rgba(0,0,0,0.35)] active:scale-95 transition-transform"
         style={{ bottom: "calc(72px + env(safe-area-inset-bottom, 0px) + 164px)" }}
       >
-        <HelpCircle className="h-6 w-6 shrink-0" />
+        <MapIcon className="h-6 w-6 shrink-0" />
       </button>
 
-      <HeaderSlideScreen open={open} onClose={() => setOpen(false)} title="Ajuda" subtitle="Tours da plataforma">
-        <div className="p-4 space-y-4">
+      <HeaderSlideScreen open={open} onClose={() => setOpen(false)} title="Tutoriais guiados" subtitle="Passo a passo da plataforma">
+        <div className="flex-1 min-h-0 overflow-y-auto p-4 space-y-4">
           <div className="relative">
             <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-slate-400" />
             <Input

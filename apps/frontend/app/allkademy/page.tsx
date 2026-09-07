@@ -1,5 +1,4 @@
 import { useState } from "react";
-import { PageHeader } from "@/components/page-header";
 import { useCourses, useEnrollments } from "@/hooks/useCourses";
 import { apiClient } from "@/lib/api-client";
 import { NeonBadge } from "@/components/neon-badge";
@@ -7,7 +6,8 @@ import type { BadgeColor } from "@/lib/badge-styles";
 import { Button } from "@/components/ui/button";
 import { SlidePanel } from "@/components/slide-panel";
 import { useToast } from "@/components/ui/use-toast";
-import { BookOpen, Clock, Layers, Video, FileText, HelpCircle } from "lucide-react";
+import { BookOpen, Clock, Layers, Video, FileText, HelpCircle, GraduationCap } from "lucide-react";
+import { STANDARD_SHELL_PANEL_CLASS, StandardPageBanner } from "@/components/standard-page-shell";
 
 // Tipos alinhados ao schema real do Prisma (Course/CourseModule/Lesson/
 // CourseEnrollment em apps/backend/prisma/schema.prisma) — NÃO usar
@@ -132,8 +132,17 @@ export default function AllkademyStudentPage() {
   };
 
   return (
-    <div className="space-y-4">
-      <PageHeader title="Allkademy" description="Cursos disponíveis para o seu perfil" />
+    <div className={STANDARD_SHELL_PANEL_CLASS}>
+      <div className="relative h-full min-h-0 flex flex-col">
+        <div className="shrink-0 -mb-[11px]">
+          <StandardPageBanner
+            icon={GraduationCap}
+            title="Allkademy"
+            description="Cursos disponíveis para o seu perfil"
+          />
+        </div>
+        <div className="flex-1 min-h-0 overflow-y-auto">
+          <div className="p-4 sm:p-6 space-y-4">
 
       {loading ? (
         <p className="text-sm text-slate-400">Carregando cursos…</p>
@@ -274,6 +283,9 @@ export default function AllkademyStudentPage() {
               essa lógica for definida pelo produto. */}
         </div>
       </SlidePanel>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }

@@ -227,14 +227,12 @@ const navigationConfig = {
       href: "/nomades/tarefasdisponiveis",
       icon: Target,
       current: false,
-      badge: "18",
     },
     {
       name: "Minhas Tarefas",
       href: "/nomades/minhastarefas",
       icon: CheckSquare,
       current: false,
-      badge: "6",
     },
     {
       name: "Habilitações",

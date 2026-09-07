@@ -251,6 +251,26 @@ async function main() {
   });
   created.push(`Nômade — ${EMAILS.nomad}`);
 
+  // Habilitações reais para o roteiro de QA do portal Nômade. São seis áreas
+  // canônicas, todas ativas e disponíveis; não dependem de produto/tarefa
+  // específica e são apagadas em cascata junto da conta QA pelo --remove.
+  const qaNomadSkills = [
+    ["qa-nomad-skill-performance", "Performance", "Performance e Anúncios Patrocinados"],
+    ["qa-nomad-skill-design", "Design", "Criação"],
+    ["qa-nomad-skill-content", "Conteúdo", "Copywriting"],
+    ["qa-nomad-skill-web", "Web", "Desenvolvimento Web"],
+    ["qa-nomad-skill-audiovisual", "Audiovisual", "Vídeo"],
+    ["qa-nomad-skill-strategic", "Estratégico", "Consultoria"],
+  ] as const;
+  for (const [id, area, category] of qaNomadSkills) {
+    await db.nomadeHabilidade.upsert({
+      where: { id },
+      create: { id, nomade_id: IDS.nomade, area, categoria_produto: category, nota_media: 5, disponibilidade: "disponivel", ativo: true },
+      update: { nota_media: 5, disponibilidade: "disponivel", ativo: true },
+    });
+  }
+  created.push("6 habilitações ativas do Nômade — prontas para teste");
+
   await db.user.upsert({
     where: { id: IDS.userLeader },
     create: { id: IDS.userLeader, email: EMAILS.leader, password_hash: passwordHash, name: "[TESTE QA] Líder", role: "lider", account_type: "lider", is_active: true, status: "ativo" },
@@ -401,6 +421,94 @@ async function main() {
     void payment;
   }
   created.push(`Pedido/Projeto — ${project.project_code}`);
+
+  // ── 3b. Trabalho visível para o Nômade (sem alterar o cenário do cliente)
+  // A compra acima fica em EM_LANCAMENTO para que Company/Agency testem a
+  // liberação administrativa. Isso, por definição, não aparece na tela
+  // "Minhas Tarefas" do Nômade. Criamos portanto um par SEPARADO de tarefas
+  // da mesma contratação, com a dependência real do catálogo preservada:
+  // a segunda etapa já nasce BLOQUEADA e a primeira fica pronta para o QA
+  // enxergar. Assim o roteiro do Nômade tem dado de verdade sem transformar
+  // o cenário dos outros perfis nem tocar em dado fora da fixture.
+  const qaNomadFirstKey = "qa-demo-nomad-dependency-first";
+  const qaNomadSecondKey = "qa-demo-nomad-dependency-second";
+  const existingNomadSecond = await db.projectTask.findUnique({ where: { generation_key: qaNomadSecondKey } });
+  if (!existingNomadSecond) {
+    const projectProduct = await db.projectProduct.findFirstOrThrow({
+      where: { project_id: project.id, origin: "CATALOG2" },
+      select: { id: true, catalog2_product_id: true, catalog2_version_id: true },
+    });
+    const catalogTasks = await db.catalog2Task.findMany({
+      where: { version_id: versionId },
+      orderBy: { sort_order: "asc" },
+      select: { id: true, name: true },
+      take: 2,
+    });
+    if (catalogTasks.length < 2) {
+      throw new Error("Fixture QA inválida: o produto precisa das duas tarefas com dependência.");
+    }
+    const [firstCatalogTask, secondCatalogTask] = catalogTasks;
+    const dueDate = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+
+    await db.projectTask.create({
+      data: {
+        project_id: project.id,
+        project_product_id: projectProduct.id,
+        catalog2_product_id: projectProduct.catalog2_product_id,
+        catalog2_version_id: projectProduct.catalog2_version_id,
+        catalog2_task_id: firstCatalogTask.id,
+        generation_key: qaNomadFirstKey,
+        name_snapshot: firstCatalogTask.name,
+        category_snapshot: "Design",
+        title: "[TESTE QA] Nômade — etapa inicial",
+        description: "Primeira etapa do par de dependência exclusivo para o roteiro do Nômade.",
+        status: "EM_EXECUCAO",
+        nomade_responsavel_id: IDS.nomade,
+        due_date: dueDate,
+        stages: {
+          create: {
+            source_key: "qa-demo-nomad-first-stage",
+            titulo: "[TESTE QA] Executar a etapa inicial",
+            ordem: 1,
+            status: "EM_ANDAMENTO",
+            executor_type: "nomad",
+            nomade_id: IDS.nomade,
+            prazo_execucao: dueDate,
+          },
+        },
+      },
+    });
+
+    await db.projectTask.create({
+      data: {
+        project_id: project.id,
+        project_product_id: projectProduct.id,
+        catalog2_product_id: projectProduct.catalog2_product_id,
+        catalog2_version_id: projectProduct.catalog2_version_id,
+        catalog2_task_id: secondCatalogTask.id,
+        generation_key: qaNomadSecondKey,
+        name_snapshot: secondCatalogTask.name,
+        category_snapshot: "Design",
+        title: "[TESTE QA] Nômade — etapa dependente",
+        description: "Depende da conclusão da etapa inicial; serve para conferir o bloqueio na tela do Nômade.",
+        status: "AGUARDANDO_NOMADE",
+        nomade_responsavel_id: IDS.nomade,
+        due_date: dueDate,
+        stages: {
+          create: {
+            source_key: "qa-demo-nomad-second-stage",
+            titulo: "[TESTE QA] Executar após a etapa inicial",
+            ordem: 1,
+            status: "BLOQUEADA",
+            executor_type: "nomad",
+            nomade_id: IDS.nomade,
+            prazo_execucao: dueDate,
+          },
+        },
+      },
+    });
+  }
+  created.push("Par de tarefas do Nômade — primeira aberta + segunda bloqueada por dependência");
 
   // ── 4. Aditivo de demonstração (fica "solicitado" — nunca auto-aprovado/
   //       pago, pra o QA poder testar o fluxo de aprovação inteiro). Checa

@@ -85,6 +85,33 @@ function loadStoredProfile(pathname: string): {
     return { ...inferred, previewUserName: null, previewUserEmail: null };
   }
 
+  // A sessão autenticada é a fonte de verdade. Rotas compartilhadas, como
+  // /allkademy, não carregam o tipo de conta no endereço; cair no fallback
+  // "admin" ali fazia um Nômade ver o shell administrativo, embora as APIs
+  // continuassem protegidas. Nunca deixe uma preferência antiga de preview
+  // decidir o portal de uma sessão real.
+  try {
+    const sessionUser = JSON.parse(localStorage.getItem("allka_user") || "null");
+    const rawType = String(sessionUser?.account_type ?? sessionUser?.role ?? "").toLowerCase();
+    const accountType: AccountType | null =
+      ["admin"].includes(rawType) ? "admin" :
+      ["nomades", "nomade", "nomad"].includes(rawType) ? "nomades" :
+      ["lider", "leader"].includes(rawType) ? "lider" :
+      ["agencias", "agencia", "agency", "partner", "parceiro"].includes(rawType) ? "agencias" :
+      ["empresas", "empresa", "company", "company_admin"].includes(rawType) ? "empresas" :
+      null;
+    if (accountType) {
+      return {
+        accountType,
+        accountSubType: accountType === "empresas" ? "company" : null,
+        previewUserName: null,
+        previewUserEmail: null,
+      };
+    }
+  } catch {
+    // Uma sessão parcial/corrompida segue para os fallbacks seguros abaixo.
+  }
+
   try {
     const raw = localStorage.getItem(PROFILE_KEY);
     if (raw) {
