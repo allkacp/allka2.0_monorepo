@@ -75,6 +75,15 @@ describe("seed:qa-demo — garantias de segurança e idempotência", () => {
     assert.equal(usersAfterFirst, 7);
     const projectsAfterFirst = await prisma.project.count({ where: { catalog2_checkout_client_action_id: "qa-demo-checkout" } });
     assert.equal(projectsAfterFirst, 1);
+    const nomadDependencyTasks = await prisma.projectTask.findMany({
+      where: { generation_key: { in: ["qa-demo-nomad-dependency-first", "qa-demo-nomad-dependency-second"] } },
+      include: { stages: true },
+      orderBy: { generation_key: "asc" },
+    });
+    assert.equal(nomadDependencyTasks.length, 2, "o roteiro do Nômade precisa do par demonstrativo de dependência");
+    assert.equal(nomadDependencyTasks[0].nomade_responsavel_id, "qa-nomade");
+    assert.equal(nomadDependencyTasks[0].stages[0]?.status, "EM_ANDAMENTO");
+    assert.equal(nomadDependencyTasks[1].stages[0]?.status, "BLOQUEADA");
     const changeOrdersAfterFirst = await prisma.catalog2ChangeOrder.count();
 
     const r2 = run([], { SEED_QA_ENVIRONMENT: "local", SEED_QA_PASSWORD: "Teste123" });
@@ -83,6 +92,11 @@ describe("seed:qa-demo — garantias de segurança e idempotência", () => {
     assert.equal(usersAfterSecond, 7, "rodar de novo não duplicou usuários");
     const projectsAfterSecond = await prisma.project.count({ where: { catalog2_checkout_client_action_id: "qa-demo-checkout" } });
     assert.equal(projectsAfterSecond, 1, "rodar de novo não duplicou o pedido");
+    assert.equal(
+      await prisma.projectTask.count({ where: { generation_key: { in: ["qa-demo-nomad-dependency-first", "qa-demo-nomad-dependency-second"] } } }),
+      2,
+      "rodar de novo não duplica o par de dependência do Nômade",
+    );
     const changeOrdersAfterSecond = await prisma.catalog2ChangeOrder.count();
     assert.equal(changeOrdersAfterSecond, changeOrdersAfterFirst, "rodar de novo não duplicou o aditivo");
 

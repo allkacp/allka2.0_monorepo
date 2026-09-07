@@ -48,6 +48,7 @@ function Harness() {
       <button onClick={() => requestStartTour("primeiros-passos")}>start-from-help</button>
       <button onClick={() => requestRestartTour("primeiros-passos")}>restart-from-help</button>
       <button onClick={() => requestStartTour("legacy")}>start-legacy-from-help</button>
+      <button onClick={() => requestStartTour("grupos-comunicacao")}>start-groups-from-help</button>
     </div>
   );
 }
@@ -64,6 +65,8 @@ function renderProvider(initialEntries: string[] = ["/"]) {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  localStorage.clear();
+  localStorage.setItem("allka_user", JSON.stringify({ id: "u1" }));
   api.getCurrentUser.mockResolvedValue({ id: "u1", account_type: "empresas" });
   api.listTourProgress.mockResolvedValue({ data: [] });
   api.getMyMandatoryBanners.mockResolvedValue({ data: [] });
@@ -99,11 +102,12 @@ describe("OnboardingProvider — oferta no primeiro acesso", () => {
     expect(screen.queryByText("Navegação principal")).not.toBeInTheDocument();
   });
 
-  it("'Não quero ver este tutorial' dispensa a versão", async () => {
+  it("'Não quero ver mais este tutorial' dispensa a versão e registra uma proteção imediata contra F5", async () => {
     const user = userEvent.setup();
     renderProvider();
-    await user.click(await screen.findByRole("button", { name: /não quero ver este tutorial/i }));
+    await user.click(await screen.findByRole("button", { name: /não quero ver mais este tutorial/i }));
     await waitFor(() => expect(api.dismissTour).toHaveBeenCalledWith("primeiros-passos", 1));
+    expect(localStorage.getItem("allka_onboarding_auto_offer_dismissed:u1:primeiros-passos:v1")).toBe("1");
   });
 
   it("nunca oferece de novo quando já existe uma decisão registrada (concluído)", async () => {
@@ -180,6 +184,18 @@ describe("OnboardingProvider — concluir tour real", () => {
       await user.click(screen.getByRole("button", { name: /próximo/i }));
     }
     await waitFor(() => expect(api.completeTour).toHaveBeenCalledWith("primeiros-passos", 1));
+  });
+});
+
+describe("OnboardingProvider — tour de painel fechado", () => {
+  it("começa Grupos pela Ajuda mesmo antes de Notificações montar suas abas, e pede o clique real para abrir", async () => {
+    api.getCurrentUser.mockResolvedValue({ id: "u1", account_type: "admin", admin_profile: { is_active: true, is_master: true, permissions: [] } });
+    const user = userEvent.setup();
+    renderProvider(["/admin/dashboard"]);
+    await user.click(await screen.findByText("start-groups-from-help"));
+
+    expect(await screen.findByText("Para continuar, abra o painel de Notificações pelo sino.")).toBeInTheDocument();
+    expect(api.startTour).toHaveBeenCalledWith("grupos-comunicacao", 1);
   });
 });
 

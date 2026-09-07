@@ -321,3 +321,26 @@ describe("Header — cesta só no contexto de catálogo/loja (ata 2026-08, inter
     expect(basketBtn()).toBeInTheDocument();
   });
 });
+
+describe("Header — busca por Enter", () => {
+  beforeEach(() => {
+    accountConfig.accountType = "admin";
+    vi.clearAllMocks();
+    apiClientMock.getUsers.mockResolvedValue([]);
+    apiClientMock.getCompanies.mockResolvedValue([]);
+    apiClientMock.getProjects.mockResolvedValue([{ id: "p1", title: "Projeto encontrado", status: "em andamento" }]);
+  });
+
+  it("leva ao primeiro resultado quando a pessoa confirma a busca com Enter", async () => {
+    const user = userEvent.setup();
+    renderHeader("/admin/dashboard");
+
+    await user.click(screen.getByRole("button", { name: /buscar/i }));
+    const input = screen.getByPlaceholderText("Usuários, empresas, projetos...");
+    await user.type(input, "projeto");
+    await screen.findByText("Projeto encontrado");
+    await user.keyboard("{Enter}");
+
+    await waitFor(() => expect(currentPath()).toBe("/admin/projetos"));
+  });
+});

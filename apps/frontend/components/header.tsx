@@ -281,9 +281,11 @@ export function Header({ transparent = false }: { transparent?: boolean } = {}) 
         users: false,
         companies: false,
         projects: false,
+        tasks: true,
         usersPath: "",
         companiesPath: "",
         projectsPath: "",
+        tasksPath: "/nomades/minhastarefas",
       };
     return {
       users: false,
@@ -317,6 +319,13 @@ export function Header({ transparent = false }: { transparent?: boolean } = {}) 
         if (searchScope.projects) {
           promises.push(apiClient.getProjects({ search: q }));
           keys.push("projects");
+        }
+        // O Nômade não pode pesquisar projetos/empresas de outras contas,
+        // mas pode localizar o próprio trabalho. Sem esta chamada o campo
+        // prometia busca enquanto retornava sempre vazio nesse portal.
+        if (searchScope.tasks && accountType === "nomades") {
+          promises.push(apiClient.getMinhasTarefasNomade("abertas"));
+          keys.push("nomadTasks");
         }
 
         const settled = await Promise.allSettled(promises);
@@ -369,6 +378,24 @@ export function Header({ transparent = false }: { transparent?: boolean } = {}) 
                 navState: { searchTerm: title },
               });
             });
+          } else if (key === "nomadTasks") {
+            const normalizedQuery = q.trim().toLocaleLowerCase("pt-BR");
+            list
+              .filter((t: any) =>
+                String(t.title ?? "").toLocaleLowerCase("pt-BR").includes(normalizedQuery) ||
+                String(t.project?.title ?? "").toLocaleLowerCase("pt-BR").includes(normalizedQuery),
+              )
+              .slice(0, 5)
+              .forEach((t: any) =>
+                results.push({
+                  type: "Tarefa",
+                  label: t.title,
+                  sub: t.project?.title ?? "",
+                  path: searchScope.tasksPath,
+                  icon: CheckSquare,
+                  navState: { search: t.title },
+                }),
+              );
           }
         });
         // Empresa: também busca tarefas em memória
@@ -427,6 +454,19 @@ export function Header({ transparent = false }: { transparent?: boolean } = {}) 
     const t = setTimeout(() => doSearch(searchQuery), 300);
     return () => clearTimeout(t);
   }, [searchQuery, doSearch]);
+
+  // A própria interface informa "Enter para navegar". Mantém essa promessa
+  // levando ao primeiro resultado atual, exatamente como um clique nele,
+  // sem executar nada enquanto a busca ainda está carregando.
+  const openSearchResult = useCallback(
+    (result: (typeof searchResults)[number]) => {
+      navigate(result.path, result.navState ? { state: result.navState } : {});
+      setSearchOpen(false);
+      setSearchQuery("");
+      setSearchResults([]);
+    },
+    [navigate],
+  );
 
   // "Meu Perfil" (ata 2026-08, reparo "Meu Perfil no container padrão"):
   // NAVEGA para a rota pessoal do portal — nunca mais abre o slide-over
@@ -697,6 +737,12 @@ export function Header({ transparent = false }: { transparent?: boolean } = {}) 
                     type="text"
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" && !searchLoading && searchResults[0]) {
+                        e.preventDefault();
+                        openSearchResult(searchResults[0]);
+                      }
+                    }}
                     placeholder={
                       accountType === "admin"
                         ? "Usuários, empresas, projetos..."
@@ -762,12 +808,7 @@ export function Header({ transparent = false }: { transparent?: boolean } = {}) 
                               {group.map((result, i) => (
                                 <button
                                   key={i}
-                                  onClick={() => {
-                                    navigate(result.path, result.navState ? { state: result.navState } : {});
-                                    setSearchOpen(false);
-                                    setSearchQuery("");
-                                    setSearchResults([]);
-                                  }}
+                                  onClick={() => openSearchResult(result)}
                                   className="w-full flex items-center gap-2.5 px-3 py-2 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors text-left"
                                 >
                                   <div className="h-7 w-7 rounded-lg bg-gray-100 dark:bg-gray-800 flex items-center justify-center shrink-0">

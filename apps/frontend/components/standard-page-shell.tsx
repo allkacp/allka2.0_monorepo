@@ -43,6 +43,10 @@ export const STANDARD_SHELL_ROUTES = [
   "/admin/financeiro",
   "/admin/relatorios",
   "/admin/allkademy",
+  // A visão de aluno da Allkademy é compartilhada pelos portais. Ela não é
+  // uma página solta: usa a mesma moldura (sidebar, header e painel branco)
+  // das telas logadas de cada perfil.
+  "/allkademy",
   "/admin/sistema",
   "/admin/alertas",
   "/admin/disponibilidade",

@@ -301,6 +301,16 @@ const STATUS_ABERTO = [
   "AGUARDANDO_NOMADE",
 ];
 
+// A visão do Nômade é guiada pela sua ETAPA. O status da tarefa-pai pode
+// continuar em execução enquanto uma etapa dele já foi entregue, então nunca
+// pode ser a única fonte para as abas "Em aberto" e "Concluídas".
+const STATUS_ETAPA_ABERTA = [
+  "PENDENTE",
+  "AGUARDANDO_EXECUTOR",
+  "EM_ANDAMENTO",
+  "BLOQUEADA",
+];
+
 router.get("/me/tarefas", verifyToken, async (req, res, next) => {
   try {
     const nomade = await prisma.nomade.findUnique({
@@ -314,14 +324,42 @@ router.get("/me/tarefas", verifyToken, async (req, res, next) => {
 
     const escopo = (req.query.escopo as string) ?? "abertas";
 
-    const where: any = {
-      OR: [
-        { nomade_responsavel_id: nomade.id },
-        { stages: { some: { nomade_id: nomade.id } } },
-      ],
-    };
-    if (escopo === "abertas") where.status = { in: STATUS_ABERTO };
-    else if (escopo === "concluidas") where.status = { in: ["CONCLUIDA", "APROVADA"] };
+    // Tarefa sem etapas: o próprio status da tarefa é o trabalho do Nômade.
+    // Tarefa com etapas: a aba é determinada pelo status DAS etapas dele.
+    // Antes o filtro usava apenas `ProjectTask.status`; ao concluir uma etapa
+    // de uma tarefa que ainda tinha outras etapas, ela saía de "Em aberto" e
+    // não entrava em "Concluídas" — exatamente o buraco observado no QA.
+    const where: any =
+      escopo === "concluidas"
+        ? {
+            OR: [
+              {
+                nomade_responsavel_id: nomade.id,
+                status: { in: ["CONCLUIDA", "APROVADA"] },
+              },
+              {
+                stages: {
+                  some: { nomade_id: nomade.id, status: "CONCLUIDA" },
+                },
+              },
+            ],
+          }
+        : {
+            OR: [
+              {
+                nomade_responsavel_id: nomade.id,
+                status: { in: STATUS_ABERTO },
+              },
+              {
+                stages: {
+                  some: {
+                    nomade_id: nomade.id,
+                    status: { in: STATUS_ETAPA_ABERTA },
+                  },
+                },
+              },
+            ],
+          };
 
     const tarefas = await prisma.projectTask.findMany({
       where,
@@ -335,7 +373,13 @@ router.get("/me/tarefas", verifyToken, async (req, res, next) => {
     });
 
     const dados = tarefas.map((t) => {
-      const minhas = t.stages.filter((e) => e.nomade_id === nomade.id);
+      const etapasDoNomade = t.stages.filter((e) => e.nomade_id === nomade.id);
+      // Não misturar, no mesmo cartão, a etapa entregue com outra ainda
+      // pendente: cada aba mostra apenas o pedaço de trabalho que ela promete.
+      const minhas =
+        escopo === "concluidas"
+          ? etapasDoNomade.filter((e) => e.status === "CONCLUIDA")
+          : etapasDoNomade.filter((e) => STATUS_ETAPA_ABERTA.includes(e.status));
       const atual =
         minhas.find((e) => e.status === "EM_ANDAMENTO") ??
         minhas.find((e) => e.status === "AGUARDANDO_EXECUTOR") ??
