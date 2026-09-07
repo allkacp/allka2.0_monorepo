@@ -70,6 +70,13 @@ function matchesRoute(tour: TourDefinition, pathname: string): boolean {
 // como única sincronização).
 function stepTargetExists(tour: TourDefinition, stepId: string | null): boolean {
   const step = stepId ? tour.steps.find((s) => s.id === stepId) : tour.steps.find((s) => s.target !== null);
+  // Um passo que mora dentro de um painel fechado começa pelo botão que o
+  // abre. O TourRunner então orienta a pessoa a clicar nele e só avança
+  // quando o alvo interno existir de verdade. Esperar pelo alvo interno aqui
+  // impedia o tour de sequer começar pela Central de Ajuda.
+  if (step?.requiresOpening) {
+    return Boolean(document.querySelector(`[data-tour-id="${CSS.escape(step.requiresOpening.openerTarget)}"]`));
+  }
   if (!step?.target) return true; // passo central, ou tour só com passos centrais
   return Boolean(document.querySelector(`[data-tour-id="${CSS.escape(step.target)}"]`));
 }
@@ -91,6 +98,38 @@ function isOfferable(progress: TourProgressDto | null): boolean {
 // exceções que ficaria desatualizada.
 function anotherDialogIsOpen(): boolean {
   return Boolean(document.querySelector('[role="dialog"], [role="alertdialog"]'));
+}
+
+// A decisão principal mora no servidor (TourProgress), para acompanhar a
+// pessoa em qualquer dispositivo. Esta marca local é uma proteção adicional
+// imediata: se ela clicar em "não quero ver mais" e atualizar a página antes
+// de a chamada HTTP terminar, o convite não reaparece naquele navegador.
+// A chave inclui o usuário para nunca vazar a escolha de uma conta para outra
+// no mesmo computador.
+function automaticOfferStorageKey(tour: TourDefinition): string | null {
+  try {
+    const raw = localStorage.getItem("allka_user");
+    const user = raw ? JSON.parse(raw) : null;
+    const userId = typeof user?.id === "string" ? user.id : null;
+    return userId ? `allka_onboarding_auto_offer_dismissed:${userId}:${tour.key}:v${tour.version}` : null;
+  } catch {
+    return null;
+  }
+}
+
+function isAutomaticOfferSuppressed(tour: TourDefinition): boolean {
+  const key = automaticOfferStorageKey(tour);
+  return Boolean(key && localStorage.getItem(key) === "1");
+}
+
+function suppressAutomaticOffer(tour: TourDefinition) {
+  const key = automaticOfferStorageKey(tour);
+  if (key) localStorage.setItem(key, "1");
+}
+
+function clearAutomaticOfferSuppression(tour: TourDefinition) {
+  const key = automaticOfferStorageKey(tour);
+  if (key) localStorage.removeItem(key);
 }
 
 export function OnboardingProvider({ children }: { children: ReactNode }) {
@@ -186,7 +225,9 @@ export function OnboardingProvider({ children }: { children: ReactNode }) {
     // dentro de painéis/modais globais sem uma tela própria pra "entrar pela
     // primeira vez" — ficam disponíveis só pela Central de Ajuda, nunca
     // ofertados sozinhos.
-    const candidate = availableTours.find((t) => t.category === "primeiros-passos" && isOfferable(progressFor(t.key)));
+    const candidate = availableTours.find(
+      (t) => t.category === "primeiros-passos" && !isAutomaticOfferSuppressed(t) && isOfferable(progressFor(t.key)),
+    );
     if (!candidate) return;
 
     let cancelled = false;
@@ -227,7 +268,12 @@ export function OnboardingProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (loading || !eligibilityCtx || welcomeTour || active || contextualTour || pendingStart) return;
     const candidate = availableTours.find(
-      (t) => t.routes.length > 0 && matchesRoute(t, location.pathname) && !offeredContextualRef.current.has(t.key) && isOfferable(progressFor(t.key)),
+      (t) =>
+        t.routes.length > 0 &&
+        matchesRoute(t, location.pathname) &&
+        !offeredContextualRef.current.has(t.key) &&
+        !isAutomaticOfferSuppressed(t) &&
+        isOfferable(progressFor(t.key)),
     );
     if (!candidate) return;
 
@@ -336,6 +382,9 @@ export function OnboardingProvider({ children }: { children: ReactNode }) {
   const requestRestartTour = useCallback((tourKey: string) => {
     const tour = TOURS.find((t) => t.key === tourKey);
     if (!tour) return;
+    // "Refazer" é uma escolha explícita: volta a permitir ofertas futuras
+    // daquele tour depois que a pessoa concluir ou sair dele.
+    clearAutomaticOfferSuppression(tour);
     setPendingStart({ tour, startStepId: null, mode: "restart" });
   }, []);
 
@@ -375,7 +424,12 @@ export function OnboardingProvider({ children }: { children: ReactNode }) {
 
   const handleWelcomeDismiss = useCallback(() => {
     if (!welcomeTour) return;
-    void apiClient.dismissTour(welcomeTour.key, welcomeTour.version).then(() => refreshProgress());
+    const tour = welcomeTour;
+    // Registra antes de fechar o modal: F5 imediato nunca transforma uma
+    // recusa explícita numa nova oferta. O servidor continua sendo a fonte de
+    // verdade entre dispositivos.
+    suppressAutomaticOffer(tour);
+    void apiClient.dismissTour(tour.key, tour.version).then(() => refreshProgress());
     overlayClaimedRef.current = false;
     setWelcomeTour(null);
   }, [welcomeTour, refreshProgress]);
@@ -396,7 +450,9 @@ export function OnboardingProvider({ children }: { children: ReactNode }) {
 
   const handleContextualDismiss = useCallback(() => {
     if (!contextualTour) return;
-    void apiClient.dismissTour(contextualTour.key, contextualTour.version).then(() => refreshProgress());
+    const tour = contextualTour;
+    suppressAutomaticOffer(tour);
+    void apiClient.dismissTour(tour.key, tour.version).then(() => refreshProgress());
     overlayClaimedRef.current = false;
     setContextualTour(null);
   }, [contextualTour, refreshProgress]);

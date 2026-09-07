@@ -193,7 +193,7 @@ export default function NomadesHabilitacoesPage() {
               carregando
                 ? "Carregando…"
                 : resumo
-                  ? `${resumo.habilitado} de ${areas.length} áreas habilitadas`
+                  ? `${resumo.habilitado} de ${areas.length} áreas habilitadas para tarefas`
                   : "Suas habilitações por área na plataforma"
             }
             actions={

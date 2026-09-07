@@ -263,18 +263,35 @@ function MessageWindow({ roomId, onBack }: { roomId: string; onBack: () => void 
 // ─── Widget ──────────────────────────────────────────────────────────────
 export function ChatWidget() {
   const { isOpen, openChat, closeChat, activeRoomId, openRoom, backToList, totalUnread } = useChat();
+  const closeButtonRef = useRef<HTMLButtonElement>(null);
+
+  // O chat é uma janela global: Escape fecha em qualquer página, inclusive
+  // quando a página abaixo usa o container branco/painéis de z-index alto.
+  useEffect(() => {
+    if (!isOpen) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") closeChat();
+    };
+    window.addEventListener("keydown", onKeyDown);
+    closeButtonRef.current?.focus();
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [isOpen, closeChat]);
 
   return (
     <>
       {isOpen && (
         <>
-          <div onClick={closeChat} className="fixed inset-0 z-40 bg-black/20 backdrop-blur-[1px]" aria-hidden />
+          {/* O chat precisa ficar acima do shell (sidebar z-100) e de qualquer
+              HeaderSlideScreen (z-60); antes ficava em z-40/z-50 e podia
+              abrir atrás do container branco, escondendo seu próprio X. */}
+          <div onClick={closeChat} className="fixed inset-0 z-[190] bg-black/20 backdrop-blur-[1px]" aria-hidden />
           <div
             className={cn(
-              "fixed z-50 flex flex-col bg-white dark:bg-[#0f1117] shadow-2xl border-l border-slate-200 dark:border-white/10",
+              "fixed z-[200] flex flex-col bg-white dark:bg-[#0f1117] shadow-2xl border-l border-slate-200 dark:border-white/10",
               "inset-0 sm:inset-y-0 sm:right-0 sm:left-auto sm:w-[420px] sm:max-w-[100vw]",
             )}
             role="dialog"
+            aria-modal="true"
             aria-label="Chat interno"
           >
             <div
@@ -292,7 +309,7 @@ export function ChatWidget() {
                   </p>
                 </div>
               </div>
-              <button onClick={closeChat} aria-label="Fechar chat" className="p-1.5 rounded-xl bg-white/10 border border-white/15 text-white/70 hover:bg-white/20 hover:text-white">
+              <button ref={closeButtonRef} onClick={closeChat} aria-label="Fechar chat" className="p-1.5 rounded-xl bg-white/10 border border-white/15 text-white/70 hover:bg-white/20 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white">
                 <X className="h-3.5 w-3.5" />
               </button>
             </div>
@@ -317,11 +334,14 @@ export function ChatWidget() {
       )}
 
       {!isOpen && (
+        /* O gatilho fechado também precisa superar o container branco da
+           página (e a sidebar z-100). Sem isso ele até aparecia parcialmente
+           em larguras médias, mas ficava atrás do painel e não recebia clique. */
         <button
           onClick={openChat}
           aria-label="Abrir chat"
           data-tour-id="chat-widget-button"
-          className="group fixed top-[85px] right-[8px] z-50 flex items-center justify-center h-10 w-10 rounded-xl text-white/70 hover:text-white hover:bg-white/10 transition-colors"
+          className="group fixed top-[165px] xl:top-[85px] right-[8px] z-[120] flex items-center justify-center h-10 w-10 rounded-xl text-white/70 hover:text-white hover:bg-white/10 transition-colors"
         >
           <MessageSquare className="h-5 w-5" />
           {totalUnread > 0 && (
