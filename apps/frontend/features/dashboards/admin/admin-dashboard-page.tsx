@@ -164,6 +164,7 @@ import { DashboardWidgetEditorModeToggle, DashboardWidgetEditorBody, DashboardWi
 import { DashboardEditorScreen } from "@/features/dashboards/shared/dashboard-editor-screen";
 import { DashboardTemplateContentList } from "@/features/dashboards/shared/dashboard-template-content";
 import { GlobalPeriodControl } from "@/features/dashboards/shared/global-period-control";
+import { useGlobalDashboardPeriod } from "@/features/dashboards/shared/use-dashboard-period";
 
 
 const formatDate = (date: Date, formatStr: string) => {
@@ -407,24 +408,13 @@ export function AdminDashboardPage() {
     refetch: refetchDashboard,
   } = useDashboard();
 
-  const [globalPeriod, setGlobalPeriod] = useState<{
-    type:
-      | "today"
-      | "yesterday"
-      | "last_7_days"
-      | "last_30_days"
-      | "this_month"
-      | "last_month"
-      | "this_quarter"
-      | "all_time"
-      | "custom";
-    from?: Date;
-    to?: Date;
-    label: string;
-  }>({
-    type: "last_30_days",
-    label: "Últimos 30 dias",
-  });
+  // Item 1 (correção pós-QA, reunião 09/09/2026) — período global
+  // hidratado do localStorage já no 1º render e persistido por perfil,
+  // sem a corrida entre o padrão e o efeito de gravação (ver
+  // useGlobalDashboardPeriod em features/dashboards/shared/use-dashboard-period.ts).
+  type GlobalDashboardPeriodType = "today" | "yesterday" | "last_7_days" | "last_30_days" | "this_month" | "last_month" | "this_quarter" | "all_time" | "custom";
+  const [globalPeriod, setGlobalPeriod] =
+    useGlobalDashboardPeriod<GlobalDashboardPeriodType>("admin");
 
   const [isPeriodPickerOpen, setIsPeriodPickerOpen] = useState(false);
   const [customPeriodFrom, setCustomPeriodFrom] = useState<Date>();
@@ -453,37 +443,6 @@ export function AdminDashboardPage() {
   // DRE real (GET /api/dashboard/dre) — usado pelo widget "CMV", que antes
   // usava só dados fabricados e nunca chamava essa rota (que já existia).
   const [dreData, setDreData] = useState<any>(null);
-
-  useEffect(() => {
-    const savedPeriod = localStorage.getItem(
-      getDashboardStorageKey("dashboard_global_period", "admin"),
-    );
-    if (savedPeriod) {
-      try {
-        const parsed = JSON.parse(savedPeriod);
-        setGlobalPeriod({
-          type: parsed.type,
-          from: parsed.from ? new Date(parsed.from) : undefined,
-          to: parsed.to ? new Date(parsed.to) : undefined,
-          label: parsed.label,
-        });
-      } catch (e) {
-        console.error("Failed to parse saved period:", e);
-      }
-    }
-  }, []);
-
-  useEffect(() => {
-    localStorage.setItem(
-      getDashboardStorageKey("dashboard_global_period", "admin"),
-      JSON.stringify({
-        type: globalPeriod.type,
-        from: globalPeriod.from?.toISOString(),
-        to: globalPeriod.to?.toISOString(),
-        label: globalPeriod.label,
-      }),
-    );
-  }, [globalPeriod]);
 
   const getDateRangeFromPeriod = (
     periodType: typeof globalPeriod.type,

@@ -498,7 +498,7 @@ import { useDashboardExport } from "@/features/dashboards/shared/use-dashboard-e
 import { DashboardExportOverlay } from "@/features/dashboards/shared/dashboard-export-overlay";
 import { useDashboardTemplate, TEMPLATE_DASHBOARD_ID } from "@/features/dashboards/shared/use-dashboard-template";
 import { useDashboardWidgetEditor } from "@/features/dashboards/shared/dashboard-widget-editor";
-import { useWidgetPeriodOverrides } from "@/features/dashboards/shared/use-dashboard-period";
+import { useGlobalDashboardPeriod, useWidgetPeriodOverrides } from "@/features/dashboards/shared/use-dashboard-period";
 import { GlobalPeriodControl } from "@/features/dashboards/shared/global-period-control";
 import { DashboardWidgetEditorModeToggle, DashboardWidgetEditorBody, DashboardWidgetEditorFooter } from "@/features/dashboards/shared/dashboard-widget-editor-panel";
 import { DashboardTemplateContentList } from "@/features/dashboards/shared/dashboard-template-content";
@@ -936,23 +936,13 @@ export default function AdminDashboardPage() {
   const genData = (from?: Date, to?: Date) =>
     withLeaderReal(generateDashboardData(from, to));
 
-  const [globalPeriod, setGlobalPeriod] = useState<{
-    type:
-      | "today"
-      | "yesterday"
-      | "last_7_days"
-      | "last_30_days"
-      | "this_month"
-      | "last_month"
-      | "this_quarter"
-      | "custom";
-    from?: Date;
-    to?: Date;
-    label: string;
-  }>({
-    type: "last_30_days",
-    label: "Últimos 30 dias",
-  });
+  // Item 1 (correção pós-QA, reunião 09/09/2026) — período global
+  // hidratado do localStorage já no 1º render e persistido por perfil,
+  // sem a corrida entre o padrão e o efeito de gravação (ver
+  // useGlobalDashboardPeriod em features/dashboards/shared/use-dashboard-period.ts).
+  type GlobalDashboardPeriodType = "today" | "yesterday" | "last_7_days" | "last_30_days" | "this_month" | "last_month" | "this_quarter" | "custom";
+  const [globalPeriod, setGlobalPeriod] =
+    useGlobalDashboardPeriod<GlobalDashboardPeriodType>("leader");
 
   const [isPeriodPickerOpen, setIsPeriodPickerOpen] = useState(false);
   const [customPeriodFrom, setCustomPeriodFrom] = useState<Date>();
@@ -968,37 +958,6 @@ export default function AdminDashboardPage() {
     (widgetId: string) => sharedGetWidgetPeriod(globalPeriod, widgetId),
     [sharedGetWidgetPeriod, globalPeriod],
   );
-
-  useEffect(() => {
-    const savedPeriod = localStorage.getItem(
-      getDashboardStorageKey("dashboard_global_period", "leader"),
-    );
-    if (savedPeriod) {
-      try {
-        const parsed = JSON.parse(savedPeriod);
-        setGlobalPeriod({
-          type: parsed.type,
-          from: parsed.from ? new Date(parsed.from) : undefined,
-          to: parsed.to ? new Date(parsed.to) : undefined,
-          label: parsed.label,
-        });
-      } catch (e) {
-        console.error("Failed to parse saved period:", e);
-      }
-    }
-  }, []);
-
-  useEffect(() => {
-    localStorage.setItem(
-      getDashboardStorageKey("dashboard_global_period", "leader"),
-      JSON.stringify({
-        type: globalPeriod.type,
-        from: globalPeriod.from?.toISOString(),
-        to: globalPeriod.to?.toISOString(),
-        label: globalPeriod.label,
-      }),
-    );
-  }, [globalPeriod]);
 
   const getDateRangeFromPeriod = (
     periodType: typeof globalPeriod.type,
