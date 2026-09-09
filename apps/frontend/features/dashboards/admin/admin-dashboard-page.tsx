@@ -164,6 +164,7 @@ import { DashboardWidgetEditorModeToggle, DashboardWidgetEditorBody, DashboardWi
 import { DashboardEditorScreen } from "@/features/dashboards/shared/dashboard-editor-screen";
 import { DashboardTemplateContentList } from "@/features/dashboards/shared/dashboard-template-content";
 import { GlobalPeriodControl } from "@/features/dashboards/shared/global-period-control";
+import { dashboardToolbarControlClass } from "@/features/dashboards/shared/dashboard-toolbar";
 import { DashboardInfoHint } from "@/features/dashboards/shared/dashboard-info-hint";
 import { useGlobalDashboardPeriod } from "@/features/dashboards/shared/use-dashboard-period";
 
@@ -10976,14 +10977,14 @@ export function AdminDashboardPage() {
             <div className="flex items-center gap-1 shrink-0">
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
-                        <button className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-white/70 bg-white/10 hover:bg-white/20 transition-colors max-w-[200px]">
+                        <button className={cn("group flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-white/70 bg-white/10 hover:bg-white/20 transition-colors max-w-[200px]", dashboardToolbarControlClass({ theme: "dark", menu: true }))}>
                           <LayoutGrid className="h-3.5 w-3.5 shrink-0 text-white" />
                           <span className="text-xs font-semibold truncate text-white">
                             {isViewingTemplateDefault
                               ? `${profileTemplate?.name ?? "Padrão"} (Padrão)`
                               : savedDashboards.find((d) => d.id === currentDashboardId)?.name ?? "Selecionar dashboard"}
                           </span>
-                          <ChevronDown className="h-3 w-3 shrink-0 ml-auto text-white" />
+                          <ChevronDown className="h-3 w-3 shrink-0 ml-auto text-white transition-transform group-data-[state=open]:rotate-180" />
                         </button>
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end" className="w-auto min-w-48 max-w-72 p-0 overflow-hidden rounded-xl shadow-[0_8px_32px_-4px_rgba(0,0,0,0.18),0_2px_8px_-2px_rgba(0,0,0,0.10)] border border-border/60">
@@ -10996,7 +10997,7 @@ export function AdminDashboardPage() {
                           {profileTemplate && (
                             <div className="group flex items-center gap-1 rounded-lg hover:bg-muted/50 transition-all">
                               <button
-                                className="flex items-center gap-2 flex-1 text-left px-2.5 py-1.5 min-w-0"
+                                className="flex items-center gap-2 flex-1 text-left px-2.5 py-1.5 min-w-0 cursor-pointer rounded-lg focus-visible:outline-none focus-visible:bg-muted/60"
                                 onClick={() => {
                                   setCurrentDashboardId(TEMPLATE_DASHBOARD_ID);
                                   setWidgets(profileTemplate.widgets as WidgetState[]);
@@ -11024,7 +11025,7 @@ export function AdminDashboardPage() {
                             return (
                               <div key={db.id} className="group flex items-center gap-1 rounded-lg hover:bg-muted/50 transition-all">
                                 <button
-                                  className="flex items-center gap-2 flex-1 text-left px-2.5 py-1.5 min-w-0"
+                                  className="flex items-center gap-2 flex-1 text-left px-2.5 py-1.5 min-w-0 cursor-pointer rounded-lg focus-visible:outline-none focus-visible:bg-muted/60"
                                   onClick={() => {
                                     handleLoadDashboard(db.id);
                                     toast({ title: "Dashboard carregado", description: db.name });
@@ -11114,6 +11115,7 @@ export function AdminDashboardPage() {
               <Tooltip>
                 <TooltipTrigger asChild>
                   <button
+                    aria-label={isViewingTemplateDefault ? "Criar visão personalizada" : "Restaurar para o padrão"}
                     onClick={() => {
                       if (isViewingTemplateDefault) {
                         createPersonalViewFromTemplate();
@@ -11133,7 +11135,7 @@ export function AdminDashboardPage() {
                         });
                       }
                     }}
-                    className="group relative flex items-center justify-center h-8 w-8 rounded-lg border border-border/60 hover:border-transparent overflow-hidden transition-all"
+                    className={cn("group relative flex items-center justify-center h-8 w-8 rounded-lg border border-border/60 hover:border-transparent overflow-hidden transition-all", dashboardToolbarControlClass({ theme: "dark" }))}
                   >
                     <span className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none" style={{ background: "linear-gradient(135deg,#000000 0%,#1a2a6f 45%,#c81a7f 100%)" }} />
                     <RotateCcw className="relative z-10 h-4 w-4 text-[#7d1b6a] group-hover:text-white transition-colors" />
@@ -11153,8 +11155,9 @@ export function AdminDashboardPage() {
                   <PopoverTrigger asChild>
                     <TooltipTrigger asChild>
                       <button
+                        aria-label="Exportar dashboard"
                         disabled={isExporting}
-                        className="flex items-center justify-center h-8 w-8 rounded-lg border border-white/70 bg-white/10 hover:bg-white/20 transition-colors disabled:opacity-50"
+                        className={cn("flex items-center justify-center h-8 w-8 rounded-lg border border-white/70 bg-white/10 hover:bg-white/20 transition-colors disabled:opacity-50", dashboardToolbarControlClass({ theme: "dark", menu: true }))}
                       >
                         <Download className={cn("h-4 w-4 text-white", isExporting && "animate-pulse")} />
                       </button>
@@ -11186,8 +11189,9 @@ export function AdminDashboardPage() {
               <Tooltip>
                 <TooltipTrigger asChild>
                   <button
+                    aria-label="Histórico de dados"
                     onClick={() => openHistoricalModal()}
-                    className="flex items-center justify-center h-8 w-8 rounded-lg border border-white/70 bg-white/10 hover:bg-white/20 transition-colors"
+                    className={cn("flex items-center justify-center h-8 w-8 rounded-lg border border-white/70 bg-white/10 hover:bg-white/20 transition-colors", dashboardToolbarControlClass({ theme: "dark" }))}
                   >
                     <History className="h-4 w-4 text-white" />
                     {Object.keys(historicalData).length > 0 && (
@@ -11206,8 +11210,9 @@ export function AdminDashboardPage() {
               <Tooltip>
                 <TooltipTrigger asChild>
                   <button
+                    aria-label="Compartilhar dashboard"
                     onClick={openDashboardPublicShare}
-                    className="flex items-center justify-center h-8 w-8 rounded-lg border border-white/70 bg-white/10 hover:bg-white/20 transition-colors"
+                    className={cn("flex items-center justify-center h-8 w-8 rounded-lg border border-white/70 bg-white/10 hover:bg-white/20 transition-colors", dashboardToolbarControlClass({ theme: "dark" }))}
                   >
                     <Share2 className="h-4 w-4 text-white" />
                   </button>
@@ -11244,7 +11249,7 @@ export function AdminDashboardPage() {
                       setIsEditingHeaderName(false);
                       setIsEditDashboardModalOpen(true);
                     }}
-                    className="flex items-center gap-1.5 px-3 py-1.5 ml-1 rounded-lg border border-white/70 bg-white/10 hover:bg-white/20 transition-colors"
+                    className={cn("flex items-center gap-1.5 px-3 py-1.5 ml-1 rounded-lg border border-white/70 bg-white/10 hover:bg-white/20 transition-colors", dashboardToolbarControlClass({ theme: "dark" }))}
                   >
                     <Pencil className="h-3.5 w-3.5 shrink-0 text-white" />
                     <span className="text-xs font-semibold text-white">

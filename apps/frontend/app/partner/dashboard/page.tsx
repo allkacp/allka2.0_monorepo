@@ -495,6 +495,7 @@ import { useDashboardTemplate, TEMPLATE_DASHBOARD_ID } from "@/features/dashboar
 import { useDashboardWidgetEditor } from "@/features/dashboards/shared/dashboard-widget-editor";
 import { useGlobalDashboardPeriod, useWidgetPeriodOverrides } from "@/features/dashboards/shared/use-dashboard-period";
 import { GlobalPeriodControl } from "@/features/dashboards/shared/global-period-control";
+import { dashboardToolbarControlClass } from "@/features/dashboards/shared/dashboard-toolbar";
 import { DashboardInfoHint } from "@/features/dashboards/shared/dashboard-info-hint";
 import { DashboardWidgetEditorModeToggle, DashboardWidgetEditorBody, DashboardWidgetEditorFooter } from "@/features/dashboards/shared/dashboard-widget-editor-panel";
 import { DashboardTemplateContentList } from "@/features/dashboards/shared/dashboard-template-content";
@@ -4959,7 +4960,7 @@ export default function AdminDashboardPage() {
             <div className="flex items-center gap-1 shrink-0">
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
-                        <button className="group relative flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-border/60 hover:border-transparent overflow-hidden transition-all max-w-[200px]">
+                        <button className={cn("group relative flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-border/60 hover:border-transparent overflow-hidden transition-all max-w-[200px]", dashboardToolbarControlClass({ theme: "light", menu: true }))}>
                           <span className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none" style={{ background: "linear-gradient(135deg,#000000 0%,#1a2a6f 45%,#c81a7f 100%)" }} />
                           <LayoutGrid className="relative z-10 h-3.5 w-3.5 shrink-0 text-[#7d1b6a] group-hover:text-white transition-colors" />
                           <span className="relative z-10 text-xs font-semibold truncate bg-clip-text text-transparent [background-image:linear-gradient(135deg,#1a2a6f_0%,#7d1b6a_55%,#c81a7f_100%)] group-hover:[background-image:none] group-hover:text-white transition-colors">
@@ -4967,7 +4968,7 @@ export default function AdminDashboardPage() {
                               ? `${profileTemplate?.name ?? "Padrão"} (Padrão)`
                               : savedDashboards.find((d) => d.id === currentDashboardId)?.name ?? "Selecionar dashboard"}
                           </span>
-                          <ChevronDown className="relative z-10 h-3 w-3 shrink-0 ml-auto text-[#c81a7f] group-hover:text-white transition-colors" />
+                          <ChevronDown className="relative z-10 h-3 w-3 shrink-0 ml-auto text-[#c81a7f] group-hover:text-white transition-[color,transform] group-data-[state=open]:rotate-180" />
                         </button>
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end" className="w-auto min-w-48 max-w-72 p-0 overflow-hidden rounded-xl shadow-[0_8px_32px_-4px_rgba(0,0,0,0.18),0_2px_8px_-2px_rgba(0,0,0,0.10)] border border-border/60">
@@ -4980,7 +4981,7 @@ export default function AdminDashboardPage() {
                           {profileTemplate && (
                             <div className="group flex items-center gap-1 rounded-lg hover:bg-muted/50 transition-all">
                               <button
-                                className="flex items-center gap-2 flex-1 text-left px-2.5 py-1.5 min-w-0"
+                                className="flex items-center gap-2 flex-1 text-left px-2.5 py-1.5 min-w-0 cursor-pointer rounded-lg focus-visible:outline-none focus-visible:bg-muted/60"
                                 onClick={() => {
                                   setCurrentDashboardId(TEMPLATE_DASHBOARD_ID);
                                   setWidgets(profileTemplate.widgets as WidgetState[]);
@@ -5008,7 +5009,7 @@ export default function AdminDashboardPage() {
                             return (
                               <div key={db.id} className="group flex items-center gap-1 rounded-lg hover:bg-muted/50 transition-all">
                                 <button
-                                  className="flex items-center gap-2 flex-1 text-left px-2.5 py-1.5 min-w-0"
+                                  className="flex items-center gap-2 flex-1 text-left px-2.5 py-1.5 min-w-0 cursor-pointer rounded-lg focus-visible:outline-none focus-visible:bg-muted/60"
                                   onClick={() => {
                                     handleLoadDashboard(db.id);
                                     toast({ title: "Dashboard carregado", description: db.name });
@@ -5098,6 +5099,7 @@ export default function AdminDashboardPage() {
               <Tooltip>
                 <TooltipTrigger asChild>
                   <button
+                    aria-label={isViewingTemplateDefault ? "Criar visão personalizada" : "Restaurar para o padrão"}
                     onClick={() => {
                       if (isViewingTemplateDefault) {
                         createPersonalViewFromTemplate();
@@ -5114,7 +5116,7 @@ export default function AdminDashboardPage() {
                         });
                       }
                     }}
-                    className="group relative flex items-center justify-center h-8 w-8 rounded-lg border border-border/60 hover:border-transparent overflow-hidden transition-all"
+                    className={cn("group relative flex items-center justify-center h-8 w-8 rounded-lg border border-border/60 hover:border-transparent overflow-hidden transition-all", dashboardToolbarControlClass({ theme: "light" }))}
                   >
                     <span className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none" style={{ background: "linear-gradient(135deg,#000000 0%,#1a2a6f 45%,#c81a7f 100%)" }} />
                     <RotateCcw className="relative z-10 h-4 w-4 text-[#7d1b6a] group-hover:text-white transition-colors" />
@@ -5134,8 +5136,9 @@ export default function AdminDashboardPage() {
                   <PopoverTrigger asChild>
                     <TooltipTrigger asChild>
                       <button
+                        aria-label="Exportar dashboard"
                         disabled={isExporting}
-                        className="group relative flex items-center justify-center h-8 w-8 rounded-lg border border-border/60 hover:border-transparent overflow-hidden transition-all disabled:opacity-50"
+                        className={cn("group relative flex items-center justify-center h-8 w-8 rounded-lg border border-border/60 hover:border-transparent overflow-hidden transition-all disabled:opacity-50", dashboardToolbarControlClass({ theme: "light", menu: true }))}
                       >
                         <span className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none" style={{ background: "linear-gradient(135deg,#000000 0%,#1a2a6f 45%,#c81a7f 100%)" }} />
                         <Download className={cn("relative z-10 h-4 w-4 text-[#7d1b6a] group-hover:text-white transition-colors", isExporting && "animate-pulse")} />
@@ -5168,8 +5171,9 @@ export default function AdminDashboardPage() {
               <Tooltip>
                 <TooltipTrigger asChild>
                   <button
+                    aria-label="Histórico de dados"
                     onClick={() => openHistoricalModal()}
-                    className="group relative flex items-center justify-center h-8 w-8 rounded-lg border border-border/60 hover:border-transparent overflow-hidden transition-all"
+                    className={cn("group relative flex items-center justify-center h-8 w-8 rounded-lg border border-border/60 hover:border-transparent overflow-hidden transition-all", dashboardToolbarControlClass({ theme: "light" }))}
                   >
                     <span className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none" style={{ background: "linear-gradient(135deg,#000000 0%,#1a2a6f 45%,#c81a7f 100%)" }} />
                     <History className="relative z-10 h-4 w-4 text-[#7d1b6a] group-hover:text-white transition-colors" />
@@ -5189,8 +5193,9 @@ export default function AdminDashboardPage() {
               <Tooltip>
                 <TooltipTrigger asChild>
                   <button
+                    aria-label="Compartilhar dashboard"
                     onClick={openDashboardPublicShare}
-                    className="group relative flex items-center justify-center h-8 w-8 rounded-lg border border-border/60 hover:border-transparent overflow-hidden transition-all"
+                    className={cn("group relative flex items-center justify-center h-8 w-8 rounded-lg border border-border/60 hover:border-transparent overflow-hidden transition-all", dashboardToolbarControlClass({ theme: "light" }))}
                   >
                     <span className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none" style={{ background: "linear-gradient(135deg,#000000 0%,#1a2a6f 45%,#c81a7f 100%)" }} />
                     <Share2 className="relative z-10 h-4 w-4 text-[#7d1b6a] group-hover:text-white transition-colors" />
@@ -5228,7 +5233,7 @@ export default function AdminDashboardPage() {
                       setIsEditingHeaderName(false);
                       setIsEditDashboardModalOpen(true);
                     }}
-                    className="group relative flex items-center gap-1.5 px-3 py-1.5 ml-1 rounded-lg border border-border/60 hover:border-transparent overflow-hidden transition-all"
+                    className={cn("group relative flex items-center gap-1.5 px-3 py-1.5 ml-1 rounded-lg border border-border/60 hover:border-transparent overflow-hidden transition-all", dashboardToolbarControlClass({ theme: "light" }))}
                   >
                     <span className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none" style={{ background: "linear-gradient(135deg,#000000 0%,#1a2a6f 45%,#c81a7f 100%)" }} />
                     <Pencil className="relative z-10 h-3.5 w-3.5 shrink-0 text-[#7d1b6a] group-hover:text-white transition-colors" />
