@@ -499,6 +499,7 @@ import { DashboardExportOverlay } from "@/features/dashboards/shared/dashboard-e
 import { useDashboardTemplate, TEMPLATE_DASHBOARD_ID } from "@/features/dashboards/shared/use-dashboard-template";
 import { useDashboardWidgetEditor } from "@/features/dashboards/shared/dashboard-widget-editor";
 import { useWidgetPeriodOverrides } from "@/features/dashboards/shared/use-dashboard-period";
+import { GlobalPeriodControl } from "@/features/dashboards/shared/global-period-control";
 import { DashboardWidgetEditorModeToggle, DashboardWidgetEditorBody, DashboardWidgetEditorFooter } from "@/features/dashboards/shared/dashboard-widget-editor-panel";
 import { DashboardTemplateContentList } from "@/features/dashboards/shared/dashboard-template-content";
 
@@ -5719,162 +5720,30 @@ export default function AdminDashboardPage() {
             {/* Divider */}
             <div className="hidden xl:block w-px h-5 bg-border/60 mx-1 shrink-0" />
 
-            {/* GLOBAL pill — hover shows gradient; hovering badge or info shows tooltip */}
-            <TooltipProvider delayDuration={200}>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <div className="flex items-center gap-1 shrink-0 cursor-default">
-                    <div className="group relative flex items-center gap-1.5 px-3 py-1.5 rounded-md border border-border/60 hover:border-transparent overflow-hidden transition-all">
-                      <span className="absolute inset-0 rounded-md opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none" style={{ background: "linear-gradient(135deg,#000000 0%,#1a2a6f 45%,#c81a7f 100%)" }} />
-                      <Globe className="relative z-10 h-3.5 w-3.5 shrink-0 text-[#7d1b6a] group-hover:text-white transition-colors" />
-                      <span className="relative z-10 text-[11px] font-medium uppercase tracking-wider leading-none bg-clip-text text-transparent [background-image:linear-gradient(135deg,#1a2a6f_0%,#7d1b6a_55%,#c81a7f_100%)] group-hover:[background-image:none] group-hover:text-white transition-colors">
-                        GLOBAL
-                      </span>
-                    </div>
-                    <Info className="h-3.5 w-3.5 text-muted-foreground" strokeWidth={2.5} />
-                  </div>
-                </TooltipTrigger>
-                <TooltipContent side="bottom" className="max-w-[240px] p-3" sideOffset={6}>
-                  <p className="font-semibold text-xs mb-1.5">Período global do dashboard</p>
-                  <p className="text-xs text-muted-foreground leading-relaxed">
-                    O período selecionado aqui é aplicado automaticamente a <strong>todos os widgets</strong> do dashboard.
-                  </p>
-                  <div className="mt-2 pt-2 border-t border-border/50">
-                    <p className="text-xs text-muted-foreground leading-relaxed">
-                      Para ajustar o período de um widget específico, clique em <strong>"Global"</strong> no cabeçalho de cada widget.
-                    </p>
-                  </div>
-                </TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
-
-            {/* Divider */}
-            <div className="hidden xl:block w-px h-5 bg-border/60 mx-1 shrink-0" />
-
-            {/* Período: label + pill + info tooltip */}
-            <TooltipProvider delayDuration={200}>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <div className="flex items-center gap-1 shrink-0 cursor-default">
-                    <div className="flex items-center gap-1.5">
-                      <span className="text-xs font-medium text-slate-600 dark:text-slate-300">Período:</span>
-                      <Popover open={isPeriodPickerOpen} onOpenChange={setIsPeriodPickerOpen}>
-                <PopoverTrigger asChild>
-                  <button className="group relative flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-border/60 hover:border-transparent overflow-hidden transition-all">
-                    <span className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none" style={{ background: "linear-gradient(135deg,#000000 0%,#1a2a6f 45%,#c81a7f 100%)" }} />
-                    <Calendar className="relative z-10 h-3 w-3 shrink-0 text-[#7d1b6a] group-hover:text-white transition-colors" />
-                    <span className="relative z-10 text-xs font-semibold max-w-[140px] truncate bg-clip-text text-transparent [background-image:linear-gradient(135deg,#1a2a6f_0%,#7d1b6a_55%,#c81a7f_100%)] group-hover:[background-image:none] group-hover:text-white transition-colors">
-                      {globalPeriod.label}
-                    </span>
-                    <ChevronDown className="relative z-10 h-3 w-3 shrink-0 text-[#c81a7f] group-hover:text-white transition-colors" />
-                  </button>
-                </PopoverTrigger>
-                <PopoverContent className="w-48 p-0 overflow-hidden rounded-xl shadow-[0_8px_32px_-4px_rgba(0,0,0,0.18),0_2px_8px_-2px_rgba(0,0,0,0.10)] border border-border/60" align="start">
-                  {/* Header */}
-                  <div className="px-3 py-2 border-b border-border/50">
-                    <p className="text-[9px] font-semibold text-muted-foreground uppercase tracking-widest">Período</p>
-                  </div>
-                  {/* Options */}
-                  <div className="p-1">
-                    {periodOptions
-                      .filter((o) => o.type !== "custom")
-                      .map((option) => {
-                        const isActive = globalPeriod.type === option.type && globalPeriod.label !== "Últimos 90 dias";
-                        return (
-                          <button
-                            key={option.type}
-                            onClick={() => handlePeriodChange(option.type, option.label)}
-                            className="group w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg transition-all text-left hover:bg-muted/50"
-                          >
-                            <span className={cn(
-                              "text-xs font-medium transition-colors",
-                              isActive
-                                ? "bg-clip-text text-transparent [background-image:linear-gradient(135deg,#1a2a6f_0%,#7d1b6a_55%,#c81a7f_100%)]"
-                                : "text-foreground group-hover:bg-clip-text group-hover:text-transparent group-hover:[background-image:linear-gradient(135deg,#1a2a6f_0%,#7d1b6a_55%,#c81a7f_100%)]"
-                            )}>
-                              {option.label}
-                            </span>
-                            {isActive && <Check className="h-3 w-3 flex-shrink-0 text-[#c81a7f]" />}
-                          </button>
-                        );
-                      })}
-                    {(() => {
-                      const isActive = globalPeriod.label === "Últimos 90 dias";
-                      return (
-                        <button
-                          onClick={() => {
-                            const today = new Date();
-                            const d = new Date(today);
-                            d.setDate(d.getDate() - 90);
-                            setGlobalPeriod({ type: "custom", from: d, to: today, label: "Últimos 90 dias" });
-                            setIsPeriodPickerOpen(false);
-                          }}
-                          className="group w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg transition-all text-left hover:bg-muted/50"
-                        >
-                          <span className={cn(
-                            "text-xs font-medium transition-colors",
-                            isActive
-                              ? "bg-clip-text text-transparent [background-image:linear-gradient(135deg,#1a2a6f_0%,#7d1b6a_55%,#c81a7f_100%)]"
-                              : "text-foreground group-hover:bg-clip-text group-hover:text-transparent group-hover:[background-image:linear-gradient(135deg,#1a2a6f_0%,#7d1b6a_55%,#c81a7f_100%)]"
-                          )}>
-                            Últimos 90 dias
-                          </span>
-                          {isActive && <Check className="h-3 w-3 flex-shrink-0 text-[#c81a7f]" />}
-                        </button>
-                      );
-                    })()}
-                  </div>
-                  {/* Custom interval */}
-                  <div className="border-t border-border/50 p-2.5 space-y-2 bg-muted/20">
-                    <p className="text-[9px] font-semibold text-muted-foreground uppercase tracking-widest">Personalizado</p>
-                    <div className="space-y-1.5">
-                      <div className="flex items-center gap-2">
-                        <label className="text-[10px] text-muted-foreground font-medium w-6 shrink-0">De</label>
-                        <input
-                          type="date"
-                          value={customPeriodFrom ? format(customPeriodFrom, "yyyy-MM-dd") : ""}
-                          onChange={(e) => setCustomPeriodFrom(e.target.value ? new Date(e.target.value + "T00:00:00") : undefined)}
-                          className="flex-1 h-7 px-2 text-xs border border-border/60 rounded-lg bg-background focus:outline-none focus:ring-1 focus:ring-[#7d1b6a]/40"
-                        />
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <label className="text-[10px] text-muted-foreground font-medium w-6 shrink-0">Até</label>
-                        <input
-                          type="date"
-                          value={customPeriodTo ? format(customPeriodTo, "yyyy-MM-dd") : ""}
-                          onChange={(e) => setCustomPeriodTo(e.target.value ? new Date(e.target.value + "T00:00:00") : undefined)}
-                          className="flex-1 h-7 px-2 text-xs border border-border/60 rounded-lg bg-background focus:outline-none focus:ring-1 focus:ring-[#7d1b6a]/40"
-                        />
-                      </div>
-                    </div>
-                    <button
-                      disabled={!customPeriodFrom || !customPeriodTo}
-                      onClick={applyCustomPeriod}
-                      className="relative w-full h-7 rounded-lg overflow-hidden text-[11px] font-semibold text-white transition-opacity disabled:opacity-40"
-                    >
-                      <span className="absolute inset-0" style={{ background: "linear-gradient(135deg,#000000 0%,#1a2a6f 45%,#c81a7f 100%)" }} />
-                      <span className="relative z-10">Aplicar</span>
-                    </button>
-                  </div>
-                </PopoverContent>
-                      </Popover>
-                    </div>
-                    <Info className="h-3.5 w-3.5 text-muted-foreground" strokeWidth={2.5} />
-                  </div>
-                </TooltipTrigger>
-                <TooltipContent side="bottom" className="max-w-[240px] p-3" sideOffset={6}>
-                  <p className="font-semibold text-xs mb-1.5">Período global do dashboard</p>
-                  <p className="text-xs text-muted-foreground leading-relaxed">
-                    O período selecionado aqui é aplicado a <strong>todos os widgets</strong> do dashboard.
-                  </p>
-                  <div className="mt-2 pt-2 border-t border-border/50">
-                    <p className="text-xs text-muted-foreground leading-relaxed">
-                      Para ajustar um widget específico, clique em <strong>"Global"</strong> no cabeçalho do widget.
-                    </p>
-                  </div>
-                </TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
+            {/* Item 1 (reunião 09/09/2026) — "Período global" do painel num
+                componente compartilhado. Antes: um selo decorativo "GLOBAL"
+                solto + um seletor "Período:" separado, com a relação entre eles
+                (e o alcance "painel inteiro") só explicada no hover. */}
+            <GlobalPeriodControl
+              periodLabel={globalPeriod.label}
+              periodType={globalPeriod.type}
+              open={isPeriodPickerOpen}
+              onOpenChange={setIsPeriodPickerOpen}
+              options={periodOptions}
+              onSelectPreset={handlePeriodChange}
+              onSelectLast90Days={() => {
+                const today = new Date();
+                const d = new Date(today);
+                d.setDate(d.getDate() - 90);
+                setGlobalPeriod({ type: "custom", from: d, to: today, label: "Últimos 90 dias" });
+                setIsPeriodPickerOpen(false);
+              }}
+              customFrom={customPeriodFrom}
+              customTo={customPeriodTo}
+              onCustomFromChange={setCustomPeriodFrom}
+              onCustomToChange={setCustomPeriodTo}
+              onApplyCustom={applyCustomPeriod}
+            />
 
             {/* Divider */}
             <div className="hidden xl:block w-px h-5 bg-border/60 mx-1 shrink-0" />
