@@ -39,7 +39,8 @@ export function OpenScreensTray() {
           <button
             type="button"
             title="Bandeja de Telas"
-            className="group relative flex items-center justify-center h-10 w-10 text-white/70 hover:text-white transition-colors"
+            aria-label="Bandeja de Telas"
+            className="group relative flex items-center justify-center h-10 w-10 text-white/70 hover:text-white transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white rounded-md"
           >
             <Layers className="h-5 w-5 shrink-0" />
             {pinned.length > 0 && (
@@ -50,7 +51,11 @@ export function OpenScreensTray() {
             </span>
           </button>
         </PopoverTrigger>
-        <PopoverContent align="end" className="w-60 p-1.5">
+        {/* z-[70]: o CONTEÚDO do popover é portalado pro body com z-50 por
+            padrão — abaixo dos painéis HeaderSlideScreen (z-60). Sem isto a
+            bandeja abria ATRÁS do painel de Notificações/Alertas/Cesta e
+            ficava impossível de usar. O gatilho já era z-65 (só ele). */}
+        <PopoverContent align="end" collisionPadding={8} className="w-60 p-1.5 z-70">
           <p className="px-2 py-1 text-[10px] font-semibold text-slate-400 uppercase tracking-wider">
             Bandeja de Telas
           </p>
@@ -79,7 +84,7 @@ export function OpenScreensTray() {
                       navigate(entry.path);
                       setOpen(false);
                     }}
-                    className="flex-1 flex items-center gap-2.5 px-2.5 py-2 text-sm text-left min-w-0"
+                    className="flex-1 flex items-center gap-2.5 px-2.5 py-2 text-sm text-left min-w-0 rounded-lg cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-300 dark:focus-visible:ring-slate-600"
                   >
                     <Icon className="h-4 w-4 text-slate-500 shrink-0" />
                     <span className="flex-1 truncate">{entry.label}</span>
@@ -87,11 +92,16 @@ export function OpenScreensTray() {
                       <Check className="h-4 w-4 text-emerald-500 shrink-0" />
                     )}
                   </button>
+                  {/* Item 5 — o X some/permanece corretamente: `removePinned`
+                      filtra só por id. Não depende de hover pra ser
+                      encontrado (opacity 60→100), tem aria-label e foco
+                      visível, e continua clicável em tela estreita. */}
                   <button
                     type="button"
                     onClick={() => removePinned(entry.id)}
-                    title="Remover da bandeja"
-                    className="p-1.5 mr-1 rounded-md text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-950/30 opacity-0 group-hover/row:opacity-100 transition-all shrink-0"
+                    aria-label={`Remover ${entry.label} da bandeja de telas`}
+                    title={`Remover ${entry.label} da bandeja`}
+                    className="p-1.5 mr-1 rounded-md text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-950/30 opacity-60 hover:opacity-100 group-hover/row:opacity-100 focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-400 transition-all shrink-0 cursor-pointer"
                   >
                     <X className="h-3.5 w-3.5" />
                   </button>

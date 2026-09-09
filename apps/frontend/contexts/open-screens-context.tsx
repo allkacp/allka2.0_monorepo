@@ -45,6 +45,16 @@ interface OpenScreensContextValue {
   pinned: PinnedEntry[];
   addPinned: (entry: PinnedEntry) => void;
   removePinned: (id: string) => void;
+  /**
+   * Adiciona se ausente, remove se presente — decidido DENTRO do updater de
+   * estado (`setPinned`), nunca por um `isPinned` capturado numa closure.
+   * Item 5 (reunião 09/09/2026): o `usePinEntry.toggle` antigo lia um
+   * `isPinned` congelado no 1º render (não estava nas deps do useCallback),
+   * então virava "só adiciona" depois de montado — o botão de pin da tela
+   * de origem (e o do EmbeddedSlideScreen/HeaderSlideScreen) nunca
+   * conseguia DESAFIXAR. `togglePinned` corrige isso na raiz.
+   */
+  togglePinned: (entry: PinnedEntry) => void;
   isPinned: (id: string) => boolean;
   pendingActivation: string | null;
   setPendingActivation: (key: string | null) => void;
@@ -74,6 +84,14 @@ export function OpenScreensProvider({
     setPinned((prev) => prev.filter((p) => p.id !== id));
   }, []);
 
+  const togglePinned = useCallback((entry: PinnedEntry) => {
+    setPinned((prev) =>
+      prev.some((p) => p.id === entry.id)
+        ? prev.filter((p) => p.id !== entry.id)
+        : [...prev, entry],
+    );
+  }, []);
+
   const isPinned = useCallback(
     (id: string) => pinned.some((p) => p.id === id),
     [pinned],
@@ -85,6 +103,7 @@ export function OpenScreensProvider({
         pinned,
         addPinned,
         removePinned,
+        togglePinned,
         isPinned,
         pendingActivation,
         setPendingActivation,
@@ -112,14 +131,15 @@ export function useOpenScreens() {
  *   const { pinned, toggle } = usePinEntry({ id, label, icon, path, activateKey });
  */
 export function usePinEntry(entry: PinnedEntry | null) {
-  const { isPinned, addPinned, removePinned } = useOpenScreens();
+  const { isPinned, togglePinned } = useOpenScreens();
   const pinned = entry ? isPinned(entry.id) : false;
+  // `togglePinned` decide adicionar x remover DENTRO do setPinned — então
+  // este callback pode ser estável pelos campos da entry sem risco de ler
+  // um estado congelado (era esse o bug do Item 5: só adicionava).
   const toggle = useCallback(() => {
-    if (!entry) return;
-    if (isPinned(entry.id)) removePinned(entry.id);
-    else addPinned(entry);
+    if (entry) togglePinned(entry);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [entry?.id, entry?.label, entry?.path, entry?.activateKey]);
+  }, [entry?.id, entry?.label, entry?.icon, entry?.path, entry?.activateKey, togglePinned]);
   return { pinned, toggle };
 }
 
