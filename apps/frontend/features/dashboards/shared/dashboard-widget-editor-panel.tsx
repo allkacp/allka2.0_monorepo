@@ -1,9 +1,20 @@
 // Peças visuais compartilhadas do editor de widgets (ver
-// use-dashboard-widget-editor.ts pro estado). Markup idêntico ao painel
-// "Editar Dashboard" que já existia em cada uma das 5 telas de dashboard
+// use-dashboard-widget-editor.ts pro estado). Markup do painel "Editar
+// Dashboard" que já existia em cada uma das 5 telas de dashboard
 // (agency/company/leader/partner/admin) — extraído pra ser literalmente o
 // mesmo componente usado ali E no editor de template
 // (/admin/dashboard-templates), em vez de um look-alike reconstruído.
+//
+// Item 4 (reunião 09/09/2026) — acabamento visual da edição de widgets:
+//  - "Salvar"/"Cancelar" subiram pro topo, junto de "Remover"/"Adicionar"
+//    (DashboardWidgetEditorModeToggle), sempre visíveis sem rolar; o rodapé
+//    separado (DashboardWidgetEditorFooter) deixou de existir;
+//  - os contadores de widgets visíveis/ocultos/total ficaram ao lado da
+//    instrução "Arraste para reordenar", no topo do corpo;
+//  - o ajuste de largura ganhou rótulos ("1/3", "2/3", "Total"), estado
+//    selecionado evidente (não só cor) e uma frase curta do efeito;
+//  - limpeza visual contida: avisos de modo mais calmos, espaçamentos
+//    consistentes. Nenhum comportamento mudou.
 import { useState } from "react";
 import {
   LayoutGrid,
@@ -17,7 +28,6 @@ import {
   ChevronUp,
   ChevronDown,
 } from "lucide-react";
-import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { useTelaEstreita } from "@/hooks/useTelaEstreita";
 import { ConfirmationDialog } from "@/components/confirmation-dialog";
@@ -27,34 +37,79 @@ import { EDITOR_GRADIENT_MAP, type DashboardWidgetEditor, type EditorWidgetLibra
 export function DashboardWidgetEditorModeToggle({
   editor,
   variant = "dark",
+  onSave,
+  onCancel,
+  saveLabel = "Salvar",
+  saving = false,
 }: {
   editor: DashboardWidgetEditor;
   /** "dark": header com fundo gradiente colorido (agency/company/leader/partner). "light": header claro (admin, EmbeddedSlideScreen). */
   variant?: "dark" | "light";
+  /** Item 4 — quando passados, "Cancelar" e "Salvar" renderizam aqui no topo,
+   *  ao lado de "Remover"/"Adicionar" (não há mais rodapé separado). */
+  onSave?: () => void;
+  onCancel?: () => void;
+  saveLabel?: string;
+  saving?: boolean;
 }) {
-  const inactiveClass = variant === "dark" ? "bg-white/15 hover:bg-white/25 text-white/90" : "bg-muted hover:bg-muted/70 text-foreground";
+  const dark = variant === "dark";
+  const inactiveClass = dark ? "bg-white/15 hover:bg-white/25 text-white/90" : "bg-muted hover:bg-muted/70 text-foreground";
+  const modeBtn = "flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-1";
+  const ring = dark
+    ? "focus-visible:ring-white focus-visible:ring-offset-transparent"
+    : "focus-visible:ring-ring focus-visible:ring-offset-background";
+  const showActions = typeof onSave === "function" || typeof onCancel === "function";
+
   return (
-    <div className="flex items-center gap-2">
+    <div className="flex items-center gap-2 flex-wrap">
       <button
+        type="button"
         onClick={() => editor.setMode((m) => (m === "remover" ? "none" : "remover"))}
-        className={cn(
-          "flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all",
-          editor.mode === "remover" ? "bg-red-500 text-white shadow-md" : inactiveClass,
-        )}
+        aria-pressed={editor.mode === "remover"}
+        className={cn(modeBtn, ring, editor.mode === "remover" ? "bg-red-500 text-white shadow-md" : inactiveClass)}
       >
         <Trash2 className="h-3.5 w-3.5" />
         Remover
       </button>
       <button
+        type="button"
         onClick={() => editor.setMode((m) => (m === "adicionar" ? "none" : "adicionar"))}
-        className={cn(
-          "flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all",
-          editor.mode === "adicionar" ? "bg-emerald-500 text-white shadow-md" : inactiveClass,
-        )}
+        aria-pressed={editor.mode === "adicionar"}
+        className={cn(modeBtn, ring, editor.mode === "adicionar" ? "bg-emerald-500 text-white shadow-md" : inactiveClass)}
       >
         <Plus className="h-3.5 w-3.5" />
         Adicionar
       </button>
+
+      {showActions && (
+        <>
+          <div className={cn("w-px h-5 shrink-0 mx-0.5", dark ? "bg-white/25" : "bg-border")} aria-hidden="true" />
+          <button
+            type="button"
+            onClick={onCancel}
+            className={cn(
+              "px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-1",
+              ring,
+              dark ? "bg-white/15 hover:bg-white/25 text-white" : "bg-muted hover:bg-muted/70 text-foreground",
+            )}
+          >
+            Cancelar
+          </button>
+          <button
+            type="button"
+            onClick={onSave}
+            disabled={saving}
+            className={cn(
+              "flex items-center gap-1.5 px-4 py-1.5 rounded-lg text-xs font-semibold shadow-sm transition-all cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-1",
+              ring,
+              dark ? "bg-white text-slate-900 hover:bg-white/90" : "btn-brand",
+            )}
+          >
+            <Save className="h-3.5 w-3.5" />
+            {saveLabel}
+          </button>
+        </>
+      )}
     </div>
   );
 }
@@ -77,6 +132,8 @@ export function DashboardWidgetEditorBody({
   const { draftWidgets, mode, draggedId, dragOverId, setDraggedId, setDragOverId } = editor;
   const availableWidgets = catalog.filter((lib) => !draftWidgets.some((dw) => dw.type === lib.id));
   const colSpanOptions = ([1, 2, 3] as const).filter((n) => n <= maxColSpan);
+  const visibleCount = draftWidgets.filter((w) => w.visible).length;
+  const hiddenCount = draftWidgets.length - visibleCount;
   // Item 12 — no mobile, drag-and-drop livre e resize por colSpan viram
   // controles simples (subir/descer, mostrar/ocultar, remover, adicionar).
   // Mesmo componente/estado em ambos os casos — só a interação muda.
@@ -86,10 +143,10 @@ export function DashboardWidgetEditorBody({
   // no ícone de lixeira só tirava o widget de `draftWidgets` na hora, sem
   // confirmação nenhuma — e o aviso do modo "remover" prometia algo que não
   // era verdade ("remover permanentemente"): esta remoção é só do rascunho
-  // (draftWidgets); nada é salvo até o clique em "Salvar" no rodapé, e
-  // "Cancelar" descarta a remoção junto com qualquer outra mudança da
-  // sessão de edição. Nenhum dado do próprio widget é apagado — só a
-  // personalização do painel.
+  // (draftWidgets); nada é salvo até o clique em "Salvar", e "Cancelar"
+  // descarta a remoção junto com qualquer outra mudança da sessão de
+  // edição. Nenhum dado do próprio widget é apagado — só a personalização
+  // do painel.
   const [removingWidget, setRemovingWidget] = useState<{ id: string; title: string } | null>(null);
 
   return (
@@ -101,36 +158,45 @@ export function DashboardWidgetEditorBody({
         )}
       >
         {isMobile && (
-          <div className="mb-4 flex items-center gap-2 px-3 py-2 rounded-lg bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800">
-            <ChevronUp className="h-3.5 w-3.5 text-blue-600 shrink-0" />
-            <p className="text-[11px] text-blue-700 dark:text-blue-300 font-medium">
+          <div className="mb-4 flex items-center gap-2 rounded-lg border border-border bg-muted/50 px-3 py-2">
+            <ChevronUp className="h-3.5 w-3.5 shrink-0 text-blue-600" />
+            <p className="text-[11px] font-medium text-muted-foreground">
               No celular, use as setas pra reordenar. Para arrastar/redimensionar livremente, use a versão desktop.
             </p>
           </div>
         )}
         {extraTop}
         {mode === "remover" && (
-          <div className="mb-5 flex items-center gap-2.5 px-4 py-2.5 bg-red-50 dark:bg-red-950/30 rounded-xl border border-red-200 dark:border-red-800">
-            <Trash2 className="h-3.5 w-3.5 text-red-500 shrink-0" />
-            <p className="text-xs text-red-700 dark:text-red-300 font-medium">
-              Modo remoção ativo — clique no ícone de lixeira pra remover um widget desta personalização
+          <div className="mb-4 flex items-center gap-2.5 rounded-lg border border-border bg-muted/50 px-3.5 py-2.5">
+            <Trash2 className="h-3.5 w-3.5 shrink-0 text-red-500" />
+            <p className="text-xs font-medium text-foreground">
+              Modo remoção ativo — clique no ícone de lixeira de um widget para removê-lo desta personalização
             </p>
           </div>
         )}
         {mode === "adicionar" && (
-          <div className="mb-5 flex items-center gap-2.5 px-4 py-2.5 bg-emerald-50 dark:bg-emerald-950/30 rounded-xl border border-emerald-200 dark:border-emerald-800">
-            <Plus className="h-3.5 w-3.5 text-emerald-600 shrink-0" />
-            <p className="text-xs text-emerald-700 dark:text-emerald-300 font-medium">
+          <div className="mb-4 flex items-center gap-2.5 rounded-lg border border-border bg-muted/50 px-3.5 py-2.5">
+            <Plus className="h-3.5 w-3.5 shrink-0 text-emerald-600" />
+            <p className="text-xs font-medium text-foreground">
               Clique em um widget disponível à direita para adicioná-lo
             </p>
           </div>
         )}
 
-        <div className="flex items-center gap-2 mb-4">
-          <LayoutGrid className="h-3.5 w-3.5 text-muted-foreground/60" />
-          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Widgets</p>
-          <span className="ml-auto text-[10px] font-medium text-muted-foreground bg-muted/60 rounded-full px-2 py-0.5">
-            {draftWidgets.length}
+        {/* Item 4 — instrução de reordenar + contadores, juntos, no topo do corpo. */}
+        <div className="mb-4 flex flex-wrap items-center gap-x-3 gap-y-2">
+          <span className="inline-flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
+            <GripVertical className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+            {isMobile ? "Use as setas para reordenar" : "Arraste para reordenar"}
+          </span>
+          <span
+            className="inline-flex items-center gap-1.5 text-[11px] font-medium"
+            role="status"
+            aria-label={`${visibleCount} widgets visíveis, ${hiddenCount} ocultos, ${draftWidgets.length} no total`}
+          >
+            <span className="rounded-full bg-muted px-2 py-0.5 text-foreground">{visibleCount} visíveis</span>
+            <span className="rounded-full bg-muted/50 px-2 py-0.5 text-muted-foreground">{hiddenCount} ocultos</span>
+            <span className="rounded-full border border-border px-2 py-0.5 text-muted-foreground">{draftWidgets.length} no total</span>
           </span>
         </div>
 
@@ -180,18 +246,20 @@ export function DashboardWidgetEditorBody({
                   {isMobile ? (
                     <div className="flex items-center gap-0.5 shrink-0">
                       <button
+                        type="button"
                         disabled={i === 0}
                         onClick={() => editor.moveBy(widget.id, -1)}
                         className="flex items-center justify-center h-5 w-5 rounded text-white/80 hover:bg-white/20 disabled:opacity-30 disabled:hover:bg-transparent transition-colors"
-                        title="Mover para cima"
+                        aria-label={`Mover ${title} para cima`}
                       >
                         <ChevronUp className="h-3.5 w-3.5" />
                       </button>
                       <button
+                        type="button"
                         disabled={i === draftWidgets.length - 1}
                         onClick={() => editor.moveBy(widget.id, 1)}
                         className="flex items-center justify-center h-5 w-5 rounded text-white/80 hover:bg-white/20 disabled:opacity-30 disabled:hover:bg-transparent transition-colors"
-                        title="Mover para baixo"
+                        aria-label={`Mover ${title} para baixo`}
                       >
                         <ChevronDown className="h-3.5 w-3.5" />
                       </button>
@@ -202,49 +270,69 @@ export function DashboardWidgetEditorBody({
                 </div>
 
                 <div className="px-3 py-2.5 bg-card">
-                  <div className="flex items-center gap-2 mb-2.5">
+                  <div className="flex items-center gap-2 mb-2">
                     <div className={cn("shrink-0 rounded-md p-1.5 bg-gradient-to-br text-white shadow-sm", gradient)}>
                       <WIcon className="h-3.5 w-3.5" />
                     </div>
                     <p className="text-[10px] text-muted-foreground font-medium leading-snug">
-                      {widgetColSpan === 1 ? "1/3 da largura" : widgetColSpan === 2 ? "2/3 da largura" : "Largura total"}
+                      {widgetColSpan === 1
+                        ? "Ocupa 1 de 3 colunas"
+                        : widgetColSpan === 2
+                          ? "Ocupa 2 de 3 colunas"
+                          : "Ocupa a linha inteira"}
                     </p>
                   </div>
 
                   {!isMobile && colSpanOptions.length > 1 && (
-                    <div className="flex items-center gap-1.5 mb-2">
-                      <span className="text-[10px] text-muted-foreground font-medium shrink-0">Largura:</span>
-                      {colSpanOptions.map((n) => (
-                        <button
-                          key={n}
-                          onMouseDown={(e) => e.stopPropagation()}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            editor.setColSpan(widget.id, n);
-                          }}
-                          title={n === 1 ? "1 coluna" : n === 2 ? "2 colunas" : "Largura total"}
-                          className={cn(
-                            "flex-1 h-5 text-[10px] font-bold rounded transition-colors border",
-                            widgetColSpan === n ? "bg-blue-600 text-white border-blue-600" : "bg-muted/50 text-muted-foreground border-border hover:bg-muted",
-                          )}
-                        >
-                          {n}
-                        </button>
-                      ))}
+                    <div className="mb-2">
+                      <span className="mb-1 block text-[10px] font-medium text-muted-foreground">Largura do widget</span>
+                      <div className="flex items-center gap-1" role="group" aria-label="Largura do widget">
+                        {colSpanOptions.map((n) => {
+                          const label = n === 1 ? "1/3" : n === 2 ? "2/3" : "Total";
+                          const desc = n === 1 ? "um terço da linha" : n === 2 ? "dois terços da linha" : "a linha inteira";
+                          const selected = widgetColSpan === n;
+                          return (
+                            <button
+                              key={n}
+                              type="button"
+                              aria-pressed={selected}
+                              aria-label={`Largura: ${desc}`}
+                              title={`Largura: ${desc}`}
+                              onMouseDown={(e) => e.stopPropagation()}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                editor.setColSpan(widget.id, n);
+                              }}
+                              className={cn(
+                                "flex-1 h-6 px-1 text-[10px] font-bold rounded border transition-colors",
+                                "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1",
+                                selected
+                                  ? "bg-primary text-primary-foreground border-primary ring-1 ring-primary"
+                                  : "bg-muted/40 text-muted-foreground border-border hover:bg-muted",
+                              )}
+                            >
+                              {label}
+                            </button>
+                          );
+                        })}
+                      </div>
                     </div>
                   )}
 
                   <div className="flex items-center justify-between pt-2 border-t border-border/60">
                     <button
+                      type="button"
                       onMouseDown={(e) => e.stopPropagation()}
                       onClick={(e) => {
                         e.stopPropagation();
                         editor.toggleVisible(widget.id);
                       }}
+                      aria-pressed={widget.visible}
+                      aria-label={widget.visible ? `Ocultar widget ${title}` : `Exibir widget ${title}`}
                       className={cn(
                         "flex items-center gap-1 text-[10px] font-medium rounded-md px-2 py-1 transition-colors",
                         widget.visible
-                          ? "text-emerald-600 bg-emerald-50 dark:bg-emerald-950/40 hover:bg-emerald-100"
+                          ? "text-emerald-700 dark:text-emerald-400 bg-emerald-500/10 hover:bg-emerald-500/20"
                           : "text-muted-foreground bg-muted/60 hover:bg-muted",
                       )}
                     >
@@ -254,13 +342,14 @@ export function DashboardWidgetEditorBody({
 
                     {(mode === "remover" || isMobile) && (
                       <button
+                        type="button"
                         onMouseDown={(e) => e.stopPropagation()}
                         onClick={(e) => {
                           e.stopPropagation();
                           setRemovingWidget({ id: widget.id, title });
                         }}
                         aria-label={`Remover widget ${title}`}
-                        className="flex items-center gap-1 text-[10px] font-semibold text-red-600 bg-red-50 dark:bg-red-950/40 hover:bg-red-100 rounded-md px-2 py-1 transition-colors"
+                        className="flex items-center gap-1 text-[10px] font-semibold text-red-600 bg-red-500/10 hover:bg-red-500/20 rounded-md px-2 py-1 transition-colors"
                       >
                         <Trash2 className="h-3 w-3" />
                         Remover
@@ -300,9 +389,10 @@ export function DashboardWidgetEditorBody({
                 const gradient = EDITOR_GRADIENT_MAP[lib.color ?? "blue"] ?? EDITOR_GRADIENT_MAP.blue;
                 return (
                   <button
+                    type="button"
                     key={lib.id}
                     onClick={() => editor.addWidget(lib.id)}
-                    className="w-full text-left group flex items-center gap-3 px-3.5 py-3 rounded-xl border border-border bg-card hover:border-emerald-400 hover:bg-emerald-50/40 dark:hover:bg-emerald-950/20 hover:shadow-sm active:scale-[0.98] transition-all duration-150"
+                    className="w-full text-left group flex items-center gap-3 px-3.5 py-3 rounded-xl border border-border bg-card hover:border-emerald-400 hover:bg-emerald-50/40 dark:hover:bg-emerald-950/20 hover:shadow-sm active:scale-[0.98] transition-all duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1"
                   >
                     <div className={cn("shrink-0 rounded-lg p-2 bg-gradient-to-br text-white shadow-sm", gradient)}>
                       <WIcon className="h-3.5 w-3.5" />
@@ -337,46 +427,11 @@ export function DashboardWidgetEditorBody({
         targetName={removingWidget?.title}
         targetDetail="Personalização deste painel"
         consequences={[
-          "A mudança só é salva de verdade quando você clicar em \"Salvar\" no rodapé do editor.",
+          "A mudança só é salva de verdade quando você clicar em \"Salvar\".",
           "Antes de salvar, dá pra desfazer clicando em \"Cancelar\" (descarta tudo desta sessão) ou adicionando o mesmo widget de novo pelo modo \"Adicionar\".",
         ]}
         finalConfirmText="Remover widget do painel"
       />
-    </div>
-  );
-}
-
-export function DashboardWidgetEditorFooter({
-  editor,
-  onCancel,
-  onSave,
-  saveLabel = "Salvar",
-  saving = false,
-}: {
-  editor: DashboardWidgetEditor;
-  onCancel: () => void;
-  onSave: () => void;
-  saveLabel?: string;
-  saving?: boolean;
-}) {
-  return (
-    <div className="flex-shrink-0 border-t bg-muted/20 px-4 sm:px-6 py-3 flex items-center gap-3 sm:gap-4 flex-wrap">
-      <div className="flex items-center gap-2 shrink-0">
-        <Button variant="outline" size="sm" className="h-8 px-4 text-sm" onClick={onCancel}>
-          Cancelar
-        </Button>
-        <Button size="sm" className="h-8 px-5 text-sm btn-brand shadow-sm gap-1.5" onClick={onSave} disabled={saving}>
-          <Save className="h-3.5 w-3.5" />
-          {saveLabel}
-        </Button>
-      </div>
-      {/* Contagem: some no mobile pra não disputar espaço com Cancelar/Salvar (item 17 — sempre acessíveis). */}
-      <div className="hidden sm:flex items-center gap-4">
-        <div className="w-px h-5 bg-border" />
-        <span className="text-xs text-muted-foreground">
-          {editor.draftWidgets.filter((w) => w.visible).length} visíveis · {editor.draftWidgets.filter((w) => !w.visible).length} ocultos · {editor.draftWidgets.length} total
-        </span>
-      </div>
     </div>
   );
 }

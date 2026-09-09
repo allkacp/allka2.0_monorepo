@@ -160,7 +160,6 @@ import { useDashboardExport } from "@/features/dashboards/shared/use-dashboard-e
 import { DashboardExportOverlay } from "@/features/dashboards/shared/dashboard-export-overlay";
 import { useDashboardTemplate, TEMPLATE_DASHBOARD_ID } from "@/features/dashboards/shared/use-dashboard-template";
 import { useDashboardWidgetEditor } from "@/features/dashboards/shared/dashboard-widget-editor";
-import { DashboardWidgetEditorModeToggle, DashboardWidgetEditorBody, DashboardWidgetEditorFooter } from "@/features/dashboards/shared/dashboard-widget-editor-panel";
 import { DashboardEditorScreen } from "@/features/dashboards/shared/dashboard-editor-screen";
 import { DashboardTemplateContentList } from "@/features/dashboards/shared/dashboard-template-content";
 import { GlobalPeriodControl } from "@/features/dashboards/shared/global-period-control";

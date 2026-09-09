@@ -502,7 +502,7 @@ import { useGlobalDashboardPeriod, useWidgetPeriodOverrides } from "@/features/d
 import { GlobalPeriodControl } from "@/features/dashboards/shared/global-period-control";
 import { dashboardToolbarControlClass } from "@/features/dashboards/shared/dashboard-toolbar";
 import { DashboardInfoHint } from "@/features/dashboards/shared/dashboard-info-hint";
-import { DashboardWidgetEditorModeToggle, DashboardWidgetEditorBody, DashboardWidgetEditorFooter } from "@/features/dashboards/shared/dashboard-widget-editor-panel";
+import { DashboardWidgetEditorModeToggle, DashboardWidgetEditorBody } from "@/features/dashboards/shared/dashboard-widget-editor-panel";
 import { DashboardTemplateContentList } from "@/features/dashboards/shared/dashboard-template-content";
 
 // Redeclaration of Alert interface removed due to linting issue.
@@ -6914,12 +6914,17 @@ export default function AdminDashboardPage() {
                         <p className="text-white/70 text-[11px] mt-0.5">
                           {isNewDashboardMode
                             ? "Adicione widgets à direita e dê um nome ao dashboard"
-                            : `Arraste para reordenar · ${editor.draftWidgets.filter((w) => w.visible).length} widgets ativos`}
+                            : `${editor.draftWidgets.filter((w) => w.visible).length} widgets ativos`}
                         </p>
                       </div>
                     </div>
                     <div className="flex items-center gap-2">
-                      <DashboardWidgetEditorModeToggle editor={editor} />
+                      <DashboardWidgetEditorModeToggle
+                      editor={editor}
+                      onCancel={() => setShowCancelConfirmDialog(true)}
+                      onSave={() => setShowSaveConfirmDialog(true)}
+                      saveLabel={isNewDashboardMode ? "Criar" : "Salvar"}
+                    />
                       <div className="w-px h-5 bg-white/25 mx-1" />
                       <button
                         onClick={handleCloseEditPanel}
@@ -6932,12 +6937,6 @@ export default function AdminDashboardPage() {
                 </div>
 
                 <DashboardWidgetEditorBody editor={editor} catalog={widgetLibrary.filter((lib) => ROLE_WIDGET_IDS.has(lib.id))} getWidgetTitle={getWidgetTitle} />
-                <DashboardWidgetEditorFooter
-                  editor={editor}
-                  onCancel={() => setShowCancelConfirmDialog(true)}
-                  onSave={() => setShowSaveConfirmDialog(true)}
-                  saveLabel={isNewDashboardMode ? "Criar" : "Salvar"}
-                />
               </div>
             </>
           );

@@ -7,8 +7,7 @@
 // componente, mesma UI, só muda o que os callbacks fazem com o resultado.
 import { useState, type ReactNode } from "react";
 import { EmbeddedSlideScreen } from "@/components/embedded-slide-screen";
-import { Button } from "@/components/ui/button";
-import { Save, Check, X, Pencil } from "lucide-react";
+import { Check, X, Pencil } from "lucide-react";
 import type { PinnedEntry } from "@/contexts/open-screens-context";
 import { DashboardWidgetEditorModeToggle, DashboardWidgetEditorBody } from "./dashboard-widget-editor-panel";
 import type { DashboardWidgetEditor, EditorWidgetLibraryItem } from "./dashboard-widget-editor";
@@ -72,28 +71,14 @@ export function DashboardEditorScreen({
           : "Atualize as configurações principais deste painel."
       }
       pin={pin}
+      // Item 4 — "Cancelar"/"Salvar" e a contagem de widgets subiram pro topo
+      // (toolbar interna, junto de "Remover"/"Adicionar"). O rodapé só existe
+      // agora quando há uma ação extra específica de modo (ex.: "Definir como
+      // padrão" no editor de template).
       footer={
-        <div className="flex items-center gap-3 sm:gap-4 w-full flex-wrap">
-          <div className="flex items-center gap-2 order-1 shrink-0">
-            <Button variant="outline" size="sm" className="h-8 px-4 text-sm" onClick={onCancel}>
-              Cancelar
-            </Button>
-            <Button size="sm" className="h-8 px-5 text-sm btn-brand shadow-sm gap-1.5" onClick={onSave} disabled={saving}>
-              <Save className="h-3.5 w-3.5" />
-              {saveLabel ?? (isNew ? "Criar" : "Salvar")}
-            </Button>
-          </div>
-          {/* Contagem: some no mobile pra não disputar espaço com Cancelar/Salvar, que precisam ficar sempre acessíveis (item 17). */}
-          <div className="hidden sm:flex items-center gap-4 order-2">
-            <div className="w-px h-5 bg-border" />
-            <span className="text-xs text-muted-foreground">
-              {editor.draftWidgets.filter((w) => w.visible).length} visíveis ·{" "}
-              {editor.draftWidgets.filter((w) => !w.visible).length} ocultos ·{" "}
-              {editor.draftWidgets.length} total
-            </span>
-          </div>
-          {footerExtra && <div className="order-3 sm:ml-auto shrink-0 w-full sm:w-auto flex justify-end">{footerExtra}</div>}
-        </div>
+        footerExtra ? (
+          <div className="flex w-full justify-end">{footerExtra}</div>
+        ) : undefined
       }
     >
       <div className="flex flex-col flex-1 overflow-hidden w-full">
@@ -153,10 +138,17 @@ export function DashboardEditorScreen({
             <p className="text-muted-foreground text-[11px] mt-0.5">
               {isNew
                 ? "Adicione widgets à direita e dê um nome ao dashboard"
-                : `Arraste para reordenar · ${editor.draftWidgets.filter((w) => w.visible).length} widgets ativos`}
+                : `${editor.draftWidgets.filter((w) => w.visible).length} widgets ativos`}
             </p>
           </div>
-          <DashboardWidgetEditorModeToggle editor={editor} variant="light" />
+          <DashboardWidgetEditorModeToggle
+            editor={editor}
+            variant="light"
+            onSave={onSave}
+            onCancel={onCancel}
+            saving={saving}
+            saveLabel={saveLabel ?? (isNew ? "Criar" : "Salvar")}
+          />
         </div>
 
         <DashboardWidgetEditorBody
