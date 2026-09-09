@@ -495,6 +495,7 @@ import { useDashboardTemplate, TEMPLATE_DASHBOARD_ID } from "@/features/dashboar
 import { useDashboardWidgetEditor } from "@/features/dashboards/shared/dashboard-widget-editor";
 import { useGlobalDashboardPeriod, useWidgetPeriodOverrides } from "@/features/dashboards/shared/use-dashboard-period";
 import { GlobalPeriodControl } from "@/features/dashboards/shared/global-period-control";
+import { DashboardInfoHint } from "@/features/dashboards/shared/dashboard-info-hint";
 import { DashboardWidgetEditorModeToggle, DashboardWidgetEditorBody, DashboardWidgetEditorFooter } from "@/features/dashboards/shared/dashboard-widget-editor-panel";
 import { DashboardTemplateContentList } from "@/features/dashboards/shared/dashboard-template-content";
 
@@ -2893,11 +2894,11 @@ export default function AdminDashboardPage() {
             <div className="absolute bottom-2 right-2 z-20">
               <Tooltip>
                 <TooltipTrigger asChild>
-                  <button className="flex items-center justify-center w-5 h-5 rounded-full bg-white/20 hover:bg-white/40 transition-colors cursor-help">
-                    <Info className="h-3 w-3 text-white" />
+                  <button type="button" aria-label={`Mais informações sobre ${metricName}`} className="flex items-center justify-center w-5 h-5 rounded-full bg-white/20 hover:bg-white/40 transition-colors cursor-help">
+                    <Info className="h-3 w-3 text-white" aria-hidden="true" />
                   </button>
                 </TooltipTrigger>
-                <TooltipContent side="top" align="end" className="max-w-[240px] bg-slate-900 text-white border-slate-700 text-[11px] leading-relaxed">
+                <TooltipContent side="top" align="end" collisionPadding={8} className="max-w-[240px] bg-slate-900 text-white border-slate-700 text-[11px] leading-relaxed">
                   {metricDescriptions[metricType]}
                 </TooltipContent>
               </Tooltip>
@@ -3028,11 +3029,11 @@ export default function AdminDashboardPage() {
           <div className="absolute bottom-2 right-2 z-20">
             <Tooltip>
               <TooltipTrigger asChild>
-                <button className="flex items-center justify-center w-5 h-5 rounded-full bg-white/20 hover:bg-white/40 transition-colors cursor-help">
-                  <Info className="h-3 w-3 text-white" />
+                <button type="button" aria-label={`Mais informações sobre ${metricName}`} className="flex items-center justify-center w-5 h-5 rounded-full bg-white/20 hover:bg-white/40 transition-colors cursor-help">
+                  <Info className="h-3 w-3 text-white" aria-hidden="true" />
                 </button>
               </TooltipTrigger>
-              <TooltipContent side="top" align="end" className="max-w-[240px] bg-slate-900 text-white border-slate-700 text-[11px] leading-relaxed">
+              <TooltipContent side="top" align="end" collisionPadding={8} className="max-w-[240px] bg-slate-900 text-white border-slate-700 text-[11px] leading-relaxed">
                 {metricDescriptions[metricType]}
               </TooltipContent>
             </Tooltip>
@@ -4911,21 +4912,16 @@ export default function AdminDashboardPage() {
                   Dashboard
                 </h1>
               </div>
-              <TooltipProvider delayDuration={200}>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <button className="flex items-center justify-center h-5 w-5 rounded-full hover:bg-muted transition-colors shrink-0 self-center">
-                      <Info className="h-3.5 w-3.5 text-muted-foreground" strokeWidth={2.5} />
-                    </button>
-                  </TooltipTrigger>
-                  <TooltipContent side="bottom" className="max-w-[220px] p-3" sideOffset={6}>
+              <DashboardInfoHint
+                label="Mais informações sobre o dashboard"
+                triggerClassName="self-center"
+                contentClassName="max-w-[220px] p-3"
+              >
                     <p className="font-semibold text-xs mb-1.5">Dashboard do Parceiro</p>
                     <p className="text-xs text-muted-foreground leading-relaxed">
                       Acompanhe suas indicações, clientes, conversões e comissões.
                     </p>
-                  </TooltipContent>
-                </Tooltip>
-              </TooltipProvider>
+              </DashboardInfoHint>
             </div>
 
             {/* Divider */}
@@ -4960,10 +4956,7 @@ export default function AdminDashboardPage() {
             <div className="hidden xl:block w-px h-5 bg-border/60 mx-1 shrink-0" />
 
             {/* Dashboard selector */}
-            <TooltipProvider delayDuration={200}>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <div className="flex items-center gap-1 shrink-0 cursor-default">
+            <div className="flex items-center gap-1 shrink-0">
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
                         <button className="group relative flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-border/60 hover:border-transparent overflow-hidden transition-all max-w-[200px]">
@@ -5076,10 +5069,10 @@ export default function AdminDashboardPage() {
                         </div>
                       </DropdownMenuContent>
                     </DropdownMenu>
-                    <Info className="h-3.5 w-3.5 text-muted-foreground" strokeWidth={2.5} />
-                  </div>
-                </TooltipTrigger>
-                <TooltipContent side="bottom" className="max-w-[220px] p-3" sideOffset={6}>
+                    <DashboardInfoHint
+                      label="Mais informações sobre os dashboards salvos"
+                      contentClassName="max-w-[220px] p-3"
+                    >
                   <p className="font-semibold text-xs mb-1.5">Selecionar dashboard</p>
                   <p className="text-xs text-muted-foreground leading-relaxed">
                     Escolha entre os dashboards salvos para alternar a <strong>visão geral da área</strong>.
@@ -5089,9 +5082,8 @@ export default function AdminDashboardPage() {
                       Use <strong>"Criar novo dashboard"</strong> para organizar diferentes configurações de widgets.
                     </p>
                   </div>
-                </TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
+                </DashboardInfoHint>
+            </div>
 
             {/* Divider */}
             <div className="hidden xl:block w-px h-5 bg-border/60 mx-1 shrink-0" />

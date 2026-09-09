@@ -197,4 +197,17 @@ describe("GlobalPeriodControl — Período global do dashboard", () => {
       screen.getByRole("button", { name: /per[ií]odo global: últimos 30 dias/i }),
     ).toBeInTheDocument();
   });
+
+  // Item 2 (reunião 09/09/2026) — garantir que NÃO voltou tooltip no
+  // componente inteiro: passar o mouse pelo rótulo / pela frase de apoio /
+  // pelo container não pode abrir nenhum tooltip.
+  it("(i) não tem tooltip no componente inteiro — hover no rótulo/frase/container não abre nada", async () => {
+    const user = userEvent.setup();
+    render(<Harness />);
+
+    await user.hover(screen.getByText("Período global"));
+    await user.hover(screen.getByText("aplica-se a todo o painel"));
+    await new Promise((r) => setTimeout(r, 20));
+    expect(screen.queryByRole("tooltip")).not.toBeInTheDocument();
+  });
 });
