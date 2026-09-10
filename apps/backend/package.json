@@ -9,7 +9,7 @@
     "postinstall": "prisma generate && npm run db:legacy:generate",
     "start": "node dist/index.js",
     "test:roadmap-contract": "tsx --test src/lib/roadmap-integration-contract.test.ts",
-    "test:unit": "tsx --test src/test-support/require-test-database.test.ts src/lib/product-feedback-access-decision.test.ts src/lib/hmac.test.ts src/lib/product-feedback-config-validation.test.ts src/middleware/auth.test.ts",
+    "test:unit": "tsx --test src/test-support/require-test-database.test.ts src/lib/product-feedback-access-decision.test.ts src/lib/hmac.test.ts src/lib/product-feedback-config-validation.test.ts src/middleware/auth.test.ts src/lib/cutover/environment-guard.test.ts src/lib/cutover/read-only-guard.test.ts src/lib/cutover/retention-manifest.test.ts",
     "test:product-feedback": "tsx scripts/run-db-tests.ts src/routes/product-feedback.integration.test.ts",
     "test:legacy-consultation": "tsx scripts/run-db-tests.ts src/routes/legacy-consultation.integration.test.ts",
     "test:legacy-snapshot": "tsx scripts/run-db-tests.ts src/routes/legacy-snapshot-oficial.integration.test.ts",
@@ -56,7 +56,10 @@
     "catalog2:cutover-plan": "tsx src/scripts/catalog2-cutover-plan.ts",
     "catalog2:commercial-cutover-plan": "tsx src/scripts/catalog2-commercial-cutover-plan.ts",
     "catalog2:client-demo": "tsx src/scripts/seed-catalog2-client-demo.ts",
-    "seed:qa-demo": "tsx src/scripts/seed-qa-demo.ts"
+    "seed:qa-demo": "tsx src/scripts/seed-qa-demo.ts",
+    "cutover:simulate": "tsx src/scripts/cutover-simulation.ts",
+    "cutover:simulate:json": "tsx src/scripts/cutover-simulation.ts -- --json",
+    "test:cutover-simulation": "tsx scripts/run-db-tests.ts src/scripts/cutover-simulation.integration.test.ts"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"
