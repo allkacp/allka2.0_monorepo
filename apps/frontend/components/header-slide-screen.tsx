@@ -104,9 +104,12 @@ export function HeaderSlideScreen({
         style={{ left: sidebarWidth, top: headerHeight, bottom: 0, zIndex }}
         className={cn(
           "fixed right-0 flex px-4 sm:px-6 py-4 pointer-events-none",
+          // Item 6 (complemento 09/09/2026) — espelha as molduras compactadas
+          // do <main> em App.tsx (topo menor, sem reserva de rodapé, borda
+          // direita só com o mínimo do trilho de ícones).
           isShellRoute
-            ? "lg:pt-[20px] lg:pl-[20px] lg:pr-14 lg:!pb-[25px]"
-            : "lg:px-14 lg:py-12",
+            ? "lg:pt-3 lg:pl-3 lg:pr-13 lg:!pb-3"
+            : "lg:pt-6 lg:pl-6 lg:pr-13 lg:!pb-6",
         )}
       >
         <div

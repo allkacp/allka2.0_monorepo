@@ -586,10 +586,20 @@ function AppLayout({ children }: { children: React.ReactNode }) {
                                   </PageErrorBoundary>
                                   <main
                                     className={cn(
+                                      // Item 6 (complemento 09/09/2026) — molduras
+                                      // do <main> compactadas: menos vão entre
+                                      // Header e container, sem reserva de rodapé
+                                      // (Footer não pinta mais faixa), e a borda
+                                      // direita só reserva o mínimo do trilho de
+                                      // ícones (fixed em right-[8px], w-9 → ~52px).
+                                      // Estes mesmos valores vivem em
+                                      // header-slide-screen.tsx e
+                                      // catalog-cart-sticky-bar.tsx (retângulos que
+                                      // precisam cair exatamente sobre este painel).
                                       "flex-1 overflow-auto mx-0 py-4 px-4 sm:px-6 pb-mobile-nav",
                                       isEmpresasRoute
-                                        ? "bg-transparent lg:pt-[20px] lg:pl-[20px] lg:pr-14 lg:!pb-[25px]"
-                                        : "bg-slate-200 dark:bg-background lg:px-14 lg:py-12",
+                                        ? "bg-transparent lg:pt-3 lg:pl-3 lg:pr-13 lg:!pb-3"
+                                        : "bg-slate-200 dark:bg-background lg:pt-6 lg:pl-6 lg:pr-13 lg:!pb-6",
                                     )}
                                   >
                                     <PageErrorBoundary>

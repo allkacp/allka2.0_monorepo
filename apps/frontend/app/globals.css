@@ -1195,12 +1195,16 @@
 
   @media (min-width: 1024px) {
     .pb-mobile-nav {
-      /* No desktop, dá espaço apenas para o footer fixo */
-      padding-bottom: calc(var(--footer-height, 2.5rem) + 1.5rem);
+      /* Item 6 (complemento 09/09/2026) — o Footer não pinta mais faixa e
+         zera `--footer-height`, então no desktop resta só uma margem curta.
+         O <main> em App.tsx ainda sobrescreve isto com um `lg:!pb-*` menor. */
+      padding-bottom: calc(var(--footer-height, 0px) + 1rem);
     }
   }
 
-  /* Footer positioning: starts after sidebar on desktop */
+  /* Footer positioning: starts after sidebar on desktop. Mantido só por
+     compatibilidade — o <Footer> atual não renderiza elemento (ver
+     components/footer.tsx). Fallback alinhado ao novo padrão de 200px. */
   .footer-positioned {
     left: 0;
     right: 0;
@@ -1208,7 +1212,7 @@
 
   @media (min-width: 1024px) {
     .footer-positioned {
-      left: var(--sidebar-width, 216px);
+      left: var(--sidebar-width, 200px);
     }
   }
 

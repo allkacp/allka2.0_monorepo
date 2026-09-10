@@ -1,6 +1,13 @@
 import type React from "react";
 
-import { useState, useEffect, useRef, Fragment } from "react";
+import {
+  useState,
+  useEffect,
+  useRef,
+  useCallback,
+  useLayoutEffect,
+  Fragment,
+} from "react";
 import { Link } from "react-router-dom";
 import { useLocation } from "react-router-dom";
 import { cn } from "@/lib/utils";
@@ -640,8 +647,70 @@ const LEVEL_CONFIG_NOMAD_SIDEBAR = {
   diamond:  { label: "Diamond",  emoji: "💎", gradient: "from-violet-400 to-purple-600", bar: "bg-gradient-to-r from-violet-400 to-purple-600", text: "text-violet-300", bg: "bg-violet-500/20", border: "border-violet-400/30", nextLabel: null,       nextTasksRequired: null },
 };
 
+/**
+ * Item 6 (complemento 09/09/2026) — rótulo de item de menu que usa TODA a
+ * largura disponível antes de truncar. Quando o nome não cabe, mostra
+ * reticências (`truncate`) e reporta ao pai que está truncado, para o
+ * `<Tooltip>` que envolve o link/botão exibir o nome completo — no hover E
+ * no foco por teclado (o alvo do Tooltip é o próprio link focável). O
+ * `title` nativo cobre o hover mesmo se o Tooltip do Radix não montar.
+ */
+function SidebarNavLabel({
+  text,
+  navKey,
+  onTruncationChange,
+  className,
+}: {
+  text: string;
+  navKey: string;
+  onTruncationChange: (key: string, truncated: boolean) => void;
+  className?: string;
+}) {
+  const ref = useRef<HTMLSpanElement>(null);
+  const [isTruncated, setIsTruncated] = useState(false);
+
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const measure = () => {
+      const truncated = el.scrollWidth > el.clientWidth + 1;
+      setIsTruncated(truncated);
+      onTruncationChange(navKey, truncated);
+    };
+    measure();
+    let ro: ResizeObserver | undefined;
+    if (typeof ResizeObserver !== "undefined") {
+      ro = new ResizeObserver(measure);
+      ro.observe(el);
+    }
+    return () => {
+      ro?.disconnect();
+      onTruncationChange(navKey, false);
+    };
+  }, [text, navKey, onTruncationChange]);
+
+  return (
+    <span
+      ref={ref}
+      className={cn("truncate", className)}
+      title={isTruncated ? text : undefined}
+    >
+      {text}
+    </span>
+  );
+}
+
 export function Sidebar({ transparent = false }: { transparent?: boolean } = {}) {
   const [collapsed, setCollapsed] = useState(false);
+  // Item 6 (complemento) — quais itens de menu estão com o nome truncado
+  // agora (por chave estável: href ou nome). Alimenta a exibição condicional
+  // do Tooltip com o nome completo.
+  const [truncatedNav, setTruncatedNav] = useState<Record<string, boolean>>({});
+  const markNavTruncated = useCallback((key: string, truncated: boolean) => {
+    setTruncatedNav((prev) =>
+      prev[key] === truncated ? prev : { ...prev, [key]: truncated },
+    );
+  }, []);
   const [agencyModalOpen, setAgencyModalOpen] = useState(false);
   const [settingsModalOpen, setSettingsModalOpen] = useState(false);
   const [isScrolled, setIsScrolled] = useState(false);
@@ -1396,12 +1465,22 @@ export function Sidebar({ transparent = false }: { transparent?: boolean } = {})
             );
           })()}
 
-          {/* Resize handle */}
+          {/* Resize handle — Item 6 (complemento 09/09/2026): área de arrasto
+              mais larga e com pega visível (barrinha central sempre discreta,
+              acende no hover), cursor col-resize e rótulo acessível. A
+              largura escolhida persiste normalmente após a 1ª migração
+              versionada (ver contexts/sidebar-context.tsx). */}
           {!collapsed && (
             <div
               onMouseDown={handleResizeMouseDown}
-              className="absolute right-0 top-0 h-full w-1 cursor-col-resize z-50 hover:bg-white/30 transition-colors"
-            />
+              role="separator"
+              aria-orientation="vertical"
+              aria-label="Arraste para ajustar a largura da barra lateral"
+              title="Arraste para ajustar a largura"
+              className="group/resize absolute right-0 top-0 z-50 flex h-full w-2 cursor-col-resize items-center justify-center hover:bg-white/10 transition-colors"
+            >
+              <span className="h-10 w-0.5 rounded-full bg-white/20 group-hover/resize:bg-white/60 transition-colors" />
+            </div>
           )}
           <div
             className={cn(
@@ -1574,7 +1653,9 @@ export function Sidebar({ transparent = false }: { transparent?: boolean } = {})
             ref={navRef}
             data-tour-id="main-navigation"
             className={cn(
-              "relative flex-1 px-2 py-4 space-y-1 backdrop-blur-sm overflow-y-auto sidebar-scrollbar scroll-fade-top scroll-fade-bottom",
+              // Item 6 (complemento) — px-1.5 (era px-2): menos recuo lateral,
+              // mais largura útil para o texto dos itens antes de truncar.
+              "relative flex-1 px-1.5 py-4 space-y-1 backdrop-blur-sm overflow-y-auto sidebar-scrollbar scroll-fade-top scroll-fade-bottom",
               isScrolled && "scrolled",
               hasMoreContent && "has-more",
             )}
@@ -1697,10 +1778,12 @@ export function Sidebar({ transparent = false }: { transparent?: boolean } = {})
                       draggedItem === index && "opacity-50",
                     )}
                   >
+                    <Tooltip>
+                      <TooltipTrigger asChild>
                     <button
                       onClick={() => toggleExpanded(item.name)}
                       className={cn(
-                        "w-full flex items-center px-3 py-2.5 rounded-lg text-xs font-medium transition-all duration-200 group",
+                        "w-full flex items-center px-2.5 py-2.5 rounded-lg text-xs font-medium transition-all duration-200 group",
                         hasActiveSubitem
                           ? "text-white shadow-lg backdrop-blur-sm"
                           : "text-white/80 hover:bg-white/10 hover:text-white backdrop-blur-sm",
@@ -1714,11 +1797,14 @@ export function Sidebar({ transparent = false }: { transparent?: boolean } = {})
                           : {}
                       }
                     >
-                      <GripVertical className="h-4 w-4 mr-1 opacity-0 group-hover:opacity-50 transition-opacity cursor-grab" />
-                      <item.icon className="h-5 w-5 mr-3" />
-                      <span className="truncate text-left mr-1">
-                        {item.name}
-                      </span>
+                      <GripVertical className="h-3.5 w-3.5 mr-1 opacity-0 group-hover:opacity-50 transition-opacity cursor-grab shrink-0" />
+                      <item.icon className="h-5 w-5 mr-2.5 shrink-0" />
+                      <SidebarNavLabel
+                        text={item.name}
+                        navKey={`grp:${item.name}`}
+                        onTruncationChange={markNavTruncated}
+                        className="text-left mr-1"
+                      />
                       <ChevronDown
                         className={cn(
                           "h-4 w-4 shrink-0 transition-transform duration-200",
@@ -1726,6 +1812,11 @@ export function Sidebar({ transparent = false }: { transparent?: boolean } = {})
                         )}
                       />
                     </button>
+                      </TooltipTrigger>
+                      {truncatedNav[`grp:${item.name}`] && (
+                        <TooltipContent side="right">{item.name}</TooltipContent>
+                      )}
+                    </Tooltip>
 
                     {isExpanded && (
                       <div className="ml-4 mt-1 space-y-1 border-l-2 border-white/25 pl-2">
@@ -1752,13 +1843,15 @@ export function Sidebar({ transparent = false }: { transparent?: boolean } = {})
                                   "opacity-50",
                               )}
                             >
+                              <Tooltip>
+                              <TooltipTrigger asChild>
                               <Link
                                 to={subitem.href}
                                 onClick={() => {
                                   if (pathname !== subitem.href) setNavigatingTo(subitem.href);
                                 }}
                                 className={cn(
-                                  "flex items-center px-3 py-2 rounded-lg text-xs font-medium transition-all duration-200 group",
+                                  "flex items-center px-2.5 py-2 rounded-lg text-xs font-medium transition-all duration-200 group",
                                   isActive || navigatingTo === subitem.href
                                     ? "text-white shadow-md"
                                     : "text-white/70 hover:bg-white/10 hover:text-white backdrop-blur-sm",
@@ -1772,15 +1865,18 @@ export function Sidebar({ transparent = false }: { transparent?: boolean } = {})
                                     : {}
                                 }
                               >
-                                <GripVertical className="h-3 w-3 mr-1 opacity-0 group-hover:opacity-50 transition-opacity cursor-grab" />
+                                <GripVertical className="h-3 w-3 mr-1 opacity-0 group-hover:opacity-50 transition-opacity cursor-grab shrink-0" />
                                 {navigatingTo === subitem.href ? (
-                                  <span className="h-4 w-4 mr-3 rounded-full border-2 border-white/30 border-t-white animate-spin shrink-0" />
+                                  <span className="h-4 w-4 mr-2.5 rounded-full border-2 border-white/30 border-t-white animate-spin shrink-0" />
                                 ) : (
-                                  <subitem.icon className="h-4 w-4 mr-3 shrink-0" />
+                                  <subitem.icon className="h-4 w-4 mr-2.5 shrink-0" />
                                 )}
-                                <span className="flex-1 truncate">
-                                  {subitem.name}
-                                </span>
+                                <SidebarNavLabel
+                                  text={subitem.name}
+                                  navKey={`sub:${subitem.href}`}
+                                  onTruncationChange={markNavTruncated}
+                                  className="flex-1"
+                                />
                                 {navigatingTo === subitem.href ? (
                                   <span className="text-[10px] text-white/50 animate-pulse">carregando...</span>
                                 ) : subitem.badge ? (
@@ -1804,6 +1900,13 @@ export function Sidebar({ transparent = false }: { transparent?: boolean } = {})
                                   </Badge>
                                 ) : null}
                               </Link>
+                              </TooltipTrigger>
+                              {truncatedNav[`sub:${subitem.href}`] && (
+                                <TooltipContent side="right">
+                                  {subitem.name}
+                                </TooltipContent>
+                              )}
+                              </Tooltip>
                             </div>
                           );
                         })}
@@ -1835,31 +1938,41 @@ export function Sidebar({ transparent = false }: { transparent?: boolean } = {})
                           onClick={() => void roadmapPanel.open()}
                           disabled={roadmapPanel.loading}
                           className={cn(
-                            "w-full flex items-center px-3 py-2.5 rounded-lg text-xs font-medium transition-all duration-200 group text-white/80 hover:bg-white/10 hover:text-white backdrop-blur-sm disabled:opacity-60",
+                            "w-full flex items-center px-2.5 py-2.5 rounded-lg text-xs font-medium transition-all duration-200 group text-white/80 hover:bg-white/10 hover:text-white backdrop-blur-sm disabled:opacity-60",
                             collapsed && "justify-center",
                           )}
                         >
                           {!collapsed && (
-                            <GripVertical className="h-4 w-4 mr-1 opacity-0 group-hover:opacity-50 transition-opacity cursor-grab" />
+                            <GripVertical className="h-3.5 w-3.5 mr-1 opacity-0 group-hover:opacity-50 transition-opacity cursor-grab shrink-0" />
                           )}
                           {roadmapPanel.loading ? (
                             <span
                               className={cn(
                                 "h-5 w-5 rounded-full border-2 border-white/30 border-t-white animate-spin shrink-0",
-                                !collapsed && "mr-3",
+                                !collapsed && "mr-2.5",
                               )}
                             />
                           ) : (
-                            <item.icon className={cn("h-5 w-5 shrink-0", !collapsed && "mr-3")} />
+                            <item.icon className={cn("h-5 w-5 shrink-0", !collapsed && "mr-2.5")} />
                           )}
-                          {!collapsed && (
-                            <span className="flex-1 truncate text-left">
-                              {roadmapPanel.loading ? "Abrindo..." : item.name}
-                            </span>
-                          )}
+                          {!collapsed &&
+                            (roadmapPanel.loading ? (
+                              <span className="flex-1 truncate text-left">
+                                Abrindo...
+                              </span>
+                            ) : (
+                              <SidebarNavLabel
+                                text={item.name}
+                                navKey={`ext:${item.name}`}
+                                onTruncationChange={markNavTruncated}
+                                className="flex-1 text-left"
+                              />
+                            ))}
                         </button>
                       </TooltipTrigger>
-                      {collapsed && <TooltipContent side="right">{item.name}</TooltipContent>}
+                      {(collapsed || truncatedNav[`ext:${item.name}`]) && (
+                        <TooltipContent side="right">{item.name}</TooltipContent>
+                      )}
                     </Tooltip>
                   </div>
                 );
@@ -1894,7 +2007,7 @@ export function Sidebar({ transparent = false }: { transparent?: boolean } = {})
                           if (pathname !== item.href) setNavigatingTo(item.href);
                         }}
                         className={cn(
-                          "flex items-center px-3 py-2.5 rounded-lg text-xs font-medium transition-all duration-200 group",
+                          "flex items-center px-2.5 py-2.5 rounded-lg text-xs font-medium transition-all duration-200 group",
                           isActive || isNavigatingHere
                             ? "text-white shadow-lg backdrop-blur-sm"
                             : "text-white/80 hover:bg-white/10 hover:text-white backdrop-blur-sm",
@@ -1910,23 +2023,28 @@ export function Sidebar({ transparent = false }: { transparent?: boolean } = {})
                         }
                       >
                         {!collapsed && (
-                          <GripVertical className="h-4 w-4 mr-1 opacity-0 group-hover:opacity-50 transition-opacity cursor-grab" />
+                          <GripVertical className="h-3.5 w-3.5 mr-1 opacity-0 group-hover:opacity-50 transition-opacity cursor-grab shrink-0" />
                         )}
                         {isNavigatingHere ? (
                           <span
                             className={cn(
                               "h-5 w-5 rounded-full border-2 border-white/30 border-t-white animate-spin shrink-0",
-                              !collapsed && "mr-3",
+                              !collapsed && "mr-2.5",
                             )}
                           />
                         ) : (
                           <item.icon
-                            className={cn("h-5 w-5 shrink-0", !collapsed && "mr-3")}
+                            className={cn("h-5 w-5 shrink-0", !collapsed && "mr-2.5")}
                           />
                         )}
                         {!collapsed && (
                           <>
-                            <span className="flex-1 truncate">{item.name}</span>
+                            <SidebarNavLabel
+                              text={item.name}
+                              navKey={`lnk:${item.href}`}
+                              onTruncationChange={markNavTruncated}
+                              className="flex-1"
+                            />
                             {isNavigatingHere && (
                               <span className="text-[10px] text-white/60 font-normal animate-pulse">
                                 carregando...
@@ -1956,7 +2074,7 @@ export function Sidebar({ transparent = false }: { transparent?: boolean } = {})
                         )}
                       </Link>
                     </TooltipTrigger>
-                    {collapsed && (
+                    {(collapsed || truncatedNav[`lnk:${item.href}`]) && (
                       <TooltipContent side="right">
                         <div className="flex items-center gap-2">
                           {item.name}
@@ -2065,7 +2183,7 @@ export function Sidebar({ transparent = false }: { transparent?: boolean } = {})
           <Dialog open={agencyModalOpen} onOpenChange={setAgencyModalOpen}>
             <DialogContent
               className="!fixed !top-3 !bottom-3 !right-3 !translate-x-0 !translate-y-0 !max-w-none !w-auto flex flex-col p-0 overflow-hidden border-0 shadow-2xl rounded-2xl"
-              style={{ left: "calc(var(--sidebar-width, 216px) + 6px)" }}
+              style={{ left: "calc(var(--sidebar-width, 200px) + 6px)" }}
             >
               {/* Hero header — fixed height */}
               <div className={`bg-linear-to-br ${lvl.gradient} px-8 pt-8 pb-6 text-white relative overflow-hidden shrink-0`}>

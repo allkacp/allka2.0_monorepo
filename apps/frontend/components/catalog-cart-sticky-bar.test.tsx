@@ -60,7 +60,12 @@ describe("CatalogCartStickyBar", () => {
     const { container } = renderBar({}, "/admin/catalogo-produtos");
     const outer = container.firstElementChild as HTMLElement;
     expect(outer.style.left).toBe("240px");
-    expect(outer.className).toContain("lg:pb-[25px]");
+    // Item 6 (complemento 09/09/2026) — molduras compactadas, espelhando o
+    // <main> (App.tsx) e o HeaderSlideScreen: rodapé sem reserva morta e
+    // borda direita só com o mínimo do trilho de ícones (pr-13 ≈ 52px).
+    expect(outer.className).toContain("lg:pb-3");
+    expect(outer.className).toContain("lg:pr-13");
+    expect(outer.className).not.toContain("lg:pb-[25px]");
   });
 
   it("continua funcionando em largura mobile", () => {

@@ -70,7 +70,10 @@ export function CatalogCartStickyBar({
     <div
       className={cn(
         "fixed bottom-0 z-30 flex px-4 sm:px-6 pb-4 pointer-events-none",
-        isShellRoute ? "lg:pb-[25px] lg:pl-[20px] lg:pr-14" : "lg:px-14 lg:pb-12",
+        // Item 6 (complemento 09/09/2026) — mesmas molduras compactadas do
+        // <main> (App.tsx) / HeaderSlideScreen: rodapé sem reserva, borda
+        // direita só com o mínimo do trilho de ícones.
+        isShellRoute ? "lg:pb-3 lg:pl-3 lg:pr-13" : "lg:pl-6 lg:pr-13 lg:pb-6",
       )}
       style={{ left: sidebarWidth, right: 0 }}
     >
