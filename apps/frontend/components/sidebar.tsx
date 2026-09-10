@@ -2006,6 +2006,18 @@ export function Sidebar({ transparent = false }: { transparent?: boolean } = {})
           </div>
         )}
 
+        {/* Item 6 (reunião 09/09/2026) — copyright no rodapé da sidebar,
+            discreto e legível. Saiu da barra fixa que flutuava no fim de todo
+            conteúdo (components/footer.tsx). Só na sidebar expandida — quando
+            recolhida (72px) não há espaço e o texto seria ilegível. */}
+        {!collapsed && (
+          <div className="px-4 pb-3 pt-1 shrink-0">
+            <p className="text-center text-[10px] leading-tight text-white/40">
+              © 2026 ALLKA by Lamego
+            </p>
+          </div>
+        )}
+
         {/* Floating hover buttons outside sidebar, right side, only when collapsed */}
         {collapsed && (
           <div
@@ -2074,7 +2086,7 @@ export function Sidebar({ transparent = false }: { transparent?: boolean } = {})
           <Dialog open={agencyModalOpen} onOpenChange={setAgencyModalOpen}>
             <DialogContent
               className="!fixed !top-3 !bottom-3 !right-3 !translate-x-0 !translate-y-0 !max-w-none !w-auto flex flex-col p-0 overflow-hidden border-0 shadow-2xl rounded-2xl"
-              style={{ left: "calc(var(--sidebar-width, 240px) + 6px)" }}
+              style={{ left: "calc(var(--sidebar-width, 216px) + 6px)" }}
             >
               {/* Hero header — fixed height */}
               <div className={`bg-linear-to-br ${lvl.gradient} px-8 pt-8 pb-6 text-white relative overflow-hidden shrink-0`}>

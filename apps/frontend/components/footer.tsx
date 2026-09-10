@@ -74,9 +74,13 @@ export function Footer({ transparent = false }: { transparent?: boolean } = {}) 
       )}
       style={transparent ? { background: "transparent" } : getFooterStyle()}
     >
-      <div className="container mx-auto px-4 py-1">
-        <p className="text-center text-xs text-white/60">&copy; 2026 ALLKA by Lamego. Todos os direitos reservados.</p>
-      </div>
+      {/* Item 6 (reunião 09/09/2026) — o copyright saiu daqui (barra fixa que
+          "flutuava" no fim de todo conteúdo) e foi pro rodapé da sidebar
+          (components/sidebar.tsx). Esta faixa fininha permanece só como base
+          visual: continua o mesmo gradiente da marca do Header/Sidebar,
+          evitando uma linha de contraste junto ao conteúdo, e ainda alimenta
+          `--footer-height` (usado pelo padding-bottom de <main>). */}
+      <div className="px-4 py-1" aria-hidden="true" />
     </footer>
   )
 }

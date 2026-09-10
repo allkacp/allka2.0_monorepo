@@ -257,12 +257,12 @@ export function ProductFeedbackWidget() {
           breakpoints must meet exactly here or there's a dead zone between
           lg and xl (~1024–1280px, common laptop/tablet-landscape widths)
           where neither trigger would render. */}
-      <div className="hidden lg:block fixed top-[245px] right-[8px] z-50 group">
+      <div className="hidden lg:block fixed top-[245px] right-[8px] z-65 group">
         <button
           type="button"
           onClick={openForm}
           aria-label="Ajuda e sugestões"
-          className="relative flex items-center justify-center h-10 w-10 rounded-xl text-white/70 hover:text-white hover:bg-white/10 transition-colors"
+          className="relative flex items-center justify-center h-9 w-9 rounded-xl text-white/70 hover:text-white hover:bg-white/10 transition-colors"
         >
           <MessageCircleQuestion className="h-5 w-5 shrink-0" />
         </button>

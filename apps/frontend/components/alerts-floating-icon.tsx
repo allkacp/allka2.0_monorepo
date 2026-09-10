@@ -118,7 +118,7 @@ export function AlertsFloatingIcon() {
           onClick={() => setOpen(true)}
           aria-label={ariaLabel}
           title={ariaLabel}
-          className="relative flex items-center justify-center h-10 w-10 transition-colors"
+          className="relative flex items-center justify-center h-9 w-9 transition-colors"
         >
           <AlertTriangle className={cn("h-5 w-5 shrink-0 transition-colors", ICON_COLOR[criticality], pulse)} />
           {unreadCount > 0 && (

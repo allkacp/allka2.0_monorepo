@@ -1208,7 +1208,7 @@
 
   @media (min-width: 1024px) {
     .footer-positioned {
-      left: var(--sidebar-width, 240px);
+      left: var(--sidebar-width, 216px);
     }
   }
 

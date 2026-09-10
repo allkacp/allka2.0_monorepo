@@ -169,9 +169,17 @@ export function SidebarProvider({ children }: { children: ReactNode }) {
 
   const [projectColor, setProjectColor] = useState<string | null>(null);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
-  const SIDEBAR_MIN = 220;
+  // Item 6 (reunião 09/09/2026) — sidebar expandida mais enxuta: o padrão
+  // caiu de 240→216 e o mínimo de 220→200, devolvendo ~24px de largura pro
+  // container central (que é `flex-1` no AppLayout, então ganha o espaço
+  // automaticamente). 216 já era uma largura válida e testada (acima do
+  // antigo mínimo de 220 por só 4px) — logo, ícones, nomes e o pill de
+  // perfil continuam cabendo. Quem já arrastou a barra mantém seu valor
+  // salvo (localStorage "sidebar-width"); só quem nunca mexeu pega o novo
+  // padrão.
+  const SIDEBAR_MIN = 200;
   const SIDEBAR_MAX = 400;
-  const SIDEBAR_DEFAULT = 240;
+  const SIDEBAR_DEFAULT = 216;
   const SIDEBAR_COLLAPSED = 72;
 
   const [customSidebarWidth, setCustomSidebarWidth] = useState<number>(() => {

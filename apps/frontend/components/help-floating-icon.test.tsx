@@ -72,6 +72,19 @@ function findTourCard(title: string) {
 }
 
 describe("HelpFloatingIcon — Tours da plataforma", () => {
+  // Item 6 (reunião 09/09/2026) — trilho de ícones à direita mais compacto:
+  // o botão do trilho no desktop passou de h-10 w-10 para h-9 w-9, criando
+  // um respiro entre ícones (antes ficavam colados) sem perder área de
+  // clique confortável (36px). Continua alcançável por teclado.
+  it("o ícone do trilho (desktop) é compacto (h-9 w-9), clicável e focável", () => {
+    renderHelp();
+    const btn = screen.getAllByRole("button", { name: "Tutoriais guiados" })[0];
+    expect(btn.className).toMatch(/(^|\s)h-9 w-9(\s|$)/);
+    expect(btn.className).not.toMatch(/h-10 w-10/);
+    btn.focus();
+    expect(btn).toHaveFocus();
+  });
+
   it("organiza os tours por categoria (Primeiros passos / Alertas e comunicação / Produtos e catálogo / Memória e lançamento)", async () => {
     api.listTourProgress.mockResolvedValue({ data: [] });
     await openHelp();

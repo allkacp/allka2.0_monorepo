@@ -40,7 +40,7 @@ export function OpenScreensTray() {
             type="button"
             title="Bandeja de Telas"
             aria-label="Bandeja de Telas"
-            className="group relative flex items-center justify-center h-10 w-10 text-white/70 hover:text-white transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white rounded-md"
+            className="group relative flex items-center justify-center h-9 w-9 text-white/70 hover:text-white transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white rounded-md"
           >
             <Layers className="h-5 w-5 shrink-0" />
             {pinned.length > 0 && (

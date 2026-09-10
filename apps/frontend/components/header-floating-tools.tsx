@@ -37,7 +37,7 @@ export function HeaderFloatingTools() {
           type="button"
           onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
           title={theme === "dark" ? "Modo claro" : "Modo escuro"}
-          className="flex items-center justify-center h-10 w-10 text-white/70 hover:text-white transition-colors"
+          className="flex items-center justify-center h-9 w-9 text-white/70 hover:text-white transition-colors"
         >
           {theme === "dark" ? (
             <Sun className="h-5 w-5 shrink-0" />
@@ -57,7 +57,7 @@ export function HeaderFloatingTools() {
             <button
               type="button"
               title="Tamanho da fonte"
-              className="group relative flex items-center justify-center h-10 w-10 text-white/70 hover:text-white transition-colors"
+              className="group relative flex items-center justify-center h-9 w-9 text-white/70 hover:text-white transition-colors"
             >
               <Type className="h-5 w-5 shrink-0" />
               <span className="pointer-events-none absolute top-full right-0 mt-2 whitespace-nowrap rounded-lg bg-gray-900/95 px-2.5 py-1.5 text-[11px] text-white opacity-0 shadow-xl border border-white/10 transition-opacity duration-150 group-hover:opacity-100">
