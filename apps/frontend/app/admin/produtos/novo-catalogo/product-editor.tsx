@@ -12,9 +12,13 @@ import { ConfirmationDialog } from "@/components/confirmation-dialog";
 
 // Construtor de produto do novo catálogo (sprint de produtos, bloco 3/6).
 // Ocupa o container padrão — SEM sobreposição grande sobre outra tela.
-// 9 seções. Uma versão publicada é imutável (a UI bloqueia + o backend
-// reaplica). Ordenação por setas (sem drag-drop). Preço/prazo vêm do
-// backend — nunca calculados aqui.
+//
+// Reunião 10/09/2026 — reformulação de usabilidade: as 10 seções técnicas
+// originais foram AGRUPADAS em 5 etapas de trabalho + 1 área secundária de
+// origem. Nenhuma função foi removida; rotas, payloads, cálculos e regras de
+// publicação continuam idênticos. Uma versão publicada é imutável (a UI
+// bloqueia + o backend reaplica). Ordenação por setas (sem drag-drop).
+// Preço/prazo vêm do backend — nunca calculados aqui.
 
 const EFFECT_TYPES = [
   ["add_deadline_days", "Adicionar dias ao prazo"],
@@ -91,30 +95,71 @@ export function ProductEditor({ productId, onBack }: { productId: string; onBack
       {msg && <p className="text-sm text-blue-600">{msg}</p>}
 
       {version && (
-        <Tabs defaultValue="geral">
+        <Tabs defaultValue="info">
+          {/* Etapas de trabalho (reunião 10/09). As 10 seções originais
+              continuam todas aqui — reagrupadas, nada removido. */}
           <TabsList className="flex-wrap" data-tour-id="catalog2-editor-tabs">
-            <TabsTrigger value="geral">1. Geral</TabsTrigger>
-            <TabsTrigger value="class">2. Classificações</TabsTrigger>
-            <TabsTrigger value="var">3. Variações</TabsTrigger>
-            <TabsTrigger value="add">4. Adicionais</TabsTrigger>
-            <TabsTrigger value="tarefas">5. Tarefas e etapas</TabsTrigger>
-            <TabsTrigger value="cond">6. Prazos e condições</TabsTrigger>
-            <TabsTrigger value="custo">7. Custos e preço</TabsTrigger>
-            <TabsTrigger value="preview">8. Pré-visualização</TabsTrigger>
-            <TabsTrigger value="hist">9. Versões e histórico</TabsTrigger>
-            <TabsTrigger value="origem">10. Origem e revisão</TabsTrigger>
+            <TabsTrigger value="info">Informações do produto</TabsTrigger>
+            <TabsTrigger value="opcoes">Classificação e opções</TabsTrigger>
+            <TabsTrigger value="entrega">Entrega: tarefas, etapas e prazos</TabsTrigger>
+            <TabsTrigger value="precos">Custos e preço</TabsTrigger>
+            <TabsTrigger value="revisao">Revisão e publicação</TabsTrigger>
+            <TabsTrigger value="origem" className="ml-1 border-l border-neutral-300 pl-3 text-neutral-500 dark:border-neutral-700">
+              Origem e importação
+            </TabsTrigger>
           </TabsList>
 
-          <TabsContent value="geral"><GeneralTab version={version} readOnly={readOnly} onSave={(b) => act(() => apiClient.updateCatalog2VersionInfo(version.id, b), "Salvo.")} product={product} onStatus={(s) => act(() => apiClient.setCatalog2ProductStatus(productId, s), "Situação atualizada.")} /></TabsContent>
-          <TabsContent value="class"><ClassTab product={product} refs={refs} onSave={(b) => act(() => apiClient.updateCatalog2Classifications(productId, b), "Classificações salvas.")} /></TabsContent>
-          <TabsContent value="var"><VariationsTab version={version} readOnly={readOnly} act={act} /></TabsContent>
-          <TabsContent value="add"><AddonsTab version={version} readOnly={readOnly} act={act} /></TabsContent>
-          <TabsContent value="tarefas"><TasksTab version={version} readOnly={readOnly} refs={refs} act={act} /></TabsContent>
-          <TabsContent value="cond"><ConditionsTab version={version} readOnly={readOnly} act={act} /></TabsContent>
-          <TabsContent value="custo"><CostTab version={version} refs={refs} act={act} onReloadRefs={load} /></TabsContent>
-          <TabsContent value="preview"><PreviewTab version={version} /></TabsContent>
-          <TabsContent value="hist"><HistoryTab version={version} readOnly={readOnly} act={act} /></TabsContent>
-          <TabsContent value="origem"><OriginReviewTab productId={productId} onChanged={load} /></TabsContent>
+          <TabsContent value="info">
+            <GeneralTab version={version} readOnly={readOnly} onSave={(b) => act(() => apiClient.updateCatalog2VersionInfo(version.id, b), "Salvo.")} product={product} onStatus={(s) => act(() => apiClient.setCatalog2ProductStatus(productId, s), "Situação atualizada.")} />
+          </TabsContent>
+
+          <TabsContent value="opcoes">
+            <StepIntro>Como o produto é classificado e as escolhas que o cliente faz na contratação.</StepIntro>
+            <Tabs defaultValue="class">
+              <TabsList>
+                <TabsTrigger value="class">Classificação</TabsTrigger>
+                <TabsTrigger value="var">Variações</TabsTrigger>
+                <TabsTrigger value="add">Adicionais</TabsTrigger>
+              </TabsList>
+              <TabsContent value="class"><ClassTab product={product} refs={refs} onSave={(b) => act(() => apiClient.updateCatalog2Classifications(productId, b), "Classificações salvas.")} /></TabsContent>
+              <TabsContent value="var"><VariationsTab version={version} readOnly={readOnly} act={act} /></TabsContent>
+              <TabsContent value="add"><AddonsTab version={version} readOnly={readOnly} act={act} /></TabsContent>
+            </Tabs>
+          </TabsContent>
+
+          <TabsContent value="entrega">
+            <StepIntro>Onde se cadastram tarefas, etapas, especialidades, prazos e as condições que ajustam a entrega.</StepIntro>
+            <Tabs defaultValue="tarefas">
+              <TabsList>
+                <TabsTrigger value="tarefas">Tarefas e etapas</TabsTrigger>
+                <TabsTrigger value="cond">Prazos e condições</TabsTrigger>
+              </TabsList>
+              <TabsContent value="tarefas"><TasksTab version={version} readOnly={readOnly} refs={refs} act={act} /></TabsContent>
+              <TabsContent value="cond"><ConditionsTab version={version} readOnly={readOnly} act={act} /></TabsContent>
+            </Tabs>
+          </TabsContent>
+
+          <TabsContent value="precos">
+            <StepIntro>Taxas, margens e valor/hora das especialidades. O preço e o prazo são sempre calculados no servidor.</StepIntro>
+            <CostTab version={version} refs={refs} act={act} onReloadRefs={load} />
+          </TabsContent>
+
+          <TabsContent value="revisao">
+            <StepIntro>Confira como o produto aparece para o cliente e publique a versão quando estiver pronta.</StepIntro>
+            <Tabs defaultValue="preview">
+              <TabsList>
+                <TabsTrigger value="preview">Pré-visualização</TabsTrigger>
+                <TabsTrigger value="hist">Publicação e versões</TabsTrigger>
+              </TabsList>
+              <TabsContent value="preview"><PreviewTab version={version} /></TabsContent>
+              <TabsContent value="hist"><HistoryTab version={version} readOnly={readOnly} act={act} /></TabsContent>
+            </Tabs>
+          </TabsContent>
+
+          <TabsContent value="origem">
+            <StepIntro>Área secundária: de onde este produto veio na importação e as pendências de decisão. Não altera o produto.</StepIntro>
+            <OriginReviewTab productId={productId} onChanged={load} />
+          </TabsContent>
         </Tabs>
       )}
     </div>
@@ -939,6 +984,9 @@ function ProductReadinessPanel({ productId, versionKey }: { productId: string; v
 }
 
 // ── helpers ────────────────────────────────────────────────────────
+function StepIntro({ children }: { children: React.ReactNode }) {
+  return <p className="mt-3 text-xs text-neutral-500 dark:text-neutral-400">{children}</p>;
+}
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return <label className="block space-y-1"><span className="text-xs font-medium text-neutral-600 dark:text-neutral-300">{label}</span>{children}</label>;
 }

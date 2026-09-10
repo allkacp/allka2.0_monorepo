@@ -184,7 +184,7 @@ it("listagem: mostra produtos do NOVO catálogo, situação, etiqueta Novo, e nu
   renderPage()
   expect(await screen.findByText("[TESTE LOCAL] Demo")).toBeInTheDocument()
   expect(screen.getByText(/não conta os 162 operacionais/i)).toBeInTheDocument()
-  expect(screen.getByText(/162 produtos de hoje continuam intactos/i)).toBeInTheDocument()
+  expect(screen.getByText(/catálogo operacional atual, com 162 produtos, não é afetado/i)).toBeInTheDocument()
   expect(screen.getByText("Novo")).toBeInTheDocument()
   expect(screen.getAllByText("Disponível").length).toBeGreaterThan(0)
   // busca é passada ao backend
@@ -192,18 +192,50 @@ it("listagem: mostra produtos do NOVO catálogo, situação, etiqueta Novo, e nu
   await waitFor(() => expect(api.getCatalog2Products).toHaveBeenCalledWith(expect.objectContaining({ q: "demo" })))
 })
 
-it("abre o produto: as 9 seções aparecem; variação e adicional têm abas separadas", async () => {
+it("banner deixa claro que os produtos estão 'Em preparação' e o que falta para publicar", async () => {
+  renderPage()
+  await screen.findByText("[TESTE LOCAL] Demo")
+  expect(screen.getByText(/produtos importados estão/i)).toBeInTheDocument()
+  expect(screen.getAllByText(/em prepara/i).length).toBeGreaterThan(0)
+  expect(screen.getByText(/cadastrar tarefas, etapas e prazos, definir a precificação e passar pela revisão final/i)).toBeInTheDocument()
+})
+
+it("editor: as 10 seções seguem acessíveis, reagrupadas em 5 etapas + Origem", async () => {
   const user = userEvent.setup()
   renderPage()
   await user.click(await screen.findByText("[TESTE LOCAL] Demo"))
 
-  expect(await screen.findByRole("tab", { name: /1\. Geral/ })).toBeInTheDocument()
-  expect(screen.getByRole("tab", { name: /3\. Variações/ })).toBeInTheDocument()
-  expect(screen.getByRole("tab", { name: /4\. Adicionais/ })).toBeInTheDocument()
-  expect(screen.getByRole("tab", { name: /5\. Tarefas e etapas/ })).toBeInTheDocument()
-  expect(screen.getByRole("tab", { name: /6\. Prazos e condições/ })).toBeInTheDocument()
-  expect(screen.getByRole("tab", { name: /7\. Custos e preço/ })).toBeInTheDocument()
-  expect(screen.getByRole("tab", { name: /9\. Versões e histórico/ })).toBeInTheDocument()
+  // 5 etapas de trabalho + área secundária de origem
+  expect(await screen.findByRole("tab", { name: "Informações do produto" })).toBeInTheDocument()
+  expect(screen.getByRole("tab", { name: "Classificação e opções" })).toBeInTheDocument()
+  expect(screen.getByRole("tab", { name: "Entrega: tarefas, etapas e prazos" })).toBeInTheDocument()
+  expect(screen.getByRole("tab", { name: "Custos e preço" })).toBeInTheDocument()
+  expect(screen.getByRole("tab", { name: "Revisão e publicação" })).toBeInTheDocument()
+  expect(screen.getByRole("tab", { name: "Origem e importação" })).toBeInTheDocument()
+
+  // Informações do produto (ex-"1. Geral") abre por padrão
+  expect(await screen.findByText("Título comercial")).toBeInTheDocument()
+
+  // Classificação e opções → 3 sub-abas, cada painel renderiza
+  await user.click(screen.getByRole("tab", { name: "Classificação e opções" }))
+  await user.click(await screen.findByRole("tab", { name: /^Classificação$/ }))
+  expect(await screen.findByText("Classificações 4F")).toBeInTheDocument()
+  await user.click(screen.getByRole("tab", { name: /^Variações$/ }))
+  expect(await screen.findByText(/Escolhas OBRIGATÓRIAS/i)).toBeInTheDocument()
+  await user.click(screen.getByRole("tab", { name: /^Adicionais$/ }))
+  expect(await screen.findByText(/Escolhas OPCIONAIS/i)).toBeInTheDocument()
+
+  // Entrega → tarefas/etapas + prazos/condições, cada painel renderiza
+  await user.click(screen.getByRole("tab", { name: "Entrega: tarefas, etapas e prazos" }))
+  await user.click(await screen.findByRole("tab", { name: /^Tarefas e etapas$/ }))
+  expect(await screen.findByText(/Modelos do catálogo/i)).toBeInTheDocument()
+  await user.click(screen.getByRole("tab", { name: /^Prazos e condições$/ }))
+  expect(await screen.findByText(/Regras tipadas/i)).toBeInTheDocument()
+
+  // Revisão e publicação → pré-visualização + publicação/versões
+  await user.click(screen.getByRole("tab", { name: "Revisão e publicação" }))
+  expect(await screen.findByRole("tab", { name: /^Pré-visualização$/ })).toBeInTheDocument()
+  expect(screen.getByRole("tab", { name: /^Publicação e versões$/ })).toBeInTheDocument()
 })
 
 it("versão publicada é somente leitura (a UI bloqueia edição)", async () => {
@@ -216,11 +248,11 @@ it("versão publicada é somente leitura (a UI bloqueia edição)", async () => 
   expect(await screen.findByText(/Versão publicada — somente leitura/i)).toBeInTheDocument()
 })
 
-it("aba Custos: simulador usa o cálculo do backend e mostra o resumo detalhado", async () => {
+it("etapa Custos e preço: simulador usa o cálculo do backend e mostra o resumo detalhado", async () => {
   const user = userEvent.setup()
   renderPage()
   await user.click(await screen.findByText("[TESTE LOCAL] Demo"))
-  await user.click(await screen.findByRole("tab", { name: /7\. Custos e preço/ }))
+  await user.click(await screen.findByRole("tab", { name: "Custos e preço" }))
   await waitFor(() => expect(api.simulateCatalog2).toHaveBeenCalled())
   expect(await screen.findByText("Custo humano")).toBeInTheDocument()
   expect(screen.getByText("Preço comercial final")).toBeInTheDocument()
@@ -229,20 +261,22 @@ it("aba Custos: simulador usa o cálculo do backend e mostra o resumo detalhado"
   expect(screen.getByText(/Prazo comercial/)).toBeInTheDocument()
 })
 
-it("aba Pré-visualização usa o mesmo endpoint do backend (não recalcula no front)", async () => {
+it("etapa Revisão: Pré-visualização usa o mesmo endpoint do backend (não recalcula no front)", async () => {
   const user = userEvent.setup()
   renderPage()
   await user.click(await screen.findByText("[TESTE LOCAL] Demo"))
-  await user.click(await screen.findByRole("tab", { name: /8\. Pré-visualização/ }))
+  await user.click(await screen.findByRole("tab", { name: "Revisão e publicação" }))
+  await user.click(await screen.findByRole("tab", { name: /^Pré-visualização$/ }))
   await waitFor(() => expect(api.previewCatalog2Version).toHaveBeenCalledWith("v2"))
   expect(await screen.findByText(/mesmo cálculo do backend/i)).toBeInTheDocument()
 })
 
-it("aba Versões: mostra as pendências de validação antes de publicar", async () => {
+it("etapa Revisão: Publicação e versões mostra as pendências de validação antes de publicar", async () => {
   const user = userEvent.setup()
   renderPage()
   await user.click(await screen.findByText("[TESTE LOCAL] Demo"))
-  await user.click(await screen.findByRole("tab", { name: /9\. Versões e histórico/ }))
+  await user.click(await screen.findByRole("tab", { name: "Revisão e publicação" }))
+  await user.click(await screen.findByRole("tab", { name: /^Publicação e versões$/ }))
   expect(await screen.findByText("Selecione um pilar.")).toBeInTheDocument()
   expect(screen.getByText(/Validação para publicar/i)).toBeInTheDocument()
   expect(screen.getByText(/Histórico da versão/i)).toBeInTheDocument()
@@ -270,21 +304,21 @@ it("contagens do resumo vêm de overview.counts (dados reais), não de literal",
   // rótulo do Stat = <div class="text-xs">…</div> (distingue do <option> do filtro)
   const card = (label: string) => screen.getByText(label, { selector: "div.text-xs" }).parentElement as HTMLElement
   // produtos importados finais = 36 (o demo NÃO infla)
-  expect(within(card("Produtos importados (finais)")).getByText("36")).toBeInTheDocument()
-  expect(within(card("Produtos importados (finais)")).getByText(/de demonstração, fora da contagem/i)).toBeInTheDocument()
+  expect(within(card("Importados (finais)")).getByText("36")).toBeInTheDocument()
+  expect(within(card("Importados (finais)")).getByText(/de demonstração, fora da contagem/i)).toBeInTheDocument()
   // tarefas/etapas cadastradas NOS importados = 0 (não fingir completo)
-  expect(within(card("Tarefas cadastradas (nos importados)")).getByText("0")).toBeInTheDocument()
-  expect(within(card("Etapas cadastradas (nos importados)")).getByText("0")).toBeInTheDocument()
+  expect(within(card("Tarefas (nos importados)")).getByText("0")).toBeInTheDocument()
+  expect(within(card("Etapas (nos importados)")).getByText("0")).toBeInTheDocument()
   expect(card("Em preparação")).toHaveTextContent("36")
   expect(card("Publicados")).toHaveTextContent("1")
-  expect(card("Produtos com pendências")).toHaveTextContent("36")
+  expect(card("Com pendências")).toHaveTextContent("36")
 })
 
 it("não usa mensagem falsa 'ainda não foram importados' quando há importação", async () => {
   renderPage()
   await screen.findByText("[TESTE LOCAL] Demo")
   expect(screen.queryByText(/ainda não foram importados/i)).not.toBeInTheDocument()
-  expect(screen.getByText(/162 produtos de hoje continuam intactos/i)).toBeInTheDocument()
+  expect(screen.getByText(/catálogo operacional atual, com 162 produtos, não é afetado/i)).toBeInTheDocument()
 })
 
 it("aba Custos: produto SEM tarefas ativas mostra 'base de custo indefinida', nunca R$ 0,00 como preço válido", async () => {
@@ -312,7 +346,7 @@ it("aba Custos: produto SEM tarefas ativas mostra 'base de custo indefinida', nu
   const user = userEvent.setup()
   renderPage()
   await user.click(await screen.findByText("[TESTE LOCAL] Demo"))
-  await user.click(await screen.findByRole("tab", { name: /7\. Custos e preço/ }))
+  await user.click(await screen.findByRole("tab", { name: "Custos e preço" }))
   await waitFor(() => expect(api.simulateCatalog2).toHaveBeenCalled())
   expect(await screen.findByText(/base de custo indefinida/i)).toBeInTheDocument()
   expect(screen.getByText(/Cadastre tarefas, especialidades, tempos e prazo/i)).toBeInTheDocument()
@@ -321,18 +355,18 @@ it("aba Custos: produto SEM tarefas ativas mostra 'base de custo indefinida', nu
   expect(screen.queryByText(/BRL 0\.00/)).not.toBeInTheDocument()
 })
 
-it("aba Custos: produto COM tarefas válidas mantém a composição detalhada normal", async () => {
+it("etapa Custos e preço: produto COM tarefas válidas mantém a composição detalhada normal", async () => {
   const user = userEvent.setup()
   renderPage()
   await user.click(await screen.findByText("[TESTE LOCAL] Demo"))
-  await user.click(await screen.findByRole("tab", { name: /7\. Custos e preço/ }))
+  await user.click(await screen.findByRole("tab", { name: "Custos e preço" }))
   await waitFor(() => expect(api.simulateCatalog2).toHaveBeenCalled())
   expect(await screen.findByText("Custo humano")).toBeInTheDocument()
   expect(screen.getByText("Preço comercial final")).toBeInTheDocument()
   expect(screen.queryByText(/base de custo indefinida/i)).not.toBeInTheDocument()
 })
 
-it("aba Custos: avisos de configuração provisória/seed e valor/hora de teste", async () => {
+it("etapa Custos e preço: avisos de configuração provisória/seed e valor/hora de teste", async () => {
   api.getCatalog2PricingSettings.mockResolvedValue({
     id: "default", tax_percent: 6, commission_percent: 10, operational_fee_percent: 5, profit_margin_percent: 30,
     human_review_percent: 15, currency: "BRL",
@@ -347,7 +381,7 @@ it("aba Custos: avisos de configuração provisória/seed e valor/hora de teste"
   const user = userEvent.setup()
   renderPage()
   await user.click(await screen.findByText("[TESTE LOCAL] Demo"))
-  await user.click(await screen.findByRole("tab", { name: /7\. Custos e preço/ }))
+  await user.click(await screen.findByRole("tab", { name: "Custos e preço" }))
   expect(await screen.findByText(/sem responsável comercial registrado/i)).toBeInTheDocument()
   expect(screen.getByText(/Base de incidência dos componentes ainda não definida/i)).toBeInTheDocument()
   expect(screen.getByText(/valor de teste — não é decisão comercial/i)).toBeInTheDocument()
@@ -376,26 +410,29 @@ it("prontidão por produto: atalho abre e mostra os itens reais do backend", asy
   expect(api.getCatalog2ProductReadiness).toHaveBeenCalledWith("prod1")
 })
 
-it("listagem: filtros da importação e badges de pendência por produto", async () => {
+it("listagem: filtros avançados vão ao backend; detalhes técnicos saem da linha principal", async () => {
+  const user = userEvent.setup()
   renderPage()
   await screen.findByText("[TESTE LOCAL] Demo")
-  // filtro por revisão da Rose vai ao backend
+  // filtros avançados ficam atrás de "Mais filtros" — abrir e usar
+  await user.click(screen.getByText(/^Mais filtros/))
   await userEvent.selectOptions(screen.getByDisplayValue("Revisão da Rose (todas)"), "true")
   await waitFor(() => expect(api.getCatalog2Products).toHaveBeenCalledWith(expect.objectContaining({ rose_reviewed: "true" })))
-  // filtro por tipo de pendência
   await userEvent.selectOptions(screen.getByDisplayValue("Tipo de pendência (todas)"), "price_pending")
   await waitFor(() => expect(api.getCatalog2Products).toHaveBeenCalledWith(expect.objectContaining({ pendency: "price_pending" })))
-  // badges na linha do produto
-  expect(screen.getByText(/#3/)).toBeInTheDocument()
-  expect(screen.getByText("Rose ✓")).toBeInTheDocument()
+  // pendências aparecem como badge na linha (texto de negócio, não código)
   expect(screen.getAllByText("preço").length).toBeGreaterThan(0)
+  // slug / origem / #index NÃO poluem a linha — ficam em "Detalhes técnicos"
+  expect(screen.queryByText(/slug demo/)).not.toBeInTheDocument()
+  await user.click(screen.getAllByText("Detalhes técnicos")[0])
+  expect(screen.getByText(/slug demo · origem #3/)).toBeInTheDocument()
 })
 
-it("aba 10 Origem e revisão: planilha, Rose, divergência, preço histórico e resolver pendência", async () => {
+it("aba Origem e importação: planilha, Rose, divergência, preço histórico e resolver pendência", async () => {
   const user = userEvent.setup()
   renderPage()
   await user.click(await screen.findByText("[TESTE LOCAL] Demo"))
-  await user.click(await screen.findByRole("tab", { name: /10\. Origem e revisão/ }))
+  await user.click(await screen.findByRole("tab", { name: "Origem e importação" }))
   expect(await screen.findByRole("heading", { name: /Planilha principal/i })).toBeInTheDocument()
   expect(screen.getByRole("heading", { name: /Referência histórica de preço/i })).toBeInTheDocument()
   expect(screen.getAllByText(/preço final/i).length).toBeGreaterThan(0)
