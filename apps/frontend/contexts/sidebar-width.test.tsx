@@ -86,4 +86,28 @@ describe("SidebarProvider — largura da sidebar (Item 6)", () => {
     renderProbe();
     expect(screen.getByTestId("w").textContent).toBe("216");
   });
+
+  it("migra o DEFAULT LEGADO 240 → 216 (não era escolha deliberada) e reescreve o localStorage", () => {
+    localStorage.setItem("sidebar-width", "240");
+    renderProbe();
+    expect(screen.getByTestId("w").textContent).toBe("216");
+    expect(localStorage.getItem("sidebar-width")).toBe("216"); // migração persistida, não re-migra
+  });
+
+  it("preserva larguras REALMENTE personalizadas pelo usuário (diferentes do default legado)", () => {
+    for (const custom of ["250", "300", "205", "399"]) {
+      localStorage.setItem("sidebar-width", custom);
+      cleanup();
+      renderProbe();
+      expect(screen.getByTestId("w").textContent).toBe(custom);
+      expect(localStorage.getItem("sidebar-width")).toBe(custom); // intacto
+    }
+  });
+
+  it("220 (antigo MÍNIMO, alcançado arrastando até o batente) é preservado — só o 240 migra", () => {
+    localStorage.setItem("sidebar-width", "220");
+    renderProbe();
+    expect(screen.getByTestId("w").textContent).toBe("220");
+    expect(localStorage.getItem("sidebar-width")).toBe("220");
+  });
 });

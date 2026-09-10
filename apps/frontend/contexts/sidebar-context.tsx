@@ -181,12 +181,29 @@ export function SidebarProvider({ children }: { children: ReactNode }) {
   const SIDEBAR_MAX = 400;
   const SIDEBAR_DEFAULT = 216;
   const SIDEBAR_COLLAPSED = 72;
+  // Padrões ANTIGOS conhecidos, gravados por builds anteriores sem serem uma
+  // escolha deliberada do usuário — migram pro novo padrão (216). Qualquer
+  // outro valor salvo (o usuário arrastou a barra) é preservado como está.
+  // Só o antigo default (240) entra aqui: 220 era o MÍNIMO antigo e chegar
+  // nele exigia arrastar a barra até o batente — isso É deliberado.
+  const LEGACY_DEFAULT_WIDTHS = new Set([240]);
 
   const [customSidebarWidth, setCustomSidebarWidth] = useState<number>(() => {
     try {
       const saved = localStorage.getItem("sidebar-width");
-      const parsed = saved ? Number(saved) : SIDEBAR_DEFAULT;
-      if (!isFinite(parsed) || parsed < SIDEBAR_MIN) return SIDEBAR_DEFAULT;
+      if (saved === null) return SIDEBAR_DEFAULT;
+      const parsed = Number(saved);
+      if (!isFinite(parsed)) return SIDEBAR_DEFAULT;
+      // Migração one-shot do default legado (240 → 216). Reescreve o
+      // localStorage pra não re-migrar a cada carga e pra o valor visível
+      // bater com o efetivo.
+      if (LEGACY_DEFAULT_WIDTHS.has(parsed)) {
+        try {
+          localStorage.setItem("sidebar-width", String(SIDEBAR_DEFAULT));
+        } catch {}
+        return SIDEBAR_DEFAULT;
+      }
+      if (parsed < SIDEBAR_MIN) return SIDEBAR_DEFAULT;
       if (parsed > SIDEBAR_MAX) return SIDEBAR_MAX;
       return parsed;
     } catch {

@@ -51,19 +51,45 @@ vi.mock("@/contexts/sidebar-context", () => ({
 import { Sidebar } from "@/components/sidebar";
 import { Footer } from "@/components/footer";
 
-describe("Item 6 — copyright no rodapé da sidebar", () => {
-  it("a sidebar expandida mostra o copyright discreto no rodapé", () => {
-    render(
-      <MemoryRouter initialEntries={["/admin/dashboard"]}>
-        <Sidebar />
-      </MemoryRouter>,
-    );
+function renderSidebar() {
+  return render(
+    <MemoryRouter initialEntries={["/admin/dashboard"]}>
+      <Sidebar />
+    </MemoryRouter>,
+  );
+}
+
+describe("Item 6 — copyright ancorado no rodapé DA sidebar (correção)", () => {
+  it("mostra o copyright discreto, com marca e ano", () => {
+    renderSidebar();
     const cr = screen.getByText(/ALLKA by Lamego/i);
     expect(cr).toBeInTheDocument();
     expect(cr.textContent).toMatch(/©?\s*2026\s*ALLKA by Lamego/i);
   });
 
-  it("o Footer (barra do fim do conteúdo) NÃO mostra mais o copyright", () => {
+  it("o copyright fica DENTRO do data-sidebar-root (coluna flex h-screen) — não como irmão depois dele, senão a página estoura a altura e o Header some", () => {
+    const { container } = renderSidebar();
+    const root = container.querySelector("[data-sidebar-root]") as HTMLElement;
+    expect(root).toBeInTheDocument();
+
+    const cr = screen.getByText(/ALLKA by Lamego/i);
+    // ancorado dentro da coluna da sidebar
+    expect(cr.closest("[data-sidebar-root]")).toBe(root);
+
+    // e vem DEPOIS da navegação e DEPOIS do pill de perfil (ou seja, no fim vertical)
+    const nav = root.querySelector('nav[data-tour-id="main-navigation"]') as HTMLElement;
+    const rolePill = screen.getByText("Administrador");
+    expect(nav.compareDocumentPosition(cr) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(rolePill.compareDocumentPosition(cr) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+
+    // nada com o copyright renderiza como irmão logo APÓS o data-sidebar-root
+    const afterRoot = root.nextElementSibling as HTMLElement | null;
+    if (afterRoot) {
+      expect(afterRoot.textContent ?? "").not.toMatch(/ALLKA by Lamego/i);
+    }
+  });
+
+  it("o Footer (barra do fim do conteúdo) NÃO mostra mais o copyright — não é faixa fixa", () => {
     render(<Footer />);
     expect(screen.queryByText(/ALLKA by Lamego/i)).not.toBeInTheDocument();
     expect(screen.queryByText(/direitos reservados/i)).not.toBeInTheDocument();
