@@ -9,8 +9,10 @@ import { Input } from "@/components/ui/input";
 import { ConfirmationDialog } from "@/components/confirmation-dialog";
 import { ProductEditor } from "@/app/admin/produtos/novo-catalogo/product-editor";
 
-// Novo catálogo — CONSTRUTOR administrativo (sprint de produtos, bloco 3/6).
+// Preparação de Produtos — área administrativa dos produtos finais da
+// plataforma (catalog2) antes da publicação. NÃO é um segundo catálogo.
 // Só Admin Master (o backend reaplica). Não mostra os 162 produtos antigos.
+// Rota /admin/produtos/novo-catalogo mantida por ora (deep links).
 
 const STATUS_LABEL: Record<string, string> = {
   em_preparacao: "Em preparação",
@@ -18,11 +20,12 @@ const STATUS_LABEL: Record<string, string> = {
   temporariamente_inativo: "Suspenso",
   arquivado: "Arquivado",
 };
+// Pequenos acentos de status — chips sólidos legíveis nos dois temas.
 const STATUS_TONE: Record<string, string> = {
-  em_preparacao: "bg-neutral-100 text-neutral-700",
-  disponivel: "bg-emerald-100 text-emerald-700",
-  temporariamente_inativo: "bg-amber-100 text-amber-700",
-  arquivado: "bg-neutral-200 text-neutral-500",
+  em_preparacao: "bg-muted text-muted-foreground",
+  disponivel: "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-200",
+  temporariamente_inativo: "bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-200",
+  arquivado: "bg-muted text-muted-foreground",
 };
 
 // Estados de preparo e pendências da importação dos 36 (bloco 4/6).
@@ -121,15 +124,15 @@ export default function AdminNovoCatalogoPage() {
     catch (e: any) { setMsg(e?.message ?? "Falha."); }
   }
 
-  if (state === "loading") return <Centered><Loader2 className="h-5 w-5 animate-spin" /> Carregando…</Centered>;
-  if (state === "forbidden") return <Centered><Lock className="h-5 w-5" /> Esta área é exclusiva do Admin Master neste momento.</Centered>;
-  if (state === "error") return <Centered>Não foi possível carregar.</Centered>;
+  if (state === "loading") return <Shell><Centered><Loader2 className="h-5 w-5 animate-spin" /> Carregando…</Centered></Shell>;
+  if (state === "forbidden") return <Shell><Centered><Lock className="h-5 w-5" /> Esta área é exclusiva do Admin Master neste momento.</Centered></Shell>;
+  if (state === "error") return <Shell><Centered>Não foi possível carregar.</Centered></Shell>;
 
   if (openProductId) {
     return (
-      <div className="mx-auto max-w-5xl p-4 md:p-6">
+      <Shell>
         <ProductEditor productId={openProductId} onBack={() => { setOpenProductId(null); void loadList(); void bootstrap(); }} />
-      </div>
+      </Shell>
     );
   }
 
@@ -138,187 +141,183 @@ export default function AdminNovoCatalogoPage() {
   const advancedFilters = [pillarId, categoryId, origin, roseReviewed, reviewState, pendency].filter(Boolean).length;
 
   return (
-    <div className="mx-auto max-w-5xl space-y-5 p-4 md:p-6">
-      <header className="flex flex-wrap items-start justify-between gap-3" data-tour-id="catalog2-admin-header">
-        <div className="space-y-1">
-          <h1 className="flex items-center gap-2 text-xl font-semibold text-neutral-900 dark:text-neutral-50">
-            <Boxes className="h-5 w-5" /> Novo catálogo
-          </h1>
-          <p className="text-sm text-neutral-500">
-            Área do Admin Master para preparar os produtos do catálogo novo. Separada do catálogo operacional atual e do
-            Legacy.
-          </p>
-        </div>
-        <a
-          href="/admin/catalog2?preview=1"
-          className="inline-flex items-center gap-1 rounded border border-neutral-300 px-3 py-1.5 text-sm hover:bg-neutral-50 dark:border-neutral-700 dark:hover:bg-neutral-800"
-        >
-          Pré-visualizar como cliente
-        </a>
-      </header>
-
-      {/* Situação: o que os produtos são hoje e o que falta para publicar.
-          Consolida os avisos que antes se repetiam em vários pontos da tela. */}
-      <section className="rounded-lg border border-neutral-200 bg-neutral-50 p-3 text-sm dark:border-neutral-800 dark:bg-neutral-900">
-        <p className="font-medium text-neutral-800 dark:text-neutral-100">
-          Os produtos importados estão <strong>em preparação</strong>.
-        </p>
-        <p className="mt-0.5 text-xs text-neutral-500">
-          Para publicar cada produto: cadastrar tarefas, etapas e prazos, definir a precificação e passar pela revisão
-          final. O catálogo operacional atual, com 162 produtos, não é afetado por esta tela.
-        </p>
-      </section>
-
-      {/* Todos os números vêm de `overview.counts` (contagem real das tabelas
-          catalog2). O produto de demonstração ("[TESTE LOCAL] …") não entra
-          nas contagens de avanço dos produtos finais importados. */}
-      <div className="space-y-2">
-        <p className="text-xs font-semibold uppercase tracking-wide text-neutral-500">Números reais</p>
-        <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-          <Stat k="Importados (finais)" v={c.final_imported_products ?? c.imported_products ?? 0}
-            hint={`não conta os 162 operacionais${c.test_local_products ? ` · + ${c.test_local_products} de demonstração, fora da contagem` : ""}`} />
-          <Stat k="Em preparação" v={c.products_in_preparation ?? 0} />
-          <Stat k="Publicados" v={c.products_published ?? 0} />
-          <Stat k="Tarefas (nos importados)" v={c.tasks_in_final_imported ?? 0} hint={`${c.tasks ?? 0} no catálogo todo`} />
-          <Stat k="Etapas (nos importados)" v={c.steps_in_final_imported ?? 0} hint={`${c.steps ?? 0} no catálogo todo`} />
-          <Stat k="Com pendências" v={c.products_with_pendencies ?? 0} />
-        </div>
-        <details className="rounded-lg border border-neutral-200 dark:border-neutral-800">
-          <summary className="cursor-pointer select-none px-3 py-2 text-xs font-medium text-neutral-600 dark:text-neutral-300">
-            Estrutura do catálogo
-          </summary>
-          <div className="grid grid-cols-2 gap-2 border-t border-neutral-200 p-3 sm:grid-cols-3 dark:border-neutral-800">
-            <Stat k="Produtos (total)" v={c.products} hint="importados + demonstração" />
-            <Stat k="Pilares" v={c.pillars} />
-            <Stat k="Classificações 4F" v={c.four_f} />
-            <Stat k="Categorias" v={c.categories} />
-            <Stat k="Especialidades" v={c.specialties} />
-            <Stat k="Versões em rascunho" v={c.draft_versions} />
-          </div>
-        </details>
-      </div>
-
-      {importSummary?.has_import && (
-        <details className="rounded-lg border border-indigo-200 bg-indigo-50/40 dark:border-indigo-900 dark:bg-indigo-950/20">
-          <summary className="flex cursor-pointer select-none flex-wrap items-center justify-between gap-2 px-3 py-2">
-            <h2 className="text-sm font-semibold text-indigo-900 dark:text-indigo-200">Importação de produtos definitivos</h2>
-            <span className="text-xs text-indigo-700 dark:text-indigo-300">
-              {/* Números vêm da importação real (importSummary), nunca de "36" fixo. */}
-              {importSummary.count_matches_expected
-                ? `✓ ${importSummary.total_imported}/${importSummary.expected ?? importSummary.total_imported} importados`
-                : `⚠ ${importSummary.total_imported}/${importSummary.expected ?? importSummary.total_imported} importados`}
-              {" · "}{importSummary.published_count} publicado(s)
-            </span>
-          </summary>
-          <div className="space-y-2 border-t border-indigo-200 p-3 dark:border-indigo-900">
-            <p className="text-xs text-indigo-800/90 dark:text-indigo-200/90">
-              {overview.import?.message ??
-                `${overview.counts.final_imported_products ?? importSummary.total_imported} produto(s) importado(s) para preparação. Aguardando tarefas, prazos, precificação e revisão para publicação.`}
-            </p>
-            <div className="grid grid-cols-2 gap-2 text-xs sm:grid-cols-4">
-              <SummaryCell k="Revisados pela Rose" v={`${importSummary.rose_reviewed} / ${importSummary.total_imported}`} />
-              <SummaryCell k="Sem revisão da Rose" v={importSummary.not_rose_reviewed} />
-              <SummaryCell k="Decisões pendentes" v={importSummary.decisions_pending} />
-              <SummaryCell k="Editados por humano" v={importSummary.human_edited} />
-            </div>
-            <div className="flex flex-wrap gap-1.5">
-              {Object.entries(importSummary.by_pendency ?? {}).map(([k, n]) => (
-                <button
-                  key={k}
-                  className={`rounded-full border px-2 py-0.5 text-[11px] ${pendency === k ? "border-indigo-500 bg-indigo-100 text-indigo-800" : "border-indigo-200 text-indigo-700"}`}
-                  onClick={() => setPendency((cur) => (cur === k ? "" : k))}
-                >
-                  {PENDENCY_LABEL[k] ?? k}: {n as number}
-                </button>
-              ))}
-            </div>
-            <p className="text-[11px] text-indigo-700/80 dark:text-indigo-300/80">
-              Fonte principal <code>{importSummary.last_batch?.source_main?.name}</code> · checksum{" "}
-              <code>{String(importSummary.last_batch?.source_main?.checksum ?? "").slice(0, 12)}…</code> · regra{" "}
-              {importSummary.last_batch?.rule_version} · lote {importSummary.last_batch?.status}. Os 162 produtos
-              operacionais seguem intactos.
+    <Shell>
+      <div className="space-y-5">
+        <header className="flex flex-wrap items-start justify-between gap-3" data-tour-id="catalog2-admin-header">
+          <div className="space-y-1">
+            <h1 className="flex items-center gap-2 text-xl font-semibold text-foreground">
+              <Boxes className="h-5 w-5" /> Preparação de Produtos
+            </h1>
+            <p className="text-sm text-muted-foreground">
+              Preparação dos produtos finais da plataforma antes da publicação — cadastro de tarefas, etapas, prazos e
+              preço. Não é um segundo catálogo.
             </p>
           </div>
-        </details>
-      )}
+          <a
+            href="/admin/catalog2?preview=1"
+            className="inline-flex items-center gap-1 rounded-md border bg-background px-3 py-1.5 text-sm text-foreground hover:bg-muted"
+          >
+            Pré-visualizar como cliente
+          </a>
+        </header>
 
-      {readiness && <ReadinessPanel readiness={readiness} />}
+        {/* Resumo de status ÚNICO. Fundo neutro sólido, sem repetir o estado
+            nos cards/blocos abaixo. */}
+        <p className="rounded-lg bg-muted px-3 py-2 text-sm text-foreground">
+          Estes são os produtos finais da plataforma, ainda <strong>em preparação</strong>. Para publicar cada um:
+          tarefas, etapas, prazos, precificação e revisão final. O catálogo operacional atual, com 162 produtos, não é
+          afetado — ainda há projetos ativos ligados a ele.
+        </p>
 
-      <div className="space-y-2">
-        <div className="flex flex-wrap items-center gap-2">
-          <div className="relative min-w-[220px] flex-1">
-            <Search className="absolute left-2 top-2.5 h-4 w-4 text-neutral-400" />
-            <Input className="pl-8" placeholder="Buscar por nome ou slug" aria-label="Buscar produtos" value={q} onChange={(e) => setQ(e.target.value)} />
+        {/* Todos os números vêm de `overview.counts` (contagem real das tabelas
+            catalog2). O produto de demonstração ("[TESTE LOCAL] …") não entra
+            nas contagens de avanço dos produtos finais importados. */}
+        <div className="space-y-2">
+          <div className="grid grid-cols-2 gap-px overflow-hidden rounded-lg border bg-border sm:grid-cols-3">
+            <Stat k="Importados (finais)" v={c.final_imported_products ?? c.imported_products ?? 0}
+              hint={`não conta os 162 operacionais${c.test_local_products ? ` · + ${c.test_local_products} de demonstração, fora da contagem` : ""}`} />
+            <Stat k="Em preparação" v={c.products_in_preparation ?? 0} />
+            <Stat k="Publicados" v={c.products_published ?? 0} tone={(c.products_published ?? 0) > 0 ? "ok" : undefined} />
+            <Stat k="Tarefas (nos importados)" v={c.tasks_in_final_imported ?? 0} hint={`${c.tasks ?? 0} no catálogo todo`} />
+            <Stat k="Etapas (nos importados)" v={c.steps_in_final_imported ?? 0} hint={`${c.steps ?? 0} no catálogo todo`} />
+            <Stat k="Com pendências" v={c.products_with_pendencies ?? 0} tone={(c.products_with_pendencies ?? 0) > 0 ? "warn" : undefined} />
           </div>
-          <label className="sr-only" htmlFor="f-status">Situação</label>
-          <select id="f-status" className="rounded border border-neutral-300 bg-transparent px-2 py-1.5 text-sm dark:border-neutral-700" value={status} onChange={(e) => setStatus(e.target.value)}>
-            <option value="">Todas as situações</option>
-            {Object.entries(STATUS_LABEL).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
-          </select>
-          <label className="sr-only" htmlFor="f-sort">Ordenar</label>
-          <select id="f-sort" className="rounded border border-neutral-300 bg-transparent px-2 py-1.5 text-sm dark:border-neutral-700" value={sort} onChange={(e) => setSort(e.target.value)}>
-            <option value="name">Nome A–Z</option>
-            <option value="name_desc">Nome Z–A</option>
-            <option value="updated">Alterado recentemente</option>
-            <option value="created">Criado recentemente</option>
-          </select>
-          <Button data-tour-id="catalog2-admin-create" size="sm" onClick={() => setConfirm({ title: "Criar produto", message: "Um novo produto (em preparação) com uma versão rascunho será criado.", onConfirm: () => createProduct() })}>
-            <Plus className="h-4 w-4" /> Criar produto
-          </Button>
+          <details className="rounded-lg border">
+            <summary className="cursor-pointer select-none px-3 py-2 text-xs font-medium text-muted-foreground">
+              Estrutura do catálogo
+            </summary>
+            <div className="grid grid-cols-2 gap-px overflow-hidden border-t bg-border sm:grid-cols-3">
+              <Stat k="Produtos (total)" v={c.products} hint="importados + demonstração" />
+              <Stat k="Pilares" v={c.pillars} />
+              <Stat k="Classificações 4F" v={c.four_f} />
+              <Stat k="Categorias" v={c.categories} />
+              <Stat k="Especialidades" v={c.specialties} />
+              <Stat k="Versões em rascunho" v={c.draft_versions} />
+            </div>
+          </details>
         </div>
 
-        <details className="rounded-lg border border-neutral-200 dark:border-neutral-800">
-          <summary className="cursor-pointer select-none px-3 py-2 text-xs font-medium text-neutral-600 dark:text-neutral-300">
-            Mais filtros{advancedFilters > 0 ? ` (${advancedFilters} ativo${advancedFilters > 1 ? "s" : ""})` : ""}
-          </summary>
-          <div className="flex flex-wrap gap-2 border-t border-neutral-200 p-3 dark:border-neutral-800">
-            <label className="sr-only" htmlFor="f-pillar">Pilar</label>
-            <select id="f-pillar" className="rounded border border-neutral-300 bg-transparent px-2 py-1.5 text-sm dark:border-neutral-700" value={pillarId} onChange={(e) => setPillarId(e.target.value)}>
-              <option value="">Todos os pilares</option>{refs.pillars.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+        {importSummary?.has_import && (
+          <details className="rounded-lg border">
+            <summary className="flex cursor-pointer select-none flex-wrap items-center justify-between gap-2 px-3 py-2">
+              <h2 className="text-sm font-semibold text-foreground">Importação de produtos definitivos</h2>
+              <span className="text-xs text-muted-foreground">
+                {/* Números vêm da importação real (importSummary), nunca de "36" fixo. */}
+                {importSummary.count_matches_expected
+                  ? `✓ ${importSummary.total_imported}/${importSummary.expected ?? importSummary.total_imported} importados`
+                  : `⚠ ${importSummary.total_imported}/${importSummary.expected ?? importSummary.total_imported} importados`}
+                {" · "}{importSummary.published_count} publicado(s)
+              </span>
+            </summary>
+            <div className="space-y-2 border-t p-3 text-muted-foreground">
+              <p className="text-xs">
+                {overview.import?.message ??
+                  `${overview.counts.final_imported_products ?? importSummary.total_imported} produto(s) importado(s) para preparação. Aguardando tarefas, prazos, precificação e revisão para publicação.`}
+              </p>
+              <div className="grid grid-cols-2 gap-2 text-xs sm:grid-cols-4">
+                <SummaryCell k="Revisados pela Rose" v={`${importSummary.rose_reviewed} / ${importSummary.total_imported}`} />
+                <SummaryCell k="Sem revisão da Rose" v={importSummary.not_rose_reviewed} />
+                <SummaryCell k="Decisões pendentes" v={importSummary.decisions_pending} />
+                <SummaryCell k="Editados por humano" v={importSummary.human_edited} />
+              </div>
+              <div className="flex flex-wrap gap-1.5">
+                {Object.entries(importSummary.by_pendency ?? {}).map(([k, n]) => (
+                  <button
+                    key={k}
+                    className={`rounded-full border px-2 py-0.5 text-[11px] ${pendency === k ? "border-foreground bg-muted text-foreground" : "text-muted-foreground hover:bg-muted"}`}
+                    onClick={() => setPendency((cur) => (cur === k ? "" : k))}
+                  >
+                    {PENDENCY_LABEL[k] ?? k}: {n as number}
+                  </button>
+                ))}
+              </div>
+              <p className="text-[11px]">
+                Fonte principal <code>{importSummary.last_batch?.source_main?.name}</code> · checksum{" "}
+                <code>{String(importSummary.last_batch?.source_main?.checksum ?? "").slice(0, 12)}…</code> · regra{" "}
+                {importSummary.last_batch?.rule_version} · lote {importSummary.last_batch?.status}. Os 162 produtos
+                operacionais seguem intactos.
+              </p>
+            </div>
+          </details>
+        )}
+
+        {readiness && <ReadinessPanel readiness={readiness} />}
+
+        <div className="space-y-2">
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="relative min-w-[200px] flex-1">
+              <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
+              <Input className="pl-8" placeholder="Buscar por nome ou slug" aria-label="Buscar produtos" value={q} onChange={(e) => setQ(e.target.value)} />
+            </div>
+            <label className="sr-only" htmlFor="f-status">Situação</label>
+            <select id="f-status" className={SELECT_CLS} value={status} onChange={(e) => setStatus(e.target.value)}>
+              <option value="">Todas as situações</option>
+              {Object.entries(STATUS_LABEL).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
             </select>
-            <label className="sr-only" htmlFor="f-cat">Categoria</label>
-            <select id="f-cat" className="rounded border border-neutral-300 bg-transparent px-2 py-1.5 text-sm dark:border-neutral-700" value={categoryId} onChange={(e) => setCategoryId(e.target.value)}>
-              <option value="">Todas as categorias</option>{refs.categories.map((c2) => <option key={c2.id} value={c2.id}>{c2.name}</option>)}
+            <label className="sr-only" htmlFor="f-sort">Ordenar</label>
+            <select id="f-sort" className={SELECT_CLS} value={sort} onChange={(e) => setSort(e.target.value)}>
+              <option value="name">Nome A–Z</option>
+              <option value="name_desc">Nome Z–A</option>
+              <option value="updated">Alterado recentemente</option>
+              <option value="created">Criado recentemente</option>
             </select>
-            <label className="sr-only" htmlFor="f-origin">Origem</label>
-            <select id="f-origin" className="rounded border border-neutral-300 bg-transparent px-2 py-1.5 text-sm dark:border-neutral-700" value={origin} onChange={(e) => setOrigin(e.target.value)}>
-              <option value="">Toda origem</option>
-              <option value="existente">Só existentes</option>
-              <option value="novo">Só novos</option>
-              <option value="reativado">Só reativados</option>
-            </select>
-            <label className="sr-only" htmlFor="f-rose">Revisão da Rose</label>
-            <select id="f-rose" className="rounded border border-neutral-300 bg-transparent px-2 py-1.5 text-sm dark:border-neutral-700" value={roseReviewed} onChange={(e) => setRoseReviewed(e.target.value)}>
-              <option value="">Revisão da Rose (todas)</option>
-              <option value="true">Revisado pela Rose</option>
-              <option value="false">Sem revisão da Rose</option>
-            </select>
-            <label className="sr-only" htmlFor="f-review">Estado de preparo</label>
-            <select id="f-review" className="rounded border border-neutral-300 bg-transparent px-2 py-1.5 text-sm dark:border-neutral-700" value={reviewState} onChange={(e) => setReviewState(e.target.value)}>
-              <option value="">Estado de preparo (todos)</option>
-              {Object.entries(REVIEW_STATE_LABEL).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
-            </select>
-            <label className="sr-only" htmlFor="f-pend">Tipo de pendência</label>
-            <select id="f-pend" className="rounded border border-neutral-300 bg-transparent px-2 py-1.5 text-sm dark:border-neutral-700" value={pendency} onChange={(e) => setPendency(e.target.value)}>
-              <option value="">Tipo de pendência (todas)</option>
-              {Object.entries(PENDENCY_LABEL).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
-            </select>
+            <Button data-tour-id="catalog2-admin-create" size="sm" onClick={() => setConfirm({ title: "Criar produto", message: "Um novo produto (em preparação) com uma versão rascunho será criado.", onConfirm: () => createProduct() })}>
+              <Plus className="h-4 w-4" /> Criar produto
+            </Button>
           </div>
-        </details>
-      </div>
 
-      {msg && <p className="text-sm text-blue-600">{msg}</p>}
-
-      {listLoading ? (
-        <Centered><Loader2 className="h-5 w-5 animate-spin" /> Carregando…</Centered>
-      ) : !list || list.data.length === 0 ? (
-        <div className="rounded-lg border border-dashed border-neutral-300 p-8 text-center text-sm text-neutral-500 dark:border-neutral-700">
-          {overview.is_empty ? overview.empty_message : "Nenhum produto com esses filtros."}
+          <details className="rounded-lg border">
+            <summary className="cursor-pointer select-none px-3 py-2 text-xs font-medium text-muted-foreground">
+              Mais filtros{advancedFilters > 0 ? ` (${advancedFilters} ativo${advancedFilters > 1 ? "s" : ""})` : ""}
+            </summary>
+            <div className="flex flex-wrap gap-2 border-t p-3">
+              <label className="sr-only" htmlFor="f-pillar">Pilar</label>
+              <select id="f-pillar" className={SELECT_CLS} value={pillarId} onChange={(e) => setPillarId(e.target.value)}>
+                <option value="">Todos os pilares</option>{refs.pillars.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+              </select>
+              <label className="sr-only" htmlFor="f-cat">Categoria</label>
+              <select id="f-cat" className={SELECT_CLS} value={categoryId} onChange={(e) => setCategoryId(e.target.value)}>
+                <option value="">Todas as categorias</option>{refs.categories.map((c2) => <option key={c2.id} value={c2.id}>{c2.name}</option>)}
+              </select>
+              <label className="sr-only" htmlFor="f-origin">Origem</label>
+              <select id="f-origin" className={SELECT_CLS} value={origin} onChange={(e) => setOrigin(e.target.value)}>
+                <option value="">Toda origem</option>
+                <option value="existente">Só existentes</option>
+                <option value="novo">Só novos</option>
+                <option value="reativado">Só reativados</option>
+              </select>
+              <label className="sr-only" htmlFor="f-rose">Revisão da Rose</label>
+              <select id="f-rose" className={SELECT_CLS} value={roseReviewed} onChange={(e) => setRoseReviewed(e.target.value)}>
+                <option value="">Revisão da Rose (todas)</option>
+                <option value="true">Revisado pela Rose</option>
+                <option value="false">Sem revisão da Rose</option>
+              </select>
+              <label className="sr-only" htmlFor="f-review">Estado de preparo</label>
+              <select id="f-review" className={SELECT_CLS} value={reviewState} onChange={(e) => setReviewState(e.target.value)}>
+                <option value="">Estado de preparo (todos)</option>
+                {Object.entries(REVIEW_STATE_LABEL).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+              </select>
+              <label className="sr-only" htmlFor="f-pend">Tipo de pendência</label>
+              <select id="f-pend" className={SELECT_CLS} value={pendency} onChange={(e) => setPendency(e.target.value)}>
+                <option value="">Tipo de pendência (todas)</option>
+                {Object.entries(PENDENCY_LABEL).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+              </select>
+            </div>
+          </details>
         </div>
-      ) : (
-        <>
-          <ul className="divide-y divide-neutral-100 rounded-lg border border-neutral-200 dark:divide-neutral-800 dark:border-neutral-800">
-            {list.data.map((p) => {
+
+        {msg && <p className="text-sm text-blue-600 dark:text-blue-400">{msg}</p>}
+
+        {listLoading ? (
+          <Centered><Loader2 className="h-5 w-5 animate-spin" /> Carregando…</Centered>
+        ) : !list || list.data.length === 0 ? (
+          <div className="rounded-lg border border-dashed p-8 text-center text-sm text-muted-foreground">
+            {overview.is_empty ? overview.empty_message : "Nenhum produto com esses filtros."}
+          </div>
+        ) : (
+          <>
+            <ul className="divide-y rounded-lg border">
+              {list.data.map((p) => {
               const readyLabel = p.imported
                 ? (p.review_state === "ready_for_final_review"
                     ? "Pronto p/ revisão final"
@@ -341,27 +340,27 @@ export default function AdminNovoCatalogoPage() {
                       <button className="text-left font-medium hover:underline" onClick={() => setOpenProductId(p.id)}>
                         {p.internal_name}
                       </button>
-                      <div className="mt-0.5 text-xs text-neutral-500">
+                      <div className="mt-0.5 text-xs text-muted-foreground">
                         {p.category?.name ?? "sem categoria"} · {p.pillar?.name ?? "sem pilar"}
                         {readyLabel ? ` · ${readyLabel}` : ""}
                         {p.imported ? ` · ${pend.length} pendência(s)` : ""}
                       </div>
                       {p.imported && (pend.length > 0 || !p.rose_reviewed || p.human_edited) && (
                         <div className="mt-1 flex flex-wrap items-center gap-1">
-                          {!p.rose_reviewed && <Badge className="bg-neutral-100 text-neutral-600">Rose pendente</Badge>}
+                          {!p.rose_reviewed && <Badge className="bg-muted text-muted-foreground">Rose pendente</Badge>}
                           {pend.slice(0, 4).map((pk: string) => (
-                            <Badge key={pk} className="bg-orange-50 text-orange-700">{PENDENCY_LABEL[pk] ?? pk}</Badge>
+                            <Badge key={pk} className="bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-200">{PENDENCY_LABEL[pk] ?? pk}</Badge>
                           ))}
-                          {pend.length > 4 && <span className="text-[11px] text-neutral-400">+{pend.length - 4}</span>}
-                          {p.human_edited && <Badge className="bg-sky-100 text-sky-700">editado por humano</Badge>}
+                          {pend.length > 4 && <span className="text-[11px] text-muted-foreground">+{pend.length - 4}</span>}
+                          {p.human_edited && <Badge className="bg-muted text-muted-foreground">editado por humano</Badge>}
                         </div>
                       )}
                       <RowTechDetails text={tech} />
                     </div>
                     <div className="flex shrink-0 flex-col items-end gap-1.5">
                       <div className="flex items-center gap-1.5">
-                        {p.is_new && <Badge className="bg-emerald-100 text-emerald-700">Novo</Badge>}
-                        <Badge className={STATUS_TONE[p.status] ?? "bg-neutral-100"}>{STATUS_LABEL[p.status] ?? p.status}</Badge>
+                        {p.is_new && <Badge className="bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-200">Novo</Badge>}
+                        <Badge className={STATUS_TONE[p.status] ?? "bg-muted text-muted-foreground"}>{STATUS_LABEL[p.status] ?? p.status}</Badge>
                         <Button size="sm" onClick={() => setOpenProductId(p.id)}>
                           {p.has_draft ? "Continuar configuração" : "Abrir"}
                         </Button>
@@ -386,26 +385,27 @@ export default function AdminNovoCatalogoPage() {
               );
             })}
           </ul>
-          <div className="flex items-center justify-between text-sm">
-            <Button size="sm" variant="ghost" disabled={page <= 1} onClick={() => setPage((n) => n - 1)}><ChevronLeft className="h-4 w-4" /> Anterior</Button>
-            <span className="text-neutral-500">Página {page} de {totalPages} · {list.total} produto(s)</span>
-            <Button size="sm" variant="ghost" disabled={page >= totalPages} onClick={() => setPage((n) => n + 1)}>Próxima <ChevronRight className="h-4 w-4" /></Button>
-          </div>
-        </>
-      )}
+            <div className="flex items-center justify-between text-sm">
+              <Button size="sm" variant="ghost" disabled={page <= 1} onClick={() => setPage((n) => n - 1)}><ChevronLeft className="h-4 w-4" /> Anterior</Button>
+              <span className="text-muted-foreground">Página {page} de {totalPages} · {list.total} produto(s)</span>
+              <Button size="sm" variant="ghost" disabled={page >= totalPages} onClick={() => setPage((n) => n + 1)}>Próxima <ChevronRight className="h-4 w-4" /></Button>
+            </div>
+          </>
+        )}
 
-      {confirm && (
-        <ConfirmationDialog
-          open
-          onClose={() => setConfirm(null)}
-          title={confirm.title}
-          message={confirm.message}
-          confirmText="Confirmar"
-          destructive={false}
-          onConfirm={() => { confirm.onConfirm(); setConfirm(null); }}
-        />
-      )}
-    </div>
+        {confirm && (
+          <ConfirmationDialog
+            open
+            onClose={() => setConfirm(null)}
+            title={confirm.title}
+            message={confirm.message}
+            confirmText="Confirmar"
+            destructive={false}
+            onConfirm={() => { confirm.onConfirm(); setConfirm(null); }}
+          />
+        )}
+      </div>
+    </Shell>
   );
 
   async function createProduct() {
@@ -422,12 +422,28 @@ export default function AdminNovoCatalogoPage() {
   }
 }
 
+// Superfície padrão da plataforma: painel sólido (bg-card) ocupando a largura
+// útil do <main>, sem max-w e sem transparências que deixem o fundo do shell
+// interferir na leitura.
+function Shell({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="rounded-xl border bg-card p-4 text-card-foreground shadow-sm sm:p-6">
+      {children}
+    </div>
+  );
+}
+
+// Select padrão — superfície sólida, borda e texto por token (contraste alto
+// nos dois temas).
+const SELECT_CLS =
+  "rounded-md border bg-background px-2 py-1.5 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring";
+
 // Detalhe técnico da linha (slug, origem, versões, datas) — fora da leitura
 // principal, atrás de um botão acessível por teclado.
 function RowTechDetails({ text }: { text: string }) {
   const [open, setOpen] = useState(false);
   return (
-    <div className="mt-1 text-[11px] text-neutral-400">
+    <div className="mt-1 text-[11px] text-muted-foreground">
       <button type="button" aria-expanded={open} className="underline decoration-dotted" onClick={() => setOpen((o) => !o)}>
         Detalhes técnicos
       </button>
@@ -436,69 +452,77 @@ function RowTechDetails({ text }: { text: string }) {
   );
 }
 
-function Stat({ k, v, hint }: { k: string; v: number | string; hint?: string }) {
+// Indicador — sem card colorido; célula neutra dentro de um painel único.
+// Um acento pequeno de status (ok/warn) só quando faz sentido.
+function Stat({ k, v, hint, tone }: { k: string; v: number | string; hint?: string; tone?: "ok" | "warn" }) {
+  const toneCls =
+    tone === "ok" ? "text-emerald-700 dark:text-emerald-300"
+      : tone === "warn" ? "text-amber-700 dark:text-amber-300"
+        : "text-foreground";
   return (
-    <div className="rounded-lg border border-neutral-200 p-3 dark:border-neutral-800">
-      <div className="text-2xl font-semibold">{v}</div>
-      <div className="text-xs text-neutral-500">{k}</div>
-      {hint && <div className="text-[10px] text-neutral-400">{hint}</div>}
+    <div className="bg-card p-3">
+      <div className={`text-lg font-semibold ${toneCls}`}>{v}</div>
+      <div className="text-xs text-muted-foreground">{k}</div>
+      {hint && <div className="text-[10px] text-muted-foreground/80">{hint}</div>}
     </div>
   );
 }
 function SummaryCell({ k, v }: { k: string; v: number | string }) {
   return (
-    <div className="rounded border border-indigo-200/60 bg-white/60 px-2 py-1 dark:border-indigo-900 dark:bg-transparent">
-      <div className="font-semibold text-indigo-900 dark:text-indigo-200">{v}</div>
-      <div className="text-[10px] text-indigo-700/80 dark:text-indigo-300/70">{k}</div>
+    <div className="rounded border bg-background px-2 py-1">
+      <div className="font-semibold text-foreground">{v}</div>
+      <div className="text-[10px] text-muted-foreground">{k}</div>
     </div>
   );
 }
 function ReadinessPanel({ readiness }: { readiness: any }) {
   const [open, setOpen] = useState(false);
   return (
-    <section className="space-y-2 rounded-lg border border-teal-200 bg-teal-50/50 p-3 dark:border-teal-900 dark:bg-teal-950/20">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <h2 className="text-sm font-semibold text-teal-900 dark:text-teal-200">Prontidão para o catálogo do cliente</h2>
-        <span className="text-xs text-teal-700 dark:text-teal-300">
+    <details className="rounded-lg border">
+      <summary className="flex cursor-pointer select-none flex-wrap items-center justify-between gap-2 px-3 py-2">
+        <h2 className="text-sm font-semibold text-foreground">Prontidão para o catálogo do cliente</h2>
+        <span className="text-xs text-muted-foreground">
           {readiness.ready_for_client}/{readiness.total} prontos · {readiness.client_visible_now} visíveis agora ·{" "}
           {readiness.with_blockers} com bloqueador
         </span>
-      </div>
-      <p className="text-[11px] text-teal-700/80 dark:text-teal-300/80">{readiness.note}</p>
-      <button className="text-xs font-medium text-teal-700 underline" onClick={() => setOpen((o) => !o)}>
-        {open ? "Ocultar detalhamento" : "Ver detalhamento por produto"}
-      </button>
-      {open && (
-        <div className="max-h-80 overflow-y-auto rounded border border-teal-200/60 dark:border-teal-900">
-          <table className="w-full text-left text-xs">
-            <thead className="sticky top-0 bg-teal-50 dark:bg-teal-950/40">
-              <tr>
-                <th className="p-1.5">#</th><th className="p-1.5">Produto</th>
-                <th className="p-1.5">Bloqueadores</th><th className="p-1.5">Pendências</th>
-              </tr>
-            </thead>
-            <tbody>
-              {readiness.products.map((p: any) => (
-                <tr key={p.id} className="border-t border-teal-200/40 dark:border-teal-900/60">
-                  <td className="p-1.5 text-neutral-400">{p.source_index ?? "—"}</td>
-                  <td className="p-1.5">{p.name}</td>
-                  <td className="p-1.5">
-                    {p.blockers.length === 0
-                      ? <Badge className="bg-emerald-100 text-emerald-700">nenhum</Badge>
-                      : p.blockers.map((b: string) => <Badge key={b} className="mr-1 bg-red-100 text-red-700">{b}</Badge>)}
-                  </td>
-                  <td className="p-1.5">
-                    {p.pendings.map((b: string) => <Badge key={b} className="mr-1 bg-amber-100 text-amber-700">{b}</Badge>)}
-                  </td>
+      </summary>
+      <div className="space-y-2 border-t p-3">
+        <p className="text-[11px] text-muted-foreground">{readiness.note}</p>
+        <button className="text-xs font-medium text-foreground underline" onClick={() => setOpen((o) => !o)}>
+          {open ? "Ocultar detalhamento" : "Ver detalhamento por produto"}
+        </button>
+        {open && (
+          <div className="max-h-80 overflow-y-auto rounded border">
+            <table className="w-full text-left text-xs">
+              <thead className="sticky top-0 bg-muted text-muted-foreground">
+                <tr>
+                  <th className="p-1.5">#</th><th className="p-1.5">Produto</th>
+                  <th className="p-1.5">Bloqueadores</th><th className="p-1.5">Pendências</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
-    </section>
+              </thead>
+              <tbody>
+                {readiness.products.map((p: any) => (
+                  <tr key={p.id} className="border-t">
+                    <td className="p-1.5 text-muted-foreground">{p.source_index ?? "—"}</td>
+                    <td className="p-1.5 text-foreground">{p.name}</td>
+                    <td className="p-1.5">
+                      {p.blockers.length === 0
+                        ? <Badge className="bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-200">nenhum</Badge>
+                        : p.blockers.map((b: string) => <Badge key={b} className="mr-1 bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-200">{b}</Badge>)}
+                    </td>
+                    <td className="p-1.5">
+                      {p.pendings.map((b: string) => <Badge key={b} className="mr-1 bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-200">{b}</Badge>)}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+    </details>
   );
 }
 function Centered({ children }: { children: React.ReactNode }) {
-  return <div className="flex items-center justify-center gap-2 py-12 text-sm text-neutral-500">{children}</div>;
+  return <div className="flex items-center justify-center gap-2 py-12 text-sm text-muted-foreground">{children}</div>;
 }

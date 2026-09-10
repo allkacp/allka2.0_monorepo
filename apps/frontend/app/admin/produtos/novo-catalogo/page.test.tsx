@@ -180,7 +180,15 @@ it("Admin comum → mensagem de acesso restrito (404)", async () => {
   expect(await screen.findByText(/exclusiva do Admin Master/i)).toBeInTheDocument()
 })
 
-it("listagem: mostra produtos do NOVO catálogo, situação, etiqueta Novo, e nunca os 162", async () => {
+it("título e menu: 'Preparação de Produtos' (não mais 'Novo Catálogo')", async () => {
+  renderPage()
+  expect(await screen.findByRole("heading", { name: "Preparação de Produtos" })).toBeInTheDocument()
+  expect(screen.queryByText(/novo cat[áa]logo/i)).not.toBeInTheDocument()
+  expect(screen.getByText(/produtos finais da plataforma antes da publicação/i)).toBeInTheDocument()
+  expect(screen.getByText(/Não é um segundo catálogo/i)).toBeInTheDocument()
+})
+
+it("listagem: mostra produtos da preparação, situação, etiqueta Novo, e nunca os 162", async () => {
   renderPage()
   expect(await screen.findByText("[TESTE LOCAL] Demo")).toBeInTheDocument()
   expect(screen.getByText(/não conta os 162 operacionais/i)).toBeInTheDocument()
@@ -192,12 +200,12 @@ it("listagem: mostra produtos do NOVO catálogo, situação, etiqueta Novo, e nu
   await waitFor(() => expect(api.getCatalog2Products).toHaveBeenCalledWith(expect.objectContaining({ q: "demo" })))
 })
 
-it("banner deixa claro que os produtos estão 'Em preparação' e o que falta para publicar", async () => {
+it("resumo de status único: um só bloco descreve 'em preparação' e o que falta", async () => {
   renderPage()
   await screen.findByText("[TESTE LOCAL] Demo")
-  expect(screen.getByText(/produtos importados estão/i)).toBeInTheDocument()
+  expect(screen.getByText(/produtos finais da plataforma, ainda/i)).toBeInTheDocument()
   expect(screen.getAllByText(/em prepara/i).length).toBeGreaterThan(0)
-  expect(screen.getByText(/cadastrar tarefas, etapas e prazos, definir a precificação e passar pela revisão final/i)).toBeInTheDocument()
+  expect(screen.getByText(/tarefas, etapas, prazos, precificação e revisão final/i)).toBeInTheDocument()
 })
 
 it("editor: as 10 seções seguem acessíveis, reagrupadas em 5 etapas + Origem", async () => {

@@ -171,27 +171,30 @@ describe("Sidebar — item Roadmap e chamados", () => {
   });
 });
 
-// Reunião 10/09/2026, bloco 2 — o construtor do Novo Catálogo (catalog2)
-// ganhou entrada de menu, visível SÓ para Admin Master. Os menus antigos
-// continuam e ficam identificados como "operacional atual".
-describe("Sidebar — Produtos: item 'Novo Catálogo' (Admin Master)", () => {
+// Reunião 10/09/2026 — a preparação dos produtos finais (catalog2) tem
+// entrada de menu, visível SÓ para Admin Master. Nome visível: "Preparação de
+// Produtos" (não "catálogo"). Os menus antigos continuam identificados como
+// "operacional atual". Rota /admin/produtos/novo-catalogo mantida por ora.
+describe("Sidebar — Produtos: item 'Preparação de Produtos' (Admin Master)", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockAccountType.value = "admin";
   });
 
-  it("Admin Master vê 'Novo Catálogo' apontando para /admin/produtos/novo-catalogo", async () => {
+  it("Admin Master vê 'Preparação de Produtos' apontando para /admin/produtos/novo-catalogo", async () => {
     getCurrentUser.mockResolvedValue({ admin_profile: { is_active: true, is_master: true, permissions: [] } });
     renderSidebar();
     await waitFor(() => expect(getCurrentUser).toHaveBeenCalled());
     await userEvent.click(await screen.findByText("Produtos"));
-    const link = await screen.findByRole("link", { name: /Novo Catálogo/i });
+    const link = await screen.findByRole("link", { name: /Preparação de Produtos/i });
     expect(link).toHaveAttribute("href", "/admin/produtos/novo-catalogo");
+    // não deve mais reforçar "catálogo" no rótulo visível
+    expect(screen.queryByRole("link", { name: /Novo Catálogo/i })).not.toBeInTheDocument();
     // os menus antigos continuam, identificados como operacional atual
     expect(screen.getByRole("link", { name: /Cadastro de Produtos \(operacional atual\)/i })).toBeInTheDocument();
   });
 
-  it("Admin comum (não-master) NÃO vê 'Novo Catálogo', mas vê o cadastro operacional", async () => {
+  it("Admin comum (não-master) NÃO vê 'Preparação de Produtos', mas vê o cadastro operacional", async () => {
     getCurrentUser.mockResolvedValue({
       admin_profile: { is_active: true, is_master: false, permissions: [{ module: "produtos", action: "view" }] },
     });
@@ -199,7 +202,7 @@ describe("Sidebar — Produtos: item 'Novo Catálogo' (Admin Master)", () => {
     await waitFor(() => expect(getCurrentUser).toHaveBeenCalled());
     await userEvent.click(await screen.findByText("Produtos"));
     await screen.findByRole("link", { name: /Cadastro de Produtos \(operacional atual\)/i });
-    expect(screen.queryByRole("link", { name: /Novo Catálogo/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: /Preparação de Produtos/i })).not.toBeInTheDocument();
   });
 });
 

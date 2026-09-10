@@ -73,7 +73,7 @@ export function ProductEditor({ productId, onBack }: { productId: string; onBack
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-2">
-          <Button size="sm" variant="ghost" onClick={onBack}><ArrowLeft className="h-4 w-4" /> Catálogo</Button>
+          <Button size="sm" variant="ghost" onClick={onBack}><ArrowLeft className="h-4 w-4" /> Voltar</Button>
           <h2 className="text-lg font-semibold">{product.internal_name}</h2>
           <Badge>{product.status}</Badge>
           {product.is_new && <Badge className="bg-emerald-100 text-emerald-700">Novo</Badge>}
@@ -985,7 +985,7 @@ function ProductReadinessPanel({ productId, versionKey }: { productId: string; v
 
 // ── helpers ────────────────────────────────────────────────────────
 function StepIntro({ children }: { children: React.ReactNode }) {
-  return <p className="mt-3 text-xs text-neutral-500 dark:text-neutral-400">{children}</p>;
+  return <p className="mt-3 text-xs text-muted-foreground">{children}</p>;
 }
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return <label className="block space-y-1"><span className="text-xs font-medium text-neutral-600 dark:text-neutral-300">{label}</span>{children}</label>;

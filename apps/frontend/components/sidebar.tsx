@@ -406,9 +406,10 @@ const navigationConfig = {
       subitems: [
         {
           // Só Admin Master (filtrado por `masterOnly`; o backend reaplica em
-          // /api/admin/catalog2/*). Reunião 10/09/2026 — o construtor do Novo
-          // Catálogo (catalog2) não tinha entrada de menu.
-          name: "Novo Catálogo",
+          // /api/admin/catalog2/*). Reunião 10/09/2026 — preparação dos
+          // produtos finais da plataforma antes da publicação (NÃO é um
+          // segundo catálogo). Rota mantida por ora para não quebrar deep links.
+          name: "Preparação de Produtos",
           href: "/admin/produtos/novo-catalogo",
           icon: Sparkles,
           current: false,
