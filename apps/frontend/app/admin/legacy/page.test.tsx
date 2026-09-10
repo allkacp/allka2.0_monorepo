@@ -128,6 +128,26 @@ it("Resumo: lote, prévia local, data da fotografia, quantidades e conferência"
   expect(screen.getByText(/coerente/i)).toBeInTheDocument()
 })
 
+it("Resumo: lote OFICIAL selado aparece como 'histórico oficial' + 'selado em …' (não como prévia)", async () => {
+  api.getLegacySummary.mockResolvedValue(
+    summaryFixture({
+      batch: {
+        ...summaryFixture().batch,
+        source_name: "Plataforma allka — produção (produtos operacionais)",
+        source_environment: "producao",
+        kind: "official",
+        is_preview: false,
+        is_official: true,
+        sealed_at: new Date("2026-09-10T00:00:00Z").toISOString(),
+      },
+    }),
+  )
+  render(<AdminConsultaLegadoPage />)
+  expect(await screen.findByText(/histórico oficial/i)).toBeInTheDocument()
+  expect(screen.getByText(/selado em/i)).toBeInTheDocument()
+  expect(screen.queryByText(/prévia local/i)).not.toBeInTheDocument()
+})
+
 it("abas ainda não importadas são honestas (Aguardando importação histórica)", async () => {
   const user = userEvent.setup()
   render(<AdminConsultaLegadoPage />)

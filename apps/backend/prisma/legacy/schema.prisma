@@ -35,6 +35,17 @@ model LegacyImportBatch {
   source_name         String
   // Ambiente de onde a fotografia veio ("local", "qa", "producao", "dump-2026-xx").
   source_environment  String
+  // Tipo do lote — EXPLÍCITO, nunca inferido do texto do nome:
+  //   "preview"  = fotografia de teste / prévia local. Descartável, pode ser
+  //                refeita à vontade.
+  //   "official" = Snapshot Histórico Oficial. Exige parâmetros explícitos para
+  //                ser gravado e, uma vez selado (`sealed_at`), é IMUTÁVEL —
+  //                nenhuma reimportação sobrescreve; só valida.
+  kind                String   @default("preview")
+  // Instante em que um lote OFICIAL foi selado como registro histórico
+  // imutável. Enquanto null, um lote oficial ainda pode ser reprocessado
+  // (ex.: corrigir divergências antes de selar). Preview nunca sela.
+  sealed_at           DateTime?
   // Instante do "retrato" (quando os dados de origem foram considerados válidos).
   snapshot_at         DateTime
   imported_at         DateTime @default(now())
@@ -56,6 +67,7 @@ model LegacyImportBatch {
 
   @@index([source_environment])
   @@index([status])
+  @@index([kind])
   @@map("legacy_import_batches")
 }
 
@@ -67,8 +79,9 @@ model LegacyRecordSnapshot {
   batch_id String
   batch    LegacyImportBatch @relation(fields: [batch_id], references: [id], onDelete: Cascade)
 
-  // "product" | "product_variation" | "product_addon" | "product_condition" |
-  // "catalog_task" | "product_catalog_task" | "specialty" | ...
+  // "product" | "product_variation" | "product_addon" | "product_version" |
+  // "product_bundle" | "product_bundle_item" | "catalog_task" |
+  // "product_catalog_task" | "specialty" | ...
   entity_type   String
   // Tabela/origem no sistema de onde saiu ("products", "product_variations", ...).
   source_table  String

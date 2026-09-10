@@ -127,7 +127,12 @@ router.get("/summary", async (req: Request, res: Response, next: NextFunction) =
         checksum: batch.checksum,
         reconciliation: parseJson(batch.reconciliation_json, {} as Record<string, unknown>),
         notes: batch.notes,
-        is_preview: batch.source_name.includes("[TESTE LOCAL]"),
+        // Tipo do lote — EXPLÍCITO (coluna `kind`), não mais inferido do texto
+        // do nome. Lotes antigos, sem a coluna preenchida, caem em "preview".
+        kind: batch.kind ?? "preview",
+        is_official: (batch.kind ?? "preview") === "official",
+        is_preview: (batch.kind ?? "preview") !== "official",
+        sealed_at: batch.sealed_at ?? null,
       },
       counts,
       product_by_status: productByStatus,
@@ -254,7 +259,7 @@ router.get("/records/:id", async (req: Request, res: Response, next: NextFunctio
       where: { id: req.params.id as string },
       include: {
         batch: {
-          select: { id: true, source_name: true, source_environment: true, snapshot_at: true, imported_at: true, importer_version: true, status: true },
+          select: { id: true, source_name: true, source_environment: true, snapshot_at: true, imported_at: true, importer_version: true, status: true, kind: true, sealed_at: true },
         },
         relations_from: {
           include: { to_record: { select: { id: true, entity_type: true, title: true, original_code: true, original_status: true } } },

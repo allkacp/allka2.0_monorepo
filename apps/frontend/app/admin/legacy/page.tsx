@@ -120,7 +120,16 @@ function ResumoTab({ summary }: { summary: any }) {
           <div className="rounded-lg border border-neutral-200 p-4 dark:border-neutral-800">
             <div className="flex flex-wrap items-center gap-2">
               <strong>{b.source_name}</strong>
-              {b.is_preview && <Badge className="bg-amber-100 text-amber-700">prévia local</Badge>}
+              {b.is_official ? (
+                <Badge className="bg-sky-100 text-sky-700">histórico oficial</Badge>
+              ) : (
+                <Badge className="bg-amber-100 text-amber-700">prévia local</Badge>
+              )}
+              {b.is_official && b.sealed_at && (
+                <Badge className="bg-emerald-100 text-emerald-700">
+                  selado em {new Date(b.sealed_at).toLocaleDateString("pt-BR")}
+                </Badge>
+              )}
               <Badge className={b.status === "completed" ? "bg-emerald-100 text-emerald-700" : "bg-orange-100 text-orange-700"}>
                 {b.status === "completed" ? "importação concluída" : b.status}
               </Badge>
@@ -186,6 +195,9 @@ const ENTITY_LABEL: Record<string, string> = {
   product: "Produtos",
   product_variation: "Variações",
   product_addon: "Adicionais",
+  product_version: "Versões históricas",
+  product_bundle: "Combos",
+  product_bundle_item: "Itens de combo",
   product_catalog_task: "Vínculos de tarefa-modelo",
   catalog_task: "Tarefas de catálogo",
   specialty: "Especialidades",
@@ -378,6 +390,9 @@ function RecordBody({ data }: { data: any }) {
 
       <RelGroup title="Variações" items={rel.has_variation} />
       <RelGroup title="Adicionais" items={rel.has_addon} />
+      <RelGroup title="Versões históricas" items={rel.has_version} />
+      <RelGroup title="Itens do combo" items={rel.has_bundle_item} />
+      <RelGroup title="Produtos no combo" items={rel.bundle_contains_product} />
       <RelGroup title="Tarefas e etapas (modelo)" items={rel.has_catalog_task} />
       <RelGroup title="Categoria" items={rel.in_category} />
 

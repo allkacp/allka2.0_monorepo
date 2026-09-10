@@ -12,13 +12,27 @@ import { PrismaClient as LegacyPrisma } from "./generated";
 import { hashPayload } from "../lib/canonical-json";
 import { sanitizeForLegacy, scrubSecretValues } from "./sanitize";
 
-export const IMPORTER_VERSION = "products-foundation-1";
+// Bumped de "products-foundation-1": a fotografia passou a preservar também as
+// versões históricas do produto (`product_versions`) e os combos
+// (`product_bundles` + itens), além de registrar o tipo do lote.
+export const IMPORTER_VERSION = "products-foundation-2";
 export const DEFAULT_SOURCE_NAME = "[TESTE LOCAL] Fotografia de produtos anteriores";
+
+/**
+ * Tipo do lote — EXPLÍCITO, nunca inferido do texto do nome.
+ *   "preview"  = prévia local / teste. Descartável.
+ *   "official" = Snapshot Histórico Oficial. Exige parâmetros explícitos e, uma
+ *                vez selado, é imutável (só validação idempotente daí em diante).
+ */
+export type LegacyBatchKind = "preview" | "official";
 
 export type LegacyEntityType =
   | "product"
   | "product_variation"
   | "product_addon"
+  | "product_version"
+  | "product_bundle"
+  | "product_bundle_item"
   | "product_catalog_task"
   | "catalog_task"
   | "specialty";
@@ -78,6 +92,7 @@ export async function collectProductSnapshot(db: OperationalPrisma): Promise<Sna
     include: {
       variations: true,
       addons: true,
+      versions: true,
       task_links: { include: { catalog_task: true } },
     },
     orderBy: { created_at: "asc" },
@@ -221,6 +236,43 @@ export async function collectProductSnapshot(db: OperationalPrisma): Promise<Sna
       });
     }
 
+    // Versões históricas do produto (snapshot automático tirado antes de cada
+    // salvamento na plataforma antiga). São as "15 linhas de product_versions"
+    // que faltavam na fotografia — preservadas com id original e relação.
+    const versions = [...p.versions].sort(
+      (x, y) => (x.created_at?.getTime() ?? 0) - (y.created_at?.getTime() ?? 0),
+    );
+    versions.forEach((ver, idx) => {
+      records.push({
+        entity_type: "product_version",
+        source_table: "product_versions",
+        original_id: ver.id,
+        original_code: null,
+        title: `${p.name} — versão ${idx + 1}`,
+        subtitle: ver.created_at ? `Salva em ${ver.created_at.toISOString()}` : null,
+        original_status: null,
+        dates: isoDates({ created_at: ver.created_at }),
+        content: {
+          id: ver.id,
+          product_id: ver.product_id,
+          created_at: ver.created_at ? ver.created_at.toISOString() : null,
+          // O estado completo do produto naquele instante (campos +
+          // variações/adicionais), como estava serializado na origem.
+          snapshot: safeJsonParse(ver.snapshot),
+        },
+        search_category: p.category ?? null,
+        search_active: null,
+      });
+      relations.push({
+        from_original_id: p.id,
+        from_entity_type: "product",
+        to_original_id: ver.id,
+        to_entity_type: "product_version",
+        relation_type: "has_version",
+        description: `Versão ${idx + 1}`,
+      });
+    });
+
     for (const link of p.task_links) {
       records.push({
         entity_type: "product_catalog_task",
@@ -326,6 +378,75 @@ export async function collectProductSnapshot(db: OperationalPrisma): Promise<Sna
   }
   void specialtyCategories;
 
+  // Combos (ProductBundle + itens). Hoje a base tem ZERO — o laço abaixo
+  // simplesmente não produz registros. Fica pronto para preservá-los, com id
+  // original e relações (combo → item → produto), se algum existir no futuro.
+  const bundles = await db.productBundle.findMany({
+    include: { items: true },
+    orderBy: { created_at: "asc" },
+  });
+  for (const b of bundles) {
+    records.push({
+      entity_type: "product_bundle",
+      source_table: "product_bundles",
+      original_id: b.id,
+      original_code: null,
+      title: b.name,
+      subtitle: b.description ?? null,
+      original_status: b.is_active ? "ativo" : "inativo",
+      dates: isoDates(b),
+      content: {
+        id: b.id,
+        name: b.name,
+        description: b.description,
+        category: b.category,
+        agency_id: b.agency_id,
+        created_by_user_id: b.created_by_user_id,
+        is_active: b.is_active,
+        item_count: b.items.length,
+      },
+      search_category: b.category ?? null,
+      search_active: b.is_active,
+    });
+    for (const item of b.items) {
+      records.push({
+        entity_type: "product_bundle_item",
+        source_table: "product_bundle_items",
+        original_id: item.id,
+        original_code: null,
+        title: null,
+        subtitle: null,
+        original_status: null,
+        dates: {},
+        content: {
+          id: item.id,
+          bundle_id: item.bundle_id,
+          product_id: item.product_id,
+          variation_id: item.variation_id,
+          sort_order: item.sort_order,
+        },
+        search_category: b.category ?? null,
+        search_active: null,
+      });
+      relations.push({
+        from_original_id: b.id,
+        from_entity_type: "product_bundle",
+        to_original_id: item.id,
+        to_entity_type: "product_bundle_item",
+        relation_type: "has_bundle_item",
+        description: `Item ${item.sort_order}`,
+      });
+      relations.push({
+        from_original_id: item.id,
+        from_entity_type: "product_bundle_item",
+        to_original_id: item.product_id,
+        to_entity_type: "product",
+        relation_type: "bundle_contains_product",
+        description: null,
+      });
+    }
+  }
+
   const sourceCounts: Record<string, number> = {};
   for (const r of records) sourceCounts[r.entity_type] = (sourceCounts[r.entity_type] ?? 0) + 1;
   sourceCounts.relations = relations.length;
@@ -339,6 +460,20 @@ export interface ImportOptions {
   dryRun: boolean;
   sourceName?: string;
   sourceEnvironment?: string;
+  /**
+   * "preview" (padrão) | "official". Um lote OFICIAL exige `sourceName`
+   * explícito (sem "[TESTE LOCAL]"), `sourceEnvironment` explícito (≠ "local"),
+   * `snapshotAt` explícito e — para GRAVAR (não dry-run) — `acknowledgeOfficial`.
+   * Depois de gravado sem divergências, o lote é SELADO e vira imutável.
+   */
+  kind?: LegacyBatchKind;
+  /** Instante do retrato. Obrigatório e explícito para lotes OFICIAIS. */
+  snapshotAt?: Date;
+  /**
+   * Confirmação explícita de que se está gravando um Snapshot Histórico Oficial
+   * (execução permanente). Obrigatória para `kind: "official"` fora de dry-run.
+   */
+  acknowledgeOfficial?: boolean;
   /** Reusar/continuar um lote específico. Sem isto, cria um lote novo. */
   batchId?: string;
   /** Permitir reprocessar um lote JÁ concluído (por padrão, recusa). */
@@ -357,6 +492,15 @@ export interface ImportResult {
   dry_run: boolean;
   batch_id: string | null;
   source_name: string;
+  /** Tipo EXPLÍCITO do lote — nunca inferido do nome. */
+  kind: LegacyBatchKind;
+  /** true quando o lote é oficial E já está selado (imutável). */
+  sealed: boolean;
+  /**
+   * "dry_run" | "completed" | "completed_with_divergences" |
+   * "validated_official" (re-execução idempotente contra um oficial já selado,
+   * sem gravação, origem idêntica).
+   */
   status: string;
   importer_version: string;
   totals: { expected: number; imported: number; skipped_unchanged: number; changed: number; sanitized_records: number };
@@ -371,9 +515,38 @@ export async function runImport(opts: ImportOptions): Promise<ImportResult> {
   const legacy = new LegacyPrisma({ datasources: { db: { url: opts.legacyImportUrl } }, log: ["warn", "error"] });
 
   try {
+    const kind: LegacyBatchKind = opts.kind === "official" ? "official" : "preview";
     const sourceName = opts.sourceName ?? DEFAULT_SOURCE_NAME;
     const sourceEnvironment = opts.sourceEnvironment ?? "local";
-    const snapshotAt = new Date();
+    const snapshotAt = opts.snapshotAt ?? new Date();
+
+    // ── Guardas de EXECUÇÃO OFICIAL ──────────────────────────────────────
+    // Um Snapshot Histórico Oficial só roda com parâmetros explícitos. Nada
+    // aqui é inferido de texto: o operador precisa dizer origem, ambiente e
+    // instante — e confirmar que a gravação é permanente.
+    if (kind === "official") {
+      const problems: string[] = [];
+      if (!opts.sourceName || !opts.sourceName.trim()) {
+        problems.push('--source-name explícito é obrigatório (nome real da origem, ex.: "Plataforma allka — produção").');
+      } else if (opts.sourceName.includes("[TESTE LOCAL]")) {
+        problems.push('um snapshot oficial não pode usar o prefixo "[TESTE LOCAL]" no nome da origem.');
+      }
+      if (!opts.sourceEnvironment || !opts.sourceEnvironment.trim() || opts.sourceEnvironment === "local") {
+        problems.push('--source-env explícito e diferente de "local" é obrigatório (ex.: "producao").');
+      }
+      if (!opts.snapshotAt || Number.isNaN(opts.snapshotAt.getTime())) {
+        problems.push("--snapshot-at explícito (ISO 8601) é obrigatório para fixar o instante do retrato.");
+      }
+      if (!opts.dryRun && !opts.acknowledgeOfficial) {
+        problems.push("--confirm-official é obrigatório para GRAVAR (a gravação é permanente e o lote é selado).");
+      }
+      if (problems.length) {
+        throw Object.assign(
+          new Error(`Execução OFICIAL bloqueada — parâmetros explícitos ausentes:\n - ${problems.join("\n - ")}`),
+          { code: "official_requires_explicit_params", problems },
+        );
+      }
+    }
 
     const collection = await collectProductSnapshot(operational);
 
@@ -422,6 +595,8 @@ export async function runImport(opts: ImportOptions): Promise<ImportResult> {
         dry_run: true,
         batch_id: null,
         source_name: sourceName,
+        kind,
+        sealed: false,
         status: "dry_run",
         importer_version: IMPORTER_VERSION,
         totals: { expected, imported: 0, skipped_unchanged: 0, changed: 0, sanitized_records: sanitizedRecords },
@@ -433,15 +608,115 @@ export async function runImport(opts: ImportOptions): Promise<ImportResult> {
     }
 
     // ── Lote ─────────────────────────────────────────────────────────────
+    // Sem --batch, um lote OFICIAL ainda é localizado pelo par (kind, origem)
+    // para que uma reexecução detecte o snapshot já selado — em vez de criar
+    // um lote oficial duplicado.
     let batch = opts.batchId
       ? await legacy.legacyImportBatch.findUnique({ where: { id: opts.batchId } })
-      : null;
+      : kind === "official"
+        ? await legacy.legacyImportBatch.findFirst({
+            where: { kind: "official", source_name: sourceName },
+            orderBy: { imported_at: "desc" },
+          })
+        : null;
 
-    if (batch && (batch.status === "completed") && !opts.allowRefresh) {
+    if (batch && opts.kind && batch.kind !== kind) {
+      throw Object.assign(
+        new Error(
+          `O lote ${batch.id} é do tipo "${batch.kind}" e a execução pediu "${kind}". ` +
+            `Um lote não muda de tipo — crie um lote novo do tipo correto.`,
+        ),
+        { code: "batch_kind_mismatch" },
+      );
+    }
+
+    // ── IMUTABILIDADE: snapshot oficial SELADO nunca é sobrescrito ────────
+    // Nem com --allow-refresh. A reexecução vira uma VALIDAÇÃO idempotente:
+    // recompara a origem atual com o que foi selado. Qualquer diferença
+    // interrompe o processo com relatório; origem idêntica → "validado".
+    if (batch && batch.kind === "official" && batch.sealed_at) {
+      const sealedRecords = await legacy.legacyRecordSnapshot.findMany({
+        where: { batch_id: batch.id },
+        select: { entity_type: true, original_id: true, checksum: true },
+      });
+      const sealedByKey = new Map(sealedRecords.map((e) => [`${e.entity_type}::${e.original_id}`, e.checksum]));
+      const sealedDivergences: ImportResult["divergences"] = [];
+      const seenKeys = new Set<string>();
+      for (const p of prepared) {
+        const k = `${p.raw.entity_type}::${p.raw.original_id}`;
+        seenKeys.add(k);
+        const prev = sealedByKey.get(k);
+        if (prev === undefined) {
+          sealedDivergences.push({
+            entity_type: p.raw.entity_type,
+            original_id: p.raw.original_id,
+            reason: "registro novo na origem — não existe no snapshot oficial selado",
+          });
+        } else if (prev !== p.checksum) {
+          sealedDivergences.push({
+            entity_type: p.raw.entity_type,
+            original_id: p.raw.original_id,
+            reason: "origem alterada desde o snapshot oficial selado (checksum diferente)",
+          });
+        }
+      }
+      for (const k of sealedByKey.keys()) {
+        if (!seenKeys.has(k)) {
+          const [et, oid] = k.split("::");
+          sealedDivergences.push({
+            entity_type: et,
+            original_id: oid,
+            reason: "registro sumiu da origem — presente no snapshot oficial selado, ausente agora",
+          });
+        }
+      }
+
+      const validationReconciliation: Record<string, EntityReconciliation> = {};
+      for (const [entity, expectedCount] of Object.entries(collection.sourceCounts)) {
+        if (entity === "relations") continue;
+        const sealedForEntity = sealedRecords.filter((e) => e.entity_type === entity).length;
+        validationReconciliation[entity] = {
+          expected_source: expectedCount,
+          imported: sealedForEntity,
+          divergence: expectedCount - sealedForEntity,
+          justification: expectedCount === sealedForEntity ? "coerente com o selado" : "diverge do selado — verificar",
+        };
+      }
+
+      if (sealedDivergences.length > 0 || Object.values(validationReconciliation).some((r) => r.divergence !== 0)) {
+        throw Object.assign(
+          new Error(
+            `O Snapshot Histórico Oficial selado (${batch.id}) DIVERGE da origem atual. ` +
+              `Processo interrompido — nada foi gravado. ${sealedDivergences.length} divergência(s) por registro.`,
+          ),
+          { code: "official_divergence", divergences: sealedDivergences, reconciliation: validationReconciliation },
+        );
+      }
+
+      return {
+        dry_run: false,
+        batch_id: batch.id,
+        source_name: batch.source_name,
+        kind: "official",
+        sealed: true,
+        status: "validated_official",
+        importer_version: IMPORTER_VERSION,
+        totals: { expected, imported: prepared.length, skipped_unchanged: prepared.length, changed: 0, sanitized_records: sanitizedRecords },
+        reconciliation: validationReconciliation,
+        divergences: [],
+        batch_checksum: batch.checksum,
+        blocked_fields_removed_sample: blockedSample,
+      };
+    }
+
+    const batchIsFinished =
+      batch != null &&
+      (batch.status === "completed" || (kind === "official" && batch.status === "completed_with_divergences"));
+    if (batch && batchIsFinished && !opts.allowRefresh) {
       // Nunca sobrescreve silenciosamente uma fotografia concluída.
       throw Object.assign(
         new Error(
-          `O lote ${batch.id} já está concluído. Rode com --allow-refresh para comparar/atualizar, ou crie um lote novo.`,
+          `O lote ${batch.id} já está concluído (${batch.status}). Rode com --allow-refresh para comparar/atualizar, ou crie um lote novo.`,
         ),
         { code: "batch_completed" },
       );
@@ -452,6 +727,7 @@ export async function runImport(opts: ImportOptions): Promise<ImportResult> {
         data: {
           source_name: sourceName,
           source_environment: sourceEnvironment,
+          kind,
           snapshot_at: snapshotAt,
           importer_version: IMPORTER_VERSION,
           expected_count: expected,
@@ -595,6 +871,12 @@ export async function runImport(opts: ImportOptions): Promise<ImportResult> {
     const batchChecksum = hashPayload(existing.map((e) => e.checksum).sort());
     const finalStatus = anyDivergence ? "completed_with_divergences" : "completed";
 
+    // Um lote OFICIAL só é SELADO (vira imutável) quando fecha SEM divergências.
+    // Com divergências, fica gravado como "completed_with_divergences", NÃO
+    // selado, e o processo é interrompido com relatório — pode ser reprocessado
+    // (com --allow-refresh) depois de corrigir a origem.
+    const sealNow = kind === "official" && !anyDivergence;
+
     await legacy.legacyImportBatch.update({
       where: { id: batch.id },
       data: {
@@ -602,14 +884,29 @@ export async function runImport(opts: ImportOptions): Promise<ImportResult> {
         imported_count: importedCount,
         checksum: batchChecksum,
         reconciliation_json: JSON.stringify(reconciliation),
-        notes: `${sanitizedRecords} registro(s) sanitizado(s). ${changed} novo(s)/alterado(s), ${skippedUnchanged} inalterado(s).`,
+        notes:
+          `${sanitizedRecords} registro(s) sanitizado(s). ${changed} novo(s)/alterado(s), ${skippedUnchanged} inalterado(s).` +
+          (sealNow ? " Snapshot Histórico Oficial SELADO — imutável." : ""),
+        ...(sealNow ? { sealed_at: new Date() } : {}),
       },
     });
+
+    if (kind === "official" && anyDivergence) {
+      throw Object.assign(
+        new Error(
+          `Snapshot OFICIAL concluído COM divergências — NÃO foi selado. ` +
+            `Lote ${batch.id} gravado como "completed_with_divergences". Revise o relatório antes de reprocessar.`,
+        ),
+        { code: "official_divergence", divergences, reconciliation, batch_id: batch.id },
+      );
+    }
 
     return {
       dry_run: false,
       batch_id: batch.id,
       source_name: sourceName,
+      kind,
+      sealed: sealNow,
       status: finalStatus,
       importer_version: IMPORTER_VERSION,
       totals: { expected, imported: importedCount, skipped_unchanged: skippedUnchanged, changed, sanitized_records: sanitizedRecords },

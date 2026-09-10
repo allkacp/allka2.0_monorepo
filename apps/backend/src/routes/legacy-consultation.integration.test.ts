@@ -112,11 +112,15 @@ describe("Consulta da Plataforma Anterior", () => {
       multipleStatements: true,
     });
     await conn.query(`CREATE DATABASE \`${legacyDbName}\` DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;`);
-    const migrationSql = fs.readFileSync(
-      path.join(backendRoot, "prisma/legacy/migrations/20260901120000_init_legacy_snapshot/migration.sql"),
-      "utf8",
-    );
-    await conn.query(`USE \`${legacyDbName}\`; ${migrationSql}`);
+    const legacyMigrations = [
+      "20260901120000_init_legacy_snapshot",
+      "20260910120000_legacy_batch_kind_and_seal",
+    ];
+    await conn.query(`USE \`${legacyDbName}\`;`);
+    for (const m of legacyMigrations) {
+      const sql = fs.readFileSync(path.join(backendRoot, `prisma/legacy/migrations/${m}/migration.sql`), "utf8");
+      await conn.query(sql);
+    }
     await conn.end();
 
     // Só agora expõe a URL para a aplicação e importa o `app`.
@@ -175,6 +179,9 @@ describe("Consulta da Plataforma Anterior", () => {
     assert.equal(r.status, 200);
     assert.equal(r.json.batch.source_name, "[TESTE LOCAL] Fotografia de produtos anteriores");
     assert.equal(r.json.batch.is_preview, true);
+    assert.equal(r.json.batch.is_official, false);
+    assert.equal(r.json.batch.kind, "preview");
+    assert.equal(r.json.batch.sealed_at, null);
     assert.equal(r.json.batch.status, "completed");
     assert.equal(r.json.counts.product, 3);
     assert.equal(r.json.counts.product_variation, 1);
