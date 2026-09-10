@@ -67,26 +67,34 @@ describe("Item 6 — copyright ancorado no rodapé DA sidebar (correção)", () 
     expect(cr.textContent).toMatch(/©?\s*2026\s*ALLKA by Lamego/i);
   });
 
-  it("o copyright fica DENTRO do data-sidebar-root (coluna flex h-screen) — não como irmão depois dele, senão a página estoura a altura e o Header some", () => {
+  it("o copyright fica DENTRO do data-sidebar-root, depois da navegação (fim vertical), sem estourar a altura", () => {
     const { container } = renderSidebar();
     const root = container.querySelector("[data-sidebar-root]") as HTMLElement;
     expect(root).toBeInTheDocument();
 
     const cr = screen.getByText(/ALLKA by Lamego/i);
-    // ancorado dentro da coluna da sidebar
     expect(cr.closest("[data-sidebar-root]")).toBe(root);
 
-    // e vem DEPOIS da navegação e DEPOIS do pill de perfil (ou seja, no fim vertical)
     const nav = root.querySelector('nav[data-tour-id="main-navigation"]') as HTMLElement;
-    const rolePill = screen.getByText("Administrador");
     expect(nav.compareDocumentPosition(cr) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-    expect(rolePill.compareDocumentPosition(cr) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
 
     // nada com o copyright renderiza como irmão logo APÓS o data-sidebar-root
     const afterRoot = root.nextElementSibling as HTMLElement | null;
     if (afterRoot) {
       expect(afterRoot.textContent ?? "").not.toMatch(/ALLKA by Lamego/i);
     }
+  });
+
+  it("NÃO existe mais cartão/pill de perfil na sidebar (identidade de papel só no cabeçalho)", () => {
+    renderSidebar();
+    // o texto de identificação de papel que ficava no pill do rodapé some
+    for (const role of ["Administrador", "Agência", "Empresa", "Nômade", "Parceiro"]) {
+      expect(screen.queryByText(role)).not.toBeInTheDocument();
+    }
+    // e "Personalizar Sidebar" segue acessível pelo botão de paleta do topo
+    expect(
+      screen.getByRole("button", { name: /personalizar sidebar/i }),
+    ).toBeInTheDocument();
   });
 
   it("o Footer (barra do fim do conteúdo) NÃO mostra mais o copyright — não é faixa fixa", () => {

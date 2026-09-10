@@ -169,41 +169,55 @@ export function SidebarProvider({ children }: { children: ReactNode }) {
 
   const [projectColor, setProjectColor] = useState<string | null>(null);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
-  // Item 6 (reunião 09/09/2026) — sidebar expandida mais enxuta: o padrão
-  // caiu de 240→216 e o mínimo de 220→200, devolvendo ~24px de largura pro
-  // container central (que é `flex-1` no AppLayout, então ganha o espaço
-  // automaticamente). 216 já era uma largura válida e testada (acima do
-  // antigo mínimo de 220 por só 4px) — logo, ícones, nomes e o pill de
-  // perfil continuam cabendo. Quem já arrastou a barra mantém seu valor
-  // salvo (localStorage "sidebar-width"); só quem nunca mexeu pega o novo
-  // padrão.
+  // Item 6 (2ª correção 09/09/2026) — sidebar expandida realmente fina:
+  // padrão GLOBAL de 200px (era 240; a 1ª tentativa em 216 não convenceu).
+  // Recolhida segue 72px. O <main> é `flex-1` no AppLayout, então o
+  // container central herda automaticamente cada px que a sidebar devolve
+  // (~40px vs. os 240 antigos). 200px acomoda logo, ícones e nomes sem
+  // corte (com truncamento por reticências quando o nome é longo, como já
+  // acontecia).
   const SIDEBAR_MIN = 200;
   const SIDEBAR_MAX = 400;
-  const SIDEBAR_DEFAULT = 216;
+  const SIDEBAR_DEFAULT = 200;
   const SIDEBAR_COLLAPSED = 72;
-  // Padrões ANTIGOS conhecidos, gravados por builds anteriores sem serem uma
-  // escolha deliberada do usuário — migram pro novo padrão (216). Qualquer
-  // outro valor salvo (o usuário arrastou a barra) é preservado como está.
-  // Só o antigo default (240) entra aqui: 220 era o MÍNIMO antigo e chegar
-  // nele exigia arrastar a barra até o batente — isso É deliberado.
-  const LEGACY_DEFAULT_WIDTHS = new Set([240]);
+
+  // Migração ÚNICA e VERSIONADA das preferências de largura. QUALQUER valor
+  // salvo antes desta versão (o default antigo de 240, um drag antigo de
+  // 300, o que for) é normalizado UMA vez pro novo padrão global (200) — o
+  // marcador abaixo garante que só roda uma vez, sem pedir pra ninguém
+  // limpar cache/localStorage. Depois disso, um redimensionamento manual do
+  // usuário volta a persistir normalmente (setSidebarWidth grava e, como o
+  // marcador já existe, essa escolha é respeitada nos próximos loads).
+  // Bump a versão pra forçar uma nova normalização global no futuro.
+  const SIDEBAR_WIDTH_KEY = "sidebar-width";
+  const SIDEBAR_WIDTH_MIGRATION_KEY = "sidebar-width-migration";
+  const SIDEBAR_WIDTH_MIGRATION_VERSION = "2026-09-item6-v200";
 
   const [customSidebarWidth, setCustomSidebarWidth] = useState<number>(() => {
     try {
-      const saved = localStorage.getItem("sidebar-width");
-      if (saved === null) return SIDEBAR_DEFAULT;
-      const parsed = Number(saved);
-      if (!isFinite(parsed)) return SIDEBAR_DEFAULT;
-      // Migração one-shot do default legado (240 → 216). Reescreve o
-      // localStorage pra não re-migrar a cada carga e pra o valor visível
-      // bater com o efetivo.
-      if (LEGACY_DEFAULT_WIDTHS.has(parsed)) {
+      const migrated =
+        localStorage.getItem(SIDEBAR_WIDTH_MIGRATION_KEY) ===
+        SIDEBAR_WIDTH_MIGRATION_VERSION;
+
+      if (!migrated) {
+        // Primeira carga nesta versão: descarta a preferência antiga (não
+        // era escolha deliberada sob o novo padrão) e fixa 200 uma vez.
         try {
-          localStorage.setItem("sidebar-width", String(SIDEBAR_DEFAULT));
+          localStorage.setItem(SIDEBAR_WIDTH_KEY, String(SIDEBAR_DEFAULT));
+          localStorage.setItem(
+            SIDEBAR_WIDTH_MIGRATION_KEY,
+            SIDEBAR_WIDTH_MIGRATION_VERSION,
+          );
         } catch {}
         return SIDEBAR_DEFAULT;
       }
-      if (parsed < SIDEBAR_MIN) return SIDEBAR_DEFAULT;
+
+      // Já migrado: respeita o que o usuário escolher a partir de agora.
+      const saved = localStorage.getItem(SIDEBAR_WIDTH_KEY);
+      if (saved === null) return SIDEBAR_DEFAULT;
+      const parsed = Number(saved);
+      if (!isFinite(parsed)) return SIDEBAR_DEFAULT;
+      if (parsed < SIDEBAR_MIN) return SIDEBAR_MIN;
       if (parsed > SIDEBAR_MAX) return SIDEBAR_MAX;
       return parsed;
     } catch {
@@ -215,7 +229,14 @@ export function SidebarProvider({ children }: { children: ReactNode }) {
     const clamped = Math.min(SIDEBAR_MAX, Math.max(SIDEBAR_MIN, width));
     setCustomSidebarWidth(clamped);
     try {
-      localStorage.setItem("sidebar-width", String(clamped));
+      localStorage.setItem(SIDEBAR_WIDTH_KEY, String(clamped));
+      // Um redimensionamento manual é uma escolha deliberada — marca a
+      // migração como feita pra que essa escolha seja respeitada nos
+      // próximos loads, mesmo que o marcador tivesse sumido.
+      localStorage.setItem(
+        SIDEBAR_WIDTH_MIGRATION_KEY,
+        SIDEBAR_WIDTH_MIGRATION_VERSION,
+      );
     } catch {}
   };
 
