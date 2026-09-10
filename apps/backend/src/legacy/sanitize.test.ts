@@ -23,10 +23,15 @@ test("isBlockedKey reconhece credenciais e segredos, mas não campos legítimos 
     "vapid_private_key",
     "recovery_code",
     "access_token",
+    "ip_address",
+    "ip",
+    "last_ip",
+    "user_agent",
+    "device_id",
   ]) {
     assert.equal(isBlockedKey(k), true, `${k} deveria ser bloqueado`);
   }
-  for (const k of ["author", "authored_at", "name", "description", "category", "price", "created_at", "title"]) {
+  for (const k of ["author", "authored_at", "name", "description", "category", "price", "created_at", "title", "membership", "principal"]) {
     assert.equal(isBlockedKey(k), false, `${k} NÃO deveria ser bloqueado`);
   }
 });

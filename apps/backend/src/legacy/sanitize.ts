@@ -50,6 +50,12 @@ const BLOCKED_KEY_PATTERNS: RegExp[] = [
   /vapid/i,
   /encryption[_-]?key/i,
   /access[_-]?token/i,
+  // Identidade histórica/organizações (bloco seguinte ao manifesto de
+  // retenção): logs de IP/dispositivo nunca vão pro legado, mesmo que um
+  // coletor futuro os inclua por engano — segunda camada de defesa.
+  /(^|_)ip(_address)?(_|$)/i,
+  /device[_-]?id/i,
+  /user[_-]?agent/i,
 ];
 
 export function isBlockedKey(key: string): boolean {

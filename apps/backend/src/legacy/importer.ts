@@ -35,7 +35,28 @@ export type LegacyEntityType =
   | "product_bundle_item"
   | "product_catalog_task"
   | "catalog_task"
-  | "specialty";
+  | "specialty"
+  | IdentityEntityType;
+
+// ── Identidade histórica e organizações (bloco seguinte ao manifesto de
+// retenção) — usuários, perfis administrativos, empresas, agências,
+// parceiros e nômades. Extensão do MESMO mecanismo genérico de snapshot;
+// nenhum schema/migration novo foi necessário (ver prisma/legacy/schema.prisma).
+export type IdentityEntityType = "user" | "admin_profile" | "company" | "agency" | "partner_profile" | "nomade";
+
+export const IDENTITY_ENTITY_TYPES: IdentityEntityType[] = [
+  "user",
+  "admin_profile",
+  "company",
+  "agency",
+  "partner_profile",
+  "nomade",
+];
+
+// Versão própria do coletor de identidade/organizações — independente de
+// IMPORTER_VERSION (que segue evoluindo só para o domínio de produtos).
+export const IDENTITY_ORG_IMPORTER_VERSION = "identity-orgs-foundation-1";
+export const DEFAULT_IDENTITY_SOURCE_NAME = "[TESTE LOCAL] Fotografia de identidades e organizações anteriores";
 
 interface RawRecord {
   entity_type: LegacyEntityType;
@@ -454,6 +475,246 @@ export async function collectProductSnapshot(db: OperationalPrisma): Promise<Sna
   return { records, relations, sourceCounts };
 }
 
+/**
+ * Monta a fotografia de IDENTIDADE HISTÓRICA e ORGANIZAÇÕES: usuários, perfis
+ * administrativos, empresas, agências, parceiros e nômades — com as relações
+ * necessárias para, no futuro, interpretar quem é autor/responsável/dono de
+ * projetos e tarefas antigos, SEM transformar nada disso em conta ativa no
+ * Legado (é só consulta histórica).
+ *
+ * Preserva por conta, deliberadamente, só o que a consulta histórica precisa:
+ * id original, nome, e-mail, papel/perfil, status e datas relevantes. NUNCA
+ * copia password_hash, tokens, sessões, MFA/recovery codes, chaves, dados de
+ * autenticação ou logs de IP — nenhum desses campos é sequer lido aqui (e o
+ * sanitizeForLegacy/scrubSecretValues do importador barram qualquer um que
+ * escapasse, por nome ou por valor, como segunda camada de proteção).
+ */
+export async function collectIdentityOrgSnapshot(db: OperationalPrisma): Promise<SnapshotCollection> {
+  const records: RawRecord[] = [];
+  const relations: RawRelation[] = [];
+
+  const adminProfiles = await db.adminProfile.findMany({ orderBy: { created_at: "asc" } });
+  for (const p of adminProfiles) {
+    records.push({
+      entity_type: "admin_profile",
+      source_table: "admin_profiles",
+      original_id: p.id,
+      original_code: null,
+      title: p.name,
+      subtitle: null,
+      original_status: p.is_active ? "ativo" : "inativo",
+      dates: isoDates(p),
+      content: { id: p.id, name: p.name, is_master: p.is_master, is_active: p.is_active },
+      search_category: null,
+      search_active: p.is_active,
+    });
+  }
+
+  const companies = await db.company.findMany({ orderBy: { created_at: "asc" } });
+  for (const c of companies) {
+    records.push({
+      entity_type: "company",
+      source_table: "companies",
+      original_id: c.id,
+      original_code: c.sequence_number != null ? `emp_${String(c.sequence_number).padStart(5, "0")}` : null,
+      title: c.name,
+      subtitle: c.cnpj ?? null,
+      original_status: c.status,
+      dates: isoDates(c),
+      content: {
+        id: c.id,
+        name: c.name,
+        cnpj: c.cnpj,
+        status: c.status,
+        type: c.type,
+        segment: c.segment,
+        city: c.city,
+        state: c.state,
+        sequence_number: c.sequence_number,
+        legacy_id: c.legacy_id,
+      },
+      search_category: c.type,
+      search_active: c.status === "ativo",
+    });
+    if (c.owner_user_id) {
+      relations.push({
+        from_original_id: c.id,
+        from_entity_type: "company",
+        to_original_id: c.owner_user_id,
+        to_entity_type: "user",
+        relation_type: "owned_by_user",
+        description: null,
+      });
+    }
+    if (c.referred_by_partner_id) {
+      relations.push({
+        from_original_id: c.id,
+        from_entity_type: "company",
+        to_original_id: c.referred_by_partner_id,
+        to_entity_type: "partner_profile",
+        relation_type: "referred_by_partner",
+        description: null,
+      });
+    }
+  }
+
+  const agencies = await db.agency.findMany({ orderBy: { created_at: "asc" } });
+  for (const a of agencies) {
+    records.push({
+      entity_type: "agency",
+      source_table: "agencies",
+      original_id: a.id,
+      original_code: a.sequence_number != null ? `age_${String(a.sequence_number).padStart(5, "0")}` : null,
+      title: a.name,
+      subtitle: a.cnpj ?? null,
+      original_status: a.status,
+      dates: isoDates(a),
+      content: {
+        id: a.id,
+        name: a.name,
+        cnpj: a.cnpj,
+        status: a.status,
+        partner_level: a.partner_level,
+        sequence_number: a.sequence_number,
+        legacy_id: a.legacy_id,
+      },
+      search_category: null,
+      search_active: a.status === "ativo",
+    });
+    relations.push({
+      from_original_id: a.id,
+      from_entity_type: "agency",
+      to_original_id: a.owner_user_id,
+      to_entity_type: "user",
+      relation_type: "owned_by_user",
+      description: null,
+    });
+  }
+
+  const partnerProfiles = await db.partnerProfile.findMany({ orderBy: { created_at: "asc" } });
+  for (const pp of partnerProfiles) {
+    records.push({
+      entity_type: "partner_profile",
+      source_table: "partner_profiles",
+      original_id: pp.id,
+      original_code: pp.referral_code ?? null,
+      title: null,
+      subtitle: null,
+      original_status: pp.status,
+      dates: isoDates(pp),
+      content: { id: pp.id, agency_id: pp.agency_id, status: pp.status, referral_code: pp.referral_code },
+      search_category: null,
+      search_active: pp.status === "active",
+    });
+    relations.push({
+      from_original_id: pp.agency_id,
+      from_entity_type: "agency",
+      to_original_id: pp.id,
+      to_entity_type: "partner_profile",
+      relation_type: "has_partner_profile",
+      description: null,
+    });
+  }
+
+  const nomades = await db.nomade.findMany({ orderBy: { created_at: "asc" } });
+  for (const n of nomades) {
+    records.push({
+      entity_type: "nomade",
+      source_table: "nomades",
+      original_id: n.id,
+      original_code: null,
+      title: n.name,
+      subtitle: n.email,
+      original_status: n.status,
+      dates: isoDates(n),
+      content: { id: n.id, name: n.name, email: n.email, status: n.status, level: n.level, legacy_id: n.legacy_id },
+      search_category: null,
+      search_active: n.status === "ativo",
+    });
+    if (n.user_id) {
+      relations.push({
+        from_original_id: n.id,
+        from_entity_type: "nomade",
+        to_original_id: n.user_id,
+        to_entity_type: "user",
+        relation_type: "profile_of_user",
+        description: null,
+      });
+    }
+  }
+
+  // Usuários por último — deliberado: as relações acima (agency owner,
+  // company owner, nomade profile) já foram emitidas com o lado "user" como
+  // destino (`to_entity_type: "user"`), e o resolvedor de relações do
+  // importador não exige que o registro de destino já exista no momento em
+  // que a relação é enfileirada (só quando grava, ao final do lote).
+  const users = await db.user.findMany({ orderBy: { created_at: "asc" } });
+  for (const u of users) {
+    records.push({
+      entity_type: "user",
+      source_table: "users",
+      original_id: u.id,
+      original_code: u.user_code ?? null,
+      title: u.name,
+      subtitle: u.email,
+      original_status: u.status,
+      dates: { created_at: u.created_at.toISOString(), updated_at: u.updated_at.toISOString(), last_login: u.last_login ? u.last_login.toISOString() : null },
+      // Só o necessário pra consulta histórica: id, nome, e-mail, papel/perfil,
+      // status. Deliberadamente AUSENTES: password_hash, username,
+      // must_set_password, password_setup_token/expires_at, tokens de
+      // reativação, telefone, avatar — nada de autenticação, segredo ou PII
+      // não essencial à identidade histórica.
+      content: {
+        id: u.id,
+        name: u.name,
+        email: u.email,
+        role: u.role,
+        account_type: u.account_type,
+        status: u.status,
+        is_active: u.is_active,
+      },
+      search_category: u.account_type,
+      search_active: u.is_active,
+    });
+    if (u.admin_profile_id) {
+      relations.push({
+        from_original_id: u.id,
+        from_entity_type: "user",
+        to_original_id: u.admin_profile_id,
+        to_entity_type: "admin_profile",
+        relation_type: "has_admin_profile",
+        description: null,
+      });
+    }
+    if (u.company_id) {
+      relations.push({
+        from_original_id: u.id,
+        from_entity_type: "user",
+        to_original_id: u.company_id,
+        to_entity_type: "company",
+        relation_type: "member_of_company",
+        description: null,
+      });
+    }
+    if (u.agency_id) {
+      relations.push({
+        from_original_id: u.id,
+        from_entity_type: "user",
+        to_original_id: u.agency_id,
+        to_entity_type: "agency",
+        relation_type: "member_of_agency",
+        description: null,
+      });
+    }
+  }
+
+  const sourceCounts: Record<string, number> = {};
+  for (const r of records) sourceCounts[r.entity_type] = (sourceCounts[r.entity_type] ?? 0) + 1;
+  sourceCounts.relations = relations.length;
+
+  return { records, relations, sourceCounts };
+}
+
 // ─────────────────────────── execução do import ────────────────────────────
 
 export interface ImportOptions {
@@ -479,6 +740,17 @@ export interface ImportOptions {
   /** Permitir reprocessar um lote JÁ concluído (por padrão, recusa). */
   allowRefresh?: boolean;
   legacyImportUrl: string;
+  /**
+   * Quais coletores rodam neste lote. Padrão: só `collectProductSnapshot`
+   * (comportamento IDÊNTICO ao de antes desta opção existir — nenhum
+   * chamador existente precisa mudar). Passe `[collectIdentityOrgSnapshot]`
+   * (ou combine coletores) para um lote de outro domínio — cada domínio usa
+   * seu próprio `sourceName` (lotes diferentes), então nunca colide com o
+   * lote de produtos.
+   */
+  collectors?: Array<(db: OperationalPrisma) => Promise<SnapshotCollection>>;
+  /** Sobrescreve o `importer_version` gravado no lote. Obrigatório junto com `collectors`. */
+  importerVersion?: string;
 }
 
 export interface EntityReconciliation {
@@ -516,9 +788,19 @@ export async function runImport(opts: ImportOptions): Promise<ImportResult> {
 
   try {
     const kind: LegacyBatchKind = opts.kind === "official" ? "official" : "preview";
+    if (opts.collectors && !opts.sourceName) {
+      // Não existe um nome padrão genérico sensato entre domínios diferentes
+      // (o padrão de fábrica é especificamente sobre produtos) — exige-se
+      // explícito, mesmo espírito das outras guardas deste importador.
+      throw Object.assign(
+        new Error("sourceName é obrigatório ao informar `collectors` — não há um nome padrão para um domínio customizado."),
+        { code: "custom_collectors_require_source_name" },
+      );
+    }
     const sourceName = opts.sourceName ?? DEFAULT_SOURCE_NAME;
     const sourceEnvironment = opts.sourceEnvironment ?? "local";
     const snapshotAt = opts.snapshotAt ?? new Date();
+    const importerVersion = opts.importerVersion ?? IMPORTER_VERSION;
 
     // ── Guardas de EXECUÇÃO OFICIAL ──────────────────────────────────────
     // Um Snapshot Histórico Oficial só roda com parâmetros explícitos. Nada
@@ -548,7 +830,16 @@ export async function runImport(opts: ImportOptions): Promise<ImportResult> {
       }
     }
 
-    const collection = await collectProductSnapshot(operational);
+    const collectors = opts.collectors ?? [collectProductSnapshot];
+    const collected = await Promise.all(collectors.map((collect) => collect(operational)));
+    const collection: SnapshotCollection = {
+      records: collected.flatMap((c) => c.records),
+      relations: collected.flatMap((c) => c.relations),
+      sourceCounts: collected.reduce<Record<string, number>>((acc, c) => {
+        for (const [k, v] of Object.entries(c.sourceCounts)) acc[k] = (acc[k] ?? 0) + v;
+        return acc;
+      }, {}),
+    };
 
     // Sanitiza + checksum de cada registro (checksum SEMPRE após sanitização).
     const prepared = collection.records.map((r) => {
@@ -598,7 +889,7 @@ export async function runImport(opts: ImportOptions): Promise<ImportResult> {
         kind,
         sealed: false,
         status: "dry_run",
-        importer_version: IMPORTER_VERSION,
+        importer_version: importerVersion,
         totals: { expected, imported: 0, skipped_unchanged: 0, changed: 0, sanitized_records: sanitizedRecords },
         reconciliation: rec,
         divergences: [],
@@ -700,7 +991,7 @@ export async function runImport(opts: ImportOptions): Promise<ImportResult> {
         kind: "official",
         sealed: true,
         status: "validated_official",
-        importer_version: IMPORTER_VERSION,
+        importer_version: importerVersion,
         totals: { expected, imported: prepared.length, skipped_unchanged: prepared.length, changed: 0, sanitized_records: sanitizedRecords },
         reconciliation: validationReconciliation,
         divergences: [],
@@ -729,7 +1020,7 @@ export async function runImport(opts: ImportOptions): Promise<ImportResult> {
           source_environment: sourceEnvironment,
           kind,
           snapshot_at: snapshotAt,
-          importer_version: IMPORTER_VERSION,
+          importer_version: importerVersion,
           expected_count: expected,
           status: "running",
         },
@@ -737,7 +1028,7 @@ export async function runImport(opts: ImportOptions): Promise<ImportResult> {
     } else {
       await legacy.legacyImportBatch.update({
         where: { id: batch.id },
-        data: { status: "running", expected_count: expected, importer_version: IMPORTER_VERSION },
+        data: { status: "running", expected_count: expected, importer_version: importerVersion },
       });
     }
 
@@ -908,7 +1199,7 @@ export async function runImport(opts: ImportOptions): Promise<ImportResult> {
       kind,
       sealed: sealNow,
       status: finalStatus,
-      importer_version: IMPORTER_VERSION,
+      importer_version: importerVersion,
       totals: { expected, imported: importedCount, skipped_unchanged: skippedUnchanged, changed, sanitized_records: sanitizedRecords },
       reconciliation,
       divergences,

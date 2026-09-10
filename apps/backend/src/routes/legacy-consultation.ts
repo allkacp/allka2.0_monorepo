@@ -14,6 +14,7 @@ import { prisma } from "../lib/prisma";
 import { verifyToken, evaluateAdminMasterAccess } from "../middleware/auth";
 import { writeAccessAudit } from "../lib/product-feedback-service";
 import { getLegacyPrisma, LegacyNotConfiguredError } from "../legacy/legacy-prisma";
+import { IDENTITY_ENTITY_TYPES } from "../legacy/importer";
 
 const router = Router();
 const MODULE = "consulta_legado";
@@ -112,6 +113,15 @@ router.get("/summary", async (req: Request, res: Response, next: NextFunction) =
     const productByStatus: Record<string, number> = {};
     for (const s of productStatus) productByStatus[s.original_status ?? "—"] = s._count._all;
 
+    // "contas" (identidade/organizações) pode viver num lote DIFERENTE do
+    // mais recente exibido acima (cada domínio tem seu próprio source_name —
+    // ver collectIdentityOrgSnapshot) — por isso checa por existência de
+    // QUALQUER lote com esses tipos, em vez de depender de `counts` do lote
+    // "mais recente" geral.
+    const identityCount = await legacy.legacyRecordSnapshot.count({
+      where: { entity_type: { in: IDENTITY_ENTITY_TYPES } },
+    });
+
     res.json({
       configured: true,
       batch: {
@@ -139,7 +149,7 @@ router.get("/summary", async (req: Request, res: Response, next: NextFunction) =
       tabs: {
         resumo: { status: "ready" },
         produtos: { status: "ready", count: counts["product"] ?? 0 },
-        contas: { status: "awaiting_import" },
+        contas: { status: identityCount > 0 ? "ready" : "awaiting_import", count: identityCount },
         compras: { status: "awaiting_import" },
         projetos: { status: "awaiting_import" },
         tarefas: { status: "awaiting_import" },
@@ -242,6 +252,113 @@ router.get("/products", async (req: Request, res: Response, next: NextFunction) 
       page_size: pageSize,
       batch_id: batchId,
       available_categories: categories.map((c) => c.search_category).filter(Boolean).sort(),
+      read_only: true,
+    });
+  } catch (err) {
+    handleErr(err, res, next);
+  }
+});
+
+// ── GET /identities  (identidade histórica + organizações) ─────────────
+// Mesmo padrão de busca/paginação de /products, mas para os 6 tipos de
+// identidade/organização (user, admin_profile, company, agency,
+// partner_profile, nomade) — que vivem em seu(s) próprio(s) lote(s),
+// distintos do lote de produtos (ver collectIdentityOrgSnapshot).
+const IDENTITY_SORTABLE = new Set(["title", "original_code", "imported_at", "original_status"]);
+
+router.get("/identities", async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const legacy = getLegacyPrisma();
+    if (!legacy) throw new LegacyNotConfiguredError();
+
+    const requestedEntityType =
+      typeof req.query.entity_type === "string" && (IDENTITY_ENTITY_TYPES as string[]).includes(req.query.entity_type)
+        ? req.query.entity_type
+        : undefined;
+    const entityTypeFilter = requestedEntityType ? [requestedEntityType] : IDENTITY_ENTITY_TYPES;
+
+    // Sem --batch_id explícito, usa o lote mais recente que de fato tem
+    // registros de identidade/organização — NUNCA o mais recente geral (que
+    // pode ser um lote de outro domínio, ex.: produtos).
+    const batchId =
+      typeof req.query.batch_id === "string" && req.query.batch_id
+        ? req.query.batch_id
+        : (
+            await legacy.legacyRecordSnapshot.findFirst({
+              where: { entity_type: { in: IDENTITY_ENTITY_TYPES } },
+              orderBy: { imported_at: "desc" },
+              select: { batch_id: true },
+            })
+          )?.batch_id;
+
+    if (!batchId) {
+      res.json({ data: [], total: 0, page: 1, page_size: 20, batch_id: null, available_entity_types: [], read_only: true });
+      return;
+    }
+
+    const q = typeof req.query.q === "string" ? req.query.q.trim().slice(0, 120) : "";
+    const status = typeof req.query.status === "string" ? req.query.status : undefined;
+    const page = Math.max(1, Number(req.query.page) || 1);
+    const pageSize = Math.min(100, Math.max(1, Number(req.query.page_size) || 20));
+    const sortBy = IDENTITY_SORTABLE.has(String(req.query.sort_by)) ? String(req.query.sort_by) : "title";
+    const sortDir = req.query.sort_dir === "desc" ? "desc" : "asc";
+
+    const where: Record<string, unknown> = { batch_id: batchId, entity_type: { in: entityTypeFilter } };
+    if (status) where.original_status = status;
+    if (q) {
+      where.OR = [
+        { original_code: { contains: q } },
+        { title: { contains: q } },
+        { subtitle: { contains: q } },
+        { content_json: { contains: q } },
+      ];
+    }
+
+    const [total, rows, entityTypeCounts] = await Promise.all([
+      legacy.legacyRecordSnapshot.count({ where }),
+      legacy.legacyRecordSnapshot.findMany({
+        where,
+        orderBy: { [sortBy]: sortDir },
+        skip: (page - 1) * pageSize,
+        take: pageSize,
+        // Só o que já é seguro por desenho (content/dados sensíveis nunca
+        // estiveram aqui — ver collectIdentityOrgSnapshot): nenhuma seleção
+        // adicional de campo é necessária para não vazar segredo, mas a
+        // lista (diferente do detalhe) nem inclui `content_json` — só o
+        // suficiente pra identificar o registro na busca.
+        select: {
+          id: true,
+          entity_type: true,
+          original_id: true,
+          original_code: true,
+          title: true,
+          subtitle: true,
+          original_status: true,
+          imported_at: true,
+          sanitized: true,
+        },
+      }),
+      legacy.legacyRecordSnapshot.groupBy({
+        by: ["entity_type"],
+        where: { batch_id: batchId, entity_type: { in: IDENTITY_ENTITY_TYPES } },
+        _count: { _all: true },
+      }),
+    ]);
+
+    await audit(req, "list", {
+      entity_type: "identity_org",
+      batch_id: batchId,
+      filters: { has_query: !!q, status: status ?? null, entity_type: requestedEntityType ?? null, page, page_size: pageSize, sort_by: sortBy, sort_dir: sortDir },
+      result_count: rows.length,
+    });
+
+    res.json({
+      data: rows,
+      total,
+      page,
+      page_size: pageSize,
+      batch_id: batchId,
+      available_entity_types: entityTypeCounts.map((c) => ({ entity_type: c.entity_type, count: c._count._all })),
       read_only: true,
     });
   } catch (err) {
