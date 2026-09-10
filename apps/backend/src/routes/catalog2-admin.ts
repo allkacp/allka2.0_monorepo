@@ -215,9 +215,24 @@ router.put("/pricing-settings", async (req, res, next) => {
 });
 
 // ── Overview (tela) ──────────────────────────────────────────────────
+// Todos os números vêm de contagem real das tabelas catalog2 — nunca de
+// literal. O produto de demonstração ("[TESTE LOCAL] …") é separado da
+// comunicação de avanço dos produtos finais importados.
+const TEST_LOCAL_PREFIX = "[TESTE LOCAL]";
+const testLocalNameFilter = { internal_name: { startsWith: TEST_LOCAL_PREFIX } };
+const finalImportedProductFilter = {
+  import_origin: { isNot: null },
+  NOT: { internal_name: { startsWith: TEST_LOCAL_PREFIX } },
+};
+
 router.get("/overview", async (_req, res, next) => {
   try {
-    const [pillars, fourF, categories, specialties, products, byStatus, draftCount] = await Promise.all([
+    const [
+      pillars, fourF, categories, specialties, products, byStatus, draftCount,
+      importedCount, testLocalCount, testLocalImportedCount, publishedCount,
+      tasksTotal, stepsTotal, tasksInFinalImported, stepsInFinalImported,
+      appliedBatchCount, lastApply, origins,
+    ] = await Promise.all([
       prisma.catalog2Pillar.count(),
       prisma.catalog2FourF.count(),
       prisma.catalog2Category.count(),
@@ -225,13 +240,64 @@ router.get("/overview", async (_req, res, next) => {
       prisma.catalog2Product.count(),
       prisma.catalog2Product.groupBy({ by: ["status"], _count: { _all: true } }),
       prisma.catalog2ProductVersion.count({ where: { state: "rascunho" } }),
+      prisma.catalog2Product.count({ where: { import_origin: { isNot: null } } }),
+      prisma.catalog2Product.count({ where: testLocalNameFilter }),
+      prisma.catalog2Product.count({ where: { import_origin: { isNot: null }, ...testLocalNameFilter } }),
+      prisma.catalog2Product.count({ where: { published_version_id: { not: null } } }),
+      prisma.catalog2Task.count(),
+      prisma.catalog2TaskStep.count(),
+      prisma.catalog2Task.count({ where: { version: { product: finalImportedProductFilter } } }),
+      prisma.catalog2TaskStep.count({ where: { task: { version: { product: finalImportedProductFilter } } } }),
+      prisma.catalog2ImportBatch.count({ where: { mode: "apply" } }),
+      prisma.catalog2ImportBatch.findFirst({ where: { mode: "apply" }, orderBy: { started_at: "desc" } }),
+      prisma.catalog2ProductImportOrigin.findMany({ select: { pendencies_json: true } }),
     ]);
+
+    const byStatusMap = Object.fromEntries(byStatus.map((s) => [s.status, s._count._all]));
+    const productsWithPendencies = origins.filter((o) => safeJsonArray(o.pendencies_json).length > 0).length;
+    // "Produtos finais importados" = importados que NÃO são o produto demo.
+    const finalImportedProducts = importedCount - testLocalImportedCount;
+    // Número esperado da importação vem do lote real, nunca de "36" fixo.
+    const importExpected = lastApply?.expected_products ?? (importedCount || null);
+
     res.json({
-      counts: { products, pillars, four_f: fourF, categories, specialties, draft_versions: draftCount },
-      products_by_status: Object.fromEntries(byStatus.map((s) => [s.status, s._count._all])),
+      counts: {
+        products,
+        pillars,
+        four_f: fourF,
+        categories,
+        specialties,
+        draft_versions: draftCount,
+        // ── contagens reais para a comunicação de avanço ──
+        imported_products: importedCount,
+        test_local_products: testLocalCount,
+        final_imported_products: finalImportedProducts,
+        products_in_preparation: byStatusMap["em_preparacao"] ?? 0,
+        products_published: publishedCount,
+        tasks: tasksTotal,
+        steps: stepsTotal,
+        tasks_in_final_imported: tasksInFinalImported,
+        steps_in_final_imported: stepsInFinalImported,
+        products_with_pendencies: productsWithPendencies,
+      },
+      import: {
+        has_import: appliedBatchCount > 0,
+        applied_batch_count: appliedBatchCount,
+        last_applied_at: lastApply?.finished_at ?? lastApply?.started_at ?? null,
+        expected: importExpected,
+        imported_count: importedCount,
+        final_imported_count: finalImportedProducts,
+        published_count: publishedCount,
+        in_preparation_count: byStatusMap["em_preparacao"] ?? 0,
+        // Frase derivada — nunca contém número fixo.
+        message: appliedBatchCount > 0
+          ? `${finalImportedProducts} produto(s) importado(s) para preparação. Aguardando tarefas, prazos, precificação e revisão para publicação.`
+          : "Nenhuma importação aplicada ainda.",
+      },
+      products_by_status: byStatusMap,
       status_meaning: CATALOG2_STATUS_MEANING,
       is_empty: products === 0,
-      empty_message: "O novo catálogo está preparado. Os 36 produtos serão importados em um próximo bloco.",
+      empty_message: "O novo catálogo está preparado. Nenhum produto importado ainda.",
     });
   } catch (e) { next(e); }
 });
@@ -778,6 +844,10 @@ router.get("/versions/:id/preview", async (req, res, next) => {
       effort_days: pricing.deadline.effort_days,
       price: pricing.lines.commercial_final_price.amount,
       price_pending: pricing.pricing_pending,
+      // Sem tarefa ativa não há base de custo — a UI não mostra "R$ 0,00" como
+      // preço válido (derivado do mesmo cálculo, sem alterá-lo).
+      active_task_count: pricing.active_task_keys.length,
+      has_cost_base: pricing.active_task_keys.length > 0,
       pending_info: pricing.pending_info,
       currency: pricing.currency,
       default_selection: sel,
@@ -848,8 +918,10 @@ router.get("/import/summary", async (_req, res, next) => {
           }
         : null,
       total_imported: totalImported,
-      expected: 36,
-      count_matches_expected: totalImported === 36,
+      // Esperado vem do lote real (Catalog2ImportBatch.expected_products) —
+      // nunca "36" fixo.
+      expected: lastApply?.expected_products ?? totalImported,
+      count_matches_expected: totalImported === (lastApply?.expected_products ?? totalImported),
       rose_reviewed: origins.filter((o) => o.rose_reviewed).length,
       not_rose_reviewed: origins.filter((o) => !o.rose_reviewed).length,
       human_edited: origins.filter((o) => o.human_edited_at).length,
@@ -1018,105 +1090,140 @@ router.post("/products/:id/resolve-pendency", async (req, res, next) => {
 // item = pronto | pendente | bloqueador | opcional. Os 36 seguem rascunho.
 // ═══════════════════════════════════════════════════════════════════════
 type ReadinessLevel = "pronto" | "pendente" | "bloqueador" | "opcional";
+
+// Include compartilhado — o painel de prontidão (lista + por produto) usa
+// exatamente a mesma consulta e as mesmas regras.
+const READINESS_INCLUDE = {
+  pillar: { select: { name: true } },
+  category: { select: { name: true } },
+  four_f: { select: { four_f_id: true } },
+  import_origin: { select: { source_index: true, rose_reviewed: true, pendencies_json: true, review_state: true } },
+  versions: {
+    orderBy: { version_number: "desc" as const },
+    include: {
+      _count: { select: { variations: true, addons: true, tasks: true } },
+      // Etapas não são relação direta da versão — contamos pelas tarefas.
+      tasks: { select: { _count: { select: { steps: true } } } },
+    },
+  },
+} satisfies Prisma.Catalog2ProductInclude;
+
+type ReadinessProduct = Prisma.Catalog2ProductGetPayload<{ include: typeof READINESS_INCLUDE }>;
+
+// Regra ÚNICA de prontidão por produto (nenhuma duplicação no frontend nem
+// entre rotas). Só leitura — nada aqui grava ou publica.
+async function computeProductReadiness(p: ReadinessProduct) {
+  const draft = p.versions.find((v) => v.state === "rascunho") ?? p.versions[0] ?? null;
+  const published = p.versions.find((v) => v.id === p.published_version_id) ?? null;
+  const targetVersion = published ?? draft;
+  const pend = safeJsonArray(p.import_origin?.pendencies_json);
+  const has = (k: string) => pend.includes(k);
+  const taskCount = targetVersion?._count.tasks ?? 0;
+  const stepCount = (targetVersion?.tasks ?? []).reduce((a, t) => a + t._count.steps, 0);
+
+  let pricing: Awaited<ReturnType<typeof computePricing>> | null = null;
+  if (targetVersion) {
+    try {
+      pricing = await computePricing(targetVersion.id, await defaultSelection(targetVersion.id));
+    } catch {
+      pricing = null;
+    }
+  }
+  const hasActiveTasks = (pricing?.active_task_keys.length ?? taskCount) > 0;
+
+  const items: Record<string, { level: ReadinessLevel; note: string }> = {
+    conteudo: has("content_review_pending")
+      ? { level: "bloqueador", note: "Revisão de conteúdo pendente (texto preservado da importação)." }
+      : { level: "pronto", note: "Conteúdo revisável." },
+    classificacao: !p.pillar_id || !p.category_id
+      ? { level: "bloqueador", note: "Falta pilar ou categoria." }
+      : has("classification_decision_pending")
+        ? { level: "bloqueador", note: "Divergência categoria × área aguardando decisão." }
+        : { level: "pronto", note: `${p.pillar?.name ?? "—"} / ${p.category?.name ?? "—"} / ${p.four_f.length} 4F` },
+    variacoes: (targetVersion?._count.variations ?? 0) > 0
+      ? { level: "pronto", note: `${targetVersion?._count.variations} variação(ões).` }
+      : { level: "opcional", note: "Sem variações (permitido)." },
+    adicionais: (targetVersion?._count.addons ?? 0) > 0
+      ? { level: "pronto", note: `${targetVersion?._count.addons} adicional(is).` }
+      : { level: "opcional", note: "Sem adicionais (permitido)." },
+    tarefas: taskCount > 0
+      ? { level: "pronto", note: `${taskCount} tarefa(s).` }
+      : { level: "pendente", note: "Nenhuma tarefa — não vira operação sem tarefas (bloco 6)." },
+    etapas: stepCount > 0
+      ? { level: "pronto", note: `${stepCount} etapa(s).` }
+      : { level: "opcional", note: taskCount > 0 ? "Sem etapas nas tarefas (permitido)." : "Etapas dependem de tarefas cadastradas." },
+    // Sem tarefa ativa NÃO há base de custo — o preço nunca é "R$ 0,00 válido".
+    preco: hasActiveTasks
+      ? pricing?.commercial_ready
+        ? { level: "pronto", note: `Preço comercial ${pricing.currency} ${pricing.lines.commercial_final_price.amount}.` }
+        : { level: "bloqueador", note: `Preço comercial "A definir": ${pricing?.pending_info.join("; ") || "configuração comercial incompleta"}.` }
+      : { level: "bloqueador", note: "Sem tarefas cadastradas — base de custo indefinida; a precificação não pode ser calculada." },
+    prazo: pricing && !pricing.deadline.commercial_deadline_pending
+      ? { level: "pronto", note: `Prazo comercial ${pricing.deadline.commercial_deadline_days} dia(s).` }
+      : { level: "bloqueador", note: "Prazo comercial base não definido." },
+    portfolio: has("portfolio_pending")
+      ? { level: "pendente", note: "Sem material de portfólio (não bloqueia venda, mas empobrece a página)." }
+      : { level: "pronto", note: "Portfólio ok / não aplicável." },
+    revisao_rose: p.import_origin
+      ? p.import_origin.rose_reviewed
+        ? { level: "pronto", note: "Revisado pela Rose." }
+        : { level: "pendente", note: "Sem revisão da Rose." }
+      : { level: "opcional", note: "Produto não veio da importação." },
+    publicacao: published
+      ? { level: "pronto", note: `v${published.version_number} publicada.` }
+      : { level: "bloqueador", note: "Nunca publicado — invisível para o cliente (bloco 5 não publica)." },
+  };
+
+  const blockers = Object.entries(items).filter(([, v]) => v.level === "bloqueador").map(([k]) => k);
+  const pendings = Object.entries(items).filter(([, v]) => v.level === "pendente").map(([k]) => k);
+  return {
+    id: p.id,
+    slug: p.slug,
+    name: p.internal_name,
+    is_test_local: p.internal_name.startsWith(TEST_LOCAL_PREFIX),
+    imported: !!p.import_origin,
+    source_index: p.import_origin?.source_index ?? null,
+    review_state: p.import_origin?.review_state ?? null,
+    status: p.status,
+    published: !!published,
+    client_visible: p.status === "disponivel" && !!published && pend.length === 0 && !!pricing?.commercial_ready,
+    task_count: taskCount,
+    step_count: stepCount,
+    has_active_tasks: hasActiveTasks,
+    items,
+    blockers,
+    pendings,
+    ready_for_client: blockers.length === 0,
+  };
+}
+
 router.get("/readiness", async (_req, res, next) => {
   try {
-    const products = await prisma.catalog2Product.findMany({
-      orderBy: { internal_name: "asc" },
-      include: {
-        pillar: { select: { name: true } },
-        category: { select: { name: true } },
-        four_f: { select: { four_f_id: true } },
-        import_origin: { select: { source_index: true, rose_reviewed: true, pendencies_json: true, review_state: true } },
-        versions: {
-          orderBy: { version_number: "desc" },
-          include: { _count: { select: { variations: true, addons: true, tasks: true } } },
-        },
-      },
-    });
-
+    const products = await prisma.catalog2Product.findMany({ orderBy: { internal_name: "asc" }, include: READINESS_INCLUDE });
     const rows = [];
-    for (const p of products) {
-      const draft = p.versions.find((v) => v.state === "rascunho") ?? p.versions[0] ?? null;
-      const published = p.versions.find((v) => v.id === p.published_version_id) ?? null;
-      const targetVersion = published ?? draft;
-      const pend = safeJsonArray(p.import_origin?.pendencies_json);
-      const has = (k: string) => pend.includes(k);
-
-      let pricing: Awaited<ReturnType<typeof computePricing>> | null = null;
-      if (targetVersion) {
-        try {
-          pricing = await computePricing(targetVersion.id, await defaultSelection(targetVersion.id));
-        } catch {
-          pricing = null;
-        }
-      }
-
-      const items: Record<string, { level: ReadinessLevel; note: string }> = {
-        conteudo: has("content_review_pending")
-          ? { level: "bloqueador", note: "Revisão de conteúdo pendente (texto preservado da importação)." }
-          : { level: "pronto", note: "Conteúdo revisável." },
-        classificacao: !p.pillar_id || !p.category_id
-          ? { level: "bloqueador", note: "Falta pilar ou categoria." }
-          : has("classification_decision_pending")
-            ? { level: "bloqueador", note: "Divergência categoria × área aguardando decisão." }
-            : { level: "pronto", note: `${p.pillar?.name ?? "—"} / ${p.category?.name ?? "—"} / ${p.four_f.length} 4F` },
-        variacoes: (targetVersion?._count.variations ?? 0) > 0
-          ? { level: "pronto", note: `${targetVersion?._count.variations} variação(ões).` }
-          : { level: "opcional", note: "Sem variações (permitido)." },
-        adicionais: (targetVersion?._count.addons ?? 0) > 0
-          ? { level: "pronto", note: `${targetVersion?._count.addons} adicional(is).` }
-          : { level: "opcional", note: "Sem adicionais (permitido)." },
-        tarefas: (targetVersion?._count.tasks ?? 0) > 0
-          ? { level: "pronto", note: `${targetVersion?._count.tasks} tarefa(s).` }
-          : { level: "pendente", note: "Nenhuma tarefa — não vira operação sem tarefas (bloco 6)." },
-        etapas: { level: "opcional", note: "Etapas não são obrigatórias para o catálogo do cliente." },
-        preco: pricing?.commercial_ready
-          ? { level: "pronto", note: `Preço comercial ${pricing.currency} ${pricing.lines.commercial_final_price.amount}.` }
-          : { level: "bloqueador", note: `Preço comercial "A definir": ${pricing?.pending_info.join("; ") || "configuração comercial incompleta"}.` },
-        prazo: pricing && !pricing.deadline.commercial_deadline_pending
-          ? { level: "pronto", note: `Prazo comercial ${pricing.deadline.commercial_deadline_days} dia(s).` }
-          : { level: "bloqueador", note: "Prazo comercial base não definido." },
-        portfolio: has("portfolio_pending")
-          ? { level: "pendente", note: "Sem material de portfólio (não bloqueia venda, mas empobrece a página)." }
-          : { level: "pronto", note: "Portfólio ok / não aplicável." },
-        revisao_rose: p.import_origin
-          ? p.import_origin.rose_reviewed
-            ? { level: "pronto", note: "Revisado pela Rose." }
-            : { level: "pendente", note: "Sem revisão da Rose." }
-          : { level: "opcional", note: "Produto não veio da importação." },
-        publicacao: published
-          ? { level: "pronto", note: `v${published.version_number} publicada.` }
-          : { level: "bloqueador", note: "Nunca publicado — invisível para o cliente (bloco 5 não publica)." },
-      };
-
-      const blockers = Object.entries(items).filter(([, v]) => v.level === "bloqueador").map(([k]) => k);
-      const pendings = Object.entries(items).filter(([, v]) => v.level === "pendente").map(([k]) => k);
-      rows.push({
-        id: p.id,
-        slug: p.slug,
-        name: p.internal_name,
-        source_index: p.import_origin?.source_index ?? null,
-        review_state: p.import_origin?.review_state ?? null,
-        status: p.status,
-        published: !!published,
-        client_visible: p.status === "disponivel" && !!published && pend.length === 0 && !!pricing?.commercial_ready,
-        items,
-        blockers,
-        pendings,
-        ready_for_client: blockers.length === 0,
-      });
-    }
-
+    for (const p of products) rows.push(await computeProductReadiness(p));
+    const final = rows.filter((r) => !r.is_test_local && r.imported);
     res.json({
-      expected: 36,
+      // "Esperado" continua vindo do lote real, nunca de "36" fixo.
+      expected: (await prisma.catalog2ImportBatch.findFirst({ where: { mode: "apply" }, orderBy: { started_at: "desc" } }))?.expected_products ?? final.length,
       total: rows.length,
+      final_imported_total: final.length,
       ready_for_client: rows.filter((r) => r.ready_for_client).length,
       client_visible_now: rows.filter((r) => r.client_visible).length,
       with_blockers: rows.filter((r) => r.blockers.length > 0).length,
-      note: "Os 36 produtos continuam rascunhos neste bloco — nada é publicado aqui.",
+      note: "Nenhum produto é publicado neste painel — ele só mostra o que falta.",
       products: rows,
     });
   } catch (e) { next(e); }
+});
+
+// Prontidão de UM produto — mesma regra do painel geral, sem recalcular os 37.
+router.get("/products/:id/readiness", async (req, res, next) => {
+  try {
+    const p = await prisma.catalog2Product.findUnique({ where: { id: req.params.id as string }, include: READINESS_INCLUDE });
+    if (!p) throw new Catalog2Error("Produto não encontrado.", 404);
+    res.json(await computeProductReadiness(p));
+  } catch (e) { handle(e, res, next); }
 });
 
 export default router;

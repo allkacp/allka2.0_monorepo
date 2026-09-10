@@ -116,6 +116,56 @@ describe("Novo catálogo — fundação", () => {
     assert.ok(r.json.counts.products < 50);
   });
 
+  it("bloco 2 (10/09): /overview traz contagens reais e o bloco de importação derivado (sem literal)", async () => {
+    const master = await mkUser("master");
+    // um produto "[TESTE LOCAL]" (demo) + um produto final
+    const demo = await createProduct({ internal_name: "[TESTE LOCAL] Demo Bloco2" }, master.id);
+    const real = await createProduct({ internal_name: "Produto Final Bloco2" }, master.id);
+    catProducts.push(demo.id, real.id);
+
+    const r = await api("/api/admin/catalog2/overview", { token: tokenFor(master) });
+    assert.equal(r.status, 200);
+    const c = r.json.counts;
+    // campos novos existem e são números
+    for (const k of ["imported_products", "test_local_products", "final_imported_products", "products_in_preparation", "products_published", "tasks", "steps", "tasks_in_final_imported", "steps_in_final_imported", "products_with_pendencies"]) {
+      assert.equal(typeof c[k], "number", `counts.${k} deve ser número real`);
+    }
+    // o "[TESTE LOCAL]" entra em test_local_products, nunca infla os finais
+    assert.ok(c.test_local_products >= 1);
+    assert.ok(c.final_imported_products >= 0);
+    assert.ok(c.final_imported_products <= c.imported_products);
+    // bloco de importação derivado — sem "36" fixo; expected vem do lote ou null
+    assert.ok(r.json.import);
+    assert.equal(typeof r.json.import.has_import, "boolean");
+    assert.ok(r.json.import.expected === null || typeof r.json.import.expected === "number");
+    assert.ok(typeof r.json.import.message === "string");
+  });
+
+  it("bloco 2 (10/09): /products/:id/readiness usa a mesma regra do painel geral", async () => {
+    const master = await mkUser("master");
+    const p = await createProduct({ internal_name: "[TESTE] Prontidão" }, master.id);
+    catProducts.push(p.id);
+
+    const one = await api(`/api/admin/catalog2/products/${p.id}/readiness`, { token: tokenFor(master) });
+    assert.equal(one.status, 200);
+    assert.ok(one.json.items && typeof one.json.items === "object");
+    // sem tarefas → "tarefas" pendente e "preço" bloqueador por base de custo indefinida
+    assert.equal(one.json.items.tarefas.level, "pendente");
+    assert.equal(one.json.items.preco.level, "bloqueador");
+    assert.match(one.json.items.preco.note, /base de custo indefinida/i);
+    assert.equal(one.json.has_active_tasks, false);
+    assert.equal(one.json.task_count, 0);
+
+    // consistente com o painel geral
+    const all = await api("/api/admin/catalog2/readiness", { token: tokenFor(master) });
+    assert.equal(all.status, 200);
+    const same = all.json.products.find((x: any) => x.id === p.id);
+    assert.deepEqual(same.blockers.sort(), one.json.blockers.sort());
+
+    // 404 para produto inexistente
+    assert.equal((await api("/api/admin/catalog2/products/nao-existe/readiness", { token: tokenFor(master) })).status, 404);
+  });
+
   it("6. versão PUBLICADA não pode ser editada diretamente (409); 7. nova versão preserva a publicada", async () => {
     const master = await mkUser("master");
     const p = await createProduct({ internal_name: "[TESTE] Versionamento" }, master.id);

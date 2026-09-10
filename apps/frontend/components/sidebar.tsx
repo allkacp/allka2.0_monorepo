@@ -405,13 +405,23 @@ const navigationConfig = {
       current: false,
       subitems: [
         {
-          name: "Cadastro de Produtos",
+          // Só Admin Master (filtrado por `masterOnly`; o backend reaplica em
+          // /api/admin/catalog2/*). Reunião 10/09/2026 — o construtor do Novo
+          // Catálogo (catalog2) não tinha entrada de menu.
+          name: "Novo Catálogo",
+          href: "/admin/produtos/novo-catalogo",
+          icon: Sparkles,
+          current: false,
+          masterOnly: true,
+        },
+        {
+          name: "Cadastro de Produtos (operacional atual)",
           href: "/admin/produtos",
           icon: Package,
           current: false,
         },
         {
-          name: "Catálogo de Produtos",
+          name: "Catálogo de Produtos (operacional atual)",
           href: "/admin/catalogo-produtos",
           icon: BookOpen,
           current: false,

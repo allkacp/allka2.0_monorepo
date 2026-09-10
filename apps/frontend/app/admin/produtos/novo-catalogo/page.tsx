@@ -156,24 +156,49 @@ export default function AdminNovoCatalogoPage() {
         </a>
       </header>
 
-      <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-        <Stat k="Produtos (novo catálogo)" v={c.products} hint="nunca os 162 atuais" />
-        <Stat k="Pilares" v={c.pillars} />
-        <Stat k="Classificações 4F" v={c.four_f} />
-        <Stat k="Categorias" v={c.categories} />
-        <Stat k="Especialidades" v={c.specialties} />
-        <Stat k="Versões em rascunho" v={c.draft_versions} />
+      {/* Todos os números vêm de `overview.counts` (contagem real das tabelas
+          catalog2). O produto de demonstração ("[TESTE LOCAL] …") não entra
+          nas contagens de avanço dos produtos finais importados. */}
+      <div className="space-y-2">
+        <p className="text-xs font-semibold text-neutral-500 uppercase tracking-wide">Avanço dos produtos importados</p>
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+          <Stat k="Produtos importados (finais)" v={c.final_imported_products ?? c.imported_products ?? 0}
+            hint={`não conta os 162 operacionais${c.test_local_products ? ` · + ${c.test_local_products} de demonstração, fora da contagem` : ""}`} />
+          <Stat k="Em preparação" v={c.products_in_preparation ?? 0} />
+          <Stat k="Publicados" v={c.products_published ?? 0} />
+          <Stat k="Tarefas cadastradas (nos importados)" v={c.tasks_in_final_imported ?? 0}
+            hint={`${c.tasks ?? 0} no catálogo todo`} />
+          <Stat k="Etapas cadastradas (nos importados)" v={c.steps_in_final_imported ?? 0}
+            hint={`${c.steps ?? 0} no catálogo todo`} />
+          <Stat k="Produtos com pendências" v={c.products_with_pendencies ?? 0} />
+        </div>
+        <p className="text-xs font-semibold text-neutral-500 uppercase tracking-wide pt-1">Estrutura do catálogo</p>
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+          <Stat k="Produtos (total)" v={c.products} hint="importados + demonstração" />
+          <Stat k="Pilares" v={c.pillars} />
+          <Stat k="Classificações 4F" v={c.four_f} />
+          <Stat k="Categorias" v={c.categories} />
+          <Stat k="Especialidades" v={c.specialties} />
+          <Stat k="Versões em rascunho" v={c.draft_versions} />
+        </div>
       </div>
 
       {importSummary?.has_import && (
         <section className="space-y-2 rounded-lg border border-indigo-200 bg-indigo-50/50 p-3 dark:border-indigo-900 dark:bg-indigo-950/30">
           <div className="flex flex-wrap items-center justify-between gap-2">
-            <h2 className="text-sm font-semibold text-indigo-900 dark:text-indigo-200">Importação dos 36 produtos</h2>
+            <h2 className="text-sm font-semibold text-indigo-900 dark:text-indigo-200">Importação de produtos definitivos</h2>
             <span className="text-xs text-indigo-700 dark:text-indigo-300">
-              {importSummary.count_matches_expected ? "✓ 36/36 importados" : `⚠ ${importSummary.total_imported}/36 importados`}
-              {" · "}nenhum publicado ({importSummary.published_count} publicados)
+              {/* Números vêm da importação real (importSummary), nunca de "36" fixo. */}
+              {importSummary.count_matches_expected
+                ? `✓ ${importSummary.total_imported}/${importSummary.expected ?? importSummary.total_imported} importados`
+                : `⚠ ${importSummary.total_imported}/${importSummary.expected ?? importSummary.total_imported} importados`}
+              {" · "}{importSummary.published_count} publicado(s)
             </span>
           </div>
+          <p className="text-xs text-indigo-800/90 dark:text-indigo-200/90">
+            {overview.import?.message ??
+              `${overview.counts.final_imported_products ?? importSummary.total_imported} produto(s) importado(s) para preparação. Aguardando tarefas, prazos, precificação e revisão para publicação.`}
+          </p>
           <div className="grid grid-cols-2 gap-2 text-xs sm:grid-cols-4">
             <SummaryCell k="Revisados pela Rose" v={`${importSummary.rose_reviewed} / ${importSummary.total_imported}`} />
             <SummaryCell k="Sem revisão da Rose" v={importSummary.not_rose_reviewed} />
@@ -322,8 +347,11 @@ export default function AdminNovoCatalogoPage() {
       )}
 
       <p className="rounded-lg bg-neutral-100 px-3 py-2 text-xs text-neutral-500 dark:bg-neutral-800">
-        Esta tela não substitui o catálogo operacional atual. Os 162 produtos de hoje continuam intactos. Os 36 produtos
-        da planilha ainda não foram importados.
+        Esta tela não substitui o catálogo operacional atual. Os 162 produtos de hoje continuam intactos.{" "}
+        {/* Texto derivado do estado real da importação — sem "36" fixo. */}
+        {overview.import?.has_import
+          ? `${overview.counts.final_imported_products ?? 0} produto(s) importado(s) e em preparação (nenhum publicado). Faltam tarefas, etapas, prazos, precificação e revisão.`
+          : "Nenhum produto importado ainda."}
       </p>
 
       {confirm && (

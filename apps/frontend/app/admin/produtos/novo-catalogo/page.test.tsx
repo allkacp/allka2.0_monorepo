@@ -42,6 +42,7 @@ const { api } = vi.hoisted(() => ({
     deleteCatalog2Variation: vi.fn(),
     getCatalog2ImportSummary: vi.fn(),
     getCatalog2Readiness: vi.fn(),
+    getCatalog2ProductReadiness: vi.fn(),
     getCatalog2ProductOrigin: vi.fn(),
     resolveCatalog2Pendency: vi.fn(),
   },
@@ -55,9 +56,21 @@ const REFS = {
   specialties: { data: [{ id: "s1", name: "Designer", max_hourly_rate: 90 }] },
 }
 const OVERVIEW = {
-  counts: { products: 1, pillars: 5, four_f: 4, categories: 5, specialties: 7, draft_versions: 1 },
+  counts: {
+    products: 37, pillars: 5, four_f: 4, categories: 5, specialties: 7, draft_versions: 36,
+    imported_products: 36, test_local_products: 1, final_imported_products: 36,
+    products_in_preparation: 36, products_published: 1,
+    tasks: 2, steps: 3, tasks_in_final_imported: 0, steps_in_final_imported: 0,
+    products_with_pendencies: 36,
+  },
+  import: {
+    has_import: true, applied_batch_count: 3, last_applied_at: new Date().toISOString(),
+    expected: 36, imported_count: 36, final_imported_count: 36, published_count: 1, in_preparation_count: 36,
+    message: "36 produto(s) importado(s) para preparação. Aguardando tarefas, prazos, precificação e revisão para publicação.",
+  },
+  products_by_status: { em_preparacao: 36, disponivel: 1 },
   is_empty: false,
-  empty_message: "O novo catálogo está preparado. Os 36 produtos serão importados em um próximo bloco.",
+  empty_message: "O novo catálogo está preparado. Nenhum produto importado ainda.",
 }
 const LIST = {
   data: [
@@ -136,6 +149,22 @@ beforeEach(() => {
   api.getCatalog2Products.mockResolvedValue(LIST)
   api.getCatalog2ImportSummary.mockResolvedValue(IMPORT_SUMMARY)
   api.getCatalog2Readiness.mockResolvedValue(null)
+  api.getCatalog2ProductReadiness.mockResolvedValue({
+    id: "prod1", name: "[TESTE LOCAL] Demo", is_test_local: true, imported: true,
+    status: "disponivel", published: true, task_count: 1, step_count: 1, has_active_tasks: true,
+    items: {
+      tarefas: { level: "pronto", note: "1 tarefa(s)." },
+      etapas: { level: "pronto", note: "1 etapa(s)." },
+      preco: { level: "pronto", note: "Preço comercial BRL 90." },
+      prazo: { level: "pronto", note: "Prazo comercial 5 dia(s)." },
+      conteudo: { level: "pronto", note: "Conteúdo revisável." },
+      portfolio: { level: "pronto", note: "Portfólio ok / não aplicável." },
+      classificacao: { level: "pronto", note: "A. Presença / Performance / 1 4F" },
+      revisao_rose: { level: "pronto", note: "Revisado pela Rose." },
+      publicacao: { level: "pronto", note: "v1 publicada." },
+    },
+    blockers: [], pendings: [],
+  })
   api.getCatalog2ProductOrigin.mockResolvedValue(ORIGIN)
   api.resolveCatalog2Pendency.mockResolvedValue({ ok: true, remaining_pendencies: ["portfolio_pending"], review_state: "portfolio_pending" })
   api.getCatalog2Product.mockResolvedValue(productDetail())
@@ -154,7 +183,7 @@ it("Admin comum → mensagem de acesso restrito (404)", async () => {
 it("listagem: mostra produtos do NOVO catálogo, situação, etiqueta Novo, e nunca os 162", async () => {
   renderPage()
   expect(await screen.findByText("[TESTE LOCAL] Demo")).toBeInTheDocument()
-  expect(screen.getByText(/nunca os 162 atuais/i)).toBeInTheDocument()
+  expect(screen.getByText(/não conta os 162 operacionais/i)).toBeInTheDocument()
   expect(screen.getByText(/162 produtos de hoje continuam intactos/i)).toBeInTheDocument()
   expect(screen.getByText("Novo")).toBeInTheDocument()
   expect(screen.getAllByText("Disponível").length).toBeGreaterThan(0)
@@ -221,13 +250,130 @@ it("aba Versões: mostra as pendências de validação antes de publicar", async
 
 // ── Importação dos 36 (sprint de produtos, bloco 4/6) ────────────────
 
-it("painel de importação: resumo, checksum da planilha e nenhum publicado", async () => {
+it("painel de importação: resumo, checksum da planilha e contagem real (sem '36' fixo)", async () => {
   renderPage()
-  expect(await screen.findByRole("heading", { name: "Importação dos 36 produtos" })).toBeInTheDocument()
+  expect(await screen.findByRole("heading", { name: "Importação de produtos definitivos" })).toBeInTheDocument()
+  // total/esperado vêm do importSummary (36/36 aqui), não de literal
   expect(screen.getByText(/36\/36 importados/)).toBeInTheDocument()
-  expect(screen.getByText(/nenhum publicado \(0 publicados\)/)).toBeInTheDocument()
+  // entre os IMPORTADOS, nenhum publicado (o demo não é importado)
+  expect(screen.getByText(/0 publicado\(s\)/)).toBeInTheDocument()
+  expect(screen.getByText(/importado\(s\) para preparação\. Aguardando tarefas, prazos, precificação e revisão/i)).toBeInTheDocument()
   expect(screen.getByText(/Allka_Proposta_Catalogo_Produtos_v9\.xlsx/)).toBeInTheDocument()
   expect(screen.getByText(/Os 162 produtos operacionais seguem intactos/i)).toBeInTheDocument()
+})
+
+// ── Bloco 2 (10/09/2026): transparência e prontidão ─────────────────
+
+it("contagens do resumo vêm de overview.counts (dados reais), não de literal", async () => {
+  renderPage()
+  await screen.findByText("[TESTE LOCAL] Demo")
+  // rótulo do Stat = <div class="text-xs">…</div> (distingue do <option> do filtro)
+  const card = (label: string) => screen.getByText(label, { selector: "div.text-xs" }).parentElement as HTMLElement
+  // produtos importados finais = 36 (o demo NÃO infla)
+  expect(within(card("Produtos importados (finais)")).getByText("36")).toBeInTheDocument()
+  expect(within(card("Produtos importados (finais)")).getByText(/de demonstração, fora da contagem/i)).toBeInTheDocument()
+  // tarefas/etapas cadastradas NOS importados = 0 (não fingir completo)
+  expect(within(card("Tarefas cadastradas (nos importados)")).getByText("0")).toBeInTheDocument()
+  expect(within(card("Etapas cadastradas (nos importados)")).getByText("0")).toBeInTheDocument()
+  expect(card("Em preparação")).toHaveTextContent("36")
+  expect(card("Publicados")).toHaveTextContent("1")
+  expect(card("Produtos com pendências")).toHaveTextContent("36")
+})
+
+it("não usa mensagem falsa 'ainda não foram importados' quando há importação", async () => {
+  renderPage()
+  await screen.findByText("[TESTE LOCAL] Demo")
+  expect(screen.queryByText(/ainda não foram importados/i)).not.toBeInTheDocument()
+  expect(screen.getByText(/162 produtos de hoje continuam intactos/i)).toBeInTheDocument()
+})
+
+it("aba Custos: produto SEM tarefas ativas mostra 'base de custo indefinida', nunca R$ 0,00 como preço válido", async () => {
+  api.getCatalog2Product.mockResolvedValue(
+    productDetail({
+      versions: [{ id: "v2", version_number: 2, state: "rascunho", title: "Sem tarefas", summary: "", full_description: "", change_summary: "", variations: [], addons: [], conditions: [], tasks: [], history: [] }],
+    }),
+  )
+  api.simulateCatalog2.mockResolvedValue({
+    pricing: {
+      currency: "BRL", quantity: 1, active_task_keys: [], warnings: [{ message: "A tarefa … não tem duração." }],
+      applied_conditions: [], deadline_detail: "…", estimated_deadline_days: 0, order_defined: true,
+      applied_order: ["tax"], pending_info: [], deadline: { effort_days: 0, internal_estimate_days: 0, commercial_deadline_days: null, commercial_deadline_pending: true },
+      pricing_pending: false,
+      lines: {
+        human_cost: { label: "Custo humano", amount: 0 }, ia_cost: { label: "IA", amount: 0 },
+        human_review_cost: { label: "Revisão humana", amount: 0 }, addons: { label: "Adicionais", amount: 0 },
+        variation_impacts: { label: "Impactos de variações", amount: 0 }, condition_impacts: { label: "Impactos de condições", detail: "nenhuma" },
+        direct_cost: { label: "Custo direto", amount: 0 }, subtotal_cost: { label: "Subtotal", amount: 0 },
+        taxes_and_margins: [], commercial_final_price: { label: "Preço comercial final", amount: 0 },
+        final_price: { label: "Preço comercial final", amount: 0 }, minimum_price: { label: "Mínimo", amount: 0 },
+      },
+    },
+  })
+  const user = userEvent.setup()
+  renderPage()
+  await user.click(await screen.findByText("[TESTE LOCAL] Demo"))
+  await user.click(await screen.findByRole("tab", { name: /7\. Custos e preço/ }))
+  await waitFor(() => expect(api.simulateCatalog2).toHaveBeenCalled())
+  expect(await screen.findByText(/base de custo indefinida/i)).toBeInTheDocument()
+  expect(screen.getByText(/Cadastre tarefas, especialidades, tempos e prazo/i)).toBeInTheDocument()
+  // NÃO apresenta "Preço comercial final" com valor
+  expect(screen.queryByText("Preço comercial final")).not.toBeInTheDocument()
+  expect(screen.queryByText(/BRL 0\.00/)).not.toBeInTheDocument()
+})
+
+it("aba Custos: produto COM tarefas válidas mantém a composição detalhada normal", async () => {
+  const user = userEvent.setup()
+  renderPage()
+  await user.click(await screen.findByText("[TESTE LOCAL] Demo"))
+  await user.click(await screen.findByRole("tab", { name: /7\. Custos e preço/ }))
+  await waitFor(() => expect(api.simulateCatalog2).toHaveBeenCalled())
+  expect(await screen.findByText("Custo humano")).toBeInTheDocument()
+  expect(screen.getByText("Preço comercial final")).toBeInTheDocument()
+  expect(screen.queryByText(/base de custo indefinida/i)).not.toBeInTheDocument()
+})
+
+it("aba Custos: avisos de configuração provisória/seed e valor/hora de teste", async () => {
+  api.getCatalog2PricingSettings.mockResolvedValue({
+    id: "default", tax_percent: 6, commission_percent: 10, operational_fee_percent: 5, profit_margin_percent: 30,
+    human_review_percent: 15, currency: "BRL",
+    updated_by_user_id: null, component_base_json: null, component_order_json: '["tax","commission","operational","margin"]',
+  })
+  api.getCatalog2Specialties.mockResolvedValue({
+    data: [
+      { id: "s1", name: "Redator", max_hourly_rate: 70, hourly_rate_note: "[TESTE LOCAL]" },
+      { id: "s2", name: "Editor de Vídeo", max_hourly_rate: null, hourly_rate_note: null },
+    ],
+  })
+  const user = userEvent.setup()
+  renderPage()
+  await user.click(await screen.findByText("[TESTE LOCAL] Demo"))
+  await user.click(await screen.findByRole("tab", { name: /7\. Custos e preço/ }))
+  expect(await screen.findByText(/sem responsável comercial registrado/i)).toBeInTheDocument()
+  expect(screen.getByText(/Base de incidência dos componentes ainda não definida/i)).toBeInTheDocument()
+  expect(screen.getByText(/valor de teste — não é decisão comercial/i)).toBeInTheDocument()
+  expect(screen.getAllByText(/aguardando definição comercial/i).length).toBeGreaterThan(0)
+})
+
+it("prontidão por produto: atalho abre e mostra os itens reais do backend", async () => {
+  api.getCatalog2ProductReadiness.mockResolvedValue({
+    id: "prod1", name: "Produto X", is_test_local: false, imported: true, task_count: 0, step_count: 0, has_active_tasks: false,
+    items: {
+      tarefas: { level: "pendente", note: "Nenhuma tarefa — não vira operação sem tarefas (bloco 6)." },
+      preco: { level: "bloqueador", note: "Sem tarefas cadastradas — base de custo indefinida; a precificação não pode ser calculada." },
+      prazo: { level: "bloqueador", note: "Prazo comercial base não definido." },
+      publicacao: { level: "bloqueador", note: "Nunca publicado — invisível para o cliente (bloco 5 não publica)." },
+      conteudo: { level: "pronto", note: "Conteúdo revisável." },
+    },
+    blockers: ["preco", "prazo", "publicacao"], pendings: ["tarefas"],
+  })
+  const user = userEvent.setup()
+  renderPage()
+  await user.click(await screen.findByText("[TESTE LOCAL] Demo"))
+  await user.click(await screen.findByRole("button", { name: /Prontidão deste produto/i }))
+  expect(await screen.findByText(/Sem tarefas cadastradas — base de custo indefinida/i)).toBeInTheDocument()
+  expect(screen.getByText("Prazo comercial base não definido.")).toBeInTheDocument()
+  expect(screen.getByText(/3 bloqueador\(es\) · 1 pendência\(s\)/)).toBeInTheDocument()
+  expect(api.getCatalog2ProductReadiness).toHaveBeenCalledWith("prod1")
 })
 
 it("listagem: filtros da importação e badges de pendência por produto", async () => {

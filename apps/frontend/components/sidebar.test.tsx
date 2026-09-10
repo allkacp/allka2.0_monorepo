@@ -171,6 +171,38 @@ describe("Sidebar — item Roadmap e chamados", () => {
   });
 });
 
+// Reunião 10/09/2026, bloco 2 — o construtor do Novo Catálogo (catalog2)
+// ganhou entrada de menu, visível SÓ para Admin Master. Os menus antigos
+// continuam e ficam identificados como "operacional atual".
+describe("Sidebar — Produtos: item 'Novo Catálogo' (Admin Master)", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockAccountType.value = "admin";
+  });
+
+  it("Admin Master vê 'Novo Catálogo' apontando para /admin/produtos/novo-catalogo", async () => {
+    getCurrentUser.mockResolvedValue({ admin_profile: { is_active: true, is_master: true, permissions: [] } });
+    renderSidebar();
+    await waitFor(() => expect(getCurrentUser).toHaveBeenCalled());
+    await userEvent.click(await screen.findByText("Produtos"));
+    const link = await screen.findByRole("link", { name: /Novo Catálogo/i });
+    expect(link).toHaveAttribute("href", "/admin/produtos/novo-catalogo");
+    // os menus antigos continuam, identificados como operacional atual
+    expect(screen.getByRole("link", { name: /Cadastro de Produtos \(operacional atual\)/i })).toBeInTheDocument();
+  });
+
+  it("Admin comum (não-master) NÃO vê 'Novo Catálogo', mas vê o cadastro operacional", async () => {
+    getCurrentUser.mockResolvedValue({
+      admin_profile: { is_active: true, is_master: false, permissions: [{ module: "produtos", action: "view" }] },
+    });
+    renderSidebar();
+    await waitFor(() => expect(getCurrentUser).toHaveBeenCalled());
+    await userEvent.click(await screen.findByText("Produtos"));
+    await screen.findByRole("link", { name: /Cadastro de Produtos \(operacional atual\)/i });
+    expect(screen.queryByRole("link", { name: /Novo Catálogo/i })).not.toBeInTheDocument();
+  });
+});
+
 // Lote de navegação de perfil (ata 2026-08-21): auditoria de código
 // confirmou que /leader/perfil é a rota REAL e funcional do perfil do
 // líder (renderiza LiderPerfilPage — ver App.tsx) e /lider/perfil é só um

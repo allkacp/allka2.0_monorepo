@@ -87,6 +87,7 @@ export function ProductEditor({ productId, onBack }: { productId: string; onBack
         </div>
       </div>
       {readOnly && <p className="rounded bg-amber-50 px-3 py-1.5 text-xs text-amber-700 dark:bg-amber-950/30">Versão publicada — somente leitura. Crie uma nova versão para editar.</p>}
+      <ProductReadinessPanel productId={productId} versionKey={selectedVersionId} />
       {msg && <p className="text-sm text-blue-600">{msg}</p>}
 
       {version && (
@@ -420,13 +421,17 @@ function CostTab({ version, refs, act, onReloadRefs }: any) {
         <h3 className="text-sm font-semibold">Módulo de precificação (taxas e margens)</h3>
         {pricing && <PricingSettingsForm pricing={pricing} onSave={(b) => act(() => apiClient.updateCatalog2PricingSettings(b).then(setPricing), "Taxas salvas.")} />}
         <h3 className="mt-4 text-sm font-semibold">Valor/hora das especialidades (referência máxima)</h3>
-        {refs.specialties.map((s: any) => (
-          <div key={s.id} className="flex items-center gap-2 text-sm">
-            <span className="w-40 truncate">{s.name}</span>
-            <Input className="w-24" type="number" defaultValue={s.max_hourly_rate ?? ""} onBlur={(e) => act(() => apiClient.updateCatalog2Specialty(s.id, { max_hourly_rate: e.target.value === "" ? null : Number(e.target.value) }).then(onReloadRefs))} />
-            {s.max_hourly_rate == null && <span className="text-xs text-amber-600">aguardando definição comercial</span>}
-          </div>
-        ))}
+        {refs.specialties.map((s: any) => {
+          const isTestLocal = typeof s.hourly_rate_note === "string" && s.hourly_rate_note.toUpperCase().includes("[TESTE LOCAL]");
+          return (
+            <div key={s.id} className="flex flex-wrap items-center gap-2 text-sm">
+              <span className="w-40 truncate">{s.name}</span>
+              <Input className="w-24" type="number" defaultValue={s.max_hourly_rate ?? ""} onBlur={(e) => act(() => apiClient.updateCatalog2Specialty(s.id, { max_hourly_rate: e.target.value === "" ? null : Number(e.target.value) }).then(onReloadRefs))} />
+              {s.max_hourly_rate == null && <span className="text-xs text-amber-600">aguardando definição comercial</span>}
+              {s.max_hourly_rate != null && isTestLocal && <span className="text-xs text-amber-600">valor de teste — não é decisão comercial</span>}
+            </div>
+          );
+        })}
       </div>
 
       <div className="space-y-3">
@@ -464,13 +469,36 @@ function CostTab({ version, refs, act, onReloadRefs }: any) {
 function PricingSettingsForm({ pricing, onSave }: any) {
   const [f, setF] = useState({ tax_percent: pricing.tax_percent ?? "", commission_percent: pricing.commission_percent ?? "", operational_fee_percent: pricing.operational_fee_percent ?? "", profit_margin_percent: pricing.profit_margin_percent ?? "", human_review_percent: pricing.human_review_percent ?? "" });
   const n = (v: any) => (v === "" ? null : Number(v));
+  // Transparência: config sem responsável comercial registrado (veio de
+  // seed/teste) e base de incidência ainda indefinida. Avisos informativos —
+  // não bloqueiam a edição nem gravam nada.
+  const provisional = pricing.updated_by_user_id == null;
+  const componentBaseUndefined = !pricing.component_base_json;
+  const componentOrderDefined = !!pricing.component_order_json;
   return (
     <div className="space-y-1.5 text-sm">
+      {provisional && (
+        <p className="rounded border border-amber-300 bg-amber-50 px-2 py-1 text-[11px] text-amber-700 dark:border-amber-800 dark:bg-amber-950/20">
+          Configuração provisória — sem responsável comercial registrado. Os percentuais abaixo vieram de seed/teste
+          e ainda não são decisão comercial.
+        </p>
+      )}
+      {componentBaseUndefined && (
+        <p className="rounded border border-amber-200 bg-amber-50 px-2 py-1 text-[11px] text-amber-700 dark:border-amber-800 dark:bg-amber-950/20">
+          Base de incidência dos componentes ainda não definida — o cálculo usa "acumulado" por padrão.
+        </p>
+      )}
+      {!componentOrderDefined && (
+        <p className="rounded border border-amber-200 bg-amber-50 px-2 py-1 text-[11px] text-amber-700 dark:border-amber-800 dark:bg-amber-950/20">
+          Ordem de incidência das taxas não confirmada — o preço comercial fica "A definir".
+        </p>
+      )}
       {(Object.keys(f) as (keyof typeof f)[]).map((k) => (
-        <label key={k} className="flex items-center gap-2">
+        <label key={k} className="flex flex-wrap items-center gap-2">
           <span className="w-44 text-xs">{k.replace(/_/g, " ")}</span>
           <Input className="w-20" type="number" value={f[k]} onChange={(e) => setF({ ...f, [k]: e.target.value })} />
           {f[k] === "" && <span className="text-[10px] text-amber-600">aguardando definição comercial</span>}
+          {f[k] !== "" && provisional && <span className="text-[10px] text-amber-600">provisório (seed)</span>}
         </label>
       ))}
       <Button size="sm" onClick={() => onSave({ tax_percent: n(f.tax_percent), commission_percent: n(f.commission_percent), operational_fee_percent: n(f.operational_fee_percent), profit_margin_percent: n(f.profit_margin_percent), human_review_percent: n(f.human_review_percent) })}>Salvar taxas</Button>
@@ -479,6 +507,35 @@ function PricingSettingsForm({ pricing, onSave }: any) {
 }
 function PricingResultView({ r }: { r: any }) {
   const money = (v: number | null) => (v == null ? <span className="text-amber-600">aguardando definição comercial</span> : `${r.currency} ${v.toFixed(2)}`);
+
+  // Sem NENHUMA tarefa ativa não existe base de custo — o cálculo real
+  // devolve zeros, mas mostrar "Preço comercial final: R$ 0,00" seria mentira.
+  // (O motor `computePricing` NÃO é alterado — só a apresentação.)
+  const noCostBase = Array.isArray(r.active_task_keys) && r.active_task_keys.length === 0;
+  if (noCostBase) {
+    return (
+      <div className="rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm dark:border-amber-800 dark:bg-amber-950/20">
+        <p className="font-semibold text-amber-800 dark:text-amber-200">Sem tarefas cadastradas — base de custo indefinida</p>
+        <p className="mt-1 text-xs text-amber-700 dark:text-amber-300">
+          Cadastre tarefas, especialidades, tempos e prazo para calcular a precificação. Enquanto não houver
+          tarefas ativas, não há preço comercial — o valor <strong>não</strong> é R$ 0,00.
+        </p>
+        <div className="mt-2 space-y-0.5 border-t border-amber-200 pt-2 dark:border-amber-800">
+          <Row
+            k="Prazo comercial"
+            v={r.deadline?.commercial_deadline_pending
+              ? <span className="text-amber-700">aguardando definição comercial</span>
+              : `${r.deadline?.commercial_deadline_days} dia(s)`}
+          />
+          <Row k="Esforço interno estimado" v={`${r.deadline?.effort_days ?? "—"} dia(s) úteis`} />
+        </div>
+        {r.warnings?.length > 0 && (
+          <ul className="mt-1 list-inside list-disc text-xs text-amber-700">{r.warnings.map((w: any, i: number) => <li key={i}>{w.message}</li>)}</ul>
+        )}
+      </div>
+    );
+  }
+
   return (
     <div className="rounded-lg border border-neutral-200 p-3 text-sm dark:border-neutral-800">
       <Row k={r.lines.human_cost.label} v={money(r.lines.human_cost.amount)} />
@@ -536,8 +593,18 @@ function PreviewTab({ version }: any) {
           Prazo comercial: {p.commercial_deadline_pending || p.estimated_deadline_days == null ? "a definir" : `${p.estimated_deadline_days} dia(s)`}
           {p.effort_days != null && <span className="text-neutral-400"> · esforço interno {p.effort_days} d</span>}
         </span>
-        <span className="text-lg font-semibold">{p.price_pending ? "Preço: a definir" : `${p.currency} ${Number(p.price).toFixed(2)}`}</span>
+        <span className="text-sm font-semibold">
+          {/* Sem tarefas ativas: base de custo indefinida — não é "R$ 0,00". */}
+          {p.has_cost_base === false || (p.tasks?.length ?? 0) === 0
+            ? <span className="text-amber-600">Preço: base de custo indefinida</span>
+            : p.price_pending
+              ? "Preço: a definir"
+              : `${p.currency} ${Number(p.price).toFixed(2)}`}
+        </span>
       </div>
+      {(p.has_cost_base === false || (p.tasks?.length ?? 0) === 0) && (
+        <p className="mt-1 text-[10px] text-amber-600">Cadastre tarefas, especialidades, tempos e prazo para calcular a precificação.</p>
+      )}
       {p.pending_info?.length > 0 && <p className="mt-1 text-[10px] text-amber-600">Aguardando definição comercial: {p.pending_info.join("; ")}.</p>}
       <p className="mt-2 text-[10px] text-neutral-400">A pré-visualização usa exatamente o mesmo cálculo do backend (seleção padrão). Esforço interno ≠ promessa de entrega.</p>
     </div>
@@ -768,6 +835,107 @@ function fmt(v: unknown): string {
   if (Array.isArray(v)) return v.join(", ");
   if (typeof v === "object") return JSON.stringify(v);
   return String(v);
+}
+
+// ── Prontidão do produto (atalho — reunião 10/09/2026, bloco 2) ────
+// Consome GET /catalog2-admin/products/:id/readiness — MESMA regra do painel
+// geral (nenhuma validação duplicada no frontend). Só leitura.
+const READINESS_ITEM_LABEL: Record<string, string> = {
+  conteudo: "Conteúdo",
+  classificacao: "Classificação",
+  variacoes: "Variações",
+  adicionais: "Adicionais",
+  tarefas: "Tarefas",
+  etapas: "Etapas",
+  preco: "Preço / base de custo",
+  prazo: "Prazo comercial",
+  portfolio: "Portfólio",
+  revisao_rose: "Revisão da Rose",
+  publicacao: "Publicação",
+};
+const READINESS_TONE: Record<string, string> = {
+  pronto: "bg-emerald-100 text-emerald-700",
+  pendente: "bg-amber-100 text-amber-700",
+  bloqueador: "bg-red-100 text-red-700",
+  opcional: "bg-neutral-100 text-neutral-600",
+};
+
+function ProductReadinessPanel({ productId, versionKey }: { productId: string; versionKey: string }) {
+  const [data, setData] = useState<any>(null);
+  const [open, setOpen] = useState(false);
+  const [loading, setLoading] = useState(true);
+
+  const reload = useCallback(() => {
+    setLoading(true);
+    apiClient
+      .getCatalog2ProductReadiness(productId)
+      .then((d: any) => setData(d))
+      .catch(() => setData({ error: true }))
+      .finally(() => setLoading(false));
+  }, [productId]);
+  useEffect(() => { reload(); }, [reload, versionKey]);
+
+  const blockers = data?.blockers ?? [];
+  const pendings = data?.pendings ?? [];
+  const summary = data?.error
+    ? "não foi possível carregar"
+    : loading && !data
+      ? "carregando…"
+      : blockers.length === 0 && pendings.length === 0
+        ? "nada pendente"
+        : `${blockers.length} bloqueador(es) · ${pendings.length} pendência(s)`;
+
+  return (
+    <section className="rounded-lg border border-neutral-200 dark:border-neutral-800">
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        className="flex w-full items-center justify-between gap-2 px-3 py-2 text-left text-sm"
+      >
+        <span className="flex items-center gap-2 font-medium">
+          Prontidão deste produto
+          <span
+            className={`rounded-full px-2 py-0.5 text-[11px] ${
+              blockers.length > 0 ? "bg-red-100 text-red-700" : pendings.length > 0 ? "bg-amber-100 text-amber-700" : "bg-emerald-100 text-emerald-700"
+            }`}
+          >
+            {summary}
+          </span>
+        </span>
+        {open ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+      </button>
+      {open && (
+        <div className="border-t border-neutral-200 p-3 dark:border-neutral-800">
+          {data?.error ? (
+            <p className="text-sm text-red-600">Não foi possível carregar a prontidão.</p>
+          ) : !data?.items ? (
+            <p className="flex items-center gap-2 text-sm text-neutral-500"><Loader2 className="h-4 w-4 animate-spin" /> Carregando…</p>
+          ) : (
+            <>
+              <p className="mb-2 text-[11px] text-neutral-400">
+                Só leitura — mostra o que falta para o produto ficar pronto. Não publica nem altera nada.
+              </p>
+              <ul className="space-y-1.5 text-sm">
+                {Object.entries(data.items).map(([key, it]: any) => (
+                  <li key={key} className="flex items-start justify-between gap-3">
+                    <span className="flex items-center gap-2">
+                      <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] ${READINESS_TONE[it.level] ?? "bg-neutral-100"}`}>{it.level}</span>
+                      <span className="font-medium">{READINESS_ITEM_LABEL[key] ?? key}</span>
+                    </span>
+                    <span className="text-right text-xs text-neutral-500">{it.note}</span>
+                  </li>
+                ))}
+              </ul>
+              <div className="mt-2 flex items-center gap-2 text-[11px] text-neutral-400">
+                <span>tarefas: {data.task_count ?? 0} · etapas: {data.step_count ?? 0}</span>
+                <button type="button" className="underline" onClick={reload}>atualizar</button>
+              </div>
+            </>
+          )}
+        </div>
+      )}
+    </section>
+  );
 }
 
 // ── helpers ────────────────────────────────────────────────────────
