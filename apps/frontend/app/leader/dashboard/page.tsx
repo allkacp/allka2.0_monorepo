@@ -498,6 +498,7 @@ import { useDashboardExport } from "@/features/dashboards/shared/use-dashboard-e
 import { DashboardExportOverlay } from "@/features/dashboards/shared/dashboard-export-overlay";
 import { useDashboardTemplate, TEMPLATE_DASHBOARD_ID } from "@/features/dashboards/shared/use-dashboard-template";
 import { useDashboardWidgetEditor } from "@/features/dashboards/shared/dashboard-widget-editor";
+import { normalizeWidgetsColSpan, serializeWidgetConfig } from "@/features/dashboards/shared/dashboard-widget-colspan";
 import { useGlobalDashboardPeriod, useWidgetPeriodOverrides } from "@/features/dashboards/shared/use-dashboard-period";
 import { GlobalPeriodControl } from "@/features/dashboards/shared/global-period-control";
 import { dashboardToolbarControlClass } from "@/features/dashboards/shared/dashboard-toolbar";
@@ -1961,7 +1962,7 @@ export default function AdminDashboardPage() {
       setWidgets(updated);
       localStorage.setItem(
         getDashboardStorageKey("dashboard-widget-config", "leader"),
-        JSON.stringify(updated),
+        JSON.stringify(serializeWidgetConfig(updated)),
       );
       setShowSaveConfirmDialog(false);
       handleCloseEditPanel();
@@ -1973,7 +1974,7 @@ export default function AdminDashboardPage() {
       setWidgets(updated);
       localStorage.setItem(
         getDashboardStorageKey("dashboard-widget-config", "leader"),
-        JSON.stringify(updated),
+        JSON.stringify(serializeWidgetConfig(updated)),
       );
       if (currentDashboardId) {
         const updatedDashboards = savedDashboards.map((d) =>
@@ -2020,13 +2021,15 @@ export default function AdminDashboardPage() {
         // Ensure the loaded config matches the WidgetState type
         const parsedConfig: WidgetState[] = JSON.parse(savedConfig);
         setWidgets(
-          parsedConfig
-            .map((w) => ({
-              ...w,
-              id:
-                w.id || `${w.type}-${Math.random().toString(36).substr(2, 9)}`,
-            }))
-            .filter((w) => ROLE_WIDGET_IDS.has(w.type)),
+          normalizeWidgetsColSpan(
+            parsedConfig
+              .map((w) => ({
+                ...w,
+                id:
+                  w.id || `${w.type}-${Math.random().toString(36).substr(2, 9)}`,
+              }))
+              .filter((w) => ROLE_WIDGET_IDS.has(w.type)),
+          ),
         );
       } catch (e) {
         console.error("Failed to parse saved widget config:", e);
@@ -2094,7 +2097,7 @@ export default function AdminDashboardPage() {
       parsedDashboards[0];
     if (currentDashboard) {
       setCurrentDashboardId(currentDashboard.id);
-      setWidgets(currentDashboard.widgets);
+      setWidgets(normalizeWidgetsColSpan(currentDashboard.widgets));
     }
   }, []);
 
@@ -2106,7 +2109,7 @@ export default function AdminDashboardPage() {
     if (appliedTemplateRef.current === marker) return;
     appliedTemplateRef.current = marker;
     setCurrentDashboardId(TEMPLATE_DASHBOARD_ID);
-    setWidgets(profileTemplate.widgets as WidgetState[]);
+    setWidgets(normalizeWidgetsColSpan(profileTemplate.widgets as WidgetState[]));
   }, [profileTemplate]);
 
   const isViewingTemplateDefault = currentDashboardId === TEMPLATE_DASHBOARD_ID;
@@ -2114,7 +2117,9 @@ export default function AdminDashboardPage() {
   function createPersonalViewFromTemplate() {
     if (!profileTemplate) return;
     const id = `personal-${Date.now()}`;
-    const widgetsCopy = (profileTemplate.widgets as WidgetState[]).map((w) => ({ ...w }));
+    const widgetsCopy = normalizeWidgetsColSpan(
+      (profileTemplate.widgets as WidgetState[]).map((w) => ({ ...w })),
+    );
     const newDashboard: SavedDashboard = {
       id,
       name: "Minha visão",
@@ -2152,18 +2157,11 @@ export default function AdminDashboardPage() {
     if (!currentDashboardId) return;
     if (currentDashboardId === TEMPLATE_DASHBOARD_ID) return;
 
-    // Ensure consistent structure when saving
+    // Formato único (inclui colSpan) — antes o auto-save omitia colSpan e
+    // sobrescrevia a largura salva pelo editor. Ver dashboard-widget-colspan.ts.
     localStorage.setItem(
       getDashboardStorageKey("dashboard-widget-config", "leader"),
-      JSON.stringify(
-        widgets.map((w) => ({
-          id: w.id,
-          type: w.type,
-          visible: w.visible,
-          order: w.order,
-          customTitle: w.customTitle,
-        })),
-      ),
+      JSON.stringify(serializeWidgetConfig(widgets)),
     );
     localStorage.setItem(
       getDashboardStorageKey("dashboard-metric-cards", "leader"),
@@ -5457,7 +5455,7 @@ export default function AdminDashboardPage() {
     const dashboard = savedDashboards.find((d) => d.id === dashboardId);
     if (dashboard) {
       // Carregar os widgets do dashboard selecionado
-      setWidgets(dashboard.widgets);
+      setWidgets(normalizeWidgetsColSpan(dashboard.widgets));
       setCurrentDashboardId(dashboardId);
       toast({
         title: "Modo de edição ativado",
@@ -5501,11 +5499,11 @@ export default function AdminDashboardPage() {
   const handleLoadDashboard = (dashboardId: string) => {
     const dashboard = savedDashboards.find((d) => d.id === dashboardId);
     if (dashboard) {
-      setWidgets(dashboard.widgets);
+      setWidgets(normalizeWidgetsColSpan(dashboard.widgets));
       setCurrentDashboardId(dashboardId);
       localStorage.setItem(
         getDashboardStorageKey("dashboard-widget-config", "leader"),
-        JSON.stringify(dashboard.widgets),
+        JSON.stringify(serializeWidgetConfig(dashboard.widgets)),
       );
       localStorage.setItem(CURRENT_DASHBOARD_KEY["LEADER"], dashboardId);
     }
@@ -5522,7 +5520,7 @@ export default function AdminDashboardPage() {
         updatedDashboards.find((d) => d.isDefault) ?? updatedDashboards[0];
       if (fallback) {
         setCurrentDashboardId(fallback.id);
-        setWidgets(fallback.widgets);
+        setWidgets(normalizeWidgetsColSpan(fallback.widgets));
       } else setCurrentDashboardId(null);
     }
   };
@@ -5546,6 +5544,7 @@ export default function AdminDashboardPage() {
       type,
       visible: true,
       order,
+      colSpan: 1, // largura padrão explícita (ver dashboard-widget-colspan.ts)
     });
     return [
       {
@@ -5736,7 +5735,7 @@ export default function AdminDashboardPage() {
                                 className="flex items-center gap-2 flex-1 text-left px-2.5 py-1.5 min-w-0 cursor-pointer rounded-lg focus-visible:outline-none focus-visible:bg-muted/60"
                                 onClick={() => {
                                   setCurrentDashboardId(TEMPLATE_DASHBOARD_ID);
-                                  setWidgets(profileTemplate.widgets as WidgetState[]);
+                                  setWidgets(normalizeWidgetsColSpan(profileTemplate.widgets as WidgetState[]));
                                   toast({ title: "Dashboard carregado", description: `${profileTemplate.name} (Padrão)` });
                                 }}
                               >
@@ -5859,7 +5858,9 @@ export default function AdminDashboardPage() {
                       } else if (
                         confirm("Restaurar esta visão para o template padrão atual? Isso substitui os widgets dela.")
                       ) {
-                        const seeded = (profileTemplate.widgets as WidgetState[]).map((w) => ({ ...w }));
+                        const seeded = normalizeWidgetsColSpan(
+                          (profileTemplate.widgets as WidgetState[]).map((w) => ({ ...w })),
+                        );
                         setWidgets(seeded);
                         setSavedDashboards((prev) => {
                           const next = prev.map((d) => (d.id === currentDashboardId ? { ...d, widgets: seeded } : d));
@@ -5972,7 +5973,9 @@ export default function AdminDashboardPage() {
                           return;
                         }
                         createPersonalViewFromTemplate();
-                        const seeded = (profileTemplate?.widgets as WidgetState[] ?? []).map((w) => ({ ...w })).sort((a, b) => a.order - b.order);
+                        const seeded = normalizeWidgetsColSpan(
+                          (profileTemplate?.widgets as WidgetState[] ?? []).map((w) => ({ ...w })).sort((a, b) => a.order - b.order),
+                        );
                         editor.reset(seeded);
                         setEditHeaderName("Minha visão");
                         setIsEditingHeaderName(false);

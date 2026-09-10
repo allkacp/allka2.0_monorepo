@@ -37,6 +37,11 @@ const mk = (type: string, order: number) => ({
   type,
   visible: true,
   order,
+  // Largura padrão explícita — mantém o formato de widget consistente com
+  // os demais caminhos de persistência (ver
+  // features/dashboards/shared/dashboard-widget-colspan.ts,
+  // DEFAULT_WIDGET_COL_SPAN).
+  colSpan: 1 as const,
 });
 
 /** Build the WidgetState[] format used by SavedDashboard["widgets"] */
