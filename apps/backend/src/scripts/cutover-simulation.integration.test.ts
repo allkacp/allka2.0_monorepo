@@ -160,7 +160,7 @@ describe("Simulador de virada limpa — manifesto de retenção + plano de domí
       assert.equal(nativos?.bucket, "remover_apos_copia");
     });
 
-    it("marks catalog2 for preservation and separates the [TESTE LOCAL] product from the real ones", async () => {
+    it("marks catalog2 for preservation and classifies the [TESTE LOCAL] product as a fixture destined for removal, never mixed with the real ones", async () => {
       const manifest = await buildRetentionManifest(prisma);
       const retained = {
         userIds: new Set(manifest.map((m) => m.user_id)),
@@ -176,7 +176,9 @@ describe("Simulador de virada limpa — manifesto de retenção + plano de domí
       const catalog2Rows = plan.rows.filter((r) => r.domain === "catalog2");
       assert.ok(catalog2Rows.every((r) => r.bucket === "preservar" || r.table.includes("TESTE LOCAL")));
       const testLocalRow = catalog2Rows.find((r) => r.table.includes("TESTE LOCAL"));
-      assert.equal(testLocalRow?.bucket, "decisao_humana");
+      // 2026-09-11: o responsável já decidiu remover fixtures — deixou de
+      // ser decisao_humana (ver domain-plan.ts).
+      assert.equal(testLocalRow?.bucket, "fixture_de_teste");
     });
 
     it("nenhuma das tabelas de alertas/notificações/chat conhecidas fica sem classificação (regressão do achado pós-snapshot: mandatory_banners/notification_preferences/user_communication_channel_prefs ficaram ausentes por um bloco inteiro)", async () => {

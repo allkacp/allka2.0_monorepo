@@ -7,13 +7,18 @@
 //                         selado real, allka_legacy) — candidato à remoção
 //                         após autorização separada de limpeza
 //   decisao_humana      → não dá para classificar sozinho por natureza do
-//                         dado (ver nota da linha) — mesmo já coberto, a
-//                         disposição final depende de confirmação humana
-//                         específica (ex.: fixture identificada por prefixo)
+//                         dado (ver nota da linha) — a disposição final
+//                         depende de confirmação humana específica AINDA
+//                         não dada
 //   bloqueado           → cobertura no Legacy AINDA NÃO comprovada para
 //                         este subconjunto específico (coletor existe no
 //                         código, mas o lote oficial correspondente ainda
 //                         não foi executado/autorizado) — nunca remover
+//   fixture_de_teste    → identificado por prefixo "[TESTE LOCAL]" — não é
+//                         dado real, nunca conta como um dos 36 produtos
+//                         catalog2 reais, e o responsável JÁ decidiu (nesta
+//                         sessão) que fixtures são removidas na limpeza —
+//                         não é mais decisao_humana
 //
 // `legacy_covered` = existe COLETOR pronto (código) pra este domínio no
 // mecanismo genérico do Legado — não confunda com "já foi copiado de
@@ -43,7 +48,13 @@
 // de leitura. O client informado pelo script real já vem com
 // attachReadOnlyGuard (read-only-guard.ts) por cima disso.
 
-export type RetentionBucket = "preservar" | "copiar_legacy" | "remover_apos_copia" | "decisao_humana" | "bloqueado";
+export type RetentionBucket =
+  | "preservar"
+  | "copiar_legacy"
+  | "remover_apos_copia"
+  | "decisao_humana"
+  | "bloqueado"
+  | "fixture_de_teste";
 
 export interface DomainPlanRow {
   domain: string;
@@ -510,10 +521,10 @@ export async function buildDomainPlan(db: DomainPlanDb, retained: DomainPlanReta
     row(
       "catalog2",
       "catalog2_products ([TESTE LOCAL])",
-      "decisao_humana",
+      "fixture_de_teste",
       testLocalProducts,
       false,
-      "Separado da comunicação dos produtos finais — não conta como um dos produtos reais.",
+      "Fixture de teste identificada por prefixo — não é produto real, nunca conta entre os 36 reais. O responsável já decidiu (sessão de ensaio da limpeza): fixtures são removidas na limpeza. Ação futura: remover.",
     ),
     row("catalog2", "catalog2_product_versions", "preservar", versions, false),
     row("catalog2", "catalog2_categories", "preservar", categories, false),
