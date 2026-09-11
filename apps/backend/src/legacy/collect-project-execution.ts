@@ -27,34 +27,10 @@
 // Campos financeiros (value/budget/spent, *_snapshot de preço/comissão,
 // faturas) são deliberadamente EXCLUÍDOS — financeiro é outro bloco.
 import { PrismaClient as OperationalPrisma } from "@prisma/client";
-import { isoDates, safeJsonParse, type RawRecord, type RawRelation, type SnapshotCollection } from "./importer";
+import { fileRef, isoDates, safeJsonParse, type RawRecord, type RawRelation, type SnapshotCollection } from "./importer";
+import { findManyChunked } from "./pagination";
 
 const PROJECT_PAGE_SIZE = 200;
-// Tamanho máximo de uma cláusula IN(...) sobre ids de tarefa dentro de uma
-// página de projetos — mesmo com uma página "gorda" (muitas tarefas por
-// projeto), a consulta às entidades-filhas nunca cresce sem limite.
-const CHUNK_IDS = 500;
-
-function chunk<T>(items: T[], size: number): T[][] {
-  const out: T[][] = [];
-  for (let i = 0; i < items.length; i += size) out.push(items.slice(i, i + size));
-  return out;
-}
-
-async function findManyChunked<T>(
-  ids: string[],
-  fetch: (idsChunk: string[]) => Promise<T[]>,
-): Promise<T[]> {
-  if (ids.length === 0) return [];
-  const results = await Promise.all(chunk(ids, CHUNK_IDS).map(fetch));
-  return results.flat();
-}
-
-/** Referência de anexo: metadados preservados, binário NUNCA copiado. */
-function fileRef(reference: string | null | undefined) {
-  if (!reference) return null;
-  return { reference, file_available_in_snapshot: false };
-}
 
 export interface CollectProjectExecutionOptions {
   /** Projetos por página de leitura (padrão 200). Nunca um findMany() sem limite. */

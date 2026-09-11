@@ -37,7 +37,8 @@ export type LegacyEntityType =
   | "catalog_task"
   | "specialty"
   | IdentityEntityType
-  | ProjectExecutionEntityType;
+  | ProjectExecutionEntityType
+  | FinancialEntityType;
 
 // ── Identidade histórica e organizações (bloco seguinte ao manifesto de
 // retenção) — usuários, perfis administrativos, empresas, agências,
@@ -105,6 +106,52 @@ export const PROJECT_EXECUTION_ENTITY_TYPES: ProjectExecutionEntityType[] = [
 export const PROJECT_EXECUTION_IMPORTER_VERSION = "project-execution-foundation-1";
 export const DEFAULT_PROJECT_EXECUTION_SOURCE_NAME = "[TESTE LOCAL] Fotografia de projetos e execução anteriores";
 
+// ── Financeiro histórico (bloco seguinte ao de projetos/execução) —
+// faturas, pagamentos, carteiras, saques, comissões/repasses, cobranças
+// (squad) e aditivos de catalog2. Ver src/legacy/collect-financial.ts.
+//
+// Deliberadamente FORA deste domínio (ver relatório do bloco):
+//   - BankAccount (dado bancário completo — nenhum valor histórico depois de
+//     mascarado, e é exatamente o tipo de dado que este bloco proíbe copiar);
+//   - Coupon/CouponUsage (pertencem ao domínio de campanhas, ainda adiado);
+//   - Catalog2Quote/Catalog2CartItem (cotação/cesta — não são uma operação
+//     financeira concluída).
+export type FinancialEntityType =
+  | "invoice"
+  | "payment"
+  | "payment_item"
+  | "wallet"
+  | "wallet_ledger"
+  | "wallet_transaction"
+  | "withdrawal_request"
+  | "partner_withdrawal"
+  | "partner_commission"
+  | "company_payment_method"
+  | "squad_config"
+  | "squad_cycle"
+  | "expense"
+  | "catalog2_change_order";
+
+export const FINANCIAL_ENTITY_TYPES: FinancialEntityType[] = [
+  "invoice",
+  "payment",
+  "payment_item",
+  "wallet",
+  "wallet_ledger",
+  "wallet_transaction",
+  "withdrawal_request",
+  "partner_withdrawal",
+  "partner_commission",
+  "company_payment_method",
+  "squad_config",
+  "squad_cycle",
+  "expense",
+  "catalog2_change_order",
+];
+
+export const FINANCIAL_IMPORTER_VERSION = "financial-foundation-1";
+export const DEFAULT_FINANCIAL_SOURCE_NAME = "[TESTE LOCAL] Fotografia financeira anterior";
+
 export interface RawRecord {
   entity_type: LegacyEntityType;
   source_table: string;
@@ -148,6 +195,16 @@ export function safeJsonParse(raw: string | null | undefined): unknown {
   } catch {
     return raw; // mantém o texto cru quando não for JSON
   }
+}
+
+/**
+ * Referência de anexo/comprovante: metadado + ponteiro pro arquivo original —
+ * o BINÁRIO nunca é copiado. Usado por qualquer coletor que preserve anexos
+ * (tarefas/projetos, recibos financeiros, comprovantes de despesa, ...).
+ */
+export function fileRef(reference: string | null | undefined): { reference: string; file_available_in_snapshot: false } | null {
+  if (!reference) return null;
+  return { reference, file_available_in_snapshot: false };
 }
 
 /**
