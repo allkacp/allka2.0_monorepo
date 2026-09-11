@@ -361,6 +361,7 @@ router.get("/products", async (req, res, next) => {
           category: { select: { key: true, name: true } },
           versions: { select: { id: true, version_number: true, state: true, published_at: true, updated_at: true, summary: true } },
           import_origin: { select: { rose_reviewed: true, review_state: true, pendencies_json: true, area_rose: true, human_edited_at: true, source_index: true } },
+          provisional_preview: { select: { image_path: true, price_amount: true, deadline_days: true, modality: true, needs_review: true, included_items_json: true } },
         },
       }),
     ]);
@@ -395,6 +396,21 @@ router.get("/products", async (req, res, next) => {
           pendencies: io?.pendencies_json ? safeJsonArray(io.pendencies_json) : [],
           human_edited: !!io?.human_edited_at,
           source_index: io?.source_index ?? null,
+          // Camada de demonstração provisória (reparo 2026-09) — nunca dado
+          // comercial real; usada só pra miniatura/preço aparecerem no
+          // Cadastro/Catálogo administrativo enquanto o produto não tem
+          // conteúdo definitivo. Sempre acompanhada de `is_provisional`.
+          provisional_preview: p.provisional_preview
+            ? {
+                is_provisional: true,
+                needs_review: p.provisional_preview.needs_review,
+                image_path: p.provisional_preview.image_path,
+                price_amount: p.provisional_preview.price_amount,
+                deadline_days: p.provisional_preview.deadline_days,
+                modality: p.provisional_preview.modality,
+                included_items_count: safeJsonArray(p.provisional_preview.included_items_json).length,
+              }
+            : null,
         };
       }),
       total, page, page_size: pageSize,
@@ -1128,6 +1144,25 @@ type ReadinessProduct = Prisma.Catalog2ProductGetPayload<{ include: typeof READI
 
 // Regra ÚNICA de prontidão por produto (nenhuma duplicação no frontend nem
 // entre rotas). Só leitura — nada aqui grava ou publica.
+async function loadProvisionalPreview(productId: string) {
+  const row = await prisma.catalog2ProvisionalPreview.findUnique({ where: { product_id: productId } });
+  if (!row) return null;
+  return {
+    is_provisional: true as const,
+    needs_review: row.needs_review,
+    image_path: row.image_path,
+    image_source_note: row.image_source_note,
+    price_amount: row.price_amount,
+    deadline_days: row.deadline_days,
+    modality: row.modality,
+    contract_note: row.contract_note,
+    highlights: safeJsonArray(row.highlights_json),
+    included_items: safeJsonArray(row.included_items_json) as unknown as { title: string; description?: string }[],
+    options: safeJsonArray(row.options_json) as unknown as { name: string; price: number; deadline_days: number; modality: string; features: string[] }[],
+    portfolio_refs: safeJsonArray(row.portfolio_refs_json),
+  };
+}
+
 async function computeProductReadiness(p: ReadinessProduct) {
   const draft = p.versions.find((v) => v.state === "rascunho") ?? p.versions[0] ?? null;
   const published = p.versions.find((v) => v.id === p.published_version_id) ?? null;
@@ -1214,6 +1249,10 @@ async function computeProductReadiness(p: ReadinessProduct) {
     blockers,
     pendings,
     ready_for_client: blockers.length === 0,
+    // Camada de demonstração provisória (reparo 2026-09) — nunca substitui os
+    // campos reais acima; sempre um objeto SEPARADO e marcado, pra nunca ser
+    // confundido com dado comercial aprovado.
+    provisional: await loadProvisionalPreview(p.id),
   };
 }
 
@@ -1243,6 +1282,26 @@ router.get("/products/:id/readiness", async (req, res, next) => {
     const p = await prisma.catalog2Product.findUnique({ where: { id: req.params.id as string }, include: READINESS_INCLUDE });
     if (!p) throw new Catalog2Error("Produto não encontrado.", 404);
     res.json(await computeProductReadiness(p));
+  } catch (e) { handle(e, res, next); }
+});
+
+// ═══════════════════════════════════════════════════════════════════════
+// DETALHE COMPLETO DO PRODUTO — reparo 2026-09 ("restaurar o detalhe
+// completo do produto, preços e imagens"). Único ponto de leitura para a
+// tela de detalhe/contratação do catalog2 no admin: reúne o conteúdo REAL
+// (getProductDetail — variações, adicionais, tarefas, etapas) com a
+// prontidão (computeProductReadiness) e a camada de demonstração
+// provisória (Catalog2ProvisionalPreview), SEMPRE em blocos separados e
+// marcados — nunca mistura os dois num único campo "preço"/"imagem".
+// ═══════════════════════════════════════════════════════════════════════
+router.get("/products/:id/detail-preview", async (req, res, next) => {
+  try {
+    const id = req.params.id as string;
+    const product = await getProductDetail(id);
+    const p = await prisma.catalog2Product.findUnique({ where: { id }, include: READINESS_INCLUDE });
+    if (!p) throw new Catalog2Error("Produto não encontrado.", 404);
+    const readiness = await computeProductReadiness(p);
+    res.json({ product, readiness });
   } catch (e) { handle(e, res, next); }
 });
 

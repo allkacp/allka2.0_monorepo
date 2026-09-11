@@ -752,17 +752,17 @@ model Project {
   // com o MESMO valor devolve o Project já criado, nunca cria outro.
   catalog2_checkout_client_action_id String? @unique
 
-  task_executions TaskExecution[]
-  invoices        Invoice[]
-  products        ProjectProduct[]
-  project_tasks   ProjectTask[]
-  payments        Payment[]
-  credentials     ProjectCredential[]
-  attachments     ProjectAttachment[]
-  connections     ProjectConnection[]
-  iallka_session  IallkaSession?
-  planner_cards   PlannerCard[]
-  change_orders   Catalog2ChangeOrder[]
+  task_executions       TaskExecution[]
+  invoices              Invoice[]
+  products              ProjectProduct[]
+  project_tasks         ProjectTask[]
+  payments              Payment[]
+  credentials           ProjectCredential[]
+  attachments           ProjectAttachment[]
+  connections           ProjectConnection[]
+  iallka_session        IallkaSession?
+  planner_cards         PlannerCard[]
+  change_orders         Catalog2ChangeOrder[]
   ai_context_snapshots  AIContextSnapshot[]
   hallucination_reports HallucinationReport[]
   launch_sessions       LaunchSession[]
@@ -889,7 +889,7 @@ model Specialty {
   created_at      DateTime @default(now())
   updated_at      DateTime @updatedAt
 
-  task_templates TaskTemplate[]
+  task_templates          TaskTemplate[]
   project_tasks_requiring ProjectTask[]
 
   @@map("specialties")
@@ -1512,15 +1512,15 @@ model ProjectTask {
   // base do dedupe do alerta de esgotamento. Nulo quando não há rodízio.
   rotation_episode_key String?
 
-  stages             ProjectTaskStage[]
-  briefing_answers   TaskBriefingAnswer[]
-  attachments        TaskAttachment[]
-  assignment_history TaskAssignmentHistory[]
-  credentials        ProjectCredential[]
-  task_offers        TaskOffer[]
+  stages                  ProjectTaskStage[]
+  briefing_answers        TaskBriefingAnswer[]
+  attachments             TaskAttachment[]
+  assignment_history      TaskAssignmentHistory[]
+  credentials             ProjectCredential[]
+  task_offers             TaskOffer[]
   memory_approved_records MemoryApprovedTaskRecord[]
-  hallucination_reports HallucinationReport[]
-  lider_responsavel  User?                   @relation("TaskLiderResponsavel", fields: [lider_responsavel_id], references: [id])
+  hallucination_reports   HallucinationReport[]
+  lider_responsavel       User?                      @relation("TaskLiderResponsavel", fields: [lider_responsavel_id], references: [id])
 
   // ── IA de Lançamento — materialização (bloco 4/4) ──────────────────────
   // Ponteiros "soft" (sem FK, mesmo padrão de outros vínculos com sessão/
@@ -1532,7 +1532,7 @@ model ProjectTask {
   // Fotografia dos campos como a IA propôs originalmente, antes de qualquer
   // edição humana — permite a UI mostrar "isto foi alterado por humano"
   // comparando com o valor atual da linha.
-  launch_ai_snapshot_json   String?    @db.LongText
+  launch_ai_snapshot_json   String? @db.LongText
 
   required_specialty_id String?
   required_specialty    Specialty? @relation(fields: [required_specialty_id], references: [id], onDelete: SetNull)
@@ -1540,8 +1540,8 @@ model ProjectTask {
   dependencies_as_successor    TaskDependency[]         @relation("TaskDependencySuccessor")
   dependencies_as_prerequisite TaskDependency[]         @relation("TaskDependencyPrerequisite")
   release_triggers             TaskReleaseTrigger[]
-  release_events                TaskReleaseEvent[]
-  dependency_overrides           TaskDependencyOverride[]
+  release_events               TaskReleaseEvent[]
+  dependency_overrides         TaskDependencyOverride[]
 
   // ── Rastreio da plataforma antiga ─────────────────────────────────────
   // id numérico do registro equivalente no dump legado (Dump20260423.sql).
@@ -1726,23 +1726,23 @@ model Memory {
   // consolidação por IA fica pro bloco 2).
   positive_instructions String? @db.LongText
   negative_instructions String? @db.LongText
-  summary                String? @db.LongText
+  summary               String? @db.LongText
 
-  is_archived      Boolean   @default(false)
-  archived_at      DateTime?
+  is_archived         Boolean   @default(false)
+  archived_at         DateTime?
   archived_by_user_id String?
 
   created_by_user_id String
-  created_at          DateTime @default(now())
-  updated_by_user_id  String?
+  created_at         DateTime @default(now())
+  updated_by_user_id String?
   // Token de concorrência otimista (mesmo padrão de planner.ts:
   // PUT /cards/:id) — cliente reenvia o updated_at que leu por último;
   // servidor recusa com 409 se não bater mais, nunca sobrescreve em silêncio.
-  updated_at          DateTime @updatedAt
+  updated_at         DateTime @updatedAt
 
-  files                  MemoryFile[]
-  approved_task_records  MemoryApprovedTaskRecord[]
-  history                MemoryHistoryEvent[]
+  files                 MemoryFile[]
+  approved_task_records MemoryApprovedTaskRecord[]
+  history               MemoryHistoryEvent[]
 
   @@unique([scope_type, scope_id])
   @@index([scope_type, scope_id])
@@ -1759,12 +1759,12 @@ model MemoryFile {
   memory_id String
   memory    Memory @relation(fields: [memory_id], references: [id], onDelete: Cascade)
 
-  name        String
+  name                String
   // nome original mostrado ao usuário
-  file_name   String
+  file_name           String
   // nome gerado em disco (evita colisão/traversal)
-  mime_type   String?
-  size        Int
+  mime_type           String?
+  size                Int
   uploaded_by_user_id String
 
   created_at  DateTime  @default(now())
@@ -1789,9 +1789,9 @@ model MemoryApprovedTaskRecord {
   project_task_id String
   project_task    ProjectTask @relation(fields: [project_task_id], references: [id], onDelete: Cascade)
 
-  approved_at      DateTime
+  approved_at         DateTime
   approved_by_user_id String?
-  approval_note    String? @db.Text
+  approval_note       String?  @db.Text
 
   idempotency_key String @unique
 
@@ -1841,7 +1841,7 @@ model AIContextSnapshot {
   project    Project @relation(fields: [project_id], references: [id], onDelete: Cascade)
 
   requested_by_user_id String
-  action                String @default("preview")
+  action               String @default("preview")
   // "preview" (única usada neste bloco) | "execution" (reservado p/ quando
   // uma chamada de IA real consumir o contexto compilado)
 
@@ -1849,18 +1849,18 @@ model AIContextSnapshot {
   // nulo neste bloco — nenhuma IA externa é chamada
   model    String?
 
-  checksum        String
+  checksum           String
   // sha256 do conteúdo estruturado das camadas (determinístico — mesmo
   // conteúdo sempre gera o mesmo checksum, independente de quando foi
   // gerado)
-  compiled_text   String @db.LongText
+  compiled_text      String  @db.LongText
   // texto final entregue à IA, já delimitado/saneado — nunca contém binário
-  structured_json String @db.LongText
+  structured_json    String  @db.LongText
   // JSON de MemoryContextLayer[] (escopo, memory_id, updated_at, presente,
   // truncado) — nunca guarda segredo nem o texto bruto não-saneado
-  missing_layers      String? @db.Text
+  missing_layers     String? @db.Text
   // JSON string[] das camadas ausentes (nunca é erro, só transparência)
-  approved_task_refs  String? @db.Text
+  approved_task_refs String? @db.Text
   // JSON de referências a tarefas aprovadas consideradas (id/título/data)
 
   response_text String? @db.LongText
@@ -1899,35 +1899,35 @@ model HallucinationReport {
   // vincula a execução real (prompt/resposta/checksum), não só o snapshot de
   // memória usado por ela.
   launch_execution_id String?
-  launch_execution     LaunchGenerationExecution? @relation(fields: [launch_execution_id], references: [id], onDelete: SetNull)
+  launch_execution    LaunchGenerationExecution? @relation(fields: [launch_execution_id], references: [id], onDelete: SetNull)
 
   project_task_id String?
   project_task    ProjectTask? @relation(fields: [project_task_id], references: [id], onDelete: SetNull)
 
   description         String  @db.LongText
-  questioned_response  String? @db.LongText
-  category             String
+  questioned_response String? @db.LongText
+  category            String
   // "informacao_incorreta" | "instrucao_ignorada" | "tom_inadequado" |
   // "dado_inventado" | "outro"
-  impact               String
+  impact              String
   // "baixo" | "medio" | "alto"
 
-  status                 String    @default("novo")
+  status                     String    @default("novo")
   // "novo" | "em_analise" | "resolvido" | "descartado"
-  assigned_admin_user_id String?
-  assigned_at            DateTime?
-  suspected_origin_layer  String?
+  assigned_admin_user_id     String?
+  assigned_at                DateTime?
+  suspected_origin_layer     String?
   // "project" | "company" | "agency" — marcado pelo admin, nunca inferido
   suspected_origin_memory_id String?
-  diagnosis_note          String? @db.LongText
+  diagnosis_note             String?   @db.LongText
 
-  resolution_note              String?   @db.LongText
-  resolved_by_user_id          String?
-  resolved_at                  DateTime?
+  resolution_note             String?   @db.LongText
+  resolved_by_user_id         String?
+  resolved_at                 DateTime?
   // Idempotência de fechamento (mesmo padrão de SystemAlert.resolve —
   // client_action_id único; repetir a mesma requisição devolve o resultado
   // já existente em vez de duplicar ou dar erro).
-  resolution_client_action_id  String?   @unique
+  resolution_client_action_id String?   @unique
 
   // Idempotência de criação — clique duplo no formulário nunca duplica.
   create_client_action_id String? @unique
@@ -1953,10 +1953,10 @@ model HallucinationReportFile {
   report_id String
   report    HallucinationReport @relation(fields: [report_id], references: [id], onDelete: Cascade)
 
-  name      String
-  file_name String
-  mime_type String?
-  size      Int
+  name                String
+  file_name           String
+  mime_type           String?
+  size                Int
   uploaded_by_user_id String
 
   created_at  DateTime  @default(now())
@@ -2027,10 +2027,10 @@ model LaunchSession {
   // Concorrência otimista (mesmo padrão do bloco 1/2): quem edita reenvia o
   // updated_at que leu por último.
 
-  participants LaunchSessionParticipant[]
-  messages     LaunchMessage[]
-  versions     LaunchProposalVersion[]
-  executions   LaunchGenerationExecution[]
+  participants     LaunchSessionParticipant[]
+  messages         LaunchMessage[]
+  versions         LaunchProposalVersion[]
+  executions       LaunchGenerationExecution[]
   materializations LaunchMaterialization[]
 
   @@index([project_id])
@@ -2041,12 +2041,12 @@ model LaunchSession {
 // projeto sempre pode VER (ver launch-permissions.ts), isto é só pra
 // controlar quem além do criador pode efetivamente interagir/gerar/aprovar.
 model LaunchSessionParticipant {
-  id                String        @id @default(cuid())
-  session_id        String
-  session           LaunchSession @relation(fields: [session_id], references: [id], onDelete: Cascade)
-  user_id           String
-  added_by_user_id  String
-  added_at          DateTime      @default(now())
+  id               String        @id @default(cuid())
+  session_id       String
+  session          LaunchSession @relation(fields: [session_id], references: [id], onDelete: Cascade)
+  user_id          String
+  added_by_user_id String
+  added_at         DateTime      @default(now())
 
   @@unique([session_id, user_id])
   @@map("launch_session_participants")
@@ -2059,7 +2059,7 @@ model LaunchMessage {
   session_id String
   session    LaunchSession @relation(fields: [session_id], references: [id], onDelete: Cascade)
 
-  role String
+  role          String
   // user | assistant | system
   actor_user_id String?
   // preenchido só quando role = "user"
@@ -2092,14 +2092,14 @@ model LaunchMessageFile {
   message_id String
   message    LaunchMessage @relation(fields: [message_id], references: [id], onDelete: Cascade)
 
-  name      String
-  file_name String
-  mime_type String?
-  size      Int
+  name                String
+  file_name           String
+  mime_type           String?
+  size                Int
   uploaded_by_user_id String
 
-  extracted_text           String?  @db.LongText
-  extracted_text_truncated Boolean  @default(false)
+  extracted_text           String? @db.LongText
+  extracted_text_truncated Boolean @default(false)
 
   created_at  DateTime  @default(now())
   archived_at DateTime?
@@ -2116,8 +2116,8 @@ model LaunchProposalVersion {
   session_id String
   session    LaunchSession @relation(fields: [session_id], references: [id], onDelete: Cascade)
 
-  version_number Int
-  source         String
+  version_number      Int
+  source              String
   // ia_gerada | humano_editado
   based_on_version_id String?
   // versão anterior sobre a qual esta foi construída (edição humana de uma
@@ -2128,7 +2128,7 @@ model LaunchProposalVersion {
   // livre): ondas/marcos, tarefas com todos os campos exigidos
 
   created_by_user_id String
-  created_at          DateTime @default(now())
+  created_at         DateTime @default(now())
 
   execution_id String?
   // preenchido só quando source = "ia_gerada" — qual execução produziu isto
@@ -2205,7 +2205,7 @@ model LaunchMaterialization {
 
   created_task_ids_json String @db.LongText
   // JSON string[] dos ProjectTask.id criados nesta materialização
-  summary_json           String @db.LongText
+  summary_json          String @db.LongText
   // contagem de tarefas/etapas/dependências/ondas/pendências — usado na
   // confirmação antes de materializar e na tela de sucesso
 
@@ -2231,7 +2231,7 @@ model TaskDependency {
   // como pré-requisito — nunca some silenciosamente uma dependência.
 
   created_by_user_id String
-  created_at          DateTime @default(now())
+  created_at         DateTime @default(now())
 
   @@unique([task_id, depends_on_task_id])
   @@index([depends_on_task_id])
@@ -2262,8 +2262,8 @@ model TaskReleaseTrigger {
   payment_reference_id   String?
 
   satisfied_by_user_id String?
-  satisfied_at          DateTime?
-  satisfaction_note     String?   @db.Text
+  satisfied_at         DateTime?
+  satisfaction_note    String?   @db.Text
 
   created_at DateTime @default(now())
   updated_at DateTime @updatedAt
@@ -2972,9 +2972,9 @@ model NotificationPreference {
 // uma lista no backend — o backend só guarda progresso, quem decide QUAIS
 // tours existem e para quem é o registro do frontend).
 model TourProgress {
-  id      String @id @default(cuid())
-  user_id String
-  user    User   @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  id       String @id @default(cuid())
+  user_id  String
+  user     User   @relation(fields: [user_id], references: [id], onDelete: Cascade)
   tour_key String
   version  Int
 
@@ -2986,10 +2986,10 @@ model TourProgress {
   // invalidar o progresso salvo).
   last_step_key String?
 
-  started_at   DateTime?
-  completed_at DateTime?
-  dismissed_at DateTime?
-  postponed_at DateTime?
+  started_at      DateTime?
+  completed_at    DateTime?
+  dismissed_at    DateTime?
+  postponed_at    DateTime?
   // "Agora não": até quando a oferta automática fica em espera — passado
   // esse horário, o motor pode oferecer de novo. Nunca usado pra bloquear
   // reabertura manual pela Central de Ajuda.
@@ -4727,13 +4727,14 @@ model Catalog2Product {
   created_at          DateTime  @default(now())
   updated_at          DateTime  @updatedAt
 
-  versions         Catalog2ProductVersion[]     @relation("Catalog2ProductVersions")
-  four_f           Catalog2ProductFourF[]
-  import_origin    Catalog2ProductImportOrigin?
-  quotes           Catalog2Quote[]
-  cart_items       Catalog2CartItem[]
+  versions            Catalog2ProductVersion[]     @relation("Catalog2ProductVersions")
+  four_f              Catalog2ProductFourF[]
+  import_origin       Catalog2ProductImportOrigin?
+  provisional_preview Catalog2ProvisionalPreview?
+  quotes              Catalog2Quote[]
+  cart_items          Catalog2CartItem[]
   // Linhas de pedido (Bloco 6/6) — produto CONTRATADO a partir deste catálogo.
-  project_products ProjectProduct[]
+  project_products    ProjectProduct[]
 
   @@index([status])
   @@index([pillar_id])
@@ -5216,6 +5217,53 @@ model Catalog2ProductImportOrigin {
 
   @@index([review_state])
   @@map("catalog2_product_import_origins")
+}
+
+// Camada de CONTEUDO PROVISORIO DE DEMONSTRACAO (reparo 2026-09, "restaurar o
+// detalhe completo do produto, precos e imagens"). Existe SOMENTE para que o
+// Admin Master consiga visualizar os produtos do catalog2 completos (imagem,
+// preco, prazo, opcoes, destaques, portfolio) enquanto os dados comerciais
+// definitivos nao existem — nunca e usada pelo cliente comum, nunca entra em
+// cotacao/cesta/checkout, nunca torna o produto "commercial_ready" e nunca e
+// considerada aprovada. Tudo aqui e nullable, auditavel (created/updated_at,
+// created_by), idempotente (upsert por product_id) e removivel (script com
+// --remove restrito exatamente aos produtos preenchidos por ele).
+model Catalog2ProvisionalPreview {
+  id         String          @id @default(cuid())
+  product_id String          @unique
+  product    Catalog2Product @relation(fields: [product_id], references: [id], onDelete: Cascade)
+
+  // Sempre true enquanto a linha existir — reforco redundante e explicito
+  // (nunca lido como "true" por omissao/ausencia de campo).
+  is_provisional Boolean @default(true)
+  needs_review   Boolean @default(true)
+
+  // Caminho de um arquivo JA EXISTENTE em /public/images/products (nunca uma
+  // URL externa/temporaria, nunca um caminho inventado — o script que
+  // preenche esta tabela valida a existencia do arquivo antes de gravar).
+  image_path        String?
+  image_source_note String? @db.Text
+
+  price_amount  Float?
+  deadline_days Int?
+  // "Projeto unico" | "Recorrente mensal" | "Sob demanda" — rotulo provisorio,
+  // nunca confundido com o campo comercial real (que ainda nao existe no
+  // catalog2 para este conceito).
+  modality      String?
+  contract_note String? @db.Text
+
+  // JSON string[] / objetos simples — sempre decodificados e reapresentados
+  // com marcacao "provisorio" no frontend, nunca tratados como dado aprovado.
+  highlights_json     String? @db.Text
+  included_items_json String? @db.Text
+  options_json        String? @db.Text
+  portfolio_refs_json String? @db.Text
+
+  created_at         DateTime @default(now())
+  updated_at         DateTime @updatedAt
+  created_by_user_id String?
+
+  @@map("catalog2_provisional_previews")
 }
 
 // Resolucao de UMA pendencia pelo Admin Master — altera so o rascunho,

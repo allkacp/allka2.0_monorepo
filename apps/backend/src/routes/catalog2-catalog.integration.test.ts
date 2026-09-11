@@ -160,6 +160,7 @@ let COMMON_ADMIN = "";
 let LEADER = "";
 let SLUG = "";
 let DRAFT_SLUG = "";
+let DRAFT_ID = "";
 
 describe("Catálogo do cliente — visibilidade, configurador, cotação e cesta", () => {
   before(async () => {
@@ -175,7 +176,14 @@ describe("Catálogo do cliente — visibilidade, configurador, cotação e cesta
     DRAFT_SLUG = `t5-draft-${crypto.randomBytes(4).toString("hex")}`;
     const p = await prisma.catalog2Product.create({ data: { slug: DRAFT_SLUG, internal_name: `[TESTE LOCAL] ${DRAFT_SLUG}`, status: "em_preparacao" } });
     catProducts.push(p.id);
+    DRAFT_ID = p.id;
     await prisma.catalog2ProductVersion.create({ data: { product_id: p.id, version_number: 1, state: "rascunho", title: "rascunho" } });
+    // reparo 2026-09: este rascunho ganha uma linha de preview provisório
+    // (imagem/preço/prazo de demonstração) — usada pelo teste abaixo pra
+    // provar que ela NUNCA vaza pro catálogo do cliente, nem em preview.
+    await prisma.catalog2ProvisionalPreview.create({
+      data: { product_id: p.id, image_path: "/images/products/alk-ads-001.svg", price_amount: 4321, deadline_days: 11, modality: "Sob demanda" },
+    });
 
     CO = await mkCompanyUser("A");
     CO2 = await mkCompanyUser("B");
@@ -423,6 +431,18 @@ describe("Catálogo do cliente — visibilidade, configurador, cotação e cesta
     for (const forbidden of ["human_cost", "direct_cost", "minimum_price", "taxes_and_margins", "ia_cost", "historical_price", "profit_margin", "commission", "subtotal_cost", "human_cost_breakdown"]) {
       assert.equal(blob.includes(forbidden), false, `campo interno "${forbidden}" vazou para o cliente`);
     }
+  });
+
+  it("reparo 2026-09: preço/imagem provisórios do preview administrativo NUNCA vazam pro catálogo do cliente (nem em preview=1)", async () => {
+    const anonList = await api(`/api/catalog2/products`, { token: CO.token });
+    const preview = await api(`/api/catalog2/products?preview=1`, { token: MASTER });
+    const blob = JSON.stringify(anonList.json) + JSON.stringify(preview.json);
+    for (const forbidden of ["is_provisional", "4321", "alk-ads-001.svg", "provisional_preview", "Sob demanda"]) {
+      assert.equal(blob.includes(forbidden), false, `campo/valor provisório "${forbidden}" vazou pro catálogo do cliente`);
+    }
+    // preço/prazo do rascunho continuam null pro cliente comum (nunca herda o provisório).
+    const commonDetail = await api(`/api/catalog2/products/${DRAFT_SLUG}`, { token: CO.token });
+    assert.equal(commonDetail.status, 404);
   });
 
   it("22. os 36 produtos importados continuam RASCUNHOS (nenhum publicado neste bloco)", async () => {

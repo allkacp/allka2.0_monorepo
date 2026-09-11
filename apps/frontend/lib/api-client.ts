@@ -887,6 +887,8 @@ class ApiClient {
   getCatalog2Readiness() { return this.c2("GET", "/readiness"); }
   /** Prontidão de UM produto — mesma regra do painel geral (bloco 2, 10/09). */
   getCatalog2ProductReadiness(productId: string) { return this.c2("GET", `/products/${productId}/readiness`); }
+  /** Detalhe completo (real + prontidão + camada provisória) — reparo 2026-09. */
+  getCatalog2ProductDetailPreview(productId: string) { return this.c2("GET", `/products/${productId}/detail-preview`); }
 
   // ── Catálogo do CLIENTE do catalog2 (sprint de produtos, bloco 5/6) ────
   private cc<T = any>(m: "GET" | "POST" | "PUT" | "DELETE", path: string, body?: unknown): Promise<T> {

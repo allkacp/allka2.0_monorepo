@@ -166,6 +166,60 @@ describe("Novo catálogo — fundação", () => {
     assert.equal((await api("/api/admin/catalog2/products/nao-existe/readiness", { token: tokenFor(master) })).status, 404);
   });
 
+  it("reparo 2026-09 (detalhe/imagens/preço provisórios): camada provisória fica SEPARADA dos campos reais, nunca torna o produto client_visible, e some ao ser removida", async () => {
+    const master = await mkUser("master");
+    const p = await createProduct({ internal_name: "[TESTE] Preview provisório" }, master.id);
+    catProducts.push(p.id);
+
+    // sem nenhuma linha provisória: readiness.provisional é null.
+    const before = await api(`/api/admin/catalog2/products/${p.id}/readiness`, { token: tokenFor(master) });
+    assert.equal(before.json.provisional, null);
+    assert.equal(before.json.price_amount, null, "sem preview, preço real continua null (nunca inventado)");
+
+    await prisma.catalog2ProvisionalPreview.create({
+      data: {
+        product_id: p.id,
+        image_path: "/images/products/alk-ads-001.svg",
+        image_source_note: "teste",
+        price_amount: 1234,
+        deadline_days: 9,
+        modality: "Projeto único",
+        contract_note: "nota de teste",
+        highlights_json: JSON.stringify(["Destaque 1", "Destaque 2"]),
+        included_items_json: JSON.stringify([{ title: "Item 1" }]),
+        options_json: JSON.stringify([{ name: "Padrão", price: 1234, deadline_days: 9, modality: "Projeto único", features: [] }]),
+        portfolio_refs_json: JSON.stringify(["/images/products/alk-ads-001-portfolio-01.svg"]),
+      },
+    });
+
+    const after = await api(`/api/admin/catalog2/products/${p.id}/readiness`, { token: tokenFor(master) });
+    // campo REAL continua null — a camada provisória nunca o substitui.
+    assert.equal(after.json.price_amount, null);
+    assert.equal(after.json.client_visible, false);
+    // camada provisória vem SEPARADA e marcada.
+    assert.equal(after.json.provisional.is_provisional, true);
+    assert.equal(after.json.provisional.price_amount, 1234);
+    assert.equal(after.json.provisional.image_path, "/images/products/alk-ads-001.svg");
+    assert.deepEqual(after.json.provisional.highlights, ["Destaque 1", "Destaque 2"]);
+
+    // /detail-preview junta o detalhe real com a mesma prontidão.
+    const detail = await api(`/api/admin/catalog2/products/${p.id}/detail-preview`, { token: tokenFor(master) });
+    assert.equal(detail.status, 200);
+    assert.equal(detail.json.product.id, p.id);
+    assert.equal(detail.json.readiness.provisional.price_amount, 1234);
+
+    // listagem: mostra a miniatura/preço provisórios, sempre marcados.
+    const list = await api(`/api/admin/catalog2/products?q=${encodeURIComponent("[TESTE] Preview provisório")}`, { token: tokenFor(master) });
+    const row = list.json.data.find((x: any) => x.id === p.id);
+    assert.equal(row.provisional_preview.is_provisional, true);
+    assert.equal(row.provisional_preview.price_amount, 1234);
+
+    // removendo a linha provisória, tudo volta a "sem preview" — reversível.
+    await prisma.catalog2ProvisionalPreview.delete({ where: { product_id: p.id } });
+    const cleared = await api(`/api/admin/catalog2/products/${p.id}/readiness`, { token: tokenFor(master) });
+    assert.equal(cleared.json.provisional, null);
+  });
+
   it("6. versão PUBLICADA não pode ser editada diretamente (409); 7. nova versão preserva a publicada", async () => {
     const master = await mkUser("master");
     const p = await createProduct({ internal_name: "[TESTE] Versionamento" }, master.id);
