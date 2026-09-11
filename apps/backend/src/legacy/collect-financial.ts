@@ -431,6 +431,12 @@ export async function collectFinancialSnapshot(
           search_active: c.status === "pending",
         });
         relations.push({ from_original_id: c.id, from_entity_type: "partner_commission", to_original_id: c.partner_id, to_entity_type: "partner_profile", relation_type: "belongs_to_partner", description: null });
+        // Retroativo: "campaign" só passou a existir como entity_type no
+        // bloco de campanhas (collect-campaigns.ts) — campaign_id já era
+        // preservado em `content` desde o bloco financeiro, mas só agora a
+        // relação pode ser tipada (o destino pode não estar no MESMO lote
+        // se só o financeiro for rodado; o modelo genérico já tolera isso).
+        if (c.campaign_id) relations.push({ from_original_id: c.id, from_entity_type: "partner_commission", to_original_id: c.campaign_id, to_entity_type: "campaign", relation_type: "commission_from_campaign", description: null });
       }
     },
   );

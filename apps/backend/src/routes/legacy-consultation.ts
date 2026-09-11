@@ -17,6 +17,7 @@ import { getLegacyPrisma, LegacyNotConfiguredError } from "../legacy/legacy-pris
 import {
   ALERT_ENTITY_TYPES,
   ALERT_NOTIFICATION_CHAT_ENTITY_TYPES,
+  CAMPAIGN_DOMAIN_ENTITY_TYPES,
   CHAT_ENTITY_TYPES,
   FINANCIAL_ENTITY_TYPES,
   IDENTITY_ENTITY_TYPES,
@@ -141,12 +142,14 @@ router.get("/summary", async (req: Request, res: Response, next: NextFunction) =
       legacy.legacyRecordSnapshot.count({ where: { entity_type: { in: FINANCIAL_ENTITY_TYPES } } }),
     ]);
 
-    // "alertas"/"notificacoes"/"chat" — mesmo raciocínio: cada um pode viver
-    // num lote próprio (ver collectAlertsNotificationsChatSnapshot).
-    const [alertCount, notificationCount, chatCount] = await Promise.all([
+    // "alertas"/"notificacoes"/"chat"/"campanhas" — mesmo raciocínio: cada um
+    // pode viver num lote próprio (ver collectAlertsNotificationsChatSnapshot
+    // e collectCampaignsSnapshot — bloco final de cobertura do Legado).
+    const [alertCount, notificationCount, chatCount, campaignDomainCount] = await Promise.all([
       legacy.legacyRecordSnapshot.count({ where: { entity_type: { in: ALERT_ENTITY_TYPES } } }),
       legacy.legacyRecordSnapshot.count({ where: { entity_type: { in: NOTIFICATION_ENTITY_TYPES } } }),
       legacy.legacyRecordSnapshot.count({ where: { entity_type: { in: CHAT_ENTITY_TYPES } } }),
+      legacy.legacyRecordSnapshot.count({ where: { entity_type: { in: CAMPAIGN_DOMAIN_ENTITY_TYPES } } }),
     ]);
 
     res.json({
@@ -184,6 +187,7 @@ router.get("/summary", async (req: Request, res: Response, next: NextFunction) =
         alertas: { status: alertCount > 0 ? "ready" : "awaiting_import", count: alertCount },
         notificacoes: { status: notificationCount > 0 ? "ready" : "awaiting_import", count: notificationCount },
         chat: { status: chatCount > 0 ? "ready" : "awaiting_import", count: chatCount },
+        campanhas: { status: campaignDomainCount > 0 ? "ready" : "awaiting_import", count: campaignDomainCount },
       },
     });
   } catch (err) {
@@ -203,6 +207,7 @@ function baseTabs() {
     alertas: { status: "awaiting_import" },
     notificacoes: { status: "awaiting_import" },
     chat: { status: "awaiting_import" },
+    campanhas: { status: "awaiting_import" },
   };
 }
 
@@ -768,6 +773,129 @@ router.get("/alerts-notifications-chat", async (req: Request, res: Response, nex
       entity_type: "alerts_notifications_chat",
       batch_id: batchId,
       filters: { has_query: !!q, status: status ?? null, entity_type: requestedEntityType ?? null, group: requestedGroup ?? null, related_to: relatedTo ?? null, from: from ?? null, to: to ?? null, page, page_size: pageSize, sort_by: sortBy, sort_dir: sortDir },
+      result_count: rows.length,
+    });
+
+    res.json({
+      data: rows,
+      total,
+      page,
+      page_size: pageSize,
+      batch_id: batchId,
+      available_entity_types: entityTypeCounts.map((c) => ({ entity_type: c.entity_type, count: c._count._all })),
+      read_only: true,
+    });
+  } catch (err) {
+    handleErr(err, res, next);
+  }
+});
+
+// ── GET /campaigns  (campanhas, cupons, usos, destinatários) ────────────
+// Mesmo padrão de /financial e /alerts-notifications-chat — bloco final de
+// cobertura do Legado. Busca por tipo, status, período, campanha/cupom
+// (related_to), conta proprietária e canal (via content_json/q). Nenhuma
+// rota aqui reenvia/edita/ativa/cancela/duplica/aplica cupom/dispara
+// campanha — só leitura.
+const CAMPAIGN_SORTABLE = new Set(["title", "original_code", "imported_at", "original_status"]);
+
+router.get("/campaigns", async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const legacy = getLegacyPrisma();
+    if (!legacy) throw new LegacyNotConfiguredError();
+
+    const requestedEntityType =
+      typeof req.query.entity_type === "string" && (CAMPAIGN_DOMAIN_ENTITY_TYPES as string[]).includes(req.query.entity_type)
+        ? req.query.entity_type
+        : undefined;
+    const entityTypeFilter = requestedEntityType ? [requestedEntityType] : CAMPAIGN_DOMAIN_ENTITY_TYPES;
+
+    const batchId =
+      typeof req.query.batch_id === "string" && req.query.batch_id
+        ? req.query.batch_id
+        : (
+            await legacy.legacyRecordSnapshot.findFirst({
+              where: { entity_type: { in: CAMPAIGN_DOMAIN_ENTITY_TYPES } },
+              orderBy: { imported_at: "desc" },
+              select: { batch_id: true },
+            })
+          )?.batch_id;
+
+    if (!batchId) {
+      res.json({ data: [], total: 0, page: 1, page_size: 20, batch_id: null, available_entity_types: [], read_only: true });
+      return;
+    }
+
+    const q = typeof req.query.q === "string" ? req.query.q.trim().slice(0, 120) : "";
+    const status = typeof req.query.status === "string" ? req.query.status : undefined;
+    // "campanha"/"cupom"/"conta proprietária"/"destinatário": qualquer
+    // original_id que este domínio referencia via relação de SAÍDA (ex.:
+    // coupon_usage→coupon, campaign_recipient_state→communication_campaign,
+    // partner_commission→campaign a partir do bloco financeiro).
+    const relatedTo = typeof req.query.related_to === "string" && req.query.related_to ? req.query.related_to : undefined;
+    const DATE_ONLY = /^\d{4}-\d{2}-\d{2}$/;
+    const rawFrom = typeof req.query.from === "string" && req.query.from ? req.query.from : undefined;
+    const rawTo = typeof req.query.to === "string" && req.query.to ? req.query.to : undefined;
+    const from = rawFrom && DATE_ONLY.test(rawFrom) ? `${rawFrom}T00:00:00.000Z` : rawFrom;
+    const to = rawTo && DATE_ONLY.test(rawTo) ? `${rawTo}T23:59:59.999Z` : rawTo;
+    const page = Math.max(1, Number(req.query.page) || 1);
+    const pageSize = Math.min(100, Math.max(1, Number(req.query.page_size) || 20));
+    const sortBy = CAMPAIGN_SORTABLE.has(String(req.query.sort_by)) ? String(req.query.sort_by) : "imported_at";
+    const sortDir = req.query.sort_dir === "desc" ? "desc" : "asc";
+
+    let relatedRecordIds: string[] | undefined;
+    if (relatedTo) {
+      const rels = await legacy.legacyRelationSnapshot.findMany({ where: { batch_id: batchId, to_original_id: relatedTo }, select: { from_record_id: true } });
+      relatedRecordIds = [...new Set(rels.map((r) => r.from_record_id))];
+      if (relatedRecordIds.length === 0) {
+        res.json({ data: [], total: 0, page, page_size: pageSize, batch_id: batchId, available_entity_types: [], read_only: true });
+        return;
+      }
+    }
+
+    const where: Record<string, unknown> = { batch_id: batchId, entity_type: { in: entityTypeFilter } };
+    if (status) where.original_status = status;
+    if (relatedRecordIds) where.id = { in: relatedRecordIds };
+    if (q) {
+      where.OR = [
+        { original_code: { contains: q } },
+        { title: { contains: q } },
+        { subtitle: { contains: q } },
+        { content_json: { contains: q } },
+      ];
+    }
+
+    if (from || to) {
+      const clauses: string[] = ["batch_id = ?"];
+      const params: unknown[] = [batchId];
+      if (from) {
+        clauses.push("JSON_UNQUOTE(JSON_EXTRACT(dates_json, '$.created_at')) >= ?");
+        params.push(from);
+      }
+      if (to) {
+        clauses.push("JSON_UNQUOTE(JSON_EXTRACT(dates_json, '$.created_at')) <= ?");
+        params.push(to);
+      }
+      const rows = await legacy.$queryRawUnsafe<Array<{ id: string }>>(`SELECT id FROM legacy_record_snapshots WHERE ${clauses.join(" AND ")}`, ...params);
+      const idsInPeriod = rows.map((r) => r.id);
+      where.id = where.id ? { in: (where.id as { in: string[] }).in.filter((id) => idsInPeriod.includes(id)) } : { in: idsInPeriod };
+    }
+
+    const [total, rows, entityTypeCounts] = await Promise.all([
+      legacy.legacyRecordSnapshot.count({ where }),
+      legacy.legacyRecordSnapshot.findMany({
+        where,
+        orderBy: { [sortBy]: sortDir },
+        skip: (page - 1) * pageSize,
+        take: pageSize,
+        select: { id: true, entity_type: true, original_id: true, original_code: true, title: true, subtitle: true, original_status: true, imported_at: true, sanitized: true },
+      }),
+      legacy.legacyRecordSnapshot.groupBy({ by: ["entity_type"], where: { batch_id: batchId, entity_type: { in: CAMPAIGN_DOMAIN_ENTITY_TYPES } }, _count: { _all: true } }),
+    ]);
+
+    await audit(req, "list", {
+      entity_type: "campaigns",
+      batch_id: batchId,
+      filters: { has_query: !!q, status: status ?? null, entity_type: requestedEntityType ?? null, related_to: relatedTo ?? null, from: from ?? null, to: to ?? null, page, page_size: pageSize, sort_by: sortBy, sort_dir: sortDir },
       result_count: rows.length,
     });
 

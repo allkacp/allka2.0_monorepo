@@ -315,7 +315,7 @@ describe("Simulador de virada limpa — manifesto de retenção + plano de domí
       assert.equal(testLocalRow?.bucket, "decisao_humana");
     });
 
-    it("lists domains not yet covered by Legacy as blockers", async () => {
+    it("no domain is left as a Legacy gap — every domain now has a ready collector (bloco final de cobertura)", async () => {
       const manifest = await buildRetentionManifest(prisma);
       const retained = {
         userIds: new Set(manifest.map((m) => m.user_id)),
@@ -324,11 +324,11 @@ describe("Simulador de virada limpa — manifesto de retenção + plano de domí
         nomadeIds: new Set<string>(),
       };
       const plan = await buildDomainPlan(prisma as unknown as DomainPlanDb, retained);
-      for (const expectedGap of ["projetos", "tarefas_etapas", "financeiro", "alertas", "notificacoes", "chat", "campanhas"]) {
-        assert.ok(plan.legacy_gaps.includes(expectedGap), `expected "${expectedGap}" to be a Legacy gap`);
-      }
-      // Structural/config domain must never be a blocker.
-      assert.ok(!plan.legacy_gaps.includes("configuracoes"));
+      // Produtos, identidade/organizações, projetos/execução, financeiro,
+      // alertas/notificações/chat e campanhas todos têm coletor pronto agora
+      // (nenhum snapshot REAL foi executado — "covered" aqui é sobre o
+      // mecanismo existir, ver comentário no topo de domain-plan.ts).
+      assert.deepEqual(plan.legacy_gaps, [], "nenhum domínio deveria aparecer como lacuna do Legacy neste ponto");
     });
   });
 

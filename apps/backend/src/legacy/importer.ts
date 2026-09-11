@@ -39,7 +39,8 @@ export type LegacyEntityType =
   | IdentityEntityType
   | ProjectExecutionEntityType
   | FinancialEntityType
-  | AlertNotificationChatEntityType;
+  | AlertNotificationChatEntityType
+  | CampaignEntityType;
 
 // ── Identidade histórica e organizações (bloco seguinte ao manifesto de
 // retenção) — usuários, perfis administrativos, empresas, agências,
@@ -208,6 +209,39 @@ export const ALERT_NOTIFICATION_CHAT_ENTITY_TYPES: AlertNotificationChatEntityTy
 
 export const ALERT_NOTIFICATION_CHAT_IMPORTER_VERSION = "alerts-notifications-chat-foundation-1";
 export const DEFAULT_ALERT_NOTIFICATION_CHAT_SOURCE_NAME = "[TESTE LOCAL] Fotografia de alertas, notificações e chat anteriores";
+
+// ── Campanhas, cupons e destinatários (bloco final de cobertura do
+// Legado) — último domínio operacional pendente. Ver
+// src/legacy/collect-campaigns.ts.
+//
+// "communication_delivery" NÃO é redeclarado aqui — já existe em
+// AlertNotificationChatEntityType e é a MESMA tabela física; o coletor de
+// alertas/notificações/chat filtra fora as linhas origin="campaign"
+// (documentado lá como "ainda adiado") e o coletor deste bloco é quem as
+// coleta, reusando o mesmo entity_type — sem redefinir o tipo.
+//
+// Deliberadamente FORA deste bloco (ver relatório):
+//   - Nenhuma entidade de "lead"/contato externo existe no schema real —
+//     Campaign, Coupon, CouponUsage e CampaignRecipientState só têm
+//     destinatário via User (recipient_user_id/linked_user_id/company_id),
+//     todos já cobertos pelo coletor de identidade/organizações. Não há
+//     lista bruta de contatos nem e-mail/telefone solto pra mascarar.
+//   - Campaign.coupon_code e Coupon.code são namespaces INDEPENDENTES (sem
+//     FK entre os dois modelos, apesar do nome parecido) — nenhuma relação
+//     campaign↔coupon é criada por coincidência de string.
+//   - Métricas de abertura/clique/conversão citadas no prompt NÃO existem
+//     no schema nem no código (grep em src/lib/comms/*.ts) — só
+//     status/state (CommunicationDelivery.status, CampaignRecipientState.state).
+export type CampaignEntityType = "campaign" | "coupon" | "coupon_usage" | "communication_campaign" | "campaign_recipient_state";
+
+export const CAMPAIGN_ENTITY_TYPES: CampaignEntityType[] = ["campaign", "coupon", "coupon_usage", "communication_campaign", "campaign_recipient_state"];
+// Grupo completo exposto pela consulta do Legado para este domínio —
+// inclui "communication_delivery" (origin=campaign) mesmo não sendo um
+// CampaignEntityType próprio, porque é o mesmo entity_type físico.
+export const CAMPAIGN_DOMAIN_ENTITY_TYPES: LegacyEntityType[] = [...CAMPAIGN_ENTITY_TYPES, "communication_delivery"];
+
+export const CAMPAIGN_IMPORTER_VERSION = "campaigns-foundation-1";
+export const DEFAULT_CAMPAIGN_SOURCE_NAME = "[TESTE LOCAL] Fotografia de campanhas anteriores";
 
 export interface RawRecord {
   entity_type: LegacyEntityType;

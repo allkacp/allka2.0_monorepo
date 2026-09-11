@@ -2,14 +2,28 @@
 // registros individuais com dado sensível) em 4 baldes, por domínio:
 //
 //   preservar          → fica no operacional depois do reset
-//   copiar_legacy       → precisa ser copiado para o Legacy; hoje o Legacy
-//                         genérico (allka_legacy) ainda NÃO cobre o domínio
+//   copiar_legacy       → precisa ser copiado para o Legacy antes da limpeza
 //   remover_apos_copia  → já existe cópia no Legacy (mesmo que só "preview")
 //                         para este domínio; falta validar/selar e então
 //                         remover do operacional
 //   decisao_humana      → não dá para classificar sozinho (nativo, sem
 //                         legacy_id, fora das 4 contas retidas — candidato a
 //                         teste/seed, mas pode ser dado real; ver auditoria)
+//
+// `legacy_covered` = existe COLETOR pronto (código) pra este domínio no
+// mecanismo genérico do Legado — não confundir com "já foi executado um
+// snapshot real". Nenhum snapshot oficial real foi rodado contra o
+// allka_legacy de verdade em nenhum bloco (proibido em todos eles); o único
+// batch real hoje é um "preview" de produtos, anterior a vários destes
+// coletores. `legacy_covered=true` responde "dá pra copiar este domínio pro
+// Legado quando alguém rodar o importador", não "já foi copiado".
+//
+// Coletores hoje existentes (todos read-only, todos com teste em banco
+// descartável): produtos (collectProductSnapshot), identidade/organizações
+// (collectIdentityOrgSnapshot), projetos/execução
+// (collectProjectExecutionSnapshot), financeiro (collectFinancialSnapshot),
+// alertas/notificações/chat (collectAlertsNotificationsChatSnapshot) e
+// campanhas (collectCampaignsSnapshot) — ver apps/backend/src/legacy/.
 //
 // Nenhuma função aqui escreve nada — todas usam apenas count()/findMany()
 // de leitura. O client informado pelo script real já vem com
@@ -157,15 +171,15 @@ async function usuariosRows(db: DomainPlanDb, retainedUserIds: Set<string>): Pro
       "users (importados, não retidos)",
       "copiar_legacy",
       comLegacyId,
-      false,
-      "legacy_id preenchido — vieram da plataforma anterior; Legacy ainda não cobre o domínio de usuários.",
+      true,
+      "legacy_id preenchido — vieram da plataforma anterior; coletor de identidade/organizações pronto (nenhum snapshot real executado ainda).",
     ),
     row(
       "usuarios",
       "users (nativos, não retidos)",
       "decisao_humana",
       nativosNaoRetidos,
-      false,
+      true,
       "Sem legacy_id e fora das 4 contas retidas — candidato a teste/seed, mas exige confirmação humana.",
     ),
   ];
@@ -186,8 +200,8 @@ async function orgRows(
   const nativosNaoRetidos = Math.max(0, total - retained - comLegacyId);
   return [
     row(domain, `${table} (retidos)`, "preservar", retained, true, "Vínculo estrutural de uma das 4 contas retidas."),
-    row(domain, `${table} (importados, não retidos)`, "copiar_legacy", comLegacyId, false),
-    row(domain, `${table} (nativos, não retidos)`, "decisao_humana", nativosNaoRetidos, false),
+    row(domain, `${table} (importados, não retidos)`, "copiar_legacy", comLegacyId, true, "Coletor de identidade/organizações pronto (nenhum snapshot real executado ainda)."),
+    row(domain, `${table} (nativos, não retidos)`, "decisao_humana", nativosNaoRetidos, true),
   ];
 }
 
@@ -213,8 +227,8 @@ export async function buildDomainPlan(db: DomainPlanDb, retained: DomainPlanReta
       "partner_profiles",
       "copiar_legacy",
       partnerProfileCount,
-      false,
-      "Vínculo de parceiro com saldo/comissão — dado de negócio, não identidade; o vínculo estrutural das contas retidas já aparece em minimal_required_records.",
+      true,
+      "Vínculo de parceiro com saldo/comissão — dado de negócio, não identidade; coletor de identidade/organizações já cobre. O vínculo estrutural das contas retidas já aparece em minimal_required_records.",
     ),
   );
 
@@ -229,15 +243,16 @@ export async function buildDomainPlan(db: DomainPlanDb, retained: DomainPlanReta
     db.productAddon.count(),
   ]);
   const producedNote =
-    "Coberto por um snapshot em allka_legacy — mas é um batch 'preview' (não selado); rodar como oficial antes de remover.";
+    "Já existe um snapshot real em allka_legacy (batch 'preview', 924 registros) — mas não inclui product_version/product_bundle/product_addon (adicionados ao coletor depois desse batch); rodar de novo, como oficial, antes de remover.";
+  const productMechanismReady = "Coletor de produtos pronto — não fazia parte do único batch real existente (anterior a este campo do coletor); precisa de novo snapshot antes de remover.";
   rows.push(
     row("produtos", "products", "remover_apos_copia", products, true, producedNote),
     row("produtos", "product_variations", "remover_apos_copia", productVariations, true, producedNote),
-    row("produtos", "product_versions", "remover_apos_copia", productVersions, false, "Não fazia parte do batch existente — precisa de novo snapshot."),
+    row("produtos", "product_versions", "remover_apos_copia", productVersions, true, productMechanismReady),
     row("produtos", "catalog_tasks", "remover_apos_copia", catalogTasks, true, producedNote),
     row("produtos", "product_catalog_tasks", "remover_apos_copia", productCatalogTasks, true, producedNote),
-    row("produtos", "product_bundles", "copiar_legacy", productBundles, false),
-    row("produtos", "product_addons", "copiar_legacy", productAddons, false),
+    row("produtos", "product_bundles", "copiar_legacy", productBundles, true, productMechanismReady),
+    row("produtos", "product_addons", "copiar_legacy", productAddons, true, productMechanismReady),
   );
 
   // ── Projetos / tarefas / etapas ──────────────────────────────────────────
@@ -249,13 +264,14 @@ export async function buildDomainPlan(db: DomainPlanDb, retained: DomainPlanReta
     db.projectTaskStage.count(),
     db.taskBriefingAnswer.count(),
   ]);
+  const projectExecutionNote = "Coletor de projetos/execução pronto (nenhum snapshot real executado ainda no allka_legacy real).";
   rows.push(
-    row("projetos", "projects (importados)", "copiar_legacy", projectsComLegacyId, false, "Legacy ainda não cobre o domínio de projetos."),
-    row("projetos", "projects (nativos)", "decisao_humana", Math.max(0, projectsTotal - projectsComLegacyId), false),
-    row("tarefas_etapas", "project_tasks (importadas)", "copiar_legacy", tasksComLegacyId, false),
-    row("tarefas_etapas", "project_tasks (nativas)", "decisao_humana", Math.max(0, tasksTotal - tasksComLegacyId), false),
-    row("tarefas_etapas", "project_task_stages", "copiar_legacy", stages, false),
-    row("tarefas_etapas", "task_briefing_answers", "copiar_legacy", briefingAnswers, false),
+    row("projetos", "projects (importados)", "copiar_legacy", projectsComLegacyId, true, projectExecutionNote),
+    row("projetos", "projects (nativos)", "decisao_humana", Math.max(0, projectsTotal - projectsComLegacyId), true),
+    row("tarefas_etapas", "project_tasks (importadas)", "copiar_legacy", tasksComLegacyId, true, projectExecutionNote),
+    row("tarefas_etapas", "project_tasks (nativas)", "decisao_humana", Math.max(0, tasksTotal - tasksComLegacyId), true),
+    row("tarefas_etapas", "project_task_stages", "copiar_legacy", stages, true, projectExecutionNote),
+    row("tarefas_etapas", "task_briefing_answers", "copiar_legacy", briefingAnswers, true, projectExecutionNote),
   );
 
   // ── Financeiro ────────────────────────────────────────────────────────────
@@ -271,15 +287,16 @@ export async function buildDomainPlan(db: DomainPlanDb, retained: DomainPlanReta
       db.paymentItem.count(),
       db.legacyRecord.count(),
     ]);
+  const financialNote = "Coletor financeiro pronto (nenhum snapshot real executado ainda no allka_legacy real).";
   rows.push(
-    row("financeiro", "invoices", "copiar_legacy", invoices, false),
-    row("financeiro", "wallets", "copiar_legacy", wallets, false),
-    row("financeiro", "wallet_ledger", "copiar_legacy", walletLedger, false),
-    row("financeiro", "wallet_transactions", "copiar_legacy", walletTransactions, false),
-    row("financeiro", "withdrawal_requests", "copiar_legacy", withdrawalRequests, false),
-    row("financeiro", "expenses", "decisao_humana", expenses, false, "Despesa operacional da própria Allka, não de cliente — confirmar se é para reter."),
-    row("financeiro", "payments", "copiar_legacy", payments, false, "Hoje 100% sandbox (gateway FAKE_SANDBOX) por desenho do schema."),
-    row("financeiro", "payment_items", "copiar_legacy", paymentItems, false),
+    row("financeiro", "invoices", "copiar_legacy", invoices, true, financialNote),
+    row("financeiro", "wallets", "copiar_legacy", wallets, true, financialNote),
+    row("financeiro", "wallet_ledger", "copiar_legacy", walletLedger, true, financialNote),
+    row("financeiro", "wallet_transactions", "copiar_legacy", walletTransactions, true, financialNote),
+    row("financeiro", "withdrawal_requests", "copiar_legacy", withdrawalRequests, true, financialNote),
+    row("financeiro", "expenses", "decisao_humana", expenses, true, "Despesa operacional da própria Allka, não de cliente — confirmar se é para reter."),
+    row("financeiro", "payments", "copiar_legacy", payments, true, "Hoje 100% sandbox (gateway FAKE_SANDBOX) por desenho do schema. " + financialNote),
+    row("financeiro", "payment_items", "copiar_legacy", paymentItems, true, financialNote),
     row(
       "financeiro",
       "legacy_records (plataforma predecessora)",
@@ -300,8 +317,8 @@ export async function buildDomainPlan(db: DomainPlanDb, retained: DomainPlanReta
   rows.push(
     row("alertas", "alert_rules", "preservar", alertRules, true, "Definição de regra (config), não ocorrência."),
     row("alertas", "alert_standards", "preservar", alertStandards, true, "Padrão de conteúdo (config)."),
-    row("alertas", "system_alerts", "copiar_legacy", systemAlerts, false),
-    row("alertas", "system_alert_events", "copiar_legacy", systemAlertEvents, false),
+    row("alertas", "system_alerts", "copiar_legacy", systemAlerts, true, "Coletor de alertas/notificações/chat pronto (nenhum snapshot real executado ainda)."),
+    row("alertas", "system_alert_events", "copiar_legacy", systemAlertEvents, true, "Coletor de alertas/notificações/chat pronto (nenhum snapshot real executado ainda)."),
   );
 
   const [
@@ -322,10 +339,10 @@ export async function buildDomainPlan(db: DomainPlanDb, retained: DomainPlanReta
   rows.push(
     row("notificacoes", "notification_messages", "preservar", notificationMessages, true, "Conteúdo autorado por admin (config)."),
     row("notificacoes", "notification_rules", "preservar", notificationRules, true),
-    row("notificacoes", "notification_groups", "copiar_legacy", notificationGroups, false),
-    row("notificacoes", "notification_group_members", "copiar_legacy", notificationGroupMembers, false),
-    row("notificacoes", "communication_deliveries", "copiar_legacy", communicationDeliveries, false),
-    row("notificacoes", "banner_acknowledgements", "copiar_legacy", bannerAcknowledgements, false),
+    row("notificacoes", "notification_groups", "copiar_legacy", notificationGroups, true, "Coletor de alertas/notificações/chat pronto (nenhum snapshot real executado ainda)."),
+    row("notificacoes", "notification_group_members", "copiar_legacy", notificationGroupMembers, true, "Coletor de alertas/notificações/chat pronto (nenhum snapshot real executado ainda)."),
+    row("notificacoes", "communication_deliveries", "copiar_legacy", communicationDeliveries, true, "Coletor de alertas/notificações/chat pronto para origin=notification/banner; origin=campaign é coletado pelo coletor de campanhas."),
+    row("notificacoes", "banner_acknowledgements", "copiar_legacy", bannerAcknowledgements, true, "Coletor de alertas/notificações/chat pronto (nenhum snapshot real executado ainda)."),
   );
 
   const [conversations, chatParticipants, chatMessages] = await Promise.all([
@@ -333,10 +350,11 @@ export async function buildDomainPlan(db: DomainPlanDb, retained: DomainPlanReta
     db.chatParticipant.count(),
     db.chatMessage.count(),
   ]);
+  const chatNote = "Coletor de alertas/notificações/chat pronto (nenhum snapshot real executado ainda). Conteúdo textual passa por sanitização (segredo colado em texto livre é redigido, não excluído).";
   rows.push(
-    row("chat", "conversations", "copiar_legacy", conversations, false),
-    row("chat", "chat_participants", "copiar_legacy", chatParticipants, false),
-    row("chat", "chat_messages", "copiar_legacy", chatMessages, false),
+    row("chat", "conversations", "copiar_legacy", conversations, true, chatNote),
+    row("chat", "chat_participants", "copiar_legacy", chatParticipants, true, chatNote),
+    row("chat", "chat_messages", "copiar_legacy", chatMessages, true, chatNote),
   );
 
   const [campaigns, communicationCampaigns, campaignRecipientStates, coupons, couponUsages] = await Promise.all([
@@ -346,12 +364,13 @@ export async function buildDomainPlan(db: DomainPlanDb, retained: DomainPlanReta
     db.coupon.count(),
     db.couponUsage.count(),
   ]);
+  const campaignNote = "Coletor de campanhas pronto (bloco final de cobertura do Legado — nenhum snapshot real executado ainda no allka_legacy real).";
   rows.push(
-    row("campanhas", "campaigns", "copiar_legacy", campaigns, false),
-    row("campanhas", "communication_campaigns", "copiar_legacy", communicationCampaigns, false),
-    row("campanhas", "campaign_recipient_states", "copiar_legacy", campaignRecipientStates, false),
-    row("campanhas", "coupons", "decisao_humana", coupons, false, "Pode ser promoção real ou cupom de teste — confirmar."),
-    row("campanhas", "coupon_usages", "copiar_legacy", couponUsages, false),
+    row("campanhas", "campaigns", "copiar_legacy", campaigns, true, campaignNote),
+    row("campanhas", "communication_campaigns", "copiar_legacy", communicationCampaigns, true, campaignNote),
+    row("campanhas", "campaign_recipient_states", "copiar_legacy", campaignRecipientStates, true, campaignNote),
+    row("campanhas", "coupons", "decisao_humana", coupons, true, "Pode ser promoção real ou cupom de teste — confirmar. " + campaignNote),
+    row("campanhas", "coupon_usages", "copiar_legacy", couponUsages, true, campaignNote),
   );
 
   // ── Configurações (estruturais — nunca saem no reset) ───────────────────
