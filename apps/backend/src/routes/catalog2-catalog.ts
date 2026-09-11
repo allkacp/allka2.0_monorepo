@@ -90,7 +90,7 @@ router.get("/products", async (req, res, next) => {
       sort: str(req.query.sort),
       page: Number(req.query.page) || 1,
       page_size: Number(req.query.page_size) || 20,
-    });
+    }, { preview: wantsPreview(req) });
     res.json(data);
   } catch (e) {
     handle(e, res, next);

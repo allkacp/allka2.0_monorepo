@@ -92,7 +92,7 @@ export function Catalog2Store({ portal }: { portal: Portal }) {
           onCartChanged={loadCart}
         />
       ) : (
-        <CatalogList refs={refs} sp={sp} setParam={setParam} setParams={setParams} onOpen={(s) => setParam("produto", s)} />
+        <CatalogList refs={refs} sp={sp} setParam={setParam} setParams={setParams} onOpen={(s) => setParam("produto", s)} preview={preview} />
       )}
 
       {cartOpen && (
@@ -109,7 +109,7 @@ export function Catalog2Store({ portal }: { portal: Portal }) {
 }
 
 // ── Lista ─────────────────────────────────────────────────────────────
-function CatalogList({ refs, sp, setParam, setParams, onOpen }: any) {
+function CatalogList({ refs, sp, setParam, setParams, onOpen, preview }: any) {
   const [data, setData] = useState<{ data: any[]; total: number } | null>(null);
   const [loading, setLoading] = useState(true);
   const q = sp.get("q") ?? "";
@@ -123,13 +123,18 @@ function CatalogList({ refs, sp, setParam, setParams, onOpen }: any) {
     setLoading(true);
     const t = setTimeout(() => {
       apiClient
-        .getClientCatalog2Products({ q, pillar_id: pillar, category_id: category, four_f_id: fourF, sort, page, page_size: 12 })
+        .getClientCatalog2Products({
+          q, pillar_id: pillar, category_id: category, four_f_id: fourF, sort, page, page_size: 12,
+          // Preview ("visualizar como cliente"): mostra os 36 reais mesmo
+          // incompletos — o backend só relaxa isso pra Admin Master.
+          ...(preview ? { preview: "1" } : {}),
+        })
         .then(setData)
         .catch(() => setData({ data: [], total: 0 }))
         .finally(() => setLoading(false));
     }, q ? 300 : 0);
     return () => clearTimeout(t);
-  }, [q, pillar, category, fourF, sort, page]);
+  }, [q, pillar, category, fourF, sort, page, preview]);
 
   const totalPages = data ? Math.max(1, Math.ceil(data.total / 12)) : 1;
   const anyFilter = q || pillar || category || fourF || sort !== "name";
@@ -182,8 +187,18 @@ function CatalogList({ refs, sp, setParam, setParams, onOpen }: any) {
                 >
                   <div className="flex items-start justify-between gap-2">
                     <span className="font-medium">{p.name}</span>
-                    {p.is_new && <Badge className="bg-emerald-100 text-emerald-700">Novo</Badge>}
+                    <div className="flex shrink-0 items-center gap-1">
+                      {p.is_new && <Badge className="bg-emerald-100 text-emerald-700">Novo</Badge>}
+                      {p.is_preview && p.status !== "disponivel" && (
+                        <Badge className="bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-200">Em preparação</Badge>
+                      )}
+                    </div>
                   </div>
+                  {p.is_preview && (p.pendencies?.length ?? 0) > 0 && (
+                    <p className="mt-0.5 text-[11px] text-amber-600 dark:text-amber-400">
+                      Falta: {p.pendencies.join(", ")}
+                    </p>
+                  )}
                   {p.short_description && <p className="mt-1 line-clamp-2 text-xs text-neutral-500">{p.short_description}</p>}
                   <div className="mt-2 flex flex-wrap gap-1 text-[11px] text-neutral-500">
                     {p.pillar?.name && <span className="rounded bg-neutral-100 px-1.5 py-0.5 dark:bg-neutral-800">{p.pillar.name}</span>}

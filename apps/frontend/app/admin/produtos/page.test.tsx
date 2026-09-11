@@ -150,6 +150,7 @@ function productDetail(over: Partial<any> = {}) {
 
 beforeEach(() => {
   vi.clearAllMocks()
+  window.localStorage.clear()
   api.getCatalog2Overview.mockResolvedValue(OVERVIEW)
   api.getCatalog2Pillars.mockResolvedValue(REFS.pillars)
   api.getCatalog2FourF.mockResolvedValue(REFS.fourF)
@@ -217,6 +218,63 @@ it("layout recuperado: banner padrão (StandardPageBanner), abas de filtro rápi
   expect(screen.getByRole("columnheader", { name: "Produto" })).toBeInTheDocument()
   expect(screen.getByRole("columnheader", { name: "Status" })).toBeInTheDocument()
   expect(screen.getByRole("columnheader", { name: "Ações" })).toBeInTheDocument()
+})
+
+// Reparo 2026-09 seguinte ("recuperação completa dos layouts"): o
+// alternador Lista/Grade (2–5 colunas) tinha sumido na primeira restauração.
+describe("Lista/Grade — alternador de visualização (Cadastro)", () => {
+  it("padrão é Lista (tabela); alternar pra Grade troca pra cards, preservando busca/filtros/página", async () => {
+    renderPage()
+    await screen.findByText("[TESTE LOCAL] Demo")
+    expect(screen.getByRole("table")).toBeInTheDocument()
+
+    await userEvent.type(screen.getByPlaceholderText(/Buscar por nome/i), "demo")
+    await waitFor(() => expect(api.getCatalog2Products).toHaveBeenCalledWith(expect.objectContaining({ q: "demo" })))
+
+    await userEvent.click(screen.getByRole("button", { name: "3 colunas" }))
+    expect(screen.queryByRole("table")).not.toBeInTheDocument()
+    // busca continua no campo — não foi limpa pela troca de modo
+    expect(screen.getByPlaceholderText(/Buscar por nome/i)).toHaveValue("demo")
+    // o card em modo grade também abre o construtor
+    await userEvent.click(screen.getByText("[TESTE LOCAL] Demo"))
+    expect(await screen.findByText("Título comercial")).toBeInTheDocument()
+  })
+
+  it("ajuste de colunas: 2/3/4/5 colunas produzem classes de grid diferentes", async () => {
+    renderPage()
+    await screen.findByText("[TESTE LOCAL] Demo")
+    await userEvent.click(screen.getByRole("button", { name: "5 colunas" }))
+    const grid = document.querySelector(".grid.grid-cols-2") as HTMLElement | null
+    expect(grid).toBeTruthy()
+    await userEvent.click(screen.getByRole("button", { name: "2 colunas" }))
+    const grid2 = document.querySelector(".grid.grid-cols-1.sm\\:grid-cols-2") as HTMLElement | null
+    expect(grid2).toBeTruthy()
+  })
+
+  it("persiste em localStorage (chave isolada do Cadastro) e sobrevive a um novo mount (equivalente a F5)", async () => {
+    const { unmount } = renderPage()
+    await screen.findByText("[TESTE LOCAL] Demo")
+    await userEvent.click(screen.getByRole("button", { name: "4 colunas" }))
+    expect(window.localStorage.getItem("allka:view-mode:admin-produtos")).toBe("4")
+    unmount()
+
+    renderPage()
+    await screen.findByText("[TESTE LOCAL] Demo")
+    expect(screen.queryByRole("table")).not.toBeInTheDocument()
+    expect(document.querySelector(".grid")).toBeTruthy()
+  })
+
+  it("abrir e fechar o construtor preserva o modo de visualização escolhido", async () => {
+    renderPage()
+    await screen.findByText("[TESTE LOCAL] Demo")
+    await userEvent.click(screen.getByRole("button", { name: "3 colunas" }))
+    expect(screen.queryByRole("table")).not.toBeInTheDocument()
+    await userEvent.click(screen.getByText("[TESTE LOCAL] Demo"))
+    await screen.findByText("Título comercial")
+    await userEvent.click(screen.getByRole("button", { name: "Voltar" }))
+    await screen.findByPlaceholderText(/Buscar por nome/i)
+    expect(screen.queryByRole("table")).not.toBeInTheDocument()
+  })
 })
 
 it("clicar na aba 'Publicados' filtra a listagem (status=disponivel) sem precisar abrir 'Filtros'", async () => {

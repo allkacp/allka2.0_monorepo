@@ -130,4 +130,43 @@ describe("Catálogo do cliente", () => {
     );
     expect(await screen.findByText(/Pré-visualização como cliente/i)).toBeInTheDocument();
   });
+
+  // Reparo 2026-09 seguinte ("recuperação completa dos layouts"): o preview
+  // não mostrava os 36 reais na GRADE (só no detalhe de um produto já
+  // aberto) — a listagem nunca pedia preview=1. Corrigido.
+  it("preview: a LISTAGEM pede preview=1 ao backend e mostra produtos incompletos com selo 'Em preparação'", async () => {
+    api.getClientCatalog2Products.mockResolvedValue({
+      data: [
+        { ...LIST.data[0] },
+        {
+          id: "prod2", slug: "produto-incompleto", name: "Produto Incompleto", short_description: null,
+          pillar: null, category: null, four_f: [], is_new: false, starting_price: null, commercial_deadline_days: null,
+          currency: "BRL", has_variations: false, has_addons: false,
+          is_preview: true, status: "em_preparacao", pendencies: ["price_pending", "deadline_pending"],
+        },
+      ],
+      total: 2, page: 1, page_size: 12,
+    });
+    render(
+      <MemoryRouter initialEntries={["/admin/catalog2?preview=1"]}>
+        <Catalog2Store portal="admin" />
+      </MemoryRouter>,
+    );
+    await waitFor(() => expect(api.getClientCatalog2Products).toHaveBeenCalledWith(expect.objectContaining({ preview: "1" })));
+    expect(await screen.findByText("Produto Incompleto")).toBeInTheDocument();
+    expect(screen.getByText("Em preparação")).toBeInTheDocument();
+    expect(screen.getByText(/Falta: price_pending, deadline_pending/)).toBeInTheDocument();
+    // preço nunca inventado — "A definir" quando ausente (helper money())
+    expect(screen.getByText(/a partir de A definir/)).toBeInTheDocument();
+  });
+
+  it("cliente comum (company/agency) NUNCA pede preview=1, mesmo que soubesse do parâmetro na URL", async () => {
+    render(
+      <MemoryRouter initialEntries={["/company/catalog2?preview=1"]}>
+        <Catalog2Store portal="company" />
+      </MemoryRouter>,
+    );
+    await screen.findByText("Serviço Demo");
+    expect(api.getClientCatalog2Products).not.toHaveBeenCalledWith(expect.objectContaining({ preview: "1" }));
+  });
 });

@@ -251,6 +251,34 @@ describe("Catálogo do cliente — visibilidade, configurador, cotação e cesta
     assert.equal((await api(`/api/catalog2/products/${DRAFT_SLUG}?preview=1`, { token: COMMON_ADMIN })).status, 404);
   });
 
+  // Reparo 2026-09 seguinte ("recuperação completa dos layouts"): a
+  // LISTAGEM nunca honrava preview=1 (só o detalhe de um produto já aberto),
+  // então "visualizar como cliente" nunca mostrava os 36 reais incompletos
+  // na grade — só um produto de cada vez, e só se alguém já soubesse o slug.
+  it("3b. Admin Master em preview=1 vê na LISTAGEM um produto real incompleto (sem versão publicada) — nunca a fixture [TESTE LOCAL]", async () => {
+    const realDraftSlug = `t5-real-draft-${crypto.randomBytes(4).toString("hex")}`;
+    const p = await prisma.catalog2Product.create({ data: { slug: realDraftSlug, internal_name: `Produto real incompleto ${realDraftSlug}`, status: "em_preparacao" } });
+    catProducts.push(p.id);
+    await prisma.catalog2ProductVersion.create({ data: { product_id: p.id, version_number: 1, state: "rascunho", title: "rascunho real" } });
+
+    const preview = await api("/api/catalog2/products?page_size=100&preview=1", { token: MASTER });
+    assert.equal(preview.status, 200);
+    const found = preview.json.data.find((x: any) => x.slug === realDraftSlug);
+    assert.ok(found, "produto real incompleto deveria aparecer na listagem em preview");
+    assert.equal(found.is_preview, true);
+    assert.equal(found.status, "em_preparacao");
+    assert.equal(found.starting_price, null, "preço nunca inventado quando não há versão publicada/pronta");
+    // a fixture [TESTE LOCAL] (DRAFT_SLUG) nunca aparece, nem em preview.
+    assert.ok(!preview.json.data.some((x: any) => x.slug === DRAFT_SLUG));
+
+    // sem preview=1, o mesmo produto incompleto continua invisível (cliente
+    // comum nunca vê o que não é comercialmente publicável).
+    const noPreview = await api("/api/catalog2/products?page_size=100", { token: MASTER });
+    assert.ok(!noPreview.json.data.some((x: any) => x.slug === realDraftSlug));
+    const clientList = await api("/api/catalog2/products?page_size=100&preview=1", { token: CO.token });
+    assert.ok(!clientList.json.data.some((x: any) => x.slug === realDraftSlug), "cliente comum não ganha preview mesmo pedindo o parâmetro");
+  });
+
   it("5. abrir o produto NÃO adiciona nada à cesta", async () => {
     await api(`/api/catalog2/products/${SLUG}`, { token: CO.token });
     await api(`/api/catalog2/products/${SLUG}/configure`, { method: "POST", token: CO.token, body: { variation_option_keys: ["estatico", "autorizado"] } });

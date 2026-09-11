@@ -41,10 +41,12 @@ import {
 import { ConfirmationDialog } from "@/components/confirmation-dialog";
 import { EmbeddedSlideScreen } from "@/components/embedded-slide-screen";
 import { PinToTrayButton } from "@/components/pin-to-tray-button";
+import { ProductViewModeToggle } from "@/components/product-view-mode-toggle";
 import {
   STANDARD_SHELL_PANEL_CLASS,
   StandardPageBanner,
 } from "@/components/standard-page-shell";
+import { usePersistedViewMode, viewModeGridClass } from "@/lib/use-persisted-view-mode";
 import { ProductEditor } from "@/app/admin/produtos/novo-catalogo/product-editor";
 
 // Cadastro de Produtos — administração exclusiva dos produtos catalog2
@@ -129,6 +131,9 @@ export default function AdminProdutosPage() {
   const [importSummary, setImportSummary] = useState<any>(null);
   const [readiness, setReadiness] = useState<any>(null);
   const [showCategoryFilters, setShowCategoryFilters] = useState(false);
+  // Lista/Grade — preferência isolada desta tela, persistida em localStorage
+  // (mesma convenção do layout anterior; restaurada 2026-09).
+  const [gridMode, setGridMode] = usePersistedViewMode("admin-produtos", "list");
   const [page, setPage] = useState(1);
   const pageSize = 15;
   const [list, setList] = useState<{ data: any[]; total: number; page_size: number } | null>(null);
@@ -388,6 +393,7 @@ export default function AdminProdutosPage() {
                 <span className="hidden shrink-0 text-xs text-slate-400 sm:inline">
                   {list ? `${list.total} ${list.total === 1 ? "item" : "itens"}` : ""}
                 </span>
+                <ProductViewModeToggle value={gridMode} onChange={setGridMode} />
               </div>
 
               {showCategoryFilters && (
@@ -451,7 +457,7 @@ export default function AdminProdutosPage() {
                     {overview.is_empty ? overview.empty_message : "Tente ajustar os filtros ou a busca para encontrar o que procura."}
                   </p>
                 </div>
-              ) : (
+              ) : gridMode === "list" ? (
                 <div className="overflow-x-auto">
                   <table className="w-full min-w-[880px] text-xs">
                     <thead>
@@ -531,38 +537,7 @@ export default function AdminProdutosPage() {
                                     <TooltipContent className="text-xs font-medium">{p.has_draft ? "Continuar configuração" : "Abrir/editar produto"}</TooltipContent>
                                   </Tooltip>
                                 </TooltipProvider>
-                                <DropdownMenu>
-                                  <DropdownMenuTrigger asChild>
-                                    <button className="flex h-[26px] w-[26px] items-center justify-center rounded-[8px] border border-[#e8edf5] bg-white text-slate-500 shadow-[0_4px_10px_rgba(15,23,42,0.06)] transition-all hover:-translate-y-px hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-400">
-                                      <MoreVertical className="h-3.5 w-3.5" />
-                                    </button>
-                                  </DropdownMenuTrigger>
-                                  <DropdownMenuContent align="end">
-                                    {p.published_version_number && !p.has_draft && (
-                                      <DropdownMenuItem onClick={() => rowAction(() => apiClient.newCatalog2Version(p.id), "Nova versão rascunho criada.")}>
-                                        Nova versão
-                                      </DropdownMenuItem>
-                                    )}
-                                    {p.status === "disponivel" && (
-                                      <DropdownMenuItem onClick={() => rowAction(() => apiClient.setCatalog2ProductStatus(p.id, "temporariamente_inativo"), "Oferta suspensa.")}>
-                                        Suspender
-                                      </DropdownMenuItem>
-                                    )}
-                                    {p.status === "temporariamente_inativo" && (
-                                      <DropdownMenuItem onClick={() => rowAction(() => apiClient.setCatalog2ProductStatus(p.id, "disponivel"), "Oferta reativada.")}>
-                                        Ativar
-                                      </DropdownMenuItem>
-                                    )}
-                                    {p.status !== "arquivado" && (
-                                      <DropdownMenuItem
-                                        className="text-red-600"
-                                        onClick={() => setConfirm({ title: "Arquivar produto?", message: "O produto sai do catálogo. O histórico é preservado; nada é apagado.", onConfirm: () => rowAction(() => apiClient.archiveCatalog2Product(p.id), "Produto arquivado.") })}
-                                      >
-                                        Arquivar
-                                      </DropdownMenuItem>
-                                    )}
-                                  </DropdownMenuContent>
-                                </DropdownMenu>
+                                <ProductRowActionsMenu p={p} rowAction={rowAction} setConfirm={setConfirm} />
                               </div>
                             </td>
                           </tr>
@@ -570,6 +545,52 @@ export default function AdminProdutosPage() {
                       })}
                     </tbody>
                   </table>
+                </div>
+              ) : (
+                <div className={`p-4 ${viewModeGridClass(gridMode)}`}>
+                  {list.data.map((p) => {
+                    const readyLabel = p.imported
+                      ? (p.review_state === "ready_for_final_review" ? "Pronto p/ revisão final" : (REVIEW_STATE_LABEL[p.review_state] ?? "Em preparação"))
+                      : null;
+                    const pend: string[] = p.pendencies ?? [];
+                    const isCompact = gridMode === 4 || gridMode === 5;
+                    return (
+                      <Card key={p.id} className="group flex flex-col overflow-hidden border border-slate-200/70 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg dark:border-slate-700/60">
+                        <div className={`relative flex shrink-0 items-center justify-center bg-linear-to-br from-blue-500 to-violet-600 ${isCompact ? "h-20" : "h-28"}`}>
+                          <Package className={isCompact ? "h-6 w-6 text-white/90" : "h-9 w-9 text-white/90"} />
+                          <div className="absolute right-2 top-2 flex items-center gap-1">
+                            {p.is_new && <Badge className="bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-200">Novo</Badge>}
+                            <Badge className={STATUS_TONE[p.status] ?? "bg-muted text-muted-foreground"}>{STATUS_LABEL[p.status] ?? p.status}</Badge>
+                          </div>
+                        </div>
+                        <div className="flex flex-1 flex-col gap-2 p-3">
+                          <button className="text-left text-[13px] font-semibold leading-tight hover:underline" onClick={() => openProduct(p.id)}>
+                            {p.internal_name}
+                          </button>
+                          {!isCompact && (
+                            <p className="text-[11px] text-muted-foreground">
+                              {readyLabel ? readyLabel : "Sem revisão de preparo ainda"}
+                              {p.imported ? ` · ${pend.length} pendência(s)` : ""}
+                            </p>
+                          )}
+                          <Badge variant="outline" className="w-fit">{p.category?.name ?? "Sem categoria"}</Badge>
+                          <div className="mt-auto flex items-center justify-between gap-1 border-t border-slate-100 pt-2 dark:border-slate-800">
+                            <TooltipProvider delayDuration={400}>
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <Button size="sm" variant="outline" className="h-7 flex-1 text-xs" onClick={() => openProduct(p.id)}>
+                                    <Pencil className="h-3 w-3" /> {isCompact ? "" : "Abrir"}
+                                  </Button>
+                                </TooltipTrigger>
+                                <TooltipContent className="text-xs font-medium">{p.has_draft ? "Continuar configuração" : "Abrir/editar produto"}</TooltipContent>
+                              </Tooltip>
+                            </TooltipProvider>
+                            <ProductRowActionsMenu p={p} rowAction={rowAction} setConfirm={setConfirm} />
+                          </div>
+                        </div>
+                      </Card>
+                    );
+                  })}
                 </div>
               )}
 
@@ -676,6 +697,52 @@ function getPageNumbers(page: number, totalPages: number): (number | "...")[] {
 }
 
 // Indicador — sem card colorido; célula neutra dentro de um painel único.
+// Ações secundárias por produto — compartilhado entre Lista e Grade (só
+// muda o gatilho visual ao redor). Nunca inclui "Excluir": catalog2 não tem
+// exclusão — arquivar é o equivalente real, já usado aqui.
+function ProductRowActionsMenu({
+  p, rowAction, setConfirm,
+}: {
+  p: any;
+  rowAction: (fn: () => Promise<any>, ok: string) => void;
+  setConfirm: (c: { title: string; message: string; onConfirm: () => void } | null) => void;
+}) {
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <button className="flex h-[26px] w-[26px] items-center justify-center rounded-[8px] border border-[#e8edf5] bg-white text-slate-500 shadow-[0_4px_10px_rgba(15,23,42,0.06)] transition-all hover:-translate-y-px hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-400">
+          <MoreVertical className="h-3.5 w-3.5" />
+        </button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end">
+        {p.published_version_number && !p.has_draft && (
+          <DropdownMenuItem onClick={() => rowAction(() => apiClient.newCatalog2Version(p.id), "Nova versão rascunho criada.")}>
+            Nova versão
+          </DropdownMenuItem>
+        )}
+        {p.status === "disponivel" && (
+          <DropdownMenuItem onClick={() => rowAction(() => apiClient.setCatalog2ProductStatus(p.id, "temporariamente_inativo"), "Oferta suspensa.")}>
+            Suspender
+          </DropdownMenuItem>
+        )}
+        {p.status === "temporariamente_inativo" && (
+          <DropdownMenuItem onClick={() => rowAction(() => apiClient.setCatalog2ProductStatus(p.id, "disponivel"), "Oferta reativada.")}>
+            Ativar
+          </DropdownMenuItem>
+        )}
+        {p.status !== "arquivado" && (
+          <DropdownMenuItem
+            className="text-red-600"
+            onClick={() => setConfirm({ title: "Arquivar produto?", message: "O produto sai do catálogo. O histórico é preservado; nada é apagado.", onConfirm: () => rowAction(() => apiClient.archiveCatalog2Product(p.id), "Produto arquivado.") })}
+          >
+            Arquivar
+          </DropdownMenuItem>
+        )}
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
 function Stat({ k, v, hint, tone }: { k: string; v: number | string; hint?: string; tone?: "ok" | "warn" }) {
   const toneCls =
     tone === "ok" ? "text-emerald-700 dark:text-emerald-300"

@@ -159,6 +159,10 @@ function deliverablesFor(version: {
 
 // ── Listagem ──────────────────────────────────────────────────────────
 
+// Fixture de teste — nunca aparece pro cliente, nem em preview (reparo
+// 2026-09, "visualizar como cliente" pra Admin Master conferir os 36 reais).
+const TEST_LOCAL_PREFIX = "[TESTE LOCAL]";
+
 export interface ClientListFilters {
   q?: string;
   pillar_id?: string;
@@ -169,21 +173,34 @@ export interface ClientListFilters {
   page_size?: number;
 }
 
-export async function listClientProducts(ctx: ClientContext, f: ClientListFilters) {
+export async function listClientProducts(ctx: ClientContext, f: ClientListFilters, opts: { preview?: boolean } = {}) {
   const page = Math.max(1, f.page ?? 1);
   const pageSize = Math.min(60, Math.max(1, f.page_size ?? 20));
-  const where: Record<string, unknown> = { status: "disponivel", published_version_id: { not: null } };
+  // Preview ("visualizar como cliente"): só Admin Master, só com ?preview=1
+  // (checado nas duas pontas — aqui e no chamador). Mostra os produtos reais
+  // (nunca a fixture) INDEPENDENTE de status/pendência/prontidão comercial —
+  // é o mesmo relaxamento que já existia para o detalhe de UM produto
+  // (getClientProduct), agora também na listagem, senão o preview nunca
+  // mostra os 36 (a maioria ainda em preparação, sem versão publicada).
+  const previewMode = !!opts.preview && ctx.can_preview_drafts;
+
+  const where: Record<string, unknown> = previewMode
+    ? { internal_name: { not: { startsWith: TEST_LOCAL_PREFIX } } }
+    : { status: "disponivel", published_version_id: { not: null } };
   if (f.pillar_id) where.pillar_id = f.pillar_id;
   if (f.category_id) where.category_id = f.category_id;
   if (f.four_f_id) where.four_f = { some: { four_f_id: f.four_f_id } };
   if (f.q) where.OR = [{ internal_name: { contains: f.q } }, { slug: { contains: f.q } }];
-  // produtos importados com pendência obrigatória: fora.
-  where.OR = [
-    ...(where.OR ? [{ OR: where.OR }] : []),
-    { import_origin: null },
-    { import_origin: { pendencies_json: null } },
-    { import_origin: { pendencies_json: "[]" } },
-  ] as unknown as typeof where.OR;
+  if (!previewMode) {
+    // produtos importados com pendência obrigatória: fora (não se aplica
+    // ao preview — lá a pendência é justamente o que se quer mostrar).
+    where.OR = [
+      ...(where.OR ? [{ OR: where.OR }] : []),
+      { import_origin: null },
+      { import_origin: { pendencies_json: null } },
+      { import_origin: { pendencies_json: "[]" } },
+    ] as unknown as typeof where.OR;
+  }
 
   const orderBy =
     f.sort === "name_desc"
@@ -200,36 +217,55 @@ export async function listClientProducts(ctx: ClientContext, f: ClientListFilter
       category: { select: { key: true, name: true } },
       four_f: { include: { four_f: { select: { key: true, name: true } } } },
       published_version: { select: { id: true, title: true, summary: true, published_at: true } },
+      versions: previewMode ? { orderBy: { version_number: "desc" as const }, take: 1, where: { state: "rascunho" } } : false,
+      import_origin: previewMode ? { select: { pendencies_json: true } } : false,
     },
   });
 
-  // Filtra por cálculo comercial pronto (não dá pra fazer em SQL).
+  // Filtra por cálculo comercial pronto — não se aplica ao preview, que
+  // mostra TODOS os reais (fora a fixture), prontos ou não.
   const enriched: Array<Record<string, unknown>> = [];
   for (const p of rows) {
-    if (!p.published_version) continue;
-    const pricing = await computePricing(p.published_version.id, await defaultSelection(p.published_version.id));
-    if (!pricing.commercial_ready) continue;
+    const versionForPreview = previewMode ? p.published_version ?? (p as any).versions?.[0] ?? null : p.published_version;
+    if (!versionForPreview) {
+      if (!previewMode) continue;
+      enriched.push({
+        id: p.id, slug: p.slug, name: p.internal_name, short_description: null,
+        pillar: p.pillar, category: p.category, four_f: p.four_f.map((l) => l.four_f).sort((a, b) => a.key.localeCompare(b.key)),
+        origin: p.origin, is_new: false, starting_price: null, commercial_deadline_days: null, currency: "BRL",
+        has_variations: false, has_addons: false,
+        is_preview: true, status: p.status,
+        pendencies: mandatoryPendencies((p as any).import_origin?.pendencies_json),
+      });
+      continue;
+    }
+    const pricing = await computePricing(versionForPreview.id, await defaultSelection(versionForPreview.id));
+    if (!previewMode && !pricing.commercial_ready) continue;
     enriched.push({
       id: p.id,
       slug: p.slug,
-      name: p.published_version.title || p.internal_name,
-      short_description: p.published_version.summary ?? null,
+      name: versionForPreview.title || p.internal_name,
+      short_description: versionForPreview.summary ?? null,
       pillar: p.pillar,
       category: p.category,
       four_f: p.four_f.map((l) => l.four_f).sort((a, b) => a.key.localeCompare(b.key)),
       origin: p.origin,
-      is_new: isNewByPublicationDate(p.published_version.published_at),
-      starting_price: pricing.lines.commercial_final_price.amount,
-      commercial_deadline_days: pricing.deadline.commercial_deadline_days,
+      is_new: p.published_version ? isNewByPublicationDate(p.published_version.published_at) : false,
+      starting_price: pricing.commercial_ready ? pricing.lines.commercial_final_price.amount : null,
+      commercial_deadline_days: pricing.commercial_ready ? pricing.deadline.commercial_deadline_days : null,
       currency: pricing.currency,
       has_variations: pricing.active_task_keys.length >= 0, // placeholder; UI usa detalhe
+      ...(previewMode ? { is_preview: true, status: p.status, pendencies: mandatoryPendencies((p as any).import_origin?.pendencies_json) } : {}),
     });
   }
   // variações/adicionais indicador: recarrega leve
   const withCounts = await Promise.all(
     enriched.map(async (e) => {
+      const row = rows.find((r) => r.id === e.id)!;
+      const versionId = row.published_version?.id ?? (row as any).versions?.[0]?.id;
+      if (!versionId) return { ...e, has_variations: false, has_addons: false };
       const v = await prisma.catalog2ProductVersion.findUnique({
-        where: { id: rows.find((r) => r.id === e.id)!.published_version!.id },
+        where: { id: versionId },
         select: { _count: { select: { variations: true, addons: true } } },
       });
       return { ...e, has_variations: (v?._count.variations ?? 0) > 0, has_addons: (v?._count.addons ?? 0) > 0 };

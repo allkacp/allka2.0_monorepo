@@ -30,6 +30,8 @@ import {
 } from "@/components/standard-page-shell";
 import { PinToTrayButton } from "@/components/pin-to-tray-button";
 import { EmbeddedSlideScreen } from "@/components/embedded-slide-screen";
+import { ProductViewModeToggle } from "@/components/product-view-mode-toggle";
+import { usePersistedViewMode, viewModeGridClass } from "@/lib/use-persisted-view-mode";
 
 // Catálogo de Produtos — visão de APRESENTAÇÃO e conferência comercial dos
 // produtos catalog2 (reunião 2026-09, consolidação "catálogo2 como cadastro
@@ -109,6 +111,10 @@ export default function AdminCatalogoProdutosPage() {
   const [category, setCategory] = useState<string>("Todos");
   const [sort, setSort] = useState<keyof typeof SORTS>("name");
   const [openProductId, setOpenProductId] = useState<string | null>(null);
+  // Grade/Lista — preferência isolada desta tela (distinta do Cadastro),
+  // persistida em localStorage. Padrão em grade de 4, como o catálogo
+  // comercial anterior (product-catalog-view.tsx, modo "page").
+  const [gridMode, setGridMode] = usePersistedViewMode("admin-catalogo-produtos", 4);
 
   const load = useCallback(async () => {
     setState("loading");
@@ -191,7 +197,15 @@ export default function AdminCatalogoProdutosPage() {
             title="Catálogo de Produtos"
             description="Visão comercial dos produtos novos (catalog2) — como serão apresentados, e o que falta para cada um."
             actions={
-              <PinToTrayButton id="page-catalogo-produtos" label="Catálogo de Produtos" icon={Store} path="/admin/catalogo-produtos" />
+              <>
+                <a
+                  href="/admin/catalog2?preview=1"
+                  className="inline-flex items-center gap-1 whitespace-nowrap rounded-lg border border-white/70 bg-white/10 px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-white/20"
+                >
+                  Visualizar como cliente
+                </a>
+                <PinToTrayButton id="page-catalogo-produtos" label="Catálogo de Produtos" icon={Store} path="/admin/catalogo-produtos" />
+              </>
             }
           />
         </div>
@@ -237,6 +251,7 @@ export default function AdminCatalogoProdutosPage() {
                 <span className="hidden shrink-0 text-xs text-slate-400 sm:inline">
                   {filtered.length} {filtered.length === 1 ? "produto" : "produtos"}
                 </span>
+                <ProductViewModeToggle value={gridMode} onChange={setGridMode} />
               </div>
 
               {/* Category pills — categorias REAIS do catalog2. */}
@@ -272,9 +287,13 @@ export default function AdminCatalogoProdutosPage() {
                   {search || category !== "Todos" ? "Tente ajustar a busca ou a categoria." : "Nenhum produto catalog2 cadastrado ainda."}
                 </p>
               </div>
+            ) : gridMode === "list" ? (
+              <ul className="divide-y overflow-hidden rounded-xl border border-slate-200/70 bg-white dark:border-slate-700/60 dark:bg-slate-900">
+                {filtered.map((p) => <ProductListRow key={p.id} product={p} onOpen={() => setOpenProductId(p.id)} />)}
+              </ul>
             ) : (
-              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-                {filtered.map((p) => <ProductCard key={p.id} product={p} onOpen={() => setOpenProductId(p.id)} />)}
+              <div className={viewModeGridClass(gridMode)}>
+                {filtered.map((p) => <ProductCard key={p.id} product={p} compact={gridMode === 4 || gridMode === 5} onOpen={() => setOpenProductId(p.id)} />)}
               </div>
             )}
 
@@ -307,7 +326,7 @@ export default function AdminCatalogoProdutosPage() {
   );
 }
 
-function ProductCard({ product: p, onOpen }: { product: Merged; onOpen: () => void }) {
+function ProductCard({ product: p, onOpen, compact = false }: { product: Merged; onOpen: () => void; compact?: boolean }) {
   const precoNote = p.items.preco?.note ?? "Preço ainda não configurado.";
   const prazoNote = p.items.prazo?.note ?? "Prazo ainda não definido.";
   const categoryName = p.list?.category?.name ?? "Sem categoria";
@@ -315,9 +334,9 @@ function ProductCard({ product: p, onOpen }: { product: Merged; onOpen: () => vo
     <Card className="group flex flex-col overflow-hidden border border-slate-200/70 bg-white shadow-sm transition-all duration-300 hover:-translate-y-0.5 hover:shadow-xl dark:border-slate-700/60 dark:bg-slate-900">
       {/* Banner — sem imagem cadastrada (catalog2 ainda não tem esse campo);
           ícone + gradiente honesto, nunca uma foto inventada. */}
-      <div className="relative flex h-32 shrink-0 items-center justify-center overflow-hidden bg-linear-to-br from-blue-50 via-purple-50 to-pink-50 dark:from-slate-800 dark:via-slate-800 dark:to-slate-900">
+      <div className={`relative flex shrink-0 items-center justify-center overflow-hidden bg-linear-to-br from-blue-50 via-purple-50 to-pink-50 dark:from-slate-800 dark:via-slate-800 dark:to-slate-900 ${compact ? "h-20" : "h-32"}`}>
         <div className="rounded-2xl bg-white/80 p-3 shadow-sm transition-transform duration-300 group-hover:scale-105 dark:bg-white/10">
-          <Package className="h-8 w-8 text-blue-500" />
+          <Package className={compact ? "h-5 w-5 text-blue-500" : "h-8 w-8 text-blue-500"} />
         </div>
         <div className="absolute right-2.5 top-2.5 flex items-center gap-1">
           {p.list?.is_new && <Badge className="bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-200">Novo</Badge>}
@@ -325,14 +344,16 @@ function ProductCard({ product: p, onOpen }: { product: Merged; onOpen: () => vo
         </div>
       </div>
 
-      <CardContent className="flex flex-1 flex-col gap-2.5 p-4">
+      <CardContent className={`flex flex-1 flex-col gap-2.5 ${compact ? "p-3" : "p-4"}`}>
         <div>
           <h3 className="line-clamp-2 text-base font-bold leading-snug text-slate-900 transition-colors group-hover:text-blue-600 dark:text-slate-100">
             {p.name}
           </h3>
-          <p className="mt-1 line-clamp-2 text-xs leading-relaxed text-slate-400">
-            {p.list?.summary || "Imagem e descrição ainda não cadastradas — produto em preparação."}
-          </p>
+          {!compact && (
+            <p className="mt-1 line-clamp-2 text-xs leading-relaxed text-slate-400">
+              {p.list?.summary || "Imagem e descrição ainda não cadastradas — produto em preparação."}
+            </p>
+          )}
         </div>
 
         <div className="flex items-center gap-1.5 text-xs text-slate-400">
@@ -341,9 +362,11 @@ function ProductCard({ product: p, onOpen }: { product: Merged; onOpen: () => vo
         </div>
 
         <div className="flex items-center gap-1.5 text-xs text-slate-500">
-          <ListChecks className="h-3.5 w-3.5" />
-          {p.task_count > 0 ? `${p.task_count} tarefa(s)` : "Tarefas ainda não cadastradas"}
-          {p.step_count > 0 ? ` · ${p.step_count} etapa(s)` : ""}
+          <ListChecks className="h-3.5 w-3.5 shrink-0" />
+          <span className="truncate">
+            {p.task_count > 0 ? `${p.task_count} tarefa(s)` : "Tarefas ainda não cadastradas"}
+            {p.step_count > 0 ? ` · ${p.step_count} etapa(s)` : ""}
+          </span>
         </div>
 
         <div className="mt-auto space-y-1 border-t border-slate-100 pt-2.5 dark:border-slate-800">
@@ -360,6 +383,32 @@ function ProductCard({ product: p, onOpen }: { product: Merged; onOpen: () => vo
         </div>
       </CardContent>
     </Card>
+  );
+}
+
+// Modo Lista — mesma apresentação comercial, densidade maior (linha em vez
+// de card). Restaurado 2026-09 junto do alternador Lista/Grade.
+function ProductListRow({ product: p, onOpen }: { product: Merged; onOpen: () => void }) {
+  const precoNote = p.items.preco?.note ?? "Preço ainda não configurado.";
+  const categoryName = p.list?.category?.name ?? "Sem categoria";
+  return (
+    <li className="flex items-center gap-3 px-4 py-3 transition-colors hover:bg-slate-50/70 dark:hover:bg-slate-800/40">
+      <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-linear-to-br from-blue-50 via-purple-50 to-pink-50 dark:from-slate-800 dark:to-slate-900">
+        <Package className="h-5 w-5 text-blue-500" />
+      </div>
+      <div className="min-w-0 flex-1">
+        <div className="flex items-center gap-1.5">
+          <span className="truncate text-sm font-semibold text-slate-900 dark:text-slate-100">{p.name}</span>
+          {p.list?.is_new && <Badge className="bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-200">Novo</Badge>}
+        </div>
+        <p className="truncate text-xs text-slate-400">{categoryName} · {p.task_count > 0 ? `${p.task_count} tarefa(s)` : "sem tarefas ainda"}</p>
+      </div>
+      <Badge className={STATUS_TONE[p.status] ?? "bg-muted text-muted-foreground"}>{STATUS_LABEL[p.status] ?? p.status}</Badge>
+      <span className="hidden w-40 shrink-0 truncate text-right text-xs text-slate-500 sm:inline">{precoNote}</span>
+      <Button variant="outline" size="sm" className="shrink-0 border-blue-200 text-xs text-blue-600 hover:bg-blue-50" onClick={onOpen}>
+        Ver detalhes
+      </Button>
+    </li>
   );
 }
 

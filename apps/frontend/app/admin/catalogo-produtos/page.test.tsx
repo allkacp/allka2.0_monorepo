@@ -72,6 +72,7 @@ const CATEGORIES = { data: [{ id: "c1", name: "Performance" }, { id: "c2", name:
 
 beforeEach(() => {
   vi.clearAllMocks();
+  window.localStorage.clear();
   api.getCatalog2Readiness.mockResolvedValue(READINESS);
   api.getCatalog2Products.mockResolvedValue(LIST);
   api.getCatalog2Categories.mockResolvedValue(CATEGORIES);
@@ -159,5 +160,48 @@ describe("Catálogo de Produtos administrativo (catalog2) — grade de cards", (
     expect(await screen.findByText("preço")).toBeInTheDocument();
     expect(screen.getByText("prazo")).toBeInTheDocument();
     expect(screen.getByText("tarefas")).toBeInTheDocument();
+  });
+});
+
+// Reparo 2026-09 seguinte ("recuperação completa dos layouts"): alternador
+// Lista/Grade também no Catálogo, com preferência isolada da do Cadastro.
+describe("Lista/Grade — alternador de visualização (Catálogo)", () => {
+  it("padrão é Grade (cards); alternar pra Lista troca a apresentação sem perder categoria/busca", async () => {
+    renderPage();
+    await screen.findByText("Site Institucional");
+    expect(screen.queryByRole("table")).not.toBeInTheDocument(); // nunca virou tabela administrativa
+    expect(document.querySelector(".grid")).toBeTruthy();
+
+    await userEvent.click(screen.getByRole("button", { name: /Marketing/ }));
+    await userEvent.click(screen.getByRole("button", { name: "Lista" }));
+    expect(screen.queryByText("Site Institucional")).not.toBeInTheDocument(); // filtro de categoria preservado
+    expect(screen.getByText("Landing Page")).toBeInTheDocument();
+    expect(screen.getByRole("list")).toBeInTheDocument();
+  });
+
+  it("preferência de visualização do Catálogo é isolada da do Cadastro (chaves de localStorage distintas)", async () => {
+    renderPage();
+    await screen.findByText("Site Institucional");
+    await userEvent.click(screen.getByRole("button", { name: "Lista" }));
+    expect(window.localStorage.getItem("allka:view-mode:admin-catalogo-produtos")).toBe("list");
+    expect(window.localStorage.getItem("allka:view-mode:admin-produtos")).toBeNull();
+  });
+
+  it("persiste em localStorage e sobrevive a um novo mount (equivalente a F5)", async () => {
+    const { unmount } = renderPage();
+    await screen.findByText("Site Institucional");
+    await userEvent.click(screen.getByRole("button", { name: "Lista" }));
+    unmount();
+
+    renderPage();
+    await screen.findByText("Site Institucional");
+    expect(screen.getByRole("list")).toBeInTheDocument();
+  });
+
+  it("botão 'Visualizar como cliente' existe e aponta pro preview do catalog2", async () => {
+    renderPage();
+    await screen.findByText("Site Institucional");
+    const link = screen.getByRole("link", { name: /Visualizar como cliente/i });
+    expect(link).toHaveAttribute("href", "/admin/catalog2?preview=1");
   });
 });
