@@ -265,3 +265,140 @@ describe("Ordenação — fiel ao layout publicado, nunca com dado inventado", (
     expect(avaliados.closest('[role="menuitem"]')).toHaveAttribute("title", expect.stringContaining("não tem avaliação"));
   });
 });
+
+// Reunião 10/09 ("Cabeçalho e filtros do Catálogo de Produtos"): busca em
+// destaque + Filtros + ordenação + alternador numa única linha; categorias
+// em badges logo abaixo, com contador e seleção clara; painel de filtros
+// só com filtros catalog2 reais (Aplicar/Limpar/Fechar, contagem e badges
+// de ativos); nada duplicado; contratação nunca liberada aqui.
+describe("Cabeçalho e filtros reorganizados (Catálogo)", () => {
+  it("badges de categorias reais mostram contador correto, incluindo 'Todos'", async () => {
+    renderPage();
+    await screen.findByText("Site Institucional");
+    const todos = screen.getByRole("button", { name: /Todos/ });
+    const performance = screen.getByRole("button", { name: /Performance/ });
+    const marketing = screen.getByRole("button", { name: /Marketing/ });
+    expect(within(todos).getByText("3")).toBeInTheDocument(); // 3 reais — fixture nunca conta
+    expect(within(performance).getByText("1")).toBeInTheDocument();
+    expect(within(marketing).getByText("2")).toBeInTheDocument();
+  });
+
+  it("categoria selecionada fica visualmente clara (só uma ativa por vez)", async () => {
+    renderPage();
+    await screen.findByText("Site Institucional");
+    const todos = screen.getByRole("button", { name: /Todos/ });
+    const marketing = screen.getByRole("button", { name: /Marketing/ });
+    expect(todos.className).toContain("text-white");
+    expect(marketing.className).not.toContain("text-white");
+
+    await userEvent.click(marketing);
+    expect(marketing.className).toContain("text-white");
+    expect(todos.className).not.toContain("text-white");
+  });
+
+  it("painel de filtros abre com apenas filtros catalog2 reais (status + com preço/prazo/tarefas/etapas/pendências/provisórios) e Aplicar/Limpar/Fechar", async () => {
+    renderPage();
+    await screen.findByText("Site Institucional");
+    await userEvent.click(screen.getByRole("button", { name: /^Filtros$/ }));
+    expect(await screen.findByText("Com preço")).toBeInTheDocument();
+    expect(screen.getByText("Com prazo")).toBeInTheDocument();
+    expect(screen.getByText("Com tarefas")).toBeInTheDocument();
+    expect(screen.getByText("Com etapas")).toBeInTheDocument();
+    expect(screen.getByText("Com pendências")).toBeInTheDocument();
+    expect(screen.getByText("Campos provisórios")).toBeInTheDocument();
+    expect(screen.getByLabelText("Status")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Aplicar" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Limpar" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Fechar" })).toBeInTheDocument();
+    // nenhum filtro herdado do catálogo antigo sem equivalente catalog2
+    expect(screen.queryByText(/avaliação|recorrência|código legado/i)).not.toBeInTheDocument();
+  });
+
+  it("aplicar 'Com pendências' filtra a grade; Limpar restaura tudo e some a contagem de ativos", async () => {
+    renderPage();
+    await screen.findByText("Site Institucional");
+    await userEvent.click(screen.getByRole("button", { name: /^Filtros$/ }));
+    await userEvent.click(screen.getByText("Com pendências"));
+    await userEvent.click(screen.getByRole("button", { name: "Aplicar" }));
+
+    expect(screen.queryByText("Site Institucional")).not.toBeInTheDocument();
+    expect(screen.getByText("Landing Page")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Com pendências/ })).toBeInTheDocument(); // badge de filtro ativo
+
+    await userEvent.click(screen.getByRole("button", { name: /Limpar filtros/i }));
+    expect(screen.getByText("Site Institucional")).toBeInTheDocument();
+    expect(screen.getByText("Landing Page")).toBeInTheDocument();
+    expect(screen.getByText("Consultoria Express")).toBeInTheDocument();
+  });
+
+  it("filtros ativos aparecem como badges removíveis (X remove só aquele filtro)", async () => {
+    renderPage();
+    await screen.findByText("Site Institucional");
+    await userEvent.click(screen.getByRole("button", { name: /^Filtros$/ }));
+    await userEvent.click(screen.getByText("Com tarefas"));
+    await userEvent.click(screen.getByRole("button", { name: "Aplicar" }));
+
+    const chip = screen.getByRole("button", { name: /Com tarefas/ });
+    expect(chip).toBeInTheDocument();
+    expect(screen.queryByText("Landing Page")).not.toBeInTheDocument(); // sem tarefas — filtrado
+
+    await userEvent.click(chip);
+    expect(screen.getByText("Landing Page")).toBeInTheDocument(); // filtro removido, volta a aparecer
+  });
+
+  it("nenhum controle duplicado: só uma busca, um botão Filtros, um controle de ordenação e uma linha de categorias", async () => {
+    renderPage();
+    await screen.findByText("Site Institucional");
+    expect(screen.getAllByPlaceholderText(/Buscar produtos/i).length).toBe(1);
+    expect(screen.getAllByRole("button", { name: /^Filtros$/ }).length).toBe(1);
+    expect(screen.getAllByRole("button", { name: /Nome A–Z|Nome Z–A|Menor preço|Maior preço|Alterado recentemente/ }).length).toBe(1);
+    expect(screen.getAllByRole("button", { name: /^Todos/ }).length).toBe(1);
+  });
+
+  it("busca + categoria + filtro combinados funcionam juntos", async () => {
+    renderPage();
+    await screen.findByText("Site Institucional");
+    await userEvent.click(screen.getByRole("button", { name: /Marketing/ }));
+    await userEvent.type(screen.getByPlaceholderText(/Buscar produtos/i), "landing");
+    await userEvent.click(screen.getByRole("button", { name: /^Filtros$/ }));
+    await userEvent.click(screen.getByText("Com pendências"));
+    await userEvent.click(screen.getByRole("button", { name: "Aplicar" }));
+    expect(screen.getByText("Landing Page")).toBeInTheDocument();
+    expect(screen.queryByText("Consultoria Express")).not.toBeInTheDocument();
+    expect(screen.queryByText("Site Institucional")).not.toBeInTheDocument();
+  });
+
+  it("abrir e fechar o detalhe de um produto preserva busca, categoria, filtro e modo de visualização", async () => {
+    renderPage();
+    await screen.findByText("Site Institucional");
+    await userEvent.click(screen.getByRole("button", { name: "Lista" }));
+    await userEvent.type(screen.getByPlaceholderText(/Buscar produtos/i), "consultoria");
+    await userEvent.click(screen.getByRole("button", { name: "Ver detalhes" }));
+    await screen.findByText("Nenhuma pendência — pronto para revisão final.");
+    // botão fechar do painel (EmbeddedSlideScreen) é só ícone, sem rótulo
+    // acessível próprio — identificado pela classe do container padrão.
+    const closeBtn = Array.from(document.querySelectorAll("button")).find((b) => b.className.includes("text-white/80")) as HTMLElement;
+    await userEvent.click(closeBtn);
+
+    expect(screen.getByPlaceholderText(/Buscar produtos/i)).toHaveValue("consultoria");
+    expect(screen.getByRole("list")).toBeInTheDocument(); // continua em Lista
+    expect(screen.getAllByText("Consultoria Express").length).toBeGreaterThan(0);
+  });
+
+  it("5 colunas aplica a classe de grade correspondente sem cortar cards", async () => {
+    renderPage();
+    await screen.findByText("Site Institucional");
+    await userEvent.click(screen.getByRole("button", { name: "5 colunas" }));
+    expect(document.querySelector(".grid")).toBeTruthy();
+    expect(screen.getByText("Site Institucional")).toBeInTheDocument();
+  });
+
+  it("nenhuma ação de contratação/checkout aparece nesta tela (só leitura/conferência)", async () => {
+    renderPage();
+    await screen.findByText("Site Institucional");
+    expect(screen.queryByRole("button", { name: /contratar|adicionar à cesta|finalizar compra/i })).not.toBeInTheDocument();
+    await userEvent.click(screen.getAllByRole("button", { name: "Ver detalhes" })[0]);
+    await screen.findByText(/Campos reais/i);
+    expect(screen.queryByRole("button", { name: /contratar|adicionar à cesta|finalizar compra/i })).not.toBeInTheDocument();
+  });
+});

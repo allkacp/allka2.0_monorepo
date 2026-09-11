@@ -11,6 +11,7 @@ import {
   ChevronDown,
   Layers,
   ListChecks,
+  SlidersHorizontal,
   X,
 } from "lucide-react";
 import { apiClient } from "@/lib/api-client";
@@ -18,6 +19,8 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -148,6 +151,48 @@ const DISABLED_SORTS = [
   { label: "Melhor avaliados", reason: "Catalog2 ainda não tem avaliação de produto — nenhum campo no modelo." },
 ] as const;
 
+// ── Painel de filtros (reunião 10/09) — só filtros catalog2 REAIS, cada um
+// com equivalente de dado no backend (nunca um filtro herdado do catálogo
+// antigo sem correspondência aqui). Estado aplicado (`filters`) é separado
+// do rascunho do painel (`draftFilters`): "Aplicar" grava o rascunho,
+// "Fechar" descarta (o rascunho é reiniciado do estado aplicado sempre que
+// o painel abre), "Limpar" zera os dois de uma vez.
+interface CatalogFilters {
+  status: string;
+  hasPrice: boolean;
+  hasDeadline: boolean;
+  hasTasks: boolean;
+  hasSteps: boolean;
+  hasPendencies: boolean;
+  provisionalOnly: boolean;
+}
+const DEFAULT_FILTERS: CatalogFilters = {
+  status: "", hasPrice: false, hasDeadline: false, hasTasks: false,
+  hasSteps: false, hasPendencies: false, provisionalOnly: false,
+};
+function countActiveFilters(f: CatalogFilters): number {
+  return (f.status ? 1 : 0) + [f.hasPrice, f.hasDeadline, f.hasTasks, f.hasSteps, f.hasPendencies, f.provisionalOnly].filter(Boolean).length;
+}
+function hasRealPrice(p: Merged) { return !!p.items.preco?.note; }
+function hasRealDeadline(p: Merged) { return !!p.items.prazo?.note; }
+function hasAnyPendency(p: Merged) { return p.blockers.length + p.pendings.length > 0; }
+// "Campos provisórios" = pelo menos um dos campos comerciais visíveis
+// (preço/prazo/tarefas/etapas) ainda não é real — mesma regra usada nos
+// selos "provisório" dos cards/detalhe.
+function hasAnyProvisionalField(p: Merged) {
+  return !hasRealPrice(p) || !hasRealDeadline(p) || p.task_count === 0 || p.step_count === 0;
+}
+function matchesFilters(p: Merged, f: CatalogFilters): boolean {
+  if (f.status && p.status !== f.status) return false;
+  if (f.hasPrice && !hasRealPrice(p)) return false;
+  if (f.hasDeadline && !hasRealDeadline(p)) return false;
+  if (f.hasTasks && p.task_count === 0) return false;
+  if (f.hasSteps && p.step_count === 0) return false;
+  if (f.hasPendencies && !hasAnyPendency(p)) return false;
+  if (f.provisionalOnly && !hasAnyProvisionalField(p)) return false;
+  return true;
+}
+
 export default function AdminCatalogoProdutosPage() {
   const [state, setState] = useState<"loading" | "ready" | "forbidden" | "error">("loading");
   const [readinessProducts, setReadinessProducts] = useState<ReadinessProduct[]>([]);
@@ -156,6 +201,9 @@ export default function AdminCatalogoProdutosPage() {
   const [search, setSearch] = useState("");
   const [category, setCategory] = useState<string>("Todos");
   const [sort, setSort] = useState<keyof typeof SORTS>("name");
+  const [filtersOpen, setFiltersOpen] = useState(false);
+  const [filters, setFilters] = useState<CatalogFilters>(DEFAULT_FILTERS);
+  const [draftFilters, setDraftFilters] = useState<CatalogFilters>(DEFAULT_FILTERS);
   const [openProductId, setOpenProductId] = useState<string | null>(null);
   // Detalhe comercial COMPLETO (layout publicado, reparo 2026-09) — bridge a
   // partir do resumo administrativo (ProductDetail), ação separada.
@@ -210,8 +258,28 @@ export default function AdminCatalogoProdutosPage() {
     if (category !== "Todos") rows = rows.filter((p) => (p.list?.category?.name ?? "Sem categoria") === category);
     const q = search.trim().toLowerCase();
     if (q) rows = rows.filter((p) => p.name.toLowerCase().includes(q));
+    rows = rows.filter((p) => matchesFilters(p, filters));
     return [...rows].sort(SORTS[sort].fn);
-  }, [real, category, search, sort]);
+  }, [real, category, search, sort, filters]);
+
+  const activeFilterCount = countActiveFilters(filters);
+  const openFiltersPanel = () => { setDraftFilters(filters); setFiltersOpen(true); };
+  const applyFilters = () => { setFilters(draftFilters); setFiltersOpen(false); };
+  const clearFilters = () => { setFilters(DEFAULT_FILTERS); setDraftFilters(DEFAULT_FILTERS); };
+  const removeActiveFilter = (key: keyof CatalogFilters) => {
+    const next = { ...filters, [key]: key === "status" ? "" : false };
+    setFilters(next);
+    setDraftFilters(next);
+  };
+  const FILTER_CHIP_LABEL: Record<string, string> = {
+    status: filters.status ? `Status: ${STATUS_LABEL[filters.status] ?? filters.status}` : "",
+    hasPrice: "Com preço",
+    hasDeadline: "Com prazo",
+    hasTasks: "Com tarefas",
+    hasSteps: "Com etapas",
+    hasPendencies: "Com pendências",
+    provisionalOnly: "Campos provisórios",
+  };
 
   const openedProduct = merged.find((p) => p.id === openProductId) ?? null;
 
@@ -266,13 +334,17 @@ export default function AdminCatalogoProdutosPage() {
               projetos antigos já ligados a ele. Para editar um produto, use o Cadastro de Produtos.
             </p>
 
-            {/* ── Toolbar: busca + ordenar (visual recuperado de product-catalog-view) ── */}
+            {/* ── Cabeçalho reorganizado (reunião 10/09): busca em destaque +
+                filtros + ordenação + alternador NUMA ÚNICA linha; categorias
+                em badges logo abaixo. Nenhum desses controles se repete em
+                outro lugar da tela. ── */}
             <div className="space-y-3 rounded-xl border border-slate-100 bg-white/80 p-3 backdrop-blur-sm dark:border-slate-800 dark:bg-slate-900/60">
-              <div className="flex items-center gap-2">
-                <div className="relative flex-1">
+              <div className="flex flex-wrap items-center gap-2">
+                <div className="relative min-w-[200px] flex-1">
                   <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
                   <Input
                     placeholder="Buscar produtos…"
+                    aria-label="Buscar produtos"
                     value={search}
                     onChange={(e) => setSearch(e.target.value)}
                     className="h-9 border-slate-200 bg-white pl-9 text-sm dark:border-slate-700 dark:bg-slate-800"
@@ -283,6 +355,71 @@ export default function AdminCatalogoProdutosPage() {
                     </button>
                   )}
                 </div>
+
+                <Popover open={filtersOpen} onOpenChange={(open) => (open ? openFiltersPanel() : setFiltersOpen(false))}>
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className={`h-9 shrink-0 gap-1.5 text-xs ${activeFilterCount > 0 ? "border-blue-300 bg-blue-50 text-blue-700 dark:border-blue-700 dark:bg-blue-900/30 dark:text-blue-400" : "border-slate-200 text-slate-600 dark:border-slate-700 dark:text-slate-300"}`}
+                    >
+                      <SlidersHorizontal className="h-3.5 w-3.5" />
+                      Filtros
+                      {activeFilterCount > 0 && (
+                        <span className="ml-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-blue-500 text-[10px] font-bold text-white">{activeFilterCount}</span>
+                      )}
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent align="start" className="w-80 space-y-3 p-4">
+                    <div className="flex items-center justify-between">
+                      <h3 className="text-sm font-semibold text-foreground">Filtros</h3>
+                      <span className="text-[11px] text-muted-foreground">
+                        {countActiveFilters(draftFilters)} ativo{countActiveFilters(draftFilters) === 1 ? "" : "s"}
+                      </span>
+                    </div>
+
+                    <div>
+                      <label htmlFor="cat-f-status" className="mb-1 block text-[11px] font-medium text-muted-foreground">Status</label>
+                      <select
+                        id="cat-f-status"
+                        className="h-9 w-full rounded-lg border border-slate-200 bg-white px-2 text-xs dark:border-slate-700 dark:bg-slate-800"
+                        value={draftFilters.status}
+                        onChange={(e) => setDraftFilters((f) => ({ ...f, status: e.target.value }))}
+                      >
+                        <option value="">Todos os status</option>
+                        {Object.entries(STATUS_LABEL).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+                      </select>
+                    </div>
+
+                    <div className="space-y-2">
+                      {([
+                        ["hasPrice", "Com preço"],
+                        ["hasDeadline", "Com prazo"],
+                        ["hasTasks", "Com tarefas"],
+                        ["hasSteps", "Com etapas"],
+                        ["hasPendencies", "Com pendências"],
+                        ["provisionalOnly", "Campos provisórios"],
+                      ] as const).map(([key, label]) => (
+                        <label key={key} className="flex items-center gap-2 text-xs text-foreground">
+                          <Checkbox
+                            checked={draftFilters[key]}
+                            onCheckedChange={(v) => setDraftFilters((f) => ({ ...f, [key]: v === true }))}
+                          />
+                          {label}
+                        </label>
+                      ))}
+                    </div>
+
+                    <div className="flex items-center justify-between gap-2 border-t border-border/60 pt-3">
+                      <Button variant="ghost" size="sm" className="text-xs" onClick={clearFilters}>Limpar</Button>
+                      <div className="flex items-center gap-2">
+                        <Button variant="outline" size="sm" className="text-xs" onClick={() => setFiltersOpen(false)}>Fechar</Button>
+                        <Button size="sm" className="text-xs" onClick={applyFilters}>Aplicar</Button>
+                      </div>
+                    </div>
+                  </PopoverContent>
+                </Popover>
+
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
                     <Button variant="outline" size="sm" className="h-9 shrink-0 gap-1.5 text-xs">
@@ -307,6 +444,28 @@ export default function AdminCatalogoProdutosPage() {
                 </span>
                 <ProductViewModeToggle value={gridMode} onChange={setGridMode} />
               </div>
+
+              {/* Badges dos filtros ativos — só aparecem quando há algum. */}
+              {activeFilterCount > 0 && (
+                <div className="flex flex-wrap items-center gap-1.5">
+                  {(Object.keys(filters) as (keyof CatalogFilters)[])
+                    .filter((k) => (k === "status" ? !!filters[k] : filters[k] === true))
+                    .map((k) => (
+                      <button
+                        key={k}
+                        type="button"
+                        onClick={() => removeActiveFilter(k)}
+                        className="inline-flex items-center gap-1 rounded-full border border-blue-200 bg-blue-50 px-2.5 py-1 text-[11px] font-medium text-blue-700 hover:bg-blue-100 dark:border-blue-800 dark:bg-blue-900/30 dark:text-blue-300"
+                      >
+                        {FILTER_CHIP_LABEL[k]}
+                        <X className="h-3 w-3" />
+                      </button>
+                    ))}
+                  <button type="button" onClick={clearFilters} className="text-[11px] font-medium text-muted-foreground hover:text-foreground hover:underline">
+                    Limpar filtros
+                  </button>
+                </div>
+              )}
 
               {/* Category pills — categorias REAIS do catalog2. */}
               <div className="flex flex-wrap gap-2">
@@ -412,11 +571,11 @@ function ProductCard({ product: p, onOpen, compact = false }: { product: Merged;
 
       <CardContent className={`flex flex-1 flex-col gap-2.5 ${compact ? "p-3" : "p-4"}`}>
         <div>
-          <h3 className="line-clamp-2 text-base font-bold leading-snug text-slate-900 transition-colors group-hover:text-blue-600 dark:text-slate-100">
+          <h3 title={p.name} className="line-clamp-2 text-base font-bold leading-snug text-slate-900 transition-colors group-hover:text-blue-600 dark:text-slate-100">
             {p.name}
           </h3>
           {!compact && (
-            <p className="mt-1 line-clamp-2 text-xs leading-relaxed text-slate-400">
+            <p title={p.list?.summary ?? undefined} className="mt-1 line-clamp-2 text-xs leading-relaxed text-slate-400">
               {p.list?.summary || "Descrição ainda não escrita — produto em preparação."}
             </p>
           )}
@@ -424,7 +583,7 @@ function ProductCard({ product: p, onOpen, compact = false }: { product: Merged;
 
         <div className="flex items-center gap-1.5 text-xs text-slate-400">
           <Layers className="h-3.5 w-3.5 shrink-0" />
-          <span className="truncate font-medium">{categoryName}</span>
+          <span title={categoryName} className="truncate font-medium">{categoryName}</span>
         </div>
 
         <div className="flex items-center gap-1.5 text-xs text-slate-500">
@@ -492,10 +651,10 @@ function ProductListRow({ product: p, onOpen }: { product: Merged; onOpen: () =>
       <Catalog2Thumbnail productId={p.id} imagePath={p.provisional?.image_path} size="sm" showBadge={false} />
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-1.5">
-          <span className="truncate text-sm font-semibold text-slate-900 dark:text-slate-100">{p.name}</span>
+          <span title={p.name} className="truncate text-sm font-semibold text-slate-900 dark:text-slate-100">{p.name}</span>
           {p.list?.is_new && <Badge className="bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-200">Novo</Badge>}
         </div>
-        <p className="truncate text-xs text-slate-400">
+        <p title={categoryName} className="truncate text-xs text-slate-400">
           {categoryName} · {p.task_count > 0 ? `${p.task_count} tarefa(s)` : `${taskProv.value} tarefa(s) (provisório)`}
         </p>
       </div>
