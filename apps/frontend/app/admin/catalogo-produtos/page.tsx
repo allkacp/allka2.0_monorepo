@@ -32,6 +32,7 @@ import { PinToTrayButton } from "@/components/pin-to-tray-button";
 import { EmbeddedSlideScreen } from "@/components/embedded-slide-screen";
 import { ProductViewModeToggle } from "@/components/product-view-mode-toggle";
 import { Catalog2Thumbnail } from "@/components/catalog2-thumbnail";
+import { Catalog2ProductDetail } from "@/components/catalog2-product-detail";
 import { ProvisionalBadge } from "@/components/provisional-badge";
 import { usePersistedViewMode, viewModeGridClass } from "@/lib/use-persisted-view-mode";
 import { provisionalPrice, provisionalDeadlineDays, provisionalTaskCount, provisionalStepCount } from "@/lib/catalog2-provisional";
@@ -89,6 +90,16 @@ interface ReadinessProduct {
   items: Record<string, { level: string; note: string }>;
   blockers: string[];
   pendings: string[];
+  // Camada de demonstração provisória (reparo 2026-09) — sempre um bloco
+  // SEPARADO, nunca confundido com os campos reais acima.
+  provisional: {
+    is_provisional: true;
+    needs_review: boolean;
+    image_path: string | null;
+    price_amount: number | null;
+    deadline_days: number | null;
+    modality: string | null;
+  } | null;
 }
 interface ListProduct {
   id: string;
@@ -111,7 +122,7 @@ type Merged = ReadinessProduct & { list?: ListProduct };
 // os produtos que ainda não têm preço pronto — nunca exibido como se fosse
 // comercial (o card/linha sempre mostra o selo "provisório" ao lado).
 function priceForSort(p: Merged): number {
-  return p.price_amount ?? provisionalPrice(p.id).value;
+  return p.price_amount ?? p.provisional?.price_amount ?? provisionalPrice(p.id).value;
 }
 
 const SORTS = {
@@ -146,6 +157,9 @@ export default function AdminCatalogoProdutosPage() {
   const [category, setCategory] = useState<string>("Todos");
   const [sort, setSort] = useState<keyof typeof SORTS>("name");
   const [openProductId, setOpenProductId] = useState<string | null>(null);
+  // Detalhe comercial COMPLETO (layout publicado, reparo 2026-09) — bridge a
+  // partir do resumo administrativo (ProductDetail), ação separada.
+  const [fullDetailId, setFullDetailId] = useState<string | null>(null);
   // Grade/Lista — preferência isolada desta tela (distinta do Cadastro),
   // persistida em localStorage. Padrão em grade de 4, como o catálogo
   // comercial anterior (product-catalog-view.tsx, modo "page").
@@ -350,8 +364,8 @@ export default function AdminCatalogoProdutosPage() {
         {/* Detalhe do produto — dentro do container padrão, só leitura. */}
         <EmbeddedSlideScreen
           open={!!openedProduct}
-          onClose={() => setOpenProductId(null)}
-          title={openedProduct?.name ?? "Produto"}
+          onClose={() => { setOpenProductId(null); setFullDetailId(null); }}
+          title={fullDetailId ? "Detalhe comercial completo" : (openedProduct?.name ?? "Produto")}
           pin={openedProduct ? {
             id: `catalog2-catalogo-${openedProduct.id}`,
             label: openedProduct.name,
@@ -359,7 +373,15 @@ export default function AdminCatalogoProdutosPage() {
             path: "/admin/catalogo-produtos",
           } : undefined}
         >
-          {openedProduct && <ProductDetail product={openedProduct} />}
+          {openedProduct && (
+            fullDetailId ? (
+              <div className="min-h-0 flex-1 overflow-y-auto p-3">
+                <Catalog2ProductDetail productId={fullDetailId} onBack={() => setFullDetailId(null)} />
+              </div>
+            ) : (
+              <ProductDetail product={openedProduct} onViewFull={() => setFullDetailId(openedProduct.id)} />
+            )
+          )}
         </EmbeddedSlideScreen>
       </div>
     </div>
@@ -368,17 +390,20 @@ export default function AdminCatalogoProdutosPage() {
 
 function ProductCard({ product: p, onOpen, compact = false }: { product: Merged; onOpen: () => void; compact?: boolean }) {
   const categoryName = p.list?.category?.name ?? "Sem categoria";
-  const priceProv = provisionalPrice(p.id);
-  const prazoProv = provisionalDeadlineDays(p.id);
+  // Fonte ÚNICA de provisório: Catalog2ProvisionalPreview (via p.provisional,
+  // vindo do backend). O hash local só é usado se o produto não tiver
+  // nenhuma linha provisória gravada (reparo 2026-09, seção 11).
+  const priceProv = p.provisional?.price_amount != null ? { value: p.provisional.price_amount, label: "Preço provisório — revisar.", is_provisional: true as const } : provisionalPrice(p.id);
+  const prazoProv = p.provisional?.deadline_days != null ? { value: p.provisional.deadline_days, label: "Prazo provisório — revisar.", is_provisional: true as const } : provisionalDeadlineDays(p.id);
   const taskProv = provisionalTaskCount(p.id);
   const hasRealTasks = p.task_count > 0;
   return (
     <Card className="group flex flex-col overflow-hidden border border-slate-200/70 bg-white shadow-sm transition-all duration-300 hover:-translate-y-0.5 hover:shadow-xl dark:border-slate-700/60 dark:bg-slate-900">
-      {/* Banner — imagem PROVISÓRIA (catalog2 ainda não tem campo de imagem
-          definitivo). Nunca uma foto real inventada — ícone/gradiente
-          determinístico + selo, ver lib/catalog2-provisional.ts. */}
+      {/* Banner — imagem real reaproveitada provisoriamente (backend,
+          Catalog2ProvisionalPreview) quando existe; ícone/gradiente
+          determinístico só como fallback — ver catalog2-thumbnail.tsx. */}
       <div className={`relative shrink-0 ${compact ? "h-20" : "h-32"}`}>
-        <Catalog2Thumbnail productId={p.id} size="lg" showBadge />
+        <Catalog2Thumbnail productId={p.id} imagePath={p.provisional?.image_path} size="lg" showBadge />
         <div className="absolute right-2.5 top-2.5 flex items-center gap-1">
           {p.list?.is_new && <Badge className="bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-200">Novo</Badge>}
           <Badge className={STATUS_TONE[p.status] ?? "bg-muted text-muted-foreground"}>{STATUS_LABEL[p.status] ?? p.status}</Badge>
@@ -459,12 +484,12 @@ function DeadlineOrProvisional({ p, prazoProv }: { p: Merged; prazoProv: ReturnT
 // Modo Lista — mesma apresentação comercial, densidade maior (linha em vez
 // de card). Restaurado 2026-09 junto do alternador Lista/Grade.
 function ProductListRow({ product: p, onOpen }: { product: Merged; onOpen: () => void }) {
-  const priceProv = provisionalPrice(p.id);
+  const priceProv = p.provisional?.price_amount != null ? { value: p.provisional.price_amount, label: "Preço provisório — revisar.", is_provisional: true as const } : provisionalPrice(p.id);
   const taskProv = provisionalTaskCount(p.id);
   const categoryName = p.list?.category?.name ?? "Sem categoria";
   return (
     <li className="flex items-center gap-3 px-4 py-3 transition-colors hover:bg-slate-50/70 dark:hover:bg-slate-800/40">
-      <Catalog2Thumbnail productId={p.id} size="sm" showBadge={false} />
+      <Catalog2Thumbnail productId={p.id} imagePath={p.provisional?.image_path} size="sm" showBadge={false} />
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-1.5">
           <span className="truncate text-sm font-semibold text-slate-900 dark:text-slate-100">{p.name}</span>
@@ -487,11 +512,11 @@ function ProductListRow({ product: p, onOpen }: { product: Merged; onOpen: () =>
 
 // Detalhe comercial — só leitura; nenhum controle de edição aparece aqui de
 // propósito (edição é função do Cadastro de Produtos).
-function ProductDetail({ product: p }: { product: Merged }) {
+function ProductDetail({ product: p, onViewFull }: { product: Merged; onViewFull?: () => void }) {
   const categoryName = p.list?.category?.name ?? "Sem categoria";
   const pendencias = [...p.blockers, ...p.pendings];
-  const priceProv = provisionalPrice(p.id);
-  const prazoProv = provisionalDeadlineDays(p.id);
+  const priceProv = p.provisional?.price_amount != null ? { value: p.provisional.price_amount, label: "Preço provisório — revisar.", is_provisional: true as const } : provisionalPrice(p.id);
+  const prazoProv = p.provisional?.deadline_days != null ? { value: p.provisional.deadline_days, label: "Prazo provisório — revisar.", is_provisional: true as const } : provisionalDeadlineDays(p.id);
   const taskProv = provisionalTaskCount(p.id);
   const stepProv = provisionalStepCount(p.id, taskProv.value);
   const hasRealPrice = !!p.items.preco?.note;
@@ -503,14 +528,21 @@ function ProductDetail({ product: p }: { product: Merged }) {
   return (
     <div className="min-h-0 flex-1 overflow-y-auto p-5">
       <div className="mx-auto max-w-2xl space-y-5">
-        <div className="flex items-center gap-2">
-          <Badge className={STATUS_TONE[p.status] ?? "bg-muted text-muted-foreground"}>{STATUS_LABEL[p.status] ?? p.status}</Badge>
-          <Badge variant="outline">{categoryName}</Badge>
-          {p.list?.published_version_number && <Badge variant="outline">v{p.list.published_version_number} publicada</Badge>}
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2">
+            <Badge className={STATUS_TONE[p.status] ?? "bg-muted text-muted-foreground"}>{STATUS_LABEL[p.status] ?? p.status}</Badge>
+            <Badge variant="outline">{categoryName}</Badge>
+            {p.list?.published_version_number && <Badge variant="outline">v{p.list.published_version_number} publicada</Badge>}
+          </div>
+          {onViewFull && (
+            <Button size="sm" variant="outline" onClick={onViewFull} className="text-xs">
+              Ver detalhe comercial completo
+            </Button>
+          )}
         </div>
 
         <div className="h-40">
-          <Catalog2Thumbnail productId={p.id} size="lg" showBadge />
+          <Catalog2Thumbnail productId={p.id} imagePath={p.provisional?.image_path} size="lg" showBadge />
         </div>
 
         <div>

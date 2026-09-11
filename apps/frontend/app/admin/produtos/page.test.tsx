@@ -52,6 +52,7 @@ const { api } = vi.hoisted(() => ({
     getCatalog2ImportSummary: vi.fn(),
     getCatalog2Readiness: vi.fn(),
     getCatalog2ProductReadiness: vi.fn(),
+    getCatalog2ProductDetailPreview: vi.fn(),
     getCatalog2ProductOrigin: vi.fn(),
     resolveCatalog2Pendency: vi.fn(),
   },
@@ -175,6 +176,17 @@ beforeEach(() => {
     },
     blockers: [], pendings: [],
   })
+  api.getCatalog2ProductDetailPreview.mockResolvedValue({
+    product: {
+      id: "prod1", slug: "demo", internal_name: "[TESTE LOCAL] Demo", status: "disponivel",
+      category: { name: "Performance" }, published_version_id: "v1",
+      versions: [{ id: "v1", state: "publicada", summary: "Resumo real", full_description: "Descrição completa real.", variations: [], tasks: [] }],
+    },
+    readiness: {
+      task_count: 1, step_count: 1, price_amount: 90, deadline_days: 5,
+      provisional: null,
+    },
+  })
   api.getCatalog2ProductOrigin.mockResolvedValue(ORIGIN)
   api.resolveCatalog2Pendency.mockResolvedValue({ ok: true, remaining_pendencies: ["portfolio_pending"], review_state: "portfolio_pending" })
   api.getCatalog2Product.mockResolvedValue(productDetail())
@@ -236,7 +248,7 @@ describe("Lista/Grade — alternador de visualização (Cadastro)", () => {
     // busca continua no campo — não foi limpa pela troca de modo
     expect(screen.getByPlaceholderText(/Buscar por nome/i)).toHaveValue("demo")
     // o card em modo grade também abre o construtor
-    await userEvent.click(screen.getByText("[TESTE LOCAL] Demo"))
+    await userEvent.click(screen.getByRole("button", { name: /abrir\/editar produto|continuar configuração/i }))
     expect(await screen.findByText("Título comercial")).toBeInTheDocument()
   })
 
@@ -269,7 +281,7 @@ describe("Lista/Grade — alternador de visualização (Cadastro)", () => {
     await screen.findByText("[TESTE LOCAL] Demo")
     await userEvent.click(screen.getByRole("button", { name: "3 colunas" }))
     expect(screen.queryByRole("table")).not.toBeInTheDocument()
-    await userEvent.click(screen.getByText("[TESTE LOCAL] Demo"))
+    await userEvent.click(screen.getByRole("button", { name: /abrir\/editar produto|continuar configuração/i }))
     await screen.findByText("Título comercial")
     await userEvent.click(screen.getByRole("button", { name: "Voltar" }))
     await screen.findByPlaceholderText(/Buscar por nome/i)
@@ -337,7 +349,8 @@ it("resumo de status único: um só bloco descreve 'em preparação' e o que fal
 it("construtor abre dentro do container padrão (EmbeddedSlideScreen, com botão de fixar na bandeja) e Voltar fecha sem sair da lista", async () => {
   const user = userEvent.setup()
   renderPage()
-  await user.click(await screen.findByText("[TESTE LOCAL] Demo"))
+  await screen.findByText("[TESTE LOCAL] Demo")
+  await user.click(await screen.findByRole("button", { name: /abrir\/editar produto|continuar configuração/i }))
   expect(await screen.findByText("Título comercial")).toBeInTheDocument()
   expect(screen.getByRole("button", { name: /adicionar à bandeja de telas/i })).toBeInTheDocument()
   await user.click(screen.getByRole("button", { name: "Voltar" }))
@@ -350,7 +363,8 @@ it("construtor: mostra aviso de campos provisórios quando o produto ainda não 
     products: [{ id: "prod1", name: "[TESTE LOCAL] Demo", task_count: 0, price_amount: null, blockers: [], pendings: [] }],
   })
   renderPage()
-  await userEvent.click(await screen.findByText("[TESTE LOCAL] Demo"))
+  await screen.findByText("[TESTE LOCAL] Demo")
+  await userEvent.click(screen.getByRole("button", { name: /abrir\/editar produto|continuar configuração/i }))
   await screen.findByText("Título comercial")
   expect(await screen.findByText(/campos provisórios/i)).toBeInTheDocument()
 })
@@ -358,7 +372,8 @@ it("construtor: mostra aviso de campos provisórios quando o produto ainda não 
 it("editor: as 10 seções seguem acessíveis, reagrupadas em 5 etapas + Origem", async () => {
   const user = userEvent.setup()
   renderPage()
-  await user.click(await screen.findByText("[TESTE LOCAL] Demo"))
+  await screen.findByText("[TESTE LOCAL] Demo")
+  await user.click(await screen.findByRole("button", { name: /abrir\/editar produto|continuar configuração/i }))
 
   // 5 etapas de trabalho + área secundária de origem
   expect(await screen.findByRole("tab", { name: "Informações do produto" })).toBeInTheDocument()
@@ -402,14 +417,16 @@ it("versão publicada é somente leitura (a UI bloqueia edição)", async () => 
   )
   const user = userEvent.setup()
   renderPage()
-  await user.click(await screen.findByText("[TESTE LOCAL] Demo"))
+  await screen.findByText("[TESTE LOCAL] Demo")
+  await user.click(await screen.findByRole("button", { name: /abrir\/editar produto|continuar configuração/i }))
   expect(await screen.findByText(/Versão publicada — somente leitura/i)).toBeInTheDocument()
 })
 
 it("etapa Custos e preço: simulador usa o cálculo do backend e mostra o resumo detalhado", async () => {
   const user = userEvent.setup()
   renderPage()
-  await user.click(await screen.findByText("[TESTE LOCAL] Demo"))
+  await screen.findByText("[TESTE LOCAL] Demo")
+  await user.click(await screen.findByRole("button", { name: /abrir\/editar produto|continuar configuração/i }))
   await user.click(await screen.findByRole("tab", { name: "Custos e preço" }))
   await waitFor(() => expect(api.simulateCatalog2).toHaveBeenCalled())
   expect(await screen.findByText("Custo humano")).toBeInTheDocument()
@@ -422,7 +439,8 @@ it("etapa Custos e preço: simulador usa o cálculo do backend e mostra o resumo
 it("etapa Revisão: Pré-visualização usa o mesmo endpoint do backend (não recalcula no front)", async () => {
   const user = userEvent.setup()
   renderPage()
-  await user.click(await screen.findByText("[TESTE LOCAL] Demo"))
+  await screen.findByText("[TESTE LOCAL] Demo")
+  await user.click(await screen.findByRole("button", { name: /abrir\/editar produto|continuar configuração/i }))
   await user.click(await screen.findByRole("tab", { name: "Revisão e publicação" }))
   await user.click(await screen.findByRole("tab", { name: /^Pré-visualização$/ }))
   await waitFor(() => expect(api.previewCatalog2Version).toHaveBeenCalledWith("v2"))
@@ -432,7 +450,8 @@ it("etapa Revisão: Pré-visualização usa o mesmo endpoint do backend (não re
 it("etapa Revisão: Publicação e versões mostra as pendências de validação antes de publicar", async () => {
   const user = userEvent.setup()
   renderPage()
-  await user.click(await screen.findByText("[TESTE LOCAL] Demo"))
+  await screen.findByText("[TESTE LOCAL] Demo")
+  await user.click(await screen.findByRole("button", { name: /abrir\/editar produto|continuar configuração/i }))
   await user.click(await screen.findByRole("tab", { name: "Revisão e publicação" }))
   await user.click(await screen.findByRole("tab", { name: /^Publicação e versões$/ }))
   expect(await screen.findByText("Selecione um pilar.")).toBeInTheDocument()
@@ -506,7 +525,8 @@ it("aba Custos: produto SEM tarefas ativas mostra 'base de custo indefinida', nu
   })
   const user = userEvent.setup()
   renderPage()
-  await user.click(await screen.findByText("[TESTE LOCAL] Demo"))
+  await screen.findByText("[TESTE LOCAL] Demo")
+  await user.click(await screen.findByRole("button", { name: /abrir\/editar produto|continuar configuração/i }))
   await user.click(await screen.findByRole("tab", { name: "Custos e preço" }))
   await waitFor(() => expect(api.simulateCatalog2).toHaveBeenCalled())
   expect(await screen.findByText(/base de custo indefinida/i)).toBeInTheDocument()
@@ -519,7 +539,8 @@ it("aba Custos: produto SEM tarefas ativas mostra 'base de custo indefinida', nu
 it("etapa Custos e preço: produto COM tarefas válidas mantém a composição detalhada normal", async () => {
   const user = userEvent.setup()
   renderPage()
-  await user.click(await screen.findByText("[TESTE LOCAL] Demo"))
+  await screen.findByText("[TESTE LOCAL] Demo")
+  await user.click(await screen.findByRole("button", { name: /abrir\/editar produto|continuar configuração/i }))
   await user.click(await screen.findByRole("tab", { name: "Custos e preço" }))
   await waitFor(() => expect(api.simulateCatalog2).toHaveBeenCalled())
   expect(await screen.findByText("Custo humano")).toBeInTheDocument()
@@ -541,7 +562,8 @@ it("etapa Custos e preço: avisos de configuração provisória/seed e valor/hor
   })
   const user = userEvent.setup()
   renderPage()
-  await user.click(await screen.findByText("[TESTE LOCAL] Demo"))
+  await screen.findByText("[TESTE LOCAL] Demo")
+  await user.click(await screen.findByRole("button", { name: /abrir\/editar produto|continuar configuração/i }))
   await user.click(await screen.findByRole("tab", { name: "Custos e preço" }))
   expect(await screen.findByText(/sem responsável comercial registrado/i)).toBeInTheDocument()
   expect(screen.getByText(/Base de incidência dos componentes ainda não definida/i)).toBeInTheDocument()
@@ -563,7 +585,8 @@ it("prontidão por produto: atalho abre e mostra os itens reais do backend", asy
   })
   const user = userEvent.setup()
   renderPage()
-  await user.click(await screen.findByText("[TESTE LOCAL] Demo"))
+  await screen.findByText("[TESTE LOCAL] Demo")
+  await user.click(await screen.findByRole("button", { name: /abrir\/editar produto|continuar configuração/i }))
   await user.click(await screen.findByRole("button", { name: /Prontidão deste produto/i }))
   expect(await screen.findByText(/Sem tarefas cadastradas — base de custo indefinida/i)).toBeInTheDocument()
   expect(screen.getByText("Prazo comercial base não definido.")).toBeInTheDocument()
@@ -619,7 +642,8 @@ it("banner: link 'Pré-visualizar como cliente' existe e aponta pro preview do c
 it("aba Origem e importação: planilha, Rose, divergência, preço histórico e resolver pendência", async () => {
   const user = userEvent.setup()
   renderPage()
-  await user.click(await screen.findByText("[TESTE LOCAL] Demo"))
+  await screen.findByText("[TESTE LOCAL] Demo")
+  await user.click(await screen.findByRole("button", { name: /abrir\/editar produto|continuar configuração/i }))
   await user.click(await screen.findByRole("tab", { name: "Origem e importação" }))
   expect(await screen.findByRole("heading", { name: /Planilha principal/i })).toBeInTheDocument()
   expect(screen.getByRole("heading", { name: /Referência histórica de preço/i })).toBeInTheDocument()

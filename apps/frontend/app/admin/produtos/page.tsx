@@ -10,6 +10,7 @@ import {
   ChevronLeft,
   ChevronRight,
   Clock as ClockIcon,
+  Eye,
   Layers,
   ListChecks,
   Loader2,
@@ -51,6 +52,7 @@ import {
 import { usePersistedViewMode, viewModeGridClass } from "@/lib/use-persisted-view-mode";
 import { provisionalPrice, provisionalTaskCount } from "@/lib/catalog2-provisional";
 import { ProductEditor } from "@/app/admin/produtos/novo-catalogo/product-editor";
+import { Catalog2ProductDetail } from "@/components/catalog2-product-detail";
 
 // Cadastro de Produtos — administração exclusiva dos produtos catalog2
 // (reunião 2026-09, consolidação "catálogo2 como cadastro definitivo"; e
@@ -110,6 +112,11 @@ export default function AdminProdutosPage() {
   // ?produto=<id> abre o construtor direto (deep link preservado do redirect
   // de /admin/produtos/novo-catalogo e de qualquer link externo).
   const [openProductId, setOpenProductId] = useState<string | null>(() => searchParams.get("produto"));
+  // ?ver=<id> abre o DETALHE completo (só leitura) — ação separada do
+  // construtor (?produto=<id>). Ícone de olho → detalhe; ícone de lápis →
+  // construtor (reparo 2026-09, "não abra o construtor quando a ação
+  // escolhida for apenas visualizar").
+  const [viewProductId, setViewProductId] = useState<string | null>(() => searchParams.get("ver"));
 
   const openProduct = useCallback((id: string | null) => {
     setOpenProductId(id);
@@ -117,6 +124,16 @@ export default function AdminProdutosPage() {
       const next = new URLSearchParams(prev);
       if (id) next.set("produto", id);
       else next.delete("produto");
+      return next;
+    }, { replace: true });
+  }, [setSearchParams]);
+
+  const viewProduct = useCallback((id: string | null) => {
+    setViewProductId(id);
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev);
+      if (id) next.set("ver", id);
+      else next.delete("ver");
       return next;
     }, { replace: true });
   }, [setSearchParams]);
@@ -188,10 +205,10 @@ export default function AdminProdutosPage() {
   }, [q, status, pillarId, categoryId, origin, roseReviewed, reviewState, pendency, onlyPendencies, sort, page]);
 
   useEffect(() => {
-    if (state !== "ready" || openProductId) return;
+    if (state !== "ready" || openProductId || viewProductId) return;
     const t = setTimeout(loadList, q ? 300 : 0);
     return () => clearTimeout(t);
-  }, [state, openProductId, loadList, q]);
+  }, [state, openProductId, viewProductId, loadList, q]);
 
   useEffect(() => setPage(1), [q, status, pillarId, categoryId, origin, roseReviewed, reviewState, pendency, onlyPendencies, sort]);
 
@@ -524,8 +541,13 @@ export default function AdminProdutosPage() {
                         const rp = readinessById[p.id];
                         const realTaskCount: number | undefined = rp?.task_count;
                         const realPrice: number | null | undefined = rp?.price_amount;
-                        const taskProv = provisionalTaskCount(p.id);
-                        const priceProv = provisionalPrice(p.id);
+                        // Fonte ÚNICA de provisório: a camada do backend
+                        // (Catalog2ProvisionalPreview, via p.provisional_preview). O
+                        // hash local (lib/catalog2-provisional.ts) só entra se o
+                        // produto não tiver nenhum preview provisório gravado.
+                        const pv = p.provisional_preview;
+                        const taskProv = pv ? { value: pv.included_items_count, label: "Estrutura provisória — completar" } : provisionalTaskCount(p.id);
+                        const priceProv = pv?.price_amount != null ? { value: pv.price_amount, label: "Preço provisório — revisar.", is_provisional: true as const } : provisionalPrice(p.id);
                         const tech = [
                           `slug ${p.slug}`,
                           p.source_index ? `origem #${p.source_index}` : null,
@@ -541,12 +563,12 @@ export default function AdminProdutosPage() {
                               <span className="font-mono text-xs font-semibold text-slate-500 dark:text-slate-400">{p.source_index ?? "—"}</span>
                             </td>
                             <td className="px-2 py-3">
-                              <Catalog2Thumbnail productId={p.id} size="sm" showBadge={false} />
+                              <Catalog2Thumbnail productId={p.id} imagePath={p.provisional_preview?.image_path} size="sm" showBadge={false} />
                             </td>
                             <td className="px-2 py-3">
                               <div className="min-w-0">
                                 <div className="flex items-center gap-1.5">
-                                  <button className="text-left text-[13px] font-semibold leading-tight hover:underline" onClick={() => openProduct(p.id)}>
+                                  <button className="text-left text-[13px] font-semibold leading-tight hover:underline" onClick={() => viewProduct(p.id)}>
                                     {p.internal_name}
                                   </button>
                                   <code className="shrink-0 rounded bg-slate-100 px-1 py-0.5 text-[10px] text-slate-400 dark:bg-slate-800" title="Slug catalog2 (não é código legado)">
@@ -616,7 +638,22 @@ export default function AdminProdutosPage() {
                                   <Tooltip>
                                     <TooltipTrigger asChild>
                                       <button
+                                        onClick={() => viewProduct(p.id)}
+                                        aria-label="Ver detalhe completo"
+                                        className="flex h-[26px] w-[26px] items-center justify-center rounded-[8px] border border-[#e8edf5] bg-white text-slate-500 shadow-[0_4px_10px_rgba(15,23,42,0.06)] transition-all hover:-translate-y-px hover:border-transparent hover:bg-slate-800 hover:text-white dark:border-slate-700 dark:bg-slate-800 dark:text-slate-400"
+                                      >
+                                        <Eye className="h-3.5 w-3.5" />
+                                      </button>
+                                    </TooltipTrigger>
+                                    <TooltipContent className="text-xs font-medium">Ver detalhe completo</TooltipContent>
+                                  </Tooltip>
+                                </TooltipProvider>
+                                <TooltipProvider delayDuration={400}>
+                                  <Tooltip>
+                                    <TooltipTrigger asChild>
+                                      <button
                                         onClick={() => openProduct(p.id)}
+                                        aria-label={p.has_draft ? "Continuar configuração" : "Abrir/editar produto"}
                                         className="flex h-[26px] w-[26px] items-center justify-center rounded-[8px] border border-[#e8edf5] bg-white text-[#6E2C96] shadow-[0_4px_10px_rgba(15,23,42,0.06)] transition-all hover:-translate-y-px hover:border-transparent hover:bg-gradient-to-br hover:from-[#2558FF] hover:via-[#6E2C96] hover:to-[#D92293] hover:text-white hover:shadow-[0_8px_18px_rgba(15,23,42,0.18)] dark:border-slate-700 dark:bg-slate-800 dark:text-slate-500"
                                       >
                                         <Pencil className="h-3.5 w-3.5" />
@@ -644,15 +681,30 @@ export default function AdminProdutosPage() {
                     const isCompact = gridMode === 4 || gridMode === 5;
                     return (
                       <Card key={p.id} className="group flex flex-col overflow-hidden border border-slate-200/70 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg dark:border-slate-700/60">
-                        <div className={`relative flex shrink-0 items-center justify-center bg-linear-to-br from-blue-500 to-violet-600 ${isCompact ? "h-20" : "h-28"}`}>
-                          <Package className={isCompact ? "h-6 w-6 text-white/90" : "h-9 w-9 text-white/90"} />
+                        <button
+                          type="button"
+                          onClick={() => viewProduct(p.id)}
+                          className={`relative flex w-full shrink-0 items-center justify-center overflow-hidden ${isCompact ? "h-20" : "h-28"}`}
+                        >
+                          {p.provisional_preview?.image_path ? (
+                            <img src={p.provisional_preview.image_path} alt="" className="h-full w-full object-cover" />
+                          ) : (
+                            <div className="flex h-full w-full items-center justify-center bg-linear-to-br from-blue-500 to-violet-600">
+                              <Package className={isCompact ? "h-6 w-6 text-white/90" : "h-9 w-9 text-white/90"} />
+                            </div>
+                          )}
                           <div className="absolute right-2 top-2 flex items-center gap-1">
                             {p.is_new && <Badge className="bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-200">Novo</Badge>}
                             <Badge className={STATUS_TONE[p.status] ?? "bg-muted text-muted-foreground"}>{STATUS_LABEL[p.status] ?? p.status}</Badge>
                           </div>
-                        </div>
+                          {p.provisional_preview?.image_path && (
+                            <div className="absolute left-2 bottom-2">
+                              <ProvisionalBadge label="Imagem provisória — reaproveitada para visualização, substituir pela imagem definitiva." />
+                            </div>
+                          )}
+                        </button>
                         <div className="flex flex-1 flex-col gap-2 p-3">
-                          <button className="text-left text-[13px] font-semibold leading-tight hover:underline" onClick={() => openProduct(p.id)}>
+                          <button className="text-left text-[13px] font-semibold leading-tight hover:underline" onClick={() => viewProduct(p.id)}>
                             {p.internal_name}
                           </button>
                           {!isCompact && (
@@ -666,7 +718,17 @@ export default function AdminProdutosPage() {
                             <TooltipProvider delayDuration={400}>
                               <Tooltip>
                                 <TooltipTrigger asChild>
-                                  <Button size="sm" variant="outline" className="h-7 flex-1 text-xs" onClick={() => openProduct(p.id)}>
+                                  <Button size="sm" variant="outline" className="h-7 px-2 text-xs" onClick={() => viewProduct(p.id)} aria-label="Ver detalhe completo">
+                                    <Eye className="h-3 w-3" />
+                                  </Button>
+                                </TooltipTrigger>
+                                <TooltipContent className="text-xs font-medium">Ver detalhe completo</TooltipContent>
+                              </Tooltip>
+                            </TooltipProvider>
+                            <TooltipProvider delayDuration={400}>
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <Button size="sm" variant="outline" className="h-7 flex-1 text-xs" onClick={() => openProduct(p.id)} aria-label={p.has_draft ? "Continuar configuração" : "Abrir/editar produto"}>
                                     <Pencil className="h-3 w-3" /> {isCompact ? "" : "Abrir"}
                                   </Button>
                                 </TooltipTrigger>
@@ -734,6 +796,30 @@ export default function AdminProdutosPage() {
                 ) : null;
               })()}
               <ProductEditor productId={openProductId} onBack={() => { openProduct(null); void loadList(); void bootstrap(); }} />
+            </div>
+          )}
+        </EmbeddedSlideScreen>
+
+        {/* Detalhe comercial completo (só leitura) — ação do ícone de olho,
+            SEPARADA do construtor. Mesma convenção de container/bandeja. */}
+        <EmbeddedSlideScreen
+          open={!!viewProductId}
+          onClose={() => viewProduct(null)}
+          title="Detalhe do produto"
+          pin={viewProductId ? {
+            id: `catalog2-detalhe-${viewProductId}`,
+            label: "Detalhe do produto",
+            icon: Eye,
+            path: `/admin/produtos?ver=${viewProductId}`,
+          } : undefined}
+        >
+          {viewProductId && (
+            <div className="min-h-0 flex-1 overflow-y-auto p-3">
+              <Catalog2ProductDetail
+                productId={viewProductId}
+                onBack={() => viewProduct(null)}
+                onOpenEditor={() => { const id = viewProductId; viewProduct(null); openProduct(id); }}
+              />
             </div>
           )}
         </EmbeddedSlideScreen>
