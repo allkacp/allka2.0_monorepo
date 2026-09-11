@@ -79,6 +79,10 @@ interface ReadinessProduct {
   published: boolean;
   task_count: number;
   step_count: number;
+  // Valores reais, nunca inventados — nulos quando o preço/prazo comercial
+  // ainda não está pronto (mesma regra do card/detalhe honestos).
+  price_amount: number | null;
+  deadline_days: number | null;
   items: Record<string, { level: string; note: string }>;
   blockers: string[];
   pendings: string[];
@@ -93,14 +97,41 @@ interface ListProduct {
 }
 type Merged = ReadinessProduct & { list?: ListProduct };
 
+// Mesmas 7 opções do Catálogo publicado (product-catalog-view.tsx,
+// SORT_OPTIONS) — 4 reais (preço/nome), "Alterado recentemente" some no
+// lugar de "Mais relevantes" (nenhuma métrica de relevância real existe
+// pro catalog2 ainda). "Mais vendidos"/"Melhor avaliados" ficam visíveis e
+// desabilitados (ver DISABLED_SORTS) — nunca removidos silenciosamente,
+// nunca com dado inventado.
 const SORTS = {
   name: { label: "Nome A–Z", fn: (a: Merged, b: Merged) => a.name.localeCompare(b.name) },
   name_desc: { label: "Nome Z–A", fn: (a: Merged, b: Merged) => b.name.localeCompare(a.name) },
+  price_asc: {
+    label: "Menor preço",
+    // Sem preço pronto (ainda a maioria) vai pro fim — nunca tratado como 0.
+    fn: (a: Merged, b: Merged) => (a.price_amount ?? Infinity) - (b.price_amount ?? Infinity),
+  },
+  price_desc: {
+    label: "Maior preço",
+    fn: (a: Merged, b: Merged) => (b.price_amount ?? -Infinity) - (a.price_amount ?? -Infinity),
+  },
   updated: {
     label: "Alterado recentemente",
     fn: (a: Merged, b: Merged) => new Date(b.list?.updated_at ?? 0).getTime() - new Date(a.list?.updated_at ?? 0).getTime(),
   },
 } as const;
+
+// Do Catálogo publicado, sem dado real no catalog2 ainda: nenhum produto
+// tem venda ou avaliação registrada (nenhum campo no schema). Mostradas
+// desabilitadas com explicação — nunca removidas, nunca inventadas.
+// "Mais relevantes" some de vez porque a versão antiga era um cálculo
+// composto de venda+avaliação+recência (nenhuma base real hoje); as outras
+// duas mantêm o rótulo original do layout publicado para ficar claro que a
+// opção existia e está apenas aguardando dado real.
+const DISABLED_SORTS = [
+  { label: "Mais vendidos", reason: "Sem dado real de contratações para os produtos novos ainda — existe um vínculo real (ProjectProduct) pra isso quando os primeiros forem publicados e contratados." },
+  { label: "Melhor avaliados", reason: "Catalog2 ainda não tem avaliação de produto — nenhum campo no modelo." },
+] as const;
 
 export default function AdminCatalogoProdutosPage() {
   const [state, setState] = useState<"loading" | "ready" | "forbidden" | "error">("loading");
@@ -245,6 +276,11 @@ export default function AdminCatalogoProdutosPage() {
                   <DropdownMenuContent align="end">
                     {Object.entries(SORTS).map(([k, v]) => (
                       <DropdownMenuItem key={k} onClick={() => setSort(k as keyof typeof SORTS)}>{v.label}</DropdownMenuItem>
+                    ))}
+                    {DISABLED_SORTS.map((d) => (
+                      <DropdownMenuItem key={d.label} disabled title={d.reason} className="opacity-50">
+                        {d.label}
+                      </DropdownMenuItem>
                     ))}
                   </DropdownMenuContent>
                 </DropdownMenu>

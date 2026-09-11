@@ -1196,6 +1196,10 @@ async function computeProductReadiness(p: ReadinessProduct) {
     task_count: taskCount,
     step_count: stepCount,
     has_active_tasks: hasActiveTasks,
+    // Valores numéricos honestos (nunca "R$ 0,00" quando não pronto) — pra
+    // ordenar por preço/prazo sem re-parsear a nota de texto no frontend.
+    price_amount: pricing?.commercial_ready ? pricing.lines.commercial_final_price.amount : null,
+    deadline_days: pricing?.commercial_ready ? pricing.deadline.commercial_deadline_days : null,
     items,
     blockers,
     pendings,

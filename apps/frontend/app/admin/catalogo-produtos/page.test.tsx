@@ -37,7 +37,7 @@ const READINESS = {
   products: [
     {
       id: "prod1", name: "Site Institucional", is_test_local: false, status: "disponivel", published: true,
-      task_count: 3, step_count: 5,
+      task_count: 3, step_count: 5, price_amount: 1200, deadline_days: 10,
       items: {
         preco: { level: "pronto", note: "Preço comercial BRL 1200." },
         prazo: { level: "pronto", note: "Prazo comercial 10 dia(s)." },
@@ -48,13 +48,19 @@ const READINESS = {
     },
     {
       id: "prod2", name: "Landing Page", is_test_local: false, status: "em_preparacao", published: false,
-      task_count: 0, step_count: 0,
+      task_count: 0, step_count: 0, price_amount: null, deadline_days: null,
       items: {},
       blockers: ["preco", "prazo"], pendings: ["tarefas"],
     },
     {
+      id: "prod3", name: "Consultoria Express", is_test_local: false, status: "disponivel", published: true,
+      task_count: 1, step_count: 1, price_amount: 300, deadline_days: 3,
+      items: { preco: { level: "pronto", note: "Preço comercial BRL 300." }, prazo: { level: "pronto", note: "Prazo comercial 3 dia(s)." } },
+      blockers: [], pendings: [],
+    },
+    {
       id: "fixture1", name: "[TESTE LOCAL] Demo", is_test_local: true, status: "disponivel", published: true,
-      task_count: 1, step_count: 1,
+      task_count: 1, step_count: 1, price_amount: 90, deadline_days: 5,
       items: { preco: { level: "pronto", note: "Preço comercial BRL 90." }, prazo: { level: "pronto", note: "Prazo comercial 5 dia(s)." } },
       blockers: [], pendings: [],
     },
@@ -64,9 +70,10 @@ const LIST = {
   data: [
     { id: "prod1", category: { id: "c1", name: "Performance" }, summary: "Site institucional completo.", published_version_number: 1, is_new: true, updated_at: new Date().toISOString() },
     { id: "prod2", category: { id: "c2", name: "Marketing" }, summary: null, published_version_number: null, updated_at: new Date().toISOString() },
+    { id: "prod3", category: { id: "c2", name: "Marketing" }, summary: "Consultoria pontual.", published_version_number: 1, updated_at: new Date().toISOString() },
     { id: "fixture1", category: { id: "c1", name: "Performance" }, summary: "Produto de demonstração.", published_version_number: 1, updated_at: new Date().toISOString() },
   ],
-  total: 3, page: 1, page_size: 100,
+  total: 4, page: 1, page_size: 100,
 };
 const CATEGORIES = { data: [{ id: "c1", name: "Performance" }, { id: "c2", name: "Marketing" }] };
 
@@ -102,7 +109,7 @@ describe("Catálogo de Produtos administrativo (catalog2) — grade de cards", (
     renderPage();
     expect(await screen.findByText("Site Institucional")).toBeInTheDocument();
     expect(screen.getByText("Landing Page")).toBeInTheDocument();
-    expect(screen.getByText("Disponível")).toBeInTheDocument();
+    expect(screen.getAllByText("Disponível").length).toBeGreaterThan(0);
     expect(screen.getByText("Em preparação")).toBeInTheDocument();
     expect(screen.getByText(/catálogo antigo, com 162 produtos, não aparece mais aqui/i)).toBeInTheDocument();
   });
@@ -203,5 +210,46 @@ describe("Lista/Grade — alternador de visualização (Catálogo)", () => {
     await screen.findByText("Site Institucional");
     const link = screen.getByRole("link", { name: /Visualizar como cliente/i });
     expect(link).toHaveAttribute("href", "/admin/catalog2?preview=1");
+  });
+});
+
+// Recuperação fiel do layout publicado (verificado via VPS/GHCR: produção
+// roda f14e783, cujo product-catalog-view.tsx é byte-idêntico a a809971 —
+// mesma referência já usada). SORT_OPTIONS do publicado tinha 7 opções;
+// as com dado real (preço/nome) viram sort de verdade, as sem dado real
+// (vendas/avaliação) ficam visíveis e desabilitadas — nunca removidas,
+// nunca inventadas.
+describe("Ordenação — fiel ao layout publicado, nunca com dado inventado", () => {
+  it("Menor/Maior preço ordenam por price_amount real; produtos sem preço pronto vão pro fim em 'Menor preço'", async () => {
+    renderPage();
+    await screen.findByText("Site Institucional");
+    await userEvent.click(screen.getByRole("button", { name: /Nome A–Z/ }));
+    await userEvent.click(screen.getByText("Menor preço"));
+    const names = screen.getAllByRole("heading", { level: 3 }).map((h) => h.textContent);
+    // reais primeiro, por preço crescente (90 fixture não entra na grade);
+    // "Landing Page" (sem preço pronto) vai pro fim.
+    expect(names.indexOf("Consultoria Express")).toBeLessThan(names.indexOf("Site Institucional"));
+    expect(names.indexOf("Landing Page")).toBe(names.length - 1);
+  });
+
+  it("Maior preço inverte a ordem, mesma base real", async () => {
+    renderPage();
+    await screen.findByText("Site Institucional");
+    await userEvent.click(screen.getByRole("button", { name: /Nome A–Z/ }));
+    await userEvent.click(screen.getByText("Maior preço"));
+    const names = screen.getAllByRole("heading", { level: 3 }).map((h) => h.textContent);
+    expect(names.indexOf("Site Institucional")).toBeLessThan(names.indexOf("Consultoria Express"));
+  });
+
+  it("'Mais vendidos' e 'Melhor avaliados' aparecem desabilitados com explicação — nunca removidos, nunca com dado inventado", async () => {
+    renderPage();
+    await screen.findByText("Site Institucional");
+    await userEvent.click(screen.getByRole("button", { name: /Nome A–Z/ }));
+    const vendidos = screen.getByText("Mais vendidos");
+    const avaliados = screen.getByText("Melhor avaliados");
+    expect(vendidos.closest('[role="menuitem"]')).toHaveAttribute("aria-disabled", "true");
+    expect(avaliados.closest('[role="menuitem"]')).toHaveAttribute("aria-disabled", "true");
+    expect(vendidos.closest('[role="menuitem"]')).toHaveAttribute("title", expect.stringContaining("Sem dado real"));
+    expect(avaliados.closest('[role="menuitem"]')).toHaveAttribute("title", expect.stringContaining("não tem avaliação"));
   });
 });
