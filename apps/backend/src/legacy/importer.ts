@@ -36,7 +36,8 @@ export type LegacyEntityType =
   | "product_catalog_task"
   | "catalog_task"
   | "specialty"
-  | IdentityEntityType;
+  | IdentityEntityType
+  | ProjectExecutionEntityType;
 
 // ── Identidade histórica e organizações (bloco seguinte ao manifesto de
 // retenção) — usuários, perfis administrativos, empresas, agências,
@@ -58,7 +59,53 @@ export const IDENTITY_ENTITY_TYPES: IdentityEntityType[] = [
 export const IDENTITY_ORG_IMPORTER_VERSION = "identity-orgs-foundation-1";
 export const DEFAULT_IDENTITY_SOURCE_NAME = "[TESTE LOCAL] Fotografia de identidades e organizações anteriores";
 
-interface RawRecord {
+// ── Projetos, produtos contratados, tarefas e etapas de execução (bloco
+// seguinte ao de identidade/organizações) — maior domínio histórico ainda
+// sem cobertura. Ver src/legacy/collect-project-execution.ts.
+export type ProjectExecutionEntityType =
+  | "project"
+  | "project_product"
+  | "project_task"
+  | "project_task_stage"
+  | "task_briefing_answer"
+  | "task_attachment"
+  | "project_attachment"
+  | "task_assignment_history"
+  | "task_dependency"
+  | "task_release_trigger"
+  | "task_release_event"
+  | "task_dependency_override"
+  | "task_offer"
+  // catalog2 ainda não tem coletor próprio (o catálogo novo é preservado
+  // operacionalmente, não migrado ao Legado — ver auditoria de virada). Os
+  // dois tipos existem aqui só para as relações "contracted_catalog2_product"
+  // e "task_from_catalog2_task" ficarem tipadas e auditáveis MESMO sem o
+  // destino importado ainda — `to_record_id` fica null e `to_original_id`
+  // preserva o id em texto, exatamente o comportamento já previsto pelo
+  // modelo genérico de relação.
+  | "catalog2_product"
+  | "catalog2_task";
+
+export const PROJECT_EXECUTION_ENTITY_TYPES: ProjectExecutionEntityType[] = [
+  "project",
+  "project_product",
+  "project_task",
+  "project_task_stage",
+  "task_briefing_answer",
+  "task_attachment",
+  "project_attachment",
+  "task_assignment_history",
+  "task_dependency",
+  "task_release_trigger",
+  "task_release_event",
+  "task_dependency_override",
+  "task_offer",
+];
+
+export const PROJECT_EXECUTION_IMPORTER_VERSION = "project-execution-foundation-1";
+export const DEFAULT_PROJECT_EXECUTION_SOURCE_NAME = "[TESTE LOCAL] Fotografia de projetos e execução anteriores";
+
+export interface RawRecord {
   entity_type: LegacyEntityType;
   source_table: string;
   original_id: string;
@@ -72,7 +119,7 @@ interface RawRecord {
   search_active: boolean | null;
 }
 
-interface RawRelation {
+export interface RawRelation {
   from_original_id: string;
   from_entity_type: LegacyEntityType;
   to_original_id: string;
@@ -87,14 +134,14 @@ export interface SnapshotCollection {
   sourceCounts: Record<string, number>;
 }
 
-function isoDates(row: { created_at?: Date | null; updated_at?: Date | null }): Record<string, unknown> {
+export function isoDates(row: { created_at?: Date | null; updated_at?: Date | null }): Record<string, unknown> {
   return {
     created_at: row.created_at ? row.created_at.toISOString() : null,
     updated_at: row.updated_at ? row.updated_at.toISOString() : null,
   };
 }
 
-function safeJsonParse(raw: string | null | undefined): unknown {
+export function safeJsonParse(raw: string | null | undefined): unknown {
   if (raw == null) return null;
   try {
     return JSON.parse(raw);

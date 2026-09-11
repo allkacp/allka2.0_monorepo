@@ -14,7 +14,7 @@ import { prisma } from "../lib/prisma";
 import { verifyToken, evaluateAdminMasterAccess } from "../middleware/auth";
 import { writeAccessAudit } from "../lib/product-feedback-service";
 import { getLegacyPrisma, LegacyNotConfiguredError } from "../legacy/legacy-prisma";
-import { IDENTITY_ENTITY_TYPES } from "../legacy/importer";
+import { IDENTITY_ENTITY_TYPES, PROJECT_EXECUTION_ENTITY_TYPES } from "../legacy/importer";
 
 const router = Router();
 const MODULE = "consulta_legado";
@@ -122,6 +122,16 @@ router.get("/summary", async (req: Request, res: Response, next: NextFunction) =
       where: { entity_type: { in: IDENTITY_ENTITY_TYPES } },
     });
 
+    // "projetos"/"tarefas" (produtos contratados, tarefas, etapas...) — mesmo
+    // raciocínio: pode viver num lote próprio, então conta por existência,
+    // não pelo lote "mais recente" geral.
+    const [projectCount, taskAndBelowCount] = await Promise.all([
+      legacy.legacyRecordSnapshot.count({ where: { entity_type: "project" } }),
+      legacy.legacyRecordSnapshot.count({
+        where: { entity_type: { in: PROJECT_EXECUTION_ENTITY_TYPES.filter((t) => t !== "project") } },
+      }),
+    ]);
+
     res.json({
       configured: true,
       batch: {
@@ -151,8 +161,8 @@ router.get("/summary", async (req: Request, res: Response, next: NextFunction) =
         produtos: { status: "ready", count: counts["product"] ?? 0 },
         contas: { status: identityCount > 0 ? "ready" : "awaiting_import", count: identityCount },
         compras: { status: "awaiting_import" },
-        projetos: { status: "awaiting_import" },
-        tarefas: { status: "awaiting_import" },
+        projetos: { status: projectCount > 0 ? "ready" : "awaiting_import", count: projectCount },
+        tarefas: { status: taskAndBelowCount > 0 ? "ready" : "awaiting_import", count: taskAndBelowCount },
         financeiro: { status: "awaiting_import" },
       },
     });
@@ -366,6 +376,111 @@ router.get("/identities", async (req: Request, res: Response, next: NextFunction
   }
 });
 
+// ── GET /project-execution  (projetos, produtos contratados, tarefas, etapas) ──
+// Mesmo padrão de /identities/produtos — mas para os 13 tipos do domínio de
+// execução (project, project_product, project_task, project_task_stage,
+// task_briefing_answer, task_attachment, project_attachment,
+// task_assignment_history, task_dependency, task_release_trigger,
+// task_release_event, task_dependency_override, task_offer). Permite achar
+// um projeto por nome/código (default entity_type=project) ou abrir o
+// domínio inteiro passando `entity_type`.
+const PROJECT_EXECUTION_SORTABLE = new Set(["title", "original_code", "imported_at", "original_status"]);
+
+router.get("/project-execution", async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const legacy = getLegacyPrisma();
+    if (!legacy) throw new LegacyNotConfiguredError();
+
+    const requestedEntityType =
+      typeof req.query.entity_type === "string" && (PROJECT_EXECUTION_ENTITY_TYPES as string[]).includes(req.query.entity_type)
+        ? req.query.entity_type
+        : undefined;
+    // Sem filtro explícito, busca só "project" — é o ponto de entrada natural
+    // (pesquisar projeto por nome/código); o resto do domínio se alcança a
+    // partir das relações do detalhe (GET /records/:id).
+    const entityTypeFilter = requestedEntityType ? [requestedEntityType] : ["project"];
+
+    const batchId =
+      typeof req.query.batch_id === "string" && req.query.batch_id
+        ? req.query.batch_id
+        : (
+            await legacy.legacyRecordSnapshot.findFirst({
+              where: { entity_type: { in: PROJECT_EXECUTION_ENTITY_TYPES } },
+              orderBy: { imported_at: "desc" },
+              select: { batch_id: true },
+            })
+          )?.batch_id;
+
+    if (!batchId) {
+      res.json({ data: [], total: 0, page: 1, page_size: 20, batch_id: null, available_entity_types: [], read_only: true });
+      return;
+    }
+
+    const q = typeof req.query.q === "string" ? req.query.q.trim().slice(0, 120) : "";
+    const status = typeof req.query.status === "string" ? req.query.status : undefined;
+    const page = Math.max(1, Number(req.query.page) || 1);
+    const pageSize = Math.min(100, Math.max(1, Number(req.query.page_size) || 20));
+    const sortBy = PROJECT_EXECUTION_SORTABLE.has(String(req.query.sort_by)) ? String(req.query.sort_by) : "title";
+    const sortDir = req.query.sort_dir === "desc" ? "desc" : "asc";
+
+    const where: Record<string, unknown> = { batch_id: batchId, entity_type: { in: entityTypeFilter } };
+    if (status) where.original_status = status;
+    if (q) {
+      where.OR = [
+        { original_code: { contains: q } },
+        { title: { contains: q } },
+        { subtitle: { contains: q } },
+        { content_json: { contains: q } },
+      ];
+    }
+
+    const [total, rows, entityTypeCounts] = await Promise.all([
+      legacy.legacyRecordSnapshot.count({ where }),
+      legacy.legacyRecordSnapshot.findMany({
+        where,
+        orderBy: { [sortBy]: sortDir },
+        skip: (page - 1) * pageSize,
+        take: pageSize,
+        select: {
+          id: true,
+          entity_type: true,
+          original_id: true,
+          original_code: true,
+          title: true,
+          subtitle: true,
+          original_status: true,
+          imported_at: true,
+          sanitized: true,
+        },
+      }),
+      legacy.legacyRecordSnapshot.groupBy({
+        by: ["entity_type"],
+        where: { batch_id: batchId, entity_type: { in: PROJECT_EXECUTION_ENTITY_TYPES } },
+        _count: { _all: true },
+      }),
+    ]);
+
+    await audit(req, "list", {
+      entity_type: "project_execution",
+      batch_id: batchId,
+      filters: { has_query: !!q, status: status ?? null, entity_type: requestedEntityType ?? "project", page, page_size: pageSize, sort_by: sortBy, sort_dir: sortDir },
+      result_count: rows.length,
+    });
+
+    res.json({
+      data: rows,
+      total,
+      page,
+      page_size: pageSize,
+      batch_id: batchId,
+      available_entity_types: entityTypeCounts.map((c) => ({ entity_type: c.entity_type, count: c._count._all })),
+      read_only: true,
+    });
+  } catch (err) {
+    handleErr(err, res, next);
+  }
+});
+
 // ── GET /records/:id  (detalhe + relações) ─────────────────────────────
 router.get("/records/:id", async (req: Request, res: Response, next: NextFunction) => {
   try {
@@ -380,6 +495,15 @@ router.get("/records/:id", async (req: Request, res: Response, next: NextFunctio
         },
         relations_from: {
           include: { to_record: { select: { id: true, entity_type: true, title: true, original_code: true, original_status: true } } },
+          orderBy: { relation_type: "asc" },
+        },
+        // Relações de ENTRADA (quem aponta PARA este registro) — é o que
+        // permite, por exemplo, abrir um projeto e ver as tarefas/produtos
+        // contratados/anexos que apontam pra ele (eles é que guardam a
+        // relação "belongs_to_project", não o projeto). Aditivo: não
+        // substitui relations_from, que continua exatamente como antes.
+        relations_to: {
+          include: { from_record: { select: { id: true, entity_type: true, title: true, original_code: true, original_status: true } } },
           orderBy: { relation_type: "asc" },
         },
       },
@@ -412,6 +536,24 @@ router.get("/records/:id", async (req: Request, res: Response, next: NextFunctio
       });
     }
 
+    // Relações de ENTRADA agrupadas por tipo — ex.: abrir um "project" e ver,
+    // em "belongs_to_project", todas as project_task/project_product/
+    // project_attachment que apontam pra ele.
+    const relationsToByType: Record<string, unknown[]> = {};
+    for (const rel of record.relations_to) {
+      (relationsToByType[rel.relation_type] ??= []).push({
+        relation_type: rel.relation_type,
+        description: rel.description,
+        record: {
+          id: rel.from_record.id,
+          entity_type: rel.from_record.entity_type,
+          title: rel.from_record.title,
+          original_code: rel.from_record.original_code,
+          original_status: rel.from_record.original_status,
+        },
+      });
+    }
+
     res.json({
       record: {
         id: record.id,
@@ -431,6 +573,7 @@ router.get("/records/:id", async (req: Request, res: Response, next: NextFunctio
       },
       batch: record.batch,
       relations_by_type: relationsByType,
+      relations_incoming_by_type: relationsToByType,
       read_only: true,
     });
   } catch (err) {
