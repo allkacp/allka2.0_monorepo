@@ -220,7 +220,7 @@ describe("Simulador de virada limpa — manifesto de retenção + plano de domí
       assert.deepEqual(plan.legacy_gaps, [], "nenhum domínio deveria aparecer como lacuna do Legacy neste ponto");
     });
 
-    it("catalog_tasks aparece dividido em vinculados (remover_apos_copia) e órfãos (bloqueado) — nunca uma única linha otimista", async () => {
+    it("catalog_tasks aparece dividido em vinculados e órfãos, ambos remover_apos_copia agora que o lote complementar está selado — nunca uma única linha otimista", async () => {
       const manifest = await buildRetentionManifest(prisma);
       const retained = { userIds: new Set(manifest.map((m) => m.user_id)), agencyIds: new Set<string>(), companyIds: new Set<string>(), nomadeIds: new Set<string>() };
       const plan = await buildDomainPlan(prisma as unknown as DomainPlanDb, retained);
@@ -229,8 +229,10 @@ describe("Simulador de virada limpa — manifesto de retenção + plano de domí
       assert.ok(linked, "deve haver uma linha para tarefas vinculadas");
       assert.ok(orphan, "deve haver uma linha para tarefas órfãs");
       assert.equal(linked!.bucket, "remover_apos_copia");
-      assert.equal(orphan!.bucket, "bloqueado");
-      assert.equal(orphan!.legacy_covered, true, "o coletor complementar existe — só a execução oficial está pendente");
+      // 2026-09-11: lote oficial complementar selado contra o allka_legacy
+      // real (orphan-catalog-tasks) — deixou de estar bloqueado.
+      assert.equal(orphan!.bucket, "remover_apos_copia");
+      assert.equal(orphan!.legacy_covered, true, "o coletor complementar existe e o lote oficial já está selado");
     });
   });
 

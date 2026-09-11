@@ -22,12 +22,13 @@
 // 2026-09-11: os 6 domínios operacionais foram selados oficialmente contra
 // o allka_legacy REAL (7 lotes: 1 preview + 6 oficiais, 66.479 registros,
 // 115.381 relações, zero divergência) — ver docs/legacy-snapshot-cli.md e
-// o relatório da sessão. As linhas abaixo refletem essa cobertura real,
-// exceto onde marcado `bloqueado`: 83 CatalogTask sem vínculo de produto
-// (achado na auditoria pós-snapshot) têm coletor complementar pronto
-// (collectOrphanCatalogTasksSnapshot) mas AINDA não foram seladas contra o
-// allka_legacy real — aguardam autorização separada para o lote oficial
-// complementar (domínio `orphan-catalog-tasks` no orquestrador).
+// o relatório da sessão. Na mesma data, o lote oficial COMPLEMENTAR das 83
+// CatalogTask sem vínculo de produto (achado na auditoria pós-snapshot,
+// coletor collectOrphanCatalogTasksSnapshot, domínio
+// `orphan-catalog-tasks`) também foi selado contra o allka_legacy real
+// (8º lote, 0 divergências) — por isso não há mais nenhuma linha marcada
+// `bloqueado` neste plano hoje. O bucket `bloqueado` continua existindo no
+// tipo para o caso de um futuro achado equivalente ainda sem lote selado.
 //
 // Coletores hoje existentes (todos read-only, todos com teste em banco
 // descartável): produtos (collectProductSnapshot), identidade/organizações
@@ -292,10 +293,18 @@ export async function buildDomainPlan(db: DomainPlanDb, retained: DomainPlanReta
     row(
       "produtos",
       "catalog_tasks (órfãos, sem vínculo de produto)",
-      "bloqueado",
+      "remover_apos_copia",
       catalogTasksOrphan,
       true,
-      "Achado na auditoria pós-snapshot: sem vínculo em product_catalog_tasks, então o coletor de produtos nunca os alcança. Todos têm legacy_id preenchido (import histórico real, não fixture) e ao menos 1 pode estar referenciada por ProjectTask real. Coletor complementar pronto (collectOrphanCatalogTasksSnapshot, domínio `orphan-catalog-tasks`) — bloqueado até o lote oficial complementar ser executado e selado contra o allka_legacy real (aguarda autorização separada).",
+      // 2026-09-11 (mesma sessão): lote oficial complementar selado contra
+      // o allka_legacy real (domínio `orphan-catalog-tasks`, coletor
+      // collectOrphanCatalogTasksSnapshot) — as 83 tarefas sem vínculo de
+      // produto (todas com legacy_id preenchido, import histórico real,
+      // não fixture) agora têm cobertura comprovada, zero duplicação com
+      // o lote de produtos (252+83=335, exatamente o total real). Deixa
+      // de estar `bloqueado`; candidato à remoção após autorização
+      // separada, como os demais domínios.
+      producedNote,
     ),
     row("produtos", "product_catalog_tasks", "remover_apos_copia", productCatalogTasks, true, producedNote),
     row("produtos", "product_bundles", "copiar_legacy", productBundles, true, productMechanismReady),
