@@ -219,10 +219,24 @@ router.get("/products", async (req: Request, res: Response, next: NextFunction) 
     const legacy = getLegacyPrisma();
     if (!legacy) throw new LegacyNotConfiguredError();
 
+    // Escopado por entity_type: "product" (nunca o lote mais recente
+    // IMPORTADO NO GERAL) — mesmo padrão já usado pelos outros 5 domínios
+    // (/identities, /project-execution, /financial, /alerts-notifications-
+    // chat, /campaigns). Sem isso, com vários domínios coexistindo, um
+    // snapshot mais recente de OUTRO domínio faria esta rota devolver vazio
+    // mesmo com produtos presentes no Legacy (achado pela prova geral
+    // integrada — nenhum snapshot real foi afetado, só o `default` de
+    // qual lote consultar quando nenhum `batch_id` é informado).
     const batchId =
       typeof req.query.batch_id === "string" && req.query.batch_id
         ? req.query.batch_id
-        : (await legacy.legacyImportBatch.findFirst({ orderBy: { imported_at: "desc" }, select: { id: true } }))?.id;
+        : (
+            await legacy.legacyRecordSnapshot.findFirst({
+              where: { entity_type: "product" },
+              orderBy: { imported_at: "desc" },
+              select: { batch_id: true },
+            })
+          )?.batch_id;
 
     if (!batchId) {
       res.json({ data: [], total: 0, page: 1, page_size: 20, batch_id: null });
@@ -690,12 +704,24 @@ router.get("/alerts-notifications-chat", async (req: Request, res: Response, nex
       requestedGroup === "alertas" ? ALERT_ENTITY_TYPES : requestedGroup === "notificacoes" ? NOTIFICATION_ENTITY_TYPES : requestedGroup === "chat" ? CHAT_ENTITY_TYPES : undefined;
     const entityTypeFilter = requestedEntityType ? [requestedEntityType] : (groupEntityTypes ?? ALERT_NOTIFICATION_CHAT_ENTITY_TYPES);
 
+    // "communication_delivery" é o MESMO entity_type físico usado pelo
+    // coletor de campanhas (origin="campaign") — ver collect-campaigns.ts.
+    // Achado pela prova geral integrada: se um lote de campanhas mais
+    // recente tiver uma entrega mais nova que a do lote de alertas/
+    // notificações/chat, resolver o "lote mais recente" por
+    // ALERT_NOTIFICATION_CHAT_ENTITY_TYPES (que inclui communication_delivery)
+    // prendia esta rota no lote de CAMPANHAS — devolvendo vazio mesmo com
+    // alerta/notificação/chat presentes. Resolve pelos tipos EXCLUSIVOS
+    // deste domínio (nunca compartilhados) — o resultado em si continua
+    // incluindo communication_delivery normalmente, só a escolha do lote
+    // padrão é que ignora esse tipo ambíguo.
+    const batchResolutionTypes = ALERT_NOTIFICATION_CHAT_ENTITY_TYPES.filter((t) => t !== "communication_delivery");
     const batchId =
       typeof req.query.batch_id === "string" && req.query.batch_id
         ? req.query.batch_id
         : (
             await legacy.legacyRecordSnapshot.findFirst({
-              where: { entity_type: { in: ALERT_NOTIFICATION_CHAT_ENTITY_TYPES } },
+              where: { entity_type: { in: batchResolutionTypes } },
               orderBy: { imported_at: "desc" },
               select: { batch_id: true },
             })
