@@ -243,6 +243,16 @@ export const CAMPAIGN_DOMAIN_ENTITY_TYPES: LegacyEntityType[] = [...CAMPAIGN_ENT
 export const CAMPAIGN_IMPORTER_VERSION = "campaigns-foundation-1";
 export const DEFAULT_CAMPAIGN_SOURCE_NAME = "[TESTE LOCAL] Fotografia de campanhas anteriores";
 
+// ── Tarefas de catálogo ÓRFÃS (bloco COMPLEMENTAR, achado na auditoria
+// pós-snapshot de 2026-09-11) — ver src/legacy/collect-orphan-catalog-
+// tasks.ts. Reusa o MESMO entity_type "catalog_task" já usado pelo coletor
+// de produtos — nenhum tipo novo, nenhum schema/migration novo. O que este
+// bloco cobre é exatamente o complemento: CatalogTask sem nenhum vínculo em
+// ProductCatalogTask (detectado por filtro relacional, nunca lista fixa de
+// ids) — nunca duplica as tarefas já cobertas pelo lote de produtos.
+export const ORPHAN_CATALOG_TASKS_IMPORTER_VERSION = "orphan-catalog-tasks-foundation-1";
+export const DEFAULT_ORPHAN_CATALOG_TASKS_SOURCE_NAME = "[TESTE LOCAL] Fotografia complementar de tarefas de catálogo órfãs";
+
 export interface RawRecord {
   entity_type: LegacyEntityType;
   source_table: string;

@@ -32,9 +32,30 @@ npm run legacy:snapshot -- --domain=<dominio|all> [opções]
 | `financial` | financeiro |
 | `alerts-notifications-chat` | alertas, notificações e chat |
 | `campaigns` | campanhas, cupons e destinatários |
-| `all` | os 6, nesta ordem fixa, sequencial |
+| `orphan-catalog-tasks` | **complementar** — tarefas de catálogo sem vínculo de produto (achado na auditoria pós-snapshot de 2026-09-11) |
+| `all` | os 6 canônicos, nesta ordem fixa, sequencial |
 
 Qualquer outro valor é recusado **antes de tocar em qualquer banco**.
+
+### `orphan-catalog-tasks` — domínio complementar, fora de `all`
+
+Achado real: 83 `CatalogTask` (de 335) sem nenhum vínculo em
+`product_catalog_tasks` — o coletor de produtos só alcança tarefas de
+catálogo via `Product → ProductCatalogTask → CatalogTask`, então essas 83
+nunca eram copiadas. Todas têm `legacy_id` preenchido (vieram do import
+histórico real) e ao menos uma é referenciada de verdade por
+`ProjectTask.catalog_task_id`. Coletor:
+`src/legacy/collect-orphan-catalog-tasks.ts` — detecta por filtro
+relacional (`product_links: { none: {} }`), nunca por lista fixa de ids;
+se uma tarefa ganhar vínculo de produto depois, ela sai do filtro
+automaticamente na próxima coleta.
+
+**Deliberadamente fora de `--domain=all`**: é um bloco de correção
+pontual, não um 7º domínio operacional permanente — incluí-lo em `all`
+mudaria silenciosamente o que "todos os domínios" significa (documentado
+em toda a base como "os 6 domínios") e o tempo esperado de toda execução
+futura, mesmo nas execuções em que ele não encontra mais nada. Seleção
+sempre explícita: `npm run legacy:snapshot -- --domain=orphan-catalog-tasks`.
 
 ## Dry-run é o padrão seguro
 

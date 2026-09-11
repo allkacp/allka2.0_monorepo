@@ -34,14 +34,33 @@ import {
   FINANCIAL_IMPORTER_VERSION,
   ALERT_NOTIFICATION_CHAT_IMPORTER_VERSION,
   CAMPAIGN_IMPORTER_VERSION,
+  ORPHAN_CATALOG_TASKS_IMPORTER_VERSION,
   type ImportResult,
 } from "./importer";
 import { collectProjectExecutionSnapshot } from "./collect-project-execution";
 import { collectFinancialSnapshot } from "./collect-financial";
 import { collectAlertsNotificationsChatSnapshot } from "./collect-alerts-notifications-chat";
 import { collectCampaignsSnapshot } from "./collect-campaigns";
+import { collectOrphanCatalogTasksSnapshot } from "./collect-orphan-catalog-tasks";
 
 // ── Domínios ────────────────────────────────────────────────────────────
+//
+// LEGACY_DOMAIN_ORDER continua com exatamente os 6 domínios canônicos —
+// é o que `--domain=all` roda, na mesma ordem de sempre. O domínio
+// complementar (`orphan-catalog-tasks`) é selecionável individualmente,
+// mas DELIBERADAMENTE não entra em `all`: é um bloco de CORREÇÃO PONTUAL
+// (83 CatalogTask sem vínculo de produto, achado numa auditoria pós-
+// snapshot), não um 7º domínio operacional permanente. Incluí-lo em `all`
+// mudaria silenciosamente o significado de "todos os domínios" (hoje
+// documentado em toda a sessão como "os 6 domínios") e o tempo/õrdem
+// esperados de toda execução futura, mesmo nas (esperadas) execuções em
+// que ele não encontra mais nenhuma tarefa órfã. Rodar separado, sob
+// nome explícito, deixa a decisão de quando reexecutá-lo com o operador —
+// exatamente como pedido ("participar de all apenas quando houver itens
+// descobertos" seria um comportamento IMPLÍCITO baseado em contagem, que
+// este orquestrador evita de propósito: nenhuma decisão de escrita é
+// tomada com base em "quantos registros existem agora", sempre em flags
+// explícitas do operador).
 
 export const LEGACY_DOMAIN_ORDER = [
   "products",
@@ -52,10 +71,19 @@ export const LEGACY_DOMAIN_ORDER = [
   "campaigns",
 ] as const;
 
-export type LegacyDomainKey = (typeof LEGACY_DOMAIN_ORDER)[number];
+/** Domínios complementares — nunca participam de `--domain=all`, só seleção explícita. */
+export const SUPPLEMENTARY_DOMAIN_ORDER = ["orphan-catalog-tasks"] as const;
+
+export const ALL_SELECTABLE_DOMAIN_KEYS = [...LEGACY_DOMAIN_ORDER, ...SUPPLEMENTARY_DOMAIN_ORDER] as const;
+
+export type LegacyDomainKey = (typeof ALL_SELECTABLE_DOMAIN_KEYS)[number];
 
 export function isLegacyDomainKey(value: string): value is LegacyDomainKey {
-  return (LEGACY_DOMAIN_ORDER as readonly string[]).includes(value);
+  return (ALL_SELECTABLE_DOMAIN_KEYS as readonly string[]).includes(value);
+}
+
+export function isSupplementaryDomainKey(value: string): boolean {
+  return (SUPPLEMENTARY_DOMAIN_ORDER as readonly string[]).includes(value);
 }
 
 interface DomainDefinition {
@@ -86,6 +114,12 @@ export const LEGACY_DOMAINS: Record<LegacyDomainKey, DomainDefinition> = {
     label: "alertas, notificações e chat",
     collectors: [collectAlertsNotificationsChatSnapshot],
     importerVersion: ALERT_NOTIFICATION_CHAT_IMPORTER_VERSION,
+  },
+  "orphan-catalog-tasks": {
+    key: "orphan-catalog-tasks",
+    label: "tarefas de catálogo órfãs (complementar)",
+    collectors: [collectOrphanCatalogTasksSnapshot],
+    importerVersion: ORPHAN_CATALOG_TASKS_IMPORTER_VERSION,
   },
   campaigns: {
     key: "campaigns",

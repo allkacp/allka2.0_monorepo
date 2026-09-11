@@ -29,6 +29,7 @@ import { PrismaClient as OperationalPrisma } from "@prisma/client";
 import { PrismaClient as LegacyPrisma } from "../legacy/generated";
 import {
   LEGACY_DOMAIN_ORDER,
+  ALL_SELECTABLE_DOMAIN_KEYS,
   LegacyDomainKey,
   isLegacyDomainKey,
   redactUrl,
@@ -59,12 +60,12 @@ function flag(name: string): boolean {
 async function main() {
   const domainArg = arg("domain");
   if (!domainArg) {
-    console.error(`❌ --domain é obrigatório. Valores aceitos: ${LEGACY_DOMAIN_ORDER.join(", ")}, all`);
+    console.error(`❌ --domain é obrigatório. Valores aceitos: ${ALL_SELECTABLE_DOMAIN_KEYS.join(", ")}, all (all roda só os 6 canônicos: ${LEGACY_DOMAIN_ORDER.join(", ")})`);
     process.exit(1);
   }
   const isAll = domainArg === "all";
   if (!isAll && !isLegacyDomainKey(domainArg)) {
-    console.error(`❌ --domain="${domainArg}" não é um domínio válido. Valores aceitos: ${LEGACY_DOMAIN_ORDER.join(", ")}, all`);
+    console.error(`❌ --domain="${domainArg}" não é um domínio válido. Valores aceitos: ${ALL_SELECTABLE_DOMAIN_KEYS.join(", ")}, all (all roda só os 6 canônicos: ${LEGACY_DOMAIN_ORDER.join(", ")})`);
     process.exit(1);
   }
 
