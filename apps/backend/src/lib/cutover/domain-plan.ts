@@ -1,35 +1,48 @@
 // Plano de domínios do simulador de virada — classifica CONTAGENS (nunca
-// registros individuais com dado sensível) em 4 baldes, por domínio:
+// registros individuais com dado sensível) em 5 baldes, por domínio:
 //
 //   preservar          → fica no operacional depois do reset
 //   copiar_legacy       → precisa ser copiado para o Legacy antes da limpeza
-//   remover_apos_copia  → já existe cópia no Legacy (mesmo que só "preview")
-//                         para este domínio; falta validar/selar e então
-//                         remover do operacional
-//   decisao_humana      → não dá para classificar sozinho (nativo, sem
-//                         legacy_id, fora das 4 contas retidas — candidato a
-//                         teste/seed, mas pode ser dado real; ver auditoria)
+//   remover_apos_copia  → cobertura no Legacy CONFIRMADA (lote oficial
+//                         selado real, allka_legacy) — candidato à remoção
+//                         após autorização separada de limpeza
+//   decisao_humana      → não dá para classificar sozinho por natureza do
+//                         dado (ver nota da linha) — mesmo já coberto, a
+//                         disposição final depende de confirmação humana
+//                         específica (ex.: fixture identificada por prefixo)
+//   bloqueado           → cobertura no Legacy AINDA NÃO comprovada para
+//                         este subconjunto específico (coletor existe no
+//                         código, mas o lote oficial correspondente ainda
+//                         não foi executado/autorizado) — nunca remover
 //
 // `legacy_covered` = existe COLETOR pronto (código) pra este domínio no
-// mecanismo genérico do Legado — não confundir com "já foi executado um
-// snapshot real". Nenhum snapshot oficial real foi rodado contra o
-// allka_legacy de verdade em nenhum bloco (proibido em todos eles); o único
-// batch real hoje é um "preview" de produtos, anterior a vários destes
-// coletores. `legacy_covered=true` responde "dá pra copiar este domínio pro
-// Legado quando alguém rodar o importador", não "já foi copiado".
+// mecanismo genérico do Legado — não confunda com "já foi copiado de
+// verdade". Ver cada nota de linha para o estado real de execução.
+//
+// 2026-09-11: os 6 domínios operacionais foram selados oficialmente contra
+// o allka_legacy REAL (7 lotes: 1 preview + 6 oficiais, 66.479 registros,
+// 115.381 relações, zero divergência) — ver docs/legacy-snapshot-cli.md e
+// o relatório da sessão. As linhas abaixo refletem essa cobertura real,
+// exceto onde marcado `bloqueado`: 83 CatalogTask sem vínculo de produto
+// (achado na auditoria pós-snapshot) têm coletor complementar pronto
+// (collectOrphanCatalogTasksSnapshot) mas AINDA não foram seladas contra o
+// allka_legacy real — aguardam autorização separada para o lote oficial
+// complementar (domínio `orphan-catalog-tasks` no orquestrador).
 //
 // Coletores hoje existentes (todos read-only, todos com teste em banco
 // descartável): produtos (collectProductSnapshot), identidade/organizações
 // (collectIdentityOrgSnapshot), projetos/execução
 // (collectProjectExecutionSnapshot), financeiro (collectFinancialSnapshot),
-// alertas/notificações/chat (collectAlertsNotificationsChatSnapshot) e
-// campanhas (collectCampaignsSnapshot) — ver apps/backend/src/legacy/.
+// alertas/notificações/chat (collectAlertsNotificationsChatSnapshot),
+// campanhas (collectCampaignsSnapshot) e o complementar de tarefas de
+// catálogo órfãs (collectOrphanCatalogTasksSnapshot) — ver
+// apps/backend/src/legacy/.
 //
 // Nenhuma função aqui escreve nada — todas usam apenas count()/findMany()
 // de leitura. O client informado pelo script real já vem com
 // attachReadOnlyGuard (read-only-guard.ts) por cima disso.
 
-export type RetentionBucket = "preservar" | "copiar_legacy" | "remover_apos_copia" | "decisao_humana";
+export type RetentionBucket = "preservar" | "copiar_legacy" | "remover_apos_copia" | "decisao_humana" | "bloqueado";
 
 export interface DomainPlanRow {
   domain: string;
@@ -118,6 +131,9 @@ export interface DomainPlanDb {
   notificationGroupMember: { count(args?: unknown): Promise<number> };
   communicationDelivery: { count(args?: unknown): Promise<number> };
   bannerAcknowledgement: { count(args?: unknown): Promise<number> };
+  mandatoryBanner: { count(args?: unknown): Promise<number> };
+  notificationPreference: { count(args?: unknown): Promise<number> };
+  userCommunicationChannelPref: { count(args?: unknown): Promise<number> };
   conversation: { count(args?: unknown): Promise<number> };
   chatParticipant: { count(args?: unknown): Promise<number> };
   chatMessage: { count(args?: unknown): Promise<number> };
@@ -169,18 +185,18 @@ async function usuariosRows(db: DomainPlanDb, retainedUserIds: Set<string>): Pro
     row(
       "usuarios",
       "users (importados, não retidos)",
-      "copiar_legacy",
+      "remover_apos_copia",
       comLegacyId,
       true,
-      "legacy_id preenchido — vieram da plataforma anterior; coletor de identidade/organizações pronto (nenhum snapshot real executado ainda).",
+      "legacy_id preenchido — coberto pelo lote oficial selado de identidade/organizações (allka_legacy real). Candidato à remoção após autorização separada.",
     ),
     row(
       "usuarios",
       "users (nativos, não retidos)",
-      "decisao_humana",
+      "remover_apos_copia",
       nativosNaoRetidos,
       true,
-      "Sem legacy_id e fora das 4 contas retidas — candidato a teste/seed, mas exige confirmação humana.",
+      "Sem legacy_id e fora das 4 contas retidas — também coberto pelo lote oficial de identidade/organizações (o coletor inclui TODOS os usuários, não só os importados). Decisão do responsável: candidato à remoção após autorização separada.",
     ),
   ];
 }
@@ -200,8 +216,22 @@ async function orgRows(
   const nativosNaoRetidos = Math.max(0, total - retained - comLegacyId);
   return [
     row(domain, `${table} (retidos)`, "preservar", retained, true, "Vínculo estrutural de uma das 4 contas retidas."),
-    row(domain, `${table} (importados, não retidos)`, "copiar_legacy", comLegacyId, true, "Coletor de identidade/organizações pronto (nenhum snapshot real executado ainda)."),
-    row(domain, `${table} (nativos, não retidos)`, "decisao_humana", nativosNaoRetidos, true),
+    row(
+      domain,
+      `${table} (importados, não retidos)`,
+      "remover_apos_copia",
+      comLegacyId,
+      true,
+      "Coberto pelo lote oficial selado de identidade/organizações (allka_legacy real). Candidato à remoção após autorização separada, exceto o vínculo estrutural das 4 contas retidas (já preservado na linha acima).",
+    ),
+    row(
+      domain,
+      `${table} (nativos, não retidos)`,
+      "remover_apos_copia",
+      nativosNaoRetidos,
+      true,
+      "Também coberto pelo mesmo lote oficial (inclui todos os registros, importados ou não). Decisão do responsável: candidato à remoção após autorização separada, exceto estrutura comprovadamente necessária às contas retidas.",
+    ),
   ];
 }
 
@@ -225,31 +255,48 @@ export async function buildDomainPlan(db: DomainPlanDb, retained: DomainPlanReta
     row(
       "agencias",
       "partner_profiles",
-      "copiar_legacy",
+      "remover_apos_copia",
       partnerProfileCount,
       true,
-      "Vínculo de parceiro com saldo/comissão — dado de negócio, não identidade; coletor de identidade/organizações já cobre. O vínculo estrutural das contas retidas já aparece em minimal_required_records.",
+      "Vínculo de parceiro com saldo/comissão — dado de negócio, não identidade; coberto pelo lote oficial selado de identidade/organizações. O vínculo estrutural das contas retidas (Valdério) já aparece em minimal_required_records e não deve ser removido.",
     ),
   );
 
-  // ── Produtos (catálogo antigo) — coberto pelo único snapshot existente ──
-  const [products, productVariations, productVersions, catalogTasks, productCatalogTasks, productBundles, productAddons] = await Promise.all([
-    db.product.count(),
-    db.productVariation.count(),
-    db.productVersion.count(),
-    db.catalogTask.count(),
-    db.productCatalogTask.count(),
-    db.productBundle.count(),
-    db.productAddon.count(),
-  ]);
+  // ── Produtos (catálogo antigo) — coberto pelo lote oficial selado real ──
+  const [products, productVariations, productVersions, catalogTasksCovered, catalogTasksOrphan, productCatalogTasks, productBundles, productAddons] =
+    await Promise.all([
+      db.product.count(),
+      db.productVariation.count(),
+      db.productVersion.count(),
+      db.catalogTask.count({ where: { product_links: { some: {} } } }),
+      db.catalogTask.count({ where: { product_links: { none: {} } } }),
+      db.productCatalogTask.count(),
+      db.productBundle.count(),
+      db.productAddon.count(),
+    ]);
   const producedNote =
-    "Já existe um snapshot real em allka_legacy (batch 'preview', 924 registros) — mas não inclui product_version/product_bundle/product_addon (adicionados ao coletor depois desse batch); rodar de novo, como oficial, antes de remover.";
-  const productMechanismReady = "Coletor de produtos pronto — não fazia parte do único batch real existente (anterior a este campo do coletor); precisa de novo snapshot antes de remover.";
+    "Coberto pelo lote oficial selado de produtos (allka_legacy real, sem divergência). Candidato à remoção após autorização separada.";
+  const productMechanismReady = "Coletor de produtos pronto; contagem atual é zero — nada a copiar hoje, mecanismo pronto se algum dia existir.";
   rows.push(
     row("produtos", "products", "remover_apos_copia", products, true, producedNote),
     row("produtos", "product_variations", "remover_apos_copia", productVariations, true, producedNote),
-    row("produtos", "product_versions", "remover_apos_copia", productVersions, true, productMechanismReady),
-    row("produtos", "catalog_tasks", "remover_apos_copia", catalogTasks, true, producedNote),
+    row("produtos", "product_versions", "remover_apos_copia", productVersions, true, producedNote),
+    row(
+      "produtos",
+      "catalog_tasks (vinculados a produto)",
+      "remover_apos_copia",
+      catalogTasksCovered,
+      true,
+      producedNote,
+    ),
+    row(
+      "produtos",
+      "catalog_tasks (órfãos, sem vínculo de produto)",
+      "bloqueado",
+      catalogTasksOrphan,
+      true,
+      "Achado na auditoria pós-snapshot: sem vínculo em product_catalog_tasks, então o coletor de produtos nunca os alcança. Todos têm legacy_id preenchido (import histórico real, não fixture) e ao menos 1 pode estar referenciada por ProjectTask real. Coletor complementar pronto (collectOrphanCatalogTasksSnapshot, domínio `orphan-catalog-tasks`) — bloqueado até o lote oficial complementar ser executado e selado contra o allka_legacy real (aguarda autorização separada).",
+    ),
     row("produtos", "product_catalog_tasks", "remover_apos_copia", productCatalogTasks, true, producedNote),
     row("produtos", "product_bundles", "copiar_legacy", productBundles, true, productMechanismReady),
     row("produtos", "product_addons", "copiar_legacy", productAddons, true, productMechanismReady),
@@ -264,14 +311,15 @@ export async function buildDomainPlan(db: DomainPlanDb, retained: DomainPlanReta
     db.projectTaskStage.count(),
     db.taskBriefingAnswer.count(),
   ]);
-  const projectExecutionNote = "Coletor de projetos/execução pronto (nenhum snapshot real executado ainda no allka_legacy real).";
+  const projectExecutionNote = "Coberto pelo lote oficial selado de projetos/execução (allka_legacy real, sem divergência). Candidato à remoção após autorização separada.";
+  const projectExecutionNativeNote = "Também coberto pelo mesmo lote oficial (o coletor inclui todos os registros, importados ou não). Decisão do responsável: candidato à remoção após autorização separada.";
   rows.push(
-    row("projetos", "projects (importados)", "copiar_legacy", projectsComLegacyId, true, projectExecutionNote),
-    row("projetos", "projects (nativos)", "decisao_humana", Math.max(0, projectsTotal - projectsComLegacyId), true),
-    row("tarefas_etapas", "project_tasks (importadas)", "copiar_legacy", tasksComLegacyId, true, projectExecutionNote),
-    row("tarefas_etapas", "project_tasks (nativas)", "decisao_humana", Math.max(0, tasksTotal - tasksComLegacyId), true),
-    row("tarefas_etapas", "project_task_stages", "copiar_legacy", stages, true, projectExecutionNote),
-    row("tarefas_etapas", "task_briefing_answers", "copiar_legacy", briefingAnswers, true, projectExecutionNote),
+    row("projetos", "projects (importados)", "remover_apos_copia", projectsComLegacyId, true, projectExecutionNote),
+    row("projetos", "projects (nativos)", "remover_apos_copia", Math.max(0, projectsTotal - projectsComLegacyId), true, projectExecutionNativeNote),
+    row("tarefas_etapas", "project_tasks (importadas)", "remover_apos_copia", tasksComLegacyId, true, projectExecutionNote),
+    row("tarefas_etapas", "project_tasks (nativas)", "remover_apos_copia", Math.max(0, tasksTotal - tasksComLegacyId), true, projectExecutionNativeNote),
+    row("tarefas_etapas", "project_task_stages", "remover_apos_copia", stages, true, projectExecutionNote),
+    row("tarefas_etapas", "task_briefing_answers", "remover_apos_copia", briefingAnswers, true, projectExecutionNote),
   );
 
   // ── Financeiro ────────────────────────────────────────────────────────────
@@ -287,16 +335,16 @@ export async function buildDomainPlan(db: DomainPlanDb, retained: DomainPlanReta
       db.paymentItem.count(),
       db.legacyRecord.count(),
     ]);
-  const financialNote = "Coletor financeiro pronto (nenhum snapshot real executado ainda no allka_legacy real).";
+  const financialNote = "Coberto pelo lote oficial selado financeiro (allka_legacy real, sem divergência). Candidato à remoção após autorização separada.";
   rows.push(
-    row("financeiro", "invoices", "copiar_legacy", invoices, true, financialNote),
-    row("financeiro", "wallets", "copiar_legacy", wallets, true, financialNote),
-    row("financeiro", "wallet_ledger", "copiar_legacy", walletLedger, true, financialNote),
-    row("financeiro", "wallet_transactions", "copiar_legacy", walletTransactions, true, financialNote),
-    row("financeiro", "withdrawal_requests", "copiar_legacy", withdrawalRequests, true, financialNote),
-    row("financeiro", "expenses", "decisao_humana", expenses, true, "Despesa operacional da própria Allka, não de cliente — confirmar se é para reter."),
-    row("financeiro", "payments", "copiar_legacy", payments, true, "Hoje 100% sandbox (gateway FAKE_SANDBOX) por desenho do schema. " + financialNote),
-    row("financeiro", "payment_items", "copiar_legacy", paymentItems, true, financialNote),
+    row("financeiro", "invoices", "remover_apos_copia", invoices, true, financialNote),
+    row("financeiro", "wallets", "remover_apos_copia", wallets, true, financialNote),
+    row("financeiro", "wallet_ledger", "remover_apos_copia", walletLedger, true, financialNote),
+    row("financeiro", "wallet_transactions", "remover_apos_copia", walletTransactions, true, financialNote),
+    row("financeiro", "withdrawal_requests", "remover_apos_copia", withdrawalRequests, true, financialNote),
+    row("financeiro", "expenses", "remover_apos_copia", expenses, true, "Despesa operacional da própria Allka, não de cliente — já está no lote financeiro selado. Decisão do responsável: candidata à remoção após autorização separada."),
+    row("financeiro", "payments", "remover_apos_copia", payments, true, "Hoje 100% sandbox (gateway FAKE_SANDBOX) por desenho do schema. " + financialNote),
+    row("financeiro", "payment_items", "remover_apos_copia", paymentItems, true, financialNote),
     row(
       "financeiro",
       "legacy_records (plataforma predecessora)",
@@ -314,11 +362,12 @@ export async function buildDomainPlan(db: DomainPlanDb, retained: DomainPlanReta
     db.systemAlert.count(),
     db.systemAlertEvent.count(),
   ]);
+  const alertsNote = "Coberto pelo lote oficial selado de alertas/notificações/chat (allka_legacy real, sem divergência). Candidato à remoção após autorização separada.";
   rows.push(
     row("alertas", "alert_rules", "preservar", alertRules, true, "Definição de regra (config), não ocorrência."),
     row("alertas", "alert_standards", "preservar", alertStandards, true, "Padrão de conteúdo (config)."),
-    row("alertas", "system_alerts", "copiar_legacy", systemAlerts, true, "Coletor de alertas/notificações/chat pronto (nenhum snapshot real executado ainda)."),
-    row("alertas", "system_alert_events", "copiar_legacy", systemAlertEvents, true, "Coletor de alertas/notificações/chat pronto (nenhum snapshot real executado ainda)."),
+    row("alertas", "system_alerts", "remover_apos_copia", systemAlerts, true, alertsNote),
+    row("alertas", "system_alert_events", "remover_apos_copia", systemAlertEvents, true, alertsNote),
   );
 
   const [
@@ -328,6 +377,9 @@ export async function buildDomainPlan(db: DomainPlanDb, retained: DomainPlanReta
     notificationGroupMembers,
     communicationDeliveries,
     bannerAcknowledgements,
+    mandatoryBanners,
+    notificationPreferences,
+    userCommunicationChannelPrefs,
   ] = await Promise.all([
     db.notificationMessage.count(),
     db.notificationRule.count(),
@@ -335,14 +387,22 @@ export async function buildDomainPlan(db: DomainPlanDb, retained: DomainPlanReta
     db.notificationGroupMember.count(),
     db.communicationDelivery.count(),
     db.bannerAcknowledgement.count(),
+    db.mandatoryBanner.count(),
+    db.notificationPreference.count(),
+    db.userCommunicationChannelPref.count(),
   ]);
   rows.push(
     row("notificacoes", "notification_messages", "preservar", notificationMessages, true, "Conteúdo autorado por admin (config)."),
     row("notificacoes", "notification_rules", "preservar", notificationRules, true),
-    row("notificacoes", "notification_groups", "copiar_legacy", notificationGroups, true, "Coletor de alertas/notificações/chat pronto (nenhum snapshot real executado ainda)."),
-    row("notificacoes", "notification_group_members", "copiar_legacy", notificationGroupMembers, true, "Coletor de alertas/notificações/chat pronto (nenhum snapshot real executado ainda)."),
-    row("notificacoes", "communication_deliveries", "copiar_legacy", communicationDeliveries, true, "Coletor de alertas/notificações/chat pronto para origin=notification/banner; origin=campaign é coletado pelo coletor de campanhas."),
-    row("notificacoes", "banner_acknowledgements", "copiar_legacy", bannerAcknowledgements, true, "Coletor de alertas/notificações/chat pronto (nenhum snapshot real executado ainda)."),
+    row("notificacoes", "notification_groups", "remover_apos_copia", notificationGroups, true, alertsNote),
+    row("notificacoes", "notification_group_members", "remover_apos_copia", notificationGroupMembers, true, alertsNote),
+    row("notificacoes", "communication_deliveries", "remover_apos_copia", communicationDeliveries, true, "Coberto para origin=notification/banner pelo lote de alertas/notificações/chat; origin=campaign é coberto pelo lote de campanhas. " + alertsNote),
+    row("notificacoes", "banner_acknowledgements", "remover_apos_copia", bannerAcknowledgements, true, alertsNote),
+    // Três tabelas antes ausentes desta lista (dado já seguro no Legacy —
+    // achado na auditoria pós-snapshot; itemizadas explicitamente agora).
+    row("notificacoes", "mandatory_banners", "remover_apos_copia", mandatoryBanners, true, "Definição do aviso obrigatório (não a confirmação de leitura, já coberta em banner_acknowledgements). " + alertsNote),
+    row("notificacoes", "notification_preferences", "remover_apos_copia", notificationPreferences, true, alertsNote),
+    row("notificacoes", "user_communication_channel_prefs", "remover_apos_copia", userCommunicationChannelPrefs, true, alertsNote),
   );
 
   const [conversations, chatParticipants, chatMessages] = await Promise.all([
@@ -350,11 +410,11 @@ export async function buildDomainPlan(db: DomainPlanDb, retained: DomainPlanReta
     db.chatParticipant.count(),
     db.chatMessage.count(),
   ]);
-  const chatNote = "Coletor de alertas/notificações/chat pronto (nenhum snapshot real executado ainda). Conteúdo textual passa por sanitização (segredo colado em texto livre é redigido, não excluído).";
+  const chatNote = "Coberto pelo lote oficial selado de alertas/notificações/chat (allka_legacy real, sem divergência). Conteúdo textual passou por sanitização real (segredo colado em texto livre foi redigido, não excluído). Candidato à remoção após autorização separada.";
   rows.push(
-    row("chat", "conversations", "copiar_legacy", conversations, true, chatNote),
-    row("chat", "chat_participants", "copiar_legacy", chatParticipants, true, chatNote),
-    row("chat", "chat_messages", "copiar_legacy", chatMessages, true, chatNote),
+    row("chat", "conversations", "remover_apos_copia", conversations, true, chatNote),
+    row("chat", "chat_participants", "remover_apos_copia", chatParticipants, true, chatNote),
+    row("chat", "chat_messages", "remover_apos_copia", chatMessages, true, chatNote),
   );
 
   const [campaigns, communicationCampaigns, campaignRecipientStates, coupons, couponUsages] = await Promise.all([
@@ -364,13 +424,13 @@ export async function buildDomainPlan(db: DomainPlanDb, retained: DomainPlanReta
     db.coupon.count(),
     db.couponUsage.count(),
   ]);
-  const campaignNote = "Coletor de campanhas pronto (bloco final de cobertura do Legado — nenhum snapshot real executado ainda no allka_legacy real).";
+  const campaignNote = "Coberto pelo lote oficial selado de campanhas (allka_legacy real, sem divergência). Candidato à remoção após autorização separada.";
   rows.push(
-    row("campanhas", "campaigns", "copiar_legacy", campaigns, true, campaignNote),
-    row("campanhas", "communication_campaigns", "copiar_legacy", communicationCampaigns, true, campaignNote),
-    row("campanhas", "campaign_recipient_states", "copiar_legacy", campaignRecipientStates, true, campaignNote),
-    row("campanhas", "coupons", "decisao_humana", coupons, true, "Pode ser promoção real ou cupom de teste — confirmar. " + campaignNote),
-    row("campanhas", "coupon_usages", "copiar_legacy", couponUsages, true, campaignNote),
+    row("campanhas", "campaigns", "remover_apos_copia", campaigns, true, campaignNote),
+    row("campanhas", "communication_campaigns", "remover_apos_copia", communicationCampaigns, true, campaignNote),
+    row("campanhas", "campaign_recipient_states", "remover_apos_copia", campaignRecipientStates, true, campaignNote),
+    row("campanhas", "coupons", "remover_apos_copia", coupons, true, "Já está no lote de campanhas selado. Decisão do responsável: candidato à remoção após autorização separada (era promoção real ou cupom de teste — ambos já preservados no Legacy). " + campaignNote),
+    row("campanhas", "coupon_usages", "remover_apos_copia", couponUsages, true, campaignNote),
   );
 
   // ── Configurações (estruturais — nunca saem no reset) ───────────────────

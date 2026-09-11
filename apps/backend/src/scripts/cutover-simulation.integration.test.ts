@@ -150,9 +150,14 @@ describe("Simulador de virada limpa — manifesto de retenção + plano de domí
       assert.equal(retidos?.count, 4);
       assert.equal(retidos?.bucket, "preservar");
       assert.ok((importados?.count ?? 0) >= 1, "the legacy_id-tagged noise user must be counted");
-      assert.equal(importados?.bucket, "copiar_legacy");
+      // 2026-09-11: os 6 domínios foram selados oficialmente contra o
+      // allka_legacy real (identidade/organizações inclui TODOS os
+      // usuários, importados ou nativos) — ambas as linhas agora são
+      // "remover_apos_copia" (cobertura real confirmada), não mais
+      // "copiar_legacy"/"decisao_humana" (ver domain-plan.ts).
+      assert.equal(importados?.bucket, "remover_apos_copia");
       assert.ok((nativos?.count ?? 0) >= 1, "the native non-retained noise user must be counted");
-      assert.equal(nativos?.bucket, "decisao_humana");
+      assert.equal(nativos?.bucket, "remover_apos_copia");
     });
 
     it("marks catalog2 for preservation and separates the [TESTE LOCAL] product from the real ones", async () => {
@@ -174,6 +179,31 @@ describe("Simulador de virada limpa — manifesto de retenção + plano de domí
       assert.equal(testLocalRow?.bucket, "decisao_humana");
     });
 
+    it("nenhuma das tabelas de alertas/notificações/chat conhecidas fica sem classificação (regressão do achado pós-snapshot: mandatory_banners/notification_preferences/user_communication_channel_prefs ficaram ausentes por um bloco inteiro)", async () => {
+      const manifest = await buildRetentionManifest(prisma);
+      const retained = { userIds: new Set(manifest.map((m) => m.user_id)), agencyIds: new Set<string>(), companyIds: new Set<string>(), nomadeIds: new Set<string>() };
+      const plan = await buildDomainPlan(prisma as unknown as DomainPlanDb, retained);
+      const knownAlertNotificationChatTables = [
+        "alert_rules",
+        "alert_standards",
+        "system_alerts",
+        "system_alert_events",
+        "notification_messages",
+        "notification_rules",
+        "notification_groups",
+        "notification_group_members",
+        "communication_deliveries",
+        "banner_acknowledgements",
+        "mandatory_banners",
+        "notification_preferences",
+        "user_communication_channel_prefs",
+      ];
+      const itemizedTables = new Set(plan.rows.filter((r) => r.domain === "alertas" || r.domain === "notificacoes").map((r) => r.table));
+      for (const t of knownAlertNotificationChatTables) {
+        assert.ok(itemizedTables.has(t), `tabela "${t}" deveria ter sua própria linha no plano — não pode ficar escondida numa categoria agregada`);
+      }
+    });
+
     it("no domain is left as a Legacy gap — every domain now has a ready collector (bloco final de cobertura)", async () => {
       const manifest = await buildRetentionManifest(prisma);
       const retained = {
@@ -188,6 +218,19 @@ describe("Simulador de virada limpa — manifesto de retenção + plano de domí
       // (nenhum snapshot REAL foi executado — "covered" aqui é sobre o
       // mecanismo existir, ver comentário no topo de domain-plan.ts).
       assert.deepEqual(plan.legacy_gaps, [], "nenhum domínio deveria aparecer como lacuna do Legacy neste ponto");
+    });
+
+    it("catalog_tasks aparece dividido em vinculados (remover_apos_copia) e órfãos (bloqueado) — nunca uma única linha otimista", async () => {
+      const manifest = await buildRetentionManifest(prisma);
+      const retained = { userIds: new Set(manifest.map((m) => m.user_id)), agencyIds: new Set<string>(), companyIds: new Set<string>(), nomadeIds: new Set<string>() };
+      const plan = await buildDomainPlan(prisma as unknown as DomainPlanDb, retained);
+      const linked = plan.rows.find((r) => r.table === "catalog_tasks (vinculados a produto)");
+      const orphan = plan.rows.find((r) => r.table === "catalog_tasks (órfãos, sem vínculo de produto)");
+      assert.ok(linked, "deve haver uma linha para tarefas vinculadas");
+      assert.ok(orphan, "deve haver uma linha para tarefas órfãs");
+      assert.equal(linked!.bucket, "remover_apos_copia");
+      assert.equal(orphan!.bucket, "bloqueado");
+      assert.equal(orphan!.legacy_covered, true, "o coletor complementar existe — só a execução oficial está pendente");
     });
   });
 
