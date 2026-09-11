@@ -405,27 +405,29 @@ const navigationConfig = {
       current: false,
       subitems: [
         {
-          // Só Admin Master (filtrado por `masterOnly`; o backend reaplica em
-          // /api/admin/catalog2/*). Reunião 10/09/2026 — preparação dos
-          // produtos finais da plataforma antes da publicação (NÃO é um
-          // segundo catálogo). Rota mantida por ora para não quebrar deep links.
-          name: "Preparação de Produtos",
-          href: "/admin/produtos/novo-catalogo",
-          icon: Sparkles,
+          // 2026-09 (consolidação catalog2, reunião "catálogo2 como cadastro
+          // definitivo"): Cadastro de Produtos passou a administrar
+          // exclusivamente o catalog2 (36 produtos reais + fixture de
+          // teste separada) — os 162 produtos antigos saíram desta tela.
+          // Só Admin Master vê/acessa (filtrado por `masterOnly`; o backend
+          // já recusava /api/admin/catalog2/* pra qualquer outro perfil —
+          // antes disso, o catálogo ANTIGO nesta mesma rota era visível a
+          // outros admins; essa mudança de acesso é intencional e está
+          // documentada no relatório da consolidação, não acidental).
+          name: "Cadastro de Produtos",
+          href: "/admin/produtos",
+          icon: Package,
           current: false,
           masterOnly: true,
         },
         {
-          name: "Cadastro de Produtos (operacional atual)",
-          href: "/admin/produtos",
-          icon: Package,
-          current: false,
-        },
-        {
-          name: "Catálogo de Produtos (operacional atual)",
+          // Mesma observação de acesso do item acima — visão comercial dos
+          // mesmos produtos catalog2, não mais os 162 antigos.
+          name: "Catálogo de Produtos",
           href: "/admin/catalogo-produtos",
           icon: BookOpen,
           current: false,
+          masterOnly: true,
         },
         {
           name: "Precificação",

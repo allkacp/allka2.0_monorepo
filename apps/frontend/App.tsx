@@ -140,9 +140,10 @@ const AdminComunicacaoPage = React.lazy(
 // Anterior" no bloco 2/6). Endereço principal /admin/legacy;
 // /admin/consulta-legado redireciona para cá.
 const AdminLegacyPage = React.lazy(() => import("@/app/admin/legacy/page"));
-// Fundação do novo catálogo — tela de validação, só Admin Master
-// (sprint de produtos, bloco 2/6).
-const AdminNovoCatalogoPage = React.lazy(
+// 2026-09 (consolidação catalog2): rota antiga ("Preparação de Produtos")
+// virou um redirecionamento puro pra /admin/produtos ("Cadastro de
+// Produtos") — mantida só por deep links/tours antigos.
+const AdminNovoCatalogoRedirectPage = React.lazy(
   () => import("@/app/admin/produtos/novo-catalogo/page"),
 );
 // Catálogo do CLIENTE do novo catálogo (sprint de produtos, bloco 5/6) —
@@ -949,9 +950,11 @@ export default function App() {
                     path="/admin/consulta-legado"
                     element={<Navigate to="/admin/legacy" replace />}
                   />
+                  {/* 2026-09: redireciona pra /admin/produtos, preservando
+                      ?produto= quando presente — ver o componente. */}
                   <Route
                     path="/admin/produtos/novo-catalogo"
-                    element={<AdminNovoCatalogoPage />}
+                    element={<AdminNovoCatalogoRedirectPage />}
                   />
                   {/* Pré-visualizar como cliente (bloco 5/6) — Admin Master;
                       o backend recusa preview de rascunho para quem não for

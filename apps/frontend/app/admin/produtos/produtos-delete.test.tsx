@@ -49,7 +49,11 @@ vi.mock("@/lib/api-client", () => ({
   },
 }));
 
-import AdminProdutosPage from "@/app/admin/produtos/page";
+// 2026-09 (consolidação catalog2): a rota /admin/produtos passou a
+// administrar catalog2 — este teste cobre a exclusão do catálogo ANTIGO,
+// que continua existindo no código (legado-page.tsx), só não está mais
+// montada nessa rota. Ver docs da consolidação.
+import AdminProdutosPage from "@/app/admin/produtos/legado-page";
 
 function renderPage() {
   return render(

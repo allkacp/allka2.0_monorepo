@@ -349,7 +349,7 @@ router.get("/products", async (req, res, next) => {
         include: {
           pillar: { select: { key: true, name: true } },
           category: { select: { key: true, name: true } },
-          versions: { select: { id: true, version_number: true, state: true, published_at: true, updated_at: true } },
+          versions: { select: { id: true, version_number: true, state: true, published_at: true, updated_at: true, summary: true } },
           import_origin: { select: { rose_reviewed: true, review_state: true, pendencies_json: true, area_rose: true, human_edited_at: true, source_index: true } },
         },
       }),
@@ -359,6 +359,11 @@ router.get("/products", async (req, res, next) => {
     res.json({
       data: rows.map((p) => {
         const pub = p.versions.find((v) => v.id === p.published_version_id) ?? null;
+        // Descrição: da versão publicada; sem publicação, do rascunho mais
+        // recente (ainda não é a descrição "oficial", mas é honesto mostrar
+        // o que existe em vez de nada — ver STATUS_LABEL/honestidade no front).
+        const draft = p.versions.find((v) => v.state === "rascunho") ?? null;
+        const descriptionSource = pub ?? draft;
         const io = p.import_origin;
         return {
           id: p.id,
@@ -368,6 +373,7 @@ router.get("/products", async (req, res, next) => {
           category: p.category,
           origin: p.origin,
           status: p.status,
+          summary: descriptionSource?.summary || null,
           published_version_number: pub?.version_number ?? null,
           published_at: pub?.published_at ?? null,
           has_draft: p.versions.some((v) => v.state === "rascunho"),

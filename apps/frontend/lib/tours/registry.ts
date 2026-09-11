@@ -203,15 +203,19 @@ export const TOURS: TourDefinition[] = [
   },
   {
     key: "novo-catalogo-admin",
-    version: 1,
-    title: "Novo catálogo — Administração",
+    version: 2,
+    title: "Cadastro de Produtos — Administração",
     description: "Como um produto nasce em rascunho até estar pronto para publicação — só para Admin Master.",
     category: "produtos-catalogo",
     allowedAccountTypes: ["admin"],
     isEligible: isAdminMaster,
-    routes: ["/admin/produtos/novo-catalogo"],
+    // 2026-09 (consolidação catalog2): rota antiga (/admin/produtos/
+    // novo-catalogo) agora só redireciona pra cá — o tour segue a rota
+    // definitiva. Versão incrementada pra reexibir o tour a quem já viu
+    // a versão antiga (o passo "header" mudou de conteúdo).
+    routes: ["/admin/produtos"],
     steps: [
-      { id: "header", target: "catalog2-admin-header", title: "Novo catálogo", description: "Um construtor separado do catálogo operacional atual — preço e prazo são sempre calculados no servidor.", placement: "bottom" },
+      { id: "header", target: "catalog2-admin-header", title: "Cadastro de Produtos", description: "Administra exclusivamente os produtos novos (catalog2) — os 162 produtos antigos não aparecem mais aqui. Preço e prazo são sempre calculados no servidor.", placement: "bottom" },
       { id: "create", target: "catalog2-admin-create", title: "Criar produto", description: "Cria um novo produto em preparação, com uma versão rascunho — nunca visível ao cliente ainda.", placement: "bottom" },
       { id: "editor-tabs", target: "catalog2-editor-tabs", title: "Conteúdo, tarefas, preço e histórico", description: "Ao abrir um produto: revisão de conteúdo, versões, especialidades e tarefas, e preço/prazo — cada um em sua aba.", placement: "bottom", optional: true },
       { id: "draft-vs-publish", target: null, title: "Rascunho x publicar", description: "Uma versão rascunho pode ser editada livremente. Publicar a torna definitiva e visível ao cliente — versões publicadas não voltam a ser editáveis." },

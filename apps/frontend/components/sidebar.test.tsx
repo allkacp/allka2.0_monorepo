@@ -171,38 +171,43 @@ describe("Sidebar — item Roadmap e chamados", () => {
   });
 });
 
-// Reunião 10/09/2026 — a preparação dos produtos finais (catalog2) tem
-// entrada de menu, visível SÓ para Admin Master. Nome visível: "Preparação de
-// Produtos" (não "catálogo"). Os menus antigos continuam identificados como
-// "operacional atual". Rota /admin/produtos/novo-catalogo mantida por ora.
-describe("Sidebar — Produtos: item 'Preparação de Produtos' (Admin Master)", () => {
+// 2026-09 (consolidação catalog2, reunião "catálogo2 como cadastro
+// definitivo"): não existe mais uma entrada de menu separada para
+// "Preparação de Produtos" — Cadastro de Produtos e Catálogo de Produtos
+// passaram a administrar exclusivamente o catalog2, e ambos exigem Admin
+// Master (o backend já recusava /api/admin/catalog2/* pra qualquer outro
+// perfil; antes desta consolidação, o catálogo ANTIGO nesta mesma rota era
+// visível a outros admins — essa perda de acesso para não-master é
+// intencional e documentada, não acidental).
+describe("Sidebar — Produtos: Cadastro/Catálogo exigem Admin Master (consolidação catalog2)", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockAccountType.value = "admin";
   });
 
-  it("Admin Master vê 'Preparação de Produtos' apontando para /admin/produtos/novo-catalogo", async () => {
+  it("Admin Master vê 'Cadastro de Produtos' e 'Catálogo de Produtos', sem entrada separada de 'Preparação'", async () => {
     getCurrentUser.mockResolvedValue({ admin_profile: { is_active: true, is_master: true, permissions: [] } });
     renderSidebar();
     await waitFor(() => expect(getCurrentUser).toHaveBeenCalled());
     await userEvent.click(await screen.findByText("Produtos"));
-    const link = await screen.findByRole("link", { name: /Preparação de Produtos/i });
-    expect(link).toHaveAttribute("href", "/admin/produtos/novo-catalogo");
-    // não deve mais reforçar "catálogo" no rótulo visível
+    const cadastro = await screen.findByRole("link", { name: /^Cadastro de Produtos$/i });
+    expect(cadastro).toHaveAttribute("href", "/admin/produtos");
+    const catalogo = await screen.findByRole("link", { name: /^Catálogo de Produtos$/i });
+    expect(catalogo).toHaveAttribute("href", "/admin/catalogo-produtos");
+    expect(screen.queryByRole("link", { name: /Preparação de Produtos/i })).not.toBeInTheDocument();
     expect(screen.queryByRole("link", { name: /Novo Catálogo/i })).not.toBeInTheDocument();
-    // os menus antigos continuam, identificados como operacional atual
-    expect(screen.getByRole("link", { name: /Cadastro de Produtos \(operacional atual\)/i })).toBeInTheDocument();
+    expect(screen.queryByText(/operacional atual/i)).not.toBeInTheDocument();
   });
 
-  it("Admin comum (não-master) NÃO vê 'Preparação de Produtos', mas vê o cadastro operacional", async () => {
+  it("Admin comum (não-master) NÃO vê Cadastro nem Catálogo de Produtos", async () => {
     getCurrentUser.mockResolvedValue({
       admin_profile: { is_active: true, is_master: false, permissions: [{ module: "produtos", action: "view" }] },
     });
     renderSidebar();
     await waitFor(() => expect(getCurrentUser).toHaveBeenCalled());
     await userEvent.click(await screen.findByText("Produtos"));
-    await screen.findByRole("link", { name: /Cadastro de Produtos \(operacional atual\)/i });
-    expect(screen.queryByRole("link", { name: /Preparação de Produtos/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: /^Cadastro de Produtos$/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: /^Catálogo de Produtos$/i })).not.toBeInTheDocument();
   });
 });
 
