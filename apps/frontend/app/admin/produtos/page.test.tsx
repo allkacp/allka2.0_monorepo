@@ -194,7 +194,36 @@ it("título e menu: 'Cadastro de Produtos' (não mais 'Preparação de Produtos'
   expect(await screen.findByRole("heading", { name: "Cadastro de Produtos" })).toBeInTheDocument()
   expect(screen.queryByText(/novo cat[áa]logo/i)).not.toBeInTheDocument()
   expect(screen.queryByRole("heading", { name: "Preparação de Produtos" })).not.toBeInTheDocument()
-  expect(screen.getByText(/cadastro de tarefas, etapas, prazos, preço e publicação/i)).toBeInTheDocument()
+  expect(screen.getByText(/produtos e serviços da plataforma \(catalog2\)/i)).toBeInTheDocument()
+})
+
+// Reparo 2026-09 seguinte: layout administrativo aprovado (banner padrão,
+// abas de filtro rápido, tabela) restaurado — ver a1 (auditoria pelo
+// histórico Git de a809971, commit anterior a c86eaa2).
+it("layout recuperado: banner padrão (StandardPageBanner), abas de filtro rápido e tabela (não mais <ul> avulsa)", async () => {
+  renderPage()
+  await screen.findByText("[TESTE LOCAL] Demo")
+  // StandardPageBanner: título dentro de um <h1>, ícone circular com
+  // gradiente — mesmo componente usado em /admin/empresas e outras telas.
+  const heading = screen.getByRole("heading", { name: "Cadastro de Produtos" })
+  expect(heading.className).toMatch(/font-bold/)
+  // Abas de filtro rápido — "Todos os produtos"/"Publicados"/"Em preparação"/
+  // "Com pendências"/"Categorias", cada uma com contador.
+  for (const label of ["Todos os produtos", "Publicados", "Em preparação", "Com pendências", "Categorias"]) {
+    expect(screen.getByText(label)).toBeInTheDocument()
+  }
+  // Tabela de verdade (thead/tbody com colunas), não mais uma lista <ul>.
+  expect(screen.getByRole("table")).toBeInTheDocument()
+  expect(screen.getByRole("columnheader", { name: "Produto" })).toBeInTheDocument()
+  expect(screen.getByRole("columnheader", { name: "Status" })).toBeInTheDocument()
+  expect(screen.getByRole("columnheader", { name: "Ações" })).toBeInTheDocument()
+})
+
+it("clicar na aba 'Publicados' filtra a listagem (status=disponivel) sem precisar abrir 'Filtros'", async () => {
+  renderPage()
+  await screen.findByText("[TESTE LOCAL] Demo")
+  await userEvent.click(screen.getByText("Publicados"))
+  await waitFor(() => expect(api.getCatalog2Products).toHaveBeenCalledWith(expect.objectContaining({ status: "disponivel" })))
 })
 
 it("listagem: mostra produtos catalog2, situação, etiqueta Novo, e nunca os 162 antigos", async () => {
@@ -214,7 +243,7 @@ it("resumo de status único: um só bloco descreve 'em preparação' e o que fal
   await screen.findByText("[TESTE LOCAL] Demo")
   expect(screen.getByText(/produtos da plataforma, ainda/i)).toBeInTheDocument()
   expect(screen.getAllByText(/em prepara/i).length).toBeGreaterThan(0)
-  expect(screen.getByText(/tarefas, etapas, prazos, precificação e revisão final/i)).toBeInTheDocument()
+  expect(screen.getByText(/catálogo antigo, com 162 produtos, não aparece mais aqui/i)).toBeInTheDocument()
 })
 
 it("construtor abre dentro do container padrão (EmbeddedSlideScreen, com botão de fixar na bandeja) e Voltar fecha sem sair da lista", async () => {
@@ -339,9 +368,12 @@ it("contagens do resumo vêm de overview.counts (dados reais), não de literal",
   // tarefas/etapas cadastradas NOS importados = 0 (não fingir completo)
   expect(within(card("Tarefas (nos importados)")).getByText("0")).toBeInTheDocument()
   expect(within(card("Etapas (nos importados)")).getByText("0")).toBeInTheDocument()
-  expect(card("Em preparação")).toHaveTextContent("36")
-  expect(card("Publicados")).toHaveTextContent("1")
-  expect(card("Com pendências")).toHaveTextContent("36")
+  // "Em preparação"/"Publicados"/"Com pendências" viraram abas de filtro
+  // rápido (layout restaurado) — o número vem no <span> badge da aba.
+  const tab = (label: string) => screen.getByText(label).closest("button") as HTMLElement
+  expect(within(tab("Em preparação")).getByText("36")).toBeInTheDocument()
+  expect(within(tab("Publicados")).getByText("1")).toBeInTheDocument()
+  expect(within(tab("Com pendências")).getByText("36")).toBeInTheDocument()
 })
 
 it("não usa mensagem falsa 'ainda não foram importados' quando há importação", async () => {
@@ -440,22 +472,20 @@ it("prontidão por produto: atalho abre e mostra os itens reais do backend", asy
   expect(api.getCatalog2ProductReadiness).toHaveBeenCalledWith("prod1")
 })
 
-it("listagem: filtros avançados vão ao backend; detalhes técnicos saem da linha principal", async () => {
-  const user = userEvent.setup()
+it("listagem: filtros avançados vão ao backend; linha da tabela fica limpa (sem slug/origem crus)", async () => {
   renderPage()
   await screen.findByText("[TESTE LOCAL] Demo")
-  // filtros avançados ficam atrás de "Mais filtros" — abrir e usar
-  await user.click(screen.getByText(/^Mais filtros/))
+  // filtros avançados (layout restaurado): botão "Filtros" abre o painel
+  await userEvent.click(screen.getByRole("button", { name: /^Filtros/ }))
   await userEvent.selectOptions(screen.getByDisplayValue("Revisão da Rose (todas)"), "true")
   await waitFor(() => expect(api.getCatalog2Products).toHaveBeenCalledWith(expect.objectContaining({ rose_reviewed: "true" })))
   await userEvent.selectOptions(screen.getByDisplayValue("Tipo de pendência (todas)"), "price_pending")
   await waitFor(() => expect(api.getCatalog2Products).toHaveBeenCalledWith(expect.objectContaining({ pendency: "price_pending" })))
   // pendências aparecem como badge na linha (texto de negócio, não código)
   expect(screen.getAllByText("preço").length).toBeGreaterThan(0)
-  // slug / origem / #index NÃO poluem a linha — ficam em "Detalhes técnicos"
+  // slug/origem/#index crus não aparecem na linha (nunca existiram como
+  // texto visível na tabela do layout restaurado)
   expect(screen.queryByText(/slug demo/)).not.toBeInTheDocument()
-  await user.click(screen.getAllByText("Detalhes técnicos")[0])
-  expect(screen.getByText(/slug demo · origem #3/)).toBeInTheDocument()
 })
 
 it("aba Origem e importação: planilha, Rose, divergência, preço histórico e resolver pendência", async () => {

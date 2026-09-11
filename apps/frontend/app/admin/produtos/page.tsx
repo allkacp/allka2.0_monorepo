@@ -2,18 +2,56 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
-import { Boxes, Loader2, Lock, Package, Search, ChevronLeft, ChevronRight, Plus } from "lucide-react";
+import {
+  AlertTriangle,
+  ArrowUpDown,
+  CheckCircle2,
+  ChevronDown,
+  ChevronLeft,
+  ChevronRight,
+  Clock as ClockIcon,
+  Layers,
+  ListChecks,
+  Loader2,
+  Lock,
+  MoreVertical,
+  Package,
+  Pencil,
+  Plus,
+  Search,
+  SlidersHorizontal,
+} from "lucide-react";
 import { apiClient } from "@/lib/api-client";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { ConfirmationDialog } from "@/components/confirmation-dialog";
 import { EmbeddedSlideScreen } from "@/components/embedded-slide-screen";
 import { PinToTrayButton } from "@/components/pin-to-tray-button";
+import {
+  STANDARD_SHELL_PANEL_CLASS,
+  StandardPageBanner,
+} from "@/components/standard-page-shell";
 import { ProductEditor } from "@/app/admin/produtos/novo-catalogo/product-editor";
 
 // Cadastro de Produtos — administração exclusiva dos produtos catalog2
-// (reunião 2026-09, consolidação "catálogo2 como cadastro definitivo").
+// (reunião 2026-09, consolidação "catálogo2 como cadastro definitivo"; e
+// reparo 2026-09 seguinte, que recuperou o layout administrativo aprovado
+// — abas de filtro rápido, banner padrão e tabela — perdido quando esta
+// rota foi trocada pela tela então chamada "Preparação de Produtos").
 // Só Admin Master (o backend reaplica em /api/admin/catalog2/*). Não mostra
 // os 162 produtos antigos — esses continuam no banco (projetos antigos que
 // os referenciam não quebram), só saíram das telas de cadastro/catálogo/
@@ -90,7 +128,9 @@ export default function AdminProdutosPage() {
   const [sort, setSort] = useState("name");
   const [importSummary, setImportSummary] = useState<any>(null);
   const [readiness, setReadiness] = useState<any>(null);
+  const [showCategoryFilters, setShowCategoryFilters] = useState(false);
   const [page, setPage] = useState(1);
+  const pageSize = 15;
   const [list, setList] = useState<{ data: any[]; total: number; page_size: number } | null>(null);
   const [listLoading, setListLoading] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
@@ -123,11 +163,11 @@ export default function AdminProdutosPage() {
       const r = await apiClient.getCatalog2Products({
         q, status, pillar_id: pillarId, category_id: categoryId,
         origin, rose_reviewed: roseReviewed, review_state: reviewState, pendency,
-        sort, page, page_size: 15,
+        sort, page, page_size: pageSize,
       });
       setList(r);
     } catch {
-      setList({ data: [], total: 0, page_size: 15 });
+      setList({ data: [], total: 0, page_size: pageSize });
     } finally {
       setListLoading(false);
     }
@@ -147,305 +187,6 @@ export default function AdminProdutosPage() {
     catch (e: any) { setMsg(e?.message ?? "Falha."); }
   }
 
-  if (state === "loading") return <Shell><Centered><Loader2 className="h-5 w-5 animate-spin" /> Carregando…</Centered></Shell>;
-  if (state === "forbidden") return <Shell><Centered><Lock className="h-5 w-5" /> Esta área é exclusiva do Admin Master neste momento.</Centered></Shell>;
-  if (state === "error") return <Shell><Centered>Não foi possível carregar.</Centered></Shell>;
-
-  const totalPages = list ? Math.max(1, Math.ceil(list.total / list.page_size)) : 1;
-  const c = overview.counts;
-  const advancedFilters = [pillarId, categoryId, origin, roseReviewed, reviewState, pendency].filter(Boolean).length;
-
-  return (
-    <Shell>
-      <div className="space-y-5">
-        <header className="flex flex-wrap items-start justify-between gap-3" data-tour-id="catalog2-admin-header">
-          <div className="space-y-1">
-            <h1 className="flex items-center gap-2 text-xl font-semibold text-foreground">
-              <Boxes className="h-5 w-5" /> Cadastro de Produtos
-            </h1>
-            <p className="text-sm text-muted-foreground">
-              Administração dos produtos da plataforma — cadastro de tarefas, etapas, prazos, preço e publicação.
-            </p>
-          </div>
-          <div className="flex flex-wrap items-center gap-2">
-            <PinToTrayButton id="page-produtos" label="Cadastro de Produtos" icon={Package} path="/admin/produtos" />
-            <a
-              href="/admin/catalog2?preview=1"
-              className="inline-flex items-center gap-1 rounded-md border bg-background px-3 py-1.5 text-sm text-foreground hover:bg-muted"
-            >
-              Pré-visualizar como cliente
-            </a>
-          </div>
-        </header>
-
-        {/* Resumo de status ÚNICO. Fundo neutro sólido, sem repetir o estado
-            nos cards/blocos abaixo. */}
-        <p className="rounded-lg bg-muted px-3 py-2 text-sm text-foreground">
-          Estes são os produtos da plataforma, ainda <strong>em preparação</strong> na maioria dos casos. Para
-          publicar cada um: tarefas, etapas, prazos, precificação e revisão final. O catálogo antigo, com 162
-          produtos, não aparece mais aqui — ele segue no banco só para não quebrar projetos antigos já ligados a ele.
-        </p>
-
-        {/* Todos os números vêm de `overview.counts` (contagem real das tabelas
-            catalog2). O produto de demonstração ("[TESTE LOCAL] …") não entra
-            nas contagens de avanço dos produtos finais importados. */}
-        <div className="space-y-2">
-          <div className="grid grid-cols-2 gap-px overflow-hidden rounded-lg border bg-border sm:grid-cols-3">
-            <Stat k="Importados (finais)" v={c.final_imported_products ?? c.imported_products ?? 0}
-              hint={`não conta os 162 operacionais${c.test_local_products ? ` · + ${c.test_local_products} de demonstração, fora da contagem` : ""}`} />
-            <Stat k="Em preparação" v={c.products_in_preparation ?? 0} />
-            <Stat k="Publicados" v={c.products_published ?? 0} tone={(c.products_published ?? 0) > 0 ? "ok" : undefined} />
-            <Stat k="Tarefas (nos importados)" v={c.tasks_in_final_imported ?? 0} hint={`${c.tasks ?? 0} no catálogo todo`} />
-            <Stat k="Etapas (nos importados)" v={c.steps_in_final_imported ?? 0} hint={`${c.steps ?? 0} no catálogo todo`} />
-            <Stat k="Com pendências" v={c.products_with_pendencies ?? 0} tone={(c.products_with_pendencies ?? 0) > 0 ? "warn" : undefined} />
-          </div>
-          <details className="rounded-lg border">
-            <summary className="cursor-pointer select-none px-3 py-2 text-xs font-medium text-muted-foreground">
-              Estrutura do catálogo
-            </summary>
-            <div className="grid grid-cols-2 gap-px overflow-hidden border-t bg-border sm:grid-cols-3">
-              <Stat k="Produtos (total)" v={c.products} hint="importados + demonstração" />
-              <Stat k="Pilares" v={c.pillars} />
-              <Stat k="Classificações 4F" v={c.four_f} />
-              <Stat k="Categorias" v={c.categories} />
-              <Stat k="Especialidades" v={c.specialties} />
-              <Stat k="Versões em rascunho" v={c.draft_versions} />
-            </div>
-          </details>
-        </div>
-
-        {importSummary?.has_import && (
-          <details className="rounded-lg border">
-            <summary className="flex cursor-pointer select-none flex-wrap items-center justify-between gap-2 px-3 py-2">
-              <h2 className="text-sm font-semibold text-foreground">Importação de produtos definitivos</h2>
-              <span className="text-xs text-muted-foreground">
-                {/* Números vêm da importação real (importSummary), nunca de "36" fixo. */}
-                {importSummary.count_matches_expected
-                  ? `✓ ${importSummary.total_imported}/${importSummary.expected ?? importSummary.total_imported} importados`
-                  : `⚠ ${importSummary.total_imported}/${importSummary.expected ?? importSummary.total_imported} importados`}
-                {" · "}{importSummary.published_count} publicado(s)
-              </span>
-            </summary>
-            <div className="space-y-2 border-t p-3 text-muted-foreground">
-              <p className="text-xs">
-                {overview.import?.message ??
-                  `${overview.counts.final_imported_products ?? importSummary.total_imported} produto(s) importado(s) para preparação. Aguardando tarefas, prazos, precificação e revisão para publicação.`}
-              </p>
-              <div className="grid grid-cols-2 gap-2 text-xs sm:grid-cols-4">
-                <SummaryCell k="Revisados pela Rose" v={`${importSummary.rose_reviewed} / ${importSummary.total_imported}`} />
-                <SummaryCell k="Sem revisão da Rose" v={importSummary.not_rose_reviewed} />
-                <SummaryCell k="Decisões pendentes" v={importSummary.decisions_pending} />
-                <SummaryCell k="Editados por humano" v={importSummary.human_edited} />
-              </div>
-              <div className="flex flex-wrap gap-1.5">
-                {Object.entries(importSummary.by_pendency ?? {}).map(([k, n]) => (
-                  <button
-                    key={k}
-                    className={`rounded-full border px-2 py-0.5 text-[11px] ${pendency === k ? "border-foreground bg-muted text-foreground" : "text-muted-foreground hover:bg-muted"}`}
-                    onClick={() => setPendency((cur) => (cur === k ? "" : k))}
-                  >
-                    {PENDENCY_LABEL[k] ?? k}: {n as number}
-                  </button>
-                ))}
-              </div>
-              <p className="text-[11px]">
-                Fonte principal <code>{importSummary.last_batch?.source_main?.name}</code> · checksum{" "}
-                <code>{String(importSummary.last_batch?.source_main?.checksum ?? "").slice(0, 12)}…</code> · regra{" "}
-                {importSummary.last_batch?.rule_version} · lote {importSummary.last_batch?.status}. Os 162 produtos
-                operacionais seguem intactos.
-              </p>
-            </div>
-          </details>
-        )}
-
-        {readiness && <ReadinessPanel readiness={readiness} />}
-
-        <div className="space-y-2">
-          <div className="flex flex-wrap items-center gap-2">
-            <div className="relative min-w-[200px] flex-1">
-              <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
-              <Input className="pl-8" placeholder="Buscar por nome ou slug" aria-label="Buscar produtos" value={q} onChange={(e) => setQ(e.target.value)} />
-            </div>
-            <label className="sr-only" htmlFor="f-status">Situação</label>
-            <select id="f-status" className={SELECT_CLS} value={status} onChange={(e) => setStatus(e.target.value)}>
-              <option value="">Todas as situações</option>
-              {Object.entries(STATUS_LABEL).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
-            </select>
-            <label className="sr-only" htmlFor="f-sort">Ordenar</label>
-            <select id="f-sort" className={SELECT_CLS} value={sort} onChange={(e) => setSort(e.target.value)}>
-              <option value="name">Nome A–Z</option>
-              <option value="name_desc">Nome Z–A</option>
-              <option value="updated">Alterado recentemente</option>
-              <option value="created">Criado recentemente</option>
-            </select>
-            <Button data-tour-id="catalog2-admin-create" size="sm" onClick={() => setConfirm({ title: "Criar produto", message: "Um novo produto (em preparação) com uma versão rascunho será criado.", onConfirm: () => createProduct() })}>
-              <Plus className="h-4 w-4" /> Criar produto
-            </Button>
-          </div>
-
-          <details className="rounded-lg border">
-            <summary className="cursor-pointer select-none px-3 py-2 text-xs font-medium text-muted-foreground">
-              Mais filtros{advancedFilters > 0 ? ` (${advancedFilters} ativo${advancedFilters > 1 ? "s" : ""})` : ""}
-            </summary>
-            <div className="flex flex-wrap gap-2 border-t p-3">
-              <label className="sr-only" htmlFor="f-pillar">Pilar</label>
-              <select id="f-pillar" className={SELECT_CLS} value={pillarId} onChange={(e) => setPillarId(e.target.value)}>
-                <option value="">Todos os pilares</option>{refs.pillars.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
-              </select>
-              <label className="sr-only" htmlFor="f-cat">Categoria</label>
-              <select id="f-cat" className={SELECT_CLS} value={categoryId} onChange={(e) => setCategoryId(e.target.value)}>
-                <option value="">Todas as categorias</option>{refs.categories.map((c2) => <option key={c2.id} value={c2.id}>{c2.name}</option>)}
-              </select>
-              <label className="sr-only" htmlFor="f-origin">Origem</label>
-              <select id="f-origin" className={SELECT_CLS} value={origin} onChange={(e) => setOrigin(e.target.value)}>
-                <option value="">Toda origem</option>
-                <option value="existente">Só existentes</option>
-                <option value="novo">Só novos</option>
-                <option value="reativado">Só reativados</option>
-              </select>
-              <label className="sr-only" htmlFor="f-rose">Revisão da Rose</label>
-              <select id="f-rose" className={SELECT_CLS} value={roseReviewed} onChange={(e) => setRoseReviewed(e.target.value)}>
-                <option value="">Revisão da Rose (todas)</option>
-                <option value="true">Revisado pela Rose</option>
-                <option value="false">Sem revisão da Rose</option>
-              </select>
-              <label className="sr-only" htmlFor="f-review">Estado de preparo</label>
-              <select id="f-review" className={SELECT_CLS} value={reviewState} onChange={(e) => setReviewState(e.target.value)}>
-                <option value="">Estado de preparo (todos)</option>
-                {Object.entries(REVIEW_STATE_LABEL).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
-              </select>
-              <label className="sr-only" htmlFor="f-pend">Tipo de pendência</label>
-              <select id="f-pend" className={SELECT_CLS} value={pendency} onChange={(e) => setPendency(e.target.value)}>
-                <option value="">Tipo de pendência (todas)</option>
-                {Object.entries(PENDENCY_LABEL).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
-              </select>
-            </div>
-          </details>
-        </div>
-
-        {msg && <p className="text-sm text-blue-600 dark:text-blue-400">{msg}</p>}
-
-        {listLoading ? (
-          <Centered><Loader2 className="h-5 w-5 animate-spin" /> Carregando…</Centered>
-        ) : !list || list.data.length === 0 ? (
-          <div className="rounded-lg border border-dashed p-8 text-center text-sm text-muted-foreground">
-            {overview.is_empty ? overview.empty_message : "Nenhum produto com esses filtros."}
-          </div>
-        ) : (
-          <>
-            <ul className="divide-y rounded-lg border">
-              {list.data.map((p) => {
-              const readyLabel = p.imported
-                ? (p.review_state === "ready_for_final_review"
-                    ? "Pronto p/ revisão final"
-                    : (REVIEW_STATE_LABEL[p.review_state] ?? "Em preparação"))
-                : null;
-              const pend: string[] = p.pendencies ?? [];
-              const tech = [
-                `slug ${p.slug}`,
-                p.source_index ? `origem #${p.source_index}` : null,
-                p.origin || null,
-                p.published_version_number ? `v${p.published_version_number} publicada` : "sem versão publicada",
-                p.has_draft ? "rascunho aberto" : null,
-                p.published_at ? `publicado ${new Date(p.published_at).toLocaleDateString("pt-BR")}` : null,
-                `alterado ${new Date(p.updated_at).toLocaleDateString("pt-BR")}`,
-              ].filter(Boolean).join(" · ");
-              return (
-                <li key={p.id} className="px-3 py-3">
-                  <div className="flex flex-wrap items-start justify-between gap-3">
-                    <div className="min-w-0 flex-1">
-                      <button className="text-left font-medium hover:underline" onClick={() => openProduct(p.id)}>
-                        {p.internal_name}
-                      </button>
-                      <div className="mt-0.5 text-xs text-muted-foreground">
-                        {p.category?.name ?? "sem categoria"} · {p.pillar?.name ?? "sem pilar"}
-                        {readyLabel ? ` · ${readyLabel}` : ""}
-                        {p.imported ? ` · ${pend.length} pendência(s)` : ""}
-                      </div>
-                      {p.imported && (pend.length > 0 || !p.rose_reviewed || p.human_edited) && (
-                        <div className="mt-1 flex flex-wrap items-center gap-1">
-                          {!p.rose_reviewed && <Badge className="bg-muted text-muted-foreground">Rose pendente</Badge>}
-                          {pend.slice(0, 4).map((pk: string) => (
-                            <Badge key={pk} className="bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-200">{PENDENCY_LABEL[pk] ?? pk}</Badge>
-                          ))}
-                          {pend.length > 4 && <span className="text-[11px] text-muted-foreground">+{pend.length - 4}</span>}
-                          {p.human_edited && <Badge className="bg-muted text-muted-foreground">editado por humano</Badge>}
-                        </div>
-                      )}
-                      <RowTechDetails text={tech} />
-                    </div>
-                    <div className="flex shrink-0 flex-col items-end gap-1.5">
-                      <div className="flex items-center gap-1.5">
-                        {p.is_new && <Badge className="bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-200">Novo</Badge>}
-                        <Badge className={STATUS_TONE[p.status] ?? "bg-muted text-muted-foreground"}>{STATUS_LABEL[p.status] ?? p.status}</Badge>
-                        <Button size="sm" onClick={() => openProduct(p.id)}>
-                          {p.has_draft ? "Continuar configuração" : "Abrir"}
-                        </Button>
-                      </div>
-                      <div className="flex flex-wrap items-center justify-end gap-1">
-                        {p.published_version_number && !p.has_draft && (
-                          <Button size="sm" variant="ghost" onClick={() => rowAction(() => apiClient.newCatalog2Version(p.id), "Nova versão rascunho criada.")}>Nova versão</Button>
-                        )}
-                        {p.status === "disponivel" && (
-                          <Button size="sm" variant="ghost" onClick={() => rowAction(() => apiClient.setCatalog2ProductStatus(p.id, "temporariamente_inativo"), "Oferta suspensa.")}>Suspender</Button>
-                        )}
-                        {p.status === "temporariamente_inativo" && (
-                          <Button size="sm" variant="ghost" onClick={() => rowAction(() => apiClient.setCatalog2ProductStatus(p.id, "disponivel"), "Oferta reativada.")}>Ativar</Button>
-                        )}
-                        {p.status !== "arquivado" && (
-                          <Button size="sm" variant="ghost" className="text-red-600" onClick={() => setConfirm({ title: "Arquivar produto?", message: "O produto sai do catálogo. O histórico é preservado; nada é apagado.", onConfirm: () => rowAction(() => apiClient.archiveCatalog2Product(p.id), "Produto arquivado.") })}>Arquivar</Button>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                </li>
-              );
-            })}
-          </ul>
-            <div className="flex items-center justify-between text-sm">
-              <Button size="sm" variant="ghost" disabled={page <= 1} onClick={() => setPage((n) => n - 1)}><ChevronLeft className="h-4 w-4" /> Anterior</Button>
-              <span className="text-muted-foreground">Página {page} de {totalPages} · {list.total} produto(s)</span>
-              <Button size="sm" variant="ghost" disabled={page >= totalPages} onClick={() => setPage((n) => n + 1)}>Próxima <ChevronRight className="h-4 w-4" /></Button>
-            </div>
-          </>
-        )}
-
-        {confirm && (
-          <ConfirmationDialog
-            open
-            onClose={() => setConfirm(null)}
-            title={confirm.title}
-            message={confirm.message}
-            confirmText="Confirmar"
-            destructive={false}
-            onConfirm={() => { confirm.onConfirm(); setConfirm(null); }}
-          />
-        )}
-      </div>
-
-      {/* O construtor abre AQUI DENTRO — container padrão, cabeçalho padrão,
-          fechar/fixar na bandeja — nunca como área separada ("Novo
-          Catálogo"). Reunião 2026-09. */}
-      <EmbeddedSlideScreen
-        open={!!openProductId}
-        onClose={() => { openProduct(null); void loadList(); void bootstrap(); }}
-        title="Editor de produto"
-        pin={openProductId ? {
-          id: `catalog2-produto-${openProductId}`,
-          label: "Editor de produto",
-          icon: Package,
-          path: `/admin/produtos?produto=${openProductId}`,
-        } : undefined}
-      >
-        {openProductId && (
-          <div className="min-h-0 flex-1 overflow-y-auto">
-            <ProductEditor productId={openProductId} onBack={() => { openProduct(null); void loadList(); void bootstrap(); }} />
-          </div>
-        )}
-      </EmbeddedSlideScreen>
-    </Shell>
-  );
-
   async function createProduct() {
     setMsg(null);
     try {
@@ -458,17 +199,423 @@ export default function AdminProdutosPage() {
       setMsg(e?.message ?? "Falha ao criar.");
     }
   }
-}
 
-// Superfície padrão da plataforma: painel sólido (bg-card) ocupando a largura
-// útil do <main>, sem max-w e sem transparências que deixem o fundo do shell
-// interferir na leitura. `relative` + altura mínima: o construtor
-// (EmbeddedSlideScreen, absolute inset-0) precisa de um ancestral posicionado
-// com altura real pra deslizar por cima sem sair deste painel.
-function Shell({ children }: { children: React.ReactNode }) {
+  if (state === "loading") {
+    return (
+      <div className={STANDARD_SHELL_PANEL_CLASS}>
+        <Centered><Loader2 className="h-5 w-5 animate-spin" /> Carregando…</Centered>
+      </div>
+    );
+  }
+  if (state === "forbidden") {
+    return (
+      <div className={STANDARD_SHELL_PANEL_CLASS}>
+        <Centered><Lock className="h-5 w-5" /> Esta área é exclusiva do Admin Master neste momento.</Centered>
+      </div>
+    );
+  }
+  if (state === "error") {
+    return (
+      <div className={STANDARD_SHELL_PANEL_CLASS}>
+        <div className="flex flex-col items-center justify-center gap-4 py-16 text-center">
+          <div className="rounded-full bg-red-50 p-4 dark:bg-red-950/40">
+            <AlertTriangle className="h-8 w-8 text-red-500" />
+          </div>
+          <div className="space-y-1.5">
+            <h2 className="text-base font-semibold text-foreground">Erro ao carregar produtos</h2>
+            <p className="max-w-sm text-sm text-muted-foreground">Não foi possível carregar o catálogo agora.</p>
+          </div>
+          <Button onClick={() => { setState("loading"); void bootstrap(); }}>Tentar novamente</Button>
+        </div>
+      </div>
+    );
+  }
+
+  const totalPages = list ? Math.max(1, Math.ceil(list.total / list.page_size)) : 1;
+  const c = overview.counts;
+  const advancedFilters = [pillarId, categoryId, origin, roseReviewed, reviewState, pendency].filter(Boolean).length;
+
+  // Abas de filtro rápido — mesma ideia do layout anterior aprovado
+  // (filtram a tabela direto, sem precisar abrir "Mais filtros"), adaptadas
+  // aos estados reais do catalog2 (em vez de "Ativos"/"Com tarefas" do
+  // catálogo antigo, que não existem aqui).
+  const quickTabs = [
+    { key: "all", label: "Todos os produtos", icon: Package, count: c.final_imported_products ?? c.imported_products ?? 0, active: status === "" && !showCategoryFilters, onClick: () => { setStatus(""); setShowCategoryFilters(false); } },
+    { key: "published", label: "Publicados", icon: CheckCircle2, count: c.products_published ?? 0, active: status === "disponivel", onClick: () => { setStatus("disponivel"); setShowCategoryFilters(false); } },
+    { key: "preparing", label: "Em preparação", icon: ClockIcon, count: c.products_in_preparation ?? 0, active: status === "em_preparacao", onClick: () => { setStatus("em_preparacao"); setShowCategoryFilters(false); } },
+    { key: "pendencies", label: "Com pendências", icon: ListChecks, count: c.products_with_pendencies ?? 0, active: false, onClick: () => setShowCategoryFilters((v) => !v) },
+    { key: "categories", label: "Categorias", icon: Layers, count: refs.categories.length, active: showCategoryFilters, onClick: () => setShowCategoryFilters((v) => !v) },
+  ] as const;
+
   return (
-    <div className="relative min-h-[70vh] rounded-xl border bg-card p-4 text-card-foreground shadow-sm sm:p-6">
-      {children}
+    <div className={STANDARD_SHELL_PANEL_CLASS}>
+      <div className="relative flex h-full min-h-[70vh] flex-col">
+        <div className="shrink-0 -mb-[11px]">
+          <StandardPageBanner
+            icon={Package}
+            title="Cadastro de Produtos"
+            description="Cadastre, edite e organize os produtos e serviços da plataforma (catalog2)"
+            actions={
+              <>
+                <TooltipProvider delayDuration={400}>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <button
+                        data-tour-id="catalog2-admin-create"
+                        onClick={() => setConfirm({ title: "Criar produto", message: "Um novo produto (em preparação) com uma versão rascunho será criado.", onConfirm: () => createProduct() })}
+                        className="flex items-center gap-1.5 whitespace-nowrap rounded-lg border border-white/70 bg-white/10 px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-white/20"
+                      >
+                        <Plus className="h-3.5 w-3.5 shrink-0" />
+                        Novo Produto
+                      </button>
+                    </TooltipTrigger>
+                    <TooltipContent side="bottom" sideOffset={6}>Criar novo produto catalog2</TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
+                <PinToTrayButton id="page-produtos" label="Cadastro de Produtos" icon={Package} path="/admin/produtos" />
+              </>
+            }
+          />
+        </div>
+
+        <div className="flex-1 min-h-0 overflow-y-auto" data-tour-id="catalog2-admin-header">
+          <div className="space-y-3">
+            <p className="rounded-lg bg-muted px-3 py-2 text-sm text-foreground">
+              Estes são os produtos da plataforma, ainda <strong>em preparação</strong> na maioria dos casos. O
+              catálogo antigo, com 162 produtos, não aparece mais aqui — ele segue no banco só para não quebrar
+              projetos antigos já ligados a ele.
+            </p>
+
+            {/* Abas-filtro rápido — mesmo padrão visual do layout anterior. */}
+            <div className="mb-1 overflow-hidden rounded-xl border border-slate-200/70 bg-white shadow-sm dark:border-slate-700/60 dark:bg-slate-900">
+              <div className="flex flex-wrap items-center">
+                {quickTabs.map((tab) => (
+                  <button
+                    key={tab.key}
+                    type="button"
+                    onClick={tab.onClick}
+                    className={`relative flex h-14 items-center gap-2 border-r border-slate-100 px-4 text-sm font-medium transition-colors last:border-r-0 dark:border-slate-800 ${
+                      tab.active
+                        ? "text-blue-600 dark:text-blue-400"
+                        : "text-slate-500 hover:bg-slate-50 hover:text-slate-800 dark:text-slate-400 dark:hover:bg-slate-800/50 dark:hover:text-slate-200"
+                    }`}
+                  >
+                    <tab.icon className="h-4 w-4" />
+                    {tab.label}
+                    <span className={`ml-0.5 flex h-5 min-w-5 items-center justify-center rounded-full px-1.5 text-[11px] font-bold ${tab.active ? "bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300" : "bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400"}`}>
+                      {tab.count}
+                    </span>
+                    <span className={`absolute inset-x-0 bottom-0 h-0.5 origin-left bg-blue-500 transition-transform ${tab.active ? "scale-x-100" : "scale-x-0"}`} />
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Indicadores gerais — vêm de overview.counts (dados reais). */}
+            <div className="grid grid-cols-2 gap-px overflow-hidden rounded-lg border bg-border sm:grid-cols-3">
+              <Stat k="Importados (finais)" v={c.final_imported_products ?? c.imported_products ?? 0}
+                hint={`não conta os 162 operacionais${c.test_local_products ? ` · + ${c.test_local_products} de demonstração, fora da contagem` : ""}`} />
+              <Stat k="Tarefas (nos importados)" v={c.tasks_in_final_imported ?? 0} hint={`${c.tasks ?? 0} no catálogo todo`} />
+              <Stat k="Etapas (nos importados)" v={c.steps_in_final_imported ?? 0} hint={`${c.steps ?? 0} no catálogo todo`} />
+            </div>
+
+            {importSummary?.has_import && (
+              <details className="rounded-lg border">
+                <summary className="flex cursor-pointer select-none flex-wrap items-center justify-between gap-2 px-3 py-2">
+                  <h2 className="text-sm font-semibold text-foreground">Importação de produtos definitivos</h2>
+                  <span className="text-xs text-muted-foreground">
+                    {importSummary.count_matches_expected
+                      ? `✓ ${importSummary.total_imported}/${importSummary.expected ?? importSummary.total_imported} importados`
+                      : `⚠ ${importSummary.total_imported}/${importSummary.expected ?? importSummary.total_imported} importados`}
+                    {" · "}{importSummary.published_count} publicado(s)
+                  </span>
+                </summary>
+                <div className="space-y-2 border-t p-3 text-muted-foreground">
+                  <p className="text-xs">
+                    {overview.import?.message ??
+                      `${overview.counts.final_imported_products ?? importSummary.total_imported} produto(s) importado(s) para preparação. Aguardando tarefas, prazos, precificação e revisão para publicação.`}
+                  </p>
+                  <div className="grid grid-cols-2 gap-2 text-xs sm:grid-cols-4">
+                    <SummaryCell k="Revisados pela Rose" v={`${importSummary.rose_reviewed} / ${importSummary.total_imported}`} />
+                    <SummaryCell k="Sem revisão da Rose" v={importSummary.not_rose_reviewed} />
+                    <SummaryCell k="Decisões pendentes" v={importSummary.decisions_pending} />
+                    <SummaryCell k="Editados por humano" v={importSummary.human_edited} />
+                  </div>
+                  <p className="text-[11px]">
+                    Fonte principal <code>{importSummary.last_batch?.source_main?.name}</code> · checksum{" "}
+                    <code>{String(importSummary.last_batch?.source_main?.checksum ?? "").slice(0, 12)}…</code> · regra{" "}
+                    {importSummary.last_batch?.rule_version} · lote {importSummary.last_batch?.status}. Os 162 produtos
+                    operacionais seguem intactos.
+                  </p>
+                </div>
+              </details>
+            )}
+
+            {readiness && <ReadinessPanel readiness={readiness} />}
+
+            <Card className="overflow-hidden border border-slate-200/70 shadow-sm dark:border-slate-700/60">
+              {/* Row 1 — busca + filtros + ordenar */}
+              <div className="flex flex-wrap items-center gap-3 border-b border-slate-200/70 bg-slate-50/60 px-4 py-3.5 dark:border-slate-700/60 dark:bg-slate-900/30">
+                <div className="relative min-w-[180px] flex-1">
+                  <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                  <Input
+                    placeholder="Buscar por nome ou slug"
+                    aria-label="Buscar produtos"
+                    value={q}
+                    onChange={(e) => setQ(e.target.value)}
+                    className="h-9 w-full rounded-lg border-slate-200 bg-white pl-9 text-sm dark:border-slate-700 dark:bg-slate-800"
+                  />
+                </div>
+                <Button
+                  onClick={() => setShowCategoryFilters((v) => !v)}
+                  variant="outline"
+                  size="sm"
+                  className={`h-9 gap-2 px-3.5 text-xs ${advancedFilters > 0 ? "border-blue-300 bg-blue-50 text-blue-700 dark:border-blue-700 dark:bg-blue-900/30 dark:text-blue-400" : "border-slate-200 text-slate-600 dark:border-slate-700 dark:text-slate-300"}`}
+                >
+                  <SlidersHorizontal className="h-3.5 w-3.5" />
+                  Filtros
+                  {advancedFilters > 0 && (
+                    <span className="ml-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-blue-500 text-[10px] font-bold text-white">{advancedFilters}</span>
+                  )}
+                </Button>
+                <label className="sr-only" htmlFor="f-sort">Ordenar</label>
+                <select id="f-sort" className={SELECT_CLS} value={sort} onChange={(e) => setSort(e.target.value)}>
+                  <option value="name">Ordenar: Nome A–Z</option>
+                  <option value="name_desc">Ordenar: Nome Z–A</option>
+                  <option value="updated">Ordenar: Alterado recentemente</option>
+                  <option value="created">Ordenar: Criado recentemente</option>
+                </select>
+                <span className="hidden shrink-0 text-xs text-slate-400 sm:inline">
+                  {list ? `${list.total} ${list.total === 1 ? "item" : "itens"}` : ""}
+                </span>
+              </div>
+
+              {showCategoryFilters && (
+                <div className="flex flex-wrap gap-2 border-b border-slate-200/70 p-3 dark:border-slate-700/60">
+                  <label className="sr-only" htmlFor="f-status">Situação</label>
+                  <select id="f-status" className={SELECT_CLS} value={status} onChange={(e) => setStatus(e.target.value)}>
+                    <option value="">Todas as situações</option>
+                    {Object.entries(STATUS_LABEL).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+                  </select>
+                  <label className="sr-only" htmlFor="f-pillar">Pilar</label>
+                  <select id="f-pillar" className={SELECT_CLS} value={pillarId} onChange={(e) => setPillarId(e.target.value)}>
+                    <option value="">Todos os pilares</option>{refs.pillars.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+                  </select>
+                  <label className="sr-only" htmlFor="f-cat">Categoria</label>
+                  <select id="f-cat" className={SELECT_CLS} value={categoryId} onChange={(e) => setCategoryId(e.target.value)}>
+                    <option value="">Todas as categorias</option>{refs.categories.map((c2) => <option key={c2.id} value={c2.id}>{c2.name}</option>)}
+                  </select>
+                  <label className="sr-only" htmlFor="f-origin">Origem</label>
+                  <select id="f-origin" className={SELECT_CLS} value={origin} onChange={(e) => setOrigin(e.target.value)}>
+                    <option value="">Toda origem</option>
+                    <option value="existente">Só existentes</option>
+                    <option value="novo">Só novos</option>
+                    <option value="reativado">Só reativados</option>
+                  </select>
+                  <label className="sr-only" htmlFor="f-rose">Revisão da Rose</label>
+                  <select id="f-rose" className={SELECT_CLS} value={roseReviewed} onChange={(e) => setRoseReviewed(e.target.value)}>
+                    <option value="">Revisão da Rose (todas)</option>
+                    <option value="true">Revisado pela Rose</option>
+                    <option value="false">Sem revisão da Rose</option>
+                  </select>
+                  <label className="sr-only" htmlFor="f-review">Estado de preparo</label>
+                  <select id="f-review" className={SELECT_CLS} value={reviewState} onChange={(e) => setReviewState(e.target.value)}>
+                    <option value="">Estado de preparo (todos)</option>
+                    {Object.entries(REVIEW_STATE_LABEL).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+                  </select>
+                  <label className="sr-only" htmlFor="f-pend">Tipo de pendência</label>
+                  <select id="f-pend" className={SELECT_CLS} value={pendency} onChange={(e) => setPendency(e.target.value)}>
+                    <option value="">Tipo de pendência (todas)</option>
+                    {Object.entries(PENDENCY_LABEL).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+                  </select>
+                </div>
+              )}
+
+              {/* Row — paginação (espelhada no rodapé) */}
+              <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200/70 bg-white px-4 py-2 dark:border-slate-700/60 dark:bg-slate-900/30">
+                <span className="text-xs text-slate-400">Página {page} de {totalPages}</span>
+                {totalPages > 1 && <PaginationControls page={page} totalPages={totalPages} onChange={setPage} />}
+              </div>
+
+              {msg && <p className="px-4 py-2 text-sm text-blue-600 dark:text-blue-400">{msg}</p>}
+
+              {listLoading ? (
+                <Centered><Loader2 className="h-5 w-5 animate-spin" /> Carregando…</Centered>
+              ) : !list || list.data.length === 0 ? (
+                <div className="flex flex-col items-center justify-center px-4 py-20">
+                  <div className="mb-5 flex h-20 w-20 items-center justify-center rounded-2xl bg-linear-to-br from-blue-100 to-purple-100 shadow-sm">
+                    <Package className="h-9 w-9 text-blue-500" />
+                  </div>
+                  <h3 className="mb-1.5 text-base font-semibold">Nenhum produto encontrado</h3>
+                  <p className="mb-6 max-w-md text-center text-sm leading-relaxed text-muted-foreground">
+                    {overview.is_empty ? overview.empty_message : "Tente ajustar os filtros ou a busca para encontrar o que procura."}
+                  </p>
+                </div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full min-w-[880px] text-xs">
+                    <thead>
+                      <tr className="border-b border-slate-200/60 bg-slate-50/60 dark:border-slate-700/60 dark:bg-slate-900/30">
+                        <th className="w-16 px-2 py-3 text-left text-[11px] font-bold uppercase tracking-[0.04em] text-slate-500 dark:text-slate-400">#</th>
+                        <th className="px-2 py-3 text-left text-[11px] font-bold uppercase tracking-[0.04em] text-slate-500 dark:text-slate-400">Produto</th>
+                        <th className="hidden px-2 py-3 text-left text-[11px] font-bold uppercase tracking-[0.04em] text-slate-500 dark:text-slate-400 sm:table-cell">Categoria</th>
+                        <th className="hidden px-2 py-3 text-left text-[11px] font-bold uppercase tracking-[0.04em] text-slate-500 dark:text-slate-400 md:table-cell">Pendências</th>
+                        <th className="px-2 py-3 text-left text-[11px] font-bold uppercase tracking-[0.04em] text-slate-500 dark:text-slate-400">Status</th>
+                        <th className="px-2 py-3 text-center text-[11px] font-bold uppercase tracking-[0.04em] text-slate-500 dark:text-slate-400">Ações</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                      {list.data.map((p) => {
+                        const readyLabel = p.imported
+                          ? (p.review_state === "ready_for_final_review" ? "Pronto p/ revisão final" : (REVIEW_STATE_LABEL[p.review_state] ?? "Em preparação"))
+                          : null;
+                        const pend: string[] = p.pendencies ?? [];
+                        return (
+                          <tr key={p.id} className="group transition-colors hover:bg-slate-50/70 dark:hover:bg-slate-800/40">
+                            <td className="px-2 py-3">
+                              <span className="font-mono text-xs font-semibold text-slate-500 dark:text-slate-400">{p.source_index ?? "—"}</span>
+                            </td>
+                            <td className="px-2 py-3">
+                              <div className="flex items-center gap-3">
+                                <div className="relative shrink-0">
+                                  <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-linear-to-br from-blue-500 to-violet-600 shadow-sm">
+                                    <Package className="h-4 w-4 text-white" />
+                                  </div>
+                                  <div className={`absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full border-2 border-background ${p.status === "disponivel" ? "bg-emerald-500" : "bg-slate-300"}`} />
+                                </div>
+                                <div className="min-w-0">
+                                  <button className="text-left text-[13px] font-semibold leading-tight hover:underline" onClick={() => openProduct(p.id)}>
+                                    {p.internal_name}
+                                  </button>
+                                  <p className="max-w-[280px] truncate text-[11px] text-muted-foreground">
+                                    {readyLabel ? readyLabel : "Sem revisão de preparo ainda"}
+                                    {p.imported ? ` · ${pend.length} pendência(s)` : ""}
+                                  </p>
+                                </div>
+                              </div>
+                            </td>
+                            <td className="hidden px-2 py-3 sm:table-cell">
+                              <Badge variant="outline">{p.category?.name ?? "Sem categoria"}</Badge>
+                            </td>
+                            <td className="hidden px-2 py-3 md:table-cell">
+                              {pend.length === 0 && !!p.rose_reviewed !== false ? (
+                                <span className="text-[11px] text-muted-foreground">nenhuma</span>
+                              ) : (
+                                <div className="flex flex-wrap items-center gap-1">
+                                  {!p.rose_reviewed && <Badge className="bg-muted text-muted-foreground">Rose pendente</Badge>}
+                                  {pend.slice(0, 3).map((pk: string) => (
+                                    <Badge key={pk} className="bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-200">{PENDENCY_LABEL[pk] ?? pk}</Badge>
+                                  ))}
+                                  {pend.length > 3 && <span className="text-[11px] text-muted-foreground">+{pend.length - 3}</span>}
+                                </div>
+                              )}
+                            </td>
+                            <td className="px-2 py-3">
+                              <div className="flex items-center gap-1.5">
+                                {p.is_new && <Badge className="bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-200">Novo</Badge>}
+                                <Badge className={STATUS_TONE[p.status] ?? "bg-muted text-muted-foreground"}>{STATUS_LABEL[p.status] ?? p.status}</Badge>
+                              </div>
+                            </td>
+                            <td className="px-2 py-3">
+                              <div className="flex items-center justify-center gap-1">
+                                <TooltipProvider delayDuration={400}>
+                                  <Tooltip>
+                                    <TooltipTrigger asChild>
+                                      <button
+                                        onClick={() => openProduct(p.id)}
+                                        className="flex h-[26px] w-[26px] items-center justify-center rounded-[8px] border border-[#e8edf5] bg-white text-[#6E2C96] shadow-[0_4px_10px_rgba(15,23,42,0.06)] transition-all hover:-translate-y-px hover:border-transparent hover:bg-gradient-to-br hover:from-[#2558FF] hover:via-[#6E2C96] hover:to-[#D92293] hover:text-white hover:shadow-[0_8px_18px_rgba(15,23,42,0.18)] dark:border-slate-700 dark:bg-slate-800 dark:text-slate-500"
+                                      >
+                                        <Pencil className="h-3.5 w-3.5" />
+                                      </button>
+                                    </TooltipTrigger>
+                                    <TooltipContent className="text-xs font-medium">{p.has_draft ? "Continuar configuração" : "Abrir/editar produto"}</TooltipContent>
+                                  </Tooltip>
+                                </TooltipProvider>
+                                <DropdownMenu>
+                                  <DropdownMenuTrigger asChild>
+                                    <button className="flex h-[26px] w-[26px] items-center justify-center rounded-[8px] border border-[#e8edf5] bg-white text-slate-500 shadow-[0_4px_10px_rgba(15,23,42,0.06)] transition-all hover:-translate-y-px hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-400">
+                                      <MoreVertical className="h-3.5 w-3.5" />
+                                    </button>
+                                  </DropdownMenuTrigger>
+                                  <DropdownMenuContent align="end">
+                                    {p.published_version_number && !p.has_draft && (
+                                      <DropdownMenuItem onClick={() => rowAction(() => apiClient.newCatalog2Version(p.id), "Nova versão rascunho criada.")}>
+                                        Nova versão
+                                      </DropdownMenuItem>
+                                    )}
+                                    {p.status === "disponivel" && (
+                                      <DropdownMenuItem onClick={() => rowAction(() => apiClient.setCatalog2ProductStatus(p.id, "temporariamente_inativo"), "Oferta suspensa.")}>
+                                        Suspender
+                                      </DropdownMenuItem>
+                                    )}
+                                    {p.status === "temporariamente_inativo" && (
+                                      <DropdownMenuItem onClick={() => rowAction(() => apiClient.setCatalog2ProductStatus(p.id, "disponivel"), "Oferta reativada.")}>
+                                        Ativar
+                                      </DropdownMenuItem>
+                                    )}
+                                    {p.status !== "arquivado" && (
+                                      <DropdownMenuItem
+                                        className="text-red-600"
+                                        onClick={() => setConfirm({ title: "Arquivar produto?", message: "O produto sai do catálogo. O histórico é preservado; nada é apagado.", onConfirm: () => rowAction(() => apiClient.archiveCatalog2Product(p.id), "Produto arquivado.") })}
+                                      >
+                                        Arquivar
+                                      </DropdownMenuItem>
+                                    )}
+                                  </DropdownMenuContent>
+                                </DropdownMenu>
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+
+              {list && list.data.length > 0 && (
+                <div className="flex items-center justify-between gap-3 border-t border-slate-200/70 px-4 py-2.5 dark:border-slate-700/60">
+                  <span className="text-xs text-slate-500 dark:text-slate-400">{list.total} produto{list.total === 1 ? "" : "s"}</span>
+                  {totalPages > 1 && <PaginationControls page={page} totalPages={totalPages} onChange={setPage} />}
+                </div>
+              )}
+            </Card>
+          </div>
+        </div>
+
+        {confirm && (
+          <ConfirmationDialog
+            open
+            onClose={() => setConfirm(null)}
+            title={confirm.title}
+            message={confirm.message}
+            confirmText="Confirmar"
+            destructive={false}
+            onConfirm={() => { confirm.onConfirm(); setConfirm(null); }}
+          />
+        )}
+
+        {/* O construtor abre AQUI DENTRO — container padrão, cabeçalho padrão,
+            fechar/fixar na bandeja — nunca como área separada ("Novo
+            Catálogo"/"Preparação de Produtos"). Reunião 2026-09. */}
+        <EmbeddedSlideScreen
+          open={!!openProductId}
+          onClose={() => { openProduct(null); void loadList(); void bootstrap(); }}
+          title="Editor de produto"
+          pin={openProductId ? {
+            id: `catalog2-produto-${openProductId}`,
+            label: "Editor de produto",
+            icon: Package,
+            path: `/admin/produtos?produto=${openProductId}`,
+          } : undefined}
+        >
+          {openProductId && (
+            <div className="min-h-0 flex-1 overflow-y-auto">
+              <ProductEditor productId={openProductId} onBack={() => { openProduct(null); void loadList(); void bootstrap(); }} />
+            </div>
+          )}
+        </EmbeddedSlideScreen>
+      </div>
     </div>
   );
 }
@@ -478,22 +625,57 @@ function Shell({ children }: { children: React.ReactNode }) {
 const SELECT_CLS =
   "rounded-md border bg-background px-2 py-1.5 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring";
 
-// Detalhe técnico da linha (slug, origem, versões, datas) — fora da leitura
-// principal, atrás de um botão acessível por teclado.
-function RowTechDetails({ text }: { text: string }) {
-  const [open, setOpen] = useState(false);
+// Paginação numerada — mesmo desenho do layout anterior aprovado (setas +
+// números + salto direto de página), sem o campo de "ir para" (dispensável
+// no volume atual de produtos catalog2).
+function PaginationControls({ page, totalPages, onChange }: { page: number; totalPages: number; onChange: (p: number) => void }) {
+  const pages = getPageNumbers(page, totalPages);
   return (
-    <div className="mt-1 text-[11px] text-muted-foreground">
-      <button type="button" aria-expanded={open} className="underline decoration-dotted" onClick={() => setOpen((o) => !o)}>
-        Detalhes técnicos
+    <div className="flex flex-shrink-0 items-center gap-1">
+      <button
+        onClick={() => onChange(Math.max(1, page - 1))}
+        disabled={page === 1}
+        title="Página anterior"
+        className="flex h-7 w-7 items-center justify-center rounded-[8px] text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-900 disabled:pointer-events-none disabled:opacity-30 dark:text-slate-300 dark:hover:bg-slate-800 dark:hover:text-white"
+      >
+        <ChevronLeft className="h-3.5 w-3.5" />
       </button>
-      {open && <div className="mt-0.5">{text}</div>}
+      {pages.map((p, i) =>
+        p === "..." ? (
+          <span key={i} className="px-0.5 text-xs text-slate-300">·</span>
+        ) : (
+          <button
+            key={i}
+            onClick={() => onChange(Number(p))}
+            className={`flex h-7 w-7 items-center justify-center rounded-[8px] text-xs font-bold transition-colors ${p === page ? "text-white shadow-[0_6px_14px_rgba(110,44,150,0.25)]" : "text-slate-500 hover:bg-slate-100 hover:text-slate-700 dark:text-slate-400 dark:hover:bg-slate-800"}`}
+            style={p === page ? { background: "linear-gradient(135deg, #111A4D 0%, #6E2C96 55%, #D92293 100%)" } : undefined}
+          >
+            {p}
+          </button>
+        ),
+      )}
+      <button
+        onClick={() => onChange(Math.min(totalPages, page + 1))}
+        disabled={page === totalPages}
+        title="Próxima página"
+        className="flex h-7 w-7 items-center justify-center rounded-[8px] text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-900 disabled:pointer-events-none disabled:opacity-30 dark:text-slate-300 dark:hover:bg-slate-800 dark:hover:text-white"
+      >
+        <ChevronRight className="h-3.5 w-3.5" />
+      </button>
     </div>
   );
 }
+function getPageNumbers(page: number, totalPages: number): (number | "...")[] {
+  if (totalPages <= 7) return Array.from({ length: totalPages }, (_, i) => i + 1);
+  const out: (number | "...")[] = [1];
+  if (page > 3) out.push("...");
+  for (let p = Math.max(2, page - 1); p <= Math.min(totalPages - 1, page + 1); p++) out.push(p);
+  if (page < totalPages - 2) out.push("...");
+  out.push(totalPages);
+  return out;
+}
 
 // Indicador — sem card colorido; célula neutra dentro de um painel único.
-// Um acento pequeno de status (ok/warn) só quando faz sentido.
 function Stat({ k, v, hint, tone }: { k: string; v: number | string; hint?: string; tone?: "ok" | "warn" }) {
   const toneCls =
     tone === "ok" ? "text-emerald-700 dark:text-emerald-300"
