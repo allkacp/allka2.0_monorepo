@@ -1,6 +1,5 @@
 import assert from "node:assert/strict";
 import { after, before, describe, it } from "node:test";
-import crypto from "node:crypto";
 import { requireTestDatabaseUrl } from "../test-support/require-test-database";
 import { prisma } from "../lib/prisma";
 import {
@@ -12,6 +11,7 @@ import {
 import { buildDomainPlan, DomainPlanDb } from "../lib/cutover/domain-plan";
 import { attachReadOnlyGuard, CutoverReadOnlyViolation, PrismaLikeClient } from "../lib/cutover/read-only-guard";
 import { getForeignKeyDependencies } from "../lib/cutover/dependency-graph";
+import { id, seedRetainedAccounts, seedNoise, snapshotAllTableCounts } from "../test-support/cutover-fixtures";
 
 // Simulador de virada limpa — manifesto de retenção + plano de domínios.
 // Prova, contra um banco de teste descartável de verdade (não um mock),
@@ -20,151 +20,10 @@ import { getForeignKeyDependencies } from "../lib/cutover/dependency-graph";
 // preservado, e os domínios ainda não cobertos pelo Legacy aparecem como
 // bloqueadores. run-db-tests.ts cuida do banco descartável (cria, aplica
 // `db push`, roda este arquivo, sempre dropa no final).
-
-function id(prefix: string): string {
-  return `${prefix}-${crypto.randomBytes(6).toString("hex")}`;
-}
-
-async function seedRetainedAccounts() {
-  const adminProfile = await prisma.adminProfile.create({
-    data: { id: id("ap"), name: "Master", is_master: true, is_active: true },
-  });
-
-  const cp = await prisma.user.create({
-    data: {
-      id: id("u-cp"),
-      email: "cp@lamego.com.vc",
-      password_hash: "x",
-      name: "Vinicius Guardia",
-      role: "admin",
-      account_type: "admin",
-      status: "ativo",
-      is_active: true,
-      admin_profile_id: adminProfile.id,
-    },
-  });
-
-  // Agency.owner_user_id -> User e User.agency_id -> Agency formam um ciclo de
-  // FK: cria o usuário primeiro (sem agency_id), cria a agência apontando pra
-  // ele, depois liga o usuário à própria agência (mesmo padrão de dono+membro
-  // usado pelos fluxos reais de cadastro de agência).
-  const gabrielUserId = id("u-gabriel");
-  await prisma.user.create({
-    data: {
-      id: gabrielUserId,
-      email: "gabriel@lamego.com.vc",
-      password_hash: "x",
-      name: "Gabriel Franco",
-      role: "agency_admin",
-      account_type: "agencias",
-      status: "ativo",
-      is_active: true,
-    },
-  });
-  const gabrielAgency = await prisma.agency.create({
-    data: { id: id("ag"), name: "Gabriel Franco Agency", owner_user_id: gabrielUserId },
-  });
-  const gabriel = await prisma.user.update({
-    where: { id: gabrielUserId },
-    data: { agency_id: gabrielAgency.id },
-  });
-
-  const valderioUserId = id("u-valderio");
-  await prisma.user.create({
-    data: {
-      id: valderioUserId,
-      email: "valderio@lamego.com.vc",
-      password_hash: "x",
-      name: "Valdério Santos",
-      role: "agency_admin",
-      account_type: "agencias",
-      status: "ativo",
-      is_active: true,
-    },
-  });
-  const valderioAgency = await prisma.agency.create({
-    data: { id: id("ag"), name: "Valdério Santos Parcerias", owner_user_id: valderioUserId },
-  });
-  const valderio = await prisma.user.update({
-    where: { id: valderioUserId },
-    data: { agency_id: valderioAgency.id },
-  });
-  const valderioPartnerProfile = await prisma.partnerProfile.create({
-    data: { id: id("pp"), agency_id: valderioAgency.id, status: "active" },
-  });
-
-  const nomadUserId = id("u-nomad");
-  const nomadUser = await prisma.user.create({
-    data: {
-      id: nomadUserId,
-      email: "nomad@allka.com.vc",
-      password_hash: "x",
-      name: "[TESTE LOCAL] Nômade QA",
-      role: "nomad",
-      account_type: "nomades",
-      status: "ativo",
-      is_active: true,
-    },
-  });
-  const nomade = await prisma.nomade.create({
-    data: { id: id("nm"), user_id: nomadUserId, name: nomadUser.name, email: "nomad-profile@allka.com.vc" },
-  });
-
-  return { adminProfile, cp, gabriel, gabrielAgency, valderio, valderioAgency, valderioPartnerProfile, nomadUser, nomade };
-}
-
-async function seedNoise() {
-  // Usuário importado (legacy_id preenchido) — deve cair em copiar_legacy.
-  await prisma.user.create({
-    data: {
-      id: id("u-legacy"),
-      email: "importado@example.test",
-      password_hash: "x",
-      name: "Importado da plataforma anterior",
-      role: "company_admin",
-      account_type: "empresas",
-      status: "ativo",
-      is_active: true,
-      legacy_id: 999001,
-    },
-  });
-  // Usuário nativo, não retido — deve cair em decisao_humana.
-  await prisma.user.create({
-    data: {
-      id: id("u-native"),
-      email: "smoke-test@allka.test",
-      password_hash: "x",
-      name: "Cliente Smoke Test",
-      role: "company_admin",
-      account_type: "empresas",
-      status: "ativo",
-      is_active: true,
-    },
-  });
-
-  // catalog2: 2 produtos reais + 1 marcado [TESTE LOCAL] — devem ser separados.
-  await prisma.catalog2Product.create({ data: { id: id("c2p"), slug: id("slug"), internal_name: "Landing Page Essencial" } });
-  await prisma.catalog2Product.create({ data: { id: id("c2p"), slug: id("slug"), internal_name: "SEO Mensal" } });
-  await prisma.catalog2Product.create({
-    data: { id: id("c2p"), slug: id("slug"), internal_name: "[TESTE LOCAL] Produto QA" },
-  });
-}
-
-// Conta a quantidade de linhas de TODAS as tabelas do schema atual — usado
-// para provar que a simulação não grava nada (antes/depois idênticos).
-async function snapshotAllTableCounts(): Promise<Record<string, number>> {
-  const tables = await prisma.$queryRawUnsafe<Array<{ table_name: string }>>(
-    "SELECT TABLE_NAME AS table_name FROM information_schema.tables WHERE table_schema = DATABASE()",
-  );
-  const counts: Record<string, number> = {};
-  for (const { table_name } of tables) {
-    const rows = await prisma.$queryRawUnsafe<Array<{ c: bigint | number }>>(
-      `SELECT COUNT(*) AS c FROM \`${table_name}\``,
-    );
-    counts[table_name] = Number(rows[0].c);
-  }
-  return counts;
-}
+//
+// Fixtures (seedRetainedAccounts/seedNoise/snapshotAllTableCounts/id) vivem
+// em src/test-support/cutover-fixtures.ts — reusadas também por
+// src/routes/legacy-integrated-proof.integration.test.ts.
 
 describe("Simulador de virada limpa — manifesto de retenção + plano de domínios", () => {
   let fixtures: Awaited<ReturnType<typeof seedRetainedAccounts>>;
