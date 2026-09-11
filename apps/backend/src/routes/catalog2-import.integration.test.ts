@@ -213,6 +213,13 @@ describe("Importação dos 36 — rotas, filtros e carimbo humano", () => {
     const byPend = await api("/api/admin/catalog2/products?pendency=price_pending&page_size=100", { token: TOKEN });
     assert.ok(byPend.json.data.every((p: any) => (p.pendencies ?? []).includes("price_pending")));
 
+    // has_pendencies=true — aba rápida "Com pendências" (reparo 2026-09,
+    // corrige bug real: a aba não filtrava nada antes). QUALQUER pendência,
+    // não uma chave específica — nunca inclui produto com pendencies=[].
+    const byAnyPend = await api("/api/admin/catalog2/products?has_pendencies=true&page_size=100", { token: TOKEN });
+    assert.ok(byAnyPend.json.data.length >= 1);
+    assert.ok(byAnyPend.json.data.every((p: any) => (p.pendencies ?? []).length > 0));
+
     const byOrigin = await api("/api/admin/catalog2/products?origin=novo&page_size=100", { token: TOKEN });
     assert.ok(byOrigin.json.data.every((p: any) => p.origin === "novo"));
 

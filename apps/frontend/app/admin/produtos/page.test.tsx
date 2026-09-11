@@ -284,6 +284,36 @@ it("clicar na aba 'Publicados' filtra a listagem (status=disponivel) sem precisa
   await waitFor(() => expect(api.getCatalog2Products).toHaveBeenCalledWith(expect.objectContaining({ status: "disponivel" })))
 })
 
+// Bug real reportado 2026-09-11: "Com pendências" reusava o mesmo estado
+// de "Categorias" — clicar nela nunca filtrava nada, só reabria/fechava o
+// painel de "Categorias" (a interface "permanecia ou retornava para
+// Categorias"). Cada aba agora tem identidade e estado próprios.
+it("bug real: 'Com pendências' filtra de verdade (has_pendencies=true), fica visualmente ativa, e 'Categorias' deixa de estar ativa", async () => {
+  renderPage()
+  await screen.findByText("[TESTE LOCAL] Demo")
+
+  const pendenciasTab = screen.getByText("Com pendências").closest("button") as HTMLElement
+  const categoriasTab = screen.getByText("Categorias").closest("button") as HTMLElement
+
+  await userEvent.click(pendenciasTab)
+  // filtra de verdade — vai ao backend com has_pendencies=true
+  await waitFor(() => expect(api.getCatalog2Products).toHaveBeenCalledWith(expect.objectContaining({ has_pendencies: "true" })))
+  // fica visualmente ativa (mesma classe de cor usada nas outras abas ativas)
+  expect(pendenciasTab.className).toContain("text-blue-600")
+  // "Categorias" não fica ativa junto, e o painel dela não abre sozinho
+  expect(categoriasTab.className).not.toContain("text-blue-600")
+  expect(screen.queryByLabelText("Pilar")).not.toBeInTheDocument()
+
+  // busca e ordenação continuam funcionando com o filtro ativo
+  await userEvent.type(screen.getByPlaceholderText(/Buscar por nome/i), "demo")
+  await waitFor(() => expect(api.getCatalog2Products).toHaveBeenCalledWith(expect.objectContaining({ has_pendencies: "true", q: "demo" })))
+
+  // clicar em "Todos os produtos" limpa o filtro de pendências
+  await userEvent.click(screen.getByText("Todos os produtos"))
+  await waitFor(() => expect(api.getCatalog2Products).toHaveBeenCalledWith(expect.objectContaining({ has_pendencies: undefined })))
+  expect(pendenciasTab.className).not.toContain("text-blue-600")
+})
+
 it("listagem: mostra produtos catalog2, situação, etiqueta Novo, e nunca os 162 antigos", async () => {
   renderPage()
   expect(await screen.findByText("[TESTE LOCAL] Demo")).toBeInTheDocument()
@@ -312,6 +342,17 @@ it("construtor abre dentro do container padrão (EmbeddedSlideScreen, com botão
   expect(screen.getByRole("button", { name: /adicionar à bandeja de telas/i })).toBeInTheDocument()
   await user.click(screen.getByRole("button", { name: "Voltar" }))
   expect(await screen.findByPlaceholderText(/Buscar por nome/i)).toBeInTheDocument()
+})
+
+it("construtor: mostra aviso de campos provisórios quando o produto ainda não tem preço/tarefas reais", async () => {
+  api.getCatalog2Readiness.mockResolvedValue({
+    ready_for_client: 0, total: 1, client_visible_now: 0, with_blockers: 1, note: "",
+    products: [{ id: "prod1", name: "[TESTE LOCAL] Demo", task_count: 0, price_amount: null, blockers: [], pendings: [] }],
+  })
+  renderPage()
+  await userEvent.click(await screen.findByText("[TESTE LOCAL] Demo"))
+  await screen.findByText("Título comercial")
+  expect(await screen.findByText(/campos provisórios/i)).toBeInTheDocument()
 })
 
 it("editor: as 10 seções seguem acessíveis, reagrupadas em 5 etapas + Origem", async () => {

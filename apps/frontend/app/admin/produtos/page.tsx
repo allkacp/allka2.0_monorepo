@@ -42,11 +42,14 @@ import { ConfirmationDialog } from "@/components/confirmation-dialog";
 import { EmbeddedSlideScreen } from "@/components/embedded-slide-screen";
 import { PinToTrayButton } from "@/components/pin-to-tray-button";
 import { ProductViewModeToggle } from "@/components/product-view-mode-toggle";
+import { Catalog2Thumbnail } from "@/components/catalog2-thumbnail";
+import { ProvisionalBadge } from "@/components/provisional-badge";
 import {
   STANDARD_SHELL_PANEL_CLASS,
   StandardPageBanner,
 } from "@/components/standard-page-shell";
 import { usePersistedViewMode, viewModeGridClass } from "@/lib/use-persisted-view-mode";
+import { provisionalPrice, provisionalTaskCount } from "@/lib/catalog2-provisional";
 import { ProductEditor } from "@/app/admin/produtos/novo-catalogo/product-editor";
 
 // Cadastro de Produtos — administração exclusiva dos produtos catalog2
@@ -127,6 +130,11 @@ export default function AdminProdutosPage() {
   const [roseReviewed, setRoseReviewed] = useState("");
   const [reviewState, setReviewState] = useState("");
   const [pendency, setPendency] = useState("");
+  // Aba rápida "Com pendências" — estado PRÓPRIO, independente de
+  // `showCategoryFilters` (bug real: antes as duas abas reusavam o mesmo
+  // booleano, então "Com pendências" só reabria "Categorias" e nunca
+  // filtrava nada — ver teste "bug real: Com pendências").
+  const [onlyPendencies, setOnlyPendencies] = useState(false);
   const [sort, setSort] = useState("name");
   const [importSummary, setImportSummary] = useState<any>(null);
   const [readiness, setReadiness] = useState<any>(null);
@@ -168,6 +176,7 @@ export default function AdminProdutosPage() {
       const r = await apiClient.getCatalog2Products({
         q, status, pillar_id: pillarId, category_id: categoryId,
         origin, rose_reviewed: roseReviewed, review_state: reviewState, pendency,
+        has_pendencies: onlyPendencies ? "true" : undefined,
         sort, page, page_size: pageSize,
       });
       setList(r);
@@ -176,7 +185,7 @@ export default function AdminProdutosPage() {
     } finally {
       setListLoading(false);
     }
-  }, [q, status, pillarId, categoryId, origin, roseReviewed, reviewState, pendency, sort, page]);
+  }, [q, status, pillarId, categoryId, origin, roseReviewed, reviewState, pendency, onlyPendencies, sort, page]);
 
   useEffect(() => {
     if (state !== "ready" || openProductId) return;
@@ -184,7 +193,7 @@ export default function AdminProdutosPage() {
     return () => clearTimeout(t);
   }, [state, openProductId, loadList, q]);
 
-  useEffect(() => setPage(1), [q, status, pillarId, categoryId, origin, roseReviewed, reviewState, pendency, sort]);
+  useEffect(() => setPage(1), [q, status, pillarId, categoryId, origin, roseReviewed, reviewState, pendency, onlyPendencies, sort]);
 
   async function rowAction(fn: () => Promise<any>, ok: string) {
     setMsg(null);
@@ -238,6 +247,10 @@ export default function AdminProdutosPage() {
 
   const totalPages = list ? Math.max(1, Math.ceil(list.total / list.page_size)) : 1;
   const c = overview.counts;
+  // /readiness traz task_count/price_amount reais (mesmos usados no painel de
+  // prontidão) — indexado por id pra casar com a página atual da listagem.
+  const readinessById: Record<string, any> = {};
+  for (const rp of readiness?.products ?? []) readinessById[rp.id] = rp;
   const advancedFilters = [pillarId, categoryId, origin, roseReviewed, reviewState, pendency].filter(Boolean).length;
 
   // Abas de filtro rápido — mesma ideia do layout anterior aprovado
@@ -245,11 +258,34 @@ export default function AdminProdutosPage() {
   // aos estados reais do catalog2 (em vez de "Ativos"/"Com tarefas" do
   // catálogo antigo, que não existem aqui).
   const quickTabs = [
-    { key: "all", label: "Todos os produtos", icon: Package, count: c.final_imported_products ?? c.imported_products ?? 0, active: status === "" && !showCategoryFilters, onClick: () => { setStatus(""); setShowCategoryFilters(false); } },
-    { key: "published", label: "Publicados", icon: CheckCircle2, count: c.products_published ?? 0, active: status === "disponivel", onClick: () => { setStatus("disponivel"); setShowCategoryFilters(false); } },
-    { key: "preparing", label: "Em preparação", icon: ClockIcon, count: c.products_in_preparation ?? 0, active: status === "em_preparacao", onClick: () => { setStatus("em_preparacao"); setShowCategoryFilters(false); } },
-    { key: "pendencies", label: "Com pendências", icon: ListChecks, count: c.products_with_pendencies ?? 0, active: false, onClick: () => setShowCategoryFilters((v) => !v) },
-    { key: "categories", label: "Categorias", icon: Layers, count: refs.categories.length, active: showCategoryFilters, onClick: () => setShowCategoryFilters((v) => !v) },
+    {
+      key: "all", label: "Todos os produtos", icon: Package, count: c.final_imported_products ?? c.imported_products ?? 0,
+      active: status === "" && !onlyPendencies && !showCategoryFilters,
+      onClick: () => { setStatus(""); setOnlyPendencies(false); setShowCategoryFilters(false); },
+    },
+    {
+      key: "published", label: "Publicados", icon: CheckCircle2, count: c.products_published ?? 0,
+      active: status === "disponivel" && !onlyPendencies,
+      onClick: () => { setStatus("disponivel"); setOnlyPendencies(false); setShowCategoryFilters(false); },
+    },
+    {
+      key: "preparing", label: "Em preparação", icon: ClockIcon, count: c.products_in_preparation ?? 0,
+      active: status === "em_preparacao" && !onlyPendencies,
+      onClick: () => { setStatus("em_preparacao"); setOnlyPendencies(false); setShowCategoryFilters(false); },
+    },
+    {
+      // Bug real corrigido (reparo 2026-09): esta aba reusava o mesmo estado
+      // de "Categorias" e nunca filtrava nada — cada aba agora tem estado
+      // próprio e independente.
+      key: "pendencies", label: "Com pendências", icon: ListChecks, count: c.products_with_pendencies ?? 0,
+      active: onlyPendencies,
+      onClick: () => { setOnlyPendencies(true); setStatus(""); setShowCategoryFilters(false); },
+    },
+    {
+      key: "categories", label: "Categorias", icon: Layers, count: refs.categories.length,
+      active: showCategoryFilters,
+      onClick: () => { setShowCategoryFilters((v) => !v); setOnlyPendencies(false); },
+    },
   ] as const;
 
   return (
@@ -468,9 +504,12 @@ export default function AdminProdutosPage() {
                   <table className="w-full min-w-[880px] text-xs">
                     <thead>
                       <tr className="border-b border-slate-200/60 bg-slate-50/60 dark:border-slate-700/60 dark:bg-slate-900/30">
-                        <th className="w-16 px-2 py-3 text-left text-[11px] font-bold uppercase tracking-[0.04em] text-slate-500 dark:text-slate-400">#</th>
+                        <th className="w-12 px-2 py-3 text-left text-[11px] font-bold uppercase tracking-[0.04em] text-slate-500 dark:text-slate-400">#</th>
+                        <th className="w-12 px-2 py-3 text-left text-[11px] font-bold uppercase tracking-[0.04em] text-slate-500 dark:text-slate-400">Img</th>
                         <th className="px-2 py-3 text-left text-[11px] font-bold uppercase tracking-[0.04em] text-slate-500 dark:text-slate-400">Produto</th>
                         <th className="hidden px-2 py-3 text-left text-[11px] font-bold uppercase tracking-[0.04em] text-slate-500 dark:text-slate-400 sm:table-cell">Categoria</th>
+                        <th className="hidden px-2 py-3 text-left text-[11px] font-bold uppercase tracking-[0.04em] text-slate-500 dark:text-slate-400 lg:table-cell">Tarefas</th>
+                        <th className="hidden px-2 py-3 text-right text-[11px] font-bold uppercase tracking-[0.04em] text-slate-500 dark:text-slate-400 lg:table-cell">Preço</th>
                         <th className="hidden px-2 py-3 text-left text-[11px] font-bold uppercase tracking-[0.04em] text-slate-500 dark:text-slate-400 md:table-cell">Pendências</th>
                         <th className="px-2 py-3 text-left text-[11px] font-bold uppercase tracking-[0.04em] text-slate-500 dark:text-slate-400">Status</th>
                         <th className="px-2 py-3 text-center text-[11px] font-bold uppercase tracking-[0.04em] text-slate-500 dark:text-slate-400">Ações</th>
@@ -482,6 +521,11 @@ export default function AdminProdutosPage() {
                           ? (p.review_state === "ready_for_final_review" ? "Pronto p/ revisão final" : (REVIEW_STATE_LABEL[p.review_state] ?? "Em preparação"))
                           : null;
                         const pend: string[] = p.pendencies ?? [];
+                        const rp = readinessById[p.id];
+                        const realTaskCount: number | undefined = rp?.task_count;
+                        const realPrice: number | null | undefined = rp?.price_amount;
+                        const taskProv = provisionalTaskCount(p.id);
+                        const priceProv = provisionalPrice(p.id);
                         const tech = [
                           `slug ${p.slug}`,
                           p.source_index ? `origem #${p.source_index}` : null,
@@ -497,27 +541,54 @@ export default function AdminProdutosPage() {
                               <span className="font-mono text-xs font-semibold text-slate-500 dark:text-slate-400">{p.source_index ?? "—"}</span>
                             </td>
                             <td className="px-2 py-3">
-                              <div className="flex items-center gap-3">
-                                <div className="relative shrink-0">
-                                  <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-linear-to-br from-blue-500 to-violet-600 shadow-sm">
-                                    <Package className="h-4 w-4 text-white" />
-                                  </div>
-                                  <div className={`absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full border-2 border-background ${p.status === "disponivel" ? "bg-emerald-500" : "bg-slate-300"}`} />
-                                </div>
-                                <div className="min-w-0">
+                              <Catalog2Thumbnail productId={p.id} size="sm" showBadge={false} />
+                            </td>
+                            <td className="px-2 py-3">
+                              <div className="min-w-0">
+                                <div className="flex items-center gap-1.5">
                                   <button className="text-left text-[13px] font-semibold leading-tight hover:underline" onClick={() => openProduct(p.id)}>
                                     {p.internal_name}
                                   </button>
-                                  <p className="max-w-[280px] truncate text-[11px] text-muted-foreground">
-                                    {readyLabel ? readyLabel : "Sem revisão de preparo ainda"}
-                                    {p.imported ? ` · ${pend.length} pendência(s)` : ""}
-                                  </p>
-                                  <RowTechDetails text={tech} />
+                                  <code className="shrink-0 rounded bg-slate-100 px-1 py-0.5 text-[10px] text-slate-400 dark:bg-slate-800" title="Slug catalog2 (não é código legado)">
+                                    {p.slug}
+                                  </code>
                                 </div>
+                                <p className="max-w-[260px] truncate text-[11px] text-muted-foreground" title={p.summary ?? undefined}>
+                                  {p.summary || "Resumo ainda não escrito"}
+                                </p>
+                                <p className="max-w-[280px] truncate text-[11px] text-muted-foreground">
+                                  {readyLabel ? readyLabel : "Sem revisão de preparo ainda"}
+                                  {p.imported ? ` · ${pend.length} pendência(s)` : ""}
+                                </p>
+                                <RowTechDetails text={tech} />
                               </div>
                             </td>
                             <td className="hidden px-2 py-3 sm:table-cell">
                               <Badge variant="outline">{p.category?.name ?? "Sem categoria"}</Badge>
+                            </td>
+                            <td className="hidden px-2 py-3 lg:table-cell">
+                              <div className="flex items-center gap-1 text-[11px] text-slate-600 dark:text-slate-300">
+                                {realTaskCount != null && realTaskCount > 0 ? (
+                                  <span>{realTaskCount} tarefa(s)</span>
+                                ) : (
+                                  <>
+                                    <span className="text-slate-400">{taskProv.value} tarefa(s)</span>
+                                    <ProvisionalBadge label={taskProv.label + " Pendência real de tarefas continua registrada."} />
+                                  </>
+                                )}
+                              </div>
+                            </td>
+                            <td className="hidden px-2 py-3 text-right lg:table-cell">
+                              {realPrice != null ? (
+                                <span className="text-[13px] font-bold text-emerald-600 dark:text-emerald-400">
+                                  R$ {realPrice.toFixed(2)}
+                                </span>
+                              ) : (
+                                <div className="flex items-center justify-end gap-1">
+                                  <span className="text-[13px] font-semibold text-slate-400">R$ {priceProv.value.toFixed(2)}</span>
+                                  <ProvisionalBadge label={priceProv.label + " Não é comercialmente válido — nunca usado em cotação, checkout ou publicação."} />
+                                </div>
+                              )}
                             </td>
                             <td className="hidden px-2 py-3 md:table-cell">
                               {pend.length === 0 && !!p.rose_reviewed !== false && !p.human_edited ? (
@@ -649,6 +720,19 @@ export default function AdminProdutosPage() {
         >
           {openProductId && (
             <div className="min-h-0 flex-1 overflow-y-auto">
+              {(() => {
+                const rp = readinessById[openProductId];
+                const hasProvisional = rp && (!(rp.task_count > 0) || rp.price_amount == null);
+                return hasProvisional ? (
+                  <div className="mx-4 mt-3 flex items-start gap-2 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:bg-amber-900/20 dark:text-amber-200">
+                    <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                    <span>
+                      Este produto tem campos provisórios (preço, prazo e/ou tarefas de demonstração) — veja o
+                      resumo completo no Catálogo de Produtos administrativo antes de publicar.
+                    </span>
+                  </div>
+                ) : null;
+              })()}
               <ProductEditor productId={openProductId} onBack={() => { openProduct(null); void loadList(); void bootstrap(); }} />
             </div>
           )}

@@ -322,6 +322,10 @@ router.get("/products", async (req, res, next) => {
     const roseReviewed = req.query.rose_reviewed === "true" ? true : req.query.rose_reviewed === "false" ? false : undefined;
     const reviewState = typeof req.query.review_state === "string" ? req.query.review_state : undefined;
     const pendency = typeof req.query.pendency === "string" ? req.query.pendency : undefined;
+    // Aba rápida "Com pendências" (reparo 2026-09 — corrige bug real: a aba
+    // não filtrava nada, só reabria "Categorias" por engano). Diferente de
+    // `pendency` (uma chave específica): este é "tem QUALQUER pendência".
+    const hasPendencies = req.query.has_pendencies === "true";
     const importedOnly = req.query.imported === "true";
     const page = Math.max(1, Number(req.query.page) || 1);
     const pageSize = Math.min(100, Math.max(1, Number(req.query.page_size) || 20));
@@ -340,7 +344,13 @@ router.get("/products", async (req, res, next) => {
     if (roseReviewed !== undefined) originWhere.rose_reviewed = roseReviewed;
     if (reviewState) originWhere.review_state = reviewState;
     if (pendency) originWhere.pendencies_json = { contains: `"${pendency}"` };
-    if (importedOnly || Object.keys(originWhere).length > 0) where.import_origin = { is: originWhere };
+    if (hasPendencies) {
+      originWhere.AND = [
+        { pendencies_json: { not: null } },
+        { pendencies_json: { not: "[]" } },
+      ];
+    }
+    if (importedOnly || hasPendencies || Object.keys(originWhere).length > 0) where.import_origin = { is: originWhere };
 
     const [total, rows] = await Promise.all([
       prisma.catalog2Product.count({ where }),
