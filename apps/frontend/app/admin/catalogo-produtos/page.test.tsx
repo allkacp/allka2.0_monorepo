@@ -138,13 +138,17 @@ describe("Catálogo de Produtos administrativo (catalog2) — grade de cards", (
     expect(screen.getByText("Landing Page")).toBeInTheDocument();
   });
 
-  it("card mostra mensagens honestas quando preço/prazo/tarefas ainda não existem, e o valor real quando existe", async () => {
+  it("card mostra o valor real quando existe, e um valor provisório MARCADO (nunca a mensagem antiga de ausência) quando não existe", async () => {
     renderPage();
     await screen.findByText("Landing Page");
-    expect(screen.getByText("Preço ainda não configurado.")).toBeInTheDocument();
-    expect(screen.getByText("Prazo ainda não definido.")).toBeInTheDocument();
-    expect(screen.getByText("Tarefas ainda não cadastradas")).toBeInTheDocument();
+    // real (Site Institucional)
     expect(screen.getByText("Preço comercial BRL 1200.")).toBeInTheDocument();
+    // "Landing Page" não tem preço/prazo/tarefas reais — mostra valor
+    // provisório determinístico, sempre com o selo "provisório" ao lado.
+    const card = screen.getByText("Landing Page").closest(".group") as HTMLElement;
+    expect(within(card).getByText(/^R\$ \d+\.\d{2}$/)).toBeInTheDocument();
+    expect(within(card).getAllByLabelText(/provisóri[ao]/i).length).toBeGreaterThan(0);
+    expect(within(card).getByText(/^\d+ tarefa\(s\)$/)).toBeInTheDocument();
   });
 
   it("abrir o detalhe de um produto: painel dentro do container padrão, com pendências honestas e sem controle de edição", async () => {
@@ -220,25 +224,33 @@ describe("Lista/Grade — alternador de visualização (Catálogo)", () => {
 // (vendas/avaliação) ficam visíveis e desabilitadas — nunca removidas,
 // nunca inventadas.
 describe("Ordenação — fiel ao layout publicado, nunca com dado inventado", () => {
-  it("Menor/Maior preço ordenam por price_amount real; produtos sem preço pronto vão pro fim em 'Menor preço'", async () => {
+  it("Menor/Maior preço ordenam por price_amount REAL quando existe (produtos com preço real ficam em ordem crescente/decrescente entre si)", async () => {
+    renderPage();
+    await screen.findByText("Site Institucional");
+    await userEvent.click(screen.getByRole("button", { name: /Nome A–Z/ }));
+    await userEvent.click(screen.getByText("Menor preço"));
+    const namesAsc = screen.getAllByRole("heading", { level: 3 }).map((h) => h.textContent);
+    // Consultoria Express (300) sempre antes de Site Institucional (1200) —
+    // preço real, nunca depende de hash provisório.
+    expect(namesAsc.indexOf("Consultoria Express")).toBeLessThan(namesAsc.indexOf("Site Institucional"));
+
+    await userEvent.click(screen.getByRole("button", { name: /Menor preço/ }));
+    await userEvent.click(screen.getByText("Maior preço"));
+    const namesDesc = screen.getAllByRole("heading", { level: 3 }).map((h) => h.textContent);
+    expect(namesDesc.indexOf("Site Institucional")).toBeLessThan(namesDesc.indexOf("Consultoria Express"));
+  });
+
+  it("'Menor preço' inclui produtos sem preço real na ordenação, usando um valor provisório determinístico (nunca ficam soltos/sem posição)", async () => {
     renderPage();
     await screen.findByText("Site Institucional");
     await userEvent.click(screen.getByRole("button", { name: /Nome A–Z/ }));
     await userEvent.click(screen.getByText("Menor preço"));
     const names = screen.getAllByRole("heading", { level: 3 }).map((h) => h.textContent);
-    // reais primeiro, por preço crescente (90 fixture não entra na grade);
-    // "Landing Page" (sem preço pronto) vai pro fim.
-    expect(names.indexOf("Consultoria Express")).toBeLessThan(names.indexOf("Site Institucional"));
-    expect(names.indexOf("Landing Page")).toBe(names.length - 1);
-  });
-
-  it("Maior preço inverte a ordem, mesma base real", async () => {
-    renderPage();
-    await screen.findByText("Site Institucional");
-    await userEvent.click(screen.getByRole("button", { name: /Nome A–Z/ }));
-    await userEvent.click(screen.getByText("Maior preço"));
-    const names = screen.getAllByRole("heading", { level: 3 }).map((h) => h.textContent);
-    expect(names.indexOf("Site Institucional")).toBeLessThan(names.indexOf("Consultoria Express"));
+    // "Landing Page" (sem preço real) aparece na grade, ordenado junto com
+    // os demais — nunca ausente, nunca com posição aleatória entre F5s
+    // (mesmo hash, mesma posição sempre).
+    expect(names).toContain("Landing Page");
+    expect(names.length).toBe(3); // fixture nunca entra
   });
 
   it("'Mais vendidos' e 'Melhor avaliados' aparecem desabilitados com explicação — nunca removidos, nunca com dado inventado", async () => {

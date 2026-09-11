@@ -31,7 +31,10 @@ import {
 import { PinToTrayButton } from "@/components/pin-to-tray-button";
 import { EmbeddedSlideScreen } from "@/components/embedded-slide-screen";
 import { ProductViewModeToggle } from "@/components/product-view-mode-toggle";
+import { Catalog2Thumbnail } from "@/components/catalog2-thumbnail";
+import { ProvisionalBadge } from "@/components/provisional-badge";
 import { usePersistedViewMode, viewModeGridClass } from "@/lib/use-persisted-view-mode";
+import { provisionalPrice, provisionalDeadlineDays, provisionalTaskCount, provisionalStepCount } from "@/lib/catalog2-provisional";
 
 // Catálogo de Produtos — visão de APRESENTAÇÃO e conferência comercial dos
 // produtos catalog2 (reunião 2026-09, consolidação "catálogo2 como cadastro
@@ -103,18 +106,19 @@ type Merged = ReadinessProduct & { list?: ListProduct };
 // pro catalog2 ainda). "Mais vendidos"/"Melhor avaliados" ficam visíveis e
 // desabilitados (ver DISABLED_SORTS) — nunca removidos silenciosamente,
 // nunca com dado inventado.
+// Ordenação por preço usa o valor REAL quando existe, e o PROVISÓRIO
+// (determinístico, nunca inventado na hora) só pra ordenar administrativamente
+// os produtos que ainda não têm preço pronto — nunca exibido como se fosse
+// comercial (o card/linha sempre mostra o selo "provisório" ao lado).
+function priceForSort(p: Merged): number {
+  return p.price_amount ?? provisionalPrice(p.id).value;
+}
+
 const SORTS = {
   name: { label: "Nome A–Z", fn: (a: Merged, b: Merged) => a.name.localeCompare(b.name) },
   name_desc: { label: "Nome Z–A", fn: (a: Merged, b: Merged) => b.name.localeCompare(a.name) },
-  price_asc: {
-    label: "Menor preço",
-    // Sem preço pronto (ainda a maioria) vai pro fim — nunca tratado como 0.
-    fn: (a: Merged, b: Merged) => (a.price_amount ?? Infinity) - (b.price_amount ?? Infinity),
-  },
-  price_desc: {
-    label: "Maior preço",
-    fn: (a: Merged, b: Merged) => (b.price_amount ?? -Infinity) - (a.price_amount ?? -Infinity),
-  },
+  price_asc: { label: "Menor preço", fn: (a: Merged, b: Merged) => priceForSort(a) - priceForSort(b) },
+  price_desc: { label: "Maior preço", fn: (a: Merged, b: Merged) => priceForSort(b) - priceForSort(a) },
   updated: {
     label: "Alterado recentemente",
     fn: (a: Merged, b: Merged) => new Date(b.list?.updated_at ?? 0).getTime() - new Date(a.list?.updated_at ?? 0).getTime(),
@@ -363,17 +367,18 @@ export default function AdminCatalogoProdutosPage() {
 }
 
 function ProductCard({ product: p, onOpen, compact = false }: { product: Merged; onOpen: () => void; compact?: boolean }) {
-  const precoNote = p.items.preco?.note ?? "Preço ainda não configurado.";
-  const prazoNote = p.items.prazo?.note ?? "Prazo ainda não definido.";
   const categoryName = p.list?.category?.name ?? "Sem categoria";
+  const priceProv = provisionalPrice(p.id);
+  const prazoProv = provisionalDeadlineDays(p.id);
+  const taskProv = provisionalTaskCount(p.id);
+  const hasRealTasks = p.task_count > 0;
   return (
     <Card className="group flex flex-col overflow-hidden border border-slate-200/70 bg-white shadow-sm transition-all duration-300 hover:-translate-y-0.5 hover:shadow-xl dark:border-slate-700/60 dark:bg-slate-900">
-      {/* Banner — sem imagem cadastrada (catalog2 ainda não tem esse campo);
-          ícone + gradiente honesto, nunca uma foto inventada. */}
-      <div className={`relative flex shrink-0 items-center justify-center overflow-hidden bg-linear-to-br from-blue-50 via-purple-50 to-pink-50 dark:from-slate-800 dark:via-slate-800 dark:to-slate-900 ${compact ? "h-20" : "h-32"}`}>
-        <div className="rounded-2xl bg-white/80 p-3 shadow-sm transition-transform duration-300 group-hover:scale-105 dark:bg-white/10">
-          <Package className={compact ? "h-5 w-5 text-blue-500" : "h-8 w-8 text-blue-500"} />
-        </div>
+      {/* Banner — imagem PROVISÓRIA (catalog2 ainda não tem campo de imagem
+          definitivo). Nunca uma foto real inventada — ícone/gradiente
+          determinístico + selo, ver lib/catalog2-provisional.ts. */}
+      <div className={`relative shrink-0 ${compact ? "h-20" : "h-32"}`}>
+        <Catalog2Thumbnail productId={p.id} size="lg" showBadge />
         <div className="absolute right-2.5 top-2.5 flex items-center gap-1">
           {p.list?.is_new && <Badge className="bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-200">Novo</Badge>}
           <Badge className={STATUS_TONE[p.status] ?? "bg-muted text-muted-foreground"}>{STATUS_LABEL[p.status] ?? p.status}</Badge>
@@ -387,7 +392,7 @@ function ProductCard({ product: p, onOpen, compact = false }: { product: Merged;
           </h3>
           {!compact && (
             <p className="mt-1 line-clamp-2 text-xs leading-relaxed text-slate-400">
-              {p.list?.summary || "Imagem e descrição ainda não cadastradas — produto em preparação."}
+              {p.list?.summary || "Descrição ainda não escrita — produto em preparação."}
             </p>
           )}
         </div>
@@ -399,15 +404,21 @@ function ProductCard({ product: p, onOpen, compact = false }: { product: Merged;
 
         <div className="flex items-center gap-1.5 text-xs text-slate-500">
           <ListChecks className="h-3.5 w-3.5 shrink-0" />
-          <span className="truncate">
-            {p.task_count > 0 ? `${p.task_count} tarefa(s)` : "Tarefas ainda não cadastradas"}
-            {p.step_count > 0 ? ` · ${p.step_count} etapa(s)` : ""}
-          </span>
+          {hasRealTasks ? (
+            <span className="truncate">
+              {p.task_count} tarefa(s){p.step_count > 0 ? ` · ${p.step_count} etapa(s)` : ""}
+            </span>
+          ) : (
+            <>
+              <span className="truncate text-slate-400">{taskProv.value} tarefa(s)</span>
+              <ProvisionalBadge label={taskProv.label + " Pendência real de tarefas continua registrada."} />
+            </>
+          )}
         </div>
 
         <div className="mt-auto space-y-1 border-t border-slate-100 pt-2.5 dark:border-slate-800">
-          <p className="text-xs font-medium text-slate-500 dark:text-slate-400">{precoNote}</p>
-          <p className="text-[11px] text-slate-400">{prazoNote}</p>
+          <PriceOrProvisional p={p} priceProv={priceProv} />
+          <DeadlineOrProvisional p={p} prazoProv={prazoProv} />
           <Button
             variant="outline"
             size="sm"
@@ -422,25 +433,51 @@ function ProductCard({ product: p, onOpen, compact = false }: { product: Merged;
   );
 }
 
+function PriceOrProvisional({ p, priceProv }: { p: Merged; priceProv: ReturnType<typeof provisionalPrice> }) {
+  if (p.items.preco?.note) {
+    return <p className="text-xs font-medium text-slate-500 dark:text-slate-400">{p.items.preco.note}</p>;
+  }
+  return (
+    <p className="flex items-center gap-1 text-xs font-medium text-slate-400">
+      R$ {priceProv.value.toFixed(2)}
+      <ProvisionalBadge label={priceProv.label + " Não vale para cotação, checkout ou publicação."} />
+    </p>
+  );
+}
+function DeadlineOrProvisional({ p, prazoProv }: { p: Merged; prazoProv: ReturnType<typeof provisionalDeadlineDays> }) {
+  if (p.items.prazo?.note) {
+    return <p className="text-[11px] text-slate-400">{p.items.prazo.note}</p>;
+  }
+  return (
+    <p className="flex items-center gap-1 text-[11px] text-slate-400">
+      {prazoProv.value} dia(s)
+      <ProvisionalBadge label={prazoProv.label} />
+    </p>
+  );
+}
+
 // Modo Lista — mesma apresentação comercial, densidade maior (linha em vez
 // de card). Restaurado 2026-09 junto do alternador Lista/Grade.
 function ProductListRow({ product: p, onOpen }: { product: Merged; onOpen: () => void }) {
-  const precoNote = p.items.preco?.note ?? "Preço ainda não configurado.";
+  const priceProv = provisionalPrice(p.id);
+  const taskProv = provisionalTaskCount(p.id);
   const categoryName = p.list?.category?.name ?? "Sem categoria";
   return (
     <li className="flex items-center gap-3 px-4 py-3 transition-colors hover:bg-slate-50/70 dark:hover:bg-slate-800/40">
-      <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-linear-to-br from-blue-50 via-purple-50 to-pink-50 dark:from-slate-800 dark:to-slate-900">
-        <Package className="h-5 w-5 text-blue-500" />
-      </div>
+      <Catalog2Thumbnail productId={p.id} size="sm" showBadge={false} />
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-1.5">
           <span className="truncate text-sm font-semibold text-slate-900 dark:text-slate-100">{p.name}</span>
           {p.list?.is_new && <Badge className="bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-200">Novo</Badge>}
         </div>
-        <p className="truncate text-xs text-slate-400">{categoryName} · {p.task_count > 0 ? `${p.task_count} tarefa(s)` : "sem tarefas ainda"}</p>
+        <p className="truncate text-xs text-slate-400">
+          {categoryName} · {p.task_count > 0 ? `${p.task_count} tarefa(s)` : `${taskProv.value} tarefa(s) (provisório)`}
+        </p>
       </div>
       <Badge className={STATUS_TONE[p.status] ?? "bg-muted text-muted-foreground"}>{STATUS_LABEL[p.status] ?? p.status}</Badge>
-      <span className="hidden w-40 shrink-0 truncate text-right text-xs text-slate-500 sm:inline">{precoNote}</span>
+      <span className="hidden w-40 shrink-0 truncate text-right text-xs text-slate-500 sm:inline">
+        {p.items.preco?.note ?? `R$ ${priceProv.value.toFixed(2)} (provisório)`}
+      </span>
       <Button variant="outline" size="sm" className="shrink-0 border-blue-200 text-xs text-blue-600 hover:bg-blue-50" onClick={onOpen}>
         Ver detalhes
       </Button>
@@ -451,10 +488,18 @@ function ProductListRow({ product: p, onOpen }: { product: Merged; onOpen: () =>
 // Detalhe comercial — só leitura; nenhum controle de edição aparece aqui de
 // propósito (edição é função do Cadastro de Produtos).
 function ProductDetail({ product: p }: { product: Merged }) {
-  const precoNote = p.items.preco?.note ?? "Preço ainda não configurado.";
-  const prazoNote = p.items.prazo?.note ?? "Prazo ainda não definido.";
   const categoryName = p.list?.category?.name ?? "Sem categoria";
   const pendencias = [...p.blockers, ...p.pendings];
+  const priceProv = provisionalPrice(p.id);
+  const prazoProv = provisionalDeadlineDays(p.id);
+  const taskProv = provisionalTaskCount(p.id);
+  const stepProv = provisionalStepCount(p.id, taskProv.value);
+  const hasRealPrice = !!p.items.preco?.note;
+  const hasRealPrazo = !!p.items.prazo?.note;
+  const hasRealTasks = p.task_count > 0;
+  const hasRealSteps = p.step_count > 0;
+  const hasRealSummary = !!p.list?.summary;
+
   return (
     <div className="min-h-0 flex-1 overflow-y-auto p-5">
       <div className="mx-auto max-w-2xl space-y-5">
@@ -464,22 +509,37 @@ function ProductDetail({ product: p }: { product: Merged }) {
           {p.list?.published_version_number && <Badge variant="outline">v{p.list.published_version_number} publicada</Badge>}
         </div>
 
-        <div className="flex h-40 items-center justify-center rounded-xl bg-linear-to-br from-blue-50 via-purple-50 to-pink-50 dark:from-slate-800 dark:via-slate-800 dark:to-slate-900">
-          <Package className="h-12 w-12 text-blue-400" />
+        <div className="h-40">
+          <Catalog2Thumbnail productId={p.id} size="lg" showBadge />
         </div>
 
         <div>
           <h2 className="text-lg font-semibold text-foreground">Descrição</h2>
-          <p className="mt-1 text-sm text-muted-foreground">
-            {p.list?.summary || "Descrição ainda não escrita — produto em preparação."}
+          <p className="mt-1 flex items-start gap-1.5 text-sm text-muted-foreground">
+            <span>{p.list?.summary || "Descrição ainda não escrita — produto em preparação."}</span>
+            {!hasRealSummary && <ProvisionalBadge label="Sem resumo real ainda — cadastre pelo Cadastro de Produtos." />}
           </p>
         </div>
 
+        {/* Resumo real × provisório × ausente — pra Admin Master entender
+            exatamente o que precisa ser substituído (reparo 2026-09). */}
+        <div>
+          <h2 className="text-sm font-semibold text-foreground">Campos reais × provisórios</h2>
+          <div className="mt-1.5 grid grid-cols-2 gap-1.5 sm:grid-cols-3">
+            <FieldStatusChip label="Descrição" status={hasRealSummary ? "real" : "provisorio"} />
+            <FieldStatusChip label="Preço" status={hasRealPrice ? "real" : "provisorio"} />
+            <FieldStatusChip label="Prazo" status={hasRealPrazo ? "real" : "provisorio"} />
+            <FieldStatusChip label="Tarefas" status={hasRealTasks ? "real" : "provisorio"} />
+            <FieldStatusChip label="Etapas" status={hasRealSteps ? "real" : "provisorio"} />
+            <FieldStatusChip label="Imagem" status="provisorio" />
+          </div>
+        </div>
+
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-          <DetailStat label="Preço" value={precoNote} />
-          <DetailStat label="Prazo" value={prazoNote} />
-          <DetailStat label="Tarefas" value={p.task_count > 0 ? String(p.task_count) : "Ainda não cadastradas"} />
-          <DetailStat label="Etapas" value={p.step_count > 0 ? String(p.step_count) : "Ainda não cadastradas"} />
+          <DetailStat label="Preço" value={hasRealPrice ? p.items.preco!.note : `R$ ${priceProv.value.toFixed(2)}`} provisional={!hasRealPrice ? priceProv.label : undefined} />
+          <DetailStat label="Prazo" value={hasRealPrazo ? p.items.prazo!.note : `${prazoProv.value} dia(s)`} provisional={!hasRealPrazo ? prazoProv.label : undefined} />
+          <DetailStat label="Tarefas" value={hasRealTasks ? String(p.task_count) : String(taskProv.value)} provisional={!hasRealTasks ? taskProv.label : undefined} />
+          <DetailStat label="Etapas" value={hasRealSteps ? String(p.step_count) : String(stepProv.value)} provisional={!hasRealSteps ? stepProv.label : undefined} />
         </div>
 
         <div>
@@ -512,17 +572,34 @@ function ProductDetail({ product: p }: { product: Merged }) {
 
         <p className="rounded-lg bg-muted px-3 py-2 text-xs text-muted-foreground">
           Esta é uma visualização comercial, só leitura. Para editar tarefas, etapas, preço ou publicar, use o
-          Cadastro de Produtos.
+          Cadastro de Produtos. Valores provisórios nunca entram em cotação, checkout ou publicação — servem só
+          pra conferência visual.
         </p>
       </div>
     </div>
   );
 }
-function DetailStat({ label, value }: { label: string; value: string }) {
+function DetailStat({ label, value, provisional }: { label: string; value: string; provisional?: string }) {
   return (
     <div className="rounded-lg border bg-background p-2.5">
       <p className="text-[11px] font-medium text-muted-foreground">{label}</p>
-      <p className="mt-0.5 text-xs text-foreground">{value}</p>
+      <div className="mt-0.5 flex items-center gap-1">
+        <p className={`text-xs ${provisional ? "text-slate-400" : "text-foreground"}`}>{value}</p>
+        {provisional && <ProvisionalBadge label={provisional} />}
+      </div>
+    </div>
+  );
+}
+function FieldStatusChip({ label, status }: { label: string; status: "real" | "provisorio" | "ausente" }) {
+  const tone =
+    status === "real" ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-200"
+      : status === "provisorio" ? "bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-200"
+        : "bg-muted text-muted-foreground";
+  const statusLabel = status === "real" ? "Real" : status === "provisorio" ? "Provisório" : "Ausente";
+  return (
+    <div className={`flex items-center justify-between rounded-md px-2 py-1 text-[11px] ${tone}`}>
+      <span>{label}</span>
+      <span className="font-semibold">{statusLabel}</span>
     </div>
   );
 }
