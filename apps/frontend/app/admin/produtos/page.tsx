@@ -277,6 +277,12 @@ export default function AdminProdutosPage() {
                     <TooltipContent side="bottom" sideOffset={6}>Criar novo produto catalog2</TooltipContent>
                   </Tooltip>
                 </TooltipProvider>
+                <a
+                  href="/admin/catalog2?preview=1"
+                  className="inline-flex items-center gap-1 whitespace-nowrap rounded-lg border border-white/70 bg-white/10 px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-white/20"
+                >
+                  Pré-visualizar como cliente
+                </a>
                 <PinToTrayButton id="page-produtos" label="Cadastro de Produtos" icon={Package} path="/admin/produtos" />
               </>
             }
@@ -476,6 +482,15 @@ export default function AdminProdutosPage() {
                           ? (p.review_state === "ready_for_final_review" ? "Pronto p/ revisão final" : (REVIEW_STATE_LABEL[p.review_state] ?? "Em preparação"))
                           : null;
                         const pend: string[] = p.pendencies ?? [];
+                        const tech = [
+                          `slug ${p.slug}`,
+                          p.source_index ? `origem #${p.source_index}` : null,
+                          p.origin || null,
+                          p.published_version_number ? `v${p.published_version_number} publicada` : "sem versão publicada",
+                          p.has_draft ? "rascunho aberto" : null,
+                          p.published_at ? `publicado ${new Date(p.published_at).toLocaleDateString("pt-BR")}` : null,
+                          `alterado ${new Date(p.updated_at).toLocaleDateString("pt-BR")}`,
+                        ].filter(Boolean).join(" · ");
                         return (
                           <tr key={p.id} className="group transition-colors hover:bg-slate-50/70 dark:hover:bg-slate-800/40">
                             <td className="px-2 py-3">
@@ -497,6 +512,7 @@ export default function AdminProdutosPage() {
                                     {readyLabel ? readyLabel : "Sem revisão de preparo ainda"}
                                     {p.imported ? ` · ${pend.length} pendência(s)` : ""}
                                   </p>
+                                  <RowTechDetails text={tech} />
                                 </div>
                               </div>
                             </td>
@@ -504,11 +520,12 @@ export default function AdminProdutosPage() {
                               <Badge variant="outline">{p.category?.name ?? "Sem categoria"}</Badge>
                             </td>
                             <td className="hidden px-2 py-3 md:table-cell">
-                              {pend.length === 0 && !!p.rose_reviewed !== false ? (
+                              {pend.length === 0 && !!p.rose_reviewed !== false && !p.human_edited ? (
                                 <span className="text-[11px] text-muted-foreground">nenhuma</span>
                               ) : (
                                 <div className="flex flex-wrap items-center gap-1">
                                   {!p.rose_reviewed && <Badge className="bg-muted text-muted-foreground">Rose pendente</Badge>}
+                                  {p.human_edited && <Badge className="bg-muted text-muted-foreground">editado por humano</Badge>}
                                   {pend.slice(0, 3).map((pk: string) => (
                                     <Badge key={pk} className="bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-200">{PENDENCY_LABEL[pk] ?? pk}</Badge>
                                   ))}
@@ -694,6 +711,22 @@ function getPageNumbers(page: number, totalPages: number): (number | "...")[] {
   if (page < totalPages - 2) out.push("...");
   out.push(totalPages);
   return out;
+}
+
+// Detalhe técnico da linha (slug, origem, versões, datas) — fora da leitura
+// principal, atrás de um botão acessível por teclado. Recuperado da
+// reformulação de 10/09 (9539f94/823b18c) — tinha sumido quando a lista
+// virou tabela no reparo de layout.
+function RowTechDetails({ text }: { text: string }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div className="mt-1 text-[11px] text-muted-foreground">
+      <button type="button" aria-expanded={open} className="underline decoration-dotted" onClick={() => setOpen((o) => !o)}>
+        Detalhes técnicos
+      </button>
+      {open && <div className="mt-0.5">{text}</div>}
+    </div>
+  );
 }
 
 // Indicador — sem card colorido; célula neutra dentro de um painel único.

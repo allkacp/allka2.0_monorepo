@@ -541,9 +541,38 @@ it("listagem: filtros avançados vão ao backend; linha da tabela fica limpa (se
   await waitFor(() => expect(api.getCatalog2Products).toHaveBeenCalledWith(expect.objectContaining({ pendency: "price_pending" })))
   // pendências aparecem como badge na linha (texto de negócio, não código)
   expect(screen.getAllByText("preço").length).toBeGreaterThan(0)
-  // slug/origem/#index crus não aparecem na linha (nunca existiram como
-  // texto visível na tabela do layout restaurado)
+  // slug/origem/#index crus não poluem a leitura principal da linha —
+  // ficam atrás do toggle "Detalhes técnicos" (ver teste dedicado abaixo).
   expect(screen.queryByText(/slug demo/)).not.toBeInTheDocument()
+})
+
+// Auditoria forense 2026-09-11 (trabalho de 10/09/2026, commits
+// 9539f94/823b18c): "Detalhes técnicos" por linha e o badge "editado por
+// humano" existiam na reformulação do construtor/lista e tinham sumido
+// quando a lista virou tabela no reparo de layout — recuperados.
+it("Detalhes técnicos: toggle por linha revela slug/origem/versão/datas, escondido por padrão", async () => {
+  renderPage()
+  await screen.findByText("[TESTE LOCAL] Demo")
+  expect(screen.queryByText(/slug demo/)).not.toBeInTheDocument()
+  await userEvent.click(screen.getByRole("button", { name: "Detalhes técnicos" }))
+  expect(screen.getByText(/slug demo · origem #3/)).toBeInTheDocument()
+})
+
+it("badge 'editado por humano' aparece na linha quando o produto foi editado manualmente", async () => {
+  api.getCatalog2Products.mockResolvedValue({
+    ...LIST,
+    data: [{ ...LIST.data[0], human_edited: true }],
+  })
+  renderPage()
+  await screen.findByText("[TESTE LOCAL] Demo")
+  expect(screen.getByText("editado por humano")).toBeInTheDocument()
+})
+
+it("banner: link 'Pré-visualizar como cliente' existe e aponta pro preview do catalog2", async () => {
+  renderPage()
+  await screen.findByText("[TESTE LOCAL] Demo")
+  const link = screen.getByRole("link", { name: /Pré-visualizar como cliente/i })
+  expect(link).toHaveAttribute("href", "/admin/catalog2?preview=1")
 })
 
 it("aba Origem e importação: planilha, Rose, divergência, preço histórico e resolver pendência", async () => {
