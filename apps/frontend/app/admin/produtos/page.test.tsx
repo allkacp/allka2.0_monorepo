@@ -326,6 +326,64 @@ it("bug real: 'Com pendências' filtra de verdade (has_pendencies=true), fica vi
   expect(pendenciasTab.className).not.toContain("text-blue-600")
 })
 
+// Bug real reportado 2026-09-11: o contador ("36 produtos") vem de
+// /overview — uma chamada INDEPENDENTE da listagem (/products) — então ele
+// continua certo mesmo quando a listagem falha em mostrar linhas. Isso
+// acontece quando `page` fica acima do total de páginas válido pro total
+// ATUAL (ex.: o total caiu de um valor maior — como nos 162 antigos — para
+// 36, enquanto a página selecionada continuava a mesma): a API responde com
+// `total` correto e `data: []`, porque a página pedida não existe mais.
+it("bug real: contador mostra 36 produtos mas tabela/grade ficam vazias (página antiga inválida após o total cair) — corrige sozinho, sem F5", async () => {
+  // Simula a API real: pagina de verdade por `page`/`page_size`, com um
+  // total GRANDE na 1ª chamada (equivalente aos 162 antigos / a um total
+  // anterior) e, a partir da 2ª chamada em diante, o total real de 36 —
+  // sem que nenhum filtro rastreado (status/busca/ordenação) tenha mudado.
+  const ALL_36 = Array.from({ length: 36 }, (_, i) => ({
+    id: `real-${i}`, internal_name: `Produto real ${i}`, slug: `produto-${i}`,
+    pillar: { name: "A. Presença" }, category: { name: "Performance" }, origin: "novo",
+    status: "em_preparacao", published_version_number: null, published_at: null,
+    has_draft: true, is_new: false, updated_at: new Date().toISOString(),
+    imported: true, rose_reviewed: true, review_state: "content_review_pending",
+    pendencies: [], human_edited: false, source_index: i,
+  }))
+  let call = 0
+  api.getCatalog2Products.mockImplementation(async (params: any) => {
+    call++
+    const pageSize = 15
+    const page = Number(params?.page) || 1
+    // 1ª chamada (mount, page=1): total "antigo", bem maior que 36 — é o
+    // que faz o botão "5" existir e ser clicável.
+    if (call === 1) {
+      const old = Array.from({ length: 90 }, (_, i) => ({ ...ALL_36[i % 36], id: `old-${i}` }))
+      return { data: old.slice(0, pageSize), total: 90, page: 1, page_size: pageSize }
+    }
+    // Da 2ª chamada em diante o total real (36) já está valendo — SEM
+    // nenhum filtro rastreado (status/busca/ordenação) ter mudado. Se a
+    // página pedida (5) não existe mais no total novo, vem "total certo,
+    // data vazia" — exatamente o bug relatado.
+    const total = ALL_36.length
+    const start = (page - 1) * pageSize
+    return { data: ALL_36.slice(start, start + pageSize), total, page, page_size: pageSize }
+  })
+
+  renderPage()
+  await screen.findByText("Produto real 0")
+
+  // usuário navega pra uma página só válida no total "antigo" (90 → 6
+  // páginas) — a paginação aparece espelhada (topo + rodapé), usa a 1ª.
+  await userEvent.click(screen.getAllByRole("button", { name: "5" })[0])
+  // reproduz o bug: a API respondeu total=36 (contador bateria com "36"),
+  // mas data=[] porque a página 5 não existe mais pro total real (3 páginas).
+  await waitFor(() => expect(api.getCatalog2Products).toHaveBeenCalledWith(expect.objectContaining({ page: 5 })))
+
+  // a tela se corrige sozinha — nunca fica "36 produtos, tabela vazia"
+  await waitFor(() => {
+    expect(screen.getAllByText(/Produto real/).length).toBeGreaterThan(0)
+  })
+  const calledPages = api.getCatalog2Products.mock.calls.map((c: any[]) => c[0]?.page)
+  expect(calledPages[calledPages.length - 1]).toBeLessThanOrEqual(3)
+})
+
 it("listagem: mostra produtos catalog2, situação, etiqueta Novo, e nunca os 162 antigos", async () => {
   renderPage()
   expect(await screen.findByText("[TESTE LOCAL] Demo")).toBeInTheDocument()

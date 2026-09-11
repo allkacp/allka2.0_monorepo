@@ -212,6 +212,22 @@ export default function AdminProdutosPage() {
 
   useEffect(() => setPage(1), [q, status, pillarId, categoryId, origin, roseReviewed, reviewState, pendency, onlyPendencies, sort]);
 
+  // Bug real 2026-09-11: "contador diz 36, tabela/grade ficam vazias" —
+  // acontece quando `page` fica acima do total de páginas válido (ex.: total
+  // caiu de 162 para 36 produtos, ou um filtro reduziu o resultado) e a API
+  // responde com `total` correto mas `data: []` (a página pedida não existe
+  // mais). O contador ("36") vem de /overview, uma chamada INDEPENDENTE da
+  // listagem — por isso ele continua certo mesmo com a tabela vazia. Aqui a
+  // gente detecta isso a partir da resposta real da listagem e corrige
+  // sozinho para a última página válida, sem precisar de F5.
+  useEffect(() => {
+    if (!list) return;
+    const validTotalPages = Math.max(1, Math.ceil(list.total / list.page_size));
+    if (list.data.length === 0 && list.total > 0 && page > validTotalPages) {
+      setPage(validTotalPages);
+    }
+  }, [list, page]);
+
   async function rowAction(fn: () => Promise<any>, ok: string) {
     setMsg(null);
     try { await fn(); setMsg(ok); await loadList(); await bootstrap(); }
