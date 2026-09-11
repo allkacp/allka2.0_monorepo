@@ -14,7 +14,15 @@ import { prisma } from "../lib/prisma";
 import { verifyToken, evaluateAdminMasterAccess } from "../middleware/auth";
 import { writeAccessAudit } from "../lib/product-feedback-service";
 import { getLegacyPrisma, LegacyNotConfiguredError } from "../legacy/legacy-prisma";
-import { FINANCIAL_ENTITY_TYPES, IDENTITY_ENTITY_TYPES, PROJECT_EXECUTION_ENTITY_TYPES } from "../legacy/importer";
+import {
+  ALERT_ENTITY_TYPES,
+  ALERT_NOTIFICATION_CHAT_ENTITY_TYPES,
+  CHAT_ENTITY_TYPES,
+  FINANCIAL_ENTITY_TYPES,
+  IDENTITY_ENTITY_TYPES,
+  NOTIFICATION_ENTITY_TYPES,
+  PROJECT_EXECUTION_ENTITY_TYPES,
+} from "../legacy/importer";
 
 const router = Router();
 const MODULE = "consulta_legado";
@@ -133,6 +141,14 @@ router.get("/summary", async (req: Request, res: Response, next: NextFunction) =
       legacy.legacyRecordSnapshot.count({ where: { entity_type: { in: FINANCIAL_ENTITY_TYPES } } }),
     ]);
 
+    // "alertas"/"notificacoes"/"chat" — mesmo raciocínio: cada um pode viver
+    // num lote próprio (ver collectAlertsNotificationsChatSnapshot).
+    const [alertCount, notificationCount, chatCount] = await Promise.all([
+      legacy.legacyRecordSnapshot.count({ where: { entity_type: { in: ALERT_ENTITY_TYPES } } }),
+      legacy.legacyRecordSnapshot.count({ where: { entity_type: { in: NOTIFICATION_ENTITY_TYPES } } }),
+      legacy.legacyRecordSnapshot.count({ where: { entity_type: { in: CHAT_ENTITY_TYPES } } }),
+    ]);
+
     res.json({
       configured: true,
       batch: {
@@ -165,6 +181,9 @@ router.get("/summary", async (req: Request, res: Response, next: NextFunction) =
         projetos: { status: projectCount > 0 ? "ready" : "awaiting_import", count: projectCount },
         tarefas: { status: taskAndBelowCount > 0 ? "ready" : "awaiting_import", count: taskAndBelowCount },
         financeiro: { status: financialCount > 0 ? "ready" : "awaiting_import", count: financialCount },
+        alertas: { status: alertCount > 0 ? "ready" : "awaiting_import", count: alertCount },
+        notificacoes: { status: notificationCount > 0 ? "ready" : "awaiting_import", count: notificationCount },
+        chat: { status: chatCount > 0 ? "ready" : "awaiting_import", count: chatCount },
       },
     });
   } catch (err) {
@@ -181,6 +200,9 @@ function baseTabs() {
     projetos: { status: "awaiting_import" },
     tarefas: { status: "awaiting_import" },
     financeiro: { status: "awaiting_import" },
+    alertas: { status: "awaiting_import" },
+    notificacoes: { status: "awaiting_import" },
+    chat: { status: "awaiting_import" },
   };
 }
 
@@ -624,6 +646,128 @@ router.get("/financial", async (req: Request, res: Response, next: NextFunction)
       entity_type: "financial",
       batch_id: batchId,
       filters: { has_query: !!q, status: status ?? null, entity_type: requestedEntityType ?? null, related_to: relatedTo ?? null, from: from ?? null, to: to ?? null, page, page_size: pageSize, sort_by: sortBy, sort_dir: sortDir },
+      result_count: rows.length,
+    });
+
+    res.json({
+      data: rows,
+      total,
+      page,
+      page_size: pageSize,
+      batch_id: batchId,
+      available_entity_types: entityTypeCounts.map((c) => ({ entity_type: c.entity_type, count: c._count._all })),
+      read_only: true,
+    });
+  } catch (err) {
+    handleErr(err, res, next);
+  }
+});
+
+// ── GET /alerts-notifications-chat  (alertas, notificações, chat) ──────
+// Mesmo padrão de /identities, /project-execution e /financial — 17 tipos.
+// Chat é exposto como HISTÓRICO somente leitura (busca + detalhe); nenhuma
+// rota aqui permite responder/enviar/marcar como lido/arquivar/excluir.
+const ALERT_NOTIFICATION_CHAT_SORTABLE = new Set(["title", "original_code", "imported_at", "original_status"]);
+
+router.get("/alerts-notifications-chat", async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const legacy = getLegacyPrisma();
+    if (!legacy) throw new LegacyNotConfiguredError();
+
+    const requestedEntityType =
+      typeof req.query.entity_type === "string" && (ALERT_NOTIFICATION_CHAT_ENTITY_TYPES as string[]).includes(req.query.entity_type)
+        ? req.query.entity_type
+        : undefined;
+    // Sem filtro, agrupa por "domínio" (group=alertas|notificacoes|chat) —
+    // senão, todos os 17 tipos.
+    const requestedGroup = typeof req.query.group === "string" ? req.query.group : undefined;
+    const groupEntityTypes =
+      requestedGroup === "alertas" ? ALERT_ENTITY_TYPES : requestedGroup === "notificacoes" ? NOTIFICATION_ENTITY_TYPES : requestedGroup === "chat" ? CHAT_ENTITY_TYPES : undefined;
+    const entityTypeFilter = requestedEntityType ? [requestedEntityType] : (groupEntityTypes ?? ALERT_NOTIFICATION_CHAT_ENTITY_TYPES);
+
+    const batchId =
+      typeof req.query.batch_id === "string" && req.query.batch_id
+        ? req.query.batch_id
+        : (
+            await legacy.legacyRecordSnapshot.findFirst({
+              where: { entity_type: { in: ALERT_NOTIFICATION_CHAT_ENTITY_TYPES } },
+              orderBy: { imported_at: "desc" },
+              select: { batch_id: true },
+            })
+          )?.batch_id;
+
+    if (!batchId) {
+      res.json({ data: [], total: 0, page: 1, page_size: 20, batch_id: null, available_entity_types: [], read_only: true });
+      return;
+    }
+
+    const q = typeof req.query.q === "string" ? req.query.q.trim().slice(0, 120) : "";
+    const status = typeof req.query.status === "string" ? req.query.status : undefined;
+    const relatedTo = typeof req.query.related_to === "string" && req.query.related_to ? req.query.related_to : undefined;
+    const DATE_ONLY = /^\d{4}-\d{2}-\d{2}$/;
+    const rawFrom = typeof req.query.from === "string" && req.query.from ? req.query.from : undefined;
+    const rawTo = typeof req.query.to === "string" && req.query.to ? req.query.to : undefined;
+    const from = rawFrom && DATE_ONLY.test(rawFrom) ? `${rawFrom}T00:00:00.000Z` : rawFrom;
+    const to = rawTo && DATE_ONLY.test(rawTo) ? `${rawTo}T23:59:59.999Z` : rawTo;
+    const page = Math.max(1, Number(req.query.page) || 1);
+    const pageSize = Math.min(100, Math.max(1, Number(req.query.page_size) || 20));
+    const sortBy = ALERT_NOTIFICATION_CHAT_SORTABLE.has(String(req.query.sort_by)) ? String(req.query.sort_by) : "imported_at";
+    const sortDir = req.query.sort_dir === "desc" ? "desc" : "asc";
+
+    let relatedRecordIds: string[] | undefined;
+    if (relatedTo) {
+      const rels = await legacy.legacyRelationSnapshot.findMany({ where: { batch_id: batchId, to_original_id: relatedTo }, select: { from_record_id: true } });
+      relatedRecordIds = [...new Set(rels.map((r) => r.from_record_id))];
+      if (relatedRecordIds.length === 0) {
+        res.json({ data: [], total: 0, page, page_size: pageSize, batch_id: batchId, available_entity_types: [], read_only: true });
+        return;
+      }
+    }
+
+    const where: Record<string, unknown> = { batch_id: batchId, entity_type: { in: entityTypeFilter } };
+    if (status) where.original_status = status;
+    if (relatedRecordIds) where.id = { in: relatedRecordIds };
+    if (q) {
+      where.OR = [
+        { original_code: { contains: q } },
+        { title: { contains: q } },
+        { subtitle: { contains: q } },
+        { content_json: { contains: q } },
+      ];
+    }
+
+    if (from || to) {
+      const clauses: string[] = ["batch_id = ?"];
+      const params: unknown[] = [batchId];
+      if (from) {
+        clauses.push("JSON_UNQUOTE(JSON_EXTRACT(dates_json, '$.created_at')) >= ?");
+        params.push(from);
+      }
+      if (to) {
+        clauses.push("JSON_UNQUOTE(JSON_EXTRACT(dates_json, '$.created_at')) <= ?");
+        params.push(to);
+      }
+      const rows = await legacy.$queryRawUnsafe<Array<{ id: string }>>(`SELECT id FROM legacy_record_snapshots WHERE ${clauses.join(" AND ")}`, ...params);
+      const idsInPeriod = rows.map((r) => r.id);
+      where.id = where.id ? { in: (where.id as { in: string[] }).in.filter((id) => idsInPeriod.includes(id)) } : { in: idsInPeriod };
+    }
+
+    const [total, rows, entityTypeCounts] = await Promise.all([
+      legacy.legacyRecordSnapshot.count({ where }),
+      legacy.legacyRecordSnapshot.findMany({
+        where,
+        orderBy: { [sortBy]: sortDir },
+        skip: (page - 1) * pageSize,
+        take: pageSize,
+        select: { id: true, entity_type: true, original_id: true, original_code: true, title: true, subtitle: true, original_status: true, imported_at: true, sanitized: true },
+      }),
+      legacy.legacyRecordSnapshot.groupBy({ by: ["entity_type"], where: { batch_id: batchId, entity_type: { in: ALERT_NOTIFICATION_CHAT_ENTITY_TYPES } }, _count: { _all: true } }),
+    ]);
+
+    await audit(req, "list", {
+      entity_type: "alerts_notifications_chat",
+      batch_id: batchId,
+      filters: { has_query: !!q, status: status ?? null, entity_type: requestedEntityType ?? null, group: requestedGroup ?? null, related_to: relatedTo ?? null, from: from ?? null, to: to ?? null, page, page_size: pageSize, sort_by: sortBy, sort_dir: sortDir },
       result_count: rows.length,
     });
 

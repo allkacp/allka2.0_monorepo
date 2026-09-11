@@ -38,7 +38,8 @@ export type LegacyEntityType =
   | "specialty"
   | IdentityEntityType
   | ProjectExecutionEntityType
-  | FinancialEntityType;
+  | FinancialEntityType
+  | AlertNotificationChatEntityType;
 
 // ── Identidade histórica e organizações (bloco seguinte ao manifesto de
 // retenção) — usuários, perfis administrativos, empresas, agências,
@@ -151,6 +152,62 @@ export const FINANCIAL_ENTITY_TYPES: FinancialEntityType[] = [
 
 export const FINANCIAL_IMPORTER_VERSION = "financial-foundation-1";
 export const DEFAULT_FINANCIAL_SOURCE_NAME = "[TESTE LOCAL] Fotografia financeira anterior";
+
+// ── Alertas, notificações e chat (bloco seguinte ao financeiro) — 17 tipos.
+// Ver src/legacy/collect-alerts-notifications-chat.ts.
+//
+// Deliberadamente FORA deste bloco (ver relatório):
+//   - PushSubscription (endpoint/p256dh/auth são a CREDENCIAL de criptografia
+//     do canal push — exatamente o tipo de segredo de canal proibido; sem
+//     valor histórico nenhum depois de removida a parte sensível);
+//   - IallkaSession/IallkaMessage (chat do assistente de IA de montagem de
+//     projeto — feature/domínio diferente do chat interno da plataforma);
+//   - CommunicationCampaign/CampaignRecipientState (domínio de campanhas,
+//     ainda adiado) — e, dentro de CommunicationDelivery, as linhas com
+//     origin="campaign" são filtradas fora pelo mesmo motivo (a tabela é
+//     compartilhada por notificação/campanha/banner; só as duas primeiras
+//     entram aqui).
+export type AlertNotificationChatEntityType =
+  | "alert_standard"
+  | "alert_rule"
+  | "system_alert"
+  | "system_alert_event"
+  | "alert_schedule"
+  | "notification_message"
+  | "notification_rule"
+  | "notification_preference"
+  | "notification_group"
+  | "notification_group_member"
+  | "user_communication_channel_pref"
+  | "communication_delivery"
+  | "mandatory_banner"
+  | "banner_acknowledgement"
+  | "conversation"
+  | "chat_participant"
+  | "chat_message";
+
+export const ALERT_ENTITY_TYPES: AlertNotificationChatEntityType[] = ["alert_standard", "alert_rule", "system_alert", "system_alert_event", "alert_schedule"];
+export const NOTIFICATION_ENTITY_TYPES: AlertNotificationChatEntityType[] = [
+  "notification_message",
+  "notification_rule",
+  "notification_preference",
+  "notification_group",
+  "notification_group_member",
+  "user_communication_channel_pref",
+  "communication_delivery",
+  "mandatory_banner",
+  "banner_acknowledgement",
+];
+export const CHAT_ENTITY_TYPES: AlertNotificationChatEntityType[] = ["conversation", "chat_participant", "chat_message"];
+
+export const ALERT_NOTIFICATION_CHAT_ENTITY_TYPES: AlertNotificationChatEntityType[] = [
+  ...ALERT_ENTITY_TYPES,
+  ...NOTIFICATION_ENTITY_TYPES,
+  ...CHAT_ENTITY_TYPES,
+];
+
+export const ALERT_NOTIFICATION_CHAT_IMPORTER_VERSION = "alerts-notifications-chat-foundation-1";
+export const DEFAULT_ALERT_NOTIFICATION_CHAT_SOURCE_NAME = "[TESTE LOCAL] Fotografia de alertas, notificações e chat anteriores";
 
 export interface RawRecord {
   entity_type: LegacyEntityType;
@@ -946,13 +1003,29 @@ export async function runImport(opts: ImportOptions): Promise<ImportResult> {
     };
 
     // Sanitiza + checksum de cada registro (checksum SEMPRE após sanitização).
+    // title/subtitle/original_code também passam por scrubSecretValues —
+    // são texto livre copiado direto da origem (nome, resumo, código) e um
+    // segredo colado à mão por engano (ex.: numa mensagem de alerta/chat)
+    // pode aparecer ali tanto quanto dentro de `content`.
     const prepared = collection.records.map((r) => {
       const s1 = sanitizeForLegacy(r.content);
       const s2 = scrubSecretValues(s1.clean);
-      const removedFields = [...s1.removedFields, ...s2.scrubbed.map((p) => `${p} (valor)`)];
+      const titleScrub = scrubSecretValues(r.title);
+      const subtitleScrub = scrubSecretValues(r.subtitle);
+      const codeScrub = scrubSecretValues(r.original_code);
+      const removedFields = [
+        ...s1.removedFields,
+        ...s2.scrubbed.map((p) => `${p} (valor)`),
+        ...titleScrub.scrubbed.map(() => "title (valor)"),
+        ...subtitleScrub.scrubbed.map(() => "subtitle (valor)"),
+        ...codeScrub.scrubbed.map(() => "original_code (valor)"),
+      ];
       const cleanContent = s2.clean;
       return {
         raw: r,
+        cleanTitle: titleScrub.clean as string | null,
+        cleanSubtitle: subtitleScrub.clean as string | null,
+        cleanOriginalCode: codeScrub.clean as string | null,
         cleanContent,
         removedFields,
         sanitized: removedFields.length > 0,
@@ -1161,9 +1234,9 @@ export async function runImport(opts: ImportOptions): Promise<ImportResult> {
             entity_type: r.entity_type,
             source_table: r.source_table,
             original_id: r.original_id,
-            original_code: r.original_code,
-            title: r.title,
-            subtitle: r.subtitle,
+            original_code: p.cleanOriginalCode,
+            title: p.cleanTitle,
+            subtitle: p.cleanSubtitle,
             original_status: r.original_status,
             dates_json: JSON.stringify(r.dates),
             content_json: JSON.stringify(p.cleanContent),

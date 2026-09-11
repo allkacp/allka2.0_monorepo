@@ -104,13 +104,35 @@ export function sanitizeForLegacy(input: unknown): SanitizeResult {
  * em um campo de nome inocente. Retorna a lista de caminhos suspeitos.
  * O importador REMOVE esses valores (substitui por "[removido: possível
  * segredo]") e marca o registro como sanitizado.
+ *
+ * SEM âncora (^...$): um segredo colado à mão no MEIO de texto livre (uma
+ * mensagem de chat/alerta com um token colado por engano, por exemplo) é
+ * encontrado e redigido mesmo cercado de outras palavras — só o trecho que
+ * bate o padrão é substituído, o resto do texto permanece legível. Quando o
+ * valor inteiro É o segredo (o caso original), o "trecho" é a string toda,
+ * então o resultado continua sendo a substituição completa de sempre.
  */
 const SECRET_VALUE_PATTERNS: RegExp[] = [
-  /^eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{5,}$/, // JWT
-  /^\$2[aby]\$\d{2}\$[./A-Za-z0-9]{53}$/, // bcrypt hash
-  /-----BEGIN [A-Z ]*PRIVATE KEY-----/, // PEM
-  /^[A-Fa-f0-9]{64,}$/, // chave hex longa (>=32 bytes)
+  /eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{5,}/, // JWT
+  /\$2[aby]\$\d{2}\$[./A-Za-z0-9]{53}/, // bcrypt hash
+  /-----BEGIN [A-Z ]*PRIVATE KEY-----[\s\S]*?-----END [A-Z ]*PRIVATE KEY-----/, // PEM
+  /[A-Fa-f0-9]{64,}/, // chave hex longa (>=32 bytes)
 ];
+
+const REDACTION = "[removido: possível segredo]";
+
+function redactEmbeddedSecrets(value: string): string | null {
+  let result = value;
+  let hit = false;
+  for (const pattern of SECRET_VALUE_PATTERNS) {
+    const probe = new RegExp(pattern.source, pattern.flags.replace("g", ""));
+    if (!probe.test(result)) continue;
+    hit = true;
+    const replacer = new RegExp(pattern.source, pattern.flags.includes("g") ? pattern.flags : `${pattern.flags}g`);
+    result = result.replace(replacer, REDACTION);
+  }
+  return hit ? result : null;
+}
 
 export function scrubSecretValues(input: unknown): { clean: unknown; scrubbed: string[] } {
   const scrubbed: string[] = [];
@@ -123,9 +145,12 @@ export function scrubSecretValues(input: unknown): { clean: unknown; scrubbed: s
       }
       return out;
     }
-    if (typeof value === "string" && SECRET_VALUE_PATTERNS.some((re) => re.test(value.trim()))) {
-      scrubbed.push(path);
-      return "[removido: possível segredo]";
+    if (typeof value === "string") {
+      const redacted = redactEmbeddedSecrets(value);
+      if (redacted !== null) {
+        scrubbed.push(path);
+        return redacted;
+      }
     }
     return value;
   }

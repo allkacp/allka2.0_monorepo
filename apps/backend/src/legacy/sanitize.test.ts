@@ -63,6 +63,24 @@ test("scrubSecretValues neutraliza segredos escondidos como VALOR em campo de no
   assert.deepEqual(scrubbed.sort(), ["hexkey", "note"]);
 });
 
+test("scrubSecretValues redige um segredo colado NO MEIO de texto livre, preservando o resto da frase (bloco de alertas/notificações/chat)", () => {
+  const jwt = "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.aaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+  const input = {
+    message: `Contém um segredo colado à mão: ${jwt} — favor ignorar`,
+    other: `Aqui vai minha chave: ${"a".repeat(64)} obrigado`,
+    fine: "Mensagem comum, sem nenhum segredo dentro",
+  };
+  const { clean, scrubbed } = scrubSecretValues(input);
+  assert.equal(
+    (clean as any).message,
+    "Contém um segredo colado à mão: [removido: possível segredo] — favor ignorar",
+    "o texto ao redor do segredo permanece legível",
+  );
+  assert.match((clean as any).other, /^Aqui vai minha chave: \[removido: possível segredo\] obrigado$/);
+  assert.equal((clean as any).fine, "Mensagem comum, sem nenhum segredo dentro");
+  assert.deepEqual(scrubbed.sort(), ["message", "other"]);
+});
+
 test("checksum é determinístico independente da ordem das chaves", () => {
   const a = { x: 1, y: { b: 2, a: [3, 4] } };
   const b = { y: { a: [3, 4], b: 2 }, x: 1 };
