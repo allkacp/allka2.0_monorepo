@@ -163,6 +163,7 @@ export default function AdminProdutosPage() {
   const pageSize = 15;
   const [list, setList] = useState<{ data: any[]; total: number; page_size: number } | null>(null);
   const [listLoading, setListLoading] = useState(false);
+  const [listError, setListError] = useState<string | null>(null);
   const [msg, setMsg] = useState<string | null>(null);
   const [confirm, setConfirm] = useState<{ title: string; message: string; onConfirm: () => void } | null>(null);
 
@@ -197,8 +198,16 @@ export default function AdminProdutosPage() {
         sort, page, page_size: pageSize,
       });
       setList(r);
+      setListError(null);
     } catch {
+      // Bug real 2026-09-11: uma falha aqui (ex.: erro 500 no backend) virava
+      // silenciosamente "Nenhum produto encontrado" — indistinguível de um
+      // filtro que realmente não bate com nada. O contador ("36") vem de
+      // /overview, uma chamada separada que não falha junto, então a tela
+      // dizia "36" com a lista vazia sem NENHUM aviso de erro. Agora o erro
+      // fica visível e distinto do estado "nenhum resultado".
       setList({ data: [], total: 0, page_size: pageSize });
+      setListError("Não foi possível carregar a lista de produtos agora. Tente novamente.");
     } finally {
       setListLoading(false);
     }
@@ -522,6 +531,15 @@ export default function AdminProdutosPage() {
 
               {listLoading ? (
                 <Centered><Loader2 className="h-5 w-5 animate-spin" /> Carregando…</Centered>
+              ) : listError ? (
+                <div className="flex flex-col items-center justify-center px-4 py-20">
+                  <div className="mb-5 flex h-20 w-20 items-center justify-center rounded-2xl bg-red-50 shadow-sm dark:bg-red-950/30">
+                    <AlertTriangle className="h-9 w-9 text-red-500" />
+                  </div>
+                  <h3 className="mb-1.5 text-base font-semibold">Erro ao carregar a lista de produtos</h3>
+                  <p className="mb-6 max-w-md text-center text-sm leading-relaxed text-muted-foreground">{listError}</p>
+                  <Button onClick={() => void loadList()}>Tentar novamente</Button>
+                </div>
               ) : !list || list.data.length === 0 ? (
                 <div className="flex flex-col items-center justify-center px-4 py-20">
                   <div className="mb-5 flex h-20 w-20 items-center justify-center rounded-2xl bg-linear-to-br from-blue-100 to-purple-100 shadow-sm">

@@ -384,6 +384,33 @@ it("bug real: contador mostra 36 produtos mas tabela/grade ficam vazias (página
   expect(calledPages[calledPages.length - 1]).toBeLessThanOrEqual(3)
 })
 
+// Bug real reportado 2026-09-11 (evidência real de tela): aba "Todos os
+// produtos" mostrava 36, busca vazia, "página 1 de 1", mas a listagem vinha
+// com 0 itens e nenhum produto renderizado. Diagnóstico com execução local
+// real (container Docker do backend) mostrou que /api/admin/catalog2/products
+// respondia 500 (Prisma Client do container desatualizado, sem o campo
+// `provisional_preview` adicionado numa fase anterior) — corrigido
+// regenerando o Prisma Client e reiniciando o container. O bug de CÓDIGO
+// remanescente: essa falha virava silenciosamente "Nenhum produto
+// encontrado", indistinguível de um filtro que realmente não bate com nada
+// — o contador ("36", vindo de /overview, uma chamada separada que não
+// falha junto) continuava certo, escondendo que a listagem tinha quebrado.
+it("bug real: falha real na listagem (ex.: erro 500 do backend) aparece como ERRO, nunca como 'Nenhum produto encontrado' silencioso", async () => {
+  // mesma chamada exata que a aba 'Todos' envia (sem filtro nenhum ativo)
+  api.getCatalog2Products.mockRejectedValueOnce(new Error("Erro interno do servidor"))
+  renderPage()
+
+  expect(await screen.findByText(/Erro ao carregar a lista de produtos/i)).toBeInTheDocument()
+  expect(screen.queryByText("Nenhum produto encontrado")).not.toBeInTheDocument()
+
+  // "Tentar novamente" refaz a MESMA chamada e, com o backend saudável,
+  // os produtos aparecem — sem precisar de F5.
+  api.getCatalog2Products.mockResolvedValueOnce(LIST)
+  await userEvent.click(screen.getByRole("button", { name: "Tentar novamente" }))
+  expect(await screen.findByText("[TESTE LOCAL] Demo")).toBeInTheDocument()
+  expect(screen.queryByText(/Erro ao carregar a lista de produtos/i)).not.toBeInTheDocument()
+})
+
 it("listagem: mostra produtos catalog2, situação, etiqueta Novo, e nunca os 162 antigos", async () => {
   renderPage()
   expect(await screen.findByText("[TESTE LOCAL] Demo")).toBeInTheDocument()
