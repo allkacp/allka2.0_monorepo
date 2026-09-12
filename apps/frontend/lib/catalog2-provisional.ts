@@ -107,6 +107,29 @@ export function provisionalStepCount(productId: string, taskCount: number): Prov
   return { value: taskCount + range(productId, "steps", 1, 4), is_provisional: true, label: "Estrutura provisória — completar" };
 }
 
+// ── Badge comercial provisório (reunião 10/09, "cards e interação") ────
+// Catalog2Product ganhou campos reais de merchandising (merch_is_new,
+// merch_is_launch, merch_is_promotion, merch_is_featured — sempre nulos até
+// um Admin Master decidir um). Enquanto nenhum estiver definido, o preview
+// administrativo pode mostrar UM badge provisório determinístico — só pra
+// avaliação visual do card, nunca visto pelo cliente comum (esta função só
+// é chamada no Catálogo administrativo) e nunca usado pra calcular preço.
+// ~40% dos ids não recebem nenhum badge (nem todo produto tem destaque).
+const MERCH_KINDS = ["novo", "lancamento", "promocao", "destaque"] as const;
+export type MerchBadgeKind = (typeof MERCH_KINDS)[number];
+export const MERCH_KIND_LABEL: Record<MerchBadgeKind, string> = {
+  novo: "Novo", lancamento: "Lançamento", promocao: "Promoção", destaque: "Destaque",
+};
+export function provisionalMerchandising(productId: string): Provisional<MerchBadgeKind | null> {
+  const roll = hash(productId + "merch-roll") % 10;
+  const kind = roll < 4 ? null : pick(productId, "merch-kind", MERCH_KINDS);
+  return {
+    value: kind,
+    is_provisional: true,
+    label: kind ? `${MERCH_KIND_LABEL[kind]} (provisório) — badge de demonstração, revisar antes de publicar.` : "Sem badge provisório",
+  };
+}
+
 // ── Resumo por produto: campos reais vs. provisórios vs. ausentes ──────
 export type FieldStatus = "real" | "provisorio" | "ausente";
 export interface ProvisionalFieldSummary {

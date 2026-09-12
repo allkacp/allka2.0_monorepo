@@ -34,11 +34,26 @@ import {
 import { PinToTrayButton } from "@/components/pin-to-tray-button";
 import { EmbeddedSlideScreen } from "@/components/embedded-slide-screen";
 import { ProductViewModeToggle } from "@/components/product-view-mode-toggle";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { Catalog2Thumbnail } from "@/components/catalog2-thumbnail";
 import { Catalog2ProductDetail } from "@/components/catalog2-product-detail";
 import { ProvisionalBadge } from "@/components/provisional-badge";
 import { usePersistedViewMode, viewModeGridClass } from "@/lib/use-persisted-view-mode";
-import { provisionalPrice, provisionalDeadlineDays, provisionalTaskCount, provisionalStepCount } from "@/lib/catalog2-provisional";
+import {
+  provisionalPrice,
+  provisionalDeadlineDays,
+  provisionalTaskCount,
+  provisionalStepCount,
+  provisionalMerchandising,
+  MERCH_KIND_LABEL,
+  type MerchBadgeKind,
+} from "@/lib/catalog2-provisional";
+import { Info } from "lucide-react";
 
 // Catálogo de Produtos — visão de APRESENTAÇÃO e conferência comercial dos
 // produtos catalog2 (reunião 2026-09, consolidação "catálogo2 como cadastro
@@ -103,9 +118,21 @@ interface ReadinessProduct {
     deadline_days: number | null;
     modality: string | null;
   } | null;
+  // Merchandising administrável (reunião 10/09) — sempre real, nulo até um
+  // Admin Master decidir; nunca preenchido automaticamente.
+  merchandising: {
+    is_new: boolean | null;
+    is_launch: boolean | null;
+    is_promotion: boolean | null;
+    is_featured: boolean | null;
+    promotion_text: string | null;
+    promotion_valid_until: string | null;
+    badge_priority: number | null;
+  } | null;
 }
 interface ListProduct {
   id: string;
+  slug: string;
   category: { id: string; name: string } | null;
   summary: string | null;
   published_version_number: number | null;
@@ -126,6 +153,85 @@ type Merged = ReadinessProduct & { list?: ListProduct };
 // comercial (o card/linha sempre mostra o selo "provisório" ao lado).
 function priceForSort(p: Merged): number {
   return p.price_amount ?? p.provisional?.price_amount ?? provisionalPrice(p.id).value;
+}
+
+// ── Badge comercial (reunião 10/09) — UM único badge por card, prioridade
+// real: promoção > lançamento > novo > destaque (a mesma ordem de urgência
+// comercial). Real sempre vence; provisório só aparece quando NENHUM campo
+// real de merchandising está definido, e a fixture nunca recebe badge.
+interface MerchBadgeView { kind: MerchBadgeKind; label: string; isProvisional: boolean; promotionText?: string | null }
+function resolveMerchBadge(p: Merged): MerchBadgeView | null {
+  const m = p.merchandising;
+  if (m) {
+    if (m.is_promotion) return { kind: "promocao", label: "Promoção", isProvisional: false, promotionText: m.promotion_text };
+    if (m.is_launch) return { kind: "lancamento", label: "Lançamento", isProvisional: false };
+    if (m.is_new) return { kind: "novo", label: "Novo", isProvisional: false };
+    if (m.is_featured) return { kind: "destaque", label: "Destaque", isProvisional: false };
+  }
+  // "Novo" derivado (publicação recente) — mesmo conceito exibido antes num
+  // badge separado no canto da imagem; unificado aqui pra nunca duplicar
+  // "Novo" em dois lugares do card.
+  if (p.list?.is_new) return { kind: "novo", label: "Novo", isProvisional: false };
+  if (p.is_test_local) return null; // fixture nunca recebe badge comercial
+  const prov = provisionalMerchandising(p.id);
+  if (!prov.value) return null;
+  return { kind: prov.value, label: MERCH_KIND_LABEL[prov.value], isProvisional: true };
+}
+
+const MERCH_TONE: Record<MerchBadgeKind, string> = {
+  novo: "bg-blue-500 text-white",
+  lancamento: "bg-violet-600 text-white",
+  promocao: "bg-rose-600 text-white",
+  destaque: "bg-amber-500 text-white",
+};
+function MerchBadgeChip({ badge }: { badge: MerchBadgeView }) {
+  const text = badge.isProvisional ? `${badge.label} (provisório)` : badge.label;
+  return (
+    <TooltipProvider delayDuration={300}>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <span
+            tabIndex={0}
+            className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide shadow-sm ${MERCH_TONE[badge.kind]} ${badge.isProvisional ? "opacity-90 ring-1 ring-white/60" : ""}`}
+          >
+            {text}
+          </span>
+        </TooltipTrigger>
+        <TooltipContent className="max-w-[220px] text-xs">
+          {badge.isProvisional
+            ? "Badge provisório de demonstração — nenhum campo de merchandising foi definido ainda para este produto; revisar antes de publicar."
+            : badge.promotionText || `Badge comercial real: ${badge.label}.`}
+        </TooltipContent>
+      </Tooltip>
+    </TooltipProvider>
+  );
+}
+
+// ── Código interno (reunião 10/09) — nunca ocupa espaço fixo no card; só
+// um ícone pequeno que, ao passar o mouse OU focar (teclado), mostra
+// slug/versão/id — nunca "ANTIGA #..." (isso não existe no catalog2).
+function ProductCodeInfo({ p }: { p: Merged }) {
+  return (
+    <TooltipProvider delayDuration={300}>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <button
+            type="button"
+            onClick={(e) => e.stopPropagation()}
+            aria-label={`Código e identificadores de ${p.name}`}
+            className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-slate-400 hover:bg-slate-100 hover:text-slate-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 dark:hover:bg-slate-800"
+          >
+            <Info className="h-3.5 w-3.5" />
+          </button>
+        </TooltipTrigger>
+        <TooltipContent className="text-xs">
+          <p>Código: <span className="font-mono">{p.list?.slug ?? "—"}</span></p>
+          {p.list?.published_version_number != null && <p>Versão publicada: v{p.list.published_version_number}</p>}
+          <p>ID (suporte): <span className="font-mono">{p.id}</span></p>
+        </TooltipContent>
+      </Tooltip>
+    </TooltipProvider>
+  );
 }
 
 const SORTS = {
@@ -209,9 +315,11 @@ export default function AdminCatalogoProdutosPage() {
   // partir do resumo administrativo (ProductDetail), ação separada.
   const [fullDetailId, setFullDetailId] = useState<string | null>(null);
   // Grade/Lista — preferência isolada desta tela (distinta do Cadastro),
-  // persistida em localStorage. Padrão em grade de 4, como o catálogo
-  // comercial anterior (product-catalog-view.tsx, modo "page").
-  const [gridMode, setGridMode] = usePersistedViewMode("admin-catalogo-produtos", 4);
+  // persistida em localStorage. Padrão em Lista (reunião 10/09, "cards e
+  // interação do catálogo") para quem ainda não escolheu nada; quem já
+  // tem uma preferência salva (Grade/2-5 colunas) continua vendo a dela —
+  // a hidratação do hook só troca o valor quando existe algo salvo.
+  const [gridMode, setGridMode] = usePersistedViewMode("admin-catalogo-produtos", "list");
 
   const load = useCallback(async () => {
     setState("loading");
@@ -547,6 +655,11 @@ export default function AdminCatalogoProdutosPage() {
   );
 }
 
+// Card inteiro clicável (reunião 10/09) — clique em qualquer área livre
+// abre o detalhe completo; elementos internos (botão "Ver detalhes", ícone
+// de informação) chamam `e.stopPropagation()` pra nunca disparar a MESMA
+// ação duas vezes. Enter/Espaço abrem quando o card está focado; foco
+// visível e cursor de ponteiro deixam claro que é clicável.
 function ProductCard({ product: p, onOpen, compact = false }: { product: Merged; onOpen: () => void; compact?: boolean }) {
   const categoryName = p.list?.category?.name ?? "Sem categoria";
   // Fonte ÚNICA de provisório: Catalog2ProvisionalPreview (via p.provisional,
@@ -556,30 +669,53 @@ function ProductCard({ product: p, onOpen, compact = false }: { product: Merged;
   const prazoProv = p.provisional?.deadline_days != null ? { value: p.provisional.deadline_days, label: "Prazo provisório — revisar.", is_provisional: true as const } : provisionalDeadlineDays(p.id);
   const taskProv = provisionalTaskCount(p.id);
   const hasRealTasks = p.task_count > 0;
+  const pendCount = p.blockers.length + p.pendings.length;
+  const badge = resolveMerchBadge(p);
+  const cardLabel = `${p.name} — ver detalhes`;
+
   return (
-    <Card className="group flex flex-col overflow-hidden border border-slate-200/70 bg-white shadow-sm transition-all duration-300 hover:-translate-y-0.5 hover:shadow-xl dark:border-slate-700/60 dark:bg-slate-900">
+    <Card
+      role="button"
+      tabIndex={0}
+      aria-label={cardLabel}
+      onClick={onOpen}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          onOpen();
+        }
+      }}
+      className="group flex cursor-pointer flex-col overflow-hidden border border-slate-200/70 bg-white shadow-sm transition-all duration-300 hover:-translate-y-0.5 hover:shadow-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 active:translate-y-0 active:shadow-sm dark:border-slate-700/60 dark:bg-slate-900"
+    >
       {/* Banner — imagem real reaproveitada provisoriamente (backend,
           Catalog2ProvisionalPreview) quando existe; ícone/gradiente
-          determinístico só como fallback — ver catalog2-thumbnail.tsx. */}
+          determinístico só como fallback — ver catalog2-thumbnail.tsx.
+          Badge comercial no canto ESQUERDO (loja virtual); status no
+          canto DIREITO — nunca os dois no mesmo canto, nunca repetidos. */}
       <div className={`relative shrink-0 ${compact ? "h-20" : "h-32"}`}>
         <Catalog2Thumbnail productId={p.id} imagePath={p.provisional?.image_path} size="lg" showBadge />
-        <div className="absolute right-2.5 top-2.5 flex items-center gap-1">
-          {p.list?.is_new && <Badge className="bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-200">Novo</Badge>}
+        {badge && (
+          <div className="absolute left-2.5 top-2.5">
+            <MerchBadgeChip badge={badge} />
+          </div>
+        )}
+        <div className="absolute right-2.5 top-2.5">
           <Badge className={STATUS_TONE[p.status] ?? "bg-muted text-muted-foreground"}>{STATUS_LABEL[p.status] ?? p.status}</Badge>
         </div>
       </div>
 
       <CardContent className={`flex flex-1 flex-col gap-2.5 ${compact ? "p-3" : "p-4"}`}>
-        <div>
+        <div className="flex items-start justify-between gap-1.5">
           <h3 title={p.name} className="line-clamp-2 text-base font-bold leading-snug text-slate-900 transition-colors group-hover:text-blue-600 dark:text-slate-100">
             {p.name}
           </h3>
-          {!compact && (
-            <p title={p.list?.summary ?? undefined} className="mt-1 line-clamp-2 text-xs leading-relaxed text-slate-400">
-              {p.list?.summary || "Descrição ainda não escrita — produto em preparação."}
-            </p>
-          )}
+          <ProductCodeInfo p={p} />
         </div>
+        {!compact && (
+          <p title={p.list?.summary ?? undefined} className="line-clamp-2 text-xs leading-relaxed text-slate-400">
+            {p.list?.summary || "Descrição ainda não escrita — produto em preparação."}
+          </p>
+        )}
 
         <div className="flex items-center gap-1.5 text-xs text-slate-400">
           <Layers className="h-3.5 w-3.5 shrink-0" />
@@ -600,6 +736,21 @@ function ProductCard({ product: p, onOpen, compact = false }: { product: Merged;
           )}
         </div>
 
+        {pendCount > 0 && (
+          <TooltipProvider delayDuration={300}>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <span tabIndex={0} onClick={(e) => e.stopPropagation()} className="inline-flex w-fit items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-semibold text-amber-800 dark:bg-amber-900/40 dark:text-amber-200">
+                  {pendCount} pendência{pendCount === 1 ? "" : "s"}
+                </span>
+              </TooltipTrigger>
+              <TooltipContent className="max-w-[220px] text-xs">
+                {[...p.blockers, ...p.pendings].map((k) => PENDENCY_LABEL[k] ?? k).join(", ")}
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
+        )}
+
         <div className="mt-auto space-y-1 border-t border-slate-100 pt-2.5 dark:border-slate-800">
           <PriceOrProvisional p={p} priceProv={priceProv} />
           <DeadlineOrProvisional p={p} prazoProv={prazoProv} />
@@ -607,7 +758,7 @@ function ProductCard({ product: p, onOpen, compact = false }: { product: Merged;
             variant="outline"
             size="sm"
             className="mt-2 w-full border-blue-200 bg-transparent text-xs text-blue-600 hover:bg-blue-50 hover:text-blue-700"
-            onClick={onOpen}
+            onClick={(e) => { e.stopPropagation(); onOpen(); }}
           >
             Ver detalhes
           </Button>
@@ -641,18 +792,40 @@ function DeadlineOrProvisional({ p, prazoProv }: { p: Merged; prazoProv: ReturnT
 }
 
 // Modo Lista — mesma apresentação comercial, densidade maior (linha em vez
-// de card). Restaurado 2026-09 junto do alternador Lista/Grade.
+// de card). Restaurado 2026-09 junto do alternador Lista/Grade; reunião
+// 10/09: a linha inteira também abre o detalhe (mesmo padrão do card).
 function ProductListRow({ product: p, onOpen }: { product: Merged; onOpen: () => void }) {
   const priceProv = p.provisional?.price_amount != null ? { value: p.provisional.price_amount, label: "Preço provisório — revisar.", is_provisional: true as const } : provisionalPrice(p.id);
   const taskProv = provisionalTaskCount(p.id);
   const categoryName = p.list?.category?.name ?? "Sem categoria";
+  const badge = resolveMerchBadge(p);
+  const cardLabel = `${p.name} — ver detalhes`;
   return (
-    <li className="flex items-center gap-3 px-4 py-3 transition-colors hover:bg-slate-50/70 dark:hover:bg-slate-800/40">
-      <Catalog2Thumbnail productId={p.id} imagePath={p.provisional?.image_path} size="sm" showBadge={false} />
+    <li
+      role="button"
+      tabIndex={0}
+      aria-label={cardLabel}
+      onClick={onOpen}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          onOpen();
+        }
+      }}
+      className="flex cursor-pointer items-center gap-3 px-4 py-3 transition-colors hover:bg-slate-50/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-500 active:bg-slate-100 dark:hover:bg-slate-800/40 dark:active:bg-slate-800"
+    >
+      <div className="relative shrink-0">
+        <Catalog2Thumbnail productId={p.id} imagePath={p.provisional?.image_path} size="sm" showBadge={false} />
+        {badge && (
+          <div className="absolute -left-1 -top-1">
+            <MerchBadgeChip badge={badge} />
+          </div>
+        )}
+      </div>
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-1.5">
           <span title={p.name} className="truncate text-sm font-semibold text-slate-900 dark:text-slate-100">{p.name}</span>
-          {p.list?.is_new && <Badge className="bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-200">Novo</Badge>}
+          <ProductCodeInfo p={p} />
         </div>
         <p title={categoryName} className="truncate text-xs text-slate-400">
           {categoryName} · {p.task_count > 0 ? `${p.task_count} tarefa(s)` : `${taskProv.value} tarefa(s) (provisório)`}
@@ -662,7 +835,7 @@ function ProductListRow({ product: p, onOpen }: { product: Merged; onOpen: () =>
       <span className="hidden w-40 shrink-0 truncate text-right text-xs text-slate-500 sm:inline">
         {p.items.preco?.note ?? `R$ ${priceProv.value.toFixed(2)} (provisório)`}
       </span>
-      <Button variant="outline" size="sm" className="shrink-0 border-blue-200 text-xs text-blue-600 hover:bg-blue-50" onClick={onOpen}>
+      <Button variant="outline" size="sm" className="shrink-0 border-blue-200 text-xs text-blue-600 hover:bg-blue-50" onClick={(e) => { e.stopPropagation(); onOpen(); }}>
         Ver detalhes
       </Button>
     </li>

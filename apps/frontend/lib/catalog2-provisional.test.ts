@@ -5,6 +5,7 @@ import {
   provisionalDeadlineDays,
   provisionalTaskCount,
   provisionalStepCount,
+  provisionalMerchandising,
 } from "./catalog2-provisional";
 
 // Reparo 2026-09 ("Cadastro/Catálogo visualmente completos com dados
@@ -66,5 +67,17 @@ describe("Camada de dados provisórios (catalog2) — determinismo e marcação"
     const { value } = provisionalThumbnail("prod-img");
     expect(value.gradient).toMatch(/^from-.+ to-.+$/);
     expect(typeof value.iconKey).toBe("string");
+  });
+
+  it("badge comercial provisório: determinístico, sempre marcado, e nem todo produto recebe um", () => {
+    const ids = Array.from({ length: 30 }, (_, i) => `produto-merch-${i}`);
+    const kinds = ids.map((id) => provisionalMerchandising(id).value);
+    expect(kinds.some((k) => k === null)).toBe(true); // ~40% sem badge
+    expect(kinds.some((k) => k !== null)).toBe(true); // ~60% com algum badge
+    for (const id of ids) {
+      const first = provisionalMerchandising(id);
+      expect(provisionalMerchandising(id).value).toEqual(first.value); // determinístico
+      expect(first.is_provisional).toBe(true);
+    }
   });
 });
