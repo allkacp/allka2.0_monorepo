@@ -8,6 +8,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/components/ui/use-toast";
 import { EmbeddedSlideScreen } from "@/components/embedded-slide-screen";
 import { useAccountType } from "@/contexts/account-type-context";
+import { useIallkaContext } from "@/contexts/iallka-context";
 import { resolveCatalogIdentity, resolveCatalogProjectDestination } from "@/lib/catalog-access";
 import { Sparkles, Send, Loader2, CheckCircle2, Package, ArrowRight } from "lucide-react";
 
@@ -40,6 +41,16 @@ function parsePayload(m: IallkaMessage): TurnResult | null {
   }
 }
 
+// Nunca finge sucesso nem inventa causa — traduz o que o backend já
+// respondeu (a permissão real continua sendo decidida lá, nunca aqui) pra
+// uma frase honesta, sem expor detalhe técnico.
+function friendlyIallkaError(err: any): string {
+  if (err?.status === 403) {
+    return "A IAllka ainda está disponível só para Admin Master e contas de agência nesta fase.";
+  }
+  return err?.message || "O assistente não respondeu agora — tente de novo em instantes.";
+}
+
 interface IallkaAssistantPanelProps {
   open: boolean;
   onClose: () => void;
@@ -49,6 +60,7 @@ export function IallkaAssistantPanel({ open, onClose }: IallkaAssistantPanelProp
   const { toast } = useToast();
   const navigate = useNavigate();
   const { accountType } = useAccountType();
+  const { suggestions, contextLine } = useIallkaContext();
   const scrollRef = useRef<HTMLDivElement>(null);
 
   const [sessionId, setSessionId] = useState<string | null>(null);
@@ -70,7 +82,7 @@ export function IallkaAssistantPanel({ open, onClose }: IallkaAssistantPanelProp
         setSessionId(session.id);
         setMessages(session.messages || []);
       })
-      .catch((err: any) => setError(err?.message || "Não foi possível iniciar o assistente"))
+      .catch((err: any) => setError(friendlyIallkaError(err)))
       .finally(() => setStarting(false));
   }, [open, sessionId, starting]);
 
@@ -86,21 +98,27 @@ export function IallkaAssistantPanel({ open, onClose }: IallkaAssistantPanelProp
     setApprovedProjectId(null);
   }
 
-  async function handleSend() {
-    const text = input.trim();
-    if (!text || !sessionId || sending) return;
+  // `visibleText` é o que aparece na bolha do usuário; `sentText` é o que
+  // realmente vai pro backend — quando vem de uma sugestão contextual, ganha
+  // um prefixo curto e seguro com a tela atual (nunca dado sensível, nunca
+  // um campo novo na API: continua sendo só a mensagem de texto de sempre,
+  // ver lib/iallka.ts sendIallkaTurn). Digitação livre nunca leva prefixo.
+  async function handleSend(overrideText?: string, withContext = false) {
+    const visibleText = (overrideText ?? input).trim();
+    if (!visibleText || !sessionId || sending) return;
+    const sentText = withContext && contextLine ? `${contextLine} ${visibleText}` : visibleText;
     setInput("");
     setError(null);
-    setMessages((prev) => [...prev, { role: "user", content: text }]);
+    setMessages((prev) => [...prev, { role: "user", content: visibleText }]);
     setSending(true);
     try {
-      const result: TurnResult = await apiClient.sendIallkaMessage(sessionId, text);
+      const result: TurnResult = await apiClient.sendIallkaMessage(sessionId, sentText);
       setMessages((prev) => [
         ...prev,
         { role: "assistant", content: result.reply_text, structured_payload: JSON.stringify(result) },
       ]);
     } catch (err: any) {
-      setError(err?.message || "O assistente não respondeu — tente de novo.");
+      setError(friendlyIallkaError(err));
     } finally {
       setSending(false);
     }
@@ -132,15 +150,15 @@ export function IallkaAssistantPanel({ open, onClose }: IallkaAssistantPanelProp
         onClose();
         if (approvedProjectId) resetForNextOpen();
       }}
-      title="IALLKA"
-      subtitle="Assistente de IA para montar um projeto"
+      title="IAllka"
+      subtitle="Assistente de IA da Allka — tira dúvidas e ajuda a montar um projeto"
     >
       <div className="flex-1 min-h-0 flex flex-col bg-slate-50 dark:bg-slate-900">
         <div ref={scrollRef} className="flex-1 min-h-0 overflow-y-auto px-5 py-5 space-y-3">
           {starting && messages.length === 0 && (
             <div className="flex items-center justify-center py-10 gap-2 text-slate-400">
               <Loader2 className="h-5 w-5 animate-spin" />
-              <span className="text-sm">Iniciando IALLKA...</span>
+              <span className="text-sm">Iniciando a IAllka...</span>
             </div>
           )}
 
@@ -227,6 +245,27 @@ export function IallkaAssistantPanel({ open, onClose }: IallkaAssistantPanelProp
             </div>
           )}
 
+          {/* Sugestões contextuais (reunião 10/09) — só antes da conversa
+              render, pra não poluir depois que a pessoa já está digitando.
+              Cada uma envia a MESMA API de sempre (sendIallkaMessage), só
+              com uma linha de contexto segura (rota/categoria/busca/aberto)
+              prefixada — nunca um campo novo, nunca dado sensível. */}
+          {!approvedProjectId && !starting && messages.length <= 1 && suggestions.length > 0 && (
+            <div className="flex flex-wrap gap-1.5 pt-1">
+              {suggestions.map((s) => (
+                <button
+                  key={s.key}
+                  type="button"
+                  disabled={!sessionId || sending}
+                  onClick={() => handleSend(s.text, true)}
+                  className="rounded-full border border-violet-200 dark:border-violet-800 bg-violet-50/70 dark:bg-violet-950/20 px-3 py-1.5 text-xs text-violet-700 dark:text-violet-300 hover:bg-violet-100 dark:hover:bg-violet-900/30 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                >
+                  {s.text}
+                </button>
+              ))}
+            </div>
+          )}
+
           {error && (
             <p className="text-xs text-red-600 dark:text-red-400 text-center">{error}</p>
           )}
@@ -253,7 +292,7 @@ export function IallkaAssistantPanel({ open, onClose }: IallkaAssistantPanelProp
                 size="icon"
                 className="h-9 w-9 shrink-0 bg-blue-600 hover:bg-blue-700 rounded-full"
                 disabled={!input.trim() || !sessionId || sending}
-                onClick={handleSend}
+                onClick={() => handleSend()}
               >
                 <Send className="h-4 w-4" />
               </Button>

@@ -95,6 +95,19 @@ export const TOURS: TourDefinition[] = [
     ],
   },
   {
+    key: "iallka-assistente",
+    version: 1,
+    title: "IAllka — assistente de IA",
+    description: "O ícone da IAllka, no canto inferior direito, e o que ela pode ajudar hoje.",
+    category: "alertas-comunicacao",
+    routes: [], // ícone global, presente em toda tela — nunca uma rota específica
+    steps: [
+      { id: "iallka-icon", target: "iallka-icon-button", title: "IAllka", description: "A assistente de IA da Allka. Usa o logo da Allka como avatar provisório, até um avatar definitivo ser escolhido.", placement: "left" },
+      { id: "iallka-context", target: null, title: "Sugestões contextuais", description: "Em algumas telas (como o Catálogo de Produtos e Projetos), a IAllka já abre com sugestões prontas pra essa tela — mas você pode digitar qualquer pergunta." },
+      { id: "iallka-honesty", target: null, title: "Nunca inventa nem executa sozinha", description: "Se ainda não tiver informação suficiente, a IAllka avisa em vez de inventar produto, preço, prazo ou tarefa — e nunca contrata ou altera um projeto sem você aprovar." },
+    ],
+  },
+  {
     key: "administracao-alertas-regras",
     version: 1,
     title: "Administração de Alertas e Regras",

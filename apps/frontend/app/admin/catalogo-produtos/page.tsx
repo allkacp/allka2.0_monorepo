@@ -15,6 +15,7 @@ import {
   X,
 } from "lucide-react";
 import { apiClient } from "@/lib/api-client";
+import { useIallkaContext } from "@/contexts/iallka-context";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -300,6 +301,7 @@ function matchesFilters(p: Merged, f: CatalogFilters): boolean {
 }
 
 export default function AdminCatalogoProdutosPage() {
+  const { setScreenContext: setIallkaScreenContext } = useIallkaContext();
   const [state, setState] = useState<"loading" | "ready" | "forbidden" | "error">("loading");
   const [readinessProducts, setReadinessProducts] = useState<ReadinessProduct[]>([]);
   const [listById, setListById] = useState<Record<string, ListProduct>>({});
@@ -390,6 +392,20 @@ export default function AdminCatalogoProdutosPage() {
   };
 
   const openedProduct = merged.find((p) => p.id === openProductId) ?? null;
+
+  // Contexto seguro pra IAllka (reunião 10/09) — só o que esta tela já
+  // mostra na própria UI (categoria, busca, quantos itens estão visíveis,
+  // nome do produto aberto); nunca um ID técnico nem dado de outra conta.
+  useEffect(() => {
+    setIallkaScreenContext({
+      label: "Catálogo de Produtos",
+      category: category !== "Todos" ? category : undefined,
+      search: search || undefined,
+      visibleCount: filtered.length,
+      openItemName: openedProduct?.name,
+    });
+    return () => setIallkaScreenContext(null);
+  }, [category, search, filtered.length, openedProduct?.name, setIallkaScreenContext]);
 
   if (state === "loading") {
     return (

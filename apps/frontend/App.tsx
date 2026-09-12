@@ -43,6 +43,8 @@ import { ProductFeedbackWidget } from "@/components/product-feedback-widget";
 import { isStandardShellRoute } from "@/components/standard-page-shell";
 import { OnboardingProvider } from "@/contexts/onboarding-context";
 import { HelpFloatingIcon } from "@/components/help-floating-icon";
+import { IallkaContextProvider } from "@/contexts/iallka-context";
+import { IallkaFloatingIcon } from "@/components/iallka-floating-icon";
 
 import { PartnerProvider } from "@/contexts/partner-context";
 import { EmpresaProvider } from "@/contexts/empresa-context";
@@ -552,6 +554,7 @@ function AppLayout({ children }: { children: React.ReactNode }) {
                           <GlobalHeaderPanelProvider>
                           <ProjectBasketProvider>
                           <NotificationsPanelProvider>
+                          <IallkaContextProvider>
                             <MobileLayoutWrapper>
                               <div
                                 className={cn(
@@ -652,7 +655,12 @@ function AppLayout({ children }: { children: React.ReactNode }) {
                                 de um banner obrigatório pendente. */}
                             <OnboardingProvider>
                               <HelpFloatingIcon />
+                              {/* IAllka — assistente de IA (reunião 10/09): ícone
+                                  global próprio, próximo slot livre da barra
+                                  vertical/mobile (ver iallka-floating-icon.tsx). */}
+                              <IallkaFloatingIcon />
                             </OnboardingProvider>
+                          </IallkaContextProvider>
                           </NotificationsPanelProvider>
                           </ProjectBasketProvider>
                           </GlobalHeaderPanelProvider>
