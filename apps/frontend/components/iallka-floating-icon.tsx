@@ -12,18 +12,55 @@
  * sidebar) como avatar provisório da IAllka, até um avatar definitivo ser
  * escolhido — nunca o mesmo ícone de Chat/Alertas/Ajuda/Sugestões.
  */
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useOnboarding } from "@/contexts/onboarding-context";
 import { IallkaAssistantPanel } from "@/components/iallka-assistant-panel";
+import { apiClient } from "@/lib/api-client";
+import { canManageAlertsAdmin } from "@/lib/admin-permissions";
+
+// Correção 2026-09-11 ("acesso da IAllka"): mesma matriz do backend —
+// nunca mostrar o ícone pra quem clicaria e só receberia 403 (Admin comum,
+// Léder, Nômade). Company/Agency/Partner (Agency com PartnerProfile ativo,
+// já coberto por account_type "agencias") e Admin Master veem o ícone.
+function useCanUseIallka(): boolean | null {
+  const [state, setState] = useState<boolean | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    apiClient
+      .getCurrentUser()
+      .then((user: any) => {
+        if (cancelled) return;
+        const accountType = user?.account_type;
+        const allowed =
+          accountType === "empresas" ||
+          accountType === "agencias" ||
+          (accountType === "admin" && canManageAlertsAdmin(accountType, user?.admin_profile ?? null));
+        setState(!!allowed);
+      })
+      .catch(() => {
+        if (!cancelled) setState(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+  return state;
+}
 
 export function IallkaFloatingIcon() {
   const [open, setOpen] = useState(false);
   const { progressFor } = useOnboarding();
+  const canUse = useCanUseIallka();
 
   // Badge discreto: some assim que a pessoa abrir a IAllka (ou dispensar o
   // tour pela Central de Ajuda) — nunca reaparece sozinho depois disso.
   const progress = progressFor("iallka-assistente");
   const showBadge = !progress || progress.status === "nao_iniciado" || progress.status === "adiado";
+
+  // Nunca mostra o ícone antes de confirmar acesso (evita um "pisca e some"
+  // pra quem não tem acesso) nem pra quem realmente não tem — Admin comum,
+  // Léder e Nômade simplesmente não veem nada aqui.
+  if (!canUse) return null;
 
   return (
     <>

@@ -45,9 +45,10 @@ function parsePayload(m: IallkaMessage): TurnResult | null {
 // respondeu (a permissão real continua sendo decidida lá, nunca aqui) pra
 // uma frase honesta, sem expor detalhe técnico.
 function friendlyIallkaError(err: any): string {
-  if (err?.status === 403) {
-    return "A IAllka ainda está disponível só para Admin Master e contas de agência nesta fase.";
-  }
+  // O backend já devolve uma mensagem honesta (ver routes/iallka.ts) —
+  // nunca uma segunda cópia fixa aqui que possa ficar desatualizada quando
+  // a matriz de acesso mudar (ex.: Company passou a ser permitida em
+  // 2026-09-11, e o texto fixo antigo ainda dizia "só admin e agência").
   return err?.message || "O assistente não respondeu agora — tente de novo em instantes.";
 }
 
