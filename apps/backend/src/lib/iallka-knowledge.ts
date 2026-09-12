@@ -74,10 +74,15 @@ export async function buildCatalog2KnowledgeText(opts: Catalog2KnowledgeOpts): P
     if (!target) continue;
 
     let pricing: Awaited<ReturnType<typeof computePricing>> | null = null;
+    let pricingSimulation: Awaited<ReturnType<typeof computePricing>> | null = null;
     try {
       pricing = await computePricing(target.id, await defaultSelection(target.id));
+      if (opts.includeProvisional) {
+        pricingSimulation = await computePricing(target.id, await defaultSelection(target.id), { simulateProvisional: true });
+      }
     } catch {
       pricing = null;
+      pricingSimulation = null;
     }
 
     const pend = safeJsonArray(p.import_origin?.pendencies_json);
@@ -98,6 +103,9 @@ export async function buildCatalog2KnowledgeText(opts: Catalog2KnowledgeOpts): P
     if (pricing?.commercial_ready && realAmount != null) {
       priceText = `R$ ${realAmount.toFixed(2)} [REAL]`;
       deadlineText = `${pricing.deadline.commercial_deadline_days} dia(s) [REAL]`;
+    } else if (opts.includeProvisional && pricingSimulation?.simulation_provenance.commercial_config === "provisional") {
+      priceText = `R$ ${pricingSimulation.simulation.total.toFixed(2)} [SIMULAÇÃO PROVISÓRIA PARA TESTE — nunca oferecer como preço final]`;
+      deadlineText = `${pricingSimulation.deadline.commercial_deadline_days ?? "?"} dia(s) [SIMULAÇÃO PROVISÓRIA — nunca prometer ao cliente]`;
     } else if (opts.includeProvisional && p.provisional_preview?.price_amount != null) {
       priceText = `R$ ${p.provisional_preview.price_amount.toFixed(2)} [PROVISÓRIO — revisar, nunca oferecer como preço final]`;
       deadlineText = `${p.provisional_preview.deadline_days ?? "?"} dia(s) [PROVISÓRIO — revisar]`;

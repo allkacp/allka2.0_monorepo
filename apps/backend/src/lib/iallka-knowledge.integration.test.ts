@@ -91,6 +91,40 @@ describe("IAllka — base de conhecimento (catálogo2 e briefing de projeto)", (
     await prisma.catalog2ProvisionalPreview.delete({ where: { product_id: p.id } });
   });
 
+  it("Admin Master recebe a simulação calculada e contas comuns nunca recebem", async () => {
+    const p = await createProduct({ internal_name: "[TESTE] Conhecimento Simulação Calculada" }, "system");
+    catProducts.push(p.id);
+    const version = await prisma.catalog2ProductVersion.findFirstOrThrow({ where: { product_id: p.id, state: "rascunho" } });
+    const specialty = await prisma.catalog2Specialty.findFirstOrThrow({ where: { key: "designer" } });
+    await prisma.catalog2Specialty.update({ where: { id: specialty.id }, data: { max_hourly_rate: 100 } });
+    await prisma.catalog2Task.create({
+      data: { version_id: version.id, key: "sim-t1", name: "Tarefa provisória", sort_order: 0, specialty_id: specialty.id, estimated_minutes: 60, effort_is_provisional: true, effort_source: "provisional_fill_v1" },
+    });
+    await prisma.catalog2ProductVersion.update({ where: { id: version.id }, data: { provisional_commercial_deadline_days: 4, provisional_deadline_source: "provisional_simulation_v1" } });
+    await prisma.catalog2PricingSimulationSettings.upsert({
+      where: { id: "default" },
+      create: { id: "default", tax_percent: 6, commission_percent: 10, operational_fee_percent: 5, profit_margin_percent: 25, human_review_percent: 12, component_order_json: JSON.stringify(["tax", "commission", "operational", "margin"]), is_provisional: true },
+      update: { tax_percent: 6, commission_percent: 10, operational_fee_percent: 5, profit_margin_percent: 25, human_review_percent: 12, component_order_json: JSON.stringify(["tax", "commission", "operational", "margin"]), is_provisional: true },
+    });
+    await prisma.catalog2PricingSimulationSpecialtyRate.upsert({
+      where: { specialty_id: specialty.id },
+      create: { specialty_id: specialty.id, hourly_rate: 90, is_provisional: true, source: "provisional_simulation_v1" },
+      update: { hourly_rate: 90, is_provisional: true, source: "provisional_simulation_v1" },
+    });
+    try {
+      const admin = await buildCatalog2KnowledgeText({ includeProvisional: true, clientVisibleOnly: false });
+      const adminLine = admin.text.split("\n").find((l) => l.includes("[TESTE] Conhecimento Simulação Calculada"))!;
+      assert.match(adminLine, /SIMULAÇÃO PROVISÓRIA PARA TESTE/);
+
+      const common = await buildCatalog2KnowledgeText({ includeProvisional: false, clientVisibleOnly: false });
+      const commonLine = common.text.split("\n").find((l) => l.includes("[TESTE] Conhecimento Simulação Calculada"))!;
+      assert.ok(!commonLine.includes("SIMULAÇÃO"));
+    } finally {
+      await prisma.catalog2PricingSimulationSpecialtyRate.deleteMany({ where: { specialty_id: specialty.id } });
+      await prisma.catalog2PricingSimulationSettings.deleteMany({ where: { id: "default" } });
+    }
+  });
+
   it("clientVisibleOnly exclui produto em preparação inteiramente (cliente comum nunca vê o que não pode contratar)", async () => {
     const p = await createProduct({ internal_name: "[TESTE] Conhecimento Cliente" }, "system");
     catProducts.push(p.id);

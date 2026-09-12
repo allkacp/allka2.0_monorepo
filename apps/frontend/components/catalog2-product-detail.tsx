@@ -144,9 +144,9 @@ export function Catalog2ProductDetail({
   const options = hasRealOptions ? realOptions : provisionalOptions;
   const selectedOption = options.find((o) => o.id === selectedOptionId) ?? null;
 
-  const displayPrice = selectedOption?.price ?? readiness?.price_amount ?? provisional?.price_amount ?? null;
+  const displayPrice = selectedOption?.price ?? readiness?.price_amount ?? readiness?.pricing_simulation?.price_amount ?? provisional?.price_amount ?? null;
   const priceIsProvisional = !readiness?.price_amount && displayPrice != null;
-  const displayDeadline = selectedOption?.deadline_days ?? readiness?.deadline_days ?? provisional?.deadline_days ?? null;
+  const displayDeadline = selectedOption?.deadline_days ?? readiness?.deadline_days ?? readiness?.pricing_simulation?.deadline_days ?? provisional?.deadline_days ?? null;
   const deadlineIsProvisional = !readiness?.deadline_days && displayDeadline != null;
   const modality = provisional?.modality ?? null;
 

@@ -580,6 +580,7 @@ export default function AdminProdutosPage() {
                         const rp = readinessById[p.id];
                         const realTaskCount: number | undefined = rp?.task_count;
                         const realPrice: number | null | undefined = rp?.price_amount;
+                        const simulatedPrice: number | null | undefined = rp?.pricing_simulation?.price_amount;
                         // Fonte ÚNICA de provisório: a camada do backend
                         // (Catalog2ProvisionalPreview, via p.provisional_preview). O
                         // hash local (lib/catalog2-provisional.ts) só entra se o
@@ -648,6 +649,12 @@ export default function AdminProdutosPage() {
                                   <span className="text-[13px] font-bold text-emerald-600 dark:text-emerald-400">
                                     R$ {realPrice.toFixed(2)}
                                   </span>
+                                  <Catalog2PricingMemoryPopover productId={p.id} isAdminMaster={isAdminMaster} />
+                                </div>
+                              ) : simulatedPrice != null ? (
+                                <div className="flex items-center justify-end gap-1">
+                                  <span className="text-[13px] font-semibold text-violet-600 dark:text-violet-300">R$ {simulatedPrice.toFixed(2)}</span>
+                                  <ProvisionalBadge label="Preço final simulado para teste. Não autoriza publicação, cotação ou contratação." />
                                   <Catalog2PricingMemoryPopover productId={p.id} isAdminMaster={isAdminMaster} />
                                 </div>
                               ) : (

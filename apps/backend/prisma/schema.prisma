@@ -5200,6 +5200,21 @@ model Catalog2PricingSimulationSettings {
   @@map("catalog2_pricing_simulation_settings")
 }
 
+// Valores/hora exclusivamente para a simulação administrativa. A tabela
+// real de especialidades permanece intocada; computePricing só consulta
+// estes valores quando simulateProvisional=true.
+model Catalog2PricingSimulationSpecialtyRate {
+  specialty_id String @id
+  hourly_rate  Float
+  is_provisional Boolean @default(true)
+  source       String @default("provisional_simulation_v1")
+  notes        String? @db.Text
+  created_at   DateTime @default(now())
+  updated_at   DateTime @updatedAt
+
+  @@map("catalog2_pricing_simulation_specialty_rates")
+}
+
 // ─── Importacao dos 36 produtos definitivos (bloco 4/6) ──────────────────────
 // Cada `--apply` = um lote. Auditavel, repetivel, NUNCA sobrescreve edicao
 // humana. Fonte principal = Allka_Proposta_Catalogo_Produtos_v9.xlsx;

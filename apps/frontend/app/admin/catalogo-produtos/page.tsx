@@ -109,6 +109,15 @@ interface ReadinessProduct {
   // ainda não está pronto (mesma regra do card/detalhe honestos).
   price_amount: number | null;
   deadline_days: number | null;
+  pricing_simulation?: {
+    is_provisional: true;
+    price_amount: number;
+    deadline_days: number | null;
+    commercial_ready: false;
+    authorizes_publish: false;
+    authorizes_quote: false;
+    authorizes_contract: false;
+  } | null;
   items: Record<string, { level: string; note: string }>;
   blockers: string[];
   pendings: string[];
@@ -162,7 +171,7 @@ type Merged = ReadinessProduct & { list?: ListProduct };
 // os produtos que ainda não têm preço pronto — nunca exibido como se fosse
 // comercial (o card/linha sempre mostra o selo "provisório" ao lado).
 function priceForSort(p: Merged): number {
-  return p.price_amount ?? p.provisional?.price_amount ?? provisionalPrice(p.id).value;
+  return p.price_amount ?? p.pricing_simulation?.price_amount ?? p.provisional?.price_amount ?? provisionalPrice(p.id).value;
 }
 
 // ── Badge comercial (reunião 10/09) — UM único badge por card, prioridade
@@ -798,6 +807,15 @@ function ProductCard({ product: p, onOpen, compact = false, isAdminMaster = fals
 }
 
 function PriceOrProvisional({ p, priceProv, isAdminMaster = false }: { p: Merged; priceProv: ReturnType<typeof provisionalPrice>; isAdminMaster?: boolean }) {
+  if (p.pricing_simulation?.price_amount != null && p.price_amount == null) {
+    return (
+      <p className="flex items-center gap-1 text-xs font-semibold text-violet-600 dark:text-violet-300">
+        R$ {p.pricing_simulation.price_amount.toFixed(2)}
+        <ProvisionalBadge label="Preço final simulado para teste. Não vale para cotação, checkout, publicação ou contratação." />
+        <Catalog2PricingMemoryPopover productId={p.id} isAdminMaster={isAdminMaster} />
+      </p>
+    );
+  }
   if (p.items.preco?.note) {
     return (
       <p className="flex items-center gap-1 text-xs font-medium text-slate-500 dark:text-slate-400">
@@ -815,6 +833,14 @@ function PriceOrProvisional({ p, priceProv, isAdminMaster = false }: { p: Merged
   );
 }
 function DeadlineOrProvisional({ p, prazoProv }: { p: Merged; prazoProv: ReturnType<typeof provisionalDeadlineDays> }) {
+  if (p.pricing_simulation?.deadline_days != null && p.deadline_days == null) {
+    return (
+      <p className="flex items-center gap-1 text-[11px] font-medium text-violet-600 dark:text-violet-300">
+        {p.pricing_simulation.deadline_days} dia(s)
+        <ProvisionalBadge label="Prazo simulado para teste — nunca é promessa ao cliente." />
+      </p>
+    );
+  }
   if (p.items.prazo?.note) {
     return <p className="text-[11px] text-slate-400">{p.items.prazo.note}</p>;
   }
@@ -869,11 +895,15 @@ function ProductListRow({ product: p, onOpen, isAdminMaster = false }: { product
       </div>
       <Badge className={STATUS_TONE[p.status] ?? "bg-muted text-muted-foreground"}>{STATUS_LABEL[p.status] ?? p.status}</Badge>
       <span className="hidden w-40 shrink-0 items-center justify-end gap-1 truncate text-right text-xs text-slate-500 sm:inline-flex">
-        {p.items.preco?.note ?? `R$ ${priceProv.value.toFixed(2)} (provisório)`}
+        {p.price_amount != null
+          ? `R$ ${p.price_amount.toFixed(2)}`
+          : p.pricing_simulation?.price_amount != null
+            ? `R$ ${p.pricing_simulation.price_amount.toFixed(2)} (simulação)`
+            : p.items.preco?.note ?? `R$ ${priceProv.value.toFixed(2)} (provisório)`}
         <Catalog2PricingMemoryPopover
           productId={p.id}
           isAdminMaster={isAdminMaster}
-          provisionalPriceAmount={!p.items.preco?.note ? priceProv.value : undefined}
+          provisionalPriceAmount={!p.items.preco?.note && !p.pricing_simulation ? priceProv.value : undefined}
         />
       </span>
       <Button variant="outline" size="sm" className="shrink-0 border-blue-200 text-xs text-blue-600 hover:bg-blue-50" onClick={(e) => { e.stopPropagation(); onOpen(); }}>
@@ -892,8 +922,8 @@ function ProductDetail({ product: p, onViewFull, isAdminMaster = false }: { prod
   const prazoProv = p.provisional?.deadline_days != null ? { value: p.provisional.deadline_days, label: "Prazo provisório — revisar.", is_provisional: true as const } : provisionalDeadlineDays(p.id);
   const taskProv = provisionalTaskCount(p.id);
   const stepProv = provisionalStepCount(p.id, taskProv.value);
-  const hasRealPrice = !!p.items.preco?.note;
-  const hasRealPrazo = !!p.items.prazo?.note;
+  const hasRealPrice = p.price_amount != null;
+  const hasRealPrazo = p.deadline_days != null;
   const hasRealTasks = p.task_count > 0;
   const hasRealSteps = p.step_count > 0;
   const hasRealSummary = !!p.list?.summary;
@@ -953,11 +983,23 @@ function ProductDetail({ product: p, onViewFull, isAdminMaster = false }: { prod
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
           <DetailStat
             label="Preço"
-            value={hasRealPrice ? p.items.preco!.note : `R$ ${priceProv.value.toFixed(2)}`}
-            provisional={!hasRealPrice ? priceProv.label : undefined}
-            extra={<Catalog2PricingMemoryPopover productId={p.id} isAdminMaster={isAdminMaster} provisionalPriceAmount={!hasRealPrice ? priceProv.value : undefined} />}
+            value={hasRealPrice
+              ? `R$ ${p.price_amount!.toFixed(2)}`
+              : p.pricing_simulation?.price_amount != null
+                ? `R$ ${p.pricing_simulation.price_amount.toFixed(2)}`
+                : `R$ ${priceProv.value.toFixed(2)}`}
+            provisional={!hasRealPrice ? (p.pricing_simulation ? "Simulação provisória para teste" : priceProv.label) : undefined}
+            extra={<Catalog2PricingMemoryPopover productId={p.id} isAdminMaster={isAdminMaster} provisionalPriceAmount={!hasRealPrice && !p.pricing_simulation ? priceProv.value : undefined} />}
           />
-          <DetailStat label="Prazo" value={hasRealPrazo ? p.items.prazo!.note : `${prazoProv.value} dia(s)`} provisional={!hasRealPrazo ? prazoProv.label : undefined} />
+          <DetailStat
+            label="Prazo"
+            value={hasRealPrazo
+              ? `${p.deadline_days} dia(s)`
+              : p.pricing_simulation?.deadline_days != null
+                ? `${p.pricing_simulation.deadline_days} dia(s)`
+                : `${prazoProv.value} dia(s)`}
+            provisional={!hasRealPrazo ? (p.pricing_simulation ? "Simulação provisória para teste" : prazoProv.label) : undefined}
+          />
           <DetailStat label="Tarefas" value={hasRealTasks ? String(p.task_count) : String(taskProv.value)} provisional={!hasRealTasks ? taskProv.label : undefined} />
           <DetailStat label="Etapas" value={hasRealSteps ? String(p.step_count) : String(stepProv.value)} provisional={!hasRealSteps ? stepProv.label : undefined} />
         </div>

@@ -38,6 +38,7 @@ describe("runProvisionalPricingSimulationFill — idempotência e regras de pres
   });
   after(async () => {
     for (const id of productIds.splice(0)) await purgeProduct(id);
+    await prisma.catalog2PricingSimulationSpecialtyRate.deleteMany();
     await prisma.catalog2PricingSimulationSettings.deleteMany({ where: { id: "default" } });
   });
 
@@ -47,11 +48,15 @@ describe("runProvisionalPricingSimulationFill — idempotência e regras de pres
     const seeded = await prisma.catalog2PricingSimulationSettings.findUniqueOrThrow({ where: { id: "default" } });
     assert.equal(seeded.is_provisional, true);
     assert.equal(seeded.source, "provisional_simulation_v1");
+    assert.equal(r1.specialty_rates_created, 7);
+    assert.equal(await prisma.catalog2PricingSimulationSpecialtyRate.count(), 7);
 
     // ajuste manual hipotético — nunca deve ser apagado pela 2ª execução
     await prisma.catalog2PricingSimulationSettings.update({ where: { id: "default" }, data: { profit_margin_percent: 41 } });
     const r2 = await runProvisionalPricingSimulationFill({ mode: "apply" });
     assert.equal(r2.settings_outcome, "already_exists");
+    assert.equal(r2.specialty_rates_created, 0);
+    assert.equal(r2.specialty_rates_preserved, 7);
     const after1 = await prisma.catalog2PricingSimulationSettings.findUniqueOrThrow({ where: { id: "default" } });
     assert.equal(after1.profit_margin_percent, 41, "valor ajustado manualmente preservado");
   });

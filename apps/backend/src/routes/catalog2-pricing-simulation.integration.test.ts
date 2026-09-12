@@ -82,6 +82,12 @@ describe("Precificação — modo Simulação para teste (reunião 10/09)", () =
       is_provisional: true, source: "provisional_simulation_v1",
     };
     await prisma.catalog2PricingSimulationSettings.upsert({ where: { id: "default" }, create: { id: "default", ...simSeed }, update: simSeed });
+    const designer = await prisma.catalog2Specialty.findUniqueOrThrow({ where: { key: "designer" } });
+    await prisma.catalog2PricingSimulationSpecialtyRate.upsert({
+      where: { specialty_id: designer.id },
+      create: { specialty_id: designer.id, hourly_rate: 90, is_provisional: true, source: "provisional_simulation_v1" },
+      update: { hourly_rate: 90, is_provisional: true, source: "provisional_simulation_v1" },
+    });
 
     const master = await mkMaster();
     TOKEN = tokenFor(master);

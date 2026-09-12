@@ -44,6 +44,19 @@ export const PROVISIONAL_PRICING_SIMULATION_SEED = {
     "Valores PROVISÓRIOS para teste (reunião 10/09) — nunca é configuração comercial aprovada. Impostos/comissão/taxa operacional na mesma ordem de grandeza do singleton real; margem (25%) e revisão humana (12%) deliberadamente diferentes da configuração real (30%/15%) para nunca serem confundidas com ela.",
 };
 
+// Referências exclusivamente simuladas. Não alteram
+// Catalog2Specialty.max_hourly_rate e são usadas somente pelo modo
+// simulateProvisional. Valores redondos e plausíveis para testar a fórmula.
+export const PROVISIONAL_SPECIALTY_RATE_BY_KEY: Record<string, number> = {
+  gestor_trafego: 120,
+  desenvolvedor_web: 120,
+  especialista_seo_geo: 100,
+  redator: 70,
+  designer: 90,
+  editor_video: 90,
+  especialista_automacao: 120,
+};
+
 // Prazo comercial provisório = dias de esforço humano estimado (soma dos
 // minutos das tarefas humanas ÷ WORKDAY_MINUTES, arredondado pra cima) + um
 // buffer fixo de revisão/ajuste interno, com piso mínimo — fórmula simples,
@@ -72,6 +85,8 @@ export interface AmbiguousBackfillLine {
 export interface PricingSimulationFillResult {
   mode: "dry_run" | "apply";
   settings_outcome: "created" | "already_exists";
+  specialty_rates_created: number;
+  specialty_rates_preserved: number;
   products_total: number;
   deadline_lines: DeadlineFillLine[];
   deadline_filled: number;
@@ -92,6 +107,31 @@ export async function runProvisionalPricingSimulationFill(opts: { mode: "dry_run
     const settingsOutcome: "created" | "already_exists" = existingSettings ? "already_exists" : "created";
     if (!existingSettings && opts.mode === "apply") {
       await db.catalog2PricingSimulationSettings.create({ data: { id: "default", ...PROVISIONAL_PRICING_SIMULATION_SEED } });
+    }
+
+    let specialtyRatesCreated = 0;
+    let specialtyRatesPreserved = 0;
+    const specialties = await db.catalog2Specialty.findMany({ select: { id: true, key: true, name: true } });
+    const existingRates = new Set((await db.catalog2PricingSimulationSpecialtyRate.findMany({ select: { specialty_id: true } })).map((r) => r.specialty_id));
+    for (const specialty of specialties) {
+      const hourlyRate = PROVISIONAL_SPECIALTY_RATE_BY_KEY[specialty.key];
+      if (hourlyRate == null) continue;
+      if (existingRates.has(specialty.id)) {
+        specialtyRatesPreserved++;
+        continue;
+      }
+      specialtyRatesCreated++;
+      if (opts.mode === "apply") {
+        await db.catalog2PricingSimulationSpecialtyRate.create({
+          data: {
+            specialty_id: specialty.id,
+            hourly_rate: hourlyRate,
+            is_provisional: true,
+            source: SIMULATION_SOURCE,
+            notes: `Valor/hora PROVISÓRIO para simulação administrativa de ${specialty.name}; nunca é tarifa comercial aprovada.`,
+          },
+        });
+      }
     }
 
     // ── 2 & 3. por produto real (nunca [TESTE LOCAL]) ──
@@ -174,6 +214,8 @@ export async function runProvisionalPricingSimulationFill(opts: { mode: "dry_run
     return {
       mode: opts.mode,
       settings_outcome: settingsOutcome,
+      specialty_rates_created: specialtyRatesCreated,
+      specialty_rates_preserved: specialtyRatesPreserved,
       products_total: products.length,
       deadline_lines: deadlineLines,
       deadline_filled: deadlineFilled,

@@ -39,6 +39,7 @@ interface HumanCostRow {
   // Reunião 10/09 ("36 produtos funcionalmente completos para teste"):
   // especialidade/tempo definidos só como dado de teste — nunca real.
   effort_is_provisional: boolean;
+  rate_is_provisional?: boolean;
 }
 interface PricingMemory {
   currency: string;
@@ -60,11 +61,27 @@ interface PricingMemory {
   quote_blockers: string[];
   pending_info: string[];
   human_cost_breakdown: HumanCostRow[];
+  is_simulation?: boolean;
+  simulation?: {
+    total: number;
+    label: string;
+    authorizes_publish: boolean;
+    authorizes_quote: boolean;
+    authorizes_contract: boolean;
+  };
+  simulation_provenance?: {
+    commercial_config: "real" | "provisional" | "missing";
+    deadline: "real" | "provisional" | "missing";
+  };
+  deadline?: {
+    commercial_deadline_days: number | null;
+  };
 }
 interface PricingMemoryResponse {
   version_id: string | null;
   version_state: string | null;
   pricing: PricingMemory | null;
+  pricing_simulation?: PricingMemory | null;
 }
 
 function money(n: number | null): string {
@@ -116,7 +133,11 @@ export function Catalog2PricingMemoryPopover({
     }
   }
 
-  const pricing = data?.pricing ?? null;
+  // Quando a rota devolve a simulação administrativa, ela é a visão
+  // principal deste popover. O preço real continua separado em `pricing` e
+  // nenhuma autorização comercial é inferida no frontend.
+  const pricing = data?.pricing_simulation ?? data?.pricing ?? null;
+  const isSimulation = !!pricing?.is_simulation;
 
   return (
     <Popover open={open} onOpenChange={handleOpenChange}>
@@ -141,6 +162,15 @@ export function Catalog2PricingMemoryPopover({
       >
         <h3 className="mb-2 text-xs font-bold text-slate-700 dark:text-slate-200">Memória de cálculo do preço</h3>
 
+        {!loading && !error && isSimulation && pricing && (
+          <div className="mb-3 rounded-md border border-violet-200 bg-violet-50 p-2.5 dark:border-violet-900/40 dark:bg-violet-900/20">
+            <p className="text-xs font-bold text-violet-800 dark:text-violet-200">Simulação provisória para teste</p>
+            <p className="mt-1 text-[11px] text-violet-700 dark:text-violet-300">
+              O cálculo abaixo usa dados provisórios identificados. Não autoriza publicação, cotação ou contratação.
+            </p>
+          </div>
+        )}
+
         {!loading && !error && pricing?.human_cost_breakdown.some((t) => t.effort_is_provisional) && (
           <p className="mb-2 flex items-center gap-1.5 rounded-md bg-amber-50 px-2 py-1 text-[11px] font-medium text-amber-800 dark:bg-amber-900/20 dark:text-amber-200">
             <ProvisionalBadge label="Especialidade e tempo provisórios para teste — revisão humana pendente. Nunca usado para aprovar preço comercial ou publicação." />
@@ -164,7 +194,7 @@ export function Catalog2PricingMemoryPopover({
           <p className="text-xs text-slate-500">Produto sem versão — nada a calcular ainda.</p>
         )}
 
-        {!loading && !error && pricing && !pricing.commercial_ready && (
+        {!loading && !error && pricing && !pricing.commercial_ready && !isSimulation && (
           <div className="mb-3 rounded-md border border-amber-200 bg-amber-50 p-2.5 dark:border-amber-900/40 dark:bg-amber-900/20">
             <p className="text-xs font-bold text-amber-800 dark:text-amber-200">Preço ainda não calculável</p>
             {/* União exata de quote_blockers (motivo geral) + pending_info
@@ -174,6 +204,15 @@ export function Catalog2PricingMemoryPopover({
               {[...new Set([...pricing.pending_info, ...pricing.quote_blockers])].map((b, i) => (
                 <li key={i}>{b}</li>
               ))}
+            </ul>
+          </div>
+        )}
+
+        {!loading && !error && pricing && isSimulation && pricing.quote_blockers.length > 0 && (
+          <div className="mb-3 rounded-md border border-amber-200 bg-amber-50 p-2.5 dark:border-amber-900/40 dark:bg-amber-900/20">
+            <p className="text-xs font-bold text-amber-800 dark:text-amber-200">Pendências antes do uso comercial</p>
+            <ul className="mt-1 list-disc space-y-0.5 pl-4 text-[11px] text-amber-700 dark:text-amber-300">
+              {[...new Set([...pricing.pending_info, ...pricing.quote_blockers])].map((b, i) => <li key={i}>{b}</li>)}
             </ul>
           </div>
         )}
@@ -196,7 +235,7 @@ export function Catalog2PricingMemoryPopover({
                         <span className="shrink-0 font-mono font-semibold">{money(t.cost)}</span>
                       </div>
                       <div className="text-[10px] text-slate-400">
-                        {t.specialty ?? "sem especialidade definida"} · {t.minutes} min · {t.rate != null ? `${money(t.rate)}/h` : "valor/hora não definido"}
+                        {t.specialty ?? "sem especialidade definida"} · {t.minutes} min · {t.rate != null ? `${money(t.rate)}/h${t.rate_is_provisional ? " (simulado)" : ""}` : "valor/hora não definido"}
                       </div>
                     </div>
                   ))}
@@ -233,11 +272,18 @@ export function Catalog2PricingMemoryPopover({
 
             <section className="border-t border-slate-200 pt-1.5 dark:border-slate-700">
               <div className="flex items-baseline justify-between gap-3">
-                <span className="text-xs font-bold text-slate-700 dark:text-slate-200">{pricing.lines.commercial_final_price.label}</span>
+                <span className="text-xs font-bold text-slate-700 dark:text-slate-200">
+                  {isSimulation ? "Preço final simulado" : pricing.lines.commercial_final_price.label}
+                </span>
                 <span className="font-mono text-sm font-extrabold text-emerald-600 dark:text-emerald-400">
-                  {money(pricing.lines.commercial_final_price.amount)}
+                  {money(isSimulation ? pricing.simulation?.total ?? null : pricing.lines.commercial_final_price.amount)}
                 </span>
               </div>
+              {isSimulation && pricing.deadline && (
+                <p className="mt-1 text-right text-[11px] font-medium text-violet-700 dark:text-violet-300">
+                  Prazo simulado: {pricing.deadline.commercial_deadline_days ?? "—"} dia(s)
+                </p>
+              )}
             </section>
           </div>
         )}

@@ -1219,11 +1219,17 @@ async function computeProductReadiness(p: ReadinessProduct) {
         : "real_reviewed";
 
   let pricing: Awaited<ReturnType<typeof computePricing>> | null = null;
+  let pricingSimulation: Awaited<ReturnType<typeof computePricing>> | null = null;
   if (targetVersion) {
     try {
       pricing = await computePricing(targetVersion.id, await defaultSelection(targetVersion.id));
     } catch {
       pricing = null;
+    }
+    try {
+      pricingSimulation = await computePricing(targetVersion.id, await defaultSelection(targetVersion.id), { simulateProvisional: true });
+    } catch {
+      pricingSimulation = null;
     }
   }
   const hasActiveTasks = (pricing?.active_task_keys.length ?? taskCount) > 0;
@@ -1311,6 +1317,20 @@ async function computeProductReadiness(p: ReadinessProduct) {
     // ordenar por preço/prazo sem re-parsear a nota de texto no frontend.
     price_amount: pricing?.commercial_ready ? pricing.lines.commercial_final_price.amount : null,
     deadline_days: pricing?.commercial_ready ? pricing.deadline.commercial_deadline_days : null,
+    // Resultado administrativo da mesma fórmula, com entradas provisórias
+    // segregadas. Nunca substitui price_amount/deadline_days reais e nunca
+    // autoriza publicação, cotação ou contratação.
+    pricing_simulation: pricingSimulation?.simulation_provenance.commercial_config === "provisional"
+      ? {
+          is_provisional: true,
+          price_amount: pricingSimulation.simulation.total,
+          deadline_days: pricingSimulation.deadline.commercial_deadline_days,
+          commercial_ready: false,
+          authorizes_publish: false,
+          authorizes_quote: false,
+          authorizes_contract: false,
+        }
+      : null,
     items,
     blockers,
     pendings,

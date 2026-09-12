@@ -100,7 +100,7 @@ export interface PricingResult {
   pending_info: string[];
   warnings: PricingWarning[];
   applied_conditions: Array<{ key: string; explanation: string }>;
-  human_cost_breakdown: Array<{ task_key: string; specialty: string | null; minutes: number; rate: number | null; cost: number | null; effort_is_provisional: boolean }>;
+  human_cost_breakdown: Array<{ task_key: string; specialty: string | null; minutes: number; rate: number | null; cost: number | null; effort_is_provisional: boolean; rate_is_provisional: boolean }>;
   ia_cost_breakdown: Array<{ task_key: string; tokens_in: number; tokens_out: number; review_rounds: number; cost: number | null }>;
   // Reunião 10/09 ("precificação dos 36 produtos funcional para teste") —
   // true só quando computePricing foi chamado com { simulateProvisional:
@@ -239,8 +239,12 @@ export async function computePricing(versionId: string, selection: PricingSelect
     ? (await prisma.catalog2PricingSimulationSettings.findUnique({ where: { id: "default" } })) ?? null
     : null;
   const activeSettings = opts.simulateProvisional ? simSettings : settings;
+  const simulationRates = opts.simulateProvisional
+    ? await prisma.catalog2PricingSimulationSpecialtyRate.findMany()
+    : [];
+  const simulationRateBySpecialty = new Map(simulationRates.map((r) => [r.specialty_id, r.hourly_rate]));
   const commercialConfigProvenance: "real" | "provisional" | "missing" = !opts.simulateProvisional
-    ? "real"
+    ? settings ? "real" : "missing"
     : simSettings
       ? "provisional"
       : "missing";
@@ -290,7 +294,11 @@ export async function computePricing(versionId: string, selection: PricingSelect
       .filter((s) => activeStepSet.has(`${t.key}:${s.key}`))
       .reduce((a, s) => a + (s.estimated_minutes ?? 0), 0);
     const minutes = stepMinutes > 0 ? stepMinutes : t.estimated_minutes ?? 0;
-    const rate = t.specialty?.max_hourly_rate ?? null;
+    const simulatedRate = opts.simulateProvisional && t.specialty_id
+      ? simulationRateBySpecialty.get(t.specialty_id) ?? null
+      : null;
+    const rate = opts.simulateProvisional ? simulatedRate : t.specialty?.max_hourly_rate ?? null;
+    const rateIsProvisional = !!opts.simulateProvisional && simulatedRate != null;
     if (minutes === 0) warnings.push({ code: "task_without_time", message: `A tarefa "${t.name}" não tem duração estimada.` });
     if (rate == null && t.specialty) {
       humanPending = true;
@@ -303,7 +311,7 @@ export async function computePricing(versionId: string, selection: PricingSelect
     }
     const cost = rate != null ? (minutes / 60) * rate : null;
     if (cost != null) humanCost += cost;
-    humanBreakdown.push({ task_key: t.key, specialty: t.specialty?.name ?? null, minutes, rate, cost: cost != null ? round2(cost) : null, effort_is_provisional: !!t.effort_is_provisional });
+    humanBreakdown.push({ task_key: t.key, specialty: t.specialty?.name ?? null, minutes, rate, cost: cost != null ? round2(cost) : null, effort_is_provisional: !!t.effort_is_provisional, rate_is_provisional: rateIsProvisional });
   }
   humanCost *= quantity;
 

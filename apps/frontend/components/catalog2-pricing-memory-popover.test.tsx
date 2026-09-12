@@ -172,4 +172,27 @@ describe("Catalog2PricingMemoryPopover", () => {
     // nunca fecha o preço comercial com dado provisório
     expect(screen.getByText(/Preço ainda não calculável/i)).toBeInTheDocument();
   });
+
+  it("mostra o total e prazo da simulação sem chamá-los de preço comercial", async () => {
+    api.getCatalog2ProductPricingMemory.mockResolvedValue({
+      ...BLOCKED_PRICING,
+      pricing_simulation: {
+        ...COMPLETE_PRICING.pricing,
+        is_simulation: true,
+        commercial_ready: false,
+        quote_blockers: ["simulação provisória para teste — nunca autoriza cotação, publicação ou contratação"],
+        pending_info: ["especialidade/tempo de tarefa(s) provisórios (dado de teste, revisão humana pendente)"],
+        simulation: { total: 612.34, label: "Simulação interna não comercial", authorizes_publish: false, authorizes_quote: false, authorizes_contract: false },
+        deadline: { commercial_deadline_days: 4 },
+      },
+    });
+    render(<Catalog2PricingMemoryPopover productId="p5" isAdminMaster />);
+    await openPopover();
+
+    expect(await screen.findByText("Simulação provisória para teste")).toBeInTheDocument();
+    expect(screen.getByText("Preço final simulado")).toBeInTheDocument();
+    expect(screen.getByText(/612,34/)).toBeInTheDocument();
+    expect(screen.getByText(/Prazo simulado: 4 dia/)).toBeInTheDocument();
+    expect(screen.queryByText("Preço ainda não calculável")).not.toBeInTheDocument();
+  });
 });

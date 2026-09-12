@@ -30,6 +30,7 @@ async function main() {
 
   console.log("\n════════ RESULTADO ════════");
   console.log(`  Catalog2PricingSimulationSettings: ${r.settings_outcome === "created" ? "criada agora" : "já existia (preservada, não sobrescrita)"}`);
+  console.log(`  Valores/hora simulados criados: ${r.specialty_rates_created} · já existentes/preservados: ${r.specialty_rates_preserved}`);
   console.log(`  Produtos avaliados: ${r.products_total}`);
   console.log(`  Prazo provisório preenchido agora: ${r.deadline_filled}`);
   console.log(`  Prazo já tinha valor REAL (preservado): ${r.deadline_skipped_has_real}`);
