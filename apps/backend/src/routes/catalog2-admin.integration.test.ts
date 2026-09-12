@@ -166,6 +166,34 @@ describe("Novo catálogo — fundação", () => {
     assert.equal((await api("/api/admin/catalog2/products/nao-existe/readiness", { token: tokenFor(master) })).status, 404);
   });
 
+  it("reunião 10/09 (cards e interação): merchandising é sempre real, nulo por padrão, e nunca preenchido automaticamente por nenhuma rota", async () => {
+    const master = await mkUser("master");
+    const p = await createProduct({ internal_name: "[TESTE] Merchandising" }, master.id);
+    catProducts.push(p.id);
+
+    const readiness = await api(`/api/admin/catalog2/products/${p.id}/readiness`, { token: tokenFor(master) });
+    assert.deepEqual(readiness.json.merchandising, {
+      is_new: null, is_launch: null, is_promotion: null, is_featured: null,
+      promotion_text: null, promotion_valid_until: null, badge_priority: null,
+    });
+
+    const list = await api(`/api/admin/catalog2/products?q=${encodeURIComponent("[TESTE] Merchandising")}`, { token: tokenFor(master) });
+    const row = list.json.data.find((x: any) => x.id === p.id);
+    assert.deepEqual(row.merchandising, {
+      is_new: null, is_launch: null, is_promotion: null, is_featured: null,
+      promotion_text: null, promotion_valid_until: null, badge_priority: null,
+    });
+
+    // gravando explicitamente (simulando uma decisão futura de Admin Master
+    // direto no banco — não existe endpoint de escrita neste bloco), o
+    // campo real aparece tal qual foi gravado, sem transformação.
+    await prisma.catalog2Product.update({ where: { id: p.id }, data: { merch_is_promotion: true, merch_promotion_text: "Lançamento de setembro" } });
+    const after = await api(`/api/admin/catalog2/products/${p.id}/readiness`, { token: tokenFor(master) });
+    assert.equal(after.json.merchandising.is_promotion, true);
+    assert.equal(after.json.merchandising.promotion_text, "Lançamento de setembro");
+    assert.equal(after.json.merchandising.is_new, null);
+  });
+
   it("reparo 2026-09 (detalhe/imagens/preço provisórios): camada provisória fica SEPARADA dos campos reais, nunca torna o produto client_visible, e some ao ser removida", async () => {
     const master = await mkUser("master");
     const p = await createProduct({ internal_name: "[TESTE] Preview provisório" }, master.id);

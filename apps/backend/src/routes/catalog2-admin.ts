@@ -396,6 +396,18 @@ router.get("/products", async (req, res, next) => {
           pendencies: io?.pendencies_json ? safeJsonArray(io.pendencies_json) : [],
           human_edited: !!io?.human_edited_at,
           source_index: io?.source_index ?? null,
+          // Merchandising administrável (reunião 10/09) — SEMPRE real (nunca
+          // preenchido automaticamente aqui); nulo enquanto nenhum Admin
+          // Master tiver decidido um badge para este produto.
+          merchandising: {
+            is_new: p.merch_is_new,
+            is_launch: p.merch_is_launch,
+            is_promotion: p.merch_is_promotion,
+            is_featured: p.merch_is_featured,
+            promotion_text: p.merch_promotion_text,
+            promotion_valid_until: p.merch_promotion_valid_until,
+            badge_priority: p.merch_badge_priority,
+          },
           // Camada de demonstração provisória (reparo 2026-09) — nunca dado
           // comercial real; usada só pra miniatura/preço aparecerem no
           // Cadastro/Catálogo administrativo enquanto o produto não tem
@@ -1249,6 +1261,17 @@ async function computeProductReadiness(p: ReadinessProduct) {
     blockers,
     pendings,
     ready_for_client: blockers.length === 0,
+    // Merchandising administrável (reunião 10/09) — mesma regra do
+    // /products: sempre real, nunca preenchido automaticamente.
+    merchandising: {
+      is_new: p.merch_is_new,
+      is_launch: p.merch_is_launch,
+      is_promotion: p.merch_is_promotion,
+      is_featured: p.merch_is_featured,
+      promotion_text: p.merch_promotion_text,
+      promotion_valid_until: p.merch_promotion_valid_until,
+      badge_priority: p.merch_badge_priority,
+    },
     // Camada de demonstração provisória (reparo 2026-09) — nunca substitui os
     // campos reais acima; sempre um objeto SEPARADO e marcado, pra nunca ser
     // confundido com dado comercial aprovado.
