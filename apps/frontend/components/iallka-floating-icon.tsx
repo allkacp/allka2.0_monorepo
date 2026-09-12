@@ -8,9 +8,9 @@
  * 365px; mobile depois de +12/+88/+164 → aqui +240), pra nunca ficar atrás
  * do container nem sobrepor outro ícone (auditoria desta reunião).
  *
- * Usa o logo da Allka (logo-allka-icon.png, mesmo arquivo já usado na
- * sidebar) como avatar provisório da IAllka, até um avatar definitivo ser
- * escolhido — nunca o mesmo ícone de Chat/Alertas/Ajuda/Sugestões.
+ * Usa o logo oficial da IAllka (iallka-icon.png, enviado pelo responsável
+ * em 2026-09-11 — "AURA", ver Manual da Marca IAllka) como avatar — nunca
+ * o mesmo ícone de Chat/Alertas/Ajuda/Sugestões.
  */
 import { useEffect, useState } from "react";
 import { useOnboarding } from "@/contexts/onboarding-context";
@@ -74,7 +74,7 @@ export function IallkaFloatingIcon() {
           title="Abrir IAllka"
           className="relative flex items-center justify-center h-9 w-9 rounded-full overflow-hidden ring-1 ring-white/25 hover:ring-white/60 transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"
         >
-          <img src="/logo-allka-icon.png" alt="" className="h-full w-full object-cover" />
+          <img src="/iallka-icon.png" alt="" className="h-full w-full object-cover" />
           {showBadge && (
             <span className="absolute top-0 right-0 h-2.5 w-2.5 rounded-full bg-emerald-400 ring-2 ring-[#0a1628]" aria-hidden="true" />
           )}

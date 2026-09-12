@@ -78,7 +78,7 @@ describe("IallkaFloatingIcon — ícone e painel", () => {
     renderIcon();
     const [btn] = await openIcons();
     const img = btn.querySelector("img");
-    expect(img).toHaveAttribute("src", "/logo-allka-icon.png");
+    expect(img).toHaveAttribute("src", "/iallka-icon.png");
   });
 
   it("3. fica numa camada acima (z-65 desktop / z-45 mobile) — nunca atrás do container padrão", async () => {
