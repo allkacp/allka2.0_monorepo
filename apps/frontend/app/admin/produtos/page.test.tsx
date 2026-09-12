@@ -457,6 +457,16 @@ it("construtor: mostra aviso de campos provisórios quando o produto ainda não 
   expect(await screen.findByText(/campos provisórios/i)).toBeInTheDocument()
 })
 
+it("reunião 10/09: produto com esforço provisório mostra 'Especialidade e tempo provisórios para teste' na listagem", async () => {
+  api.getCatalog2Readiness.mockResolvedValue({
+    ready_for_client: 0, total: 1, client_visible_now: 0, with_blockers: 1, note: "",
+    products: [{ id: "prod1", name: "[TESTE LOCAL] Demo", task_count: 1, price_amount: null, blockers: [], pendings: [], functional_for_test: true }],
+  })
+  renderPage()
+  await screen.findByText("[TESTE LOCAL] Demo")
+  expect(await screen.findByLabelText(/Especialidade e tempo provisórios para teste/i)).toBeInTheDocument()
+})
+
 it("editor: as 10 seções seguem acessíveis, reagrupadas em 5 etapas + Origem", async () => {
   const user = userEvent.setup()
   renderPage()

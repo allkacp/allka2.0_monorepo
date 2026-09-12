@@ -637,6 +637,9 @@ export default function AdminProdutosPage() {
                                     <ProvisionalBadge label={taskProv.label + " Pendência real de tarefas continua registrada."} />
                                   </>
                                 )}
+                                {rp?.functional_for_test && (
+                                  <ProvisionalBadge label="Especialidade e tempo provisórios para teste — funcional para teste, pendente de revisão. Nunca usado para aprovar preço comercial ou publicação." />
+                                )}
                               </div>
                             </td>
                             <td className="hidden px-2 py-3 text-right lg:table-cell">
@@ -722,6 +725,7 @@ export default function AdminProdutosPage() {
                       : null;
                     const pend: string[] = p.pendencies ?? [];
                     const isCompact = gridMode === 4 || gridMode === 5;
+                    const rp = readinessById[p.id];
                     return (
                       <Card key={p.id} className="group flex flex-col overflow-hidden border border-slate-200/70 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg dark:border-slate-700/60">
                         <button
@@ -756,7 +760,12 @@ export default function AdminProdutosPage() {
                               {p.imported ? ` · ${pend.length} pendência(s)` : ""}
                             </p>
                           )}
-                          <Badge variant="outline" className="w-fit">{p.category?.name ?? "Sem categoria"}</Badge>
+                          <div className="flex flex-wrap items-center gap-1">
+                            <Badge variant="outline" className="w-fit">{p.category?.name ?? "Sem categoria"}</Badge>
+                            {rp?.functional_for_test && (
+                              <ProvisionalBadge label="Especialidade e tempo provisórios para teste — funcional para teste, pendente de revisão. Nunca usado para aprovar preço comercial ou publicação." />
+                            )}
+                          </div>
                           <div className="mt-auto flex items-center justify-between gap-1 border-t border-slate-100 pt-2 dark:border-slate-800">
                             <TooltipProvider delayDuration={400}>
                               <Tooltip>

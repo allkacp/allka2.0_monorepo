@@ -60,6 +60,8 @@ const READINESS = {
       task_count: 1, step_count: 1, price_amount: 300, deadline_days: 3,
       items: { preco: { level: "pronto", note: "Preço comercial BRL 300." }, prazo: { level: "pronto", note: "Prazo comercial 3 dia(s)." } },
       blockers: [], pendings: [],
+      // Reunião 10/09 ("36 produtos funcionalmente completos para teste").
+      effort_data_state: "provisional", functional_for_test: true, functional_for_test_label: "Funcional para teste, pendente de revisão",
     },
     {
       id: "fixture1", name: "[TESTE LOCAL] Demo", is_test_local: true, status: "disponivel", published: true,
@@ -176,6 +178,15 @@ describe("Catálogo de Produtos administrativo (catalog2) — grade de cards", (
     expect(await screen.findByText("preço")).toBeInTheDocument();
     expect(screen.getByText("prazo")).toBeInTheDocument();
     expect(screen.getByText("tarefas")).toBeInTheDocument();
+  });
+
+  it("reunião 10/09: produto com esforço provisório mostra o aviso na linha e no detalhe", async () => {
+    renderPage();
+    const row = (await screen.findByText("Consultoria Express")).closest(".group, li") as HTMLElement;
+    expect(within(row).getByText(/especialidade\/tempo provisórios/i)).toBeInTheDocument();
+
+    await userEvent.click(within(row).getByRole("button", { name: "Ver detalhes" }));
+    expect(await screen.findByText(/Funcional para teste, pendente de revisão/i)).toBeInTheDocument();
   });
 });
 

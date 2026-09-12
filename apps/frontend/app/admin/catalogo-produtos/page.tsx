@@ -112,6 +112,12 @@ interface ReadinessProduct {
   items: Record<string, { level: string; note: string }>;
   blockers: string[];
   pendings: string[];
+  // Reunião 10/09 ("36 produtos funcionalmente completos para teste"):
+  // especialidade/tempo provisórios (dado de teste) — nunca decisão
+  // comercial. Ver items.esforco_tarefas pra o detalhe por tarefa.
+  effort_data_state?: "missing" | "provisional" | "real_reviewed";
+  functional_for_test?: boolean;
+  functional_for_test_label?: string | null;
   // Camada de demonstração provisória (reparo 2026-09) — sempre um bloco
   // SEPARADO, nunca confundido com os campos reais acima.
   provisional: {
@@ -754,6 +760,9 @@ function ProductCard({ product: p, onOpen, compact = false, isAdminMaster = fals
               <ProvisionalBadge label={taskProv.label + " Pendência real de tarefas continua registrada."} />
             </>
           )}
+          {p.functional_for_test && (
+            <ProvisionalBadge label="Especialidade e tempo provisórios para teste — funcional para teste, pendente de revisão. Nunca usado para aprovar preço comercial ou publicação." />
+          )}
         </div>
 
         {pendCount > 0 && (
@@ -855,6 +864,7 @@ function ProductListRow({ product: p, onOpen, isAdminMaster = false }: { product
         </div>
         <p title={categoryName} className="truncate text-xs text-slate-400">
           {categoryName} · {p.task_count > 0 ? `${p.task_count} tarefa(s)` : `${taskProv.value} tarefa(s) (provisório)`}
+          {p.functional_for_test ? " · especialidade/tempo provisórios (teste)" : ""}
         </p>
       </div>
       <Badge className={STATUS_TONE[p.status] ?? "bg-muted text-muted-foreground"}>{STATUS_LABEL[p.status] ?? p.status}</Badge>
@@ -927,7 +937,17 @@ function ProductDetail({ product: p, onViewFull, isAdminMaster = false }: { prod
             <FieldStatusChip label="Tarefas" status={hasRealTasks ? "real" : "provisorio"} />
             <FieldStatusChip label="Etapas" status={hasRealSteps ? "real" : "provisorio"} />
             <FieldStatusChip label="Imagem" status="provisorio" />
+            <FieldStatusChip
+              label="Especialidade/Tempo"
+              status={p.effort_data_state === "real_reviewed" ? "real" : p.effort_data_state === "provisional" ? "provisorio" : "ausente"}
+            />
           </div>
+          {p.functional_for_test && (
+            <p className="mt-1.5 flex items-center gap-1.5 text-xs text-amber-700 dark:text-amber-300">
+              <ProvisionalBadge label="Especialidade e tempo provisórios para teste — revisar antes de aprovar comercialmente." />
+              {p.functional_for_test_label}
+            </p>
+          )}
         </div>
 
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">

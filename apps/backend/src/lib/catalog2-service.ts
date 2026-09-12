@@ -603,6 +603,11 @@ export async function getProductDetail(productId: string) {
         requires_review: t.requires_review,
         requires_client_approval: t.requires_client_approval,
         is_conditional: t.is_conditional,
+        // Reunião 10/09 ("36 produtos funcionalmente completos para
+        // teste"): o detalhe administrativo precisa mostrar quando
+        // especialidade/tempo são dado de teste, nunca real.
+        effort_is_provisional: t.effort_is_provisional,
+        effort_source: t.effort_source,
         specialty: t.specialty ? { id: t.specialty.id, key: t.specialty.key, name: t.specialty.name, max_hourly_rate: t.specialty.max_hourly_rate } : null,
         depends_on: t.dependencies.map((d) => d.depends_on_task_id),
         ai: t.ai

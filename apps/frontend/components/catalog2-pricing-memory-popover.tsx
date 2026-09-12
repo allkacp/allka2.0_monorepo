@@ -23,6 +23,7 @@ import { Info, Loader2, AlertTriangle } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { apiClient } from "@/lib/api-client";
 import { fmtBRL } from "@/components/product-detail-shared";
+import { ProvisionalBadge } from "@/components/provisional-badge";
 
 interface PricingLine {
   label: string;
@@ -35,6 +36,9 @@ interface HumanCostRow {
   minutes: number;
   rate: number | null;
   cost: number | null;
+  // Reunião 10/09 ("36 produtos funcionalmente completos para teste"):
+  // especialidade/tempo definidos só como dado de teste — nunca real.
+  effort_is_provisional: boolean;
 }
 interface PricingMemory {
   currency: string;
@@ -137,6 +141,13 @@ export function Catalog2PricingMemoryPopover({
       >
         <h3 className="mb-2 text-xs font-bold text-slate-700 dark:text-slate-200">Memória de cálculo do preço</h3>
 
+        {!loading && !error && pricing?.human_cost_breakdown.some((t) => t.effort_is_provisional) && (
+          <p className="mb-2 flex items-center gap-1.5 rounded-md bg-amber-50 px-2 py-1 text-[11px] font-medium text-amber-800 dark:bg-amber-900/20 dark:text-amber-200">
+            <ProvisionalBadge label="Especialidade e tempo provisórios para teste — revisão humana pendente. Nunca usado para aprovar preço comercial ou publicação." />
+            Especialidade e tempo provisórios para teste
+          </p>
+        )}
+
         {loading && (
           <div className="flex items-center gap-2 py-3 text-xs text-slate-500">
             <Loader2 className="h-3.5 w-3.5 animate-spin" /> Calculando…
@@ -176,7 +187,12 @@ export function Catalog2PricingMemoryPopover({
                   {pricing.human_cost_breakdown.map((t) => (
                     <div key={t.task_key} className="text-[11px] text-slate-600 dark:text-slate-300">
                       <div className="flex items-baseline justify-between gap-2">
-                        <span className="truncate font-medium">{t.task_key}</span>
+                        <span className="flex min-w-0 items-center gap-1 truncate font-medium">
+                          {t.task_key}
+                          {t.effort_is_provisional && (
+                            <ProvisionalBadge label="Especialidade e tempo provisórios para teste — revisão humana pendente." />
+                          )}
+                        </span>
                         <span className="shrink-0 font-mono font-semibold">{money(t.cost)}</span>
                       </div>
                       <div className="text-[10px] text-slate-400">

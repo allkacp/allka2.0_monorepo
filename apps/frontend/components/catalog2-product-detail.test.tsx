@@ -129,3 +129,29 @@ describe("Catalog2ProductDetail — dado provisório", () => {
     expect((await screen.findAllByText(/a definir/i)).length).toBeGreaterThan(0);
   });
 });
+
+describe("Catalog2ProductDetail — reunião 10/09 (esforço provisório para teste)", () => {
+  const PROVISIONAL_EFFORT_DETAIL = {
+    product: {
+      id: "p3", slug: "produto-provisorio", internal_name: "Produto Com Esforço Provisório", status: "em_preparacao",
+      category: { name: "Presença Digital" }, published_version_id: null,
+      versions: [{
+        id: "v3", state: "rascunho", summary: "Resumo real.", full_description: "Descrição real.",
+        variations: [], tasks: [{ id: "t1", name: "Tarefa provisória", description: null, specialty: { name: "Designer" }, effort_is_provisional: true }],
+      }],
+    },
+    readiness: {
+      task_count: 1, step_count: 0, price_amount: null, deadline_days: null,
+      functional_for_test: true, functional_for_test_label: "Funcional para teste, pendente de revisão",
+      provisional: null,
+    },
+  };
+
+  it("mostra o aviso de especialidade/tempo provisórios por tarefa e o rótulo 'funcional para teste' do produto", async () => {
+    api.getCatalog2ProductDetailPreview.mockResolvedValue(PROVISIONAL_EFFORT_DETAIL);
+    render(<Catalog2ProductDetail productId="p3" onBack={() => {}} />);
+    expect(await screen.findByText("Tarefa provisória")).toBeInTheDocument();
+    expect(screen.getAllByText(/provisório/i).length).toBeGreaterThan(0);
+    expect(screen.getByText(/Funcional para teste, pendente de revisão/i)).toBeInTheDocument();
+  });
+});

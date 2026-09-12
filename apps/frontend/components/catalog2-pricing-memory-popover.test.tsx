@@ -151,4 +151,25 @@ describe("Catalog2PricingMemoryPopover", () => {
     await openPopover();
     expect(await screen.findByText("Falha ao calcular")).toBeInTheDocument();
   });
+
+  it("reunião 10/09: tarefa com effort_is_provisional mostra o aviso 'Especialidade e tempo provisórios para teste' (banner + por tarefa)", async () => {
+    api.getCatalog2ProductPricingMemory.mockResolvedValue({
+      version_id: "v3",
+      version_state: "rascunho",
+      pricing: {
+        ...COMPLETE_PRICING.pricing,
+        commercial_ready: false,
+        quote_blockers: ["preço comercial incompleto"],
+        pending_info: ["especialidade/tempo de tarefa(s) provisórios (dado de teste, revisão humana pendente)"],
+        human_cost_breakdown: [{ task_key: "t1", specialty: "Designer", minutes: 120, rate: 137.5, cost: 275, effort_is_provisional: true }],
+      },
+    });
+    render(<Catalog2PricingMemoryPopover productId="p4" isAdminMaster />);
+    await openPopover();
+
+    await waitFor(() => expect(screen.getAllByText(/Especialidade e tempo provisórios para teste/i).length).toBeGreaterThan(0));
+    expect(screen.getByText("especialidade/tempo de tarefa(s) provisórios (dado de teste, revisão humana pendente)")).toBeInTheDocument();
+    // nunca fecha o preço comercial com dado provisório
+    expect(screen.getByText(/Preço ainda não calculável/i)).toBeInTheDocument();
+  });
 });

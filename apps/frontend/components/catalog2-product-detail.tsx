@@ -153,8 +153,8 @@ export function Catalog2ProductDetail({
   const tasks = targetVersion?.tasks ?? [];
   const hasRealTasks = tasks.length > 0;
   const includedItems = hasRealTasks
-    ? tasks.map((t: any) => ({ title: t.name, description: t.description, real: true }))
-    : (provisional?.included_items ?? []).map((it: any) => ({ ...it, real: false }));
+    ? tasks.map((t: any) => ({ title: t.name, description: t.description, real: true, effort_is_provisional: !!t.effort_is_provisional }))
+    : (provisional?.included_items ?? []).map((it: any) => ({ ...it, real: false, effort_is_provisional: false }));
 
   const highlights: { text: string; real: boolean }[] = provisional?.highlights?.map((h: string) => ({ text: h, real: false })) ?? [];
 
@@ -374,6 +374,9 @@ export function Catalog2ProductDetail({
                             <div className="flex items-center gap-2">
                               <p className="text-sm font-semibold">{item.title}</p>
                               {!item.real && <ProvisionalBadge label="Item provisório — completar com tarefas reais no construtor." />}
+                              {item.real && item.effort_is_provisional && (
+                                <ProvisionalBadge label="Especialidade e tempo provisórios para teste — revisão humana pendente. Nunca usado para aprovar preço comercial." />
+                              )}
                             </div>
                             {item.description && <p className="text-xs text-muted-foreground mt-0.5 leading-relaxed">{item.description}</p>}
                           </div>
@@ -422,6 +425,11 @@ export function Catalog2ProductDetail({
             {displayDeadline != null && (
               <p className="text-xs text-blue-200 mt-1">
                 Prazo: <strong className="text-white">{displayDeadline} dias</strong>{deadlineIsProvisional && " (provisório)"}
+              </p>
+            )}
+            {readiness?.functional_for_test && (
+              <p className="mt-1.5 rounded-md bg-amber-400/20 px-2 py-1 text-[11px] font-medium text-amber-100">
+                {readiness.functional_for_test_label ?? "Funcional para teste, pendente de revisão"} — especialidade e tempo das tarefas são provisórios para teste.
               </p>
             )}
           </div>
