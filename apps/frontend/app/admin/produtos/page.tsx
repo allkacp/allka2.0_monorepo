@@ -91,6 +91,7 @@ const REVIEW_STATE_LABEL: Record<string, string> = {
   price_pending: "Definir preço",
   deadline_pending: "Definir prazo comercial",
   portfolio_pending: "Falta portfólio",
+  task_effort_fields_pending: "Definir especialidade/horas das tarefas",
   rose_review_pending: "Revisão da Rose pendente",
   ready_for_final_review: "Pronto p/ revisão final",
   ready_for_publication: "Pronto p/ publicação",
@@ -101,6 +102,7 @@ const PENDENCY_LABEL: Record<string, string> = {
   price_pending: "preço",
   deadline_pending: "prazo comercial",
   portfolio_pending: "portfólio",
+  task_effort_fields_pending: "especialidade/horas das tarefas",
   rose_review_pending: "revisão Rose",
 };
 

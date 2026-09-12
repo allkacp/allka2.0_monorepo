@@ -92,6 +92,7 @@ const PENDENCY_LABEL: Record<string, string> = {
   conteudo: "conteúdo", classificacao: "classificação", variacoes: "variações",
   adicionais: "adicionais", tarefas: "tarefas", etapas: "etapas", preco: "preço",
   prazo: "prazo", portfolio: "portfólio", revisao_rose: "revisão", publicacao: "publicação",
+  esforco_tarefas: "especialidade/horas das tarefas",
 };
 
 interface ReadinessProduct {
