@@ -913,10 +913,6 @@ const PENDENCY_PRIORITY = [
   "price_pending",
   "deadline_pending",
   "portfolio_pending",
-  // Tarefas/etapas existem (importadas do texto "Etapas Executáveis por
-  // IA" — reunião 10/09), mas especialidade/horas/dependências não constam
-  // na fonte original. Ver import-tasks-from-steps-text.ts.
-  "task_effort_fields_pending",
   "rose_review_pending",
 ];
 function reviewStateFromPendencies(pendencies: string[]): string {
@@ -1151,7 +1147,11 @@ const READINESS_INCLUDE = {
     include: {
       _count: { select: { variations: true, addons: true, tasks: true } },
       // Etapas não são relação direta da versão — contamos pelas tarefas.
-      tasks: { select: { _count: { select: { steps: true } } } },
+      // specialty_id/estimated_minutes: usados pra CALCULAR ao vivo se
+      // alguma tarefa está sem esforço definido (reunião 10/09, correção
+      // "task_effort_fields_pending") — nunca lido de um registro
+      // histórico de pendência.
+      tasks: { select: { specialty_id: true, estimated_minutes: true, _count: { select: { steps: true } } } },
     },
   },
 } satisfies Prisma.Catalog2ProductInclude;
@@ -1187,6 +1187,14 @@ async function computeProductReadiness(p: ReadinessProduct) {
   const has = (k: string) => pend.includes(k);
   const taskCount = targetVersion?._count.tasks ?? 0;
   const stepCount = (targetVersion?.tasks ?? []).reduce((a, t) => a + t._count.steps, 0);
+  // Calculado AO VIVO a partir das tarefas reais — nunca lido de um
+  // registro histórico de pendência (bug corrigido reunião 10/09: um
+  // produto com human_edited_at ficava fora da contagem mesmo com tarefas
+  // sem especialidade/horas). Reflete o estado atual e some sozinho assim
+  // que todas as tarefas da versão forem completadas.
+  const hasIncompleteTaskEffort = (targetVersion?.tasks ?? []).some(
+    (t) => !t.specialty_id || t.estimated_minutes == null,
+  );
 
   let pricing: Awaited<ReturnType<typeof computePricing>> | null = null;
   if (targetVersion) {
@@ -1222,11 +1230,14 @@ async function computeProductReadiness(p: ReadinessProduct) {
     // Reunião 10/09 ("tarefas e etapas dos 36 produtos reais"): as tarefas
     // vieram do texto "Etapas Executáveis por IA" da fonte original — real,
     // mas sem especialidade/horas/dependências (a fonte não define isso).
+    // Condição objetiva (dados atuais das tarefas), nunca dependente de
+    // human_edited_at — resolve sozinha assim que as tarefas forem
+    // completadas.
     esforco_tarefas: taskCount === 0
       ? { level: "opcional", note: "Sem tarefas ainda — nada a estimar." }
-      : has("task_effort_fields_pending")
-        ? { level: "pendente", note: "Especialidade/horas estimadas/dependências das tarefas não definidas na fonte — revisão manual pendente." }
-        : { level: "pronto", note: "Especialidade/horas das tarefas revisadas." },
+      : hasIncompleteTaskEffort
+        ? { level: "pendente", note: "Especialidade/horas estimadas de alguma tarefa não definidas — revisão manual pendente." }
+        : { level: "pronto", note: "Especialidade/horas de todas as tarefas definidas." },
     // Sem tarefa ativa NÃO há base de custo — o preço nunca é "R$ 0,00 válido".
     preco: hasActiveTasks
       ? pricing?.commercial_ready

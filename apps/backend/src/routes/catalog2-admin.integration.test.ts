@@ -345,4 +345,83 @@ describe("Novo catálogo — fundação", () => {
     // já tem a v1 rascunho — pedir outra sem publicar → 409
     await assert.rejects(() => newDraftVersion(p.id, master.id), (e: any) => e.code === "draft_exists");
   });
+
+  // Correção da inconsistência "task_effort_fields_pending" (reunião 10/09):
+  // a pendência de especialidade/horas ausentes é uma condição OBJETIVA das
+  // tarefas reais — sempre calculada ao vivo, nunca lida de um registro
+  // histórico protegido por human_edited_at.
+  describe("prontidão do esforço das tarefas (especialidade/horas) — condição objetiva, nunca histórica", () => {
+    it("1. produto com human_edited_at registrado, mas com tarefa incompleta, CONTINUA com a pendência", async () => {
+      const master = await mkUser("master");
+      const p = await createProduct({ internal_name: "[TESTE] Esforço c/ edição humana" }, master.id);
+      catProducts.push(p.id);
+      const v1 = await prisma.catalog2ProductVersion.findFirstOrThrow({ where: { product_id: p.id } });
+      await prisma.catalog2Task.create({ data: { version_id: v1.id, key: "t1", name: "Tarefa incompleta", sort_order: 0 } });
+      // human_edited_at setado (ex.: alguém editou o rascunho por outro
+      // motivo) — isso NUNCA deve esconder uma tarefa sem especialidade/horas.
+      await prisma.catalog2ProductImportOrigin.create({
+        data: {
+          product_id: p.id, source_key: `t9:${p.id}`, source_index: 1, source_name: p.internal_name,
+          review_state: "ready_for_final_review", pendencies_json: "[]", last_import_checksum: "chk",
+          human_edited_at: new Date(),
+        },
+      });
+
+      const r = await api(`/api/admin/catalog2/products/${p.id}/readiness`, { token: tokenFor(master) });
+      assert.equal(r.json.items.esforco_tarefas.level, "pendente");
+      assert.ok(r.json.pendings.includes("esforco_tarefas"));
+    });
+
+    it("2. produto com TODAS as tarefas completas (especialidade + horas) não apresenta a pendência", async () => {
+      const master = await mkUser("master");
+      const p = await createProduct({ internal_name: "[TESTE] Esforço completo" }, master.id);
+      catProducts.push(p.id);
+      const v1 = await prisma.catalog2ProductVersion.findFirstOrThrow({ where: { product_id: p.id } });
+      const spec = await prisma.catalog2Specialty.findFirst();
+      assert.ok(spec, "fixture de especialidade precisa existir (seedCatalog2Classifications)");
+      await prisma.catalog2Task.create({
+        data: { version_id: v1.id, key: "t1", name: "Tarefa completa", sort_order: 0, specialty_id: spec!.id, estimated_minutes: 60 },
+      });
+
+      const r = await api(`/api/admin/catalog2/products/${p.id}/readiness`, { token: tokenFor(master) });
+      assert.equal(r.json.items.esforco_tarefas.level, "pronto");
+      assert.ok(!r.json.pendings.includes("esforco_tarefas"));
+      assert.ok(!r.json.blockers.includes("esforco_tarefas"));
+    });
+
+    it("3. produto com várias tarefas, sendo só UMA incompleta, apresenta a pendência", async () => {
+      const master = await mkUser("master");
+      const p = await createProduct({ internal_name: "[TESTE] Esforço parcial" }, master.id);
+      catProducts.push(p.id);
+      const v1 = await prisma.catalog2ProductVersion.findFirstOrThrow({ where: { product_id: p.id } });
+      const spec = await prisma.catalog2Specialty.findFirst();
+      await prisma.catalog2Task.create({
+        data: { version_id: v1.id, key: "t1", name: "Completa", sort_order: 0, specialty_id: spec!.id, estimated_minutes: 30 },
+      });
+      await prisma.catalog2Task.create({
+        data: { version_id: v1.id, key: "t2", name: "Sem horas", sort_order: 1, specialty_id: spec!.id, estimated_minutes: null },
+      });
+      await prisma.catalog2Task.create({
+        data: { version_id: v1.id, key: "t3", name: "Sem especialidade", sort_order: 2, specialty_id: null, estimated_minutes: 45 },
+      });
+
+      const r = await api(`/api/admin/catalog2/products/${p.id}/readiness`, { token: tokenFor(master) });
+      assert.equal(r.json.items.esforco_tarefas.level, "pendente");
+
+      // completando as duas que faltavam, a pendência se resolve sozinha —
+      // sem nenhuma ação de "resolver pendência" manual.
+      await prisma.catalog2Task.updateMany({ where: { version_id: v1.id }, data: { specialty_id: spec!.id, estimated_minutes: 20 } });
+      const after = await api(`/api/admin/catalog2/products/${p.id}/readiness`, { token: tokenFor(master) });
+      assert.equal(after.json.items.esforco_tarefas.level, "pronto");
+    });
+
+    it("produto sem tarefas: esforço é 'opcional' (nada a estimar ainda) — nunca aparece como pendência", async () => {
+      const master = await mkUser("master");
+      const p = await createProduct({ internal_name: "[TESTE] Esforço sem tarefas" }, master.id);
+      catProducts.push(p.id);
+      const r = await api(`/api/admin/catalog2/products/${p.id}/readiness`, { token: tokenFor(master) });
+      assert.equal(r.json.items.esforco_tarefas.level, "opcional");
+      assert.ok(!r.json.pendings.includes("esforco_tarefas"));
+    });
+  });
 });

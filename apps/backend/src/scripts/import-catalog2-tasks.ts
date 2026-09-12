@@ -32,7 +32,7 @@ async function main() {
   console.log(`  Com tarefas ANTES: ${r.products_with_tasks_before}  ·  Com tarefas DEPOIS: ${r.products_with_tasks_after}`);
   console.log(`  Tarefas criadas: ${r.tasks_created_total}  ·  Já existentes (idempotência): ${r.tasks_already_existing_total}`);
   console.log(`  Pendência "content_review_pending" resolvida: ${r.content_pendency_cleared_count} produto(s)`);
-  console.log(`  Pendência "task_effort_fields_pending" adicionada: ${r.effort_pendency_added_count} produto(s)`);
+  console.log(`  Resquício obsoleto "task_effort_fields_pending" removido: ${r.stale_effort_pendency_removed_count} produto(s) (essa condição agora é sempre calculada ao vivo pelo /readiness)`);
   if (r.products_no_source_text > 0) console.log(`  ⚠ Sem texto de etapas na fonte: ${r.products_no_source_text} produto(s)`);
   if (r.products_no_draft_version > 0) console.log(`  ⚠ Sem versão em rascunho: ${r.products_no_draft_version} produto(s)`);
 

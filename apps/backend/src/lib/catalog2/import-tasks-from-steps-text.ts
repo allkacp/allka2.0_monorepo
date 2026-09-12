@@ -8,29 +8,40 @@
 // passos separados por ";" — cada segmento vira UMA Catalog2Task (key
 // estável `etapa-N`, nome = texto exato do segmento, sort_order = posição
 // na lista). Nunca inventa: especialidade, horas estimadas e dependências
-// entre tarefas NÃO existem na fonte — ficam null/ausentes, com uma
-// pendência explícita (`task_effort_fields_pending`) registrada pra revisão
-// humana, nunca preenchidas com valor padrão silencioso.
+// entre tarefas NÃO existem na fonte — ficam null/ausentes (nunca
+// preenchidas com valor padrão silencioso). A ausência é uma condição
+// objetiva das tarefas, sempre calculada ao vivo pelo cálculo de prontidão
+// (ver correção abaixo) — nunca gravada como pendência histórica.
 //
 // Idempotente: cada tarefa é identificada por (version_id, key) — já
 // existente nunca é recriada nem sobrescrita (create-only, igual ao padrão
 // de geração de ProjectTask em generate-tasks-catalog2.ts). Nunca publica
 // produto, nunca mexe em preço/prazo/imagem.
+//
+// Correção (reunião 10/09, "inconsistência da pendência
+// task_effort_fields_pending"): especialidade/horas ausentes NÃO viram mais
+// um código gravado em pendencies_json — essa condição é objetiva (dados
+// reais das tarefas) e agora é sempre CALCULADA ao vivo pelo cálculo de
+// prontidão (computeProductReadiness em catalog2-admin.ts), nunca lida de
+// um registro histórico protegido por human_edited_at. Esta importação só
+// limpa, de forma idempotente, qualquer resquício desse código antigo que
+// já tenha sido gravado (não é uma decisão editorial — roda mesmo com
+// human_edited_at, sem reabrir/fechar nenhuma outra pendência).
 import { PrismaClient } from "@prisma/client";
 import { assertLocalDatabase } from "../assert-local-database";
 
 const TEST_LOCAL_PREFIX = "[TESTE LOCAL]";
+const STALE_EFFORT_PENDENCY_CODE = "task_effort_fields_pending";
 
 // Mesma ordem de prioridade usada em import-products.ts e catalog2-admin.ts
 // (duplicada de propósito — os três arquivos já seguem esse padrão nesta
-// base; nenhum módulo central existia antes desta tarefa) + o novo código.
+// base; nenhum módulo central existia antes desta tarefa).
 const PENDENCY_PRIORITY = [
   "content_review_pending",
   "classification_decision_pending",
   "price_pending",
   "deadline_pending",
   "portfolio_pending",
-  "task_effort_fields_pending",
   "rose_review_pending",
 ];
 function reviewStateFrom(pendencies: string[]): string {
@@ -57,7 +68,7 @@ export interface TaskImportLine {
   tasks_created: number;
   tasks_already_existing: number;
   content_pendency_cleared: boolean;
-  effort_pendency_added: boolean;
+  stale_effort_pendency_removed: boolean;
   pendencies_untouched_reason: string | null; // ex.: "edição humana já registrada"
   truncated_names: string[]; // nomes que passaram de 191 chars (raro) — texto integral preservado em description
 }
@@ -70,7 +81,7 @@ export interface TasksImportResult {
   tasks_created_total: number;
   tasks_already_existing_total: number;
   content_pendency_cleared_count: number;
-  effort_pendency_added_count: number;
+  stale_effort_pendency_removed_count: number;
   products_no_source_text: number;
   products_no_draft_version: number;
   lines: TaskImportLine[];
@@ -120,7 +131,7 @@ export async function runTasksImport(opts: TasksImportOptions): Promise<TasksImp
     let tasksCreatedTotal = 0;
     let tasksExistingTotal = 0;
     let contentPendencyClearedCount = 0;
-    let effortPendencyAddedCount = 0;
+    let staleEffortPendencyRemovedCount = 0;
     let noSourceText = 0;
     let noDraftVersion = 0;
     let productsWithTasksBefore = 0;
@@ -141,7 +152,7 @@ export async function runTasksImport(opts: TasksImportOptions): Promise<TasksImp
           tasks_created: 0,
           tasks_already_existing: 0,
           content_pendency_cleared: false,
-          effort_pendency_added: false,
+          stale_effort_pendency_removed: false,
           pendencies_untouched_reason: "produto sem registro de importação original",
           truncated_names: [],
         });
@@ -159,7 +170,7 @@ export async function runTasksImport(opts: TasksImportOptions): Promise<TasksImp
           tasks_created: 0,
           tasks_already_existing: 0,
           content_pendency_cleared: false,
-          effort_pendency_added: false,
+          stale_effort_pendency_removed: false,
           pendencies_untouched_reason: "sem versão em rascunho para receber as tarefas",
           truncated_names: [],
         });
@@ -181,7 +192,7 @@ export async function runTasksImport(opts: TasksImportOptions): Promise<TasksImp
           tasks_created: 0,
           tasks_already_existing: 0,
           content_pendency_cleared: false,
-          effort_pendency_added: false,
+          stale_effort_pendency_removed: false,
           pendencies_untouched_reason: "fonte original não descreve etapas para este produto",
           truncated_names: [],
         });
@@ -232,20 +243,31 @@ export async function runTasksImport(opts: TasksImportOptions): Promise<TasksImp
       tasksCreatedTotal += tasksCreated;
       tasksExistingTotal += tasksExisting;
 
-      // ── Pendências: só mexe se ainda não houve edição humana registrada
-      // pra este produto (nunca sobrescreve decisão de revisão manual).
+      // ── Pendências. content_review_pending é uma decisão EDITORIAL — só
+      // mexe se ainda não houve edição humana registrada pra este produto
+      // (nunca sobrescreve decisão de revisão manual). Já a limpeza do
+      // código obsoleto task_effort_fields_pending NÃO é uma decisão
+      // editorial (ninguém decidiu nada sobre ele — é resíduo de um bug
+      // desta própria importação), então roda sempre, mesmo com
+      // human_edited_at, sem reabrir/fechar nenhuma outra pendência.
       let contentCleared = false;
-      let effortAdded = false;
+      let staleEffortRemoved = false;
       let untouchedReason: string | null = null;
 
       if (tasksCreated > 0 || tasksExisting > 0) {
+        const pend = safeJsonArray(p.import_origin.pendencies_json);
+        let next = [...pend];
+
+        if (next.includes(STALE_EFFORT_PENDENCY_CODE)) {
+          next = next.filter((x) => x !== STALE_EFFORT_PENDENCY_CODE);
+          staleEffortRemoved = true;
+        }
+
         if (p.import_origin.human_edited_at) {
-          untouchedReason = "edição humana já registrada — pendências preservadas";
+          untouchedReason = "edição humana já registrada — pendências editoriais preservadas";
         } else {
-          const pend = safeJsonArray(p.import_origin.pendencies_json);
           const hasVariationsRaw = "variations_raw" in originTexts;
           const hasAddonsRaw = "addons_raw" in originTexts;
-          let next = [...pend];
 
           // content_review_pending foi marcado (entre outros motivos) porque
           // as "Etapas Executáveis por IA" não tinham virado tarefas — agora
@@ -256,24 +278,18 @@ export async function runTasksImport(opts: TasksImportOptions): Promise<TasksImp
             next = next.filter((x) => x !== "content_review_pending");
             contentCleared = true;
           }
-          // Tarefas existem agora, mas especialidade/horas/dependências
-          // continuam indefinidas na fonte — pendência própria, honesta.
-          if (!next.includes("task_effort_fields_pending")) {
-            next.push("task_effort_fields_pending");
-            effortAdded = true;
-          }
+        }
 
-          if (opts.mode === "apply" && (contentCleared || effortAdded)) {
-            await db.catalog2ProductImportOrigin.update({
-              where: { id: p.import_origin.id },
-              data: { pendencies_json: JSON.stringify(next), review_state: reviewStateFrom(next) },
-            });
-          }
+        if (opts.mode === "apply" && (contentCleared || staleEffortRemoved)) {
+          await db.catalog2ProductImportOrigin.update({
+            where: { id: p.import_origin.id },
+            data: { pendencies_json: JSON.stringify(next), review_state: reviewStateFrom(next) },
+          });
         }
       }
 
       if (contentCleared) contentPendencyClearedCount++;
-      if (effortAdded) effortPendencyAddedCount++;
+      if (staleEffortRemoved) staleEffortPendencyRemovedCount++;
 
       lines.push({
         product_id: p.id,
@@ -284,7 +300,7 @@ export async function runTasksImport(opts: TasksImportOptions): Promise<TasksImp
         tasks_created: tasksCreated,
         tasks_already_existing: tasksExisting,
         content_pendency_cleared: contentCleared,
-        effort_pendency_added: effortAdded,
+        stale_effort_pendency_removed: staleEffortRemoved,
         pendencies_untouched_reason: untouchedReason,
         truncated_names: truncatedNames,
       });
@@ -303,7 +319,7 @@ export async function runTasksImport(opts: TasksImportOptions): Promise<TasksImp
       tasks_created_total: tasksCreatedTotal,
       tasks_already_existing_total: tasksExistingTotal,
       content_pendency_cleared_count: contentPendencyClearedCount,
-      effort_pendency_added_count: effortPendencyAddedCount,
+      stale_effort_pendency_removed_count: staleEffortPendencyRemovedCount,
       products_no_source_text: noSourceText,
       products_no_draft_version: noDraftVersion,
       lines,

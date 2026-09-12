@@ -89,11 +89,14 @@ describe("runTasksImport — tarefas/etapas a partir do texto de etapas preserva
     }
 
     // content_review_pending caiu (só existia por causa do texto de etapas,
-    // sem variations_raw/addons_raw), e a pendência de esforço apareceu.
+    // sem variations_raw/addons_raw). Especialidade/horas ausentes NÃO
+    // viram mais um código gravado — essa condição agora é sempre
+    // calculada ao vivo pelo cálculo de prontidão (ver correção da
+    // inconsistência task_effort_fields_pending).
     const origin = await prisma.catalog2ProductImportOrigin.findUniqueOrThrow({ where: { product_id: p.id } });
     const pend = JSON.parse(origin.pendencies_json!);
     assert.ok(!pend.includes("content_review_pending"));
-    assert.ok(pend.includes("task_effort_fields_pending"));
+    assert.ok(!pend.includes("task_effort_fields_pending"), "não deve mais gravar esse código — a condição é calculada ao vivo");
     assert.ok(pend.includes("price_pending")); // pendência não relacionada é preservada
   });
 
@@ -108,10 +111,10 @@ describe("runTasksImport — tarefas/etapas a partir do texto de etapas preserva
     const origin = await prisma.catalog2ProductImportOrigin.findUniqueOrThrow({ where: { product_id: p.id } });
     const pend = JSON.parse(origin.pendencies_json!);
     assert.ok(pend.includes("content_review_pending"), "não deve remover pendência de outro motivo real");
-    assert.ok(pend.includes("task_effort_fields_pending"));
+    assert.ok(!pend.includes("task_effort_fields_pending"));
   });
 
-  it("nunca sobrescreve pendências de um produto com edição humana já registrada (mas ainda cria as tarefas)", async () => {
+  it("nunca sobrescreve pendência EDITORIAL (content_review_pending) de um produto com edição humana já registrada (mas ainda cria as tarefas)", async () => {
     const p = await mkProduct({
       internalName: "Produto já revisado por humano",
       stepsText: "Passo A; Passo B",
@@ -122,11 +125,35 @@ describe("runTasksImport — tarefas/etapas a partir do texto de etapas preserva
     const line = r.lines.find((l) => l.product_id === p.id)!;
     assert.equal(line.tasks_created, 2);
     assert.equal(line.content_pendency_cleared, false);
-    assert.equal(line.effort_pendency_added, false);
-    assert.equal(line.pendencies_untouched_reason, "edição humana já registrada — pendências preservadas");
+    assert.equal(line.stale_effort_pendency_removed, false);
+    assert.equal(line.pendencies_untouched_reason, "edição humana já registrada — pendências editoriais preservadas");
 
     const origin = await prisma.catalog2ProductImportOrigin.findUniqueOrThrow({ where: { product_id: p.id } });
     assert.deepEqual(JSON.parse(origin.pendencies_json!), ["content_review_pending"]);
+  });
+
+  it("correção da inconsistência: remove o resquício obsoleto 'task_effort_fields_pending' MESMO com edição humana já registrada (não é decisão editorial)", async () => {
+    const p = await mkProduct({
+      internalName: "Produto com resquício obsoleto e edição humana",
+      stepsText: "Passo único",
+      pendencies: ["content_review_pending", "task_effort_fields_pending"],
+      humanEditedAt: new Date(),
+    });
+    const r = await runTasksImport({ mode: "apply" });
+    const line = r.lines.find((l) => l.product_id === p.id)!;
+    assert.equal(line.content_pendency_cleared, false, "content_review_pending é editorial — continua preservado");
+    assert.equal(line.stale_effort_pendency_removed, true, "resquício obsoleto é removido mesmo com edição humana");
+
+    const origin = await prisma.catalog2ProductImportOrigin.findUniqueOrThrow({ where: { product_id: p.id } });
+    const pend = JSON.parse(origin.pendencies_json!);
+    assert.deepEqual(pend.sort(), ["content_review_pending"]);
+
+    // idempotente: rodar de novo não erra nem re-adiciona nada.
+    const second = await runTasksImport({ mode: "apply" });
+    const secondLine = second.lines.find((l) => l.product_id === p.id)!;
+    assert.equal(secondLine.stale_effort_pendency_removed, false, "já foi removido — nada a fazer na 2ª execução");
+    const originAfter = await prisma.catalog2ProductImportOrigin.findUniqueOrThrow({ where: { product_id: p.id } });
+    assert.deepEqual(JSON.parse(originAfter.pendencies_json!).sort(), ["content_review_pending"]);
   });
 
   it("produto sem texto de etapas na fonte: nenhuma tarefa inventada, pendência não mexida", async () => {
