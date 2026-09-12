@@ -45,6 +45,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { apiClient } from "@/lib/api-client";
+import { useIallkaContext } from "@/contexts/iallka-context";
 import { TaskLaunchDrawer } from "@/components/task-launch-drawer";
 import { ProjectConnectionsTab } from "@/components/project-connections-tab";
 import { ProjectMemoriaTab } from "@/components/project-memoria-tab";
@@ -1176,6 +1177,22 @@ export function ProjectViewSlidePanel({
   const [launchDrawerOpen, setLaunchDrawerOpen] = useState(false);
   const [launchDrawerTask, setLaunchDrawerTask] = useState<any>(null);
   const repairedDraftRef = useRef<string | null>(null);
+
+  // ── IAllka: registra o projeto aberto no contexto da tela (reunião 10/09,
+  // "integração IAllka — telas de Projetos") — só o ID, nunca briefing/doc.
+  // Limpa ao fechar o painel ou trocar de projeto (cleanup roda antes do
+  // próximo efeito quando `project?.id` muda), pra nunca reaproveitar o
+  // projeto anterior.
+  const { setScreenContext: setIallkaScreenContext } = useIallkaContext();
+  useEffect(() => {
+    if (!open || !project?.id) return;
+    setIallkaScreenContext({
+      label: "Projetos",
+      openItemName: project.name,
+      projectId: String(project.id),
+    });
+    return () => setIallkaScreenContext(null);
+  }, [open, project?.id, project?.name, setIallkaScreenContext]);
 
   // ── Data fetchers ─────────────────────────────────────────────────────────
   const fetchProducts = useCallback(async () => {
