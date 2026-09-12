@@ -4,6 +4,7 @@ import fs from "fs";
 import path from "path";
 import multer from "multer";
 import { z } from "zod";
+import { Prisma } from "@prisma/client";
 import { prisma } from "../lib/prisma";
 import { verifyToken, requireRole, evaluateAdminMasterAccess } from "../middleware/auth";
 import { validate } from "../middleware/validate";
@@ -82,6 +83,35 @@ const DOCUMENT_SELECT = {
   updated_at: true,
   replaced_by: { select: { id: true, name: true, version: true } },
 } as const;
+
+// Correção ("preservação do histórico da Base de Conhecimento"): uma cadeia
+// de versões é a lista de documentos ligados por replaces_document_id, do
+// primeiro (sem predecessor) até o mais recente. Anda pra trás até achar a
+// raiz e depois pra frente coletando cada sucessor — funciona a partir de
+// QUALQUER membro da cadeia, não só do mais novo.
+async function getVersionChainIds(documentId: string): Promise<string[]> {
+  let rootId = documentId;
+  for (;;) {
+    const doc = await prisma.aIKnowledgeDocument.findUnique({
+      where: { id: rootId },
+      select: { replaces_document_id: true },
+    });
+    if (!doc?.replaces_document_id) break;
+    rootId = doc.replaces_document_id;
+  }
+  const ids = [rootId];
+  let currentId = rootId;
+  for (;;) {
+    const next = await prisma.aIKnowledgeDocument.findFirst({
+      where: { replaces_document_id: currentId },
+      select: { id: true },
+    });
+    if (!next) break;
+    ids.push(next.id);
+    currentId = next.id;
+  }
+  return ids;
+}
 
 // GET /api/ai-knowledge-base/categories
 router.get("/categories", async (_req, res, next) => {
@@ -230,7 +260,12 @@ router.post("/categories/:key/documents", guardAdminMaster, async (req, res, nex
   }
 });
 
-// POST /api/ai-knowledge-base/documents/:id/activate
+// POST /api/ai-knowledge-base/documents/:id/activate — ativa esta versão e
+// desativa QUALQUER outra versão ativa da mesma cadeia (nunca duas
+// vigentes ao mesmo tempo). As duas escritas (desativar as outras, ativar
+// esta) ficam na MESMA transação — concorrência (duas ativações na mesma
+// cadeia ao mesmo tempo) serializa pelas travas de linha do próprio UPDATE,
+// nunca resultando em duas ativas.
 router.post("/documents/:id/activate", guardAdminMaster, async (req, res, next) => {
   try {
     const document = await prisma.aIKnowledgeDocument.findUnique({ where: { id: req.params.id as string } });
@@ -238,13 +273,28 @@ router.post("/documents/:id/activate", guardAdminMaster, async (req, res, next) 
       res.status(404).json({ error: "Documento não encontrado" });
       return;
     }
-    const updated = await prisma.aIKnowledgeDocument.update({
-      where: { id: document.id },
-      data: { is_active: true },
-      select: DOCUMENT_SELECT,
-    });
+    const chainIds = await getVersionChainIds(document.id);
+    const [, updated] = await prisma.$transaction([
+      prisma.aIKnowledgeDocument.updateMany({
+        where: { id: { in: chainIds.filter((id) => id !== document.id) } },
+        data: { is_active: false },
+      }),
+      prisma.aIKnowledgeDocument.update({
+        where: { id: document.id },
+        data: { is_active: true },
+        select: DOCUMENT_SELECT,
+      }),
+    ]);
     res.json(updated);
   } catch (err) {
+    // Duas ativações concorrentes na MESMA cadeia disputam as mesmas
+    // linhas — o MySQL detecta e aborta uma delas (deadlock/write
+    // conflict, P2034). Nunca deixa duas versões ativas: quem perdeu só
+    // precisa tentar de novo (a invariante "uma só ativa" nunca quebra).
+    if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2034") {
+      res.status(409).json({ error: "Outra ativação/substituição desta cadeia está em andamento. Tente de novo." });
+      return;
+    }
     next(err);
   }
 });
@@ -274,7 +324,12 @@ router.post("/documents/:id/deactivate", guardAdminMaster, async (req, res, next
 // do documento :id. O documento ANTIGO nunca é apagado nem sobrescrito: ele
 // vira is_active=false e a linha nova aponta pra ele via
 // replaces_document_id (histórico preservado; só uma versão ativa por vez
-// dentro da cadeia).
+// dentro da cadeia). Só a versão VIGENTE (is_active=true) pode ser
+// substituída — evita duas substituições concorrentes criarem duas
+// versões ativas na mesma cadeia (uma a partir de v1, outra a partir de
+// v2). Duas substituições concorrentes da MESMA versão ainda são possíveis
+// de tentar; a segunda esbarra na constraint única de
+// replaces_document_id e recebe 409 (ver catch abaixo).
 router.post(
   "/documents/:id/replace",
   guardAdminMaster,
@@ -288,6 +343,11 @@ router.post(
         res.status(404).json({ error: "Documento não encontrado" });
         return;
       }
+      if (!oldDoc.is_active) {
+        req.resume();
+        res.status(409).json({ error: "Este documento não é mais a versão vigente — substitua a versão ativa da cadeia." });
+        return;
+      }
       res.locals.oldDoc = oldDoc;
       next();
     } catch (err) {
@@ -296,6 +356,7 @@ router.post(
   },
   uploadReplace.single("file"),
   async (req, res, next) => {
+    let destPath: string | undefined;
     try {
       const oldDoc = res.locals.oldDoc as { id: string; category_id: string; category: { key: string }; version: number };
       if (!req.file) {
@@ -310,7 +371,7 @@ router.post(
 
       // Move do diretório temporário pra dentro da categoria do original.
       const destDir = ensureUploadDir(`knowledge-base/${oldDoc.category.key}`);
-      const destPath = path.join(destDir, req.file.filename);
+      destPath = path.join(destDir, req.file.filename);
       fs.renameSync(req.file.path, destPath);
 
       const [newDoc] = await prisma.$transaction([
@@ -334,6 +395,15 @@ router.post(
       ]);
       res.status(201).json(newDoc);
     } catch (err) {
+      // Corrida: outra substituição do MESMO documento já ganhou a
+      // constraint única de replaces_document_id entre a checagem acima e
+      // esta escrita — nunca deixa a cadeia com duas versões ativas.
+      if (err instanceof Prisma.PrismaClientKnownRequestError && (err.code === "P2002" || err.code === "P2034")) {
+        if (destPath) fs.rmSync(destPath, { force: true });
+        else if (req.file) fs.rmSync(req.file.path, { force: true });
+        res.status(409).json({ error: "Este documento já foi substituído por outra pessoa nesse meio-tempo. Recarregue e tente de novo." });
+        return;
+      }
       next(err);
     }
   },
@@ -361,15 +431,30 @@ router.get("/documents/:id/download", async (req, res, next) => {
   }
 });
 
-// DELETE /api/ai-knowledge-base/documents/:id
+// DELETE /api/ai-knowledge-base/documents/:id — correção ("preservação do
+// histórico"): um documento que faça parte de uma cadeia de versões
+// (substituiu outro OU foi substituído por outro) NUNCA pode ser apagado
+// fisicamente — nem a versão antiga, nem a vigente. A única ação
+// disponível pra esses é Desativar (POST .../deactivate), que preserva
+// conteúdo, versão, datas e a relação de substituição. Excluir só é
+// permitido pra um documento SEM histórico nenhum (nunca substituiu, nunca
+// foi substituído) — remover esse nunca quebra nenhuma referência, porque
+// nenhuma outra linha aponta pra ele.
 router.delete("/documents/:id", guardAdminMaster, async (req, res, next) => {
   try {
     const document = await prisma.aIKnowledgeDocument.findUnique({
       where: { id: req.params.id as string },
-      include: { category: true },
+      include: { category: true, replaced_by: { select: { id: true } } },
     });
     if (!document) {
       res.status(404).json({ error: "Documento não encontrado" });
+      return;
+    }
+    const belongsToVersionChain = !!document.replaces_document_id || !!document.replaced_by;
+    if (belongsToVersionChain) {
+      res.status(409).json({
+        error: "Este documento faz parte de um histórico de versões e não pode ser excluído. Use Desativar para preservar o histórico.",
+      });
       return;
     }
     await prisma.aIKnowledgeDocument.delete({ where: { id: document.id } });

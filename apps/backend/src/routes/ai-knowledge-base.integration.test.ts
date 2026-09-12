@@ -10,6 +10,7 @@ import app from "../app";
 import { prisma } from "../lib/prisma";
 import { config } from "../config";
 import { ensureDefaultKnowledgeCategories, getCategoryKnowledgeText, getCategoryKnowledgeSections } from "../lib/ai-knowledge-base";
+import { uploadedFilePath } from "../lib/file-storage";
 import { buildAdminKnowledgeText, buildProjectBriefingText } from "../lib/iallka-knowledge";
 
 // Reunião 10/09 ("organização da base de conhecimento administrativa da
@@ -284,5 +285,118 @@ describe("Base de conhecimento administrativa da IAllka (AIKnowledgeCategory/Doc
     const after1 = await prisma.aIKnowledgeCategory.count({ where: { key: { in: ["produtos", "briefing", "quatro_fs", "processos", "politicas", "outros"] } } });
     assert.equal(before1, 6);
     assert.equal(after1, 6);
+  });
+
+  // Correção ("preservação do histórico da Base de Conhecimento da
+  // IAllka") — documento que faça parte de uma cadeia de versões nunca
+  // pode ser apagado fisicamente; só Desativar. Ativar uma versão desativa
+  // qualquer outra ativa da mesma cadeia; substituição/ativação
+  // concorrentes nunca deixam duas versões ativas.
+  describe("preservação do histórico de versões", () => {
+    it("1. a versão ANTIGA (substituída) não pode ser excluída", async () => {
+      const master = await mkUser("master");
+      const cat = await mkCategory(`t9-hist-antiga-${crypto.randomBytes(3).toString("hex")}`, "[TESTE] Histórico — antiga");
+      const v1 = await uploadFile(`/api/ai-knowledge-base/categories/${cat.key}/documents`, master.token, Buffer.from("Conteúdo v1."), "doc.txt");
+      const v2 = await uploadFile(`/api/ai-knowledge-base/documents/${v1.json.id}/replace`, master.token, Buffer.from("Conteúdo v2."), "doc-v2.txt");
+      assert.equal(v2.status, 201);
+
+      const del = await api(`/api/ai-knowledge-base/documents/${v1.json.id}`, { method: "DELETE", token: master.token });
+      assert.equal(del.status, 409);
+      assert.match(del.json.error, /histórico de versões/i);
+      assert.ok(await prisma.aIKnowledgeDocument.findUnique({ where: { id: v1.json.id } }), "a linha antiga continua existindo");
+    });
+
+    it("2. a versão VIGENTE não pode ser excluída quando pertence a uma cadeia (mas um documento sem histórico pode)", async () => {
+      const master = await mkUser("master");
+      const cat = await mkCategory(`t9-hist-vigente-${crypto.randomBytes(3).toString("hex")}`, "[TESTE] Histórico — vigente");
+      const v1 = await uploadFile(`/api/ai-knowledge-base/categories/${cat.key}/documents`, master.token, Buffer.from("Conteúdo v1."), "doc.txt");
+      const v2 = await uploadFile(`/api/ai-knowledge-base/documents/${v1.json.id}/replace`, master.token, Buffer.from("Conteúdo v2."), "doc-v2.txt");
+
+      const delActive = await api(`/api/ai-knowledge-base/documents/${v2.json.id}`, { method: "DELETE", token: master.token });
+      assert.equal(delActive.status, 409);
+      assert.match(delActive.json.error, /histórico de versões/i);
+
+      // documento SEM histórico (nunca substituiu, nunca foi substituído) — pode ser excluído normalmente.
+      const standalone = await uploadFile(`/api/ai-knowledge-base/categories/${cat.key}/documents`, master.token, Buffer.from("Conteúdo avulso."), "avulso.txt");
+      const delStandalone = await api(`/api/ai-knowledge-base/documents/${standalone.json.id}`, { method: "DELETE", token: master.token });
+      assert.equal(delStandalone.status, 200);
+      assert.equal(await prisma.aIKnowledgeDocument.findUnique({ where: { id: standalone.json.id } }), null);
+    });
+
+    it("3. desativar preserva conteúdo, versão, datas e a relação de substituição (nunca apaga)", async () => {
+      const master = await mkUser("master");
+      const cat = await mkCategory(`t9-hist-desativa-${crypto.randomBytes(3).toString("hex")}`, "[TESTE] Histórico — desativar");
+      const v1 = await uploadFile(`/api/ai-knowledge-base/categories/${cat.key}/documents`, master.token, Buffer.from("Conteúdo v1."), "doc.txt");
+      const v2 = await uploadFile(`/api/ai-knowledge-base/documents/${v1.json.id}/replace`, master.token, Buffer.from("Conteúdo v2."), "doc-v2.txt");
+
+      const before = await prisma.aIKnowledgeDocument.findUniqueOrThrow({ where: { id: v2.json.id } });
+      const deact = await api(`/api/ai-knowledge-base/documents/${v2.json.id}/deactivate`, { method: "POST", token: master.token });
+      assert.equal(deact.status, 200);
+      assert.equal(deact.json.is_active, false);
+
+      const after = await prisma.aIKnowledgeDocument.findUniqueOrThrow({ where: { id: v2.json.id } });
+      assert.equal(after.name, before.name);
+      assert.equal(after.version, before.version);
+      assert.equal(after.replaces_document_id, before.replaces_document_id);
+      assert.equal(after.created_at.getTime(), before.created_at.getTime());
+      assert.equal(after.file_name, before.file_name);
+      // o conteúdo em disco continua existindo — nunca apagado
+      const filePath = uploadedFilePath(`knowledge-base/${cat.key}`, after.file_name);
+      assert.ok(fs.existsSync(filePath));
+    });
+
+    it("4. reativar uma versão antiga desativa a outra ativa da mesma cadeia (nunca duas vigentes)", async () => {
+      const master = await mkUser("master");
+      const cat = await mkCategory(`t9-hist-reativa-${crypto.randomBytes(3).toString("hex")}`, "[TESTE] Histórico — reativar");
+      const v1 = await uploadFile(`/api/ai-knowledge-base/categories/${cat.key}/documents`, master.token, Buffer.from("Conteúdo v1."), "doc.txt");
+      const v2 = await uploadFile(`/api/ai-knowledge-base/documents/${v1.json.id}/replace`, master.token, Buffer.from("Conteúdo v2."), "doc-v2.txt");
+      // estado inicial: v1 inativa, v2 ativa (substituição já desativou v1)
+      assert.equal((await prisma.aIKnowledgeDocument.findUniqueOrThrow({ where: { id: v1.json.id } })).is_active, false);
+      assert.equal((await prisma.aIKnowledgeDocument.findUniqueOrThrow({ where: { id: v2.json.id } })).is_active, true);
+
+      const reactivate = await api(`/api/ai-knowledge-base/documents/${v1.json.id}/activate`, { method: "POST", token: master.token });
+      assert.equal(reactivate.status, 200);
+      assert.equal(reactivate.json.is_active, true);
+
+      const v1After = await prisma.aIKnowledgeDocument.findUniqueOrThrow({ where: { id: v1.json.id } });
+      const v2After = await prisma.aIKnowledgeDocument.findUniqueOrThrow({ where: { id: v2.json.id } });
+      assert.equal(v1After.is_active, true);
+      assert.equal(v2After.is_active, false, "a outra versão da cadeia deve ter sido desativada automaticamente");
+
+      const activeCount = await prisma.aIKnowledgeDocument.count({ where: { id: { in: [v1.json.id, v2.json.id] }, is_active: true } });
+      assert.equal(activeCount, 1, "só uma versão ativa na cadeia");
+    });
+
+    it("5. ativações/substituições concorrentes nunca deixam duas versões ativas na mesma cadeia", async () => {
+      const master = await mkUser("master");
+      const cat = await mkCategory(`t9-hist-concorrente-${crypto.randomBytes(3).toString("hex")}`, "[TESTE] Histórico — concorrência");
+      const v1 = await uploadFile(`/api/ai-knowledge-base/categories/${cat.key}/documents`, master.token, Buffer.from("Conteúdo v1."), "doc.txt");
+
+      // duas substituições concorrentes da MESMA versão vigente — só uma
+      // pode vencer (a outra esbarra na constraint única de
+      // replaces_document_id e recebe 409, nunca cria duas "v2").
+      const [replaceA, replaceB] = await Promise.all([
+        uploadFile(`/api/ai-knowledge-base/documents/${v1.json.id}/replace`, master.token, Buffer.from("Conteúdo v2 — tentativa A."), "a.txt"),
+        uploadFile(`/api/ai-knowledge-base/documents/${v1.json.id}/replace`, master.token, Buffer.from("Conteúdo v2 — tentativa B."), "b.txt"),
+      ]);
+      const statuses = [replaceA.status, replaceB.status].sort();
+      assert.deepEqual(statuses, [201, 409], "uma substituição vence, a outra é recusada — nunca as duas criam versão");
+
+      const chainDocs = await prisma.aIKnowledgeDocument.findMany({
+        where: { OR: [{ id: v1.json.id }, { replaces_document_id: v1.json.id }] },
+      });
+      assert.equal(chainDocs.filter((d) => d.is_active).length, 1, "só uma versão ativa depois da corrida de substituição");
+
+      // agora duas ativações concorrentes de versões DIFERENTES da mesma cadeia.
+      const winner = chainDocs.find((d) => d.replaces_document_id === v1.json.id)!;
+      await Promise.all([
+        api(`/api/ai-knowledge-base/documents/${v1.json.id}/activate`, { method: "POST", token: master.token }),
+        api(`/api/ai-knowledge-base/documents/${winner.id}/activate`, { method: "POST", token: master.token }),
+      ]);
+      const afterRace = await prisma.aIKnowledgeDocument.findMany({
+        where: { id: { in: [v1.json.id, winner.id] } },
+      });
+      assert.equal(afterRace.filter((d) => d.is_active).length, 1, "duas ativações concorrentes nunca deixam duas versões ativas");
+    });
   });
 });

@@ -2454,26 +2454,36 @@ export default function AdminConfiguracoesPage() {
                                 disabled={kbUploading}
                                 tone="text-violet-500"
                               />
-                              <DocumentDeleteButton
-                                documentName={doc.name}
-                                scopeLabel={
-                                  kbSelectedCategoryData?.name
-                                    ? `da base de conhecimento "${kbSelectedCategoryData.name}"`
-                                    : "da base de conhecimento"
-                                }
-                                title="Excluir documento da base de conhecimento"
-                                consequences={[
-                                  "O arquivo é apagado do servidor — não há lixeira nem desfazer.",
-                                  "A base de conhecimento deixa de responder com base nesse documento.",
-                                  "Enviar o arquivo de novo cria um documento novo, com outro histórico.",
-                                ]}
-                                onDelete={() => apiClient.deleteKnowledgeDocument(doc.id)}
-                                onDeleted={reloadKbAfterDocDelete}
-                              >
-                                {(open) => (
-                                  <IconActionButton icon={Trash2} tooltip="Excluir" onClick={open} tone="text-red-400" />
-                                )}
-                              </DocumentDeleteButton>
+                              {doc.replaces_document_id || doc.replaced_by ? (
+                                <IconActionButton
+                                  icon={Trash2}
+                                  tooltip="Excluir indisponível: este documento faz parte de um histórico de versões (foi substituído ou substituiu outro). Use Desativar para preservar o histórico."
+                                  onClick={() => {}}
+                                  disabled
+                                  tone="text-red-400"
+                                />
+                              ) : (
+                                <DocumentDeleteButton
+                                  documentName={doc.name}
+                                  scopeLabel={
+                                    kbSelectedCategoryData?.name
+                                      ? `da base de conhecimento "${kbSelectedCategoryData.name}"`
+                                      : "da base de conhecimento"
+                                  }
+                                  title="Excluir documento da base de conhecimento"
+                                  consequences={[
+                                    "O arquivo é apagado do servidor — não há lixeira nem desfazer.",
+                                    "A base de conhecimento deixa de responder com base nesse documento.",
+                                    "Enviar o arquivo de novo cria um documento novo, com outro histórico.",
+                                  ]}
+                                  onDelete={() => apiClient.deleteKnowledgeDocument(doc.id)}
+                                  onDeleted={reloadKbAfterDocDelete}
+                                >
+                                  {(open) => (
+                                    <IconActionButton icon={Trash2} tooltip="Excluir" onClick={open} tone="text-red-400" />
+                                  )}
+                                </DocumentDeleteButton>
+                              )}
                             </>
                           )}
                         </div>
