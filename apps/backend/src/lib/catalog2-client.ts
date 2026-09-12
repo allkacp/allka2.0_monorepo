@@ -135,9 +135,24 @@ export function clientPricingView(p: PricingResult) {
     commercial_ready: p.commercial_ready,
     // avisos relevantes ao cliente (sem jargão de custo interno)
     notices: p.warnings
-      .filter((w) => w.code !== "tax_order_not_confirmed" && !w.code.startsWith("specialty_") && !w.code.startsWith("ia_cost") && w.code !== "task_without_time")
+      .filter((w) =>
+        w.code !== "tax_order_not_confirmed" &&
+        !w.code.startsWith("specialty_") &&
+        !w.code.startsWith("ia_cost") &&
+        w.code !== "task_without_time" &&
+        // Reunião 10/09 ("precificação dos 36 produtos funcional para
+        // teste"): avisos de dado PROVISÓRIO (esforço/prazo) nunca chegam
+        // ao cliente — defesa em profundidade, mesmo que este caminho
+        // nunca receba computePricing em modo simulação de propósito.
+        w.code !== "effort_provisional" &&
+        w.code !== "deadline_provisional",
+      )
       .map((w) => w.message),
     applied_options: p.applied_conditions.map((c) => c.explanation),
+    // Defesa em profundidade: o cliente NUNCA deve receber um resultado de
+    // simulação (o servidor nunca deveria chamar computePricing assim
+    // aqui, mas se algum dia chamar por engano, isto nunca autoriza nada).
+    ...(p.is_simulation ? { commercial_ready: false } : {}),
   };
 }
 

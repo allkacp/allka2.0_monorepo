@@ -1387,8 +1387,16 @@ router.get("/products/:id/pricing-memory", async (req, res, next) => {
       res.json({ version_id: null, version_state: null, pricing: null });
       return;
     }
-    const pricing = await computePricing(targetVersion.id, await defaultSelection(targetVersion.id));
-    res.json({ version_id: targetVersion.id, version_state: targetVersion.state, pricing });
+    const sel = await defaultSelection(targetVersion.id);
+    const pricing = await computePricing(targetVersion.id, sel);
+    // Reunião 10/09 ("precificação dos 36 produtos funcional para teste"):
+    // mesmo motor (computePricing), mesma seleção — só liga o modo
+    // simulação (estrutura de configuração PROVISÓRIA e SEPARADA, prazo
+    // provisório por produto). NUNCA autoriza nada (commercial_ready
+    // sempre false no resultado); só para o Admin Master ver a memória
+    // completa fechando matematicamente antes dos dados reais existirem.
+    const pricing_simulation = await computePricing(targetVersion.id, sel, { simulateProvisional: true });
+    res.json({ version_id: targetVersion.id, version_state: targetVersion.state, pricing, pricing_simulation });
   } catch (e) { handle(e, res, next); }
 });
 

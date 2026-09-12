@@ -102,6 +102,29 @@ export interface PricingResult {
   applied_conditions: Array<{ key: string; explanation: string }>;
   human_cost_breakdown: Array<{ task_key: string; specialty: string | null; minutes: number; rate: number | null; cost: number | null; effort_is_provisional: boolean }>;
   ia_cost_breakdown: Array<{ task_key: string; tokens_in: number; tokens_out: number; review_rounds: number; cost: number | null }>;
+  // Reunião 10/09 ("precificação dos 36 produtos funcional para teste") —
+  // true só quando computePricing foi chamado com { simulateProvisional:
+  // true }. NUNCA no fluxo de cliente/checkout/cotação — só rotas
+  // admin-only explícitas (memória de cálculo em modo "Simulação para
+  // teste", IAllka). Quando true, commercial_ready é SEMPRE false, não
+  // importa o que os campos abaixo contenham.
+  is_simulation: boolean;
+  simulation_provenance: {
+    commercial_config: "real" | "provisional" | "missing";
+    deadline: "real" | "provisional" | "missing";
+  };
+}
+
+export interface PricingOptions {
+  /** Reunião 10/09: usa Catalog2PricingSimulationSettings (estrutura
+   * PROVISÓRIA e SEPARADA do singleton comercial real) e o prazo comercial
+   * provisório da versão em vez do real quando o real não estiver
+   * definido — nunca sobrescreve/mistura com o real, que sempre vence
+   * quando presente. Força commercial_ready=false incondicionalmente. Só
+   * deve ser passado por rotas admin-only explícitas — nunca por
+   * catalog2-client.ts (checkout/cotação/catálogo do cliente) nem por
+   * validateVersionForPublish/publishVersion. */
+  simulateProvisional?: boolean;
 }
 
 const DEFAULT_COMPONENT_ORDER = ["tax", "commission", "operational", "margin"] as const;
@@ -203,11 +226,24 @@ function round2(n: number): number {
   return Math.round((n + Number.EPSILON) * 100) / 100;
 }
 
-export async function computePricing(versionId: string, selection: PricingSelection): Promise<PricingResult> {
+export async function computePricing(versionId: string, selection: PricingSelection, opts: PricingOptions = {}): Promise<PricingResult> {
   const version = await loadVersion(versionId);
   if (!version) throw Object.assign(new Error("Versão não encontrada."), { httpStatus: 404 });
 
   const settings = (await prisma.catalog2PricingSettings.findUnique({ where: { id: "default" } })) ?? null;
+  // Estrutura de simulação PROVISÓRIA — só carregada quando pedido
+  // explicitamente, e usada como fonte ÚNICA de percentuais/ordem neste
+  // modo (nunca misturada campo-a-campo com o real; "separada" de
+  // propósito). O singleton real nunca é lido nem alterado por este modo.
+  const simSettings = opts.simulateProvisional
+    ? (await prisma.catalog2PricingSimulationSettings.findUnique({ where: { id: "default" } })) ?? null
+    : null;
+  const activeSettings = opts.simulateProvisional ? simSettings : settings;
+  const commercialConfigProvenance: "real" | "provisional" | "missing" = !opts.simulateProvisional
+    ? "real"
+    : simSettings
+      ? "provisional"
+      : "missing";
   const currency = settings?.currency ?? "BRL";
   const quantity = Math.max(1, Math.floor(selection.quantity ?? 1));
   const warnings: PricingWarning[] = [];
@@ -297,7 +333,7 @@ export async function computePricing(versionId: string, selection: PricingSelect
   iaCost *= quantity;
 
   // ── Revisão humana ──────────────────────────────────────────────────
-  const reviewPct = settings?.human_review_percent ?? null;
+  const reviewPct = activeSettings?.human_review_percent ?? null;
   const humanReviewCost = reviewPct != null ? humanCost * (reviewPct / 100) : null;
 
   // ── Adicionais (custo direto) ───────────────────────────────────────
@@ -336,15 +372,17 @@ export async function computePricing(versionId: string, selection: PricingSelect
   const subtotalWithPercent = subtotalCost * (1 + percentImpacts / 100);
 
   // ── Taxas e margens — ORDEM e BASE configuráveis (reparo 2.2) ───────
-  const orderCfg = parseJsonArray(settings?.component_order_json);
+  const orderCfg = parseJsonArray(activeSettings?.component_order_json);
   const orderDefined = orderCfg.length > 0;
   const appliedOrder = orderDefined ? orderCfg : [...DEFAULT_COMPONENT_ORDER];
-  const baseCfg = parseJsonObject(settings?.component_base_json); // { comp: "running"|"subtotal"|"direct_cost" }
+  // component_base_json só existe no singleton REAL — em modo simulação
+  // sempre usa a base padrão ("acumulado"), nunca lê nem herda do real.
+  const baseCfg = opts.simulateProvisional ? {} : parseJsonObject(settings?.component_base_json); // { comp: "running"|"subtotal"|"direct_cost" }
   const COMP: Record<string, { label: string; pct: number | null }> = {
-    tax: { label: "Impostos (Simples Nacional)", pct: settings?.tax_percent ?? null },
-    commission: { label: "Comissão", pct: settings?.commission_percent ?? null },
-    operational: { label: "Taxa operacional", pct: settings?.operational_fee_percent ?? null },
-    margin: { label: "Margem de lucro", pct: settings?.profit_margin_percent ?? null },
+    tax: { label: "Impostos (Simples Nacional)", pct: activeSettings?.tax_percent ?? null },
+    commission: { label: "Comissão", pct: activeSettings?.commission_percent ?? null },
+    operational: { label: "Taxa operacional", pct: activeSettings?.operational_fee_percent ?? null },
+    margin: { label: "Margem de lucro", pct: activeSettings?.profit_margin_percent ?? null },
   };
   let running = subtotalWithPercent;
   const taxesAndMargins: PricingLine[] = [];
@@ -401,11 +439,18 @@ export async function computePricing(versionId: string, selection: PricingSelect
   const effortDays = effortMinutes > 0 ? Math.ceil(effortMinutes / WORKDAY_MINUTES) : 0;
   const daysFromEffects = daysFromVariations + daysFromConditions + daysFromAddons;
   const internalEstimateDays = effortDays + daysFromEffects;
-  const baseCommercial = version.base_commercial_deadline_days;
+  // O prazo REAL sempre vence quando definido — o provisório só entra como
+  // fallback em modo simulação, e nunca sobrescreve/edita o campo real.
+  const usedProvisionalDeadline = version.base_commercial_deadline_days == null && !!opts.simulateProvisional && version.provisional_commercial_deadline_days != null;
+  const baseCommercial = version.base_commercial_deadline_days ?? (opts.simulateProvisional ? version.provisional_commercial_deadline_days ?? null : null);
+  const deadlineProvenance: "real" | "provisional" | "missing" =
+    version.base_commercial_deadline_days != null ? "real" : usedProvisionalDeadline ? "provisional" : "missing";
   const commercialDeadline = baseCommercial != null ? baseCommercial + daysFromEffects : null;
   const commercialPending = baseCommercial == null;
   if (commercialPending) {
     warnings.push({ code: "commercial_deadline_pending", message: "Prazo comercial base não definido — a estimativa interna NÃO vira promessa de entrega. Defina o prazo comercial na aba de prazos." });
+  } else if (usedProvisionalDeadline) {
+    warnings.push({ code: "deadline_provisional", message: "Prazo comercial calculado com base PROVISÓRIA (dado de teste) — nunca é promessa real ao cliente." });
   }
   const deadline: DeadlineResult = {
     effort_minutes: effortMinutes,
@@ -436,7 +481,11 @@ export async function computePricing(versionId: string, selection: PricingSelect
   const quoteBlockers: string[] = [];
   if (pricingPending) quoteBlockers.push("preço comercial incompleto");
   if (commercialPending) quoteBlockers.push("prazo comercial não definido");
-  const commercialReady = quoteBlockers.length === 0;
+  // Reunião 10/09: modo simulação NUNCA autoriza cotação/publicação/
+  // contratação, independente de qualquer outra condição acima — bloqueio
+  // incondicional, sem exceção.
+  if (opts.simulateProvisional) quoteBlockers.push("simulação provisória para teste — nunca autoriza cotação, publicação ou contratação");
+  const commercialReady = !opts.simulateProvisional && quoteBlockers.length === 0;
 
   return {
     currency,
@@ -485,6 +534,11 @@ export async function computePricing(versionId: string, selection: PricingSelect
     applied_conditions: appliedConditions,
     human_cost_breakdown: humanBreakdown,
     ia_cost_breakdown: iaBreakdown,
+    is_simulation: !!opts.simulateProvisional,
+    simulation_provenance: {
+      commercial_config: commercialConfigProvenance,
+      deadline: deadlineProvenance,
+    },
   };
 }
 

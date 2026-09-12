@@ -4807,6 +4807,15 @@ model Catalog2ProductVersion {
   // interno e nao vira promessa de entrega.
   base_commercial_deadline_days Int?
 
+  // Reuniao 10/09 ("precificacao dos 36 produtos funcional para teste") —
+  // prazo comercial PROVISORIO por produto, campo TOTALMENTE separado do
+  // real acima. So e lido por computePricing em modo simulacao
+  // (simulateProvisional=true); o prazo real (base_commercial_deadline_days)
+  // SEMPRE vence quando estiver preenchido — nunca sobrescrito por isto.
+  provisional_commercial_deadline_days Int?
+  provisional_deadline_reason          String? @db.Text
+  provisional_deadline_source          String?
+
   published_at             DateTime?
   published_by_user_id     String?
   // Idempotencia da publicacao: gerado no frontend por clique intencional em
@@ -5006,6 +5015,13 @@ model Catalog2Task {
   // pelo script de preenchimento provisório; "human_reviewed" = um humano
   // confirmou/editou via admin (PUT /tasks/:id) — nunca sobrescrito de volta.
   effort_source             String?
+  // Reuniao 10/09 ("precificacao dos 36 produtos funcional para teste") —
+  // persiste o sinal de ambiguidade do classificador (classify-provisional-
+  // effort.ts) pra continuar identificado/visivel mesmo depois de novas
+  // execucoes do script de preenchimento (que pula tarefa ja preenchida e
+  // nunca recalcularia isto de novo sem persistir).
+  effort_ambiguous        Boolean @default(false)
+  effort_ambiguous_reason String? @db.Text
 
   created_at DateTime @default(now())
   updated_at DateTime @updatedAt
@@ -5151,6 +5167,37 @@ model Catalog2PricingSettings {
   created_at              DateTime @default(now())
 
   @@map("catalog2_pricing_settings")
+}
+
+// Configuracao de simulacao PROVISORIA (reuniao 10/09, "precificacao dos 36
+// produtos funcional para teste") — estrutura PROPRIA, TOTALMENTE separada
+// do singleton comercial real acima (Catalog2PricingSettings). So e lida
+// por computePricing quando chamado explicitamente com
+// { simulateProvisional: true } (so em rotas admin-only da memoria de
+// calculo/IAllka) — NUNCA no fluxo de catalogo do cliente, cotacao ou
+// checkout, e NUNCA grava/edita o singleton real. is_provisional=true e o
+// marcador de procedencia que impede qualquer uso destes valores em
+// producao (computePricing forca commercial_ready=false sempre que este
+// modo e usado, independente do que estes campos contenham).
+model Catalog2PricingSimulationSettings {
+  id String @id @default("default")
+
+  tax_percent             Float?
+  commission_percent      Float?
+  operational_fee_percent Float?
+  profit_margin_percent   Float?
+  human_review_percent    Float?
+  component_order_json    String? @db.Text
+
+  is_provisional Boolean @default(true)
+  // "provisional_simulation_v1" — versao da regra que preencheu isto.
+  source         String  @default("provisional_simulation_v1")
+  notes          String? @db.Text
+
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  @@map("catalog2_pricing_simulation_settings")
 }
 
 // ─── Importacao dos 36 produtos definitivos (bloco 4/6) ──────────────────────
