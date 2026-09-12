@@ -32,7 +32,8 @@ alterar dados reais, publicar produtos, concluir compras ou criar projetos.
 | 7 | Catálogo de Produtos | Clique no card/linha e também em Escolher | A área livre abre o detalhe; Escolher abre diretamente o detalhe comercial completo | ☐ Sim ☐ Não |
 | 8 | Catálogo → detalhes | Passe o mouse ou use Tab no ícone de informação | Código interno aparece somente no ícone, sem poluir o card; foco de teclado fica visível | ☐ Sim ☐ Não |
 | 9 | Qualquer tela | Use a IAllka e pergunte sobre um produto ou sobre os 4Fs | O painel abre dentro do padrão visual, responde de forma contextual e mostra as fontes usadas; valores provisórios, se citados, vêm identificados | ☐ Sim ☐ Não |
-| 10 | Configurações → Base de Conhecimento da IA | Abra a aba | Categorias e documentos aparecem; controles de edição, ativação e substituição ficam disponíveis para Master | ☐ Sim ☐ Não |
+| 10 | IAllka | Peça uma sugestão de produto novo para um objetivo | Sugestões do Catalog2 aparecem em uma caixa própria. Produto em preparação informa que ainda não gera orçamento, cesta ou projeto | ☐ Sim ☐ Não |
+| 11 | Configurações → Base de Conhecimento da IA | Abra a aba | Categorias e documentos aparecem; controles de edição, ativação e substituição ficam disponíveis para Master | ☐ Sim ☐ Não |
 
 ---
 
