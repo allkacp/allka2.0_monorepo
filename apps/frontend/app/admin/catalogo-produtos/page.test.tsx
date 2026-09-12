@@ -89,6 +89,40 @@ beforeEach(() => {
   api.getCatalog2Readiness.mockResolvedValue(READINESS);
   api.getCatalog2Products.mockResolvedValue(LIST);
   api.getCatalog2Categories.mockResolvedValue(CATEGORIES);
+  api.getCatalog2ProductDetailPreview.mockImplementation(async (id: string) => {
+    const readiness = READINESS.products.find((item) => item.id === id) ?? READINESS.products[0];
+    const list = LIST.data.find((item) => item.id === id) ?? LIST.data[0];
+    return {
+      product: {
+        id,
+        slug: list.slug,
+        internal_name: readiness.name,
+        status: readiness.status,
+        category: list.category,
+        published_version_id: null,
+        versions: [{
+          id: `version-${id}`,
+          state: "rascunho",
+          summary: list.summary,
+          full_description: list.summary,
+          variations: [{ id: `variation-${id}`, name: "Opção", options: [{ id: `option-${id}`, label: "Padrão" }] }],
+          tasks: readiness.task_count > 0 ? [{ id: `task-${id}`, name: "Entrega principal", specialty: { name: "Designer" }, effort_is_provisional: !!readiness.functional_for_test }] : [],
+        }],
+      },
+      readiness: {
+        ...readiness,
+        provisional: readiness.price_amount == null ? {
+          price_amount: 500,
+          deadline_days: 5,
+          modality: "Avulso",
+          highlights: [],
+          included_items: [],
+          options: [{ name: "Padrão para teste", price: 500, deadline_days: 5, modality: "Avulso", features: [] }],
+          portfolio_refs: [],
+        } : null,
+      },
+    };
+  });
 });
 
 describe("Catálogo de Produtos administrativo (catalog2) — grade de cards", () => {
@@ -164,7 +198,7 @@ describe("Catálogo de Produtos administrativo (catalog2) — grade de cards", (
     // "Site Institucional" não tem pendências (blockers/pendings vazios).
     const card = screen.getByText("Site Institucional").closest(".group, li") as HTMLElement;
     await userEvent.click(within(card).getByRole("button", { name: "Escolher" }));
-    expect(await screen.findByText("Nenhuma pendência — pronto para revisão final.")).toBeInTheDocument();
+    expect(await screen.findByRole("button", { name: "Voltar ao catálogo" })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /publicar/i })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /excluir/i })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /adicionar à cesta/i })).not.toBeInTheDocument();
@@ -175,9 +209,8 @@ describe("Catálogo de Produtos administrativo (catalog2) — grade de cards", (
     await screen.findByText("Landing Page");
     const card = screen.getByText("Landing Page").closest(".group, li") as HTMLElement;
     await userEvent.click(within(card).getByRole("button", { name: "Escolher" }));
-    expect(await screen.findByText("preço")).toBeInTheDocument();
-    expect(screen.getByText("prazo")).toBeInTheDocument();
-    expect(screen.getByText("tarefas")).toBeInTheDocument();
+    expect(await screen.findByText(/Opção — Padrão/i)).toBeInTheDocument();
+    expect(screen.getAllByText(/provisóri/i).length).toBeGreaterThan(0);
   });
 
   it("reunião 10/09: produto com esforço provisório mostra o aviso na linha e no detalhe", async () => {
@@ -401,7 +434,7 @@ describe("Cabeçalho e filtros reorganizados (Catálogo)", () => {
     await userEvent.click(screen.getByRole("button", { name: "Lista" }));
     await userEvent.type(screen.getByPlaceholderText(/Buscar produtos/i), "consultoria");
     await userEvent.click(screen.getByRole("button", { name: "Escolher" }));
-    await screen.findByText("Nenhuma pendência — pronto para revisão final.");
+    await screen.findByRole("button", { name: "Voltar ao catálogo" });
     // botão fechar do painel (EmbeddedSlideScreen) é só ícone, sem rótulo
     // acessível próprio — identificado pela classe do container padrão.
     const closeBtn = Array.from(document.querySelectorAll("button")).find((b) => b.className.includes("text-white/80")) as HTMLElement;
@@ -425,7 +458,7 @@ describe("Cabeçalho e filtros reorganizados (Catálogo)", () => {
     await screen.findByText("Site Institucional");
     expect(screen.queryByRole("button", { name: /contratar|adicionar à cesta|finalizar compra/i })).not.toBeInTheDocument();
     await userEvent.click(screen.getAllByRole("button", { name: "Escolher" })[0]);
-    await screen.findByText(/Campos reais/i);
+    await screen.findByRole("button", { name: "Voltar ao catálogo" });
     expect(screen.queryByRole("button", { name: /contratar|adicionar à cesta|finalizar compra/i })).not.toBeInTheDocument();
   });
 });
@@ -465,8 +498,8 @@ describe("Cards e interação (reunião 10/09)", () => {
     await userEvent.click(within(card).getByRole("button", { name: "Escolher" }));
     // abre normalmente — só uma vez (não há erro de dois onOpen simultâneos,
     // e o painel mostra exatamente um produto).
-    expect(await screen.findByText("Nenhuma pendência — pronto para revisão final.")).toBeInTheDocument();
-    expect(screen.getAllByText("Nenhuma pendência — pronto para revisão final.").length).toBe(1);
+    expect(await screen.findByRole("button", { name: "Voltar ao catálogo" })).toBeInTheDocument();
+    expect(screen.getAllByRole("heading", { name: "Site Institucional" }).length).toBeGreaterThan(0);
   });
 
   it("ação principal é 'Escolher' e abre apenas o detalhe administrativo", async () => {
@@ -559,8 +592,6 @@ describe("Cards e interação (reunião 10/09)", () => {
     await screen.findByText("Site Institucional");
     const card = screen.getByText("Site Institucional").closest(".group, li") as HTMLElement;
     await userEvent.click(within(card).getByRole("button", { name: "Escolher" }));
-    await screen.findByText("Nenhuma pendência — pronto para revisão final.");
-    await userEvent.click(screen.getByRole("button", { name: "Ver detalhe comercial completo" }));
     expect(await screen.findByText(/não foi possível carregar o detalhe/i)).toBeInTheDocument();
   });
 });

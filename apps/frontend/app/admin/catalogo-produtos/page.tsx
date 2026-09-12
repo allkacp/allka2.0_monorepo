@@ -645,11 +645,11 @@ export default function AdminCatalogoProdutosPage() {
               </div>
             ) : gridMode === "list" ? (
               <ul className="divide-y overflow-hidden rounded-xl border border-slate-200/70 bg-white dark:border-slate-700/60 dark:bg-slate-900">
-                {filtered.map((p) => <ProductListRow key={p.id} product={p} onOpen={() => setOpenProductId(p.id)} isAdminMaster={isAdminMaster} />)}
+                {filtered.map((p) => <ProductListRow key={p.id} product={p} onOpen={() => setOpenProductId(p.id)} onChoose={() => { setOpenProductId(p.id); setFullDetailId(p.id); }} isAdminMaster={isAdminMaster} />)}
               </ul>
             ) : (
               <div className={viewModeGridClass(gridMode)}>
-                {filtered.map((p) => <ProductCard key={p.id} product={p} compact={gridMode === 4 || gridMode === 5} onOpen={() => setOpenProductId(p.id)} isAdminMaster={isAdminMaster} />)}
+                {filtered.map((p) => <ProductCard key={p.id} product={p} compact={gridMode === 4 || gridMode === 5} onOpen={() => setOpenProductId(p.id)} onChoose={() => { setOpenProductId(p.id); setFullDetailId(p.id); }} isAdminMaster={isAdminMaster} />)}
               </div>
             )}
 
@@ -695,7 +695,7 @@ export default function AdminCatalogoProdutosPage() {
 // de informação) chamam `e.stopPropagation()` pra nunca disparar a MESMA
 // ação duas vezes. Enter/Espaço abrem quando o card está focado; foco
 // visível e cursor de ponteiro deixam claro que é clicável.
-function ProductCard({ product: p, onOpen, compact = false, isAdminMaster = false }: { product: Merged; onOpen: () => void; compact?: boolean; isAdminMaster?: boolean }) {
+function ProductCard({ product: p, onOpen, onChoose, compact = false, isAdminMaster = false }: { product: Merged; onOpen: () => void; onChoose: () => void; compact?: boolean; isAdminMaster?: boolean }) {
   const categoryName = p.list?.category?.name ?? "Sem categoria";
   // Fonte ÚNICA de provisório: Catalog2ProvisionalPreview (via p.provisional,
   // vindo do backend). O hash local só é usado se o produto não tiver
@@ -796,7 +796,7 @@ function ProductCard({ product: p, onOpen, compact = false, isAdminMaster = fals
             variant="outline"
             size="sm"
             className="mt-2 w-full border-blue-200 bg-transparent text-xs text-blue-600 hover:bg-blue-50 hover:text-blue-700"
-            onClick={(e) => { e.stopPropagation(); onOpen(); }}
+            onClick={(e) => { e.stopPropagation(); onChoose(); }}
           >
             Escolher
           </Button>
@@ -855,7 +855,7 @@ function DeadlineOrProvisional({ p, prazoProv }: { p: Merged; prazoProv: ReturnT
 // Modo Lista — mesma apresentação comercial, densidade maior (linha em vez
 // de card). Restaurado 2026-09 junto do alternador Lista/Grade; reunião
 // 10/09: a linha inteira também abre o detalhe (mesmo padrão do card).
-function ProductListRow({ product: p, onOpen, isAdminMaster = false }: { product: Merged; onOpen: () => void; isAdminMaster?: boolean }) {
+function ProductListRow({ product: p, onOpen, onChoose, isAdminMaster = false }: { product: Merged; onOpen: () => void; onChoose: () => void; isAdminMaster?: boolean }) {
   const priceProv = p.provisional?.price_amount != null ? { value: p.provisional.price_amount, label: "Preço provisório — revisar.", is_provisional: true as const } : provisionalPrice(p.id);
   const taskProv = provisionalTaskCount(p.id);
   const categoryName = p.list?.category?.name ?? "Sem categoria";
@@ -906,7 +906,7 @@ function ProductListRow({ product: p, onOpen, isAdminMaster = false }: { product
           provisionalPriceAmount={!p.items.preco?.note && !p.pricing_simulation ? priceProv.value : undefined}
         />
       </span>
-      <Button variant="outline" size="sm" className="shrink-0 border-blue-200 text-xs text-blue-600 hover:bg-blue-50" onClick={(e) => { e.stopPropagation(); onOpen(); }}>
+      <Button variant="outline" size="sm" className="shrink-0 border-blue-200 text-xs text-blue-600 hover:bg-blue-50" onClick={(e) => { e.stopPropagation(); onChoose(); }}>
         Escolher
       </Button>
     </li>
