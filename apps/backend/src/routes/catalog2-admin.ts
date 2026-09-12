@@ -913,6 +913,10 @@ const PENDENCY_PRIORITY = [
   "price_pending",
   "deadline_pending",
   "portfolio_pending",
+  // Tarefas/etapas existem (importadas do texto "Etapas Executáveis por
+  // IA" — reunião 10/09), mas especialidade/horas/dependências não constam
+  // na fonte original. Ver import-tasks-from-steps-text.ts.
+  "task_effort_fields_pending",
   "rose_review_pending",
 ];
 function reviewStateFromPendencies(pendencies: string[]): string {
@@ -1215,6 +1219,14 @@ async function computeProductReadiness(p: ReadinessProduct) {
     etapas: stepCount > 0
       ? { level: "pronto", note: `${stepCount} etapa(s).` }
       : { level: "opcional", note: taskCount > 0 ? "Sem etapas nas tarefas (permitido)." : "Etapas dependem de tarefas cadastradas." },
+    // Reunião 10/09 ("tarefas e etapas dos 36 produtos reais"): as tarefas
+    // vieram do texto "Etapas Executáveis por IA" da fonte original — real,
+    // mas sem especialidade/horas/dependências (a fonte não define isso).
+    esforco_tarefas: taskCount === 0
+      ? { level: "opcional", note: "Sem tarefas ainda — nada a estimar." }
+      : has("task_effort_fields_pending")
+        ? { level: "pendente", note: "Especialidade/horas estimadas/dependências das tarefas não definidas na fonte — revisão manual pendente." }
+        : { level: "pronto", note: "Especialidade/horas das tarefas revisadas." },
     // Sem tarefa ativa NÃO há base de custo — o preço nunca é "R$ 0,00 válido".
     preco: hasActiveTasks
       ? pricing?.commercial_ready
