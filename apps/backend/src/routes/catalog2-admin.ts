@@ -686,7 +686,18 @@ router.put("/tasks/:id", async (req, res, next) => {
   try {
     await versionOfTask(req.params.id as string);
     const d = taskSchema.partial().parse(req.body);
-    res.json(await prisma.catalog2Task.update({ where: { id: req.params.id as string }, data: d }));
+    const data: typeof d & { effort_is_provisional?: boolean; effort_source?: string; effort_provisional_reason?: string | null } = { ...d };
+    // Reunião 10/09 ("36 produtos funcionalmente completos para teste"):
+    // um humano editando especialidade/tempo aqui pelo admin SEMPRE
+    // "gradua" a tarefa pra dado real revisado — nunca deixa um valor
+    // editado manualmente marcado como provisório, e nunca o script de
+    // preenchimento provisório sobrescreve de volta (ver regra 14).
+    if ("specialty_id" in d || "estimated_minutes" in d) {
+      data.effort_is_provisional = false;
+      data.effort_source = "human_reviewed";
+      data.effort_provisional_reason = null;
+    }
+    res.json(await prisma.catalog2Task.update({ where: { id: req.params.id as string }, data }));
   } catch (e) { handle(e, res, next); }
 });
 router.delete("/tasks/:id", async (req, res, next) => {
@@ -1151,7 +1162,7 @@ const READINESS_INCLUDE = {
       // alguma tarefa está sem esforço definido (reunião 10/09, correção
       // "task_effort_fields_pending") — nunca lido de um registro
       // histórico de pendência.
-      tasks: { select: { specialty_id: true, estimated_minutes: true, _count: { select: { steps: true } } } },
+      tasks: { select: { specialty_id: true, estimated_minutes: true, effort_is_provisional: true, _count: { select: { steps: true } } } },
     },
   },
 } satisfies Prisma.Catalog2ProductInclude;
@@ -1192,9 +1203,20 @@ async function computeProductReadiness(p: ReadinessProduct) {
   // produto com human_edited_at ficava fora da contagem mesmo com tarefas
   // sem especialidade/horas). Reflete o estado atual e some sozinho assim
   // que todas as tarefas da versão forem completadas.
-  const hasIncompleteTaskEffort = (targetVersion?.tasks ?? []).some(
-    (t) => !t.specialty_id || t.estimated_minutes == null,
-  );
+  const tasksForEffort = targetVersion?.tasks ?? [];
+  const hasMissingTaskEffort = tasksForEffort.some((t) => !t.specialty_id || t.estimated_minutes == null);
+  const hasProvisionalTaskEffort = tasksForEffort.some((t) => t.effort_is_provisional);
+  const hasIncompleteTaskEffort = hasMissingTaskEffort || hasProvisionalTaskEffort;
+  // Regra 9 (reunião 10/09): a prontidão distingue os três estados —
+  // "missing" (specialty_id/estimated_minutes ausentes), "provisional"
+  // (preenchidos, mas marcados como dado de teste) e "real_reviewed"
+  // (preenchidos e nenhum marcado como provisório).
+  const effortDataState: "missing" | "provisional" | "real_reviewed" =
+    tasksForEffort.length === 0 || hasMissingTaskEffort
+      ? "missing"
+      : hasProvisionalTaskEffort
+        ? "provisional"
+        : "real_reviewed";
 
   let pricing: Awaited<ReturnType<typeof computePricing>> | null = null;
   if (targetVersion) {
@@ -1235,9 +1257,11 @@ async function computeProductReadiness(p: ReadinessProduct) {
     // completadas.
     esforco_tarefas: taskCount === 0
       ? { level: "opcional", note: "Sem tarefas ainda — nada a estimar." }
-      : hasIncompleteTaskEffort
+      : effortDataState === "missing"
         ? { level: "pendente", note: "Especialidade/horas estimadas de alguma tarefa não definidas — revisão manual pendente." }
-        : { level: "pronto", note: "Especialidade/horas de todas as tarefas definidas." },
+        : effortDataState === "provisional"
+          ? { level: "pendente", note: "Especialidade/horas PROVISÓRIAS (dado de teste) — revise e confirme os dados reais antes de aprovar comercialmente." }
+          : { level: "pronto", note: "Especialidade/horas de todas as tarefas revisadas (dado real)." },
     // Sem tarefa ativa NÃO há base de custo — o preço nunca é "R$ 0,00 válido".
     preco: hasActiveTasks
       ? pricing?.commercial_ready
@@ -1276,6 +1300,13 @@ async function computeProductReadiness(p: ReadinessProduct) {
     task_count: taskCount,
     step_count: stepCount,
     has_active_tasks: hasActiveTasks,
+    // Regra 9/10 (reunião 10/09, "36 produtos funcionalmente completos
+    // para teste"): distingue ausente × provisório × real revisado, e
+    // rotula honestamente um produto com dado provisório — nunca "pronto",
+    // nunca escondido, sempre "funcional para teste, pendente de revisão".
+    effort_data_state: effortDataState,
+    functional_for_test: effortDataState === "provisional",
+    functional_for_test_label: effortDataState === "provisional" ? "Funcional para teste, pendente de revisão" : null,
     // Valores numéricos honestos (nunca "R$ 0,00" quando não pronto) — pra
     // ordenar por preço/prazo sem re-parsear a nota de texto no frontend.
     price_amount: pricing?.commercial_ready ? pricing.lines.commercial_final_price.amount : null,

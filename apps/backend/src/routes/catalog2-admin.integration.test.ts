@@ -549,4 +549,98 @@ describe("Novo catálogo — fundação", () => {
       assert.equal(r.json.version_id, null);
     });
   });
+
+  // Reunião 10/09 ("36 produtos funcionalmente completos para teste") —
+  // effort_is_provisional/effort_source nunca vira decisão comercial.
+  describe("procedência do esforço (effort_is_provisional/effort_source)", () => {
+    it("prontidão distingue ausente × provisório × real revisado, e nunca deixa provisório virar 'pronto'", async () => {
+      const master = await mkUser("master");
+      const spec = await prisma.catalog2Specialty.findFirstOrThrow({ where: { key: "especialista_automacao" } });
+      const p = await createProduct({ internal_name: "[TESTE] Efeito provisório — prontidão" }, master.id);
+      catProducts.push(p.id);
+      const v1 = await prisma.catalog2ProductVersion.findFirstOrThrow({ where: { product_id: p.id } });
+      const task = await prisma.catalog2Task.create({ data: { version_id: v1.id, key: "t1", name: "Tarefa provisória", sort_order: 0 } });
+
+      let r = await api(`/api/admin/catalog2/products/${p.id}/readiness`, { token: tokenFor(master) });
+      assert.equal(r.json.effort_data_state, "missing");
+      assert.equal(r.json.functional_for_test, false);
+
+      await prisma.catalog2Task.update({
+        where: { id: task.id },
+        data: { specialty_id: spec.id, estimated_minutes: 45, effort_is_provisional: true, effort_source: "provisional_fill_v1", effort_provisional_reason: "Estimativa determinística para teste." },
+      });
+      r = await api(`/api/admin/catalog2/products/${p.id}/readiness`, { token: tokenFor(master) });
+      assert.equal(r.json.effort_data_state, "provisional");
+      assert.equal(r.json.functional_for_test, true);
+      assert.equal(r.json.functional_for_test_label, "Funcional para teste, pendente de revisão");
+      assert.equal(r.json.items.esforco_tarefas.level, "pendente");
+      assert.match(r.json.items.esforco_tarefas.note, /PROVISÓRIAS/);
+
+      await prisma.catalog2Task.update({ where: { id: task.id }, data: { effort_is_provisional: false, effort_source: "human_reviewed" } });
+      r = await api(`/api/admin/catalog2/products/${p.id}/readiness`, { token: tokenFor(master) });
+      assert.equal(r.json.effort_data_state, "real_reviewed");
+      assert.equal(r.json.functional_for_test, false);
+      assert.equal(r.json.items.esforco_tarefas.level, "pronto");
+    });
+
+    it("computePricing: tarefa com effort_is_provisional NUNCA fecha commercial_ready, mesmo com especialidade+horas+config completos", async () => {
+      const master = await mkUser("master");
+      const spec = await prisma.catalog2Specialty.findFirstOrThrow({ where: { key: "especialista_automacao" } });
+      await prisma.catalog2Specialty.update({ where: { id: spec.id }, data: { max_hourly_rate: 80 } });
+      await prisma.catalog2PricingSettings.upsert({
+        where: { id: "default" },
+        create: { id: "default", tax_percent: 6, commission_percent: 10, operational_fee_percent: 5, profit_margin_percent: 30, human_review_percent: 10, component_order_json: JSON.stringify(["tax", "commission", "operational", "margin"]) },
+        update: { tax_percent: 6, commission_percent: 10, operational_fee_percent: 5, profit_margin_percent: 30, human_review_percent: 10, component_order_json: JSON.stringify(["tax", "commission", "operational", "margin"]) },
+      });
+      const p = await createProduct({ internal_name: "[TESTE] Efeito provisório — pricing" }, master.id);
+      catProducts.push(p.id);
+      const v1 = await prisma.catalog2ProductVersion.findFirstOrThrow({ where: { product_id: p.id } });
+      await prisma.catalog2ProductVersion.update({ where: { id: v1.id }, data: { base_commercial_deadline_days: 5 } });
+      await prisma.catalog2Task.create({
+        data: { version_id: v1.id, key: "t1", name: "Tarefa provisória completa", specialty_id: spec.id, estimated_minutes: 60, sort_order: 0, effort_is_provisional: true, effort_source: "provisional_fill_v1" },
+      });
+
+      const pricing = await computePricing(v1.id, await defaultSelection(v1.id));
+      assert.equal(pricing.commercial_ready, false, "nunca fecha com esforço provisório, mesmo com tudo mais configurado");
+      assert.ok(pricing.pending_info.some((s) => s.includes("provisórios")));
+      assert.equal(pricing.human_cost_breakdown[0].effort_is_provisional, true);
+      // mas o custo AINDA é calculado — alimenta a memória administrativa (regra 7).
+      assert.equal(pricing.human_cost_breakdown[0].cost, 80); // 60 min a R$80/h
+
+      const r = await api(`/api/admin/catalog2/products/${p.id}/pricing-memory`, { token: tokenFor(master) });
+      assert.equal(r.json.pricing.commercial_ready, false);
+      assert.equal(r.json.pricing.human_cost_breakdown[0].cost, 80);
+    });
+
+    it("publicação é bloqueada por esforço provisório MESMO com force:true", async () => {
+      const master = await mkUser("master");
+      const p = await createProduct({ internal_name: "[TESTE] Efeito provisório — publicação" }, master.id);
+      catProducts.push(p.id);
+      const v1 = await prisma.catalog2ProductVersion.findFirstOrThrow({ where: { product_id: p.id } });
+      await prisma.catalog2ProductVersion.update({ where: { id: v1.id }, data: { title: "t", full_description: "d" } });
+      await prisma.catalog2Task.create({ data: { version_id: v1.id, key: "t1", name: "Tarefa provisória", sort_order: 0, effort_is_provisional: true, effort_source: "provisional_fill_v1" } });
+
+      await assert.rejects(
+        () => publishVersion(v1.id, master.id, { force: true }),
+        (e: any) => e.code === "provisional_effort_blocks_publish",
+      );
+    });
+
+    it("PUT /tasks/:id: humano editando especialidade/tempo gradua a tarefa pra human_reviewed (nunca fica provisória depois de editada)", async () => {
+      const master = await mkUser("master");
+      const spec = await prisma.catalog2Specialty.findFirstOrThrow({ where: { key: "especialista_automacao" } });
+      const p = await createProduct({ internal_name: "[TESTE] Efeito provisório — edição humana" }, master.id);
+      catProducts.push(p.id);
+      const v1 = await prisma.catalog2ProductVersion.findFirstOrThrow({ where: { product_id: p.id } });
+      const task = await prisma.catalog2Task.create({
+        data: { version_id: v1.id, key: "t1", name: "Tarefa", specialty_id: spec.id, estimated_minutes: 30, sort_order: 0, effort_is_provisional: true, effort_source: "provisional_fill_v1" },
+      });
+
+      const r = await api(`/api/admin/catalog2/tasks/${task.id}`, { method: "PUT", token: tokenFor(master), body: { estimated_minutes: 90 } });
+      assert.equal(r.status, 200);
+      assert.equal(r.json.effort_is_provisional, false);
+      assert.equal(r.json.effort_source, "human_reviewed");
+      assert.equal(r.json.estimated_minutes, 90);
+    });
+  });
 });

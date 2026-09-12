@@ -100,7 +100,7 @@ export interface PricingResult {
   pending_info: string[];
   warnings: PricingWarning[];
   applied_conditions: Array<{ key: string; explanation: string }>;
-  human_cost_breakdown: Array<{ task_key: string; specialty: string | null; minutes: number; rate: number | null; cost: number | null }>;
+  human_cost_breakdown: Array<{ task_key: string; specialty: string | null; minutes: number; rate: number | null; cost: number | null; effort_is_provisional: boolean }>;
   ia_cost_breakdown: Array<{ task_key: string; tokens_in: number; tokens_out: number; review_rounds: number; cost: number | null }>;
 }
 
@@ -239,6 +239,14 @@ export async function computePricing(versionId: string, selection: PricingSelect
   // ── Custo humano ──────────────────────────────────────────────────────
   let humanCost = 0;
   let humanPending = false;
+  // Reunião 10/09 ("36 produtos funcionalmente completos para teste"):
+  // tarefa com effort_is_provisional=true tem specialty_id/estimated_minutes
+  // preenchidos só como DADO DE TESTE (nunca decisão comercial real) — o
+  // custo AINDA é calculado (alimenta a memória de cálculo administrativa,
+  // regra 7), mas força humanPending=true incondicionalmente, garantindo
+  // que commercial_ready NUNCA feche com dado provisório (regra 8),
+  // independente de a especialidade já ter valor/hora configurado.
+  let anyProvisionalEffort = false;
   const humanBreakdown: PricingResult["human_cost_breakdown"] = [];
   for (const t of activeTasks) {
     if (t.execution_mode === "ia") continue;
@@ -252,9 +260,14 @@ export async function computePricing(versionId: string, selection: PricingSelect
       humanPending = true;
       warnings.push({ code: "specialty_without_rate", message: `A especialidade "${t.specialty.name}" não tem valor/hora definido.` });
     }
+    if (t.effort_is_provisional) {
+      anyProvisionalEffort = true;
+      humanPending = true;
+      warnings.push({ code: "effort_provisional", message: `A tarefa "${t.name}" tem especialidade/tempo PROVISÓRIOS (dado de teste) — não pode fechar o preço comercial.` });
+    }
     const cost = rate != null ? (minutes / 60) * rate : null;
     if (cost != null) humanCost += cost;
-    humanBreakdown.push({ task_key: t.key, specialty: t.specialty?.name ?? null, minutes, rate, cost: cost != null ? round2(cost) : null });
+    humanBreakdown.push({ task_key: t.key, specialty: t.specialty?.name ?? null, minutes, rate, cost: cost != null ? round2(cost) : null, effort_is_provisional: !!t.effort_is_provisional });
   }
   humanCost *= quantity;
 
@@ -359,6 +372,7 @@ export async function computePricing(versionId: string, selection: PricingSelect
   // pendência PRÓPRIA (`deadline.commercial_deadline_pending`).
   const pendingInfo: string[] = [];
   if (humanPending) pendingInfo.push("valor/hora de especialidade");
+  if (anyProvisionalEffort) pendingInfo.push("especialidade/tempo de tarefa(s) provisórios (dado de teste, revisão humana pendente)");
   if (iaPending) pendingInfo.push("custo por token de IA");
   if (reviewPct == null) pendingInfo.push("percentual de revisão humana");
   if (anyRatePending) pendingInfo.push("percentual de imposto/comissão/taxa/margem");

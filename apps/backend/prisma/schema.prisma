@@ -4994,6 +4994,19 @@ model Catalog2Task {
   // a inclui (add_task). false = tarefa fixa do produto.
   is_conditional           Boolean @default(false)
 
+  // Reunião 10/09 ("36 produtos funcionalmente completos para teste") —
+  // procedência ADITIVA do esforço (specialty_id/estimated_minutes). Nunca
+  // confia em nome/texto "[TESTE]": o backend precisa distinguir ausente ×
+  // provisório × real/revisado sem heurística de string, pra nunca deixar
+  // dado de teste virar decisão comercial silenciosamente (computePricing,
+  // prontidão e publicação leem effort_is_provisional diretamente).
+  effort_is_provisional     Boolean @default(false)
+  effort_provisional_reason String?  @db.Text
+  // null = nunca preenchido (ausente); "provisional_fill_v1" = preenchido
+  // pelo script de preenchimento provisório; "human_reviewed" = um humano
+  // confirmou/editou via admin (PUT /tasks/:id) — nunca sobrescrito de volta.
+  effort_source             String?
+
   created_at DateTime @default(now())
   updated_at DateTime @updatedAt
 

@@ -324,6 +324,12 @@ export interface PublishValidation {
   ok: boolean;
   issues: string[];
   pricing_pending: boolean;
+  // Reunião 10/09 ("36 produtos funcionalmente completos para teste"):
+  // alguma tarefa tem specialty_id/estimated_minutes preenchidos só como
+  // dado PROVISÓRIO (effort_is_provisional=true) — bloqueia a publicação
+  // SEMPRE, mesmo com force (ver publishVersion), pra nunca deixar dado de
+  // teste virar decisão comercial.
+  has_provisional_effort: boolean;
 }
 
 export async function validateVersionForPublish(versionId: string): Promise<PublishValidation> {
@@ -337,7 +343,7 @@ export async function validateVersionForPublish(versionId: string): Promise<Publ
       tasks: { include: { steps: true, ai: true } },
     },
   });
-  if (!v) return { ok: false, issues: ["Versão não encontrada."], pricing_pending: true };
+  if (!v) return { ok: false, issues: ["Versão não encontrada."], pricing_pending: true, has_provisional_effort: false };
 
   const issues: string[] = [];
   if (!v.title?.trim()) issues.push("Informe o título comercial.");
@@ -347,6 +353,14 @@ export async function validateVersionForPublish(versionId: string): Promise<Publ
   const fourF = await prisma.catalog2ProductFourF.count({ where: { product_id: v.product_id } });
   if (fourF === 0) issues.push("Selecione ao menos uma classificação 4F.");
   if (v.tasks.length === 0) issues.push("O produto precisa de ao menos uma tarefa.");
+
+  // Reunião 10/09: dado de esforço PROVISÓRIO (teste) nunca vira decisão
+  // comercial — bloqueia a publicação incondicionalmente (ver publishVersion,
+  // que NÃO aceita force para esta pendência específica).
+  const hasProvisionalEffort = v.tasks.some((t) => t.effort_is_provisional);
+  if (hasProvisionalEffort) {
+    issues.push("Há tarefa(s) com especialidade/tempo PROVISÓRIOS (dado de teste) — revise e confirme os dados reais antes de publicar.");
+  }
 
   const ctx = await buildEffectCtx(versionId);
   for (const c of v.conditions) {
@@ -385,7 +399,7 @@ export async function validateVersionForPublish(versionId: string): Promise<Publ
     issues.push("Não foi possível calcular o preço/prazo desta versão.");
   }
 
-  return { ok: issues.length === 0, issues, pricing_pending: pricingPending };
+  return { ok: issues.length === 0, issues, pricing_pending: pricingPending, has_provisional_effort: hasProvisionalEffort };
 }
 
 export async function publishVersion(
@@ -401,6 +415,17 @@ export async function publishVersion(
   }
 
   const validation = await validateVersionForPublish(versionId);
+  // Dado de esforço PROVISÓRIO (teste) bloqueia SEMPRE — nem force passa
+  // por cima disso (diferente das outras pendências abaixo, que a ata
+  // permite publicar com force). Nunca deixa dado de teste virar produto
+  // comercialmente aprovado/publicável.
+  if (validation.has_provisional_effort) {
+    throw new Catalog2Error(
+      "Esta versão tem tarefa(s) com especialidade/tempo PROVISÓRIOS (dado de teste) — publique só depois de revisar e confirmar os dados reais. Não é possível publicar nem com force.",
+      422,
+      "provisional_effort_blocks_publish",
+    );
+  }
   if (!validation.ok && !opts.force) {
     throw new Catalog2Error("A versão tem pendências e não pode ser publicada.", 422, "validation_failed");
   }

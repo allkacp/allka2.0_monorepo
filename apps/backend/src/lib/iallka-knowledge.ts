@@ -57,7 +57,7 @@ export async function buildCatalog2KnowledgeText(opts: Catalog2KnowledgeOpts): P
         orderBy: { version_number: "desc" },
         include: {
           _count: { select: { variations: true, addons: true, tasks: true } },
-          tasks: { select: { specialty: { select: { name: true } }, _count: { select: { steps: true } } } },
+          tasks: { select: { specialty: { select: { name: true } }, effort_is_provisional: true, _count: { select: { steps: true } } } },
         },
       },
     },
@@ -86,6 +86,10 @@ export async function buildCatalog2KnowledgeText(opts: Catalog2KnowledgeOpts): P
 
     const specialties = Array.from(new Set(target.tasks.map((t) => t.specialty?.name).filter((n): n is string => !!n)));
     const stepCount = target.tasks.reduce((a, t) => a + t._count.steps, 0);
+    // Reunião 10/09 ("36 produtos funcionalmente completos para teste"): a
+    // IAllka NUNCA apresenta esforço/prazo provisório como definitivo —
+    // sempre avisa quando alguma tarefa tem effort_is_provisional=true.
+    const hasProvisionalEffort = target.tasks.some((t) => t.effort_is_provisional);
     const fourFs = p.four_f.map((l) => l.four_f.name);
 
     let priceText: string;
@@ -118,6 +122,9 @@ export async function buildCatalog2KnowledgeText(opts: Catalog2KnowledgeOpts): P
         `estrutura: ${target._count.tasks} tarefa(s), ${stepCount} etapa(s)`,
         `preço: ${priceText}`,
         `prazo: ${deadlineText}`,
+        hasProvisionalEffort
+          ? "esforço (especialidade/tempo das tarefas): PROVISÓRIO — dado de teste, nunca definitivo; explique isso ao usuário se perguntarem sobre esforço ou prazo deste produto."
+          : null,
         `status: ${p.status}`,
         pend.length ? `pendências: ${pend.join(", ")}` : "pendências: nenhuma",
         `disponibilidade: ${disponibilidade}`,
