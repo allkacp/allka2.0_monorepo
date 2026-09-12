@@ -10,7 +10,7 @@ import { Catalog2ProductDetail } from "./catalog2-product-detail";
 // provisórios, sempre marcados e nunca contratáveis.
 
 const { api } = vi.hoisted(() => ({
-  api: { getCatalog2ProductDetailPreview: vi.fn() },
+  api: { getCatalog2ProductDetailPreview: vi.fn(), getCatalog2ProductPricingMemory: vi.fn() },
 }));
 vi.mock("@/lib/api-client", () => ({ apiClient: api }));
 
@@ -80,6 +80,20 @@ describe("Catalog2ProductDetail — dado real", () => {
     render(<Catalog2ProductDetail productId="p1" onBack={() => {}} />);
     expect(await screen.findByText("Diagnóstico")).toBeInTheDocument();
     expect(screen.queryByLabelText(/provisório/i)).not.toBeInTheDocument();
+  });
+
+  it("5. memória de cálculo do preço: sem isAdminMaster (padrão), o ícone não aparece", async () => {
+    api.getCatalog2ProductDetailPreview.mockResolvedValue(REAL_DETAIL);
+    render(<Catalog2ProductDetail productId="p1" onBack={() => {}} />);
+    await screen.findByText("Criação de Site Institucional");
+    expect(screen.queryByRole("button", { name: "Como o preço foi calculado" })).not.toBeInTheDocument();
+  });
+
+  it("5. memória de cálculo do preço: com isAdminMaster, o ícone aparece ao lado do preço", async () => {
+    api.getCatalog2ProductDetailPreview.mockResolvedValue(REAL_DETAIL);
+    render(<Catalog2ProductDetail productId="p1" onBack={() => {}} isAdminMaster />);
+    await screen.findByText("Criação de Site Institucional");
+    expect(screen.getByRole("button", { name: "Como o preço foi calculado" })).toBeInTheDocument();
   });
 });
 

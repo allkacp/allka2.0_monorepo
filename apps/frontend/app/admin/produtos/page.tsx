@@ -53,6 +53,8 @@ import { usePersistedViewMode, viewModeGridClass } from "@/lib/use-persisted-vie
 import { provisionalPrice, provisionalTaskCount } from "@/lib/catalog2-provisional";
 import { ProductEditor } from "@/app/admin/produtos/novo-catalogo/product-editor";
 import { Catalog2ProductDetail } from "@/components/catalog2-product-detail";
+import { Catalog2PricingMemoryPopover } from "@/components/catalog2-pricing-memory-popover";
+import { useIsAdminMaster } from "@/hooks/use-is-admin-master";
 
 // Cadastro de Produtos — administração exclusiva dos produtos catalog2
 // (reunião 2026-09, consolidação "catálogo2 como cadastro definitivo"; e
@@ -107,6 +109,7 @@ const PENDENCY_LABEL: Record<string, string> = {
 };
 
 export default function AdminProdutosPage() {
+  const isAdminMaster = useIsAdminMaster();
   const [searchParams, setSearchParams] = useSearchParams();
   const [state, setState] = useState<"loading" | "ready" | "forbidden" | "error">("loading");
   const [overview, setOverview] = useState<any>(null);
@@ -638,13 +641,17 @@ export default function AdminProdutosPage() {
                             </td>
                             <td className="hidden px-2 py-3 text-right lg:table-cell">
                               {realPrice != null ? (
-                                <span className="text-[13px] font-bold text-emerald-600 dark:text-emerald-400">
-                                  R$ {realPrice.toFixed(2)}
-                                </span>
+                                <div className="flex items-center justify-end gap-1">
+                                  <span className="text-[13px] font-bold text-emerald-600 dark:text-emerald-400">
+                                    R$ {realPrice.toFixed(2)}
+                                  </span>
+                                  <Catalog2PricingMemoryPopover productId={p.id} isAdminMaster={isAdminMaster} />
+                                </div>
                               ) : (
                                 <div className="flex items-center justify-end gap-1">
                                   <span className="text-[13px] font-semibold text-slate-400">R$ {priceProv.value.toFixed(2)}</span>
                                   <ProvisionalBadge label={priceProv.label + " Não é comercialmente válido — nunca usado em cotação, checkout ou publicação."} />
+                                  <Catalog2PricingMemoryPopover productId={p.id} isAdminMaster={isAdminMaster} provisionalPriceAmount={priceProv.value} />
                                 </div>
                               )}
                             </td>
@@ -855,6 +862,7 @@ export default function AdminProdutosPage() {
                 productId={viewProductId}
                 onBack={() => viewProduct(null)}
                 onOpenEditor={() => { const id = viewProductId; viewProduct(null); openProduct(id); }}
+                isAdminMaster={isAdminMaster}
               />
             </div>
           )}

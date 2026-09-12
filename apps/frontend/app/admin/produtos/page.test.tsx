@@ -28,6 +28,8 @@ function renderPage() {
 
 const { api } = vi.hoisted(() => ({
   api: {
+    getCurrentUser: vi.fn(),
+    getCatalog2ProductPricingMemory: vi.fn(),
     getCatalog2Overview: vi.fn(),
     getCatalog2Pillars: vi.fn(),
     getCatalog2FourF: vi.fn(),
@@ -152,6 +154,7 @@ function productDetail(over: Partial<any> = {}) {
 beforeEach(() => {
   vi.clearAllMocks()
   window.localStorage.clear()
+  api.getCurrentUser.mockResolvedValue({ id: "u1", account_type: "admin", admin_profile: { is_active: true, is_master: true } })
   api.getCatalog2Overview.mockResolvedValue(OVERVIEW)
   api.getCatalog2Pillars.mockResolvedValue(REFS.pillars)
   api.getCatalog2FourF.mockResolvedValue(REFS.fourF)

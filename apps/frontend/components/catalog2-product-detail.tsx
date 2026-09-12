@@ -35,6 +35,7 @@ import { CopyLinkButton } from "@/components/copy-link-button";
 import { fmtBRL, Section, PortfolioGallery } from "@/components/product-detail-shared";
 import { Catalog2Thumbnail } from "@/components/catalog2-thumbnail";
 import { ProvisionalBadge } from "@/components/provisional-badge";
+import { Catalog2PricingMemoryPopover } from "@/components/catalog2-pricing-memory-popover";
 
 type TabId = "detalhes" | "portfolio" | "nomades";
 
@@ -61,10 +62,12 @@ export function Catalog2ProductDetail({
   productId,
   onBack,
   onOpenEditor,
+  isAdminMaster = false,
 }: {
   productId: string;
   onBack: () => void;
   onOpenEditor?: () => void;
+  isAdminMaster?: boolean;
 }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -407,6 +410,14 @@ export function Catalog2ProductDetail({
                 )}
               </span>
               {priceIsProvisional && displayPrice != null && <span className="text-[10px] text-amber-300 font-semibold">(provisório — revisar)</span>}
+              {isAdminMaster && (
+                <Catalog2PricingMemoryPopover
+                  productId={productId}
+                  isAdminMaster={isAdminMaster}
+                  provisionalPriceAmount={priceIsProvisional ? displayPrice : undefined}
+                  variant="dark"
+                />
+              )}
             </div>
             {displayDeadline != null && (
               <p className="text-xs text-blue-200 mt-1">

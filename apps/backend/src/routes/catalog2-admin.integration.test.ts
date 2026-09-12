@@ -9,6 +9,7 @@ import { prisma } from "../lib/prisma";
 import { config } from "../config";
 import { seedCatalog2Classifications, seedCatalog2FourFForTests } from "../lib/catalog2-classifications-seed";
 import { createProduct, newDraftVersion, publishVersion } from "../lib/catalog2-service";
+import { computePricing, defaultSelection } from "../lib/catalog2-pricing";
 
 // Fundação do novo catálogo (sprint de produtos, bloco 2/6).
 
@@ -422,6 +423,130 @@ describe("Novo catálogo — fundação", () => {
       const r = await api(`/api/admin/catalog2/products/${p.id}/readiness`, { token: tokenFor(master) });
       assert.equal(r.json.items.esforco_tarefas.level, "opcional");
       assert.ok(!r.json.pendings.includes("esforco_tarefas"));
+    });
+  });
+
+  // Memória de cálculo do preço (reunião 10/09, "memória de cálculo da
+  // precificação — Admin Master"): GET /products/:id/pricing-memory devolve
+  // computePricing NA ÍNTEGRA — nunca reformulado aqui. `catalog2_pricing_settings`
+  // é um singleton (id:"default") compartilhado por VÁRIAS suítes rodando
+  // em paralelo contra o mesmo schema de teste (ex.: catalog2-catalog) —
+  // cada teste abaixo só faz upsert (nunca delete, pra nunca derrubar a
+  // linha embaixo de outra suíte concorrente) e reafirma o que precisa.
+  describe("memória de cálculo do preço (pricing-memory) — Admin Master", () => {
+    it("1. produto com cálculo completo: devolve computePricing NA ÍNTEGRA (mesmos números de uma chamada direta)", async () => {
+      const master = await mkUser("master");
+      const spec = await prisma.catalog2Specialty.findFirstOrThrow({ where: { key: "editor_video" } });
+      await prisma.catalog2Specialty.update({ where: { id: spec.id }, data: { max_hourly_rate: 120 } });
+      await prisma.catalog2PricingSettings.upsert({
+        where: { id: "default" },
+        create: { id: "default", tax_percent: 6, commission_percent: 10, operational_fee_percent: 5, profit_margin_percent: 30, human_review_percent: 10, component_order_json: JSON.stringify(["tax", "commission", "operational", "margin"]) },
+        update: { tax_percent: 6, commission_percent: 10, operational_fee_percent: 5, profit_margin_percent: 30, human_review_percent: 10, component_order_json: JSON.stringify(["tax", "commission", "operational", "margin"]) },
+      });
+
+      const p = await createProduct({ internal_name: "[TESTE] Preço completo" }, master.id);
+      catProducts.push(p.id);
+      const v1 = await prisma.catalog2ProductVersion.findFirstOrThrow({ where: { product_id: p.id } });
+      await prisma.catalog2ProductVersion.update({ where: { id: v1.id }, data: { base_commercial_deadline_days: 5 } });
+      await prisma.catalog2Task.create({ data: { version_id: v1.id, key: "t1", name: "Fazer a arte", specialty_id: spec.id, estimated_minutes: 120, sort_order: 0 } });
+
+      const r = await api(`/api/admin/catalog2/products/${p.id}/pricing-memory`, { token: tokenFor(master) });
+      assert.equal(r.status, 200);
+      assert.equal(r.json.version_id, v1.id);
+      assert.equal(r.json.pricing.commercial_ready, true, JSON.stringify(r.json.pricing.pending_info));
+      assert.equal(r.json.pricing.human_cost_breakdown.length, 1);
+      assert.equal(r.json.pricing.human_cost_breakdown[0].specialty, "Editor de Vídeo");
+      assert.equal(r.json.pricing.human_cost_breakdown[0].minutes, 120);
+      assert.equal(r.json.pricing.human_cost_breakdown[0].rate, 120);
+      assert.ok(r.json.pricing.lines.commercial_final_price.amount > 0);
+
+      // 6. confirma que a rota devolve o MESMO resultado de computePricing
+      // chamado diretamente (mesma seleção) — nunca reformulado no backend.
+      const direct = await computePricing(v1.id, await defaultSelection(v1.id));
+      assert.deepEqual(r.json.pricing, JSON.parse(JSON.stringify(direct)));
+    });
+
+    it("2. produto bloqueado por tarefa sem especialidade/horas definidas: 'Preço ainda não calculável' com o bloqueador exato", async () => {
+      const master = await mkUser("master");
+      await prisma.catalog2PricingSettings.upsert({
+        where: { id: "default" },
+        create: { id: "default", tax_percent: 6, commission_percent: 10, operational_fee_percent: 5, profit_margin_percent: 30, human_review_percent: 10, component_order_json: JSON.stringify(["tax", "commission", "operational", "margin"]) },
+        update: { tax_percent: 6, commission_percent: 10, operational_fee_percent: 5, profit_margin_percent: 30, human_review_percent: 10, component_order_json: JSON.stringify(["tax", "commission", "operational", "margin"]) },
+      });
+      // especialidade existe, mas SEM valor/hora (max_hourly_rate null) — o
+      // mesmo estado real dos 36 produtos catalog2 (nenhum tem valor/hora
+      // nem horas definidos ainda).
+      const specNoRate = await prisma.catalog2Specialty.findFirstOrThrow({ where: { key: "redator" } });
+      await prisma.catalog2Specialty.update({ where: { id: specNoRate.id }, data: { max_hourly_rate: null } });
+
+      const p = await createProduct({ internal_name: "[TESTE] Tarefa sem esforço" }, master.id);
+      catProducts.push(p.id);
+      const v1 = await prisma.catalog2ProductVersion.findFirstOrThrow({ where: { product_id: p.id } });
+      await prisma.catalog2ProductVersion.update({ where: { id: v1.id }, data: { base_commercial_deadline_days: 5 } });
+      await prisma.catalog2Task.create({ data: { version_id: v1.id, key: "t1", name: "Tarefa sem esforço definido", specialty_id: specNoRate.id, estimated_minutes: null, sort_order: 0 } });
+
+      const r = await api(`/api/admin/catalog2/products/${p.id}/pricing-memory`, { token: tokenFor(master) });
+      assert.equal(r.status, 200);
+      assert.equal(r.json.pricing.commercial_ready, false);
+      assert.ok(r.json.pricing.quote_blockers.includes("preço comercial incompleto"));
+      assert.ok(r.json.pricing.pending_info.includes("valor/hora de especialidade"), JSON.stringify(r.json.pricing.pending_info));
+      assert.equal(r.json.pricing.lines.human_cost.amount, null);
+      assert.equal(r.json.pricing.lines.commercial_final_price.amount, null);
+    });
+
+    it("3. produto sem configuração comercial (sem ordem de incidência/percentuais): bloqueado, com o bloqueador exato", async () => {
+      const master = await mkUser("master");
+      // Simula "nada configurado" SEM apagar a linha singleton (evitaria
+      // derrubar outra suíte concorrente que dependa dela existir) —
+      // upsert com todos os percentuais/ordem null tem o mesmo efeito para
+      // o motor de preço (orderCfg vazio, todo COMP.pct null).
+      await prisma.catalog2PricingSettings.upsert({
+        where: { id: "default" },
+        create: { id: "default", tax_percent: null, commission_percent: null, operational_fee_percent: null, profit_margin_percent: null, human_review_percent: null, component_order_json: null },
+        update: { tax_percent: null, commission_percent: null, operational_fee_percent: null, profit_margin_percent: null, human_review_percent: null, component_order_json: null },
+      });
+
+      const spec = await prisma.catalog2Specialty.findFirstOrThrow({ where: { key: "editor_video" } });
+      await prisma.catalog2Specialty.update({ where: { id: spec.id }, data: { max_hourly_rate: 100 } });
+      const p = await createProduct({ internal_name: "[TESTE] Sem config comercial" }, master.id);
+      catProducts.push(p.id);
+      const v1 = await prisma.catalog2ProductVersion.findFirstOrThrow({ where: { product_id: p.id } });
+      await prisma.catalog2Task.create({ data: { version_id: v1.id, key: "t1", name: "Tarefa com esforço definido", specialty_id: spec.id, estimated_minutes: 60, sort_order: 0 } });
+
+      const r = await api(`/api/admin/catalog2/products/${p.id}/pricing-memory`, { token: tokenFor(master) });
+      assert.equal(r.status, 200);
+      assert.equal(r.json.pricing.commercial_ready, false);
+      assert.ok(r.json.pricing.quote_blockers.includes("preço comercial incompleto"));
+      assert.ok(r.json.pricing.pending_info.includes("ordem de incidência das taxas"), JSON.stringify(r.json.pricing.pending_info));
+      assert.equal(r.json.pricing.lines.commercial_final_price.amount, null);
+      // custo humano em si é calculável (especialidade com valor/hora) —
+      // só a camada comercial (taxas/ordem) é que falta, não a tarefa.
+      assert.equal(r.json.pricing.lines.human_cost.amount, 100, "60 min a R$100/h = R$100");
+    });
+
+    it("5. só Admin Master acessa — admin comum e usuário comum recebem 404", async () => {
+      const master = await mkUser("master");
+      const commonAdmin = await mkUser("common_admin");
+      const plain = await mkUser("plain");
+      const p = await createProduct({ internal_name: "[TESTE] Acesso pricing-memory" }, master.id);
+      catProducts.push(p.id);
+
+      assert.equal((await api(`/api/admin/catalog2/products/${p.id}/pricing-memory`, { token: tokenFor(master) })).status, 200);
+      assert.equal((await api(`/api/admin/catalog2/products/${p.id}/pricing-memory`, { token: tokenFor(commonAdmin) })).status, 404);
+      assert.equal((await api(`/api/admin/catalog2/products/${p.id}/pricing-memory`, { token: tokenFor(plain) })).status, 404);
+      assert.equal((await api(`/api/admin/catalog2/products/${p.id}/pricing-memory`)).status, 401);
+    });
+
+    it("produto sem versão: pricing null, sem erro (nunca inventa cálculo)", async () => {
+      const master = await mkUser("master");
+      // produto sem NENHUMA versão — caso defensivo, não deveria acontecer
+      // no fluxo normal (createProduct já cria a v1), simulado direto no banco.
+      const p = await prisma.catalog2Product.create({ data: { slug: `t-sem-versao-${crypto.randomBytes(4).toString("hex")}`, internal_name: "[TESTE] Sem versão", status: "em_preparacao" } });
+      catProducts.push(p.id);
+      const r = await api(`/api/admin/catalog2/products/${p.id}/pricing-memory`, { token: tokenFor(master) });
+      assert.equal(r.status, 200);
+      assert.equal(r.json.pricing, null);
+      assert.equal(r.json.version_id, null);
     });
   });
 });

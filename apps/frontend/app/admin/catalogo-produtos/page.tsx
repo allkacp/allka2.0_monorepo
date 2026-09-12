@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import {
   Store,
   Loader2,
@@ -55,6 +55,8 @@ import {
   type MerchBadgeKind,
 } from "@/lib/catalog2-provisional";
 import { Info } from "lucide-react";
+import { Catalog2PricingMemoryPopover } from "@/components/catalog2-pricing-memory-popover";
+import { useIsAdminMaster } from "@/hooks/use-is-admin-master";
 
 // Catálogo de Produtos — visão de APRESENTAÇÃO e conferência comercial dos
 // produtos catalog2 (reunião 2026-09, consolidação "catálogo2 como cadastro
@@ -302,6 +304,7 @@ function matchesFilters(p: Merged, f: CatalogFilters): boolean {
 }
 
 export default function AdminCatalogoProdutosPage() {
+  const isAdminMaster = useIsAdminMaster();
   const { setScreenContext: setIallkaScreenContext } = useIallkaContext();
   const [state, setState] = useState<"loading" | "ready" | "forbidden" | "error">("loading");
   const [readinessProducts, setReadinessProducts] = useState<ReadinessProduct[]>([]);
@@ -627,11 +630,11 @@ export default function AdminCatalogoProdutosPage() {
               </div>
             ) : gridMode === "list" ? (
               <ul className="divide-y overflow-hidden rounded-xl border border-slate-200/70 bg-white dark:border-slate-700/60 dark:bg-slate-900">
-                {filtered.map((p) => <ProductListRow key={p.id} product={p} onOpen={() => setOpenProductId(p.id)} />)}
+                {filtered.map((p) => <ProductListRow key={p.id} product={p} onOpen={() => setOpenProductId(p.id)} isAdminMaster={isAdminMaster} />)}
               </ul>
             ) : (
               <div className={viewModeGridClass(gridMode)}>
-                {filtered.map((p) => <ProductCard key={p.id} product={p} compact={gridMode === 4 || gridMode === 5} onOpen={() => setOpenProductId(p.id)} />)}
+                {filtered.map((p) => <ProductCard key={p.id} product={p} compact={gridMode === 4 || gridMode === 5} onOpen={() => setOpenProductId(p.id)} isAdminMaster={isAdminMaster} />)}
               </div>
             )}
 
@@ -660,10 +663,10 @@ export default function AdminCatalogoProdutosPage() {
           {openedProduct && (
             fullDetailId ? (
               <div className="min-h-0 flex-1 overflow-y-auto p-3">
-                <Catalog2ProductDetail productId={fullDetailId} onBack={() => setFullDetailId(null)} />
+                <Catalog2ProductDetail productId={fullDetailId} onBack={() => setFullDetailId(null)} isAdminMaster={isAdminMaster} />
               </div>
             ) : (
-              <ProductDetail product={openedProduct} onViewFull={() => setFullDetailId(openedProduct.id)} />
+              <ProductDetail product={openedProduct} onViewFull={() => setFullDetailId(openedProduct.id)} isAdminMaster={isAdminMaster} />
             )
           )}
         </EmbeddedSlideScreen>
@@ -677,7 +680,7 @@ export default function AdminCatalogoProdutosPage() {
 // de informação) chamam `e.stopPropagation()` pra nunca disparar a MESMA
 // ação duas vezes. Enter/Espaço abrem quando o card está focado; foco
 // visível e cursor de ponteiro deixam claro que é clicável.
-function ProductCard({ product: p, onOpen, compact = false }: { product: Merged; onOpen: () => void; compact?: boolean }) {
+function ProductCard({ product: p, onOpen, compact = false, isAdminMaster = false }: { product: Merged; onOpen: () => void; compact?: boolean; isAdminMaster?: boolean }) {
   const categoryName = p.list?.category?.name ?? "Sem categoria";
   // Fonte ÚNICA de provisório: Catalog2ProvisionalPreview (via p.provisional,
   // vindo do backend). O hash local só é usado se o produto não tiver
@@ -769,7 +772,7 @@ function ProductCard({ product: p, onOpen, compact = false }: { product: Merged;
         )}
 
         <div className="mt-auto space-y-1 border-t border-slate-100 pt-2.5 dark:border-slate-800">
-          <PriceOrProvisional p={p} priceProv={priceProv} />
+          <PriceOrProvisional p={p} priceProv={priceProv} isAdminMaster={isAdminMaster} />
           <DeadlineOrProvisional p={p} prazoProv={prazoProv} />
           <Button
             variant="outline"
@@ -785,14 +788,20 @@ function ProductCard({ product: p, onOpen, compact = false }: { product: Merged;
   );
 }
 
-function PriceOrProvisional({ p, priceProv }: { p: Merged; priceProv: ReturnType<typeof provisionalPrice> }) {
+function PriceOrProvisional({ p, priceProv, isAdminMaster = false }: { p: Merged; priceProv: ReturnType<typeof provisionalPrice>; isAdminMaster?: boolean }) {
   if (p.items.preco?.note) {
-    return <p className="text-xs font-medium text-slate-500 dark:text-slate-400">{p.items.preco.note}</p>;
+    return (
+      <p className="flex items-center gap-1 text-xs font-medium text-slate-500 dark:text-slate-400">
+        {p.items.preco.note}
+        <Catalog2PricingMemoryPopover productId={p.id} isAdminMaster={isAdminMaster} />
+      </p>
+    );
   }
   return (
     <p className="flex items-center gap-1 text-xs font-medium text-slate-400">
       R$ {priceProv.value.toFixed(2)}
       <ProvisionalBadge label={priceProv.label + " Não vale para cotação, checkout ou publicação."} />
+      <Catalog2PricingMemoryPopover productId={p.id} isAdminMaster={isAdminMaster} provisionalPriceAmount={priceProv.value} />
     </p>
   );
 }
@@ -811,7 +820,7 @@ function DeadlineOrProvisional({ p, prazoProv }: { p: Merged; prazoProv: ReturnT
 // Modo Lista — mesma apresentação comercial, densidade maior (linha em vez
 // de card). Restaurado 2026-09 junto do alternador Lista/Grade; reunião
 // 10/09: a linha inteira também abre o detalhe (mesmo padrão do card).
-function ProductListRow({ product: p, onOpen }: { product: Merged; onOpen: () => void }) {
+function ProductListRow({ product: p, onOpen, isAdminMaster = false }: { product: Merged; onOpen: () => void; isAdminMaster?: boolean }) {
   const priceProv = p.provisional?.price_amount != null ? { value: p.provisional.price_amount, label: "Preço provisório — revisar.", is_provisional: true as const } : provisionalPrice(p.id);
   const taskProv = provisionalTaskCount(p.id);
   const categoryName = p.list?.category?.name ?? "Sem categoria";
@@ -849,8 +858,13 @@ function ProductListRow({ product: p, onOpen }: { product: Merged; onOpen: () =>
         </p>
       </div>
       <Badge className={STATUS_TONE[p.status] ?? "bg-muted text-muted-foreground"}>{STATUS_LABEL[p.status] ?? p.status}</Badge>
-      <span className="hidden w-40 shrink-0 truncate text-right text-xs text-slate-500 sm:inline">
+      <span className="hidden w-40 shrink-0 items-center justify-end gap-1 truncate text-right text-xs text-slate-500 sm:inline-flex">
         {p.items.preco?.note ?? `R$ ${priceProv.value.toFixed(2)} (provisório)`}
+        <Catalog2PricingMemoryPopover
+          productId={p.id}
+          isAdminMaster={isAdminMaster}
+          provisionalPriceAmount={!p.items.preco?.note ? priceProv.value : undefined}
+        />
       </span>
       <Button variant="outline" size="sm" className="shrink-0 border-blue-200 text-xs text-blue-600 hover:bg-blue-50" onClick={(e) => { e.stopPropagation(); onOpen(); }}>
         Ver detalhes
@@ -861,7 +875,7 @@ function ProductListRow({ product: p, onOpen }: { product: Merged; onOpen: () =>
 
 // Detalhe comercial — só leitura; nenhum controle de edição aparece aqui de
 // propósito (edição é função do Cadastro de Produtos).
-function ProductDetail({ product: p, onViewFull }: { product: Merged; onViewFull?: () => void }) {
+function ProductDetail({ product: p, onViewFull, isAdminMaster = false }: { product: Merged; onViewFull?: () => void; isAdminMaster?: boolean }) {
   const categoryName = p.list?.category?.name ?? "Sem categoria";
   const pendencias = [...p.blockers, ...p.pendings];
   const priceProv = p.provisional?.price_amount != null ? { value: p.provisional.price_amount, label: "Preço provisório — revisar.", is_provisional: true as const } : provisionalPrice(p.id);
@@ -917,7 +931,12 @@ function ProductDetail({ product: p, onViewFull }: { product: Merged; onViewFull
         </div>
 
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-          <DetailStat label="Preço" value={hasRealPrice ? p.items.preco!.note : `R$ ${priceProv.value.toFixed(2)}`} provisional={!hasRealPrice ? priceProv.label : undefined} />
+          <DetailStat
+            label="Preço"
+            value={hasRealPrice ? p.items.preco!.note : `R$ ${priceProv.value.toFixed(2)}`}
+            provisional={!hasRealPrice ? priceProv.label : undefined}
+            extra={<Catalog2PricingMemoryPopover productId={p.id} isAdminMaster={isAdminMaster} provisionalPriceAmount={!hasRealPrice ? priceProv.value : undefined} />}
+          />
           <DetailStat label="Prazo" value={hasRealPrazo ? p.items.prazo!.note : `${prazoProv.value} dia(s)`} provisional={!hasRealPrazo ? prazoProv.label : undefined} />
           <DetailStat label="Tarefas" value={hasRealTasks ? String(p.task_count) : String(taskProv.value)} provisional={!hasRealTasks ? taskProv.label : undefined} />
           <DetailStat label="Etapas" value={hasRealSteps ? String(p.step_count) : String(stepProv.value)} provisional={!hasRealSteps ? stepProv.label : undefined} />
@@ -960,13 +979,14 @@ function ProductDetail({ product: p, onViewFull }: { product: Merged; onViewFull
     </div>
   );
 }
-function DetailStat({ label, value, provisional }: { label: string; value: string; provisional?: string }) {
+function DetailStat({ label, value, provisional, extra }: { label: string; value: string; provisional?: string; extra?: ReactNode }) {
   return (
     <div className="rounded-lg border bg-background p-2.5">
       <p className="text-[11px] font-medium text-muted-foreground">{label}</p>
       <div className="mt-0.5 flex items-center gap-1">
         <p className={`text-xs ${provisional ? "text-slate-400" : "text-foreground"}`}>{value}</p>
         {provisional && <ProvisionalBadge label={provisional} />}
+        {extra}
       </div>
     </div>
   );

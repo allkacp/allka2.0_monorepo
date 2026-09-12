@@ -1331,6 +1331,36 @@ router.get("/products/:id/readiness", async (req, res, next) => {
   } catch (e) { handle(e, res, next); }
 });
 
+// Memória de cálculo do preço (reunião 10/09, "memória de cálculo da
+// precificação — Admin Master"): devolve o PricingResult de computePricing
+// NA ÍNTEGRA — tarefas/especialidade/horas/valor-hora, variações,
+// adicionais, subtotais, ordem de incidência comercial e preço final.
+// Nunca recalculado/reformulado aqui nem no frontend; mesma seleção
+// "vitrine" (defaultSelection) usada pela prontidão — não é cotação de
+// cliente. Rota já protegida por guardAdminMaster (todo o router).
+router.get("/products/:id/pricing-memory", async (req, res, next) => {
+  try {
+    const p = await prisma.catalog2Product.findUnique({
+      where: { id: req.params.id as string },
+      select: {
+        id: true,
+        published_version_id: true,
+        versions: { orderBy: { version_number: "desc" }, select: { id: true, state: true, version_number: true } },
+      },
+    });
+    if (!p) throw new Catalog2Error("Produto não encontrado.", 404);
+    const draft = p.versions.find((v) => v.state === "rascunho") ?? p.versions[0] ?? null;
+    const published = p.versions.find((v) => v.id === p.published_version_id) ?? null;
+    const targetVersion = published ?? draft;
+    if (!targetVersion) {
+      res.json({ version_id: null, version_state: null, pricing: null });
+      return;
+    }
+    const pricing = await computePricing(targetVersion.id, await defaultSelection(targetVersion.id));
+    res.json({ version_id: targetVersion.id, version_state: targetVersion.state, pricing });
+  } catch (e) { handle(e, res, next); }
+});
+
 // ═══════════════════════════════════════════════════════════════════════
 // DETALHE COMPLETO DO PRODUTO — reparo 2026-09 ("restaurar o detalhe
 // completo do produto, preços e imagens"). Único ponto de leitura para a

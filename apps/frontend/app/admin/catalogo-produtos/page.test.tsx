@@ -14,6 +14,8 @@ import { OpenScreensProvider } from "@/contexts/open-screens-context";
 
 const { api } = vi.hoisted(() => ({
   api: {
+    getCurrentUser: vi.fn(),
+    getCatalog2ProductPricingMemory: vi.fn(),
     getCatalog2Readiness: vi.fn(),
     getCatalog2Products: vi.fn(),
     getCatalog2Categories: vi.fn(),
@@ -81,6 +83,7 @@ const CATEGORIES = { data: [{ id: "c1", name: "Performance" }, { id: "c2", name:
 beforeEach(() => {
   vi.clearAllMocks();
   window.localStorage.clear();
+  api.getCurrentUser.mockResolvedValue({ id: "u1", account_type: "admin", admin_profile: { is_active: true, is_master: true } });
   api.getCatalog2Readiness.mockResolvedValue(READINESS);
   api.getCatalog2Products.mockResolvedValue(LIST);
   api.getCatalog2Categories.mockResolvedValue(CATEGORIES);

@@ -889,6 +889,8 @@ class ApiClient {
   getCatalog2ProductReadiness(productId: string) { return this.c2("GET", `/products/${productId}/readiness`); }
   /** Detalhe completo (real + prontidão + camada provisória) — reparo 2026-09. */
   getCatalog2ProductDetailPreview(productId: string) { return this.c2("GET", `/products/${productId}/detail-preview`); }
+  /** Memória de cálculo do preço (computePricing na íntegra) — Admin Master, reunião 10/09. */
+  getCatalog2ProductPricingMemory(productId: string) { return this.c2("GET", `/products/${productId}/pricing-memory`); }
 
   // ── Catálogo do CLIENTE do catalog2 (sprint de produtos, bloco 5/6) ────
   private cc<T = any>(m: "GET" | "POST" | "PUT" | "DELETE", path: string, body?: unknown): Promise<T> {
