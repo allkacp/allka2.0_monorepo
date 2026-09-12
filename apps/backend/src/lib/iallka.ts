@@ -9,6 +9,7 @@
 import { GoogleGenAI } from "@google/genai";
 import { prisma } from "./prisma";
 import { assertProductContractable } from "./product-contractability";
+import { checkClientVisibility } from "./catalog2-client";
 import { recordAIUsage, usageFromGeminiResponse } from "./ai-usage-tracker";
 import {
   buildCatalog2KnowledgeText,
@@ -41,7 +42,8 @@ Regras da conversa:
 - Português do Brasil, direto, sem emojis, sem markdown (a resposta é exibida como texto puro).
 
 Regras de conhecimento (reunião 10/09, "base de conhecimento — catálogo e briefings"):
-- Existem DUAS listas de catálogo abaixo: uma pro CATÁLOGO LEGADO (é dali, e só dali, que vêm os ids válidos pra "selected_products" — nunca invente, nunca use um id que não esteja lá) e outra INFORMATIVA do CATÁLOGO2 (produtos novos da plataforma — use pra EXPLICAR, comparar e responder perguntas sobre esses produtos, mas NUNCA proponha um id do catálogo2 em "selected_products").
+- Existem DUAS listas de catálogo abaixo. O CATÁLOGO LEGADO continua sendo a única fonte de "selected_products" e, portanto, a única que pode criar um projeto neste fluxo. O CATÁLOGO2 deve ser usado em "catalog2_recommendations": recomendações informativas dos produtos novos, sempre com um id da lista fornecida e nunca dentro de "selected_products".
+- Produto Catalog2 em preparação pode ser recomendado somente como "em preparação para revisão"; nunca diga que ele foi adicionado a projeto, cesta, orçamento ou contratação. Produto Catalog2 realmente disponível pode ser recomendado como próximo passo de configuração, mas também não entra em "selected_products" automaticamente.
 - Todo produto do catálogo2 já vem marcado [REAL] ou [PROVISÓRIO] no preço/prazo. Preço/prazo [PROVISÓRIO] NUNCA é uma oferta comercial válida — sempre diga explicitamente que é provisório e precisa de revisão antes de qualquer contratação real. Nunca apresente um valor provisório como se fosse o preço final.
 - Um produto marcado "EM PREPARAÇÃO" nunca deve ser recomendado como se já pudesse ser contratado agora — explique que ele ainda está em preparação.
 - Se a pergunta não tiver base nas informações fornecidas (nem no catálogo, nem nos documentos), diga honestamente que não encontrou essa informação, em vez de inventar. Pode fazer uma pergunta de esclarecimento em vez de responder.
@@ -107,11 +109,23 @@ export interface IallkaSelectedProduct {
   reasoning: string;
 }
 
+export interface IallkaCatalog2Recommendation {
+  product_id: string;
+  reasoning: string;
+  product_name?: string;
+  product_slug?: string;
+  status?: "disponivel" | "em_preparacao" | "temporariamente_inativo" | "arquivado";
+  can_configure?: boolean;
+}
+
 export interface IallkaTurnResult {
   reply_text: string;
   stage: "gathering" | "proposal";
   project_title: string;
   selected_products: IallkaSelectedProduct[];
+  /** Recomendações do Catalog2. São validadas no servidor e nunca criam
+   * projeto, cesta ou cotação por conta própria. */
+  catalog2_recommendations: IallkaCatalog2Recommendation[];
   /** Fontes REALMENTE usadas neste turno — calculado no servidor a partir
    * do que foi montado no contexto (nunca auto-relatado pela IA, pra nunca
    * arriscar uma fonte alucinada). Vazio quando nada relevante foi incluído. */
@@ -156,7 +170,7 @@ export async function sendIallkaTurn(
 ${catalogText}
 === FIM DO CATÁLOGO ===
 
-=== CATÁLOGO2 — PRODUTOS REAIS DA PLATAFORMA (informativo — nunca proponha estes em selected_products) ===
+=== CATÁLOGO2 — PRODUTOS NOVOS DA PLATAFORMA (use somente em catalog2_recommendations; nunca em selected_products) ===
 ${catalog2.text}
 === FIM DO CATÁLOGO2 ===
 
@@ -203,8 +217,19 @@ ${opts.projectBriefing.text}
               required: ["product_id", "reasoning"],
             },
           },
+          catalog2_recommendations: {
+            type: "array",
+            items: {
+              type: "object",
+              properties: {
+                product_id: { type: "string" },
+                reasoning: { type: "string" },
+              },
+              required: ["product_id", "reasoning"],
+            },
+          },
         },
-        required: ["reply_text", "stage", "project_title", "selected_products"],
+        required: ["reply_text", "stage", "project_title", "selected_products", "catalog2_recommendations"],
       },
     },
   });
@@ -216,7 +241,37 @@ ${opts.projectBriefing.text}
   const parsed = JSON.parse(text) as IallkaTurnResult;
   // `sources` é calculado no servidor (nunca reportado pela própria IA) —
   // sempre reflete exatamente o que foi injetado no contexto deste turno.
-  return { ...parsed, sources };
+  return { ...parsed, catalog2_recommendations: parsed.catalog2_recommendations ?? [], sources };
+}
+
+/** Revalida recomendações de Catalog2. Diferente do catálogo legado, uma
+ * recomendação aqui não vira item de projeto: apenas informa o estado real
+ * e o próximo passo seguro para o usuário. */
+export async function validateCatalog2Recommendations(
+  items: IallkaCatalog2Recommendation[],
+): Promise<IallkaCatalog2Recommendation[]> {
+  const valid: IallkaCatalog2Recommendation[] = [];
+  for (const item of items) {
+    const product = await prisma.catalog2Product.findUnique({
+      where: { id: item.product_id },
+      select: {
+        id: true, slug: true, internal_name: true, status: true,
+        published_version_id: true,
+        import_origin: { select: { pendencies_json: true } },
+      },
+    });
+    if (!product || product.internal_name.startsWith("[TESTE LOCAL]")) continue;
+    const visibility = await checkClientVisibility(product);
+    valid.push({
+      product_id: product.id,
+      reasoning: item.reasoning,
+      product_name: product.internal_name,
+      product_slug: product.slug,
+      status: product.status as IallkaCatalog2Recommendation["status"],
+      can_configure: visibility.visible,
+    });
+  }
+  return valid;
 }
 
 /** Revalida cada produto/variação proposto contra o catálogo real — a IA

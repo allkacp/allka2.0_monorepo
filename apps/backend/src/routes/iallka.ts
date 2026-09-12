@@ -11,6 +11,7 @@ import { createBulkProjectProducts } from "../lib/project-products-bulk";
 import {
   sendIallkaTurn,
   validateProposal,
+  validateCatalog2Recommendations,
   type IallkaHistoryTurn,
   type IallkaSelectedProduct,
   type IallkaTurnResult,
@@ -216,6 +217,14 @@ router.post(
           result = { ...result, selected_products: selectedProducts };
         }
       }
+
+      // O Catalog2 tem um caminho comercial próprio. A IAllka pode
+      // recomendá-lo com base nos 4Fs, mas nunca transforma essa sugestão em
+      // projeto/cotação automaticamente nem deixa um rascunho parecer oferta.
+      result = {
+        ...result,
+        catalog2_recommendations: await validateCatalog2Recommendations(result.catalog2_recommendations ?? []),
+      };
 
       await prisma.iallkaMessage.create({
         data: { session_id: session.id, role: "user", content: message },

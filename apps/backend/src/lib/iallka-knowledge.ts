@@ -120,7 +120,7 @@ export async function buildCatalog2KnowledgeText(opts: Catalog2KnowledgeOpts): P
 
     lines.push(
       [
-        `- ${p.internal_name}`,
+        `- id: ${p.id} | ${p.internal_name}`,
         `categoria: ${p.category?.name ?? "sem categoria"}`,
         `pilar: ${p.pillar?.name ?? "sem pilar"}`,
         fourFs.length ? `4Fs: ${fourFs.join(", ")}` : null,

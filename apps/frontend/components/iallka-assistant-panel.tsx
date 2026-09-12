@@ -25,6 +25,14 @@ interface SelectedProduct {
   reasoning: string;
 }
 
+interface Catalog2Recommendation {
+  product_id: string;
+  reasoning: string;
+  product_name?: string;
+  status?: string;
+  can_configure?: boolean;
+}
+
 interface KnowledgeSource {
   type: "produto" | "documento" | "projeto";
   name: string;
@@ -36,6 +44,7 @@ interface TurnResult {
   stage: "gathering" | "proposal";
   project_title: string;
   selected_products: SelectedProduct[];
+  catalog2_recommendations?: Catalog2Recommendation[];
   /** Fontes reais usadas neste turno (calculadas no servidor — ver
    * lib/iallka-knowledge.ts) — reunião 10/09, "base de conhecimento". */
   sources?: KnowledgeSource[];
@@ -200,6 +209,22 @@ export function IallkaAssistantPanel({ open, onClose }: IallkaAssistantPanelProp
                   <p className="ml-9 mt-1 max-w-[80%] text-[10px] text-slate-400 dark:text-slate-500">
                     Fontes: {sources.map((s) => s.name).join(", ")}
                   </p>
+                )}
+                {payload?.catalog2_recommendations && payload.catalog2_recommendations.length > 0 && (
+                  <div className="ml-9 mt-2 max-w-[80%] rounded-xl border border-violet-200 bg-violet-50/70 p-2.5 text-xs dark:border-violet-800 dark:bg-violet-950/20">
+                    <p className="font-semibold text-violet-800 dark:text-violet-200">Sugestões do novo catálogo</p>
+                    <div className="mt-1.5 space-y-1.5">
+                      {payload.catalog2_recommendations.map((product) => (
+                        <div key={product.product_id} className="rounded-lg bg-white/70 px-2 py-1.5 text-slate-700 dark:bg-slate-900/40 dark:text-slate-200">
+                          <p className="font-medium">{product.product_name ?? "Produto do Catalog2"}</p>
+                          <p className="mt-0.5 text-[11px]">{product.reasoning}</p>
+                          <p className={`mt-1 text-[10px] font-medium ${product.can_configure ? "text-emerald-700 dark:text-emerald-300" : "text-amber-700 dark:text-amber-300"}`}>
+                            {product.can_configure ? "Disponível para configurar no catálogo" : "Em preparação — ainda não gera orçamento, cesta ou projeto"}
+                          </p>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
                 )}
               </div>
             );

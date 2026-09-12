@@ -85,4 +85,27 @@ describe("IallkaAssistantPanel — envia só o project_id do contexto da tela", 
     const [, , sentProjectId] = api.sendIallkaMessage.mock.calls[0];
     expect(sentProjectId).toBeUndefined();
   });
+
+  it("mostra recomendação do Catalog2 como orientação, sem oferecer criação automática de projeto", async () => {
+    api.sendIallkaMessage.mockResolvedValueOnce({
+      reply_text: "Este produto atende ao objetivo informado.",
+      stage: "gathering",
+      project_title: "",
+      selected_products: [],
+      catalog2_recommendations: [{
+        product_id: "catalog2-1",
+        product_name: "Criação de Site Institucional",
+        reasoning: "Atende à necessidade de presença digital.",
+        can_configure: false,
+      }],
+      sources: [],
+    });
+    renderPanel();
+    await waitFor(() => expect(api.createIallkaSession).toHaveBeenCalled());
+    await sendMessage("Preciso de um site");
+    expect(await screen.findByText("Sugestões do novo catálogo")).toBeInTheDocument();
+    expect(screen.getByText("Criação de Site Institucional")).toBeInTheDocument();
+    expect(screen.getByText(/ainda não gera orçamento, cesta ou projeto/i)).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /aprovar e criar projeto/i })).not.toBeInTheDocument();
+  });
 });
