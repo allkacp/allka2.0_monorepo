@@ -163,7 +163,7 @@ describe("Catálogo de Produtos administrativo (catalog2) — grade de cards", (
     await screen.findByText("Site Institucional");
     // "Site Institucional" não tem pendências (blockers/pendings vazios).
     const card = screen.getByText("Site Institucional").closest(".group, li") as HTMLElement;
-    await userEvent.click(within(card).getByRole("button", { name: "Ver detalhes" }));
+    await userEvent.click(within(card).getByRole("button", { name: "Escolher" }));
     expect(await screen.findByText("Nenhuma pendência — pronto para revisão final.")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /publicar/i })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /excluir/i })).not.toBeInTheDocument();
@@ -174,7 +174,7 @@ describe("Catálogo de Produtos administrativo (catalog2) — grade de cards", (
     renderPage();
     await screen.findByText("Landing Page");
     const card = screen.getByText("Landing Page").closest(".group, li") as HTMLElement;
-    await userEvent.click(within(card).getByRole("button", { name: "Ver detalhes" }));
+    await userEvent.click(within(card).getByRole("button", { name: "Escolher" }));
     expect(await screen.findByText("preço")).toBeInTheDocument();
     expect(screen.getByText("prazo")).toBeInTheDocument();
     expect(screen.getByText("tarefas")).toBeInTheDocument();
@@ -185,7 +185,7 @@ describe("Catálogo de Produtos administrativo (catalog2) — grade de cards", (
     const row = (await screen.findByText("Consultoria Express")).closest(".group, li") as HTMLElement;
     expect(within(row).getByText(/especialidade\/tempo provisórios/i)).toBeInTheDocument();
 
-    await userEvent.click(within(row).getByRole("button", { name: "Ver detalhes" }));
+    await userEvent.click(within(row).getByRole("button", { name: "Escolher" }));
     expect(await screen.findByText(/Funcional para teste, pendente de revisão/i)).toBeInTheDocument();
   });
 });
@@ -400,7 +400,7 @@ describe("Cabeçalho e filtros reorganizados (Catálogo)", () => {
     await screen.findByText("Site Institucional");
     await userEvent.click(screen.getByRole("button", { name: "Lista" }));
     await userEvent.type(screen.getByPlaceholderText(/Buscar produtos/i), "consultoria");
-    await userEvent.click(screen.getByRole("button", { name: "Ver detalhes" }));
+    await userEvent.click(screen.getByRole("button", { name: "Escolher" }));
     await screen.findByText("Nenhuma pendência — pronto para revisão final.");
     // botão fechar do painel (EmbeddedSlideScreen) é só ícone, sem rótulo
     // acessível próprio — identificado pela classe do container padrão.
@@ -424,7 +424,7 @@ describe("Cabeçalho e filtros reorganizados (Catálogo)", () => {
     renderPage();
     await screen.findByText("Site Institucional");
     expect(screen.queryByRole("button", { name: /contratar|adicionar à cesta|finalizar compra/i })).not.toBeInTheDocument();
-    await userEvent.click(screen.getAllByRole("button", { name: "Ver detalhes" })[0]);
+    await userEvent.click(screen.getAllByRole("button", { name: "Escolher" })[0]);
     await screen.findByText(/Campos reais/i);
     expect(screen.queryByRole("button", { name: /contratar|adicionar à cesta|finalizar compra/i })).not.toBeInTheDocument();
   });
@@ -457,24 +457,22 @@ describe("Cards e interação (reunião 10/09)", () => {
     expect(await screen.findByText("Nenhuma pendência — pronto para revisão final.")).toBeInTheDocument();
   });
 
-  it("botão interno 'Ver detalhes' não dispara a abertura duas vezes (não propaga pro card)", async () => {
+  it("botão interno 'Escolher' não dispara a abertura duas vezes (não propaga pro card)", async () => {
     renderPage();
     await screen.findByText("Site Institucional");
     await userEvent.click(screen.getByRole("button", { name: "4 colunas" }));
     const card = screen.getByText("Site Institucional").closest(".group") as HTMLElement;
-    await userEvent.click(within(card).getByRole("button", { name: "Ver detalhes" }));
+    await userEvent.click(within(card).getByRole("button", { name: "Escolher" }));
     // abre normalmente — só uma vez (não há erro de dois onOpen simultâneos,
     // e o painel mostra exatamente um produto).
     expect(await screen.findByText("Nenhuma pendência — pronto para revisão final.")).toBeInTheDocument();
     expect(screen.getAllByText("Nenhuma pendência — pronto para revisão final.").length).toBe(1);
   });
 
-  it("ação principal é sempre 'Ver detalhes' — nunca 'Escolher' (isso não existe no Admin)", async () => {
+  it("ação principal é 'Escolher' e abre apenas o detalhe administrativo", async () => {
     renderPage();
     await screen.findByText("Site Institucional");
-    expect(screen.queryByText("Escolher")).not.toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: /^Escolher$/ })).not.toBeInTheDocument();
-    expect(screen.getAllByRole("button", { name: "Ver detalhes" }).length).toBeGreaterThan(0);
+    expect(screen.getAllByRole("button", { name: "Escolher" }).length).toBeGreaterThan(0);
   });
 
   it("código interno (slug/id) não ocupa espaço fixo no card — só aparece no ícone de informação, nunca 'ANTIGA #'", async () => {
@@ -560,7 +558,7 @@ describe("Cards e interação (reunião 10/09)", () => {
     renderPage();
     await screen.findByText("Site Institucional");
     const card = screen.getByText("Site Institucional").closest(".group, li") as HTMLElement;
-    await userEvent.click(within(card).getByRole("button", { name: "Ver detalhes" }));
+    await userEvent.click(within(card).getByRole("button", { name: "Escolher" }));
     await screen.findByText("Nenhuma pendência — pronto para revisão final.");
     await userEvent.click(screen.getByRole("button", { name: "Ver detalhe comercial completo" }));
     expect(await screen.findByText(/não foi possível carregar o detalhe/i)).toBeInTheDocument();

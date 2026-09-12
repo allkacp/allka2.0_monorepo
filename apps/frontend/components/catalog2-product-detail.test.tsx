@@ -70,7 +70,7 @@ describe("Catalog2ProductDetail — dado real", () => {
     api.getCatalog2ProductDetailPreview.mockResolvedValue(REAL_DETAIL);
     render(<Catalog2ProductDetail productId="p1" onBack={() => {}} />);
     await screen.findByText("Criação de Site Institucional");
-    const btn = screen.getByRole("button", { name: "Contratar" });
+    const btn = screen.getByRole("button", { name: "Selecione uma opção" });
     expect(btn).toBeDisabled();
     expect(screen.getByText("Produto em preparação. Dados provisórios precisam ser revisados antes da contratação.")).toBeInTheDocument();
   });
@@ -112,7 +112,7 @@ describe("Catalog2ProductDetail — dado provisório", () => {
     api.getCatalog2ProductDetailPreview.mockResolvedValue(PROVISIONAL_DETAIL);
     render(<Catalog2ProductDetail productId="p2" onBack={() => {}} />);
     await userEvent.click(await screen.findByText("Essencial"));
-    expect(screen.getByRole("button", { name: "Contratar" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: /contratação bloqueada/i })).toBeDisabled();
   });
 
   it("aba Portfólio mostra o aviso de portfólio provisório quando há referências", async () => {

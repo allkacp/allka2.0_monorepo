@@ -798,7 +798,7 @@ function ProductCard({ product: p, onOpen, compact = false, isAdminMaster = fals
             className="mt-2 w-full border-blue-200 bg-transparent text-xs text-blue-600 hover:bg-blue-50 hover:text-blue-700"
             onClick={(e) => { e.stopPropagation(); onOpen(); }}
           >
-            Ver detalhes
+            Escolher
           </Button>
         </div>
       </CardContent>
@@ -907,7 +907,7 @@ function ProductListRow({ product: p, onOpen, isAdminMaster = false }: { product
         />
       </span>
       <Button variant="outline" size="sm" className="shrink-0 border-blue-200 text-xs text-blue-600 hover:bg-blue-50" onClick={(e) => { e.stopPropagation(); onOpen(); }}>
-        Ver detalhes
+        Escolher
       </Button>
     </li>
   );

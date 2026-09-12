@@ -9,7 +9,7 @@
 // 100% catalog2 — nada de lógica comercial do produto antigo é reutilizada
 // aqui, só o layout (Section/FaqItem/PortfolioGallery/fmtBRL, que são
 // utilitários puramente visuais, sem regra de negócio).
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   ArrowLeft,
   CheckCircle2,
@@ -26,6 +26,8 @@ import {
   Images,
   Users,
   Zap,
+  GripVertical,
+  ShoppingCart,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -38,6 +40,15 @@ import { ProvisionalBadge } from "@/components/provisional-badge";
 import { Catalog2PricingMemoryPopover } from "@/components/catalog2-pricing-memory-popover";
 
 type TabId = "detalhes" | "portfolio" | "nomades";
+
+const DETAIL_PANEL_STORAGE_KEY = "allka:catalog2-detail-right-fraction-v1";
+const DEFAULT_RIGHT_FRACTION = 0.58;
+const MIN_RIGHT_FRACTION = 0.42;
+const MAX_RIGHT_FRACTION = 0.68;
+
+function clampRightFraction(value: number) {
+  return Math.min(MAX_RIGHT_FRACTION, Math.max(MIN_RIGHT_FRACTION, value));
+}
 
 interface RealOption {
   id: string;
@@ -77,6 +88,44 @@ export function Catalog2ProductDetail({
   const [highlightsExpanded, setHighlightsExpanded] = useState(false);
   const [selectedOptionId, setSelectedOptionId] = useState<string | null>(null);
   const [expandedOptionId, setExpandedOptionId] = useState<string | null>(null);
+  const bodyRef = useRef<HTMLDivElement | null>(null);
+  const [isWideLayout, setIsWideLayout] = useState(false);
+  const [isDraggingDivider, setIsDraggingDivider] = useState(false);
+  const [rightFraction, setRightFraction] = useState(() => {
+    if (typeof window === "undefined") return DEFAULT_RIGHT_FRACTION;
+    const saved = Number(window.localStorage.getItem(DETAIL_PANEL_STORAGE_KEY));
+    return Number.isFinite(saved) && saved >= MIN_RIGHT_FRACTION && saved <= MAX_RIGHT_FRACTION
+      ? saved
+      : DEFAULT_RIGHT_FRACTION;
+  });
+
+  useEffect(() => {
+    const update = () => setIsWideLayout(window.innerWidth >= 1024);
+    update();
+    window.addEventListener("resize", update);
+    return () => window.removeEventListener("resize", update);
+  }, []);
+
+  useEffect(() => {
+    if (!isDraggingDivider) return;
+    const move = (event: MouseEvent) => {
+      const rect = bodyRef.current?.getBoundingClientRect();
+      if (!rect?.width) return;
+      const next = clampRightFraction((rect.right - event.clientX) / rect.width);
+      setRightFraction(next);
+    };
+    const stop = () => setIsDraggingDivider(false);
+    window.addEventListener("mousemove", move);
+    window.addEventListener("mouseup", stop);
+    return () => {
+      window.removeEventListener("mousemove", move);
+      window.removeEventListener("mouseup", stop);
+    };
+  }, [isDraggingDivider]);
+
+  useEffect(() => {
+    window.localStorage.setItem(DETAIL_PANEL_STORAGE_KEY, String(rightFraction));
+  }, [rightFraction]);
 
   useEffect(() => {
     let cancelled = false;
@@ -299,8 +348,8 @@ export function Catalog2ProductDetail({
       )}
 
       {/* ── Corpo: abas + opções ────────────────────────────────────── */}
-      <div className="flex flex-1 min-h-0 overflow-hidden flex-col lg:flex-row gap-3">
-        <div className="flex flex-col min-h-0 order-2 lg:order-1 min-w-0 flex-1 rounded-2xl border border-border/50 bg-background">
+      <div ref={bodyRef} className="flex flex-1 min-h-0 overflow-hidden flex-col lg:flex-row rounded-2xl border border-border/60 bg-background shadow-sm">
+        <div className="flex flex-col min-h-0 order-2 lg:order-1 min-w-0 flex-1 bg-background">
           <div role="tablist" aria-label="Seções do produto" className="shrink-0 flex border-b border-border/50 overflow-x-auto">
             {tabs.map(({ id, label, icon: Icon }) => (
               <button
@@ -398,9 +447,33 @@ export function Catalog2ProductDetail({
           </ScrollArea>
         </div>
 
+        {isWideLayout && (
+          <div
+            role="separator"
+            aria-orientation="vertical"
+            aria-label="Redimensionar colunas de detalhes e opções"
+            aria-valuenow={Math.round(rightFraction * 100)}
+            tabIndex={0}
+            onMouseDown={(event) => { event.preventDefault(); setIsDraggingDivider(true); }}
+            onDoubleClick={() => setRightFraction(DEFAULT_RIGHT_FRACTION)}
+            onKeyDown={(event) => {
+              if (event.key === "ArrowLeft") setRightFraction((v) => clampRightFraction(v + 0.02));
+              if (event.key === "ArrowRight") setRightFraction((v) => clampRightFraction(v - 0.02));
+              if (event.key === "Enter") setRightFraction(DEFAULT_RIGHT_FRACTION);
+            }}
+            className={cn("order-2 hidden lg:flex w-2.5 shrink-0 cursor-col-resize items-center justify-center border-x border-border/50 bg-muted/40 hover:bg-purple-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-500", isDraggingDivider && "bg-purple-300")}
+            title="Arraste para ajustar as colunas; duplo clique restaura"
+          >
+            <GripVertical className="h-4 w-4 text-purple-500" />
+          </div>
+        )}
+
         {/* ── Painel de opções e contratação ─────────────────────────── */}
-        <div className="shrink-0 order-1 lg:order-3 w-full lg:w-[380px] rounded-2xl border border-border/50 flex flex-col bg-slate-50/60 dark:bg-slate-900/20 min-h-0">
-          <div className="shrink-0 px-4 py-3 text-white rounded-t-2xl" style={{ background: "linear-gradient(135deg, #050816 0%, #1a2a6f 45%, #c81a7f 100%)" }}>
+        <div
+          className="shrink-0 order-1 lg:order-3 w-full flex flex-col bg-slate-50/60 dark:bg-slate-900/20 min-h-0"
+          style={isWideLayout ? { flex: `0 0 ${rightFraction * 100}%`, width: `${rightFraction * 100}%`, minWidth: 360 } : undefined}
+        >
+          <div className="shrink-0 px-5 py-3 text-white" style={{ background: "linear-gradient(135deg, #050816 0%, #1a2a6f 45%, #c81a7f 100%)" }}>
             <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1">
               <span className="text-lg font-extrabold leading-none">
                 {displayPrice != null ? (
@@ -422,11 +495,11 @@ export function Catalog2ProductDetail({
                 />
               )}
             </div>
-            {displayDeadline != null && (
-              <p className="text-xs text-blue-200 mt-1">
-                Prazo: <strong className="text-white">{displayDeadline} dias</strong>{deadlineIsProvisional && " (provisório)"}
-              </p>
-            )}
+            <div className="mt-1 flex flex-wrap items-center gap-x-2 text-xs text-blue-200">
+              {displayDeadline != null && <span>Prazo: <strong className="text-white">{displayDeadline} dias</strong>{deadlineIsProvisional && " (provisório)"}</span>}
+              {modality && <><span className="text-white/30">|</span><span>Modalidade: <strong className="text-white">{modality}</strong></span></>}
+              {options.length > 0 && <><span className="text-white/30">|</span><span><strong className="text-white">{options.length}</strong> {options.length === 1 ? "opção" : "opções"}</span></>}
+            </div>
             {readiness?.functional_for_test && (
               <p className="mt-1.5 rounded-md bg-amber-400/20 px-2 py-1 text-[11px] font-medium text-amber-100">
                 {readiness.functional_for_test_label ?? "Funcional para teste, pendente de revisão"} — especialidade e tempo das tarefas são provisórios para teste.
@@ -464,6 +537,12 @@ export function Catalog2ProductDetail({
                               {o.deadline_days} dias
                             </span>
                           )}
+                          {o.modality && (
+                            <span className="inline-flex items-center gap-1 text-[9px] font-semibold px-1.5 py-0.5 rounded-full bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-700">
+                              <Repeat2 className="h-2 w-2" />
+                              {o.modality}
+                            </span>
+                          )}
                           {!o.is_provisional ? null : (
                             <span className="inline-flex items-center gap-1 text-[9px] font-semibold px-1.5 py-0.5 rounded-full bg-amber-50 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-700">
                               provisória
@@ -497,8 +576,9 @@ export function Catalog2ProductDetail({
           </ScrollArea>
 
           <div className="shrink-0 p-3 border-t border-border/50 space-y-2">
-            <Button type="button" disabled className="w-full" title={blockedReason}>
-              Contratar
+            <Button type="button" disabled className="w-full gap-2 rounded-xl bg-gradient-to-r from-slate-950 via-indigo-950 to-fuchsia-700 text-white" title={blockedReason}>
+              <ShoppingCart className="h-4 w-4" />
+              {selectedOption ? "Opção selecionada — contratação bloqueada" : "Selecione uma opção"}
             </Button>
             <p className="text-[11px] text-amber-700 dark:text-amber-400 flex items-start gap-1.5">
               <AlertTriangle className="h-3 w-3 shrink-0 mt-0.5" />
