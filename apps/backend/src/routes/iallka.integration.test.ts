@@ -31,6 +31,7 @@ const agencies: string[] = [];
 const companies: string[] = [];
 const partnerProfiles: string[] = [];
 const sessions: string[] = [];
+const projects: string[] = [];
 
 function tokenFor(u: { id: string; email: string; role: string; account_type: string }) {
   return jwt.sign({ id: u.id, email: u.email, role: u.role, account_type: u.account_type }, config.JWT_SECRET, { expiresIn: "1h" });
@@ -99,7 +100,7 @@ describe("IAllka — nova matriz de acesso (Admin Master, Company, Agency, Partn
     await new Promise<void>((res, rej) => server.close((e) => (e ? rej(e) : res())));
     await prisma.iallkaMessage.deleteMany({ where: { session_id: { in: sessions } } });
     await prisma.iallkaSession.deleteMany({ where: { id: { in: sessions } } });
-    await prisma.project.deleteMany({ where: { created_by_user_id: { in: users } } });
+    await prisma.project.deleteMany({ where: { OR: [{ created_by_user_id: { in: users } }, { id: { in: projects } }] } });
     await prisma.partnerProfile.deleteMany({ where: { id: { in: partnerProfiles } } });
     await prisma.user.updateMany({ where: { id: { in: users } }, data: { agency_id: null, company_id: null } });
     await prisma.agency.deleteMany({ where: { id: { in: agencies } } });
@@ -227,5 +228,31 @@ describe("IAllka — nova matriz de acesso (Admin Master, Company, Agency, Partn
     const u = await mkUser("company");
     const r = await api("/api/iallka/sessions/nao-existe-123", { token: tokenFor(u) });
     assert.equal(r.status, 404);
+  });
+
+  it("8. projeto fora da conta é recusado antes de qualquer chamada de IA (briefing privado nunca vaza pra outra conta)", async () => {
+    const companyA = await mkUser("company");
+    const companyB = await mkUser("company");
+    const created = await api("/api/iallka/sessions", { method: "POST", token: tokenFor(companyA) });
+    sessions.push(created.json.id);
+
+    // projeto pertence à Company B (nunca a companyA, que é dona da sessão).
+    const project = await prisma.project.create({
+      data: {
+        title: "Projeto fora da conta",
+        project_code: `proj-fora-${crypto.randomBytes(4).toString("hex")}`,
+        status: "draft",
+        lifecycle: "avulso",
+        company_id: (await prisma.user.findUnique({ where: { id: companyB.id }, select: { company_id: true } }))!.company_id,
+      },
+    });
+    projects.push(project.id);
+
+    const r = await api(`/api/iallka/sessions/${created.json.id}/messages`, {
+      method: "POST",
+      token: tokenFor(companyA),
+      body: { message: "me ajude com este projeto", project_id: project.id },
+    });
+    assert.equal(r.status, 403);
   });
 });

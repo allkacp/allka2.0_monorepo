@@ -22,6 +22,12 @@ export interface IallkaScreenContext {
   visibleCount?: number;
   /** Nome do produto/projeto aberto no momento, se houver (nunca ID/UUID). */
   openItemName?: string;
+  /** ID do projeto aberto (reunião 10/09, "base de conhecimento —
+   * briefings") — SÓ quando a própria tela já confirmou que o usuário tem
+   * acesso a ele (é o mesmo projeto que ela está exibindo). Enviado ao
+   * backend, que revalida o vínculo de novo antes de usar o briefing —
+   * nunca confiado só por estar aqui. */
+  projectId?: string;
 }
 
 interface Suggestion {

@@ -1643,8 +1643,8 @@ class ApiClient {
     return this.get(`/iallka/sessions/${id}`);
   }
 
-  async sendIallkaMessage(id: string, message: string) {
-    return this.post(`/iallka/sessions/${id}/messages`, { message });
+  async sendIallkaMessage(id: string, message: string, projectId?: string) {
+    return this.post(`/iallka/sessions/${id}/messages`, projectId ? { message, project_id: projectId } : { message });
   }
 
   async approveIallkaSession(id: string) {

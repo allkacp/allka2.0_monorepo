@@ -192,4 +192,22 @@ describe("IallkaFloatingIcon — ícone e painel", () => {
       unmount();
     }
   });
+
+  it("17. exibe as fontes reais usadas na resposta (base de conhecimento) — nunca caminho técnico/prompt/token", async () => {
+    api.sendIallkaMessage.mockResolvedValue({
+      reply_text: "O produto X custa R$ 1.200,00.",
+      stage: "gathering",
+      project_title: "",
+      selected_products: [],
+      sources: [{ type: "produto", name: "Site Institucional" }, { type: "documento", name: "produtos" }],
+    });
+    renderIcon();
+    const [btn] = await openIcons();
+    const user = userEvent.setup();
+    await user.click(btn);
+    await screen.findByText("IAllka");
+    const textarea = await screen.findByPlaceholderText(/Me conte tudo que sabe/i);
+    await user.type(textarea, "Quanto custa o Site Institucional?{Enter}");
+    expect(await screen.findByText(/Fontes: Site Institucional, produtos/i)).toBeInTheDocument();
+  });
 });

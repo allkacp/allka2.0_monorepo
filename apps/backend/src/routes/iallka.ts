@@ -4,7 +4,8 @@ import { z } from "zod";
 import { prisma } from "../lib/prisma";
 import { verifyToken, evaluateAdminMasterAccess } from "../middleware/auth";
 import { validate } from "../middleware/validate";
-import { resolveMyAgencyId, resolveProjectNewScope } from "../lib/project-scope";
+import { resolveMyAgencyId, resolveProjectNewScope, getProjectScope, projectInScope } from "../lib/project-scope";
+import { buildProjectBriefingText } from "../lib/iallka-knowledge";
 import { createProjectWithSequentialCode } from "../lib/create-project";
 import { createBulkProjectProducts } from "../lib/project-products-bulk";
 import {
@@ -136,7 +137,11 @@ router.get("/sessions/:id", verifyToken, async (req: Request, res: Response, nex
 
 // ── POST /api/iallka/sessions/:id/messages ────────────────────────────────────
 
-const messageSchema = z.object({ message: z.string().min(1) });
+// `project_id` opcional (reunião 10/09, "base de conhecimento — briefings"):
+// permite anexar o briefing PRIVADO de um projeto próprio a este turno —
+// validado abaixo contra o escopo real da conta (nunca persistido na
+// sessão, nunca cacheado, nunca vazado pra outra conta/turno).
+const messageSchema = z.object({ message: z.string().min(1), project_id: z.string().optional() });
 
 router.post(
   "/sessions/:id/messages",
@@ -161,12 +166,34 @@ router.post(
         return;
       }
 
-      const { message } = req.body as z.infer<typeof messageSchema>;
+      const { message, project_id } = req.body as z.infer<typeof messageSchema>;
       const history = toHistory(session.messages);
+
+      // Vínculo organizacional do DONO da sessão (nunca de quem está
+      // usando, no caso raro de suporte via Admin Master) — decide se ele
+      // vê o catálogo2 inteiro (Admin Master) ou só o realmente contratável
+      // (Company/Agency/Partner), mesma regra de checkClientVisibility.
+      const ownerIsAdminMaster = await isAdminMaster(session.user_id);
+
+      let projectBriefing: Awaited<ReturnType<typeof buildProjectBriefingText>> = null;
+      if (project_id) {
+        const owner = await prisma.user.findUnique({ where: { id: session.user_id }, select: { account_type: true } });
+        const scope = await getProjectScope(prisma, session.user_id, owner?.account_type ?? "");
+        const project = await prisma.project.findUnique({ where: { id: project_id }, select: { agency: true, client_id: true } });
+        if (!project || !projectInScope(scope, project)) {
+          res.status(403).json({ error: "Este projeto não pertence à sua conta" });
+          return;
+        }
+        projectBriefing = await buildProjectBriefingText(project_id);
+      }
 
       let result: IallkaTurnResult;
       try {
-        result = await sendIallkaTurn(history, message, req.user!.id);
+        result = await sendIallkaTurn(history, message, req.user!.id, {
+          isAdminMaster: ownerIsAdminMaster,
+          clientVisibleOnly: !ownerIsAdminMaster,
+          projectBriefing,
+        });
       } catch (err) {
         next(err);
         return;

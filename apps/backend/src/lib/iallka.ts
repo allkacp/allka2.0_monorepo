@@ -10,6 +10,11 @@ import { GoogleGenAI } from "@google/genai";
 import { prisma } from "./prisma";
 import { assertProductContractable } from "./product-contractability";
 import { recordAIUsage, usageFromGeminiResponse } from "./ai-usage-tracker";
+import {
+  buildCatalog2KnowledgeText,
+  buildAdminKnowledgeText,
+  type KnowledgeSource,
+} from "./iallka-knowledge";
 
 const MODEL = "gemini-2.5-flash";
 
@@ -34,6 +39,14 @@ Regras da conversa:
 - Explique brevemente o raciocínio de cada produto escolhido (por que ele resolve o que foi pedido).
 - Se, depois de uma proposta, o usuário pedir ajuste (trocar produto, adicionar, remover, mudar variação), monte uma proposta NOVA já refletindo o pedido — não é preciso perguntar de novo o que já foi respondido antes.
 - Português do Brasil, direto, sem emojis, sem markdown (a resposta é exibida como texto puro).
+
+Regras de conhecimento (reunião 10/09, "base de conhecimento — catálogo e briefings"):
+- Existem DUAS listas de catálogo abaixo: uma pro CATÁLOGO LEGADO (é dali, e só dali, que vêm os ids válidos pra "selected_products" — nunca invente, nunca use um id que não esteja lá) e outra INFORMATIVA do CATÁLOGO2 (produtos novos da plataforma — use pra EXPLICAR, comparar e responder perguntas sobre esses produtos, mas NUNCA proponha um id do catálogo2 em "selected_products").
+- Todo produto do catálogo2 já vem marcado [REAL] ou [PROVISÓRIO] no preço/prazo. Preço/prazo [PROVISÓRIO] NUNCA é uma oferta comercial válida — sempre diga explicitamente que é provisório e precisa de revisão antes de qualquer contratação real. Nunca apresente um valor provisório como se fosse o preço final.
+- Um produto marcado "EM PREPARAÇÃO" nunca deve ser recomendado como se já pudesse ser contratado agora — explique que ele ainda está em preparação.
+- Se a pergunta não tiver base nas informações fornecidas (nem no catálogo, nem nos documentos), diga honestamente que não encontrou essa informação, em vez de inventar. Pode fazer uma pergunta de esclarecimento em vez de responder.
+- Ao recomendar um produto, explique o motivo (que necessidade ele resolve), cite os campos relevantes usados na decisão (categoria, preço, prazo, tarefas) e informe pendências reais quando existirem.
+- Nunca invente preço, prazo, tarefa, política ou produto que não esteja em nenhuma das fontes fornecidas.
 `.trim();
 
 function buildCatalogText(
@@ -99,6 +112,23 @@ export interface IallkaTurnResult {
   stage: "gathering" | "proposal";
   project_title: string;
   selected_products: IallkaSelectedProduct[];
+  /** Fontes REALMENTE usadas neste turno — calculado no servidor a partir
+   * do que foi montado no contexto (nunca auto-relatado pela IA, pra nunca
+   * arriscar uma fonte alucinada). Vazio quando nada relevante foi incluído. */
+  sources?: KnowledgeSource[];
+}
+
+export interface IallkaTurnOpts {
+  /** Admin Master: vê o catálogo2 inteiro (inclusive em preparação) e pode
+   * ver preço/prazo PROVISÓRIO, sempre marcado como tal. */
+  isAdminMaster?: boolean;
+  /** Company/Agency/Partner: só produtos catalog2 realmente visíveis pro
+   * cliente entram no contexto — nunca um provisório, nunca "em preparação". */
+  clientVisibleOnly?: boolean;
+  /** Texto de briefing de um projeto específico — só deve chegar aqui
+   * depois de validado que o projeto pertence à conta da sessão (ver
+   * routes/iallka.ts). Nunca cacheado, nunca reaproveitado entre contas. */
+  projectBriefing?: { text: string; source: KnowledgeSource } | null;
 }
 
 /** Envia um turno pra IA: histórico completo + mensagem nova do usuário,
@@ -108,13 +138,39 @@ export async function sendIallkaTurn(
   history: IallkaHistoryTurn[],
   userMessage: string,
   userId?: string,
+  opts: IallkaTurnOpts = {},
 ): Promise<IallkaTurnResult> {
   const catalogText = await buildProductCatalogContext();
+  const catalog2 = await buildCatalog2KnowledgeText({
+    includeProvisional: !!opts.isAdminMaster,
+    clientVisibleOnly: !!opts.clientVisibleOnly,
+  });
+  const adminDocs = await buildAdminKnowledgeText();
+
+  const sources: KnowledgeSource[] = [...catalog2.sources, ...adminDocs.sources];
+  if (opts.projectBriefing) sources.push(opts.projectBriefing.source);
+
   const systemInstruction = `${IALLKA_PERSONA}
 
 === CATÁLOGO DE PRODUTOS DISPONÍVEIS PRA PROPOR (use só os ids listados aqui) ===
 ${catalogText}
-=== FIM DO CATÁLOGO ===`;
+=== FIM DO CATÁLOGO ===
+
+=== CATÁLOGO2 — PRODUTOS REAIS DA PLATAFORMA (informativo — nunca proponha estes em selected_products) ===
+${catalog2.text}
+=== FIM DO CATÁLOGO2 ===
+
+=== DOCUMENTOS ADMINISTRATIVOS APROVADOS (conhecimento compartilhado) ===
+${adminDocs.text || "(nenhum documento cadastrado ainda)"}
+=== FIM DOS DOCUMENTOS ===${
+    opts.projectBriefing
+      ? `
+
+=== BRIEFING PRIVADO DESTE PROJETO (nunca compartilhe fora desta sessão) ===
+${opts.projectBriefing.text}
+=== FIM DO BRIEFING PRIVADO ===`
+      : ""
+  }`;
 
   const contents = [
     ...history.map((h) => ({ role: h.role === "assistant" ? "model" : "user", parts: [{ text: h.content }] })),
@@ -157,7 +213,10 @@ ${catalogText}
 
   const text = response.text;
   if (!text) throw new Error("IALLKA não retornou resposta");
-  return JSON.parse(text) as IallkaTurnResult;
+  const parsed = JSON.parse(text) as IallkaTurnResult;
+  // `sources` é calculado no servidor (nunca reportado pela própria IA) —
+  // sempre reflete exatamente o que foi injetado no contexto deste turno.
+  return { ...parsed, sources };
 }
 
 /** Revalida cada produto/variação proposto contra o catálogo real — a IA

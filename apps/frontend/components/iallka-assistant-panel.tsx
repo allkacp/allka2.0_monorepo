@@ -25,11 +25,20 @@ interface SelectedProduct {
   reasoning: string;
 }
 
+interface KnowledgeSource {
+  type: "produto" | "documento" | "projeto";
+  name: string;
+  detail?: string;
+}
+
 interface TurnResult {
   reply_text: string;
   stage: "gathering" | "proposal";
   project_title: string;
   selected_products: SelectedProduct[];
+  /** Fontes reais usadas neste turno (calculadas no servidor — ver
+   * lib/iallka-knowledge.ts) — reunião 10/09, "base de conhecimento". */
+  sources?: KnowledgeSource[];
 }
 
 function parsePayload(m: IallkaMessage): TurnResult | null {
@@ -61,7 +70,7 @@ export function IallkaAssistantPanel({ open, onClose }: IallkaAssistantPanelProp
   const { toast } = useToast();
   const navigate = useNavigate();
   const { accountType } = useAccountType();
-  const { suggestions, contextLine } = useIallkaContext();
+  const { suggestions, contextLine, screenContext } = useIallkaContext();
   const scrollRef = useRef<HTMLDivElement>(null);
 
   const [sessionId, setSessionId] = useState<string | null>(null);
@@ -113,7 +122,7 @@ export function IallkaAssistantPanel({ open, onClose }: IallkaAssistantPanelProp
     setMessages((prev) => [...prev, { role: "user", content: visibleText }]);
     setSending(true);
     try {
-      const result: TurnResult = await apiClient.sendIallkaMessage(sessionId, sentText);
+      const result: TurnResult = await apiClient.sendIallkaMessage(sessionId, sentText, screenContext.projectId);
       setMessages((prev) => [
         ...prev,
         { role: "assistant", content: result.reply_text, structured_payload: JSON.stringify(result) },
@@ -163,24 +172,38 @@ export function IallkaAssistantPanel({ open, onClose }: IallkaAssistantPanelProp
             </div>
           )}
 
-          {messages.map((m, i) => (
-            <div key={m.id || i} className={`flex ${m.role === "user" ? "justify-end" : "justify-start"}`}>
-              {m.role === "assistant" && (
-                <div className="h-7 w-7 rounded-full bg-gradient-to-br from-violet-500 to-purple-700 flex items-center justify-center shrink-0 mr-2 mt-0.5 shadow-sm">
-                  <Sparkles className="h-3.5 w-3.5 text-white" />
+          {messages.map((m, i) => {
+            const payload = m.role === "assistant" ? parsePayload(m) : null;
+            const sources = payload?.sources ?? [];
+            return (
+              <div key={m.id || i} className={`flex flex-col ${m.role === "user" ? "items-end" : "items-start"}`}>
+                <div className={`flex ${m.role === "user" ? "justify-end" : "justify-start"}`}>
+                  {m.role === "assistant" && (
+                    <div className="h-7 w-7 rounded-full bg-gradient-to-br from-violet-500 to-purple-700 flex items-center justify-center shrink-0 mr-2 mt-0.5 shadow-sm">
+                      <Sparkles className="h-3.5 w-3.5 text-white" />
+                    </div>
+                  )}
+                  <div
+                    className={`max-w-[80%] px-3.5 py-2.5 rounded-2xl text-sm shadow-sm whitespace-pre-wrap ${
+                      m.role === "user"
+                        ? "bg-blue-600 text-white rounded-br-sm"
+                        : "bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-700 rounded-bl-sm"
+                    }`}
+                  >
+                    {m.content}
+                  </div>
                 </div>
-              )}
-              <div
-                className={`max-w-[80%] px-3.5 py-2.5 rounded-2xl text-sm shadow-sm whitespace-pre-wrap ${
-                  m.role === "user"
-                    ? "bg-blue-600 text-white rounded-br-sm"
-                    : "bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-700 rounded-bl-sm"
-                }`}
-              >
-                {m.content}
+                {/* Fontes reais usadas neste turno (reunião 10/09, "base de
+                    conhecimento") — nunca um caminho técnico/prompt/token,
+                    só o que foi consultado de verdade. */}
+                {sources.length > 0 && (
+                  <p className="ml-9 mt-1 max-w-[80%] text-[10px] text-slate-400 dark:text-slate-500">
+                    Fontes: {sources.map((s) => s.name).join(", ")}
+                  </p>
+                )}
               </div>
-            </div>
-          ))}
+            );
+          })}
 
           {sending && (
             <div className="flex justify-start">
