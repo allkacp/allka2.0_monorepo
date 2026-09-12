@@ -50,7 +50,36 @@ export const DEFAULT_CATEGORIES: { key: string; name: string; description: strin
     description:
       "Vocabulário técnico, nomes de telas/funcionalidades e convenções de como o time prefere que bugs/ideias sejam descritos — usado pela IA que melhora os textos do formulário \"Ajuda e sugestões\" antes de virar chamado.",
   },
+  // Reunião 10/09 ("organização da base de conhecimento administrativa da
+  // IAllka") — categorias novas, aditivas. "Produtos" e "Briefings" já
+  // existiam (chaves "produtos"/"briefing" acima) e são reaproveitadas tal
+  // qual — nunca duplicadas aqui.
+  {
+    key: "quatro_fs",
+    name: "Quatro Fs",
+    description: "Material de referência sobre a metodologia dos 4 Fs (Fundação, Fluxo, Força, Fidelização) usada pela IAllka.",
+  },
+  {
+    key: "processos",
+    name: "Processos",
+    description: "Processos internos e fluxos operacionais consultados pela IAllka.",
+  },
+  {
+    key: "politicas",
+    name: "Políticas",
+    description: "Políticas administrativas e comerciais consultadas pela IAllka.",
+  },
+  {
+    key: "outros",
+    name: "Outros",
+    description: "Material de referência da IAllka que não se encaixa nas demais categorias.",
+  },
 ];
+
+/** Formatos que o extrator abaixo realmente sabe ler. Usado pela rota de
+ * upload pra recusar de cara um formato não suportado — nunca salvar um
+ * documento que nunca vai alimentar nenhuma IA. */
+export const SUPPORTED_KB_EXTENSIONS = new Set([".pdf", ".docx", ".txt", ".md"]);
 
 /** Exportado pro bloco 3/4 (IA de lançamento) reaproveitar a mesma extração
  * de texto de anexo (PDF/DOCX/TXT/MD) — nunca duplicar pdf-parse/mammoth. */
@@ -129,38 +158,55 @@ export async function ensureDefaultKnowledgeCategories(): Promise<void> {
 
 interface CacheEntry {
   fingerprint: string;
-  text: string;
+  sections: DocumentSection[];
 }
 const textCache = new Map<string, CacheEntry>();
 
-/** Texto combinado de todos os documentos de uma categoria (extraído de
- * PDF/DOCX/TXT/MD), com cache automático por fingerprint dos documentos. */
-export async function getCategoryKnowledgeText(categoryKey: string): Promise<string> {
+export interface DocumentSection {
+  document_id: string;
+  document_name: string;
+  text: string;
+}
+
+/** Seções de texto (uma por documento ATIVO) de uma categoria, extraídas de
+ * PDF/DOCX/TXT/MD, com cache automático por fingerprint dos documentos
+ * ATIVOS — desativar/reativar/substituir um documento troca o conjunto e
+ * invalida o cache sozinho (o fingerprint é sobre a query já filtrada).
+ * Documento INATIVO nunca entra aqui — nunca alimenta nenhum fluxo de IA. */
+export async function getCategoryKnowledgeSections(categoryKey: string): Promise<DocumentSection[]> {
   const category = await prisma.aIKnowledgeCategory.findUnique({
     where: { key: categoryKey },
-    include: { documents: { orderBy: { created_at: "asc" } } },
+    include: { documents: { where: { is_active: true }, orderBy: { created_at: "asc" } } },
   });
-  if (!category || category.documents.length === 0) return "";
+  if (!category || category.documents.length === 0) return [];
 
   const fingerprint = category.documents.map((d) => `${d.id}:${d.size ?? 0}`).join("|");
   const cached = textCache.get(categoryKey);
-  if (cached && cached.fingerprint === fingerprint) return cached.text;
+  if (cached && cached.fingerprint === fingerprint) return cached.sections;
 
-  const sections: string[] = [];
+  const sections: DocumentSection[] = [];
   for (const doc of category.documents) {
     try {
       const filePath = uploadedFilePath(KB_SUBPATH(categoryKey), doc.file_name);
       if (!fs.existsSync(filePath)) continue;
       const text = await extractFileText(filePath);
-      if (text.trim()) sections.push(`### Documento: ${doc.name}\n${text.trim()}`);
+      if (text.trim()) sections.push({ document_id: doc.id, document_name: doc.name, text: text.trim() });
     } catch (err) {
       console.error(`[ai-knowledge-base] Falha ao ler "${doc.name}" (categoria ${categoryKey}):`, err);
     }
   }
 
-  const combined = sections.join("\n\n---\n\n");
-  textCache.set(categoryKey, { fingerprint, text: combined });
-  return combined;
+  textCache.set(categoryKey, { fingerprint, sections });
+  return sections;
+}
+
+/** Texto combinado de todos os documentos ATIVOS de uma categoria — mesma
+ * extração/cache de getCategoryKnowledgeSections, só junta em uma string
+ * (usado pelos fluxos de IA que só precisam do texto, não da lista por
+ * documento — ver lib/ai-consultor.ts). */
+export async function getCategoryKnowledgeText(categoryKey: string): Promise<string> {
+  const sections = await getCategoryKnowledgeSections(categoryKey);
+  return sections.map((s) => `### Documento: ${s.document_name}\n${s.text}`).join("\n\n---\n\n");
 }
 
 /** Texto combinado dos documentos de CONTEXTO de um projeto específico (aba

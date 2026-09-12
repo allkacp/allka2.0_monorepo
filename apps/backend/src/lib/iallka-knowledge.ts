@@ -18,7 +18,7 @@
 // bloco.
 import { prisma } from "./prisma";
 import { computePricing, defaultSelection } from "./catalog2-pricing";
-import { getCategoryKnowledgeText, getProjectDocumentsText } from "./ai-knowledge-base";
+import { getCategoryKnowledgeSections, getProjectDocumentsText } from "./ai-knowledge-base";
 
 const TEST_LOCAL_PREFIX = "[TESTE LOCAL]";
 
@@ -135,18 +135,28 @@ export async function buildCatalog2KnowledgeText(opts: Catalog2KnowledgeOpts): P
 }
 
 /** Documentos administrativos já aprovados (AIKnowledgeCategory/Document,
- * gerenciados em Configurações > Base de Conhecimento IA) — conhecimento
- * COMPARTILHADO por definição (só entra ali por decisão de um Admin
- * Master), nunca dado privado de projeto. */
+ * gerenciados em Configurações > Base de Conhecimento IA — reunião 10/09,
+ * "organização da base de conhecimento administrativa da IAllka") —
+ * conhecimento COMPARTILHADO por definição (só entra ali por decisão de um
+ * Admin Master), nunca dado privado de projeto/briefing de cliente.
+ *
+ * Percorre TODAS as categorias existentes (nunca uma lista fixa de 2 — as
+ * seis desta reunião, mais qualquer categoria futura, entram
+ * automaticamente), e só considera documentos ATIVOS (is_active=true —
+ * getCategoryKnowledgeSections já filtra). Uma fonte por DOCUMENTO (nunca
+ * só por categoria), com o nome da categoria embutido — a IAllka informa
+ * exatamente qual categoria e qual documento embasou a resposta. */
 export async function buildAdminKnowledgeText(): Promise<{ text: string; sources: KnowledgeSource[] }> {
-  const categories = ["produtos", "briefing"] as const;
+  const categories = await prisma.aIKnowledgeCategory.findMany({ orderBy: { name: "asc" } });
   const parts: string[] = [];
   const sources: KnowledgeSource[] = [];
-  for (const key of categories) {
-    const text = await getCategoryKnowledgeText(key);
-    if (text.trim()) {
-      parts.push(`### Categoria: ${key}\n${text}`);
-      sources.push({ type: "documento", name: key });
+  for (const category of categories) {
+    const sections = await getCategoryKnowledgeSections(category.key);
+    if (sections.length === 0) continue;
+    const categoryText = sections.map((s) => `### Documento: ${s.document_name}\n${s.text}`).join("\n\n---\n\n");
+    parts.push(`### Categoria: ${category.name}\n${categoryText}`);
+    for (const s of sections) {
+      sources.push({ type: "documento", name: `${category.name}: ${s.document_name}`, detail: category.key });
     }
   }
   return { text: parts.join("\n\n---\n\n"), sources };

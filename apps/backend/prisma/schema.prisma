@@ -2343,9 +2343,25 @@ model AIKnowledgeDocument {
   size        Int?
   uploaded_by String?
 
+  // Reunião 10/09 ("organização da base de conhecimento administrativa da
+  // IAllka") — versionamento aditivo. Documento INATIVO nunca alimenta
+  // nenhum fluxo de IA (getCategoryKnowledgeText/Sections filtram por
+  // is_active). "Substituir" cria uma nova linha (nunca sobrescreve o
+  // histórico) apontando pra quem ela substitui via replaces_document_id, e
+  // a linha antiga vira is_active=false — a versão ativa é sempre a que tem
+  // is_active=true dentro da mesma cadeia.
+  is_active   Boolean @default(true)
+  version     Int     @default(1)
+
+  replaces_document_id String?              @unique
+  replaces              AIKnowledgeDocument? @relation("AIKnowledgeDocumentVersion", fields: [replaces_document_id], references: [id], onDelete: SetNull)
+  replaced_by            AIKnowledgeDocument? @relation("AIKnowledgeDocumentVersion")
+
   created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
 
   @@index([category_id])
+  @@index([is_active])
   @@map("ai_knowledge_documents")
 }
 

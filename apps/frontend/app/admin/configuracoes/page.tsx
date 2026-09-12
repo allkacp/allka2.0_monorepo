@@ -31,6 +31,7 @@ import {
   EyeOff,
   CheckCircle2,
   RotateCcw,
+  RefreshCw,
   MessageSquare,
   Users,
   Briefcase,
@@ -76,6 +77,7 @@ import {
 } from "@/components/standard-page-shell";
 import { PinToTrayButton } from "@/components/pin-to-tray-button";
 import { DocumentDeleteButton } from "@/components/document-delete-button";
+import { useIsAdminMaster } from "@/hooks/use-is-admin-master";
 
 // ─── helpers ──────────────────────────────────────────────────────────────────
 
@@ -152,9 +154,14 @@ function StatusPill({ connected }) {
 const ICON_BTN =
   "h-[26px] w-[26px] flex items-center justify-center rounded-[8px] bg-white dark:bg-slate-800 border border-[#e8edf5] dark:border-slate-700 shadow-[0_4px_10px_rgba(15,23,42,0.06)] hover:bg-gradient-to-br hover:from-[#2558FF] hover:via-[#6E2C96] hover:to-[#D92293] hover:text-white dark:hover:text-[#0a1628] hover:border-transparent hover:shadow-[0_8px_18px_rgba(15,23,42,0.18)] hover:-translate-y-px transition-all duration-150";
 
-function IconActionButton({ icon: Icon, tooltip, onClick, tone = "text-slate-400" }) {
+function IconActionButton({ icon: Icon, tooltip, onClick, tone = "text-slate-400", disabled = false }) {
   return (
-    <button onClick={onClick} title={tooltip} className={`${ICON_BTN} ${tone} dark:text-slate-500`}>
+    <button
+      onClick={onClick}
+      title={tooltip}
+      disabled={disabled}
+      className={`${ICON_BTN} ${tone} dark:text-slate-500 disabled:opacity-30 disabled:pointer-events-none`}
+    >
       <Icon className="h-3.5 w-3.5" />
     </button>
   );
@@ -399,6 +406,11 @@ export default function AdminConfiguracoesPage() {
   useSidebar();
   const { toast } = useToast();
   const navigate = useNavigate();
+  // Base de Conhecimento da IA (reunião 10/09, "organização da base de
+  // conhecimento administrativa da IAllka") — criar/editar/ativar/
+  // desativar/substituir documento é só Admin Master (o backend já recusa
+  // com 403; aqui só evita mostrar um controle que ia falhar).
+  const isKbAdminMaster = useIsAdminMaster();
 
   // ── Base de Conhecimento IA ──
   // Diferente das outras abas desta tela (ainda locais/mock): esta já fala
@@ -413,6 +425,13 @@ export default function AdminConfiguracoesPage() {
   const [kbAddingCategory, setKbAddingCategory] = useState(false);
   const [kbCategoryForm, setKbCategoryForm] = useState({ key: "", name: "", description: "" });
   const kbFileInputRef = useRef(null);
+  // Substituir documento (reunião 10/09, "organização da base de
+  // conhecimento") — histórico preservado, nunca sobrescrito; o antigo vira
+  // inativo. kbReplacingDocId guarda QUAL documento está sendo substituído
+  // no momento em que o seletor de arquivo abre.
+  const kbReplaceInputRef = useRef(null);
+  const [kbReplacingDocId, setKbReplacingDocId] = useState(null);
+  const [kbTogglingDocId, setKbTogglingDocId] = useState(null);
 
   async function loadKbCategories() {
     setKbLoadingCategories(true);
@@ -462,6 +481,47 @@ export default function AdminConfiguracoesPage() {
     } finally {
       setKbUploading(false);
       if (kbFileInputRef.current) kbFileInputRef.current.value = "";
+    }
+  }
+
+  async function handleKbToggleActive(doc) {
+    setKbTogglingDocId(doc.id);
+    try {
+      if (doc.is_active) {
+        await apiClient.deactivateKnowledgeDocument(doc.id);
+        toast({ title: "Documento desativado — não alimenta mais a IAllka nem os outros fluxos de IA." });
+      } else {
+        await apiClient.activateKnowledgeDocument(doc.id);
+        toast({ title: "Documento ativado" });
+      }
+      await Promise.all([loadKbDocuments(kbSelectedCategory), loadKbCategories()]);
+    } catch (err) {
+      toast({ title: "Erro ao alterar status do documento", description: err?.message, variant: "destructive" });
+    } finally {
+      setKbTogglingDocId(null);
+    }
+  }
+
+  function handleKbReplaceClick(doc) {
+    setKbReplacingDocId(doc.id);
+    kbReplaceInputRef.current?.click();
+  }
+
+  async function handleKbReplaceFileSelected(e) {
+    const file = e.target.files?.[0];
+    const documentId = kbReplacingDocId;
+    if (!file || !documentId) return;
+    setKbUploading(true);
+    try {
+      await apiClient.replaceKnowledgeDocument(documentId, file);
+      toast({ title: "Nova versão enviada — a antiga foi preservada no histórico, inativa." });
+      await Promise.all([loadKbDocuments(kbSelectedCategory), loadKbCategories()]);
+    } catch (err) {
+      toast({ title: "Erro ao substituir documento", description: err?.message, variant: "destructive" });
+    } finally {
+      setKbUploading(false);
+      setKbReplacingDocId(null);
+      if (kbReplaceInputRef.current) kbReplaceInputRef.current.value = "";
     }
   }
 
@@ -2235,17 +2295,19 @@ export default function AdminConfiguracoesPage() {
                   Documentos que alimentam cada fluxo de IA da plataforma — se você mudar os arquivos aqui, a IA já passa a usar o conteúdo novo na próxima chamada.
                 </p>
               </div>
-              <Button
-                size="sm"
-                variant="outline"
-                className="h-7 gap-1.5 text-xs shrink-0"
-                onClick={() => setKbAddingCategory((v) => !v)}
-              >
-                <Plus className="h-3 w-3" /> Nova categoria
-              </Button>
+              {isKbAdminMaster && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="h-7 gap-1.5 text-xs shrink-0"
+                  onClick={() => setKbAddingCategory((v) => !v)}
+                >
+                  <Plus className="h-3 w-3" /> Nova categoria
+                </Button>
+              )}
             </div>
 
-            {kbAddingCategory && (
+            {kbAddingCategory && isKbAdminMaster && (
               <div className="px-5 py-4 border-b border-dashed border-blue-200 dark:border-blue-800 bg-blue-50/40 dark:bg-blue-950/15 space-y-3">
                 <p className="text-[10px] font-semibold text-blue-600 dark:text-blue-400 uppercase tracking-wide">
                   Nova categoria (banco de documentos)
@@ -2324,23 +2386,32 @@ export default function AdminConfiguracoesPage() {
                     {kbSelectedCategoryData.description || "Sem descrição."}
                   </p>
                 </div>
-                <div>
-                  <input
-                    ref={kbFileInputRef}
-                    type="file"
-                    accept=".pdf,.txt,.md,.docx"
-                    className="hidden"
-                    onChange={handleKbFileSelected}
-                  />
-                  <Button
-                    size="sm"
-                    className="h-7 gap-1.5 text-xs shrink-0"
-                    disabled={kbUploading}
-                    onClick={() => kbFileInputRef.current?.click()}
-                  >
-                    <Upload className="h-3 w-3" /> {kbUploading ? "Enviando…" : "Adicionar documento"}
-                  </Button>
-                </div>
+                {isKbAdminMaster && (
+                  <div>
+                    <input
+                      ref={kbFileInputRef}
+                      type="file"
+                      accept=".pdf,.txt,.md,.docx"
+                      className="hidden"
+                      onChange={handleKbFileSelected}
+                    />
+                    <input
+                      ref={kbReplaceInputRef}
+                      type="file"
+                      accept=".pdf,.txt,.md,.docx"
+                      className="hidden"
+                      onChange={handleKbReplaceFileSelected}
+                    />
+                    <Button
+                      size="sm"
+                      className="h-7 gap-1.5 text-xs shrink-0"
+                      disabled={kbUploading}
+                      onClick={() => kbFileInputRef.current?.click()}
+                    >
+                      <Upload className="h-3 w-3" /> {kbUploading ? "Enviando…" : "Adicionar documento"}
+                    </Button>
+                  </div>
+                )}
               </div>
             )}
 
@@ -2350,6 +2421,7 @@ export default function AdminConfiguracoesPage() {
                   <tr className="border-b border-slate-200/60 dark:border-slate-700/60">
                     <th className="text-center py-3 px-4 text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wide">Ações</th>
                     <th className="text-left py-3 px-4 text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wide">Documento</th>
+                    <th className="text-left py-3 px-4 text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wide">Status</th>
                     <th className="text-left py-3 px-4 text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wide">Tamanho</th>
                     <th className="text-left py-3 px-4 text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wide">Enviado por</th>
                     <th className="text-left py-3 px-4 text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wide">Data</th>
@@ -2366,26 +2438,44 @@ export default function AdminConfiguracoesPage() {
                       <td data-rotulo="Ações" className="py-2 px-4">
                         <div className="flex items-center justify-center gap-1">
                           <IconActionButton icon={Download} tooltip="Baixar" onClick={() => handleKbDownload(doc)} tone="text-blue-500" />
-                          <DocumentDeleteButton
-                            documentName={doc.name}
-                            scopeLabel={
-                              kbSelectedCategoryData?.name
-                                ? `da base de conhecimento "${kbSelectedCategoryData.name}"`
-                                : "da base de conhecimento"
-                            }
-                            title="Excluir documento da base de conhecimento"
-                            consequences={[
-                              "O arquivo é apagado do servidor — não há lixeira nem desfazer.",
-                              "A base de conhecimento deixa de responder com base nesse documento.",
-                              "Enviar o arquivo de novo cria um documento novo, com outro histórico.",
-                            ]}
-                            onDelete={() => apiClient.deleteKnowledgeDocument(doc.id)}
-                            onDeleted={reloadKbAfterDocDelete}
-                          >
-                            {(open) => (
-                              <IconActionButton icon={Trash2} tooltip="Excluir" onClick={open} tone="text-red-400" />
-                            )}
-                          </DocumentDeleteButton>
+                          {isKbAdminMaster && (
+                            <>
+                              <IconActionButton
+                                icon={doc.is_active ? EyeOff : Eye}
+                                tooltip={doc.is_active ? "Desativar (para de alimentar a IA)" : "Ativar"}
+                                onClick={() => handleKbToggleActive(doc)}
+                                disabled={kbTogglingDocId === doc.id}
+                                tone={doc.is_active ? "text-amber-500" : "text-emerald-500"}
+                              />
+                              <IconActionButton
+                                icon={RefreshCw}
+                                tooltip="Substituir (nova versão — mantém o histórico)"
+                                onClick={() => handleKbReplaceClick(doc)}
+                                disabled={kbUploading}
+                                tone="text-violet-500"
+                              />
+                              <DocumentDeleteButton
+                                documentName={doc.name}
+                                scopeLabel={
+                                  kbSelectedCategoryData?.name
+                                    ? `da base de conhecimento "${kbSelectedCategoryData.name}"`
+                                    : "da base de conhecimento"
+                                }
+                                title="Excluir documento da base de conhecimento"
+                                consequences={[
+                                  "O arquivo é apagado do servidor — não há lixeira nem desfazer.",
+                                  "A base de conhecimento deixa de responder com base nesse documento.",
+                                  "Enviar o arquivo de novo cria um documento novo, com outro histórico.",
+                                ]}
+                                onDelete={() => apiClient.deleteKnowledgeDocument(doc.id)}
+                                onDeleted={reloadKbAfterDocDelete}
+                              >
+                                {(open) => (
+                                  <IconActionButton icon={Trash2} tooltip="Excluir" onClick={open} tone="text-red-400" />
+                                )}
+                              </DocumentDeleteButton>
+                            </>
+                          )}
                         </div>
                       </td>
                       <td data-rotulo="Documento" className="py-3 px-4">
@@ -2394,7 +2484,21 @@ export default function AdminConfiguracoesPage() {
                             <FileText className="h-3.5 w-3.5 text-blue-500" />
                           </span>
                           {doc.name}
+                          {doc.version > 1 && (
+                            <span className="text-[10px] font-normal text-slate-400">v{doc.version}</span>
+                          )}
                         </span>
+                      </td>
+                      <td data-rotulo="Status" className="py-3 px-4">
+                        {doc.is_active ? (
+                          <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-semibold text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-200">
+                            Ativo{doc.version > 1 ? " (versão vigente)" : ""}
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-semibold text-slate-500 dark:bg-slate-800 dark:text-slate-400">
+                            Inativo{doc.replaced_by ? ` (substituído por v${doc.replaced_by.version})` : ""}
+                          </span>
+                        )}
                       </td>
                       <td data-rotulo="Tamanho" className="py-3 px-4 text-slate-500 dark:text-slate-400">{formatKbFileSize(doc.size)}</td>
                       <td data-rotulo="Enviado por" className="py-3 px-4 text-slate-500 dark:text-slate-400">{doc.uploaded_by || "—"}</td>
@@ -2405,7 +2509,7 @@ export default function AdminConfiguracoesPage() {
                   ))}
                   {!kbLoadingDocuments && kbSelectedCategory && kbDocuments.length === 0 && (
                     <tr>
-                      <td colSpan={5} className="py-8 text-center text-xs text-slate-400">
+                      <td colSpan={6} className="py-8 text-center text-xs text-slate-400">
                         Nenhum documento nesta categoria ainda.
                       </td>
                     </tr>

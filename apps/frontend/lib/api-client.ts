@@ -2500,6 +2500,18 @@ class ApiClient {
   async downloadKnowledgeDocument(documentId: string) {
     return this.downloadBlob(`/ai-knowledge-base/documents/${documentId}/download`);
   }
+  /** Reunião 10/09 ("organização da base de conhecimento") — só Admin Master. */
+  async activateKnowledgeDocument(documentId: string) {
+    return this.post(`/ai-knowledge-base/documents/${documentId}/activate`, {});
+  }
+  async deactivateKnowledgeDocument(documentId: string) {
+    return this.post(`/ai-knowledge-base/documents/${documentId}/deactivate`, {});
+  }
+  /** Sobe uma nova versão no lugar de `documentId` — o antigo vira inativo,
+   * histórico preservado (nunca apagado), nunca sobrescrito. */
+  async replaceKnowledgeDocument(documentId: string, file: File) {
+    return this.uploadFile(`/ai-knowledge-base/documents/${documentId}/replace`, file);
+  }
   // ─── Uso e Custos de IA (admin > Configurações) ────────────────────────────
   async getAIUsageSummary() {
     return this.get("/ai-usage/summary");
