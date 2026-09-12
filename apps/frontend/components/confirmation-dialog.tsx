@@ -215,6 +215,7 @@ export function ConfirmationDialog({
           className={`flex-1 h-10 text-sm font-semibold text-white border-0 transition-all ${finalButtonClass}`}
           onClick={() => void handleConfirm()}
           disabled={isSubmitting}
+          aria-busy={isSubmitting}
         >
           {isSubmitting ? (
             <span className="flex items-center justify-center gap-2">
@@ -247,6 +248,7 @@ export function ConfirmationDialog({
         }`}
         onClick={() => void handleConfirm()}
         disabled={isSubmitting || confirmDisabled}
+        aria-busy={isSubmitting}
       >
         {isSubmitting ? (
           <span className="flex items-center justify-center gap-2">

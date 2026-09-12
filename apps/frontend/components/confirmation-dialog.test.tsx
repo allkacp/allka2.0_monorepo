@@ -182,6 +182,23 @@ describe("ConfirmationDialog — twoStep", () => {
     resolveConfirm();
   });
 
+  // Reunião 10/09 ("feedback visual global"): aria-busy marca o botão como
+  // ocupado pra leitores de tela durante o await — some assim que resolve.
+  it("botão final marca aria-busy durante o envio e some ao concluir", async () => {
+    let resolveConfirm: () => void = () => {};
+    const onConfirm = vi.fn(() => new Promise<void>((resolve) => { resolveConfirm = resolve; }));
+    const user = userEvent.setup();
+    render(<Harness twoStep onConfirm={onConfirm} finalConfirmText="Excluir produto definitivamente" />);
+    await openViaTrigger(user);
+    await user.click(screen.getByRole("button", { name: /continuar para confirmação/i }));
+    const finalButton = screen.getByRole("button", { name: /excluir produto definitivamente/i });
+    expect(finalButton).not.toHaveAttribute("aria-busy", "true");
+    await user.click(finalButton);
+    await waitFor(() => expect(finalButton).toHaveAttribute("aria-busy", "true"));
+    resolveConfirm();
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+  });
+
   it("11. erro é exibido de forma amigável", async () => {
     const onConfirm = vi.fn().mockRejectedValue(new Error("Produto vinculado a projetos existentes."));
     const user = userEvent.setup();

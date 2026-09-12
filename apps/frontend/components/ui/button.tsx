@@ -1,11 +1,12 @@
 import * as React from 'react'
 import { Slot } from '@radix-ui/react-slot'
 import { cva, type VariantProps } from 'class-variance-authority'
+import { Loader2 } from 'lucide-react'
 
 import { cn } from '@/lib/utils'
 
 const buttonVariants = cva(
-  "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium transition-all disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg:not([class*='size-'])]:size-4 shrink-0 [&_svg]:shrink-0 outline-none focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 aria-invalid:border-destructive",
+  "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium transition-all disabled:pointer-events-none disabled:opacity-50 disabled:cursor-not-allowed [&_svg]:pointer-events-none [&_svg:not([class*='size-'])]:size-4 shrink-0 [&_svg]:shrink-0 outline-none focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 aria-invalid:border-destructive cursor-pointer active:scale-[0.98]",
   {
     variants: {
       variant: {
@@ -40,19 +41,41 @@ function Button({
   variant,
   size,
   asChild = false,
+  loading = false,
+  disabled,
+  children,
   ...props
 }: React.ComponentProps<'button'> &
   VariantProps<typeof buttonVariants> & {
     asChild?: boolean
+    /** Reunião 10/09 ("feedback visual global"): mostra um spinner, marca
+     * `aria-busy` e desabilita o botão — nunca deixa um segundo clique
+     * disparar a mesma ação enquanto uma requisição está em andamento.
+     * Aditivo: quem não passa `loading` continua exatamente como antes. */
+    loading?: boolean
   }) {
+  // `asChild` (Slot) precisa de um único filho — loading não se aplica
+  // junto de asChild (o chamador controla o próprio conteúdo nesse caso).
   const Comp = asChild ? Slot : 'button'
+  const isDisabled = disabled || (loading && !asChild)
 
   return (
     <Comp
       data-slot="button"
+      aria-busy={!asChild && loading ? true : undefined}
+      disabled={!asChild ? isDisabled : undefined}
       className={cn(buttonVariants({ variant, size, className }))}
       {...props}
-    />
+    >
+      {!asChild && loading ? (
+        <>
+          <Loader2 className="animate-spin" aria-hidden="true" />
+          {children}
+        </>
+      ) : (
+        children
+      )}
+    </Comp>
   )
 }
 

@@ -2066,6 +2066,38 @@
   }
 }
 
+/* ============================================================
+   FEEDBACK VISUAL GLOBAL DE CLICÁVEIS (reunião 10/09)
+   ============================================================
+   Rede de segurança de baixa especificidade (seletor de tipo) para
+   QUALQUER <button>/<a> da plataforma — cursor, pressionado e foco
+   visível. Nunca sobrescreve um estado já definido por classe (uma
+   classe Tailwind sempre tem mais especificidade que um seletor de
+   tipo), então nenhuma tela com seu próprio hover/active/focus muda
+   de aparência; isto só preenche a lacuna onde nada existia (ex.:
+   botões de fechar/ícone só, itens de menu, abas). O `prefers-
+   reduced-motion` acima já zera a duração de qualquer transição —
+   o `:active` abaixo continua funcionando, só sem a suavização. */
+button:not(:disabled):not([aria-disabled='true']) {
+  cursor: pointer;
+}
+button:disabled,
+button[aria-disabled='true'],
+[aria-disabled='true'] {
+  cursor: not-allowed;
+}
+button:not(:disabled):not([aria-disabled='true']):active {
+  transform: scale(0.98);
+}
+button:focus-visible,
+a:focus-visible,
+[role='tab']:focus-visible,
+[role='menuitem']:focus-visible,
+[tabindex]:focus-visible {
+  outline: 2px solid var(--ring, #6e2c96);
+  outline-offset: 2px;
+}
+
 /* ─── Alvos de toque ────────────────────────────────────────────────────────
  *
  * Auditoria no iPhone 13 em 9 telas: 2.404 dos 2.494 elementos clicáveis
