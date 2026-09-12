@@ -64,6 +64,7 @@
     "catalog2:import-products": "tsx src/scripts/import-catalog2-products.ts",
     "catalog2:import-tasks": "tsx src/scripts/import-catalog2-tasks.ts",
     "catalog2:fill-provisional-effort": "tsx src/scripts/fill-catalog2-provisional-effort.ts",
+    "catalog2:fill-provisional-pricing-simulation": "tsx src/scripts/fill-catalog2-provisional-pricing-simulation.ts",
     "catalog2:seed-provisional-preview": "tsx src/scripts/seed-catalog2-provisional-preview.ts",
     "catalog2:cutover-plan": "tsx src/scripts/catalog2-cutover-plan.ts",
     "catalog2:commercial-cutover-plan": "tsx src/scripts/catalog2-commercial-cutover-plan.ts",
