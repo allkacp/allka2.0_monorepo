@@ -867,7 +867,10 @@ router.post("/versions/:id/simulate", async (req, res, next) => {
   try {
     const sel = selectionSchema.parse(req.body ?? {});
     const pricing = await computePricing(req.params.id as string, sel);
-    res.json({ selection: sel, pricing });
+    // A simulação provisória usa o mesmo conjunto de escolhas, mas permanece
+    // separada do preço comercial e nunca torna o produto contratável.
+    const pricing_simulation = await computePricing(req.params.id as string, sel, { simulateProvisional: true });
+    res.json({ selection: sel, pricing, pricing_simulation });
   } catch (e) { handle(e, res, next); }
 });
 router.get("/versions/:id/preview", async (req, res, next) => {

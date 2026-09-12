@@ -52,6 +52,9 @@ function clampRightFraction(value: number) {
 
 interface RealOption {
   id: string;
+  key: string;
+  variation_id: string;
+  variation_name: string;
   name: string;
   price: number | null;
   deadline_days: number | null;
@@ -88,6 +91,9 @@ export function Catalog2ProductDetail({
   const [highlightsExpanded, setHighlightsExpanded] = useState(false);
   const [selectedOptionId, setSelectedOptionId] = useState<string | null>(null);
   const [expandedOptionId, setExpandedOptionId] = useState<string | null>(null);
+  const [selectedOptionKeys, setSelectedOptionKeys] = useState<string[]>([]);
+  const [selectedAddonKeys, setSelectedAddonKeys] = useState<string[]>([]);
+  const [selectionSimulation, setSelectionSimulation] = useState<any | null>(null);
   const bodyRef = useRef<HTMLDivElement | null>(null);
   const [isWideLayout, setIsWideLayout] = useState(false);
   const [isDraggingDivider, setIsDraggingDivider] = useState(false);
@@ -164,7 +170,10 @@ export function Catalog2ProductDetail({
       for (const o of v.options ?? []) {
         opts.push({
           id: o.id,
-          name: `${v.name} — ${o.label}`,
+          key: o.key,
+          variation_id: v.id,
+          variation_name: v.name,
+          name: o.label,
           price: readiness?.price_amount ?? null,
           deadline_days: readiness?.deadline_days ?? null,
           modality: null,
@@ -191,11 +200,42 @@ export function Catalog2ProductDetail({
 
   const hasRealOptions = realOptions.length > 0;
   const options = hasRealOptions ? realOptions : provisionalOptions;
-  const selectedOption = options.find((o) => o.id === selectedOptionId) ?? null;
+  const selectedOption = options.find((o) => o.id === selectedOptionId || (!o.is_provisional && selectedOptionKeys.includes((o as RealOption).key))) ?? null;
 
-  const displayPrice = selectedOption?.price ?? readiness?.price_amount ?? readiness?.pricing_simulation?.price_amount ?? provisional?.price_amount ?? null;
+  useEffect(() => {
+    if (!targetVersion) return;
+    const defaults = (targetVersion.variations ?? []).flatMap((variation: any) => {
+      const option = variation.options?.find((item: any) => item.is_default) ?? variation.options?.[0];
+      return option?.key ? [option.key] : [];
+    });
+    setSelectedOptionKeys(defaults);
+    setSelectedAddonKeys((targetVersion.addons ?? []).filter((addon: any) => addon.is_default_selected).map((addon: any) => addon.key));
+  }, [targetVersion?.id]);
+
+  useEffect(() => {
+    if (!targetVersion?.id || !hasRealOptions) {
+      setSelectionSimulation(null);
+      return;
+    }
+    let cancelled = false;
+    apiClient.simulateCatalog2(targetVersion.id, {
+      variation_option_keys: selectedOptionKeys,
+      addon_keys: selectedAddonKeys,
+      quantity: 1,
+      answers: {},
+    }).then((result: any) => {
+      if (!cancelled) setSelectionSimulation(result.pricing_simulation ?? result.pricing ?? null);
+    }).catch(() => {
+      if (!cancelled) setSelectionSimulation(null);
+    });
+    return () => { cancelled = true; };
+  }, [targetVersion?.id, hasRealOptions, selectedOptionKeys, selectedAddonKeys]);
+
+  const selectedCalculatedPrice = selectionSimulation?.lines?.commercial_final_price?.amount ?? selectionSimulation?.lines?.final_price?.amount ?? null;
+  const displayPrice = selectedCalculatedPrice ?? selectedOption?.price ?? readiness?.price_amount ?? readiness?.pricing_simulation?.price_amount ?? provisional?.price_amount ?? null;
   const priceIsProvisional = !readiness?.price_amount && displayPrice != null;
-  const displayDeadline = selectedOption?.deadline_days ?? readiness?.deadline_days ?? readiness?.pricing_simulation?.deadline_days ?? provisional?.deadline_days ?? null;
+  const selectedCalculatedDeadline = selectionSimulation?.deadline?.commercial_deadline_days ?? selectionSimulation?.estimated_deadline_days ?? null;
+  const displayDeadline = selectedCalculatedDeadline ?? selectedOption?.deadline_days ?? readiness?.deadline_days ?? readiness?.pricing_simulation?.deadline_days ?? provisional?.deadline_days ?? null;
   const deadlineIsProvisional = !readiness?.deadline_days && displayDeadline != null;
   const modality = provisional?.modality ?? null;
 
@@ -517,15 +557,25 @@ export function Catalog2ProductDetail({
               {options.length === 0 && <p className="text-xs text-muted-foreground px-1">Nenhuma opção cadastrada ainda.</p>}
 
               {options.map((o) => {
-                const isSel = selectedOptionId === o.id;
+                const isSel = o.is_provisional ? selectedOptionId === o.id : selectedOptionKeys.includes((o as RealOption).key);
                 const isExpanded = expandedOptionId === o.id;
                 return (
                   <div key={o.id} className={cn("rounded-xl border-2 transition-all bg-background overflow-hidden", isSel ? "border-emerald-500 shadow-sm ring-2 ring-emerald-100 dark:ring-emerald-900/40" : "border-slate-200 dark:border-slate-700 hover:border-purple-300")}>
-                    <button type="button" onClick={() => setSelectedOptionId(isSel ? null : o.id)} className="w-full text-left px-3 py-2.5 flex items-start gap-2.5">
+                    <button type="button" onClick={() => {
+                      setSelectedOptionId(isSel ? null : o.id);
+                      if (!o.is_provisional) {
+                        const real = o as RealOption;
+                        const siblingKeys = realOptions.filter((item) => item.variation_id === real.variation_id).map((item) => item.key);
+                        setSelectedOptionKeys((current) => [...current.filter((key) => !siblingKeys.includes(key)), real.key]);
+                      }
+                    }} className="w-full text-left px-3 py-2.5 flex items-start gap-2.5">
                       {isSel ? <CheckCircle2 className="h-4 w-4 text-emerald-500 shrink-0 mt-0.5" /> : <Circle className="h-4 w-4 text-slate-300 dark:text-slate-600 shrink-0 mt-0.5" />}
                       <div className="min-w-0 flex-1">
                         <div className="flex items-start justify-between gap-2">
-                          <p className="text-xs font-bold leading-tight truncate">{o.name}</p>
+                          <div className="min-w-0">
+                            {!o.is_provisional && <p className="text-[9px] font-semibold uppercase tracking-wide text-muted-foreground">{(o as RealOption).variation_name}</p>}
+                            <p className="text-xs font-bold leading-tight truncate">{o.name}</p>
+                          </div>
                           <span className={cn("text-sm font-extrabold shrink-0 leading-tight", isSel ? "text-emerald-600" : "text-foreground")}>
                             {o.price != null ? fmtBRL(o.price) : "—"}
                           </span>
@@ -572,6 +622,28 @@ export function Catalog2ProductDetail({
                   </div>
                 );
               })}
+
+              {(targetVersion?.addons ?? []).length > 0 && (
+                <div className="mt-4 space-y-2 border-t border-border/60 pt-3">
+                  <div className="flex items-center justify-between px-1">
+                    <h2 className="text-[11px] font-bold uppercase tracking-wide text-muted-foreground">Adicionais</h2>
+                    <span className="text-[10px] text-amber-600">valores provisórios quando indicado</span>
+                  </div>
+                  {(targetVersion.addons ?? []).filter((addon: any) => addon.is_active !== false).map((addon: any) => {
+                    const checked = selectedAddonKeys.includes(addon.key);
+                    return (
+                      <label key={addon.id} className={cn("flex cursor-pointer items-start gap-2 rounded-xl border bg-background px-3 py-2.5 transition-colors", checked ? "border-purple-400 bg-purple-50/50 dark:bg-purple-950/20" : "border-border/70 hover:border-purple-300")}>
+                        <input type="checkbox" className="mt-0.5" checked={checked} onChange={(event) => setSelectedAddonKeys((current) => event.target.checked ? [...current, addon.key] : current.filter((key) => key !== addon.key))} />
+                        <span className="min-w-0 flex-1">
+                          <span className="block text-xs font-bold">{addon.name}</span>
+                          {addon.description && <span className="mt-0.5 block text-[11px] text-muted-foreground">{addon.description}</span>}
+                        </span>
+                        {addon.base_cost != null && <span className="text-xs font-semibold">+ {fmtBRL(addon.base_cost)}</span>}
+                      </label>
+                    );
+                  })}
+                </div>
+              )}
             </div>
           </ScrollArea>
 

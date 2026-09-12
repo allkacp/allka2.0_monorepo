@@ -1,5 +1,5 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
-import { render, screen, within } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { Catalog2ProductDetail } from "./catalog2-product-detail";
 
@@ -10,7 +10,7 @@ import { Catalog2ProductDetail } from "./catalog2-product-detail";
 // provisórios, sempre marcados e nunca contratáveis.
 
 const { api } = vi.hoisted(() => ({
-  api: { getCatalog2ProductDetailPreview: vi.fn(), getCatalog2ProductPricingMemory: vi.fn() },
+  api: { getCatalog2ProductDetailPreview: vi.fn(), getCatalog2ProductPricingMemory: vi.fn(), simulateCatalog2: vi.fn() },
 }));
 vi.mock("@/lib/api-client", () => ({ apiClient: api }));
 
@@ -20,7 +20,11 @@ const REAL_DETAIL = {
     category: { name: "Presença Digital" }, published_version_id: null,
     versions: [{
       id: "v1", state: "rascunho", summary: "Resumo real do produto.", full_description: "Descrição completa real do produto.",
-      variations: [{ id: "var1", name: "Formato", options: [{ id: "opt1", label: "Padrão" }] }],
+      variations: [{ id: "var1", name: "Formato", options: [
+        { id: "opt1", key: "padrao", label: "Padrão", is_default: true },
+        { id: "opt2", key: "premium", label: "Premium", is_default: false },
+      ] }],
+      addons: [{ id: "addon1", key: "urgencia", name: "Entrega urgente", description: "Prioridade na fila.", base_cost: 200, is_active: true, is_default_selected: false }],
       tasks: [{ id: "t1", name: "Diagnóstico", description: "Levantamento inicial.", specialty: { name: "UX Writer" } }],
     }],
   },
@@ -52,6 +56,7 @@ const PROVISIONAL_DETAIL = {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  api.simulateCatalog2.mockResolvedValue({ pricing_simulation: null, pricing: null });
 });
 
 describe("Catalog2ProductDetail — dado real", () => {
@@ -63,14 +68,14 @@ describe("Catalog2ProductDetail — dado real", () => {
     expect(screen.getByText("site-institucional")).toBeInTheDocument();
     expect(screen.getAllByText(/R\$\s*750/).length).toBeGreaterThan(0);
     expect(screen.getAllByText(/9 dias/).length).toBeGreaterThan(0);
-    expect(screen.getByText("Formato — Padrão")).toBeInTheDocument();
+    expect(screen.getByText("Padrão")).toBeInTheDocument();
   });
 
   it("botão Contratar SEMPRE desabilitado e com o aviso exato de bloqueio", async () => {
     api.getCatalog2ProductDetailPreview.mockResolvedValue(REAL_DETAIL);
     render(<Catalog2ProductDetail productId="p1" onBack={() => {}} />);
     await screen.findByText("Criação de Site Institucional");
-    const btn = screen.getByRole("button", { name: "Selecione uma opção" });
+    const btn = screen.getByRole("button", { name: /contratação bloqueada/i });
     expect(btn).toBeDisabled();
     expect(screen.getByText("Produto em preparação. Dados provisórios precisam ser revisados antes da contratação.")).toBeInTheDocument();
   });
@@ -94,6 +99,29 @@ describe("Catalog2ProductDetail — dado real", () => {
     render(<Catalog2ProductDetail productId="p1" onBack={() => {}} isAdminMaster />);
     await screen.findByText("Criação de Site Institucional");
     expect(screen.getByRole("button", { name: "Como o preço foi calculado" })).toBeInTheDocument();
+  });
+
+  it("recalcula preço e prazo com a opção e o adicional selecionados", async () => {
+    api.getCatalog2ProductDetailPreview.mockResolvedValue(REAL_DETAIL);
+    api.simulateCatalog2.mockResolvedValue({
+      pricing_simulation: {
+        lines: { commercial_final_price: { amount: 1234.56 } },
+        deadline: { commercial_deadline_days: 5 },
+      },
+    });
+    render(<Catalog2ProductDetail productId="p1" onBack={() => {}} />);
+
+    await userEvent.click(await screen.findByText("Premium"));
+    await userEvent.click(screen.getByRole("checkbox", { name: /Entrega urgente/i }));
+
+    await waitFor(() => expect(api.simulateCatalog2).toHaveBeenLastCalledWith("v1", {
+      variation_option_keys: ["premium"],
+      addon_keys: ["urgencia"],
+      quantity: 1,
+      answers: {},
+    }));
+    expect(screen.getAllByText(/R\$\s*1\.234,56/).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/5 dias/).length).toBeGreaterThan(0);
   });
 });
 

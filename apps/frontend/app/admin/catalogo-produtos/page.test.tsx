@@ -20,6 +20,7 @@ const { api } = vi.hoisted(() => ({
     getCatalog2Products: vi.fn(),
     getCatalog2Categories: vi.fn(),
     getCatalog2ProductDetailPreview: vi.fn(),
+    simulateCatalog2: vi.fn(),
   },
 }));
 vi.mock("@/lib/api-client", () => ({ apiClient: api }));
@@ -89,6 +90,7 @@ beforeEach(() => {
   api.getCatalog2Readiness.mockResolvedValue(READINESS);
   api.getCatalog2Products.mockResolvedValue(LIST);
   api.getCatalog2Categories.mockResolvedValue(CATEGORIES);
+  api.simulateCatalog2.mockResolvedValue({ pricing_simulation: null, pricing: null });
   api.getCatalog2ProductDetailPreview.mockImplementation(async (id: string) => {
     const readiness = READINESS.products.find((item) => item.id === id) ?? READINESS.products[0];
     const list = LIST.data.find((item) => item.id === id) ?? LIST.data[0];
@@ -209,7 +211,7 @@ describe("Catálogo de Produtos administrativo (catalog2) — grade de cards", (
     await screen.findByText("Landing Page");
     const card = screen.getByText("Landing Page").closest(".group, li") as HTMLElement;
     await userEvent.click(within(card).getByRole("button", { name: "Escolher" }));
-    expect(await screen.findByText(/Opção — Padrão/i)).toBeInTheDocument();
+    expect(await screen.findByText(/^Padrão$/i)).toBeInTheDocument();
     expect(screen.getAllByText(/provisóri/i).length).toBeGreaterThan(0);
   });
 
