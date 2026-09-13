@@ -62,6 +62,11 @@ jobs:
           deploy_path="$1"
           cd "$deploy_path"
 
+          echo "===== daemon Docker (somente leitura) ====="
+          timeout 10s systemctl is-active docker || echo "(systemctl docker excedeu 10s ou retornou estado não ativo)"
+          timeout 10s docker version --format 'Server: {{.Server.Version}}' || echo "(docker version excedeu 10s)"
+          timeout 10s docker ps -a --format 'table {{.Names}}\t{{.Status}}\t{{.Image}}' || echo "(docker ps excedeu 10s)"
+
           echo "===== docker compose ps --all ====="
           timeout 20s docker compose --env-file .env -f docker-compose.yml ps --all || echo "(docker compose ps excedeu 20s)"
 
