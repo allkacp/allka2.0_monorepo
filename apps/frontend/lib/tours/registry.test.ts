@@ -66,8 +66,9 @@ describe("Registro de tours (sprint de onboarding, bloco 1/3)", () => {
     }
   });
 
-  it("registro central: bloco 2 adiciona os 14 tours de recursos já entregues — Monitoramento e presença fica de fora (sem interface real hoje)", () => {
-    expect(TOURS).toHaveLength(15);
+  it("registro central inclui os 15 tours de recursos já entregues e o tour da Aura — Monitoramento e presença fica de fora (sem interface real hoje)", () => {
+    expect(TOURS).toHaveLength(16);
+    expect(TOURS.some((tour) => tour.key === "iallka-assistente")).toBe(true);
     expect(TOURS.some((t) => /monitoramento/i.test(t.key))).toBe(false);
   });
 
