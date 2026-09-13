@@ -341,7 +341,7 @@ export function ChatWidget() {
           onClick={openChat}
           aria-label="Abrir chat"
           data-tour-id="chat-widget-button"
-          className="group fixed top-[165px] xl:top-[85px] right-[8px] z-[120] flex items-center justify-center h-9 w-9 rounded-xl text-white/70 hover:text-white hover:bg-white/10 transition-colors"
+          className="group fixed top-[165px] xl:top-[85px] right-[8px] z-[120] flex items-center justify-center h-10 w-10 rounded-xl text-white/70 hover:text-white hover:bg-white/10 transition-colors"
         >
           <MessageSquare className="h-5 w-5" />
           {totalUnread > 0 && (

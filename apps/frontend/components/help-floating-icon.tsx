@@ -72,7 +72,7 @@ export function HelpFloatingIcon() {
           onClick={() => setOpen(true)}
           aria-label="Tutoriais guiados"
           title="Tutoriais guiados"
-          className="relative flex items-center justify-center h-9 w-9 text-white/70 hover:text-white transition-colors"
+          className="relative flex items-center justify-center h-10 w-10 text-white/70 hover:text-white transition-colors"
         >
           <MapIcon className="h-5 w-5 shrink-0" />
         </button>
