@@ -168,7 +168,10 @@ export function IallkaAssistantPanel({ open, onClose }: IallkaAssistantPanelProp
       open={open}
       onClose={() => {
         onClose();
-        if (approvedProjectId) resetForNextOpen();
+        // Cada abertura começa uma conversa contextual nova. Assim uma
+        // saudação antiga de uma sessão já aberta não reaparece depois que a
+        // pessoa mudou de tela ou fechou o painel.
+        resetForNextOpen();
       }}
       title="Aura"
       subtitle="Aura, a inteligência artificial da Allka — entende a tela atual e ajuda você a avançar"
