@@ -32,8 +32,9 @@ alterar dados reais, publicar produtos, concluir compras ou criar projetos.
 | 7 | Catálogo de Produtos | Clique no card/linha e também em Escolher | A área livre abre o detalhe; Escolher abre diretamente o detalhe comercial completo | ☐ Sim ☐ Não |
 | 8 | Catálogo → detalhes | Passe o mouse ou use Tab no ícone de informação | Código interno aparece somente no ícone, sem poluir o card; foco de teclado fica visível | ☐ Sim ☐ Não |
 | 9 | Qualquer tela | Use a IAllka e pergunte sobre um produto ou sobre os 4Fs | O painel abre dentro do padrão visual, responde de forma contextual e mostra as fontes usadas; valores provisórios, se citados, vêm identificados | ☐ Sim ☐ Não |
-| 10 | IAllka | Peça uma sugestão de produto novo para um objetivo | Sugestões do Catalog2 aparecem em uma caixa própria. Produto em preparação informa que ainda não gera orçamento, cesta ou projeto | ☐ Sim ☐ Não |
-| 11 | Configurações → Base de Conhecimento da IA | Abra a aba | Categorias e documentos aparecem; controles de edição, ativação e substituição ficam disponíveis para Master | ☐ Sim ☐ Não |
+| 10 | Ícone da IAllka | Passe o mouse sobre o avatar e depois abra o painel | A Aura aprovada aparece ampliada no hover/foco; ao clicar, a conversa abre dentro do container branco da página, sem cobrir sidebar e cabeçalho | ☐ Sim ☐ Não |
+| 11 | IAllka | Peça uma sugestão de produto novo para um objetivo | Sugestões do Catalog2 aparecem em uma caixa própria. Produto em preparação informa que ainda não gera orçamento, cesta ou projeto | ☐ Sim ☐ Não |
+| 12 | Configurações → Base de Conhecimento da IA | Abra a aba | Categorias e documentos aparecem; controles de edição, ativação e substituição ficam disponíveis para Master | ☐ Sim ☐ Não |
 
 ---
 
@@ -45,7 +46,8 @@ alterar dados reais, publicar produtos, concluir compras ou criar projetos.
 | 2 | Catálogo | Procure os produtos novos | Produtos em preparação não aparecem como disponíveis para contratar | ☐ Sim ☐ Não |
 | 3 | Qualquer tela | Abra a IAllka e peça orientação sobre um objetivo de marketing | A IAllka abre e responde; não trata produto provisório como oferta contratável | ☐ Sim ☐ Não |
 | 4 | Projetos | Abra um projeto da própria Agência e pergunte à IAllka sobre “este projeto” | A resposta usa somente o contexto daquele projeto; ao fechar/trocar o projeto, não mistura informações | ☐ Sim ☐ Não |
-| 5 | Base de Conhecimento | Se a tela estiver disponível para leitura, abra-a | Pode consultar; comandos de criar, ativar, desativar ou substituir não aparecem para perfil não Master | ☐ Sim ☐ Não |
+| 5 | Ícone da IAllka | Passe o mouse/foco sobre o avatar e abra o assistente | A Aura aparece ampliada e o painel permanece no container branco da tela, sem ocupar a plataforma inteira | ☐ Sim ☐ Não |
+| 6 | Base de Conhecimento | Se a tela estiver disponível para leitura, abra-a | Pode consultar; comandos de criar, ativar, desativar ou substituir não aparecem para perfil não Master | ☐ Sim ☐ Não |
 
 ---
 
