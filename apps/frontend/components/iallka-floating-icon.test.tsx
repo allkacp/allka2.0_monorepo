@@ -41,7 +41,7 @@ beforeEach(() => {
   api.postponeTour.mockResolvedValue({ data: {} });
   api.createIallkaSession.mockResolvedValue({
     id: "sess1",
-    messages: [{ id: "m1", role: "assistant", content: "IALLKA pode te ajudar a montar um projeto..." }],
+    messages: [{ id: "m1", role: "assistant", content: "Olá! Eu sou a Aura, a inteligência artificial da Allka." }],
   });
 });
 
@@ -80,10 +80,10 @@ describe("IallkaFloatingIcon — ícone e painel", () => {
     expect(btn.querySelector("span[style*='iallka-aura.png']")).toBeInTheDocument();
   });
 
-  it("2b. oferece uma prévia maior da Aura no hover/foco, usando a mesma imagem oficial", async () => {
+  it("2b. mantém o avatar fechado no hover/foco até a próxima revisão visual", async () => {
     renderIcon();
     await openIcons();
-    expect(document.querySelector("img[src='/iallka-aura.png']")).toBeInTheDocument();
+    expect(document.querySelector("img[src='/iallka-aura.png']")).not.toBeInTheDocument();
   });
 
   it("3. fica numa camada acima (z-65 desktop / z-45 mobile) — nunca atrás do container padrão", async () => {
@@ -185,13 +185,13 @@ describe("IallkaFloatingIcon — ícone e painel", () => {
 
   it("12b. erro amigável (403) quando a conta ainda não tem acesso ao fluxo de IA — mostra a mensagem real do backend", async () => {
     api.createIallkaSession.mockRejectedValue(
-      Object.assign(new Error("A IAllka ainda não está disponível para este tipo de conta"), { status: 403 }),
+      Object.assign(new Error("A Aura ainda não está disponível para este tipo de conta"), { status: 403 }),
     );
     renderIcon();
     const [btn] = await openIcons();
     const user = userEvent.setup();
     await user.click(btn);
-    expect(await screen.findByText(/A IAllka ainda não está disponível para este tipo de conta/i)).toBeInTheDocument();
+    expect(await screen.findByText(/A Aura ainda não está disponível para este tipo de conta/i)).toBeInTheDocument();
   });
 
   it("14. nenhuma ação automática indevida: abrir o painel não cria projeto nem aprova nada sozinho", async () => {

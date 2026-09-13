@@ -489,7 +489,7 @@ export default function AdminConfiguracoesPage() {
     try {
       if (doc.is_active) {
         await apiClient.deactivateKnowledgeDocument(doc.id);
-        toast({ title: "Documento desativado — não alimenta mais a IAllka nem os outros fluxos de IA." });
+        toast({ title: "Documento desativado — não alimenta mais a Aura nem os outros fluxos de IA." });
       } else {
         await apiClient.activateKnowledgeDocument(doc.id);
         toast({ title: "Documento ativado" });

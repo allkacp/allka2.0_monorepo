@@ -79,20 +79,6 @@ export function IallkaFloatingIcon() {
             <span className="absolute top-0 right-0 h-2.5 w-2.5 rounded-full bg-emerald-400 ring-2 ring-[#0a1628]" aria-hidden="true" />
           )}
         </button>
-        {/* Prévia só no hover/foco do mouse: Aura maior, sem virar modal nem
-            ocupar área de trabalho. A imagem aprovada já tem transparência. */}
-        <div
-          aria-hidden="true"
-          className="pointer-events-none absolute bottom-0 right-12 w-44 origin-bottom-right opacity-0 scale-90 translate-x-2 transition-all duration-200 group-hover:opacity-100 group-hover:scale-100 group-hover:translate-x-0 group-focus-within:opacity-100 group-focus-within:scale-100 group-focus-within:translate-x-0"
-        >
-          <div className="rounded-2xl border border-violet-200/70 bg-slate-950/35 p-1 shadow-[0_16px_34px_-12px_rgba(15,23,42,0.65)] backdrop-blur-sm">
-            <img
-              src="/iallka-aura.png"
-              alt=""
-              className="block h-44 w-full object-contain object-bottom"
-            />
-          </div>
-        </div>
         <span className="pointer-events-none absolute top-full right-0 mt-2 whitespace-nowrap rounded-lg bg-gray-900/95 px-2.5 py-1.5 text-[11px] text-white opacity-0 shadow-xl border border-white/10 transition-opacity duration-150 group-hover:opacity-100">
           Falar com a Aura
         </span>

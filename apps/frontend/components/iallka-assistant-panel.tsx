@@ -171,7 +171,7 @@ export function IallkaAssistantPanel({ open, onClose }: IallkaAssistantPanelProp
         if (approvedProjectId) resetForNextOpen();
       }}
       title="Aura"
-      subtitle="Assistente da Allka — entende a tela atual e ajuda você a avançar"
+      subtitle="Aura, a inteligência artificial da Allka — entende a tela atual e ajuda você a avançar"
     >
       <div className="flex-1 min-h-0 flex flex-col bg-slate-50 dark:bg-slate-900">
         <div ref={scrollRef} className="flex-1 min-h-0 overflow-y-auto px-5 py-5 space-y-3">

@@ -44,7 +44,7 @@ const router = Router();
 // "solto" (sem agency_id/company_id) pra quem não é Admin Master.
 
 const OPENING_MESSAGE =
-  "IALLKA pode te ajudar a montar um projeto, basta responder algumas perguntas. Me conte tudo que sabe e deseja para este projeto:";
+  "Olá! Eu sou a Aura, a inteligência artificial da Allka. Reconheço a tela em que você está e posso ajudar com o que você precisa fazer nela. Por onde começamos?";
 
 async function isAdminMaster(userId: string): Promise<boolean> {
   const user = await prisma.user.findUnique({
@@ -77,7 +77,7 @@ function toHistory(messages: Array<{ role: string; content: string }>): IallkaHi
 router.post("/sessions", verifyToken, async (req: Request, res: Response, next: NextFunction) => {
   try {
     if (!(await canUseIallka(req))) {
-      res.status(403).json({ error: "A IAllka ainda não está disponível para este tipo de conta" });
+      res.status(403).json({ error: "A Aura ainda não está disponível para este tipo de conta" });
       return;
     }
     // Só informativo na criação (auditoria/debug) — o vínculo real usado
@@ -311,7 +311,7 @@ router.post("/sessions/:id/approve", verifyToken, async (req: Request, res: Resp
     }
 
     const project = await createProjectWithSequentialCode(prisma, {
-      title: payload.project_title || "Projeto montado pela IALLKA",
+      title: payload.project_title || "Projeto montado pela Aura",
       status: "draft",
       lifecycle: "avulso",
       ...orgData,

@@ -57,22 +57,22 @@ export const DEFAULT_CATEGORIES: { key: string; name: string; description: strin
   {
     key: "quatro_fs",
     name: "Quatro Fs",
-    description: "Material de referência sobre a metodologia dos 4 Fs (Fundação, Fluxo, Força, Fidelização) usada pela IAllka.",
+    description: "Material de referência sobre a metodologia dos 4 Fs (Fundação, Fluxo, Força, Fidelização) usada pela Aura.",
   },
   {
     key: "processos",
     name: "Processos",
-    description: "Processos internos e fluxos operacionais consultados pela IAllka.",
+    description: "Processos internos e fluxos operacionais consultados pela Aura.",
   },
   {
     key: "politicas",
     name: "Políticas",
-    description: "Políticas administrativas e comerciais consultadas pela IAllka.",
+    description: "Políticas administrativas e comerciais consultadas pela Aura.",
   },
   {
     key: "outros",
     name: "Outros",
-    description: "Material de referência da IAllka que não se encaixa nas demais categorias.",
+    description: "Material de referência da Aura que não se encaixa nas demais categorias.",
   },
 ];
 
