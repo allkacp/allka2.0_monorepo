@@ -70,8 +70,8 @@ export function IallkaFloatingIcon() {
           type="button"
           data-tour-id="iallka-icon-button"
           onClick={() => setOpen(true)}
-          aria-label="Abrir IAllka"
-          title="Abrir IAllka"
+          aria-label="Falar com a Aura"
+          title="Falar com a Aura"
           className="relative flex items-center justify-center h-9 w-9 rounded-full overflow-hidden ring-1 ring-white/25 hover:ring-white/60 transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"
         >
           <IallkaAuraAvatar className="h-full w-full" />
@@ -94,7 +94,7 @@ export function IallkaFloatingIcon() {
           </div>
         </div>
         <span className="pointer-events-none absolute top-full right-0 mt-2 whitespace-nowrap rounded-lg bg-gray-900/95 px-2.5 py-1.5 text-[11px] text-white opacity-0 shadow-xl border border-white/10 transition-opacity duration-150 group-hover:opacity-100">
-          Abrir IAllka
+          Falar com a Aura
         </span>
       </div>
 
@@ -104,7 +104,7 @@ export function IallkaFloatingIcon() {
         type="button"
         data-tour-id="iallka-icon-button"
         onClick={() => setOpen(true)}
-        aria-label="Abrir IAllka"
+        aria-label="Falar com a Aura"
         className="lg:hidden fixed right-4 z-45 flex items-center justify-center h-14 w-14 rounded-full overflow-hidden ring-2 ring-white/40 shadow-[0_8px_24px_-4px_rgba(0,0,0,0.35)] active:scale-95 transition-transform focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-blue-400"
         style={{ bottom: "calc(72px + env(safe-area-inset-bottom, 0px) + 240px)" }}
       >

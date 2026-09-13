@@ -89,6 +89,15 @@ describe("IallkaAssistantPanel — envia só o project_id do contexto da tela", 
     expect(sentProjectId).toBeUndefined();
   });
 
+  it("uma pergunta digitada também leva o contexto da tela atual para a Aura", async () => {
+    renderPanel(undefined);
+    await waitFor(() => expect(api.createIallkaSession).toHaveBeenCalled());
+    await sendMessage("Como começo?");
+    await waitFor(() => expect(api.sendIallkaMessage).toHaveBeenCalled());
+    const [, sentText] = api.sendIallkaMessage.mock.calls[0];
+    expect(sentText).toBe("Tela atual: Projetos. Como começo?");
+  });
+
   it("mostra recomendação do Catalog2 como orientação, sem oferecer criação automática de projeto", async () => {
     api.sendIallkaMessage.mockResolvedValueOnce({
       reply_text: "Este produto atende ao objetivo informado.",

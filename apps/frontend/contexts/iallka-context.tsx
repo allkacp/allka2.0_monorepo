@@ -42,19 +42,33 @@ const CATALOGO_SUGGESTIONS: Suggestion[] = [
   { key: "diferencas-produtos", text: "Explique as diferenças entre estes produtos" },
 ];
 const PROJETOS_SUGGESTIONS: Suggestion[] = [
+  { key: "criar-projeto", text: "Ajude-me a criar um projeto" },
   { key: "entender-projeto", text: "Ajude-me a entender este projeto" },
   { key: "proximos-passos", text: "Quais são os próximos passos?" },
   { key: "explicar-tarefas", text: "Explique as tarefas pendentes" },
   { key: "estruturar-lancamento", text: "Ajude a estruturar o lançamento" },
 ];
+const CADASTRO_PRODUTOS_SUGGESTIONS: Suggestion[] = [
+  { key: "entender-produto", text: "Explique este produto" },
+  { key: "revisar-pendencias", text: "O que falta completar neste produto?" },
+  { key: "organizar-produto", text: "Ajude-me a organizar os dados do produto" },
+  { key: "entender-preco", text: "Explique a composição do preço" },
+];
+const TAREFAS_SUGGESTIONS: Suggestion[] = [
+  { key: "entender-tarefa", text: "Ajude-me a entender esta tarefa" },
+  { key: "proximo-passo-tarefa", text: "Qual é o próximo passo desta tarefa?" },
+  { key: "preparar-briefing", text: "Ajude-me a preparar o briefing" },
+  { key: "revisar-entrega", text: "O que preciso revisar antes da entrega?" },
+];
 const GENERIC_SUGGESTIONS: Suggestion[] = [
-  { key: "o-que-e-iallka", text: "O que a IAllka pode me ajudar a fazer aqui?" },
+  { key: "o-que-aura-faz", text: "O que a Aura pode me ajudar a fazer nesta tela?" },
 ];
 
 function labelForRoute(pathname: string): string {
   if (pathname.includes("catalogo-produtos")) return "Catálogo de Produtos";
   if (pathname.includes("/produtos")) return "Cadastro de Produtos";
   if (pathname.includes("projeto")) return "Projetos";
+  if (pathname.includes("tarefas")) return "Tarefas";
   if (pathname.includes("dashboard")) return "Dashboard";
   if (pathname.includes("allkademy")) return "Allkademy";
   return "esta tela";
@@ -81,13 +95,17 @@ export function IallkaContextProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const isCatalogo = location.pathname.includes("catalogo-produtos");
+  const isCadastroProdutos = location.pathname.includes("/produtos");
   const isProjetos = location.pathname.includes("projeto");
+  const isTarefas = location.pathname.includes("tarefas");
 
   const suggestions = useMemo(() => {
     if (isCatalogo) return CATALOGO_SUGGESTIONS;
+    if (isCadastroProdutos) return CADASTRO_PRODUTOS_SUGGESTIONS;
     if (isProjetos) return PROJETOS_SUGGESTIONS;
+    if (isTarefas) return TAREFAS_SUGGESTIONS;
     return GENERIC_SUGGESTIONS;
-  }, [isCatalogo, isProjetos]);
+  }, [isCatalogo, isCadastroProdutos, isProjetos, isTarefas]);
 
   const contextLine = useMemo(() => {
     const label = screenContext.label || labelForRoute(location.pathname);

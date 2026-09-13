@@ -119,14 +119,14 @@ export function IallkaAssistantPanel({ open, onClose }: IallkaAssistantPanelProp
   }
 
   // `visibleText` é o que aparece na bolha do usuário; `sentText` é o que
-  // realmente vai pro backend — quando vem de uma sugestão contextual, ganha
-  // um prefixo curto e seguro com a tela atual (nunca dado sensível, nunca
-  // um campo novo na API: continua sendo só a mensagem de texto de sempre,
-  // ver lib/iallka.ts sendIallkaTurn). Digitação livre nunca leva prefixo.
-  async function handleSend(overrideText?: string, withContext = false) {
+  // realmente vai pro backend. Toda pergunta recebe o contexto curto e
+  // seguro da tela atual — inclusive texto digitado livremente — para que a
+  // Aura saiba se a conversa é sobre projetos, produtos ou tarefas, sem um
+  // campo novo na API e sem enviar dado que a própria tela não exiba.
+  async function handleSend(overrideText?: string) {
     const visibleText = (overrideText ?? input).trim();
     if (!visibleText || !sessionId || sending) return;
-    const sentText = withContext && contextLine ? `${contextLine} ${visibleText}` : visibleText;
+    const sentText = contextLine ? `${contextLine} ${visibleText}` : visibleText;
     setInput("");
     setError(null);
     setMessages((prev) => [...prev, { role: "user", content: visibleText }]);
@@ -170,15 +170,15 @@ export function IallkaAssistantPanel({ open, onClose }: IallkaAssistantPanelProp
         onClose();
         if (approvedProjectId) resetForNextOpen();
       }}
-      title="IAllka"
-      subtitle="Assistente de IA da Allka — tira dúvidas e ajuda a montar um projeto"
+      title="Aura"
+      subtitle="Assistente da Allka — entende a tela atual e ajuda você a avançar"
     >
       <div className="flex-1 min-h-0 flex flex-col bg-slate-50 dark:bg-slate-900">
         <div ref={scrollRef} className="flex-1 min-h-0 overflow-y-auto px-5 py-5 space-y-3">
           {starting && messages.length === 0 && (
             <div className="flex items-center justify-center py-10 gap-2 text-slate-400">
               <Loader2 className="h-5 w-5 animate-spin" />
-              <span className="text-sm">Iniciando a IAllka...</span>
+              <span className="text-sm">Iniciando a Aura...</span>
             </div>
           )}
 
@@ -303,7 +303,7 @@ export function IallkaAssistantPanel({ open, onClose }: IallkaAssistantPanelProp
                   key={s.key}
                   type="button"
                   disabled={!sessionId || sending}
-                  onClick={() => handleSend(s.text, true)}
+                  onClick={() => handleSend(s.text)}
                   className="rounded-full border border-violet-200 dark:border-violet-800 bg-violet-50/70 dark:bg-violet-950/20 px-3 py-1.5 text-xs text-violet-700 dark:text-violet-300 hover:bg-violet-100 dark:hover:bg-violet-900/30 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                 >
                   {s.text}

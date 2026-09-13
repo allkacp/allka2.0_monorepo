@@ -64,11 +64,11 @@ function renderIcon(initialPath = "/admin/catalogo-produtos") {
 }
 
 async function openIcons() {
-  return screen.findAllByRole("button", { name: "Abrir IAllka" });
+  return screen.findAllByRole("button", { name: "Falar com a Aura" });
 }
 
 describe("IallkaFloatingIcon — ícone e painel", () => {
-  it("1. ícone fica visível, com nome oficial 'IAllka' no rótulo/tooltip", async () => {
+  it("1. ícone fica visível, com nome oficial 'Aura' no rótulo/tooltip", async () => {
     renderIcon();
     const buttons = await openIcons();
     expect(buttons.length).toBeGreaterThan(0);
@@ -109,7 +109,7 @@ describe("IallkaFloatingIcon — ícone e painel", () => {
     const [btn] = await openIcons();
     const user = userEvent.setup();
     await user.click(btn);
-    expect(await screen.findByText("IAllka")).toBeInTheDocument();
+    expect(await screen.findByText("Aura")).toBeInTheDocument();
   });
 
   it("7. contexto do Catálogo de Produtos: sugestões específicas aparecem", async () => {
@@ -117,7 +117,7 @@ describe("IallkaFloatingIcon — ícone e painel", () => {
     const [btn] = await openIcons();
     const user = userEvent.setup();
     await user.click(btn);
-    await screen.findByText("IAllka");
+    await screen.findByText("Aura");
     expect(await screen.findByText("Ajude-me a escolher um produto")).toBeInTheDocument();
     expect(screen.getByText("Monte uma combinação usando os 4 Fs")).toBeInTheDocument();
   });
@@ -127,8 +127,22 @@ describe("IallkaFloatingIcon — ícone e painel", () => {
     const [btn] = await openIcons();
     const user = userEvent.setup();
     await user.click(btn);
-    await screen.findByText("IAllka");
+    await screen.findByText("Aura");
     expect(await screen.findByText("Quais são os próximos passos?")).toBeInTheDocument();
+    expect(screen.getByText("Ajude-me a criar um projeto")).toBeInTheDocument();
+  });
+
+  it("8b. Cadastro de Produtos e Tarefas recebem sugestões próprias da Aura", async () => {
+    const { unmount } = renderIcon("/admin/produtos");
+    const [productsButton] = await openIcons();
+    await userEvent.setup().click(productsButton);
+    expect(await screen.findByText("O que falta completar neste produto?")).toBeInTheDocument();
+    unmount();
+
+    renderIcon("/admin/tarefas");
+    const [tasksButton] = await openIcons();
+    await userEvent.setup().click(tasksButton);
+    expect(await screen.findByText("Qual é o próximo passo desta tarefa?")).toBeInTheDocument();
   });
 
   it("9. tela genérica: orientação curta, sem fingir sugestões específicas", async () => {
@@ -136,8 +150,8 @@ describe("IallkaFloatingIcon — ícone e painel", () => {
     const [btn] = await openIcons();
     const user = userEvent.setup();
     await user.click(btn);
-    await screen.findByText("IAllka");
-    expect(await screen.findByText("O que a IAllka pode me ajudar a fazer aqui?")).toBeInTheDocument();
+    await screen.findByText("Aura");
+    expect(await screen.findByText("O que a Aura pode me ajudar a fazer nesta tela?")).toBeInTheDocument();
     expect(screen.queryByText("Ajude-me a escolher um produto")).not.toBeInTheDocument();
   });
 
@@ -146,7 +160,7 @@ describe("IallkaFloatingIcon — ícone e painel", () => {
     const [btn] = await openIcons();
     btn.focus();
     await userEvent.keyboard("{Enter}");
-    expect(await screen.findByText("IAllka")).toBeInTheDocument();
+    expect(await screen.findByText("Aura")).toBeInTheDocument();
   });
 
   it("12. loading ao iniciar sessão, e erro amigável quando a API falha", async () => {
@@ -156,9 +170,9 @@ describe("IallkaFloatingIcon — ícone e painel", () => {
     const [btn] = await openIcons();
     const user = userEvent.setup();
     await user.click(btn);
-    expect(screen.getByText(/Iniciando a IAllka/i)).toBeInTheDocument();
+    expect(screen.getByText(/Iniciando a Aura/i)).toBeInTheDocument();
     resolveSession({ id: "s1", messages: [] });
-    await waitFor(() => expect(screen.queryByText(/Iniciando a IAllka/i)).not.toBeInTheDocument());
+    await waitFor(() => expect(screen.queryByText(/Iniciando a Aura/i)).not.toBeInTheDocument());
   });
 
   it("12b. erro amigável (403) quando a conta ainda não tem acesso ao fluxo de IA — mostra a mensagem real do backend", async () => {
@@ -177,7 +191,7 @@ describe("IallkaFloatingIcon — ícone e painel", () => {
     const [btn] = await openIcons();
     const user = userEvent.setup();
     await user.click(btn);
-    await screen.findByText("IAllka");
+    await screen.findByText("Aura");
     expect(api.approveIallkaSession).not.toHaveBeenCalled();
     expect(screen.queryByText(/projeto criado/i)).not.toBeInTheDocument();
   });
@@ -186,7 +200,7 @@ describe("IallkaFloatingIcon — ícone e painel", () => {
     api.getCurrentUser.mockResolvedValue({ id: "u2", account_type: "admin", admin_profile: { is_active: true, is_master: false } });
     renderIcon();
     await waitFor(() => expect(api.getCurrentUser).toHaveBeenCalled());
-    expect(screen.queryByRole("button", { name: "Abrir IAllka" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Falar com a Aura" })).not.toBeInTheDocument();
   });
 
   it("Company e Agency veem o ícone normalmente (bug corrigido)", async () => {
@@ -210,7 +224,7 @@ describe("IallkaFloatingIcon — ícone e painel", () => {
     const [btn] = await openIcons();
     const user = userEvent.setup();
     await user.click(btn);
-    await screen.findByText("IAllka");
+    await screen.findByText("Aura");
     const textarea = await screen.findByPlaceholderText(/Me conte tudo que sabe/i);
     await user.type(textarea, "Quanto custa o Site Institucional?{Enter}");
     expect(await screen.findByText(/Fontes: Site Institucional, produtos/i)).toBeInTheDocument();
