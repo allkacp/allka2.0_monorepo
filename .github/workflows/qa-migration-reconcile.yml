@@ -77,6 +77,7 @@ concurrency:
 
 permissions:
   contents: read
+  packages: read
 
 jobs:
   reconcile:
@@ -166,8 +167,8 @@ jobs:
           VPS_USER: ${{ secrets.VPS_USER }}
           VPS_SSH_PORT: ${{ secrets.VPS_SSH_PORT }}
           VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
-          GHCR_PAT: ${{ secrets.GHCR_PAT }}
-          GHCR_USERNAME: ${{ secrets.GHCR_USERNAME }}
+          GHCR_PAT: ${{ github.token }}
+          GHCR_USERNAME: ${{ github.actor }}
         run: |
           : "${VPS_HOST:?Set the VPS_HOST secret}"
           : "${VPS_USER:?Set the VPS_USER secret}"
@@ -266,8 +267,8 @@ jobs:
           VPS_USER: ${{ secrets.VPS_USER }}
           VPS_SSH_PORT: ${{ secrets.VPS_SSH_PORT }}
           VPS_DEPLOY_PATH: ${{ secrets.VPS_DEPLOY_PATH || '/opt/allka-2026' }}
-          GHCR_PAT: ${{ secrets.GHCR_PAT }}
-          GHCR_USERNAME: ${{ secrets.GHCR_USERNAME }}
+          GHCR_PAT: ${{ github.token }}
+          GHCR_USERNAME: ${{ github.actor }}
           COMMIT_SHORT: ${{ steps.schema.outputs.commit_short }}
           SCHEMA_SHA256: ${{ steps.schema.outputs.schema_sha256 }}
         run: |
