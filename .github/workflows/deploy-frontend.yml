@@ -106,7 +106,7 @@ jobs:
           VPS_USER: ${{ secrets.VPS_USER }}
           VPS_SSH_PORT: ${{ secrets.VPS_SSH_PORT }}
           VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
-          GHCR_PAT: ${{ secrets.GHCR_PAT }}
+          GHCR_PAT: ${{ github.token }}
           ROADMAP_QA_BASIC_AUTH_USER: ${{ secrets.ROADMAP_QA_BASIC_AUTH_USER }}
           ROADMAP_QA_BASIC_AUTH_HASH: ${{ secrets.ROADMAP_QA_BASIC_AUTH_HASH }}
         run: |
@@ -239,8 +239,8 @@ jobs:
           VPS_USER: ${{ secrets.VPS_USER }}
           VPS_SSH_PORT: ${{ secrets.VPS_SSH_PORT }}
           VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
-          GHCR_PAT: ${{ secrets.GHCR_PAT }}
-          GHCR_USERNAME: ${{ secrets.GHCR_USERNAME }}
+          GHCR_PAT: ${{ github.token }}
+          GHCR_USERNAME: ${{ github.actor }}
         run: |
           VPS_HOST="$(echo -n "$VPS_HOST" | tr -d '[:space:]')"
           VPS_USER="$(echo -n "$VPS_USER" | tr -d '[:space:]')"
