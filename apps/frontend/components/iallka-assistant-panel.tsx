@@ -6,11 +6,12 @@ import { apiClient } from "@/lib/api-client";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/components/ui/use-toast";
-import { EmbeddedSlideScreen } from "@/components/embedded-slide-screen";
+import { HeaderSlideScreen } from "@/components/header-slide-screen";
+import { IallkaAuraAvatar } from "@/components/iallka-aura-avatar";
 import { useAccountType } from "@/contexts/account-type-context";
 import { useIallkaContext } from "@/contexts/iallka-context";
 import { resolveCatalogIdentity, resolveCatalogProjectDestination } from "@/lib/catalog-access";
-import { Sparkles, Send, Loader2, CheckCircle2, Package, ArrowRight } from "lucide-react";
+import { Send, Loader2, CheckCircle2, Package, ArrowRight } from "lucide-react";
 
 interface IallkaMessage {
   id?: string;
@@ -163,7 +164,7 @@ export function IallkaAssistantPanel({ open, onClose }: IallkaAssistantPanelProp
   const showProposalCard = !approvedProjectId && lastProposal?.stage === "proposal" && lastProposal.selected_products.length > 0;
 
   return (
-    <EmbeddedSlideScreen
+    <HeaderSlideScreen
       open={open}
       onClose={() => {
         onClose();
@@ -188,9 +189,7 @@ export function IallkaAssistantPanel({ open, onClose }: IallkaAssistantPanelProp
               <div key={m.id || i} className={`flex flex-col ${m.role === "user" ? "items-end" : "items-start"}`}>
                 <div className={`flex ${m.role === "user" ? "justify-end" : "justify-start"}`}>
                   {m.role === "assistant" && (
-                    <div className="h-7 w-7 rounded-full bg-gradient-to-br from-violet-500 to-purple-700 flex items-center justify-center shrink-0 mr-2 mt-0.5 shadow-sm">
-                      <Sparkles className="h-3.5 w-3.5 text-white" />
-                    </div>
+                    <IallkaAuraAvatar expression={payload?.stage === "proposal" ? "smile" : "attentive"} className="h-7 w-7 mr-2 mt-0.5 shadow-sm ring-1 ring-violet-300/70" />
                   )}
                   <div
                     className={`max-w-[80%] px-3.5 py-2.5 rounded-2xl text-sm shadow-sm whitespace-pre-wrap ${
@@ -232,9 +231,7 @@ export function IallkaAssistantPanel({ open, onClose }: IallkaAssistantPanelProp
 
           {sending && (
             <div className="flex justify-start">
-              <div className="h-7 w-7 rounded-full bg-gradient-to-br from-violet-500 to-purple-700 flex items-center justify-center shrink-0 mr-2 shadow-sm">
-                <Sparkles className="h-3.5 w-3.5 text-white" />
-              </div>
+              <IallkaAuraAvatar expression="thinking" className="h-7 w-7 mr-2 shadow-sm ring-1 ring-violet-300/70" />
               <div className="px-3.5 py-2.5 rounded-2xl rounded-bl-sm bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 flex items-center gap-1.5">
                 <Loader2 className="h-3.5 w-3.5 animate-spin text-violet-500" />
                 <span className="text-xs text-slate-400">pensando...</span>
@@ -349,6 +346,6 @@ export function IallkaAssistantPanel({ open, onClose }: IallkaAssistantPanelProp
           </div>
         )}
       </div>
-    </EmbeddedSlideScreen>
+    </HeaderSlideScreen>
   );
 }

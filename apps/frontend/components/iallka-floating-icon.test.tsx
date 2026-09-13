@@ -74,11 +74,16 @@ describe("IallkaFloatingIcon — ícone e painel", () => {
     expect(buttons.length).toBeGreaterThan(0);
   });
 
-  it("2. usa o logo da Allka como avatar (nunca um ícone de lucide igual ao de outra função)", async () => {
+  it("2. usa a Aura como avatar (nunca um ícone de lucide igual ao de outra função)", async () => {
     renderIcon();
     const [btn] = await openIcons();
-    const img = btn.querySelector("img");
-    expect(img).toHaveAttribute("src", "/iallka-icon.png");
+    expect(btn.querySelector("span[style*='iallka-aura.png']")).toBeInTheDocument();
+  });
+
+  it("2b. oferece uma prévia maior da Aura no hover/foco, usando a mesma imagem oficial", async () => {
+    renderIcon();
+    await openIcons();
+    expect(document.querySelector("img[src='/iallka-aura.png']")).toBeInTheDocument();
   });
 
   it("3. fica numa camada acima (z-65 desktop / z-45 mobile) — nunca atrás do container padrão", async () => {

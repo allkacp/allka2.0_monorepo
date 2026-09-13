@@ -8,13 +8,13 @@
  * 365px; mobile depois de +12/+88/+164 → aqui +240), pra nunca ficar atrás
  * do container nem sobrepor outro ícone (auditoria desta reunião).
  *
- * Usa o logo oficial da IAllka (iallka-icon.png, enviado pelo responsável
- * em 2026-09-11 — "AURA", ver Manual da Marca IAllka) como avatar — nunca
- * o mesmo ícone de Chat/Alertas/Ajuda/Sugestões.
+ * Usa a Aura e o símbolo oficial aprovados pelo responsável em 12/09/2026 —
+ * nunca um ícone genérico igual ao de Chat/Alertas/Ajuda/Sugestões.
  */
 import { useEffect, useState } from "react";
 import { useOnboarding } from "@/contexts/onboarding-context";
 import { IallkaAssistantPanel } from "@/components/iallka-assistant-panel";
+import { IallkaAuraAvatar } from "@/components/iallka-aura-avatar";
 import { apiClient } from "@/lib/api-client";
 import { canManageAlertsAdmin } from "@/lib/admin-permissions";
 
@@ -74,11 +74,25 @@ export function IallkaFloatingIcon() {
           title="Abrir IAllka"
           className="relative flex items-center justify-center h-9 w-9 rounded-full overflow-hidden ring-1 ring-white/25 hover:ring-white/60 transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"
         >
-          <img src="/iallka-icon.png" alt="" className="h-full w-full object-cover" />
+          <IallkaAuraAvatar className="h-full w-full" />
           {showBadge && (
             <span className="absolute top-0 right-0 h-2.5 w-2.5 rounded-full bg-emerald-400 ring-2 ring-[#0a1628]" aria-hidden="true" />
           )}
         </button>
+        {/* Prévia só no hover/foco do mouse: Aura maior, sem virar modal nem
+            ocupar área de trabalho. A imagem aprovada já tem transparência. */}
+        <div
+          aria-hidden="true"
+          className="pointer-events-none absolute bottom-0 right-12 w-44 origin-bottom-right opacity-0 scale-90 translate-x-2 transition-all duration-200 group-hover:opacity-100 group-hover:scale-100 group-hover:translate-x-0 group-focus-within:opacity-100 group-focus-within:scale-100 group-focus-within:translate-x-0"
+        >
+          <div className="rounded-2xl border border-violet-200/70 bg-slate-950/35 p-1 shadow-[0_16px_34px_-12px_rgba(15,23,42,0.65)] backdrop-blur-sm">
+            <img
+              src="/iallka-aura.png"
+              alt=""
+              className="block h-44 w-full object-contain object-bottom"
+            />
+          </div>
+        </div>
         <span className="pointer-events-none absolute top-full right-0 mt-2 whitespace-nowrap rounded-lg bg-gray-900/95 px-2.5 py-1.5 text-[11px] text-white opacity-0 shadow-xl border border-white/10 transition-opacity duration-150 group-hover:opacity-100">
           Abrir IAllka
         </span>
@@ -94,7 +108,7 @@ export function IallkaFloatingIcon() {
         className="lg:hidden fixed right-4 z-45 flex items-center justify-center h-14 w-14 rounded-full overflow-hidden ring-2 ring-white/40 shadow-[0_8px_24px_-4px_rgba(0,0,0,0.35)] active:scale-95 transition-transform focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-blue-400"
         style={{ bottom: "calc(72px + env(safe-area-inset-bottom, 0px) + 240px)" }}
       >
-        <img src="/logo-allka-icon.png" alt="" className="h-full w-full object-cover" />
+        <IallkaAuraAvatar className="h-full w-full" />
         {showBadge && (
           <span className="absolute top-1 right-1 h-3 w-3 rounded-full bg-emerald-400 ring-2 ring-white" aria-hidden="true" />
         )}

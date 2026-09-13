@@ -7,6 +7,7 @@ import { IallkaAssistantPanel } from "@/components/iallka-assistant-panel";
 import { IallkaContextProvider, useIallkaContext } from "@/contexts/iallka-context";
 import { AccountTypeProvider } from "@/contexts/account-type-context";
 import { OpenScreensProvider } from "@/contexts/open-screens-context";
+import { SidebarProvider } from "@/contexts/sidebar-context";
 
 // Reunião 10/09 ("integração IAllka — telas de Projetos"): o painel manda
 // SÓ o `project_id` que a tela registrou no contexto — nunca briefing/doc, e
@@ -51,10 +52,12 @@ function renderPanel(projectId?: string) {
     <MemoryRouter initialEntries={["/admin/tarefas"]}>
       <OpenScreensProvider>
         <AccountTypeProvider>
-          <IallkaContextProvider>
-            <ScreenStub projectId={projectId} />
-            <IallkaAssistantPanel open onClose={() => {}} />
-          </IallkaContextProvider>
+          <SidebarProvider>
+            <IallkaContextProvider>
+              <ScreenStub projectId={projectId} />
+              <IallkaAssistantPanel open onClose={() => {}} />
+            </IallkaContextProvider>
+          </SidebarProvider>
         </AccountTypeProvider>
       </OpenScreensProvider>
     </MemoryRouter>,
