@@ -145,6 +145,14 @@ describe("IallkaFloatingIcon — ícone e painel", () => {
     expect(await screen.findByText("Qual é o próximo passo desta tarefa?")).toBeInTheDocument();
   });
 
+  it("8c. em uma tarefa dentro de Projetos, Tarefas tem prioridade sobre o trecho 'projetos' da URL", async () => {
+    renderIcon("/admin/projetos/proj-123/tarefas");
+    const [button] = await openIcons();
+    await userEvent.setup().click(button);
+    expect(await screen.findByText("Qual é o próximo passo desta tarefa?")).toBeInTheDocument();
+    expect(screen.queryByText("Ajude-me a criar um projeto")).not.toBeInTheDocument();
+  });
+
   it("9. tela genérica: orientação curta, sem fingir sugestões específicas", async () => {
     renderIcon("/perfil");
     const [btn] = await openIcons();

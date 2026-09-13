@@ -64,14 +64,34 @@ const GENERIC_SUGGESTIONS: Suggestion[] = [
   { key: "o-que-aura-faz", text: "O que a Aura pode me ajudar a fazer nesta tela?" },
 ];
 
-function labelForRoute(pathname: string): string {
-  if (pathname.includes("catalogo-produtos")) return "Catálogo de Produtos";
-  if (pathname.includes("/produtos")) return "Cadastro de Produtos";
-  if (pathname.includes("projeto")) return "Projetos";
-  if (pathname.includes("tarefas")) return "Tarefas";
-  if (pathname.includes("dashboard")) return "Dashboard";
-  if (pathname.includes("allkademy")) return "Allkademy";
-  return "esta tela";
+type ScreenArea = "catalogo" | "cadastro-produtos" | "projetos" | "tarefas" | "dashboard" | "allkademy" | "generica";
+
+/**
+ * Reconhece a URL por segmentos, não por um trecho solto. A prioridade é
+ * deliberada: em `/projetos/:id/tarefas`, a pessoa está trabalhando em
+ * Tarefas e não em Projetos, portanto a Aura deve assumir Tarefas.
+ */
+function screenAreaForRoute(pathname: string): ScreenArea {
+  const segments = pathname.toLowerCase().split("/").filter(Boolean);
+  if (segments.includes("tarefas")) return "tarefas";
+  if (segments.includes("catalogo-produtos")) return "catalogo";
+  if (segments.includes("produtos")) return "cadastro-produtos";
+  if (segments.some((segment) => segment.startsWith("projeto"))) return "projetos";
+  if (segments.includes("dashboard")) return "dashboard";
+  if (segments.includes("allkademy")) return "allkademy";
+  return "generica";
+}
+
+function labelForArea(area: ScreenArea): string {
+  switch (area) {
+    case "catalogo": return "Catálogo de Produtos";
+    case "cadastro-produtos": return "Cadastro de Produtos";
+    case "projetos": return "Projetos";
+    case "tarefas": return "Tarefas";
+    case "dashboard": return "Dashboard";
+    case "allkademy": return "Allkademy";
+    default: return "esta tela";
+  }
 }
 
 interface IallkaContextValue {
@@ -84,38 +104,43 @@ interface IallkaContextValue {
 
 const IallkaContext = createContext<IallkaContextValue | null>(null);
 
+/** Contexto registrado por uma tela, atrelado à URL onde ele nasceu. */
+type RegisteredScreenContext = IallkaScreenContext & { pathname: string };
+
 export function IallkaContextProvider({ children }: { children: ReactNode }) {
   const location = useLocation();
-  const [screenContext, setScreenContextState] = useState<IallkaScreenContext>({});
+  const [registeredContext, setScreenContextState] = useState<RegisteredScreenContext | null>(null);
 
   // Cada tela registra (e limpa ao desmontar) só o que ela mesma já mostra
-  // na UI — nunca um dado que o usuário não veria de qualquer forma.
+  // na UI — nunca um dado que o usuário não veria de qualquer forma. O
+  // pathname é salvo junto: ao mudar de URL, um contexto antigo é ignorado
+  // imediatamente, mesmo que uma limpeza de componente ocorra depois.
   const setScreenContext = useCallback((partial: IallkaScreenContext | null) => {
-    setScreenContextState(partial ?? {});
-  }, []);
+    setScreenContextState(partial ? { ...partial, pathname: location.pathname } : null);
+  }, [location.pathname]);
 
-  const isCatalogo = location.pathname.includes("catalogo-produtos");
-  const isCadastroProdutos = location.pathname.includes("/produtos");
-  const isProjetos = location.pathname.includes("projeto");
-  const isTarefas = location.pathname.includes("tarefas");
+  const screenArea = useMemo(() => screenAreaForRoute(location.pathname), [location.pathname]);
+  const screenContext = registeredContext?.pathname === location.pathname ? registeredContext : {};
 
   const suggestions = useMemo(() => {
-    if (isCatalogo) return CATALOGO_SUGGESTIONS;
-    if (isCadastroProdutos) return CADASTRO_PRODUTOS_SUGGESTIONS;
-    if (isProjetos) return PROJETOS_SUGGESTIONS;
-    if (isTarefas) return TAREFAS_SUGGESTIONS;
-    return GENERIC_SUGGESTIONS;
-  }, [isCatalogo, isCadastroProdutos, isProjetos, isTarefas]);
+    switch (screenArea) {
+      case "catalogo": return CATALOGO_SUGGESTIONS;
+      case "cadastro-produtos": return CADASTRO_PRODUTOS_SUGGESTIONS;
+      case "projetos": return PROJETOS_SUGGESTIONS;
+      case "tarefas": return TAREFAS_SUGGESTIONS;
+      default: return GENERIC_SUGGESTIONS;
+    }
+  }, [screenArea]);
 
   const contextLine = useMemo(() => {
-    const label = screenContext.label || labelForRoute(location.pathname);
+    const label = screenContext.label || labelForArea(screenArea);
     const parts = [`Tela atual: ${label}.`];
     if (screenContext.category) parts.push(`Categoria selecionada: ${screenContext.category}.`);
     if (screenContext.search) parts.push(`Busca ativa: "${screenContext.search}".`);
     if (typeof screenContext.visibleCount === "number") parts.push(`${screenContext.visibleCount} item(ns) visível(is) agora.`);
     if (screenContext.openItemName) parts.push(`Aberto agora: ${screenContext.openItemName}.`);
     return parts.join(" ");
-  }, [screenContext, location.pathname]);
+  }, [screenContext, screenArea]);
 
   const value = useMemo(
     () => ({ screenContext, setScreenContext, suggestions, contextLine }),
