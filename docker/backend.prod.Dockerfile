@@ -43,6 +43,11 @@ COPY --from=build /app/apps/backend/prisma /app/apps/backend/prisma
 # "Cannot find module './generated'" (visto em produção: run 33509916614).
 COPY --from=build /app/apps/backend/src/legacy/generated /app/apps/backend/dist/legacy/generated
 COPY apps/backend/reset-users-password.cjs /app/apps/backend/reset-users-password.cjs
+# Item 16.2 (reunião 2026-09-14) — comando real do serviço `migrate` em
+# docker-compose.prod.yml (substitui `npm run db:deploy` puro). Precisa
+# estar no runtime porque roda dentro do próprio container do `migrate`.
+COPY apps/backend/migrate-deploy-checked.sh /app/apps/backend/migrate-deploy-checked.sh
+RUN chmod +x /app/apps/backend/migrate-deploy-checked.sh
 
 WORKDIR /app/apps/backend
 EXPOSE 3001

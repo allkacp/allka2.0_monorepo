@@ -24,7 +24,14 @@ services:
     image: ${BACKEND_IMAGE:?BACKEND_IMAGE is required}
     restart: "no"
     working_dir: /app/apps/backend
-    command: ["npm", "run", "db:deploy"]
+    # Item 16.2 (reunião 2026-09-14): não roda "prisma migrate deploy" puro.
+    # migrate-deploy-checked.sh verifica primeiro se `_prisma_migrations`
+    # está de fato reconciliado com o schema físico do banco (mesmo `prisma
+    # migrate diff` do workflow de reconciliação) — só chama `migrate
+    # deploy` quando isso é seguro. Se abortar (exit 1), este serviço falha
+    # e `docker compose run --rm migrate && up -d --no-deps backend` nunca
+    # chega a trocar o backend em execução.
+    command: ["./migrate-deploy-checked.sh"]
     env_file:
       - ./.env.backend
     environment:
