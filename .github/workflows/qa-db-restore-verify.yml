@@ -1,0 +1,314 @@
+name: DB Restore Verify + Legacy Backup (manual, isolated)
+
+# Item 12.1/13.1/15 (reuniao 2026-09-14, "Fechar a preparacao da
+# publicacao" / "Validar a recuperacao do ambiente online") — integrado
+# via PR minima, separado da entrega completa do catalog2 (que continua
+# só na branch da reuniao, nao integrada). Disparo exclusivamente manual
+# (workflow_dispatch); nao dispara nem depende de nenhum deploy.
+#
+# Cobre dois gaps concretos encontrados no Item 12/12.1:
+#   1. Nenhum workflow existente restaura o CONTEUDO de um backup real pra
+#      verificar (o "DB Backup" so cria e reporta metadado, nunca lê de
+#      volta) — mode=verify-operational faz isso, sempre num banco NOVO e
+#      ISOLADO (nome com sufixo _restore_verify_<timestamp>), nunca sobre
+#      allka/allka_legacy, e sempre dropado ao final (sucesso ou falha).
+#   2. Nenhum workflow existente faz backup do banco Legacy (allka_legacy,
+#      separado do operacional) — mode=backup-legacy faz mysqldump dele,
+#      mesmo padrao do "DB Backup" (metadado sanitizado, nunca conteudo).
+#
+# Escritas no VPS permitidas por este workflow: (a) o arquivo de backup do
+# Legacy (nunca apagado, como o operacional), (b) o banco ISOLADO de
+# restauracao (sempre dropado ao final, nunca persiste). NUNCA escreve em
+# allka/allka_legacy diretamente — só leitura deles (mysqldump é read-only
+# a nivel de dado).
+
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: "verify-operational (restaura backups/<arquivo> isolado e compara contagens) ou backup-legacy (mysqldump de allka_legacy)"
+        required: true
+        type: choice
+        options:
+          - verify-operational
+          - backup-legacy
+      backup_file:
+        description: "Só para verify-operational: nome exato do arquivo em backups/ (ex.: allka-backup-20260916T144742Z.sql.gz) — NUNCA um caminho fora de backups/"
+        required: false
+        default: ""
+
+concurrency:
+  group: deploy-vps
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  restore-verify:
+    if: inputs.mode == 'verify-operational'
+    runs-on: ubuntu-latest
+    environment: dev
+    steps:
+      - name: Validate required secrets
+        shell: bash
+        env:
+          VPS_HOST: ${{ secrets.VPS_HOST }}
+          VPS_USER: ${{ secrets.VPS_USER }}
+          VPS_SSH_PORT: ${{ secrets.VPS_SSH_PORT }}
+          VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+        run: |
+          : "${VPS_HOST:?Set the VPS_HOST secret}"
+          : "${VPS_USER:?Set the VPS_USER secret}"
+          : "${VPS_SSH_PORT:?Set the VPS_SSH_PORT secret}"
+          : "${VPS_SSH_KEY:?Set the VPS_SSH_KEY secret}"
+
+      - name: Validate backup_file input (nome simples, dentro de backups/, nunca um path traversal)
+        shell: bash
+        env:
+          BACKUP_FILE: ${{ inputs.backup_file }}
+        run: |
+          if [ -z "$BACKUP_FILE" ]; then
+            echo "::error::backup_file é obrigatório para mode=verify-operational"; exit 1
+          fi
+          if ! [[ "$BACKUP_FILE" =~ ^allka-backup-[0-9]{8}T[0-9]{6}Z\.sql\.gz$ ]]; then
+            echo "::error::backup_file precisa bater com o padrão exato allka-backup-<timestamp>.sql.gz gerado pelo workflow 'DB Backup'. Recebido: '$BACKUP_FILE'"
+            exit 1
+          fi
+
+      - name: Configure SSH
+        shell: bash
+        env:
+          VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+        run: |
+          mkdir -p ~/.ssh
+          touch ~/.ssh/allka_deploy_key
+          chmod 600 ~/.ssh/allka_deploy_key
+          printf '%s\n' "$VPS_SSH_KEY" > ~/.ssh/allka_deploy_key
+          touch ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/known_hosts
+
+      - name: Render remote restore-verify script (isolado, nunca toca allka/allka_legacy)
+        shell: bash
+        run: |
+          mkdir -p .deploy
+          cat > .deploy/remote-restore-verify.sh <<'SCRIPT'
+          set -euo pipefail
+          deploy_path="$1"
+          backup_file="$2"
+          cd "$deploy_path"
+          set -a
+          source ./.env
+          set +a
+
+          f="backups/${backup_file}"
+          if [ ! -f "$f" ]; then
+            echo "ERRO: $f não existe." >&2
+            exit 1
+          fi
+          size_bytes="$(stat -c%s "$f")"
+          sha256="$(sha256sum "$f" | cut -d' ' -f1)"
+          echo "arquivo=$f"
+          echo "tamanho_bytes=$size_bytes"
+          echo "sha256=$sha256"
+
+          # Integridade do gzip, independente da restauração em si.
+          if ! gzip -t "$f"; then
+            echo "ERRO: $f falhou no teste de integridade gzip (-t)." >&2
+            exit 1
+          fi
+          echo "gzip_integrity=ok"
+
+          # ── Item 13.1: espaço em disco + memória, ANTES de tocar em qualquer
+          # banco. Nunca restaura às cegas — se a informação não for confiável,
+          # interrompe com motivo claro em vez de arriscar comprometer o VPS.
+          #
+          # Estimativa de espaço necessário: o campo ISIZE do próprio gzip (via
+          # `gzip -l`, mod 2^32 — irrelevante aqui, dump muito menor que 4GB)
+          # dá o tamanho REAL descompactado do SQL — melhor proxy disponível
+          # sem já ter restaurado. Banco/índices InnoDB tipicamente ficam entre
+          # 1x e 2x esse tamanho (o dump é texto SQL verboso, mas índices somam
+          # overhead) — uso 2x como estimativa conservadora, mais uma margem
+          # operacional FIXA de 500MB (nunca deixa o disco do host beirar zero,
+          # independente do tamanho do dump).
+          uncompressed_bytes="$(gzip -l "$f" | awk 'NR==2 {print $2}')"
+          if [ -z "${uncompressed_bytes:-}" ] || [ "$uncompressed_bytes" -le 0 ] 2>/dev/null; then
+            echo "ERRO: não foi possível obter o tamanho descompactado de $f via 'gzip -l' — sem informação confiável, interrompendo ANTES de restaurar." >&2
+            exit 1
+          fi
+          echo "tamanho_descompactado_estimado_bytes=$uncompressed_bytes"
+
+          margin_bytes=$((500 * 1024 * 1024))
+          required_bytes=$(( uncompressed_bytes * 2 + margin_bytes ))
+          avail_bytes="$(df -B1 --output=avail "$deploy_path" 2>/dev/null | tail -1 | tr -d ' ')"
+          if [ -z "${avail_bytes:-}" ]; then
+            echo "ERRO: não foi possível ler espaço livre em disco (df) para $deploy_path — sem informação confiável, interrompendo ANTES de restaurar." >&2
+            exit 1
+          fi
+          echo "espaco_livre_bytes=$avail_bytes"
+          echo "espaco_necessario_estimado_bytes=$required_bytes"
+          if [ "$avail_bytes" -lt "$required_bytes" ]; then
+            echo "ERRO: espaço livre insuficiente para restaurar com segurança (livre=${avail_bytes} bytes, necessário estimado=${required_bytes} bytes = 2x o tamanho descompactado + 500MB de margem). Restauração interrompida ANTES de tocar no banco — não comprometer a aplicação online por falta de disco." >&2
+            exit 1
+          fi
+
+          avail_mem_mb="$(free -m 2>/dev/null | awk '/^Mem:/{print $7}')"
+          if [ -z "${avail_mem_mb:-}" ]; then
+            echo "ERRO: não foi possível ler memória disponível (free -m) — sem informação confiável, interrompendo ANTES de restaurar." >&2
+            exit 1
+          fi
+          echo "memoria_disponivel_mb=$avail_mem_mb"
+          min_mem_mb=512
+          if [ "$avail_mem_mb" -lt "$min_mem_mb" ]; then
+            echo "ERRO: memória disponível insuficiente (${avail_mem_mb}MB livres, mínimo ${min_mem_mb}MB) — restaurar aqui poderia comprometer a aplicação online. Interrompida ANTES de tocar no banco." >&2
+            exit 1
+          fi
+          echo "verificacao_espaco_memoria=ok"
+
+          # Nome exclusivo (timestamp + PID do processo remoto — nunca colide
+          # mesmo em dois disparos na mesma UTC-second) — limpeza (trap) só
+          # derruba ESTE banco, nunca outro.
+          iso_db="allka_restore_verify_$(date -u +%Y%m%dT%H%M%SZ)_$$"
+          echo "banco_isolado=$iso_db"
+          docker compose --env-file .env -f docker-compose.yml exec -T mysql \
+            sh -c "exec mysql -uroot -p\"\$MYSQL_ROOT_PASSWORD\" -e \"CREATE DATABASE \\\`${iso_db}\\\` CHARACTER SET utf8mb4;\""
+
+          cleanup() {
+            docker compose --env-file .env -f docker-compose.yml exec -T mysql \
+              sh -c "exec mysql -uroot -p\"\$MYSQL_ROOT_PASSWORD\" -e \"DROP DATABASE IF EXISTS \\\`${iso_db}\\\`;\"" || true
+          }
+          trap cleanup EXIT
+
+          # Limite de execução da restauração em si (nunca trava o job
+          # indefinidamente se o dump for maior que o esperado).
+          if ! timeout 900s bash -c "gunzip -c '$f' | docker compose --env-file .env -f docker-compose.yml exec -T mysql \
+            sh -c \"exec mysql -uroot -p\\\"\\\$MYSQL_ROOT_PASSWORD\\\" '${iso_db}'\""; then
+            echo "ERRO: restauração excedeu 900s ou falhou — banco isolado será removido pela limpeza (trap), nada persiste." >&2
+            exit 1
+          fi
+          echo "restauracao=ok"
+
+          # Contagens verificáveis: nº de tabelas + linhas de algumas tabelas
+          # centrais, restaurado vs. o banco operacional ATUAL (nunca tratar
+          # diferença como perda — o operacional pode ter mudado depois do
+          # backup; só reporta os dois números, decisão é humana).
+          tables_restored="$(docker compose --env-file .env -f docker-compose.yml exec -T mysql \
+            sh -c "exec mysql -uroot -p\"\$MYSQL_ROOT_PASSWORD\" -N -e \"SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='${iso_db}';\"")"
+          tables_current="$(docker compose --env-file .env -f docker-compose.yml exec -T mysql \
+            sh -c "exec mysql -uroot -p\"\$MYSQL_ROOT_PASSWORD\" -N -e \"SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='\$MYSQL_DATABASE';\"")"
+          users_restored="$(docker compose --env-file .env -f docker-compose.yml exec -T mysql \
+            sh -c "exec mysql -uroot -p\"\$MYSQL_ROOT_PASSWORD\" \"${iso_db}\" -N -e 'SELECT COUNT(*) FROM users;'" || echo "n/a")"
+          users_current="$(docker compose --env-file .env -f docker-compose.yml exec -T mysql \
+            sh -c "exec mysql -uroot -p\"\$MYSQL_ROOT_PASSWORD\" \"\$MYSQL_DATABASE\" -N -e 'SELECT COUNT(*) FROM users;'" || echo "n/a")"
+          echo "tabelas_restauradas=$tables_restored"
+          echo "tabelas_banco_atual=$tables_current"
+          echo "users_restaurado=$users_restored"
+          echo "users_atual=$users_current"
+          echo "nota=diferenca entre restaurado e atual pode ser atividade real pos-backup, nunca tratar como perda sem investigar"
+          SCRIPT
+
+      - name: Restaura em banco isolado, verifica integridade e contagens, sempre limpa ao final
+        shell: bash
+        env:
+          VPS_HOST: ${{ secrets.VPS_HOST }}
+          VPS_USER: ${{ secrets.VPS_USER }}
+          VPS_SSH_PORT: ${{ secrets.VPS_SSH_PORT }}
+          VPS_DEPLOY_PATH: ${{ secrets.VPS_DEPLOY_PATH || '/opt/allka-2026' }}
+          BACKUP_FILE: ${{ inputs.backup_file }}
+        run: |
+          VPS_HOST="$(echo -n "$VPS_HOST" | tr -d '[:space:]')"
+          VPS_USER="$(echo -n "$VPS_USER" | tr -d '[:space:]')"
+          VPS_SSH_PORT="$(echo -n "$VPS_SSH_PORT" | tr -d '[:space:]')"
+          remote="${VPS_USER}@${VPS_HOST}"
+          SSH_OPTS=(-i "$HOME/.ssh/allka_deploy_key" -p "$VPS_SSH_PORT" -o ConnectTimeout=15 -o ConnectionAttempts=2 -o BatchMode=yes -o StrictHostKeyChecking=accept-new -o UserKnownHostsFile="$HOME/.ssh/known_hosts")
+          scp -i "$HOME/.ssh/allka_deploy_key" -P "$VPS_SSH_PORT" -o StrictHostKeyChecking=accept-new -o UserKnownHostsFile="$HOME/.ssh/known_hosts" \
+            .deploy/remote-restore-verify.sh "$remote:/tmp/allka-remote-restore-verify.sh"
+          output="$(ssh "${SSH_OPTS[@]}" "$remote" "bash /tmp/allka-remote-restore-verify.sh '${VPS_DEPLOY_PATH}' '${BACKUP_FILE}'; rc=\$?; rm -f /tmp/allka-remote-restore-verify.sh; exit \$rc")"
+          echo "$output"
+          {
+            echo "## Restore-verify (banco isolado, nunca sobre allka/allka_legacy)"
+            echo '```'
+            echo "$output"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  backup-legacy:
+    if: inputs.mode == 'backup-legacy'
+    runs-on: ubuntu-latest
+    environment: dev
+    steps:
+      - name: Validate required secrets
+        shell: bash
+        env:
+          VPS_HOST: ${{ secrets.VPS_HOST }}
+          VPS_USER: ${{ secrets.VPS_USER }}
+          VPS_SSH_PORT: ${{ secrets.VPS_SSH_PORT }}
+          VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+        run: |
+          : "${VPS_HOST:?Set the VPS_HOST secret}"
+          : "${VPS_USER:?Set the VPS_USER secret}"
+          : "${VPS_SSH_PORT:?Set the VPS_SSH_PORT secret}"
+          : "${VPS_SSH_KEY:?Set the VPS_SSH_KEY secret}"
+
+      - name: Configure SSH
+        shell: bash
+        env:
+          VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+        run: |
+          mkdir -p ~/.ssh
+          touch ~/.ssh/allka_deploy_key
+          chmod 600 ~/.ssh/allka_deploy_key
+          printf '%s\n' "$VPS_SSH_KEY" > ~/.ssh/allka_deploy_key
+          touch ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/known_hosts
+
+      - name: Render remote legacy-backup script (mesmo padrao do "DB Backup", banco allka_legacy)
+        shell: bash
+        run: |
+          mkdir -p .deploy
+          cat > .deploy/remote-backup-legacy.sh <<'SCRIPT'
+          set -euo pipefail
+          deploy_path="$1"
+          cd "$deploy_path"
+          set -a
+          source ./.env
+          set +a
+
+          # Confirma que o banco allka_legacy de fato existe antes de tentar —
+          # nunca cria um banco vazio "backup" de algo que não existe.
+          exists="$(docker compose --env-file .env -f docker-compose.yml exec -T mysql \
+            sh -c 'exec mysql -uroot -p"$MYSQL_ROOT_PASSWORD" -N -e "SELECT COUNT(*) FROM information_schema.schemata WHERE schema_name='"'"'allka_legacy'"'"';"')"
+          if [ "$exists" != "1" ]; then
+            echo "IMPEDIMENTO: banco 'allka_legacy' não existe neste servidor MySQL — nada para fazer backup." >&2
+            exit 1
+          fi
+
+          mkdir -p backups
+          ts="$(date -u +%Y%m%dT%H%M%SZ)"
+          file="backups/allka-legacy-backup-${ts}.sql.gz"
+          docker compose --env-file .env -f docker-compose.yml exec -T mysql \
+            sh -c 'exec mysqldump -uroot -p"$MYSQL_ROOT_PASSWORD" --single-transaction --routines --triggers allka_legacy' \
+            | gzip > "$file"
+          size_bytes="$(stat -c%s "$file")"
+          checksum="$(sha256sum "$file" | cut -d' ' -f1)"
+          echo "backup_file=${file}"
+          echo "backup_size_bytes=${size_bytes}"
+          echo "backup_sha256=${checksum}"
+          SCRIPT
+
+      - name: Run mysqldump de allka_legacy no VPS e reporta metadado
+        shell: bash
+        env:
+          VPS_HOST: ${{ secrets.VPS_HOST }}
+          VPS_USER: ${{ secrets.VPS_USER }}
+          VPS_SSH_PORT: ${{ secrets.VPS_SSH_PORT }}
+          VPS_DEPLOY_PATH: ${{ secrets.VPS_DEPLOY_PATH || '/opt/allka-2026' }}
+        run: |
+          VPS_HOST="$(echo -n "$VPS_HOST" | tr -d '[:space:]')"
+          VPS_USER="$(echo -n "$VPS_USER" | tr -d '[:space:]')"
+          VPS_SSH_PORT="$(echo -n "$VPS_SSH_PORT" | tr -d '[:space:]')"
+          remote="${VPS_USER}@${VPS_HOST}"
+          SSH_OPTS=(-i "$HOME/.ssh/allka_deploy_key" -p "$VPS_SSH_PORT" -o ConnectTimeout=15 -o ConnectionAttempts=2 -o BatchMode=yes -o StrictHostKeyChecking=accept-new -o UserKnownHostsFile="$HOME/.ssh/known_hosts")
+          scp -i "$HOME/.ssh/allka_deploy_key" -P "$VPS_SSH_PORT" -o StrictHostKeyChecking=accept-new -o UserKnownHostsFile="$HOME/.ssh/known_hosts" \
+            .deploy/remote-backup-legacy.sh "$remote:/tmp/allka-remote-backup-legacy.sh"
+          ssh "${SSH_OPTS[@]}" "$remote" "bash /tmp/allka-remote-backup-legacy.sh '${VPS_DEPLOY_PATH}' && rm -f /tmp/allka-remote-backup-legacy.sh"
