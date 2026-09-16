@@ -412,24 +412,24 @@ jobs:
 
           docker network inspect allka-proxy-shared >/dev/null 2>&1 || docker network create allka-proxy-shared
 
-          # ATENÇÃO (Item 16.1, reunião 2026-09-14) — correção de uma
-          # afirmação incompleta do Item 16: este `run --rm migrate` (=
-          # `prisma migrate deploy`) NÃO é, sozinho, uma solução automática
-          # para drift de baseline. Já falhou antes exatamente neste banco
-          # ("Table 'users' already exists", run 33452356620) por causa de
-          # baseline dessincronizada — motivo pelo qual existe o workflow
-          # separado `qa-migration-reconcile.yml` (mode=diff/apply,
-          # só-leitura por padrão). Antes de mesclar qualquer PR cuja
-          # migration corrija um statement já classificado BLOCKED por esse
-          # workflow (ex.: `ALTER COLUMN ... DROP DEFAULT`), esse statement
-          # precisa ser resolvido ISOLADAMENTE (acesso administrativo direto
-          # ao MySQL de produção, fora de qualquer pipeline) e marcado
-          # `prisma migrate resolve --applied <nome>` ANTES do merge — só
-          # depois disso este passo automático é seguro para as migrations
-          # puramente aditivas restantes. Runbook completo (ordem exata,
-          # pré-condições, SQL) em docs/qa/reuniao-2026-09-14.md, seção
-          # "Item 16.1 — Ordem real do deploy". Este comentário não muda o
-          # comportamento do workflow — é a documentação que faltava.
+          # ATENÇÃO (Item 16.1/16.2, reunião 2026-09-14) — este `run --rm
+          # migrate` NÃO roda mais "prisma migrate deploy" puro. O serviço
+          # `migrate` (docker-compose.prod.yml) chama
+          # apps/backend/migrate-deploy-checked.sh, que verifica ANTES se
+          # `_prisma_migrations` está de fato reconciliado com o schema
+          # físico do banco (mesmo `prisma migrate diff` do workflow
+          # qa-migration-reconcile.yml) e ABORTA (exit != 0) sem tocar em
+          # nada, em vez de tentar recriar estrutura que já existe — era
+          # exatamente essa lacuna que causou a falha real documentada
+          # ("Table 'users' already exists", run 33452356620). Um exit != 0
+          # aqui quebra esta cadeia `&&` ANTES de `up -d --no-deps backend`
+          # — o container antigo nunca é trocado. Se abortar, resolva a
+          # baseline via `qa-migration-reconcile.yml` mode=apply (que agora
+          # também resolve TODAS as migrations pendentes do commit, não só
+          # a mais recente) antes de repetir este deploy. Testado em banco
+          # descartável (4 cenários — up to date / pendência segura /
+          # drift-abortado / drift-reconciliado) em
+          # docs/qa/reuniao-2026-09-14.md, seção "Item 16.2".
           docker compose --env-file .env -f docker-compose.yml pull backend \
             && docker compose --env-file .env -f docker-compose.yml up -d mysql \
             && docker compose --env-file .env -f docker-compose.yml run --rm migrate \
