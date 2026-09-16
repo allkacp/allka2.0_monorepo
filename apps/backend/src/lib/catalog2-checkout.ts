@@ -22,6 +22,27 @@ import { satisfyPaymentTriggersByReference } from "./task-release-service";
 export class Catalog2CheckoutError extends Catalog2Error {}
 
 /**
+ * Item 6/6.1: soma meses de calendário (não uma aproximação de 30 dias) —
+ * 14/09 + 12 meses = 14/09 do ano seguinte, sem deriva acumulada. Usa
+ * campos UTC explicitamente (nunca local) — determinístico não importa o
+ * fuso do processo. Trata corretamente "passagem de mês no fim do mês":
+ * `Date.setMonth` sozinho estoura pro mês seguinte quando o dia não existe
+ * lá (31/01 + 1 mês viraria "03/03", pulando fevereiro inteiro) — aqui o
+ * dia é sempre CAPADO no último dia do mês de destino (31/01 + 1 mês =
+ * 28/02 ou 29/02 em ano bissexto, nunca março).
+ */
+export function addMonths(d: Date, months: number): Date {
+  const totalMonths = d.getUTCFullYear() * 12 + d.getUTCMonth() + months;
+  const year = Math.floor(totalMonths / 12);
+  const month = totalMonths % 12;
+  const daysInTargetMonth = new Date(Date.UTC(year, month + 1, 0)).getUTCDate();
+  const day = Math.min(d.getUTCDate(), daysInTargetMonth);
+  const r = new Date(d.getTime());
+  r.setUTCFullYear(year, month, day);
+  return r;
+}
+
+/**
  * Revalida a cotação no motor oficial (mesma lógica de
  * POST /catalog2/quotes/:id/revalidate) e garante que ela ainda está
  * "valida" antes de deixar o chamador prosseguir para criar um
@@ -88,6 +109,18 @@ export async function attachCatalog2QuoteToProject(tx: DbClient, params: AttachQ
     include: { category: { select: { name: true } }, pillar: { select: { name: true } } },
   });
 
+  // Item 6 (reunião 2026-09-14, "Modalidades de contratação por período"):
+  // a fotografia do período (se algum) é copiada da Quote — que já a
+  // recalculou/congelou pelo MESMO motor — pro ProjectProduct, EXATAMENTE
+  // como preço/prazo/config já são copiados hoje. `recurrence_snapshot`
+  // ("avulso"|"mensal") é o campo LEGADO lido pelos relatórios financeiros/
+  // de execução — qualquer período vira "mensal" ali (é recorrente no
+  // sentido binário que esses relatórios entendem); a granularidade real
+  // (mensal/trimestral/semestral/anual) fica nos campos catalog2_period_*
+  // dedicados, específicos do catalog2.
+  const now = new Date();
+  const periodEndsAt = quote.contract_period_months ? addMonths(now, quote.contract_period_months) : null;
+
   const pp = await tx.projectProduct.create({
     data: {
       project_id: params.projectId,
@@ -98,7 +131,7 @@ export async function attachCatalog2QuoteToProject(tx: DbClient, params: AttachQ
       product_code_snapshot: product.slug,
       product_category_snapshot: product.category?.name ?? product.pillar?.name ?? "Catálogo 2.0",
       product_price_snapshot: quote.commercial_price ?? 0,
-      recurrence_snapshot: null,
+      recurrence_snapshot: quote.contract_period ? "mensal" : null,
       preco_final_cliente_snapshot: quote.commercial_price ?? 0,
       comissao_snapshot: 0,
       pagador_snapshot: params.pagadorSnapshot,
@@ -106,6 +139,11 @@ export async function attachCatalog2QuoteToProject(tx: DbClient, params: AttachQ
       origin_catalog2_quote_id: quote.id,
       origin_catalog2_change_order_id: params.changeOrderId ?? null,
       status: "PENDENTE",
+      catalog2_period: quote.contract_period,
+      catalog2_period_months: quote.contract_period_months,
+      catalog2_period_discount_percent: quote.contract_period_discount_percent,
+      catalog2_period_reference_monthly_price: quote.contract_period_reference_monthly_price,
+      catalog2_period_ends_at: periodEndsAt,
     },
   });
 

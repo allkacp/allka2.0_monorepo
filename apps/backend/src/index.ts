@@ -11,6 +11,10 @@ import { ensureDefaultAlertStandardsAndRules, runAlertEngineOnceGuarded } from "
 import { runTaskRotationOnceGuarded } from "./lib/task-rotation-engine";
 import { runTaskReleaseSchedulerOnceGuarded } from "./lib/task-release-scheduler";
 import { runCommsSchedulerOnceGuarded } from "./lib/comms";
+import { runCatalog2InactivationSchedulerOnceGuarded } from "./lib/catalog2-inactivation-scheduler";
+import { runCatalog2DeliveryCycleSchedulerOnceGuarded } from "./lib/catalog2-delivery-cycle-scheduler";
+import { runCatalog2ActivationNotificationSchedulerOnceGuarded } from "./lib/catalog2-activation-notification-scheduler";
+import { getCatalog2HistoryCoverageMarker } from "./lib/catalog2-product-history";
 
 // Mascara a URL do banco: mantém apenas o caminho do arquivo, omite credenciais
 function maskDatabaseUrl(url: string): string {
@@ -148,6 +152,50 @@ async function main() {
     );
   }, config.COMMS_SCHEDULER_INTERVAL_MS).unref();
   console.log(`📣 Motor de comunicação ativo (intervalo: ${config.COMMS_SCHEDULER_INTERVAL_MS}ms).`);
+
+  // Worker de inativação programada de produtos do catalog2 (Item 5,
+  // reunião 2026-09-14) — efetiva o status "arquivado" quando a data
+  // programada chega, reaproveitando o MESMO padrão durável dos motores
+  // acima. O bloqueio de contratação em si nunca depende deste worker ter
+  // rodado (ver checkClientVisibility) — ele só formaliza o status e envia
+  // o aviso de encerramento.
+  setInterval(() => {
+    runCatalog2InactivationSchedulerOnceGuarded().catch((err) =>
+      console.error("❌ Falha no worker de inativação programada do catálogo:", err),
+    );
+  }, config.CATALOG2_INACTIVATION_SCHEDULER_INTERVAL_MS).unref();
+  console.log(`🗄️  Worker de inativação programada do catálogo ativo (intervalo: ${config.CATALOG2_INACTIVATION_SCHEDULER_INTERVAL_MS}ms).`);
+
+  // Worker de ciclos de entrega mensal do catalog2 (Item 6.1, reunião
+  // 2026-09-14) — libera (gera tarefas de) cada ciclo de um contrato de
+  // período pago quando sua data prevista chega. Mesmo padrão durável dos
+  // motores acima; nunca cria cobrança/pagamento novo.
+  setInterval(() => {
+    runCatalog2DeliveryCycleSchedulerOnceGuarded().catch((err) =>
+      console.error("❌ Falha no worker de ciclos de entrega do catálogo:", err),
+    );
+  }, config.CATALOG2_DELIVERY_CYCLE_SCHEDULER_INTERVAL_MS).unref();
+  console.log(`📦 Worker de ciclos de entrega do catálogo ativo (intervalo: ${config.CATALOG2_DELIVERY_CYCLE_SCHEDULER_INTERVAL_MS}ms).`);
+
+  // Worker de aviso de ativação do catalog2 (Item 8, reunião 2026-09-14) —
+  // envia (em lote) o aviso "produto disponível" pra toda a plataforma
+  // quando uma transição real de status registrou a intenção — mesmo
+  // padrão durável dos motores acima; a mudança de status em si nunca
+  // espera este worker (a intenção já foi persistida junto da alteração).
+  setInterval(() => {
+    runCatalog2ActivationNotificationSchedulerOnceGuarded().catch((err) =>
+      console.error("❌ Falha no worker de aviso de ativação do catálogo:", err),
+    );
+  }, config.CATALOG2_ACTIVATION_NOTIFICATION_SCHEDULER_INTERVAL_MS).unref();
+  console.log(`📢 Worker de aviso de ativação do catálogo ativo (intervalo: ${config.CATALOG2_ACTIVATION_NOTIFICATION_SCHEDULER_INTERVAL_MS}ms).`);
+
+  // Item 7.1 (reunião 2026-09-14, "Fechar a integridade do histórico"):
+  // aquece o marco persistido de cobertura completa do histórico do
+  // catalog2 — cria (só na 1ª vez, em cada ambiente) ou apenas lê o já
+  // existente. Nunca bloqueia o boot do servidor por causa disto.
+  getCatalog2HistoryCoverageMarker().catch((err) =>
+    console.error("❌ Falha ao aquecer o marco de cobertura do histórico do catálogo:", err),
+  );
 
   // Passenger/cPanel sets PORT as a socket path or port number
   // Use process.env.PORT directly to support both TCP and Unix socket

@@ -49,6 +49,14 @@ Regras de conhecimento (reunião 10/09, "base de conhecimento — catálogo e br
 - Se a pergunta não tiver base nas informações fornecidas (nem no catálogo, nem nos documentos), diga honestamente que não encontrou essa informação, em vez de inventar. Pode fazer uma pergunta de esclarecimento em vez de responder.
 - Ao recomendar um produto, explique o motivo (que necessidade ele resolve), cite os campos relevantes usados na decisão (categoria, preço, prazo, tarefas) e informe pendências reais quando existirem.
 - Nunca invente preço, prazo, tarefa, política ou produto que não esteja em nenhuma das fontes fornecidas.
+
+Regras dos Itens 2-8 do catálogo2 (reunião 2026-09-14, "consolidação das mudanças" — Item 9, "Atualizar o contexto da Aura"):
+- Quando a seção "PRODUTO EM CONTEXTO" estiver presente abaixo, ela já traz status, disponibilidade, bloqueios, pendências (só quando o perfil é Admin Master), tarefas/etapas/questionários, modalidades de período e inativação programada — todos JÁ CALCULADOS no servidor. Nunca calcule ou deduza esses valores você mesma; só explique o que está escrito ali. Se a pergunta for sobre um produto e essa seção não estiver presente, diga que não tem esse produto identificado no contexto atual, em vez de responder com base no CATÁLOGO2 genérico acima.
+- Quando a seção "COTAÇÃO EM CONTEXTO" estiver presente, ela traz o preço congelado, a proteção de 30 dias (com a data real já calculada) e a validade dessa cotação específica — use exatamente esses valores, nunca calcule uma data de proteção você mesma. Sem essa seção, se perguntarem sobre proteção de preço, explique só a REGRA GERAL (cotações ficam protegidas por 30 dias a partir da data de uma alteração comercial real) sem citar nenhum valor ou data específica — deixe claro que, pra saber a data exata desta cotação, é preciso abrir a cotação identificada.
+- Quando a seção "HISTÓRICO EM CONTEXTO" estiver presente (só aparece para Admin Master), explique a cobertura real e as limitações exatamente como descritas ali — nunca afirme que um evento existe se ele não estiver listado, e sempre informe a partir de quando o histórico é comprovadamente completo.
+- Inativação programada: NUNCA prometa crédito, desconto ou cancelamento automático como compensação — a regra de compensação financeira da inativação ainda não existe. Só explique o que a seção de contexto realmente informa (data efetiva, se já bloqueou contratação nova, se contratos existentes continuam honrados).
+- Você é só orientação: nunca ofereça publicar uma versão, mudar preço, contratar ou inativar um produto pelo chat — essas ações continuam exigindo a tela/confirmação normal. Se pedirem isso, explique como fazer na tela certa, nunca finja executar a ação.
+- Conteúdo restrito a Admin Master (custo interno, margem, memória de cálculo, dado provisório, histórico administrativo) nunca aparece nas seções de contexto de uma conta comercial — se uma conta comercial perguntar por isso, diga que essa informação é restrita, sem revelar nem uma aproximação do valor.
 `.trim();
 
 function buildCatalogText(
@@ -143,6 +151,14 @@ export interface IallkaTurnOpts {
    * depois de validado que o projeto pertence à conta da sessão (ver
    * routes/iallka.ts). Nunca cacheado, nunca reaproveitado entre contas. */
   projectBriefing?: { text: string; source: KnowledgeSource } | null;
+  /** Item 9 (reunião 2026-09-14, "Atualizar o contexto da Aura") — produto/
+   * cotação/histórico específicos já resolvidos e AUTORIZADOS no servidor
+   * (ver lib/iallka-catalog2-context.ts + routes/iallka.ts). `null` quando
+   * o id recebido do frontend não existe, não é visível pro perfil, ou não
+   * pertence à conta da sessão — nunca um texto parcial nesses casos. */
+  catalog2Product?: { text: string; source: KnowledgeSource } | null;
+  catalog2Quote?: { text: string; source: KnowledgeSource } | null;
+  catalog2History?: { text: string; source: KnowledgeSource } | null;
 }
 
 /** Envia um turno pra IA: histórico completo + mensagem nova do usuário,
@@ -163,6 +179,9 @@ export async function sendIallkaTurn(
 
   const sources: KnowledgeSource[] = [...catalog2.sources, ...adminDocs.sources];
   if (opts.projectBriefing) sources.push(opts.projectBriefing.source);
+  if (opts.catalog2Product) sources.push(opts.catalog2Product.source);
+  if (opts.catalog2Quote) sources.push(opts.catalog2Quote.source);
+  if (opts.catalog2History) sources.push(opts.catalog2History.source);
 
   const systemInstruction = `${IALLKA_PERSONA}
 
@@ -183,6 +202,30 @@ ${adminDocs.text || "(nenhum documento cadastrado ainda)"}
 === BRIEFING PRIVADO DESTE PROJETO (nunca compartilhe fora desta sessão) ===
 ${opts.projectBriefing.text}
 === FIM DO BRIEFING PRIVADO ===`
+      : ""
+  }${
+    opts.catalog2Product
+      ? `
+
+=== PRODUTO EM CONTEXTO (a tela atual está olhando este produto — dados já calculados no servidor) ===
+${opts.catalog2Product.text}
+=== FIM DO PRODUTO EM CONTEXTO ===`
+      : ""
+  }${
+    opts.catalog2Quote
+      ? `
+
+=== COTAÇÃO EM CONTEXTO (cotação identificada e autorizada nesta sessão — dados já calculados no servidor) ===
+${opts.catalog2Quote.text}
+=== FIM DA COTAÇÃO EM CONTEXTO ===`
+      : ""
+  }${
+    opts.catalog2History
+      ? `
+
+=== HISTÓRICO EM CONTEXTO (só Admin Master) ===
+${opts.catalog2History.text}
+=== FIM DO HISTÓRICO EM CONTEXTO ===`
       : ""
   }`;
 
@@ -258,6 +301,7 @@ export async function validateCatalog2Recommendations(
         id: true, slug: true, internal_name: true, status: true,
         published_version_id: true,
         import_origin: { select: { pendencies_json: true } },
+        inactivation_scheduled_at: true, inactivation_effective_at: true,
       },
     });
     if (!product || product.internal_name.startsWith("[TESTE LOCAL]")) continue;
