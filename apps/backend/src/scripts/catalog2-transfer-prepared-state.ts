@@ -9,9 +9,25 @@
  * existe hoje no banco de ORIGEM (produtos com Catalog2ProductImportOrigin)
  * e reconcilia contra o banco de DESTINO por slug/chave natural.
  *
- *   npm run catalog2:transfer-prepared -- --target-url "mysql://..." --dry-run   (padrão)
- *   npm run catalog2:transfer-prepared -- --target-url "mysql://..." --apply
- *   npm run catalog2:transfer-prepared -- --target-url "mysql://..." --apply --json
+ *   npm run catalog2:transfer-prepared -- --target-url=mysql://...  --dry-run   (padrão)
+ *   npm run catalog2:transfer-prepared -- --target-url=mysql://... --apply                                    (target-env=development, implícito)
+ *   npm run catalog2:transfer-prepared -- --target-url=mysql://... --apply --target-env=production \
+ *     --expected-database-name=<nome exato do banco na --target-url> \
+ *     --confirm="TRANSFERIR PARA PRODUCAO" \
+ *     --backup-sha256=<sha256 de um backup real já validado> \
+ *     --expected-manifest-sha256=<manifest_sha256 impresso por um --dry-run revisado>
+ *
+ * Item 13.1 (reunião 2026-09-14, "Concluir a preparação local") — localhost
+ * NUNCA prova sozinho que um destino é de desenvolvimento (rodar de dentro
+ * do próprio VPS de produção, via 127.0.0.1, passaria por
+ * `assertLocalDatabase` sem aviso nenhum). Por isso `--target-env` é
+ * SEMPRE explícito: "development" (padrão, sem cerimônia extra, mesmo
+ * comportamento já testado no Item 12.1) ou "production" (exige TODOS os 4
+ * parâmetros acima — falta de qualquer um recusa antes de qualquer
+ * escrita). Em produção, qualquer conflito ou divergência de configuração
+ * global no manifesto recusa a transferência inteira, mesmo com
+ * confirmação — nunca sobrescreve nada silenciosamente. `--dry-run`
+ * continua sendo o padrão sempre que `--apply` não é passado.
  *
  * Escopo (só isto, nada além):
  *   - Catalog2Product (+ four_f, delivery_recurrence, status sempre
@@ -42,6 +58,7 @@
  * natural em toda entidade, upsert por igualdade de conteúdo (unchanged) ou
  * atualização (updated) — nunca duplica ao rodar de novo.
  */
+import crypto from "node:crypto";
 import { PrismaClient } from "@prisma/client";
 import { assertLocalDatabase } from "../lib/assert-local-database";
 
@@ -50,6 +67,27 @@ function arg(name: string): string | undefined {
   if (!hit) return undefined;
   const eq = hit.indexOf("=");
   return eq === -1 ? "" : hit.slice(eq + 1);
+}
+
+// Item 13.1 (reunião 2026-09-14, "Concluir a preparação local") — localhost
+// NUNCA prova sozinho que um destino é de desenvolvimento: rodar este
+// script de DENTRO do próprio VPS de produção, apontando pro MySQL real via
+// 127.0.0.1, passaria por `assertLocalDatabase` sem nenhum aviso adicional
+// (é exatamente isso que o pedido identificou como risco real). Por isso um
+// destino de produção exige uma declaração EXPLÍCITA e independente da
+// string de conexão — nunca inferida do endereço.
+const CONFIRM_PHRASE = "TRANSFERIR PARA PRODUCAO";
+type TargetEnv = "production" | "development";
+
+function canonicalManifestJSON(lines: ProductManifestLine[]): string {
+  // Ordem estável (já vem ordenado por slug na query) — determinístico pra
+  // permitir checksum-lock (mesmo padrão já usado em qa-migration-reconcile.yml:
+  // diff computado -> sha256 -> só aplica se o sha256 revisado bater de novo).
+  return JSON.stringify(lines);
+}
+
+function sha256(s: string): string {
+  return crypto.createHash("sha256").update(s, "utf8").digest("hex");
 }
 
 type Outcome = "created" | "updated" | "unchanged" | "conflict";
@@ -83,15 +121,26 @@ async function main() {
     console.error("❌ --target-url é obrigatório (ex.: mysql://allka:...@localhost:3306/allka_alvo_descartavel)");
     process.exit(1);
   }
+  const targetDatabaseName = new URL(targetUrl).pathname.replace(/^\//, "");
   const sourceUrl = process.env.DATABASE_URL;
   assertLocalDatabase(sourceUrl); // origem também nunca pode ser remota, por simetria
-  assertLocalDatabase(targetUrl); // destino: nunca produção, nunca QA online — só localhost/127.0.0.1/::1
+  assertLocalDatabase(targetUrl); // destino: nunca produção, nunca QA online — só localhost/127.0.0.1/::1 (ver gate de --target-env abaixo, localhost sozinho NÃO basta pra apply=production)
+
+  // targetEnv é SEMPRE explícito — nunca inferido do endereço de conexão.
+  // "development" preserva o comportamento já testado no Item 12.1 (sem
+  // ceremônia extra); "production" exige toda a cadeia de confirmação abaixo.
+  const targetEnvArg = arg("target-env");
+  if (targetEnvArg !== undefined && targetEnvArg !== "production" && targetEnvArg !== "development") {
+    console.error(`❌ --target-env precisa ser exatamente "production" ou "development" (recebido: "${targetEnvArg}")`);
+    process.exit(1);
+  }
+  const targetEnv: TargetEnv = (targetEnvArg as TargetEnv | undefined) ?? "development";
 
   const src = new PrismaClient({ datasources: { db: { url: sourceUrl } } });
   const dst = new PrismaClient({ datasources: { db: { url: targetUrl } } });
 
-  console.log(`▶ Transferência de estado preparado — modo ${mode.toUpperCase()}`);
-  console.log(`  Origem: DATABASE_URL local · Destino: ${new URL(targetUrl).pathname.replace(/^\//, "")}`);
+  console.log(`▶ Transferência de estado preparado — modo ${mode.toUpperCase()} · target-env=${targetEnv}`);
+  console.log(`  Origem: DATABASE_URL local · Destino: ${targetDatabaseName}`);
 
   const products = await src.catalog2Product.findMany({
     where: { import_origin: { isNot: null } },
@@ -104,6 +153,113 @@ async function main() {
     },
     orderBy: { slug: "asc" },
   });
+
+  // ── Pré-visualização SEMPRE calculada primeiro (só leitura) — usada tanto
+  // para imprimir o manifesto em dry-run quanto como travamento de checksum
+  // antes de qualquer escrita em modo produção (mesmo padrão de
+  // qa-migration-reconcile.yml: diff calculado -> sha256 -> só aplica se o
+  // sha256 revisado bater de novo no momento do apply).
+  async function buildReadOnlyManifest(): Promise<ProductManifestLine[]> {
+    const lines: ProductManifestLine[] = [];
+    const seen = new Set<string>();
+    for (const p of products) {
+      const line: ProductManifestLine = {
+        slug: p.slug,
+        product: "unchanged",
+        version: "unchanged",
+        tasks: { created: 0, updated: 0, unchanged: 0 },
+        steps: { created: 0, updated: 0, unchanged: 0 },
+        questionnaires: { created: 0, updated: 0, unchanged: 0, conflict: 0 },
+        variations: { created: 0, updated: 0, unchanged: 0 },
+        options: { created: 0, updated: 0, unchanged: 0 },
+        addons: { created: 0, updated: 0, unchanged: 0 },
+        periods: { created: 0, updated: 0, unchanged: 0 },
+        provisional_preview: p.provisional_preview ? "unchanged" : "absent",
+        import_origin: "unchanged",
+        global_config_divergences: [],
+        warnings: [],
+      };
+      const v = p.versions[0];
+      if (!v) { line.warnings.push("produto sem nenhuma versão — pulado"); lines.push(line); continue; }
+      for (const t of v.tasks) {
+        if (!t.specialty) continue;
+        const key = t.specialty.key;
+        const targetSpecialty = await dst.catalog2Specialty.findUnique({ where: { key } });
+        if (!targetSpecialty) {
+          const msg = `especialidade "${key}" não existe no destino — precisa rodar catalog2:seed-classifications lá antes`;
+          if (!seen.has(msg)) { line.global_config_divergences.push(msg); seen.add(msg); }
+        } else if (targetSpecialty.max_hourly_rate !== t.specialty.max_hourly_rate) {
+          const msg = `especialidade "${key}": max_hourly_rate difere (origem=${t.specialty.max_hourly_rate} · destino=${targetSpecialty.max_hourly_rate}) — NÃO sobrescrito, decisão do responsável`;
+          if (!seen.has(msg)) { line.global_config_divergences.push(msg); seen.add(msg); }
+        }
+      }
+      const existingProduct = await dst.catalog2Product.findUnique({ where: { slug: p.slug }, include: { versions: { orderBy: { version_number: "desc" }, take: 1 }, import_origin: true } });
+      line.product = existingProduct ? (existingProduct.delivery_recurrence === p.delivery_recurrence ? "unchanged" : "conflict") : "created";
+      const existingVersion = existingProduct?.versions[0];
+      line.version = !existingProduct ? "created" : !existingVersion ? "created" : existingVersion.title === v.title && existingVersion.full_description === v.full_description ? "unchanged" : "updated";
+      line.tasks.created = existingProduct ? 0 : v.tasks.length;
+      line.tasks.unchanged = existingProduct ? v.tasks.length : 0;
+      line.steps.created = existingProduct ? 0 : v.tasks.reduce((a, t) => a + t.steps.length, 0);
+      line.variations.created = existingProduct ? 0 : v.variations.length;
+      line.options.created = existingProduct ? 0 : v.variations.reduce((a, va) => a + va.options.length, 0);
+      line.addons.created = existingProduct ? 0 : v.addons.length;
+      line.periods.created = existingProduct ? 0 : p.periods.length;
+      const qCount = new Set(v.tasks.filter((t) => t.questionnaire).map((t) => t.questionnaire!.id)).size;
+      line.questionnaires.created = existingProduct ? 0 : qCount;
+      line.import_origin = existingProduct?.import_origin ? "unchanged" : "created";
+      lines.push(line);
+    }
+    return lines;
+  }
+
+  const readOnlyManifest = await buildReadOnlyManifest();
+  const readOnlyManifestHash = sha256(canonicalManifestJSON(readOnlyManifest));
+
+  if (mode === "dry_run") {
+    console.log(`\n════════ MANIFESTO — PRÉVIA (${products.length} produtos avaliados) ════════`);
+    for (const l of readOnlyManifest) {
+      console.log(`  ${l.slug} — produto:${l.product} versão:${l.version} tarefas:${jstr(l.tasks)} questionários:${jstr(l.questionnaires)}`);
+      if (l.global_config_divergences.length) for (const d of l.global_config_divergences) console.log(`     ⚠ ${d}`);
+      if (l.warnings.length) for (const w of l.warnings) console.log(`     ⚠ ${w}`);
+    }
+    console.log(`\n  manifest_sha256=${readOnlyManifestHash}`);
+    console.log("  (guarde este hash — é exigido em --expected-manifest-sha256 para --apply --target-env=production)");
+    if (arg("json") !== undefined) console.log("\n" + JSON.stringify({ mode, target_env: targetEnv, count: products.length, manifest: readOnlyManifest, manifest_sha256: readOnlyManifestHash }, null, 2));
+    console.log("\n────────────────────────────────────────────");
+    console.log("Nada foi gravado no destino. Rode com --apply para transferir.");
+    await src.$disconnect();
+    await dst.$disconnect();
+    return;
+  }
+
+  // ── Portão de produção — nunca inferido do endereço de conexão ─────────
+  if (targetEnv === "production") {
+    const expectedDbName = arg("expected-database-name");
+    const confirmPhrase = arg("confirm");
+    const expectedManifestSha256 = arg("expected-manifest-sha256");
+    const backupSha256 = arg("backup-sha256");
+    const problems: string[] = [];
+    if (!expectedDbName) problems.push("--expected-database-name é obrigatório para --target-env=production");
+    else if (expectedDbName !== targetDatabaseName) problems.push(`--expected-database-name ("${expectedDbName}") não bate com o nome do banco na --target-url ("${targetDatabaseName}") — destino divergente do declarado, recusando`);
+    if (!confirmPhrase) problems.push(`--confirm é obrigatório para --target-env=production (frase exata: "${CONFIRM_PHRASE}")`);
+    else if (confirmPhrase !== CONFIRM_PHRASE) problems.push(`--confirm não bate com a frase exata exigida ("${CONFIRM_PHRASE}")`);
+    if (!backupSha256) problems.push("--backup-sha256 é obrigatório para --target-env=production (sha256 de um backup real já validado — auditoria, não verificado automaticamente por este script)");
+    if (!expectedManifestSha256) problems.push("--expected-manifest-sha256 é obrigatório para --target-env=production (rode --dry-run primeiro, revise o manifesto, copie o manifest_sha256 impresso)");
+    else if (expectedManifestSha256 !== readOnlyManifestHash) problems.push(`--expected-manifest-sha256 ("${expectedManifestSha256}") não bate com o manifesto recalculado agora ("${readOnlyManifestHash}") — o destino pode ter mudado desde a revisão, ou o hash informado está errado. Rode --dry-run de novo e revise o novo manifesto.`);
+    const anyConflict = readOnlyManifest.some((l) => l.product === "conflict" || l.questionnaires.conflict > 0);
+    const anyGlobalDivergence = readOnlyManifest.some((l) => l.global_config_divergences.length > 0);
+    if (anyConflict) problems.push("o manifesto tem pelo menos um conflito (produto ou questionário) — nunca aplicável em produção sem resolver antes, mesmo com confirmação");
+    if (anyGlobalDivergence) problems.push("o manifesto tem pelo menos uma divergência de configuração global (ex.: especialidade) — nunca aplicável em produção sem resolver antes, mesmo com confirmação");
+    if (problems.length > 0) {
+      console.error("\n❌ Portão de produção recusou a transferência:");
+      for (const p of problems) console.error(`   - ${p}`);
+      console.error("\nNenhuma escrita foi feita.");
+      await src.$disconnect();
+      await dst.$disconnect();
+      process.exit(1);
+    }
+    console.log(`\n✅ Portão de produção aprovado — destino "${targetDatabaseName}" confirmado, manifesto ${readOnlyManifestHash} revisado, backup ${backupSha256} referenciado.`);
+  }
 
   const manifest: ProductManifestLine[] = [];
   const configDivergenceSeen = new Set<string>();
@@ -146,26 +302,8 @@ async function main() {
       }
     }
 
-    if (mode === "dry_run") {
-      // Dry-run: só classifica por existência/igualdade de conteúdo, não escreve.
-      const existingProduct = await dst.catalog2Product.findUnique({ where: { slug: p.slug }, include: { versions: { orderBy: { version_number: "desc" }, take: 1 }, import_origin: true } });
-      line.product = existingProduct ? (existingProduct.delivery_recurrence === p.delivery_recurrence ? "unchanged" : "conflict") : "created";
-      const existingVersion = existingProduct?.versions[0];
-      line.version = !existingProduct ? "created" : !existingVersion ? "created" : existingVersion.title === v.title && existingVersion.full_description === v.full_description ? "unchanged" : "updated";
-      line.tasks.created = existingProduct ? 0 : v.tasks.length;
-      line.tasks.unchanged = existingProduct ? v.tasks.length : 0;
-      line.steps.created = existingProduct ? 0 : v.tasks.reduce((a, t) => a + t.steps.length, 0);
-      line.variations.created = existingProduct ? 0 : v.variations.length;
-      line.options.created = existingProduct ? 0 : v.variations.reduce((a, va) => a + va.options.length, 0);
-      line.addons.created = existingProduct ? 0 : v.addons.length;
-      line.periods.created = existingProduct ? 0 : p.periods.length;
-      const qCount = new Set(v.tasks.filter((t) => t.questionnaire).map((t) => t.questionnaire!.id)).size;
-      line.questionnaires.created = existingProduct ? 0 : qCount;
-      line.import_origin = existingProduct?.import_origin ? "unchanged" : "created";
-      manifest.push(line);
-      continue;
-    }
-
+    // A esta altura mode é sempre "apply" — dry_run já retornou mais acima,
+    // antes deste loop (ver buildReadOnlyManifest/readOnlyManifest).
     // ── APPLY: upsert real, por identidade natural, dentro de uma transação por produto ──
     await dst.$transaction(async (tx) => {
       const existing = await tx.catalog2Product.findUnique({ where: { slug: p.slug } });
@@ -416,17 +554,17 @@ async function main() {
     manifest.push(line);
   }
 
-  console.log(`\n════════ MANIFESTO (${products.length} produtos avaliados) ════════`);
+  console.log(`\n════════ MANIFESTO — APLICADO (${products.length} produtos avaliados, target-env=${targetEnv}) ════════`);
   for (const l of manifest) {
     console.log(`  ${l.slug} — produto:${l.product} versão:${l.version} tarefas:${jstr(l.tasks)} questionários:${jstr(l.questionnaires)}`);
     if (l.global_config_divergences.length) for (const d of l.global_config_divergences) console.log(`     ⚠ ${d}`);
     if (l.warnings.length) for (const w of l.warnings) console.log(`     ⚠ ${w}`);
   }
 
-  if (arg("json") !== undefined) console.log("\n" + JSON.stringify({ mode, count: products.length, manifest }, null, 2));
+  if (arg("json") !== undefined) console.log("\n" + JSON.stringify({ mode, target_env: targetEnv, count: products.length, manifest }, null, 2));
 
   console.log("\n────────────────────────────────────────────");
-  console.log(mode === "dry_run" ? "Nada foi gravado no destino. Rode com --apply para transferir." : "Transferência concluída no destino informado. Nenhum produto ficou contratável.");
+  console.log("Transferência concluída no destino informado. Nenhum produto ficou contratável.");
 
   await src.$disconnect();
   await dst.$disconnect();
