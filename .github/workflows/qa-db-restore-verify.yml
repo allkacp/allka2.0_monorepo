@@ -120,7 +120,56 @@ jobs:
           fi
           echo "gzip_integrity=ok"
 
-          iso_db="allka_restore_verify_$(date -u +%Y%m%dT%H%M%SZ)"
+          # ── Item 13.1: espaço em disco + memória, ANTES de tocar em qualquer
+          # banco. Nunca restaura às cegas — se a informação não for confiável,
+          # interrompe com motivo claro em vez de arriscar comprometer o VPS.
+          #
+          # Estimativa de espaço necessário: o campo ISIZE do próprio gzip (via
+          # `gzip -l`, mod 2^32 — irrelevante aqui, dump muito menor que 4GB)
+          # dá o tamanho REAL descompactado do SQL — melhor proxy disponível
+          # sem já ter restaurado. Banco/índices InnoDB tipicamente ficam entre
+          # 1x e 2x esse tamanho (o dump é texto SQL verboso, mas índices somam
+          # overhead) — uso 2x como estimativa conservadora, mais uma margem
+          # operacional FIXA de 500MB (nunca deixa o disco do host beirar zero,
+          # independente do tamanho do dump).
+          uncompressed_bytes="$(gzip -l "$f" | awk 'NR==2 {print $2}')"
+          if [ -z "${uncompressed_bytes:-}" ] || [ "$uncompressed_bytes" -le 0 ] 2>/dev/null; then
+            echo "ERRO: não foi possível obter o tamanho descompactado de $f via 'gzip -l' — sem informação confiável, interrompendo ANTES de restaurar." >&2
+            exit 1
+          fi
+          echo "tamanho_descompactado_estimado_bytes=$uncompressed_bytes"
+
+          margin_bytes=$((500 * 1024 * 1024))
+          required_bytes=$(( uncompressed_bytes * 2 + margin_bytes ))
+          avail_bytes="$(df -B1 --output=avail "$deploy_path" 2>/dev/null | tail -1 | tr -d ' ')"
+          if [ -z "${avail_bytes:-}" ]; then
+            echo "ERRO: não foi possível ler espaço livre em disco (df) para $deploy_path — sem informação confiável, interrompendo ANTES de restaurar." >&2
+            exit 1
+          fi
+          echo "espaco_livre_bytes=$avail_bytes"
+          echo "espaco_necessario_estimado_bytes=$required_bytes"
+          if [ "$avail_bytes" -lt "$required_bytes" ]; then
+            echo "ERRO: espaço livre insuficiente para restaurar com segurança (livre=${avail_bytes} bytes, necessário estimado=${required_bytes} bytes = 2x o tamanho descompactado + 500MB de margem). Restauração interrompida ANTES de tocar no banco — não comprometer a aplicação online por falta de disco." >&2
+            exit 1
+          fi
+
+          avail_mem_mb="$(free -m 2>/dev/null | awk '/^Mem:/{print $7}')"
+          if [ -z "${avail_mem_mb:-}" ]; then
+            echo "ERRO: não foi possível ler memória disponível (free -m) — sem informação confiável, interrompendo ANTES de restaurar." >&2
+            exit 1
+          fi
+          echo "memoria_disponivel_mb=$avail_mem_mb"
+          min_mem_mb=512
+          if [ "$avail_mem_mb" -lt "$min_mem_mb" ]; then
+            echo "ERRO: memória disponível insuficiente (${avail_mem_mb}MB livres, mínimo ${min_mem_mb}MB) — restaurar aqui poderia comprometer a aplicação online. Interrompida ANTES de tocar no banco." >&2
+            exit 1
+          fi
+          echo "verificacao_espaco_memoria=ok"
+
+          # Nome exclusivo (timestamp + PID do processo remoto — nunca colide
+          # mesmo em dois disparos na mesma UTC-second) — limpeza (trap) só
+          # derruba ESTE banco, nunca outro.
+          iso_db="allka_restore_verify_$(date -u +%Y%m%dT%H%M%SZ)_$$"
           echo "banco_isolado=$iso_db"
           docker compose --env-file .env -f docker-compose.yml exec -T mysql \
             sh -c "exec mysql -uroot -p\"\$MYSQL_ROOT_PASSWORD\" -e \"CREATE DATABASE \\\`${iso_db}\\\` CHARACTER SET utf8mb4;\""
@@ -131,8 +180,13 @@ jobs:
           }
           trap cleanup EXIT
 
-          gunzip -c "$f" | docker compose --env-file .env -f docker-compose.yml exec -T mysql \
-            sh -c "exec mysql -uroot -p\"\$MYSQL_ROOT_PASSWORD\" \"${iso_db}\""
+          # Limite de execução da restauração em si (nunca trava o job
+          # indefinidamente se o dump for maior que o esperado).
+          if ! timeout 900s bash -c "gunzip -c '$f' | docker compose --env-file .env -f docker-compose.yml exec -T mysql \
+            sh -c \"exec mysql -uroot -p\\\"\\\$MYSQL_ROOT_PASSWORD\\\" '${iso_db}'\""; then
+            echo "ERRO: restauração excedeu 900s ou falhou — banco isolado será removido pela limpeza (trap), nada persiste." >&2
+            exit 1
+          fi
           echo "restauracao=ok"
 
           # Contagens verificáveis: nº de tabelas + linhas de algumas tabelas
