@@ -234,17 +234,87 @@ describe("Catálogo do cliente — visibilidade, configurador, cotação e cesta
     assert.equal(det.status, 404);
   });
 
-  it("2. cliente não vê produto suspenso nem arquivado", async () => {
+  // Item 2 (reunião 2026-09-14, "Status e disponibilidade dos produtos"):
+  // ANTES desta mudança, temporariamente_inativo (pausado) era invisível
+  // pro cliente, igual arquivado. Agora é o único status visível-mas-
+  // bloqueado que este teste original cobria — arquivado (Inativo)
+  // continua o único status realmente FORA da listagem/detalhe comercial
+  // comum. Ver teste "2b" (mais abaixo) para pausado/pré-lançamento/
+  // esgotado, todos visíveis com etiqueta própria.
+  it("2. cliente não vê produto arquivado; produto pausado continua visível (com etiqueta), mas não contratável", async () => {
     const p = await prisma.catalog2Product.findFirstOrThrow({ where: { slug: SLUG } });
     await prisma.catalog2Product.update({ where: { id: p.id }, data: { status: "temporariamente_inativo" } });
     let list = await api("/api/catalog2/products?page_size=100", { token: CO.token });
+    const paused = list.json.data.find((x: any) => x.slug === SLUG);
+    assert.ok(paused, "produto pausado deveria continuar visível na listagem");
+    assert.equal(paused.contractable, false);
+    const pausedDetail = await api(`/api/catalog2/products/${SLUG}`, { token: CO.token });
+    assert.equal(pausedDetail.status, 200);
+    assert.equal(pausedDetail.json.can_contract, false);
+
+    await prisma.catalog2Product.update({ where: { id: p.id }, data: { status: "arquivado" } });
+    list = await api("/api/catalog2/products?page_size=100", { token: CO.token });
     assert.ok(!list.json.data.some((x: any) => x.slug === SLUG));
     assert.equal((await api(`/api/catalog2/products/${SLUG}`, { token: CO.token })).status, 404);
-    await prisma.catalog2Product.update({ where: { id: p.id }, data: { status: "arquivado" } });
-    assert.equal((await api(`/api/catalog2/products/${SLUG}`, { token: CO.token })).status, 404);
+
     await prisma.catalog2Product.update({ where: { id: p.id }, data: { status: "disponivel" } });
     list = await api("/api/catalog2/products?page_size=100", { token: CO.token });
     assert.ok(list.json.data.some((x: any) => x.slug === SLUG));
+  });
+
+  // Item 2 (reunião 2026-09-14, "Status e disponibilidade dos produtos"):
+  // pré-lançamento/pausado/esgotado são VISÍVEIS no catálogo do cliente
+  // (diferente de temporariamente_inativo/arquivado ANTES desta mudança,
+  // que eram invisíveis) — mas nunca contratáveis. Cobre os 3 status juntos
+  // porque a regra é idêntica para os três (só o status muda).
+  for (const [status, label] of [
+    ["pre_lancamento", "Pré-lançamento"],
+    ["temporariamente_inativo", "Pausado"],
+    ["esgotado_temporariamente", "Esgotado temporariamente"],
+  ] as const) {
+    it(`2b. status "${status}" (${label}): produto aparece no catálogo do cliente com etiqueta própria, mas não é contratável`, async () => {
+      const p = await prisma.catalog2Product.findFirstOrThrow({ where: { slug: SLUG } });
+      await prisma.catalog2Product.update({ where: { id: p.id }, data: { status } });
+      try {
+        const list = await api("/api/catalog2/products?page_size=100", { token: CO.token });
+        assert.equal(list.status, 200);
+        const row = list.json.data.find((x: any) => x.slug === SLUG);
+        assert.ok(row, `produto "${status}" deveria continuar visível na listagem`);
+        assert.equal(row.status, status);
+        assert.equal(row.status_label, label);
+        assert.equal(row.contractable, false);
+        assert.ok(row.unavailable_reason, "deveria trazer o motivo de bloqueio");
+
+        const det = await api(`/api/catalog2/products/${SLUG}`, { token: CO.token });
+        assert.equal(det.status, 200, "detalhe deveria continuar acessível (não é 404)");
+        assert.equal(det.json.status, status);
+        assert.equal(det.json.can_contract, false);
+        assert.ok(det.json.contract_blocked_reason, "detalhe deveria expor o motivo de bloqueio ao cliente real");
+
+        // Bloqueio real na API, não só na UI: chamar cotação/cesta direto
+        // continua proibido mesmo o produto sendo visível.
+        const quote = await api(`/api/catalog2/quotes`, { method: "POST", token: CO.token, body: { product: SLUG, selection: { variation_option_keys: ["estatico"], addon_keys: [] } } });
+        assert.equal(quote.status, 409);
+        assert.equal(quote.json.code, "not_quotable");
+
+        const cart = await api(`/api/catalog2/cart/items`, { method: "POST", token: CO.token, body: { product: SLUG, selection: { variation_option_keys: ["estatico"], addon_keys: [] } } });
+        assert.equal(cart.status, 409);
+      } finally {
+        await prisma.catalog2Product.update({ where: { id: p.id }, data: { status: "disponivel" } });
+      }
+    });
+  }
+
+  it("2c. em_preparacao continua invisível mesmo com versão publicada manualmente revertida", async () => {
+    const p = await prisma.catalog2Product.findFirstOrThrow({ where: { slug: SLUG } });
+    await prisma.catalog2Product.update({ where: { id: p.id }, data: { status: "em_preparacao" } });
+    try {
+      const list = await api("/api/catalog2/products?page_size=100", { token: CO.token });
+      assert.ok(!list.json.data.some((x: any) => x.slug === SLUG));
+      assert.equal((await api(`/api/catalog2/products/${SLUG}`, { token: CO.token })).status, 404);
+    } finally {
+      await prisma.catalog2Product.update({ where: { id: p.id }, data: { status: "disponivel" } });
+    }
   });
 
   it("3. Admin Master pré-visualiza o rascunho (preview=1)", async () => {
