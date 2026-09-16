@@ -134,6 +134,19 @@ describe("Catálogo de Produtos administrativo (catalog2) — grade de cards", (
     expect(await screen.findByText(/exclusiva do Admin Master/i)).toBeInTheDocument();
   });
 
+  it("falha real da API (não-404) mostra erro visível com opção de tentar novamente, nunca vira silenciosamente lista vazia", async () => {
+    api.getCatalog2Readiness.mockRejectedValueOnce(new Error("erro 500"));
+    renderPage();
+    expect(await screen.findByText(/Erro ao carregar o catálogo/i)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Tentar novamente/i })).toBeInTheDocument();
+    // nunca deve parecer "nenhum produto encontrado" — o card real não aparece,
+    // mas a mensagem é claramente de erro, não de resultado vazio.
+    expect(screen.queryByText("Site Institucional")).not.toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole("button", { name: /Tentar novamente/i }));
+    expect(await screen.findByText("Site Institucional")).toBeInTheDocument();
+  });
+
   it("layout recuperado: banner padrão, busca, categorias reais e grade de cards (não mais tabela administrativa)", async () => {
     renderPage();
     await screen.findByText("Site Institucional");
@@ -151,7 +164,7 @@ describe("Catálogo de Produtos administrativo (catalog2) — grade de cards", (
     renderPage();
     expect(await screen.findByText("Site Institucional")).toBeInTheDocument();
     expect(screen.getByText("Landing Page")).toBeInTheDocument();
-    expect(screen.getAllByText("Disponível").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Ativo").length).toBeGreaterThan(0);
     expect(screen.getByText("Em preparação")).toBeInTheDocument();
     expect(screen.getByText(/catálogo antigo, com 162 produtos, não aparece mais aqui/i)).toBeInTheDocument();
   });
@@ -539,7 +552,7 @@ describe("Cards e interação (reunião 10/09)", () => {
     await userEvent.click(screen.getByRole("button", { name: "4 colunas" }));
     const card = screen.getByText("Site Institucional").closest(".group") as HTMLElement;
     expect(within(card).getAllByText("Performance").length).toBe(1);
-    expect(within(card).getAllByText("Disponível").length).toBe(1);
+    expect(within(card).getAllByText("Ativo").length).toBe(1);
     expect(within(card).getAllByText("Preço comercial BRL 1200.").length).toBe(1);
   });
 
@@ -588,12 +601,29 @@ describe("Cards e interação (reunião 10/09)", () => {
     expect(await screen.findByText("Nenhuma pendência — pronto para revisão final.")).toBeInTheDocument();
   });
 
-  it("detalhe comercial completo: mostra loading e depois erro claro quando a API falha (nunca tela em branco)", async () => {
-    api.getCatalog2ProductDetailPreview.mockRejectedValue(new Error());
+  it("detalhe comercial completo: mostra loading e depois erro claro quando a API falha (nunca tela em branco), com opção de tentar novamente", async () => {
+    api.getCatalog2ProductDetailPreview.mockRejectedValueOnce(new Error());
     renderPage();
     await screen.findByText("Site Institucional");
     const card = screen.getByText("Site Institucional").closest(".group, li") as HTMLElement;
     await userEvent.click(within(card).getByRole("button", { name: "Escolher" }));
     expect(await screen.findByText(/não foi possível carregar o detalhe/i)).toBeInTheDocument();
+
+    const retry = screen.getByRole("button", { name: /Tentar novamente/i });
+    await userEvent.click(retry);
+    expect(await screen.findByRole("heading", { name: "Site Institucional" })).toBeInTheDocument();
+  });
+
+  it("detalhe comercial completo: produto inexistente (404) mostra 'não encontrado' sem oferecer tentar novamente (repetir nunca resolveria)", async () => {
+    api.getCatalog2ProductDetailPreview.mockRejectedValue(
+      Object.assign(new Error("Produto não encontrado."), { status: 404 }),
+    );
+    renderPage();
+    await screen.findByText("Site Institucional");
+    const card = screen.getByText("Site Institucional").closest(".group, li") as HTMLElement;
+    await userEvent.click(within(card).getByRole("button", { name: "Escolher" }));
+    expect(await screen.findByText("Produto não encontrado.")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Tentar novamente/i })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Voltar" })).toBeInTheDocument();
   });
 });

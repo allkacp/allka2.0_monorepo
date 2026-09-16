@@ -35,12 +35,46 @@ const { api } = vi.hoisted(() => ({
     getCatalog2FourF: vi.fn(),
     getCatalog2Categories: vi.fn(),
     getCatalog2Specialties: vi.fn(),
+    addCatalog2Specialty: vi.fn(),
+    getCatalog2Questionnaires: vi.fn(),
+    getCatalog2Questionnaire: vi.fn(),
+    addCatalog2Questionnaire: vi.fn(),
+    updateCatalog2Questionnaire: vi.fn(),
+    addCatalog2QuestionnaireQuestion: vi.fn(),
+    updateCatalog2QuestionnaireQuestion: vi.fn(),
+    deleteCatalog2QuestionnaireQuestion: vi.fn(),
+    reorderCatalog2QuestionnaireQuestions: vi.fn(),
+    setCatalog2TaskQuestionnaire: vi.fn(),
+    updateCatalog2TaskQuestionnaireContent: vi.fn(),
+    searchCatalog2Tasks: vi.fn(),
+    importCatalog2Task: vi.fn(),
+    addCatalog2Task: vi.fn(),
+    updateCatalog2Task: vi.fn(),
+    deleteCatalog2Task: vi.fn(),
+    duplicateCatalog2Task: vi.fn(),
+    reorderCatalog2Tasks: vi.fn(),
+    updateCatalog2TaskAI: vi.fn(),
+    addCatalog2Step: vi.fn(),
+    updateCatalog2Step: vi.fn(),
+    deleteCatalog2Step: vi.fn(),
+    reorderCatalog2Steps: vi.fn(),
     getCatalog2Products: vi.fn(),
     getCatalog2Product: vi.fn(),
     createCatalog2Product: vi.fn(),
     newCatalog2Version: vi.fn(),
     setCatalog2ProductStatus: vi.fn(),
     archiveCatalog2Product: vi.fn(),
+    previewCatalog2ProductInactivation: vi.fn(),
+    scheduleCatalog2ProductInactivation: vi.fn(),
+    cancelCatalog2ProductInactivation: vi.fn(),
+    getCatalog2ProductPeriods: vi.fn().mockResolvedValue({ data: [
+      { period: "mensal", label: "Mensal", months: 1, configured: false, is_active: false, discount_percent: null, updated_at: null },
+      { period: "trimestral", label: "Trimestral", months: 3, configured: false, is_active: false, discount_percent: null, updated_at: null },
+      { period: "semestral", label: "Semestral", months: 6, configured: false, is_active: false, discount_percent: null, updated_at: null },
+      { period: "anual", label: "Anual", months: 12, configured: false, is_active: false, discount_percent: null, updated_at: null },
+    ] }),
+    updateCatalog2ProductPeriod: vi.fn(),
+    removeCatalog2ProductPeriod: vi.fn(),
     updateCatalog2VersionInfo: vi.fn(),
     validateCatalog2Version: vi.fn(),
     publishCatalog2Version: vi.fn(),
@@ -160,6 +194,7 @@ beforeEach(() => {
   api.getCatalog2FourF.mockResolvedValue(REFS.fourF)
   api.getCatalog2Categories.mockResolvedValue(REFS.categories)
   api.getCatalog2Specialties.mockResolvedValue(REFS.specialties)
+  api.getCatalog2Questionnaires.mockResolvedValue({ data: [] })
   api.getCatalog2Products.mockResolvedValue(LIST)
   api.getCatalog2ImportSummary.mockResolvedValue(IMPORT_SUMMARY)
   api.getCatalog2Readiness.mockResolvedValue(null)
@@ -223,9 +258,9 @@ it("layout recuperado: banner padrão (StandardPageBanner), abas de filtro rápi
   // gradiente — mesmo componente usado em /admin/empresas e outras telas.
   const heading = screen.getByRole("heading", { name: "Cadastro de Produtos" })
   expect(heading.className).toMatch(/font-bold/)
-  // Abas de filtro rápido — "Todos os produtos"/"Publicados"/"Em preparação"/
+  // Abas de filtro rápido — "Todos os produtos"/"Ativos"/"Em preparação"/
   // "Com pendências"/"Categorias", cada uma com contador.
-  for (const label of ["Todos os produtos", "Publicados", "Em preparação", "Com pendências", "Categorias"]) {
+  for (const label of ["Todos os produtos", "Ativos", "Em preparação", "Com pendências", "Categorias"]) {
     expect(screen.getByText(label)).toBeInTheDocument()
   }
   // Tabela de verdade (thead/tbody com colunas), não mais uma lista <ul>.
@@ -292,10 +327,10 @@ describe("Lista/Grade — alternador de visualização (Cadastro)", () => {
   })
 })
 
-it("clicar na aba 'Publicados' filtra a listagem (status=disponivel) sem precisar abrir 'Filtros'", async () => {
+it("clicar na aba 'Ativos' filtra a listagem (status=disponivel) sem precisar abrir 'Filtros'", async () => {
   renderPage()
   await screen.findByText("[TESTE LOCAL] Demo")
-  await userEvent.click(screen.getByText("Publicados"))
+  await userEvent.click(screen.getByText("Ativos"))
   await waitFor(() => expect(api.getCatalog2Products).toHaveBeenCalledWith(expect.objectContaining({ status: "disponivel" })))
 })
 
@@ -420,7 +455,7 @@ it("listagem: mostra produtos catalog2, situação, etiqueta Novo, e nunca os 16
   expect(screen.getByText(/não conta os 162 operacionais/i)).toBeInTheDocument()
   expect(screen.getByText(/catálogo antigo, com 162 produtos, não aparece mais aqui/i)).toBeInTheDocument()
   expect(screen.getByText("Novo")).toBeInTheDocument()
-  expect(screen.getAllByText("Disponível").length).toBeGreaterThan(0)
+  expect(screen.getAllByText("Ativo").length).toBeGreaterThan(0)
   // busca é passada ao backend
   await userEvent.type(screen.getByPlaceholderText(/Buscar por nome/i), "demo")
   await waitFor(() => expect(api.getCatalog2Products).toHaveBeenCalledWith(expect.objectContaining({ q: "demo" })))
@@ -509,6 +544,354 @@ it("editor: as 10 seções seguem acessíveis, reagrupadas em 5 etapas + Origem"
   expect(screen.getByRole("tab", { name: /^Publicação e versões$/ })).toBeInTheDocument()
 })
 
+// Reunião 2026-09-14 (Item 3 — "Cadastro integrado do produto"): o admin
+// precisa criar/vincular tarefa, etapas, questionário e especialidade SEM
+// sair do cadastro. Mock STATEFUL de getCatalog2Product — cada ação muta um
+// "banco" em memória e o próximo load() devolve o estado atualizado, pra
+// provar que "salvar, fechar e reabrir" preserva os vínculos de verdade
+// (não só que os métodos da API foram chamados).
+function statefulDraftProduct() {
+  const base = productDetail()
+  const draft = base.versions.find((v: any) => v.id === "v2")
+  draft.tasks = []
+  return base
+}
+
+describe("Cadastro integrado do produto (Item 3, reunião 2026-09-14)", () => {
+  it("criar tarefa nova, adicionar e editar etapa, criar especialidade nova, criar e vincular questionário — tudo fica visível ao reabrir", async () => {
+    const user = userEvent.setup()
+    let db = statefulDraftProduct()
+    api.getCatalog2Product.mockImplementation(async () => JSON.parse(JSON.stringify(db)))
+
+    let taskSeq = 0
+    api.addCatalog2Task.mockImplementation(async (versionId: string, body: any) => {
+      const v = db.versions.find((x: any) => x.id === versionId)
+      const task = { id: `t-new-${++taskSeq}`, key: body.key, name: body.name, sort_order: 99, execution_mode: "humano", estimated_minutes: null, is_conditional: false, requires_review: false, specialty: null, questionnaire: null, ai: null, depends_on: [], steps: [] }
+      v.tasks.push(task)
+      return task
+    })
+    api.addCatalog2Step.mockImplementation(async (taskId: string, body: any) => {
+      const task = db.versions.flatMap((v: any) => v.tasks).find((t: any) => t.id === taskId)
+      const step = { id: `s-new-${task.steps.length + 1}`, key: body.key, name: body.name, sort_order: task.steps.length + 1, estimated_minutes: body.estimated_minutes ?? null, is_conditional: false }
+      task.steps.push(step)
+      return step
+    })
+    api.updateCatalog2Step.mockImplementation(async (stepId: string, body: any) => {
+      const step = db.versions.flatMap((v: any) => v.tasks).flatMap((t: any) => t.steps).find((s: any) => s.id === stepId)
+      Object.assign(step, body)
+      return step
+    })
+    // Cópia LOCAL da lista de especialidades — nunca muta o fixture
+    // REFS.specialties.data compartilhado entre testes (evitaria "vazar"
+    // a especialidade criada aqui pros demais testes do arquivo).
+    const specialtiesList = [...REFS.specialties.data]
+    api.getCatalog2Specialties.mockImplementation(async () => ({ data: specialtiesList }))
+    api.addCatalog2Specialty.mockImplementation(async (body: any) => {
+      const specialty = { id: "sp-new-1", key: body.key, name: body.name, max_hourly_rate: body.max_hourly_rate ?? null }
+      specialtiesList.push(specialty)
+      return specialty
+    })
+    api.updateCatalog2Task.mockImplementation(async (taskId: string, body: any) => {
+      const task = db.versions.flatMap((v: any) => v.tasks).find((t: any) => t.id === taskId)
+      if ("specialty_id" in body) task.specialty = body.specialty_id ? specialtiesList.find((s: any) => s.id === body.specialty_id) : null
+      Object.assign(task, body)
+      return task
+    })
+    let questionnaireSeq = 0
+    const questionnaireDb: any[] = []
+    api.addCatalog2Questionnaire.mockImplementation(async (body: any) => {
+      const q = { id: `q-new-${++questionnaireSeq}`, name: body.name, description: body.description ?? null, questions: [] }
+      questionnaireDb.push(q)
+      return q
+    })
+    api.addCatalog2QuestionnaireQuestion.mockImplementation(async (questionnaireId: string, body: any) => {
+      const q = questionnaireDb.find((x) => x.id === questionnaireId)
+      const question = { id: `qq-${q.questions.length + 1}`, key: body.key, label: body.label, is_required: body.is_required, sort_order: body.sort_order }
+      q.questions.push(question)
+      return question
+    })
+    api.setCatalog2TaskQuestionnaire.mockImplementation(async (taskId: string, questionnaireId: string | null) => {
+      const task = db.versions.flatMap((v: any) => v.tasks).find((t: any) => t.id === taskId)
+      task.questionnaire = questionnaireId ? questionnaireDb.find((q) => q.id === questionnaireId) : null
+      return { ok: true, questionnaire_id: questionnaireId }
+    })
+
+    renderPage()
+    await screen.findByText("[TESTE LOCAL] Demo")
+    await user.click(await screen.findByRole("button", { name: /abrir\/editar produto|continuar configuração/i }))
+    await user.click(await screen.findByRole("tab", { name: "Entrega: tarefas, etapas e prazos" }))
+    await user.click(await screen.findByRole("tab", { name: /^Tarefas e etapas$/ }))
+    await screen.findByText(/Modelos do catálogo/i)
+
+    // 1. Criar uma tarefa nova (fluxo "Criar nova").
+    await user.click(screen.getByRole("button", { name: /Criar nova/i }))
+    await user.type(screen.getByLabelText("key"), "briefing-inicial")
+    await user.type(screen.getByLabelText("nome"), "Briefing inicial")
+    await user.click(screen.getByRole("button", { name: "Criar tarefa" }))
+    expect(await screen.findByText(/Briefing inicial/)).toBeInTheDocument()
+    expect(api.addCatalog2Task).toHaveBeenCalledWith("v2", { key: "briefing-inicial", name: "Briefing inicial" })
+
+    // 2. Adicionar uma etapa dentro da tarefa. Nesse ponto o formulário de
+    // "Criar nova" tarefa continua aberto (abaixo da lista), então "key"/
+    // "nome" aparecem duas vezes na tela — o da ETAPA vem primeiro no DOM
+    // (dentro da lista de tarefas), o da tarefa nova vem depois.
+    const stepKeyInputs = screen.getAllByLabelText("key")
+    await user.type(stepKeyInputs[0], "coleta-dados")
+    const stepNameInputs = screen.getAllByLabelText("nome")
+    await user.type(stepNameInputs[0], "Coletar dados do cliente")
+    await user.click(screen.getByRole("button", { name: "Adicionar etapa" }))
+    expect(await screen.findByText(/Coletar dados do cliente/)).toBeInTheDocument()
+
+    // 3. Editar a etapa recém-criada.
+    await user.click(screen.getByText("editar"))
+    const editNameInput = screen.getByDisplayValue("Coletar dados do cliente")
+    await user.clear(editNameInput)
+    await user.type(editNameInput, "Coletar briefing completo")
+    await user.click(screen.getByRole("button", { name: "Salvar" }))
+    expect(await screen.findByText(/Coletar briefing completo/)).toBeInTheDocument()
+    expect(api.updateCatalog2Step).toHaveBeenCalledWith("s-new-1", { name: "Coletar briefing completo", estimated_minutes: null })
+
+    // 4. Criar uma especialidade nova durante a configuração da tarefa.
+    await user.click(screen.getByText("+ nova especialidade"))
+    await user.type(screen.getAllByLabelText("key")[0], "copywriter")
+    await user.type(screen.getAllByLabelText("nome")[0], "Copywriter")
+    await user.click(screen.getByRole("button", { name: "Criar especialidade" }))
+    await waitFor(() => expect(api.addCatalog2Specialty).toHaveBeenCalledWith({ key: "copywriter", name: "Copywriter", max_hourly_rate: null }))
+    expect(await screen.findByRole("option", { name: "Copywriter" })).toBeInTheDocument()
+
+    // 5. Criar e vincular um questionário (perguntas + obrigatoriedade).
+    await user.click(screen.getByRole("button", { name: /Criar novo questionário/i }))
+    await user.type(screen.getByLabelText("nome do questionário"), "Briefing de conteúdo")
+    await user.type(screen.getByLabelText("nova pergunta"), "Qual o objetivo da campanha?")
+    await user.click(screen.getByRole("button", { name: "Adicionar pergunta" }))
+    expect(screen.getByText(/Qual o objetivo da campanha\?/)).toBeInTheDocument()
+    await user.click(screen.getByRole("button", { name: "Criar e vincular" }))
+    await waitFor(() => expect(api.setCatalog2TaskQuestionnaire).toHaveBeenCalledWith("t-new-1", "q-new-1"))
+    expect(await screen.findByText(/Questionário: Briefing de conteúdo/)).toBeInTheDocument()
+    expect(screen.getByText(/Qual o objetivo da campanha\?/)).toBeInTheDocument()
+
+    // 6. Fechar (Voltar) e reabrir o editor — tudo continua vinculado e visível.
+    await user.click(screen.getByRole("button", { name: /^Voltar$/i }))
+    await user.click(await screen.findByRole("button", { name: /abrir\/editar produto|continuar configuração/i }))
+    await user.click(await screen.findByRole("tab", { name: "Entrega: tarefas, etapas e prazos" }))
+    await user.click(await screen.findByRole("tab", { name: /^Tarefas e etapas$/ }))
+    expect(await screen.findByText(/Briefing inicial/)).toBeInTheDocument()
+    expect(screen.getByText(/Coletar briefing completo/)).toBeInTheDocument()
+    expect(screen.getByText(/questionário: Briefing de conteúdo/)).toBeInTheDocument()
+  })
+
+  it("selecionar tarefa existente (de outro produto) IMPORTA uma cópia pra esta versão, sem alterar a tarefa de origem", async () => {
+    const user = userEvent.setup()
+    const db = statefulDraftProduct()
+    api.getCatalog2Product.mockImplementation(async () => JSON.parse(JSON.stringify(db)))
+    api.searchCatalog2Tasks.mockResolvedValue({
+      data: [{ id: "t-other", key: "revisao-seo", name: "Revisão de SEO", execution_mode: "humano", estimated_minutes: 30, specialty_name: "SEO", step_count: 2, questionnaire: null, product_name: "Outro Produto", version_label: "v1 (publicada)" }],
+    })
+    api.importCatalog2Task.mockImplementation(async (versionId: string, sourceTaskId: string) => {
+      const v = db.versions.find((x: any) => x.id === versionId)
+      v.tasks.push({ id: "t-imported-1", key: "revisao-seo", name: "Revisão de SEO", sort_order: 99, execution_mode: "humano", estimated_minutes: 30, is_conditional: false, requires_review: false, specialty: null, questionnaire: null, ai: null, depends_on: [], steps: [] } as any)
+      return { ok: true, task_id: "t-imported-1" }
+    })
+
+    renderPage()
+    await screen.findByText("[TESTE LOCAL] Demo")
+    await user.click(await screen.findByRole("button", { name: /abrir\/editar produto|continuar configuração/i }))
+    await user.click(await screen.findByRole("tab", { name: "Entrega: tarefas, etapas e prazos" }))
+    await user.click(await screen.findByRole("tab", { name: /^Tarefas e etapas$/ }))
+    await user.click(screen.getByRole("button", { name: /Selecionar existente/i }))
+    await user.type(screen.getByPlaceholderText(/Buscar tarefa por nome ou key/i), "seo")
+    expect(await screen.findByText("Revisão de SEO")).toBeInTheDocument()
+    expect(screen.getByText(/Outro Produto/)).toBeInTheDocument()
+    await user.click(screen.getByRole("button", { name: "Importar cópia" }))
+    await waitFor(() => expect(api.importCatalog2Task).toHaveBeenCalledWith("v2", "t-other"))
+    // "Revisão de SEO" aparece 2x agora (resultado da busca + a tarefa
+    // recém-importada na lista) — confirma a cópia sem depender de o
+    // painel de busca ainda estar aberto ou não.
+    expect(await screen.findByText("#99 Revisão de SEO")).toBeInTheDocument()
+  })
+
+  it("cancelar a criação (fechar sem salvar) preserva o produto e as tarefas já existentes", async () => {
+    const user = userEvent.setup()
+    renderPage()
+    await screen.findByText("[TESTE LOCAL] Demo")
+    await user.click(await screen.findByRole("button", { name: /abrir\/editar produto|continuar configuração/i }))
+    await user.click(await screen.findByRole("tab", { name: "Entrega: tarefas, etapas e prazos" }))
+    await user.click(await screen.findByRole("tab", { name: /^Tarefas e etapas$/ }))
+    await user.click(screen.getByRole("button", { name: /Criar nova/i }))
+    await user.type(screen.getByLabelText("key"), "rascunho-abandonado")
+    // Fecha sem clicar em "Criar tarefa".
+    await user.click(screen.getByRole("button", { name: /^Voltar$/i }))
+    expect(api.addCatalog2Task).not.toHaveBeenCalled()
+    // Produto continua acessível e intacto (nenhuma chamada de escrita disparada).
+    expect(await screen.findByText("[TESTE LOCAL] Demo")).toBeInTheDocument()
+  })
+
+  it("erro ao salvar a tarefa mostra mensagem visível e não fecha o formulário de criação", async () => {
+    const user = userEvent.setup()
+    api.addCatalog2Task.mockRejectedValueOnce(new Error("Situação inválida."))
+    renderPage()
+    await screen.findByText("[TESTE LOCAL] Demo")
+    await user.click(await screen.findByRole("button", { name: /abrir\/editar produto|continuar configuração/i }))
+    await user.click(await screen.findByRole("tab", { name: "Entrega: tarefas, etapas e prazos" }))
+    await user.click(await screen.findByRole("tab", { name: /^Tarefas e etapas$/ }))
+    await user.click(screen.getByRole("button", { name: /Criar nova/i }))
+    await user.type(screen.getByLabelText("key"), "tarefa-com-erro")
+    await user.type(screen.getByLabelText("nome"), "Tarefa com erro")
+    await user.click(screen.getByRole("button", { name: "Criar tarefa" }))
+    expect(await screen.findByText("Situação inválida.")).toBeInTheDocument()
+    expect(screen.queryByText(/Tarefa com erro/)).not.toBeInTheDocument()
+  })
+
+  it("clique repetido em 'Criar e vincular' (questionário) não dispara duas criações — botão fica desabilitado enquanto salva", async () => {
+    const user = userEvent.setup()
+    const db = statefulDraftProduct()
+    db.versions.find((v: any) => v.id === "v2").tasks = [{ id: "t1", key: "t1", name: "Tarefa 1", sort_order: 1, execution_mode: "humano", estimated_minutes: 60, is_conditional: false, requires_review: false, steps: [], specialty: null, questionnaire: null, ai: null, depends_on: [] }]
+    api.getCatalog2Product.mockImplementation(async () => JSON.parse(JSON.stringify(db)))
+    let createCalls = 0
+    let resolveCreate: (v: any) => void = () => {}
+    api.addCatalog2Questionnaire.mockImplementation(() => {
+      createCalls++
+      return new Promise((resolve) => { resolveCreate = resolve })
+    })
+
+    renderPage()
+    await screen.findByText("[TESTE LOCAL] Demo")
+    await user.click(await screen.findByRole("button", { name: /abrir\/editar produto|continuar configuração/i }))
+    await user.click(await screen.findByRole("tab", { name: "Entrega: tarefas, etapas e prazos" }))
+    await user.click(await screen.findByRole("tab", { name: /^Tarefas e etapas$/ }))
+    await user.click(screen.getByRole("button", { name: /Criar novo questionário/i }))
+    await user.type(screen.getByLabelText("nome do questionário"), "Briefing X")
+    await user.type(screen.getByLabelText("nova pergunta"), "Pergunta 1")
+    await user.click(screen.getByRole("button", { name: "Adicionar pergunta" }))
+    const saveBtn = screen.getByRole("button", { name: "Criar e vincular" })
+    await user.click(saveBtn)
+    // Segundo clique enquanto a primeira chamada ainda não resolveu.
+    await user.click(screen.getByRole("button", { name: /Salvando/i }))
+    expect(createCalls).toBe(1)
+    resolveCreate({ id: "q-x", name: "Briefing X", description: null, questions: [] })
+  })
+
+  // Item 3.1 (reunião 2026-09-14, "Edição e preservação dos questionários").
+  it("editar título, perguntas e reordenar um questionário já vinculado pela interface — avisa quando cria cópia, e persiste ao fechar e reabrir", async () => {
+    const user = userEvent.setup()
+    const db = statefulDraftProduct()
+    const draftV = db.versions.find((v: any) => v.id === "v2")
+    draftV.tasks = [{
+      id: "t1", key: "t1", name: "Tarefa 1", sort_order: 1, execution_mode: "humano", estimated_minutes: 60,
+      is_conditional: false, requires_review: false, specialty: null, ai: null, depends_on: [], steps: [],
+      questionnaire: { id: "q1", name: "Briefing original", description: "desc original", questions: [
+        { id: "qq1", key: "objetivo", label: "Qual o objetivo?", is_required: true, sort_order: 1 },
+        { id: "qq2", key: "publico", label: "Qual o público?", is_required: false, sort_order: 2 },
+      ] },
+    }]
+    api.getCatalog2Product.mockImplementation(async () => JSON.parse(JSON.stringify(db)))
+    api.updateCatalog2TaskQuestionnaireContent.mockImplementation(async (taskId: string, body: any) => {
+      const task = draftV.tasks.find((t: any) => t.id === taskId)
+      const forked = true // simula que era compartilhado — backend decidiu copiar
+      const newQuestionnaire = { id: "q1-copy", name: body.name, description: body.description, questions: body.questions.map((q: any, i: number) => ({ id: `qq-copy-${i + 1}`, ...q, sort_order: i + 1 })) }
+      task.questionnaire = newQuestionnaire
+      return { ok: true, forked, questionnaire: newQuestionnaire }
+    })
+
+    renderPage()
+    await screen.findByText("[TESTE LOCAL] Demo")
+    await user.click(await screen.findByRole("button", { name: /abrir\/editar produto|continuar configuração/i }))
+    await user.click(await screen.findByRole("tab", { name: "Entrega: tarefas, etapas e prazos" }))
+    await user.click(await screen.findByRole("tab", { name: /^Tarefas e etapas$/ }))
+    expect(await screen.findByText(/Questionário: Briefing original/)).toBeInTheDocument()
+
+    await user.click(screen.getByRole("button", { name: "Editar" }))
+    const nameInput = screen.getByDisplayValue("Briefing original")
+    await user.clear(nameInput)
+    await user.type(nameInput, "Briefing revisado")
+    // edita a 2ª pergunta e reordena pra 1º lugar
+    const labelInputs = screen.getAllByDisplayValue(/Qual o (objetivo|público)\?/)
+    await user.clear(labelInputs[1])
+    await user.type(labelInputs[1], "Qual é o público-alvo?")
+    const upButtons = screen.getAllByRole("button").filter((b) => b.querySelector(".lucide-chevron-up"))
+    await user.click(upButtons[upButtons.length - 1]) // sobe a última pergunta editável (a 2ª)
+    // adiciona uma pergunta nova
+    await user.type(screen.getByLabelText("nova pergunta"), "Prazo desejado?")
+    await user.click(screen.getByRole("button", { name: "Adicionar pergunta" }))
+
+    await user.click(screen.getByRole("button", { name: "Salvar" }))
+    await waitFor(() => expect(api.updateCatalog2TaskQuestionnaireContent).toHaveBeenCalledTimes(1))
+    const [, savedBody] = api.updateCatalog2TaskQuestionnaireContent.mock.calls[0]
+    expect(savedBody.name).toBe("Briefing revisado")
+    expect(savedBody.questions.map((q: any) => q.label)).toEqual(["Qual é o público-alvo?", "Qual o objetivo?", "Prazo desejado?"])
+
+    // avisa que uma cópia foi criada (era compartilhado)
+    expect(await screen.findByText(/uma cópia própria foi criada/i)).toBeInTheDocument()
+    expect(await screen.findByText(/Questionário: Briefing revisado/)).toBeInTheDocument()
+
+    // fecha e reabre — continua persistido
+    await user.click(screen.getByRole("button", { name: /^Voltar$/i }))
+    await user.click(await screen.findByRole("button", { name: /abrir\/editar produto|continuar configuração/i }))
+    await user.click(await screen.findByRole("tab", { name: "Entrega: tarefas, etapas e prazos" }))
+    await user.click(await screen.findByRole("tab", { name: /^Tarefas e etapas$/ }))
+    expect(await screen.findByText(/Questionário: Briefing revisado/)).toBeInTheDocument()
+    expect(screen.getByText(/Qual é o público-alvo\?/)).toBeInTheDocument()
+    expect(screen.getByText(/Prazo desejado\?/)).toBeInTheDocument()
+  })
+
+  it("cancelar a edição do questionário preserva o conteúdo anterior (nenhuma chamada à API, nada muda)", async () => {
+    const user = userEvent.setup()
+    const db = statefulDraftProduct()
+    const draftV = db.versions.find((v: any) => v.id === "v2")
+    draftV.tasks = [{
+      id: "t1", key: "t1", name: "Tarefa 1", sort_order: 1, execution_mode: "humano", estimated_minutes: 60,
+      is_conditional: false, requires_review: false, specialty: null, ai: null, depends_on: [], steps: [],
+      questionnaire: { id: "q1", name: "Briefing original", description: null, questions: [{ id: "qq1", key: "objetivo", label: "Qual o objetivo?", is_required: true, sort_order: 1 }] },
+    }]
+    api.getCatalog2Product.mockImplementation(async () => JSON.parse(JSON.stringify(db)))
+
+    renderPage()
+    await screen.findByText("[TESTE LOCAL] Demo")
+    await user.click(await screen.findByRole("button", { name: /abrir\/editar produto|continuar configuração/i }))
+    await user.click(await screen.findByRole("tab", { name: "Entrega: tarefas, etapas e prazos" }))
+    await user.click(await screen.findByRole("tab", { name: /^Tarefas e etapas$/ }))
+    await user.click(screen.getByRole("button", { name: "Editar" }))
+    const nameInput = screen.getByDisplayValue("Briefing original")
+    await user.clear(nameInput)
+    await user.type(nameInput, "Alteração que será descartada")
+    await user.click(screen.getByRole("button", { name: "Cancelar" }))
+
+    expect(api.updateCatalog2TaskQuestionnaireContent).not.toHaveBeenCalled()
+    expect(await screen.findByText(/Questionário: Briefing original/)).toBeInTheDocument()
+    expect(screen.queryByText(/Alteração que será descartada/)).not.toBeInTheDocument()
+  })
+
+  it("erro ao salvar a edição do questionário mostra mensagem visível e preserva o conteúdo anterior", async () => {
+    const user = userEvent.setup()
+    const db = statefulDraftProduct()
+    const draftV = db.versions.find((v: any) => v.id === "v2")
+    draftV.tasks = [{
+      id: "t1", key: "t1", name: "Tarefa 1", sort_order: 1, execution_mode: "humano", estimated_minutes: 60,
+      is_conditional: false, requires_review: false, specialty: null, ai: null, depends_on: [], steps: [],
+      questionnaire: { id: "q1", name: "Briefing original", description: null, questions: [{ id: "qq1", key: "objetivo", label: "Qual o objetivo?", is_required: true, sort_order: 1 }] },
+    }]
+    api.getCatalog2Product.mockImplementation(async () => JSON.parse(JSON.stringify(db)))
+    api.updateCatalog2TaskQuestionnaireContent.mockRejectedValueOnce(new Error("Este questionário é usado por mais de uma tarefa — edite pelo formulário da tarefa."))
+
+    renderPage()
+    await screen.findByText("[TESTE LOCAL] Demo")
+    await user.click(await screen.findByRole("button", { name: /abrir\/editar produto|continuar configuração/i }))
+    await user.click(await screen.findByRole("tab", { name: "Entrega: tarefas, etapas e prazos" }))
+    await user.click(await screen.findByRole("tab", { name: /^Tarefas e etapas$/ }))
+    await user.click(screen.getByRole("button", { name: "Editar" }))
+    const nameInput = screen.getByDisplayValue("Briefing original")
+    await user.clear(nameInput)
+    await user.type(nameInput, "Tentativa com erro")
+    await user.click(screen.getByRole("button", { name: "Salvar" }))
+
+    expect(await screen.findByText(/usado por mais de uma tarefa/i)).toBeInTheDocument()
+    // formulário de edição continua aberto, com o texto digitado preservado (não fechou nem reverteu).
+    expect(screen.getByDisplayValue("Tentativa com erro")).toBeInTheDocument()
+    // o card read-only (fora de edição) não voltou a aparecer com o nome antigo por cima do form.
+    expect(screen.queryByText(/^Questionário: Briefing original$/)).not.toBeInTheDocument()
+  })
+})
+
 it("versão publicada é somente leitura (a UI bloqueia edição)", async () => {
   api.getCatalog2Product.mockResolvedValue(
     productDetail({ versions: [productDetail().versions[1]] }), // só a v1 publicada
@@ -584,11 +967,11 @@ it("contagens do resumo vêm de overview.counts (dados reais), não de literal",
   // tarefas/etapas cadastradas NOS importados = 0 (não fingir completo)
   expect(within(card("Tarefas (nos importados)")).getByText("0")).toBeInTheDocument()
   expect(within(card("Etapas (nos importados)")).getByText("0")).toBeInTheDocument()
-  // "Em preparação"/"Publicados"/"Com pendências" viraram abas de filtro
+  // "Em preparação"/"Ativos"/"Com pendências" viraram abas de filtro
   // rápido (layout restaurado) — o número vem no <span> badge da aba.
   const tab = (label: string) => screen.getByText(label).closest("button") as HTMLElement
   expect(within(tab("Em preparação")).getByText("36")).toBeInTheDocument()
-  expect(within(tab("Publicados")).getByText("1")).toBeInTheDocument()
+  expect(within(tab("Ativos")).getByText("1")).toBeInTheDocument()
   expect(within(tab("Com pendências")).getByText("36")).toBeInTheDocument()
 })
 
