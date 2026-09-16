@@ -2009,6 +2009,41 @@ export function ProjectViewSlidePanel({
                                     </p>
                                   </div>
                                 </div>
+
+                                {/* Item 6.1 (reunião 2026-09-14, "Completar
+                                    a execução dos períodos") — período
+                                    contratado, ciclos e situação das
+                                    entregas, reaproveitando os mesmos
+                                    componentes do grid acima. Só aparece
+                                    pra contratos com período (avulso nunca
+                                    mostra nada aqui). */}
+                                {pp.catalog2_period && (
+                                  <div className="mt-2 rounded-lg border border-indigo-100 bg-indigo-50/60 px-2.5 py-2 dark:border-indigo-900 dark:bg-indigo-950/20">
+                                    <p className="text-[10px] font-semibold uppercase tracking-wider text-indigo-500">
+                                      Período contratado
+                                    </p>
+                                    <p className="text-sm font-semibold capitalize text-indigo-800 dark:text-indigo-300">
+                                      {pp.catalog2_period} ({pp.catalog2_period_months} mês(es)) — desconto {pp.catalog2_period_discount_percent}%
+                                    </p>
+                                    {(() => {
+                                      const cycles: any[] = pp.catalog2_delivery_cycles ?? [];
+                                      const releasedFollowUps = cycles.filter((c) => c.status === "released").length;
+                                      const skippedFollowUps = cycles.filter((c) => c.status === "skipped").length;
+                                      const nextPending = cycles.find((c) => c.status === "pending");
+                                      // Ciclo 0 (a 1ª entrega) nunca ganha linha — é liberado junto do
+                                      // pagamento original; contamos como liberado assim que o item saiu de PENDENTE.
+                                      const releasedTotal = (pp.status !== "PENDENTE" ? 1 : 0) + releasedFollowUps;
+                                      return (
+                                        <p className="mt-0.5 text-xs text-indigo-600 dark:text-indigo-400">
+                                          Ciclos de entrega: {releasedTotal}/{pp.catalog2_period_months} liberados
+                                          {nextPending && ` · próximo ciclo previsto: ${fmtDate(nextPending.scheduled_at)}`}
+                                          {!nextPending && releasedTotal >= (pp.catalog2_period_months ?? 0) && " · período concluído"}
+                                          {skippedFollowUps > 0 && ` · ${skippedFollowUps} ciclo(s) não liberado(s)`}
+                                        </p>
+                                      );
+                                    })()}
+                                  </div>
+                                )}
                               </div>
 
                               {/* Tasks mini-list from product */}

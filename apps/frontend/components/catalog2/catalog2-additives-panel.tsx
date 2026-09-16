@@ -65,7 +65,11 @@ export function Catalog2AdditivesPanel({ projectId }: { projectId: string }) {
       setPortal(resolvedPortal);
       if (!admin) {
         const quotes = await apiClient.listClientCatalog2Quotes().catch(() => ({ data: [] }));
-        setMyQuotes(((quotes as any)?.data ?? []).filter((q: any) => q.status === "valida"));
+        // Guarda TODAS as cotações do cliente aqui (válidas e expiradas) —
+        // a lista de anexo do formulário abaixo filtra só as válidas, mas o
+        // painel de "cotações vencidas" (Item 4) precisa das expiradas
+        // também, para oferecer a ação de renovar.
+        setMyQuotes((quotes as any)?.data ?? []);
       }
     } catch (e: any) {
       setError(e?.message ?? "Não foi possível carregar os aditivos.");
@@ -97,13 +101,16 @@ export function Catalog2AdditivesPanel({ projectId }: { projectId: string }) {
       {catalog2Items.length === 0 ? (
         <p className="text-sm text-neutral-500">Este projeto não tem itens do novo catálogo — aditivos só se aplicam a produtos contratados via Catálogo 2.0.</p>
       ) : portal !== "admin" ? (
-        <RequestAdditiveForm
-          catalog2Items={catalog2Items}
-          myQuotes={myQuotes}
-          projectId={projectId}
-          onCreated={load}
-          portal={portal}
-        />
+        <>
+          <ExpiredQuotesPanel myQuotes={myQuotes} onRenewed={load} />
+          <RequestAdditiveForm
+            catalog2Items={catalog2Items}
+            myQuotes={myQuotes.filter((q: any) => q.status === "valida")}
+            projectId={projectId}
+            onCreated={load}
+            portal={portal}
+          />
+        </>
       ) : null}
 
       <div className="flex items-center justify-between" data-tour-id="catalog2-additives-history">
@@ -122,6 +129,90 @@ export function Catalog2AdditivesPanel({ projectId }: { projectId: string }) {
           ))}
         </ul>
       )}
+    </div>
+  );
+}
+
+// Item 4 (reunião 2026-09-14, "Preços e proteção por 30 dias"): a cotação
+// congela o preço no momento em que foi gerada. Quando a proteção de 30
+// dias termina (ou o produto deixou de estar disponível daquela forma), a
+// cotação expira e não pode mais virar aditivo — o cliente precisa
+// renovar explicitamente para ver o valor atualizado, nunca é reaproveitada
+// silenciosamente com o valor antigo.
+function ExpiredQuotesPanel({ myQuotes, onRenewed }: { myQuotes: any[]; onRenewed: () => Promise<void> }) {
+  const expired = myQuotes.filter((q: any) => q.status === "expirada");
+  const [renewingId, setRenewingId] = useState<string | null>(null);
+  const [result, setResult] = useState<Record<string, any>>({});
+  const [errors, setErrors] = useState<Record<string, string>>({});
+
+  if (expired.length === 0) return null;
+
+  async function renew(id: string) {
+    setRenewingId(id);
+    setErrors((e) => ({ ...e, [id]: "" }));
+    try {
+      const r = await apiClient.renewClientCatalog2Quote(id);
+      setResult((prev) => ({ ...prev, [id]: r }));
+      await onRenewed();
+    } catch (e: any) {
+      setErrors((prev) => ({ ...prev, [id]: e?.message ?? "Não foi possível renovar esta cotação." }));
+    } finally {
+      setRenewingId(null);
+    }
+  }
+
+  return (
+    <div className="space-y-2 rounded-lg border border-amber-200 bg-amber-50 p-4 dark:border-amber-900 dark:bg-amber-950/30">
+      <h3 className="text-sm font-semibold text-amber-800 dark:text-amber-300">Cotações vencidas</h3>
+      <p className="text-xs text-amber-700 dark:text-amber-400">
+        O preço destas cotações foi congelado quando foram geradas e a proteção de 30 dias já terminou (ou o produto mudou de disponibilidade).
+        Renove para ver o valor e prazo atuais antes de anexar a um aditivo.
+      </p>
+      <ul className="space-y-2">
+        {expired.map((q: any) => {
+          const r = result[q.id];
+          return (
+            <li key={q.id} className="rounded border border-amber-300 bg-white p-2.5 text-sm dark:border-amber-800 dark:bg-neutral-900">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <span>
+                  Valor congelado: <strong>{money(q.commercial_price, q.currency)}</strong>
+                  {" "}— {q.commercial_deadline_days ?? "?"} dia(s)
+                </span>
+                <Button size="sm" variant="outline" disabled={renewingId === q.id} onClick={() => renew(q.id)}>
+                  {renewingId === q.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />} Renovar
+                </Button>
+              </div>
+              {errors[q.id] && (
+                <p className="mt-1.5 flex items-center gap-1.5 text-xs text-red-700">
+                  <AlertCircle className="h-3.5 w-3.5 shrink-0" /> {errors[q.id]}
+                </p>
+              )}
+              {r && r.renewed && (
+                <div className="mt-1.5 rounded bg-neutral-50 p-2 text-xs dark:bg-neutral-800/50">
+                  <p className="font-medium text-neutral-700 dark:text-neutral-300">Nova cotação gerada:</p>
+                  <div className="flex justify-between">
+                    <span>Preço</span>
+                    <span>
+                      {r.changed?.price ? <span className="text-neutral-400 line-through">{money(r.previous.commercial_price, r.previous.currency)}</span> : null}{" "}
+                      <strong className={r.changed?.price ? "text-amber-700" : ""}>{money(r.quote.commercial_price, r.quote.currency)}</strong>
+                    </span>
+                  </div>
+                  <div className="flex justify-between text-neutral-500">
+                    <span>Prazo</span>
+                    <span>
+                      {r.changed?.deadline ? <span className="text-neutral-400 line-through">{r.previous.commercial_deadline_days ?? "?"} dia(s)</span> : null}{" "}
+                      {r.quote.commercial_deadline_days ?? "?"} dia(s)
+                    </span>
+                  </div>
+                </div>
+              )}
+              {r && !r.renewed && (
+                <p className="mt-1.5 text-xs text-neutral-500">Esta cotação já está válida novamente — nenhuma renovação foi necessária.</p>
+              )}
+            </li>
+          );
+        })}
+      </ul>
     </div>
   );
 }

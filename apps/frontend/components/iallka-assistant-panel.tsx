@@ -132,7 +132,7 @@ export function IallkaAssistantPanel({ open, onClose }: IallkaAssistantPanelProp
     setMessages((prev) => [...prev, { role: "user", content: visibleText }]);
     setSending(true);
     try {
-      const result: TurnResult = await apiClient.sendIallkaMessage(sessionId, sentText, screenContext.projectId);
+      const result: TurnResult = await apiClient.sendIallkaMessage(sessionId, sentText, screenContext.projectId, screenContext.productId, screenContext.quoteId);
       setMessages((prev) => [
         ...prev,
         { role: "assistant", content: result.reply_text, structured_payload: JSON.stringify(result) },

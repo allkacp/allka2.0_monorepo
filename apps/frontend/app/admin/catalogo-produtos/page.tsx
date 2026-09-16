@@ -8,6 +8,7 @@ import {
   Package,
   Search,
   ArrowUpDown,
+  AlertTriangle,
   ChevronDown,
   Layers,
   ListChecks,
@@ -45,6 +46,7 @@ import { Catalog2Thumbnail } from "@/components/catalog2-thumbnail";
 import { Catalog2ProductDetail } from "@/components/catalog2-product-detail";
 import { ProvisionalBadge } from "@/components/provisional-badge";
 import { usePersistedViewMode, viewModeGridClass } from "@/lib/use-persisted-view-mode";
+import { CATALOG2_STATUS_LABEL, CATALOG2_STATUS_TONE } from "@/lib/catalog2-status";
 import {
   provisionalPrice,
   provisionalDeadlineDays,
@@ -78,18 +80,10 @@ import { useIsAdminMaster } from "@/hooks/use-is-admin-master";
 // tarefa/imagem) — os textos de preço/prazo vêm do próprio backend
 // (/readiness), que já não finge preço "R$ 0,00" quando não há tarefa.
 
-const STATUS_LABEL: Record<string, string> = {
-  em_preparacao: "Em preparação",
-  disponivel: "Disponível",
-  temporariamente_inativo: "Suspenso",
-  arquivado: "Arquivado",
-};
-const STATUS_TONE: Record<string, string> = {
-  em_preparacao: "bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300",
-  disponivel: "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-200",
-  temporariamente_inativo: "bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-200",
-  arquivado: "bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400",
-};
+// Rótulo/cor de status — módulo compartilhado com /admin/produtos (reunião
+// 2026-09-14, Item 2): ver apps/frontend/lib/catalog2-status.ts.
+const STATUS_LABEL: Record<string, string> = CATALOG2_STATUS_LABEL;
+const STATUS_TONE: Record<string, string> = CATALOG2_STATUS_TONE;
 const PENDENCY_LABEL: Record<string, string> = {
   conteudo: "conteúdo", classificacao: "classificação", variacoes: "variações",
   adicionais: "adicionais", tarefas: "tarefas", etapas: "etapas", preco: "preço",
@@ -157,6 +151,9 @@ interface ListProduct {
   published_version_number: number | null;
   is_new?: boolean;
   updated_at?: string;
+  // Item 5 (reunião 2026-09-14, "Inativação programada de produtos").
+  inactivation_scheduled_at?: string | null;
+  inactivation_effective_at?: string | null;
 }
 type Merged = ReadinessProduct & { list?: ListProduct };
 
@@ -412,9 +409,12 @@ export default function AdminCatalogoProdutosPage() {
 
   const openedProduct = merged.find((p) => p.id === openProductId) ?? null;
 
-  // Contexto seguro pra IAllka (reunião 10/09) — só o que esta tela já
-  // mostra na própria UI (categoria, busca, quantos itens estão visíveis,
-  // nome do produto aberto); nunca um ID técnico nem dado de outra conta.
+  // Contexto seguro pra IAllka (reunião 10/09; Item 9, reunião 2026-09-14,
+  // "Atualizar o contexto da Aura") — só o que esta tela já mostra na
+  // própria UI (categoria, busca, quantos itens estão visíveis, nome do
+  // produto aberto). `productId` é o único id técnico enviado — mesmo
+  // princípio de `projectId`: revalidado/reautorizado no servidor antes de
+  // virar contexto de prompt, nunca confiado só por estar aqui.
   useEffect(() => {
     setIallkaScreenContext({
       label: "Catálogo de Produtos",
@@ -422,9 +422,10 @@ export default function AdminCatalogoProdutosPage() {
       search: search || undefined,
       visibleCount: filtered.length,
       openItemName: openedProduct?.name,
+      productId: openedProduct?.id,
     });
     return () => setIallkaScreenContext(null);
-  }, [category, search, filtered.length, openedProduct?.name, setIallkaScreenContext]);
+  }, [category, search, filtered.length, openedProduct?.name, openedProduct?.id, setIallkaScreenContext]);
 
   if (state === "loading") {
     return (
@@ -443,7 +444,16 @@ export default function AdminCatalogoProdutosPage() {
   if (state === "error") {
     return (
       <div className={STANDARD_SHELL_PANEL_CLASS}>
-        <Centered>Não foi possível carregar.</Centered>
+        <div className="flex flex-col items-center justify-center gap-4 py-16 text-center">
+          <div className="rounded-full bg-red-50 p-4 dark:bg-red-950/40">
+            <AlertTriangle className="h-8 w-8 text-red-500" />
+          </div>
+          <div className="space-y-1.5">
+            <h2 className="text-base font-semibold text-foreground">Erro ao carregar o catálogo</h2>
+            <p className="max-w-sm text-sm text-muted-foreground">Não foi possível carregar os produtos agora. Tente novamente.</p>
+          </div>
+          <Button onClick={() => void load()}>Tentar novamente</Button>
+        </div>
       </div>
     );
   }
@@ -774,6 +784,12 @@ function ProductCard({ product: p, onOpen, onChoose, compact = false, isAdminMas
           )}
         </div>
 
+        {p.list?.inactivation_scheduled_at && (
+          <span className="inline-flex w-fit items-center gap-1 rounded-full bg-red-100 px-2 py-0.5 text-[10px] font-semibold text-red-800 dark:bg-red-900/40 dark:text-red-200">
+            Inativação programada para {new Date(p.list.inactivation_effective_at).toLocaleDateString("pt-BR")}
+          </span>
+        )}
+
         {pendCount > 0 && (
           <TooltipProvider delayDuration={300}>
             <Tooltip>
@@ -893,6 +909,11 @@ function ProductListRow({ product: p, onOpen, onChoose, isAdminMaster = false }:
           {p.functional_for_test ? " · especialidade/tempo provisórios (teste)" : ""}
         </p>
       </div>
+      {p.list?.inactivation_scheduled_at && (
+        <Badge className="shrink-0 bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-200">
+          Inativação em {new Date(p.list.inactivation_effective_at).toLocaleDateString("pt-BR")}
+        </Badge>
+      )}
       <Badge className={STATUS_TONE[p.status] ?? "bg-muted text-muted-foreground"}>{STATUS_LABEL[p.status] ?? p.status}</Badge>
       <span className="hidden w-40 shrink-0 items-center justify-end gap-1 truncate text-right text-xs text-slate-500 sm:inline-flex">
         {p.price_amount != null
@@ -932,10 +953,15 @@ function ProductDetail({ product: p, onViewFull, isAdminMaster = false }: { prod
     <div className="min-h-0 flex-1 overflow-y-auto p-5">
       <div className="mx-auto max-w-2xl space-y-5">
         <div className="flex items-center justify-between gap-2">
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <Badge className={STATUS_TONE[p.status] ?? "bg-muted text-muted-foreground"}>{STATUS_LABEL[p.status] ?? p.status}</Badge>
             <Badge variant="outline">{categoryName}</Badge>
             {p.list?.published_version_number && <Badge variant="outline">v{p.list.published_version_number} publicada</Badge>}
+            {p.list?.inactivation_scheduled_at && (
+              <Badge className="bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-200">
+                Inativação programada para {new Date(p.list.inactivation_effective_at).toLocaleDateString("pt-BR")}
+              </Badge>
+            )}
           </div>
           {onViewFull && (
             <Button size="sm" variant="outline" onClick={onViewFull} className="text-xs">

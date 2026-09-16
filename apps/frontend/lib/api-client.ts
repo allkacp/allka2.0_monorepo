@@ -835,6 +835,24 @@ class ApiClient {
   updateCatalog2Classifications(productId: string, body: Record<string, any>) { return this.c2("PUT", `/products/${productId}/classifications`, body); }
   setCatalog2ProductStatus(productId: string, status: string) { return this.c2("PATCH", `/products/${productId}/status`, { status }); }
   archiveCatalog2Product(productId: string) { return this.c2("POST", `/products/${productId}/archive`); }
+  previewCatalog2ProductInactivation(productId: string) { return this.c2("GET", `/products/${productId}/inactivation/preview`); }
+  scheduleCatalog2ProductInactivation(productId: string, note?: string) { return this.c2("POST", `/products/${productId}/inactivation/schedule`, { note }); }
+  cancelCatalog2ProductInactivation(productId: string) { return this.c2("POST", `/products/${productId}/inactivation/cancel`); }
+  getCatalog2ProductPeriods(productId: string) { return this.c2("GET", `/products/${productId}/periods`); }
+  updateCatalog2ProductDeliveryRecurrence(productId: string, delivery_recurrence: "mensal" | null) {
+    return this.c2("PUT", `/products/${productId}/delivery-recurrence`, { delivery_recurrence });
+  }
+  updateCatalog2ProductPeriod(productId: string, period: string, body: { discount_percent: number; is_active?: boolean }) {
+    return this.c2("PUT", `/products/${productId}/periods/${period}`, body);
+  }
+  removeCatalog2ProductPeriod(productId: string, period: string) { return this.c2("DELETE", `/products/${productId}/periods/${period}`); }
+  // histórico de alterações (reunião 2026-09-14, Item 7)
+  getCatalog2ProductHistory(productId: string, params?: { page?: number; page_size?: number; category?: string; date_from?: string; date_to?: string }) {
+    const qs = new URLSearchParams();
+    for (const [k, v] of Object.entries(params ?? {})) if (v !== undefined && v !== "") qs.set(k, String(v));
+    return this.c2("GET", `/products/${productId}/history${qs.toString() ? `?${qs}` : ""}`);
+  }
+  summarizeCatalog2ProductHistory(productId: string) { return this.c2("POST", `/products/${productId}/history/summary`); }
   newCatalog2Version(productId: string) { return this.c2("POST", `/products/${productId}/versions`); }
   validateCatalog2Version(versionId: string) { return this.c2("GET", `/versions/${versionId}/validate`); }
   publishCatalog2Version(versionId: string, body: Record<string, any>) { return this.c2("POST", `/versions/${versionId}/publish`, body); }
@@ -842,7 +860,30 @@ class ApiClient {
   previewCatalog2Version(versionId: string) { return this.c2("GET", `/versions/${versionId}/preview`); }
   getCatalog2PricingSettings() { return this.c2("GET", "/pricing-settings"); }
   updateCatalog2PricingSettings(body: Record<string, any>) { return this.c2("PUT", "/pricing-settings", body); }
+  addCatalog2Specialty(body: Record<string, any>) { return this.c2("POST", "/specialties", body); }
   updateCatalog2Specialty(id: string, body: Record<string, any>) { return this.c2("PUT", `/specialties/${id}`, body); }
+  // questionários (reunião 2026-09-14, Item 3 — cadastro integrado)
+  getCatalog2Questionnaires() { return this.c2<{ data: any[] }>("GET", "/questionnaires"); }
+  getCatalog2Questionnaire(id: string) { return this.c2("GET", `/questionnaires/${id}`); }
+  addCatalog2Questionnaire(body: Record<string, any>) { return this.c2("POST", "/questionnaires", body); }
+  updateCatalog2Questionnaire(id: string, body: Record<string, any>) { return this.c2("PUT", `/questionnaires/${id}`, body); }
+  addCatalog2QuestionnaireQuestion(questionnaireId: string, body: Record<string, any>) { return this.c2("POST", `/questionnaires/${questionnaireId}/questions`, body); }
+  updateCatalog2QuestionnaireQuestion(id: string, body: Record<string, any>) { return this.c2("PUT", `/questions/${id}`, body); }
+  deleteCatalog2QuestionnaireQuestion(id: string) { return this.c2("DELETE", `/questions/${id}`); }
+  reorderCatalog2QuestionnaireQuestions(questionnaireId: string, order: string[]) { return this.c2("PUT", `/questionnaires/${questionnaireId}/questions/order`, { order }); }
+  setCatalog2TaskQuestionnaire(taskId: string, questionnaireId: string | null) { return this.c2("PUT", `/tasks/${taskId}/questionnaire`, { questionnaire_id: questionnaireId }); }
+  // Item 3.1 — edição segura (cria cópia própria se o questionário for
+  // compartilhado com outra tarefa/produto/versão publicada).
+  updateCatalog2TaskQuestionnaireContent(taskId: string, body: { name: string; description?: string | null; questions: { key: string; label: string; is_required?: boolean }[] }) {
+    return this.c2("PUT", `/tasks/${taskId}/questionnaire/content`, body);
+  }
+  // tarefas reutilizáveis — busca cross-produto + importar (copia) pra outra versão
+  searchCatalog2Tasks(q: string, excludeVersionId?: string) {
+    const qs = new URLSearchParams({ q });
+    if (excludeVersionId) qs.set("exclude_version_id", excludeVersionId);
+    return this.c2<{ data: any[] }>("GET", `/tasks/search?${qs.toString()}`);
+  }
+  importCatalog2Task(versionId: string, sourceTaskId: string) { return this.c2("POST", `/versions/${versionId}/tasks/import`, { source_task_id: sourceTaskId }); }
   // variações / opções / efeitos
   addCatalog2Variation(versionId: string, body: Record<string, any>) { return this.c2("POST", `/versions/${versionId}/variations`, body); }
   updateCatalog2Variation(id: string, body: Record<string, any>) { return this.c2("PUT", `/variations/${id}`, body); }
@@ -908,17 +949,24 @@ class ApiClient {
   getClientCatalog2Product(slug: string, preview?: boolean) {
     return this.cc("GET", `/products/${encodeURIComponent(slug)}${preview ? "?preview=1" : ""}`);
   }
-  configureClientCatalog2(slug: string, selection: Record<string, any>, preview?: boolean) {
-    return this.cc("POST", `/products/${encodeURIComponent(slug)}/configure${preview ? "?preview=1" : ""}`, selection);
+  configureClientCatalog2(slug: string, selection: Record<string, any>, preview?: boolean, period?: string | null) {
+    return this.cc("POST", `/products/${encodeURIComponent(slug)}/configure${preview ? "?preview=1" : ""}`, { ...selection, ...(period ? { period } : {}) });
   }
   listClientCatalog2Quotes() { return this.cc<{ data: any[] }>("GET", "/quotes"); }
-  createClientCatalog2Quote(product: string, selection: Record<string, any>) { return this.cc("POST", "/quotes", { product, selection }); }
+  createClientCatalog2Quote(product: string, selection: Record<string, any>, period?: string | null) {
+    return this.cc("POST", "/quotes", { product, selection, ...(period ? { period } : {}) });
+  }
   getClientCatalog2Quote(id: string) { return this.cc("GET", `/quotes/${id}`); }
   revalidateClientCatalog2Quote(id: string) { return this.cc("POST", `/quotes/${id}/revalidate`); }
+  renewClientCatalog2Quote(id: string) { return this.cc("POST", `/quotes/${id}/renew`); }
   cancelClientCatalog2Quote(id: string) { return this.cc("POST", `/quotes/${id}/cancel`); }
   getClientCatalog2Cart() { return this.cc<{ items: any[]; count: number; needs_revalidation: boolean }>("GET", "/cart"); }
-  addClientCatalog2CartItem(product: string, selection: Record<string, any>) { return this.cc("POST", "/cart/items", { product, selection }); }
-  updateClientCatalog2CartItem(id: string, selection: Record<string, any>) { return this.cc("PUT", `/cart/items/${id}`, selection); }
+  addClientCatalog2CartItem(product: string, selection: Record<string, any>, period?: string | null) {
+    return this.cc("POST", "/cart/items", { product, selection, ...(period ? { period } : {}) });
+  }
+  updateClientCatalog2CartItem(id: string, selection: Record<string, any>, period?: string | null) {
+    return this.cc("PUT", `/cart/items/${id}`, { ...selection, ...(period !== undefined ? { period } : {}) });
+  }
   removeClientCatalog2CartItem(id: string) { return this.cc("DELETE", `/cart/items/${id}`); }
   clearClientCatalog2Cart() { return this.cc("POST", "/cart/clear"); }
 
@@ -1645,8 +1693,12 @@ class ApiClient {
     return this.get(`/iallka/sessions/${id}`);
   }
 
-  async sendIallkaMessage(id: string, message: string, projectId?: string) {
-    return this.post(`/iallka/sessions/${id}/messages`, projectId ? { message, project_id: projectId } : { message });
+  async sendIallkaMessage(id: string, message: string, projectId?: string, productId?: string, quoteId?: string) {
+    const body: Record<string, string> = { message };
+    if (projectId) body.project_id = projectId;
+    if (productId) body.product_id = productId;
+    if (quoteId) body.quote_id = quoteId;
+    return this.post(`/iallka/sessions/${id}/messages`, body);
   }
 
   async approveIallkaSession(id: string) {
