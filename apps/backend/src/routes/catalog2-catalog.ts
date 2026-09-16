@@ -20,6 +20,7 @@ import {
   listQuotes,
   getQuote,
   revalidateQuote,
+  renewQuote,
   cancelQuote,
   getCart,
   addToCart,
@@ -116,7 +117,10 @@ const selectionSchema = z.object({
 router.post("/products/:slug/configure", async (req, res, next) => {
   try {
     const sel = selectionSchema.parse(req.body ?? {});
-    res.json(await configureProduct(ctxOf(req), req.params.slug as string, sel, { preview: wantsPreview(req) }));
+    // Item 6 (reunião 2026-09-14): período opcional — string qualquer que
+    // não bata com um período válido vira avulso (normalizePeriod), nunca
+    // erro de validação aqui; a disponibilidade real é decidida no serviço.
+    res.json(await configureProduct(ctxOf(req), req.params.slug as string, sel, { preview: wantsPreview(req), period: (req.body as any)?.period }));
   } catch (e) {
     handle(e, res, next);
   }
@@ -132,8 +136,8 @@ router.get("/quotes", async (req, res, next) => {
 });
 router.post("/quotes", async (req, res, next) => {
   try {
-    const body = z.object({ product: z.string().min(1), selection: selectionSchema }).parse(req.body);
-    res.status(201).json(await createQuote(ctxOf(req), body.product, body.selection));
+    const body = z.object({ product: z.string().min(1), selection: selectionSchema, period: z.string().optional() }).parse(req.body);
+    res.status(201).json(await createQuote(ctxOf(req), body.product, body.selection, body.period));
   } catch (e) {
     handle(e, res, next);
   }
@@ -148,6 +152,17 @@ router.get("/quotes/:id", async (req, res, next) => {
 router.post("/quotes/:id/revalidate", async (req, res, next) => {
   try {
     res.json(await revalidateQuote(ctxOf(req), req.params.id as string));
+  } catch (e) {
+    handle(e, res, next);
+  }
+});
+// Item 4 (reunião 2026-09-14): renova uma cotação vencida — recalcula pela
+// regra comercial atual e cria uma cotação nova, preservando a antiga como
+// histórico (renewed_from_quote_id). Se a cotação não precisava de
+// renovação (ainda válida/protegida), é um no-op — devolve a mesma.
+router.post("/quotes/:id/renew", async (req, res, next) => {
+  try {
+    res.json(await renewQuote(ctxOf(req), req.params.id as string));
   } catch (e) {
     handle(e, res, next);
   }
@@ -170,8 +185,8 @@ router.get("/cart", async (req, res, next) => {
 });
 router.post("/cart/items", async (req, res, next) => {
   try {
-    const body = z.object({ product: z.string().min(1), selection: selectionSchema }).parse(req.body);
-    res.status(201).json(await addToCart(ctxOf(req), body.product, body.selection));
+    const body = z.object({ product: z.string().min(1), selection: selectionSchema, period: z.string().optional() }).parse(req.body);
+    res.status(201).json(await addToCart(ctxOf(req), body.product, body.selection, body.period));
   } catch (e) {
     handle(e, res, next);
   }
@@ -179,7 +194,7 @@ router.post("/cart/items", async (req, res, next) => {
 router.put("/cart/items/:id", async (req, res, next) => {
   try {
     const sel = selectionSchema.parse(req.body ?? {});
-    res.json(await updateCartItem(ctxOf(req), req.params.id as string, sel));
+    res.json(await updateCartItem(ctxOf(req), req.params.id as string, sel, (req.body as any)?.period));
   } catch (e) {
     handle(e, res, next);
   }
