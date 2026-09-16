@@ -566,9 +566,13 @@ router.put("/pricing-settings", async (req, res, next) => {
       human_review_percent: z.number().nonnegative().nullish(),
       currency: z.string().length(3).optional(),
       notes: z.string().max(2000).nullish(),
+      // Item 16.1 — percentual DEMONSTRATIVO de compensação por inativação,
+      // nunca entra em computePricing, nunca gera crédito real (só simulação).
+      demo_inactivation_compensation_percent: z.number().min(0).max(100).nullish(),
+      demo_inactivation_compensation_note: z.string().max(2000).nullish(),
     }).parse(req.body);
     const data: Record<string, unknown> = { updated_by_user_id: req.user!.id };
-    for (const k of ["tax_percent", "commission_percent", "operational_fee_percent", "profit_margin_percent", "human_review_percent", "currency", "notes"] as const) {
+    for (const k of ["tax_percent", "commission_percent", "operational_fee_percent", "profit_margin_percent", "human_review_percent", "currency", "notes", "demo_inactivation_compensation_percent", "demo_inactivation_compensation_note"] as const) {
       if (d[k] !== undefined) data[k] = d[k];
     }
     const before = await prisma.catalog2PricingSettings.findUnique({ where: { id: "default" } });
@@ -590,6 +594,33 @@ router.put("/pricing-settings", async (req, res, next) => {
     });
     await audit(req, "pricing_settings_updated", {});
     res.json(s);
+  } catch (e) { handle(e, res, next); }
+});
+
+// Item 16.1 (reunião 2026-09-14, "Desconto por inativação") — simula o
+// resultado do percentual DEMONSTRATIVO sobre uma base informada pelo
+// próprio Admin Master. NUNCA persiste crédito/estorno, NUNCA toca em
+// Catalog2Quote/pagamento — cálculo puro, resposta imediata, sempre
+// marcada como simulação. A base definitiva (o que "já foi entregue"
+// significa em R$) continua indefinida (Item 5) — o admin informa a base
+// manualmente aqui só para ver o percentual em ação.
+router.post("/pricing-settings/simulate-inactivation-compensation", async (req, res, next) => {
+  try {
+    const { base_amount } = z.object({ base_amount: z.number().nonnegative() }).parse(req.body);
+    const s = await prisma.catalog2PricingSettings.findUnique({ where: { id: "default" } });
+    const percent = s?.demo_inactivation_compensation_percent ?? null;
+    if (percent == null) {
+      res.status(400).json({ error: "Percentual demonstrativo de compensação ainda não configurado — defina em PUT /pricing-settings antes de simular." });
+      return;
+    }
+    res.json({
+      is_simulation: true,
+      is_provisional: true,
+      base_amount,
+      percent,
+      simulated_compensation_amount: Math.round(base_amount * (percent / 100) * 100) / 100,
+      note: "SIMULAÇÃO — nenhum crédito, estorno ou abatimento real foi gerado. Base definitiva e tratamento do que já foi entregue continuam sem definição (Item 5).",
+    });
   } catch (e) { handle(e, res, next); }
 });
 

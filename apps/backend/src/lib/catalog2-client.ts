@@ -13,6 +13,7 @@
 //     + versão publicada + produto disponível + zero pendência obrigatória.
 
 import { prisma } from "./prisma";
+import { config } from "../config";
 import { hashPayload } from "./canonical-json";
 import { Catalog2Error, isNewByPublicationDate, computeInactivationState } from "./catalog2-service";
 import { computePricing, defaultSelection, type PricingResult, type PricingSelection } from "./catalog2-pricing";
@@ -51,11 +52,21 @@ export interface ClientContext {
   can_preview_drafts: boolean;
 }
 
+// Item 16.1 (reunião 2026-09-14, "Visibilidade e teste") — parseia a lista
+// uma vez, e-mails normalizados em minúsculo. Nunca um wildcard.
+const DEMO_PREVIEW_EMAILS = new Set(
+  (config.CATALOG2_DEMO_PREVIEW_EMAILS ?? "")
+    .split(",")
+    .map((e) => e.trim().toLowerCase())
+    .filter(Boolean),
+);
+
 export async function resolveClientContext(userId: string, accountType: string, role: string): Promise<ClientContext> {
   const user = await prisma.user.findUnique({
     where: { id: userId },
     select: {
       id: true,
+      email: true,
       company_id: true,
       agency_id: true,
       admin_profile: { select: { is_master: true, is_active: true } },
@@ -76,6 +87,12 @@ export async function resolveClientContext(userId: string, accountType: string, 
               : "other";
 
   const isMaster = kind === "admin" && !!user?.admin_profile?.is_master && user.admin_profile.is_active !== false;
+  // Conta de teste explicitamente autorizada (e-mail exato na allowlist,
+  // nunca inferido) — só company/agency, nunca amplia o que um admin comum
+  // (não-master) já não teria. Preço fictício em preview continua nunca
+  // autorizando cotação/contratação real (ver simulateProvisional).
+  const isAuthorizedDemoAccount =
+    (kind === "company" || kind === "agency") && !!user?.email && DEMO_PREVIEW_EMAILS.has(user.email.toLowerCase());
 
   // Quem contrata: company/agency. Admin só pré-visualiza. leader/nomad só veem.
   const canContract = kind === "agency" || kind === "company";
@@ -95,7 +112,7 @@ export async function resolveClientContext(userId: string, accountType: string, 
     can_view: canView,
     can_configure: canConfigure,
     can_contract: canContract,
-    can_preview_drafts: isMaster,
+    can_preview_drafts: isMaster || isAuthorizedDemoAccount,
   };
 }
 
@@ -383,7 +400,13 @@ export async function listClientProducts(ctx: ClientContext, f: ClientListFilter
       });
       continue;
     }
-    const pricing = await computePricing(versionForPreview.id, await defaultSelection(versionForPreview.id));
+    // Item 16.1 (reunião 2026-09-14, "Visibilidade e teste"): em preview,
+    // simula com dado PROVISÓRIO quando o real ainda não existe — é o que
+    // permite homologar os 36 produtos online mesmo com prazo ainda
+    // provisório. `simulateProvisional` nunca autoriza cotação/contratação
+    // (bloqueio incondicional em computePricing/checkClientVisibility) —
+    // só afeta o que aparece NESTA leitura de preview.
+    const pricing = await computePricing(versionForPreview.id, await defaultSelection(versionForPreview.id), { simulateProvisional: previewMode });
     const status = p.status as Catalog2Status;
     // Prontidão comercial só é exigida pra APARECER no status "Ativo" (regra
     // de sempre). Pré-lançamento/pausado/esgotado aparecem mesmo com
@@ -473,7 +496,10 @@ export async function getClientProduct(ctx: ClientContext, slugOrId: string, opt
   if (!version) throw new Catalog2Error("Produto não encontrado.", 404);
 
   const sel = await defaultSelection(version.id);
-  const pricing = await computePricing(version.id, sel);
+  // Item 16.1: em preview, simula com dado PROVISÓRIO quando o real ainda
+  // não existe — nunca autoriza cotação/contratação (ver checkClientVisibility/
+  // computePricing, bloqueio incondicional em modo simulação).
+  const pricing = await computePricing(version.id, sel, { simulateProvisional: previewMode });
   // Item 6: só os períodos CONFIGURADOS + ATIVOS aparecem — nunca os 4 fixos.
   const availablePeriods = await listAvailablePeriods(version.id, sel, product);
 

@@ -104,6 +104,16 @@ const baseEnvSchema = z.object({
   // importador offline e pelas migrations do legado — nunca por rota HTTP.
   LEGACY_DATABASE_URL: z.string().optional(),
   LEGACY_IMPORT_DATABASE_URL: z.string().optional(),
+
+  // Item 16.1 (reunião 2026-09-14, "Visibilidade e teste") — lista explícita
+  // (e-mails exatos, separados por vírgula) de contas comerciais (company/
+  // agency) autorizadas a ver os 36 produtos em preview demonstrativo,
+  // mesmo com dado provisório, para homologação. NUNCA um wildcard, NUNCA
+  // inferido de account_type — só quem está literalmente nesta lista. Vazio
+  // = ninguém além do Admin Master vê preview (comportamento de sempre).
+  // Preço fictício aqui nunca autoriza cotação/contratação real — ver
+  // `simulateProvisional` em catalog2-pricing.ts, bloqueio incondicional.
+  CATALOG2_DEMO_PREVIEW_EMAILS: z.string().optional(),
   // Purpose-separated from ROADMAP_HMAC_* — only ever signs the SSO
   // handoff (POST .../allka/sso/tickets on the Roadmap), never ticket
   // creation/lookup. Deliberately optional: lib/roadmap-client.ts falls
