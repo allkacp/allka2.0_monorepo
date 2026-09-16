@@ -860,6 +860,7 @@ class ApiClient {
   previewCatalog2Version(versionId: string) { return this.c2("GET", `/versions/${versionId}/preview`); }
   getCatalog2PricingSettings() { return this.c2("GET", "/pricing-settings"); }
   updateCatalog2PricingSettings(body: Record<string, any>) { return this.c2("PUT", "/pricing-settings", body); }
+  simulateCatalog2InactivationCompensation(base_amount: number) { return this.c2("POST", "/pricing-settings/simulate-inactivation-compensation", { base_amount }); }
   addCatalog2Specialty(body: Record<string, any>) { return this.c2("POST", "/specialties", body); }
   updateCatalog2Specialty(id: string, body: Record<string, any>) { return this.c2("PUT", `/specialties/${id}`, body); }
   // questionários (reunião 2026-09-14, Item 3 — cadastro integrado)

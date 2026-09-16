@@ -1006,6 +1006,13 @@ function ProductPeriodsPanel({ productId, act }: { productId: string; act: (fn: 
 function PricingSettingsForm({ pricing, onSave }: any) {
   const [f, setF] = useState({ tax_percent: pricing.tax_percent ?? "", commission_percent: pricing.commission_percent ?? "", operational_fee_percent: pricing.operational_fee_percent ?? "", profit_margin_percent: pricing.profit_margin_percent ?? "", human_review_percent: pricing.human_review_percent ?? "" });
   const n = (v: any) => (v === "" ? null : Number(v));
+  const [inact, setInact] = useState({
+    demo_inactivation_compensation_percent: pricing.demo_inactivation_compensation_percent ?? "",
+    demo_inactivation_compensation_note: pricing.demo_inactivation_compensation_note ?? "",
+  });
+  const [simBase, setSimBase] = useState("");
+  const [simResult, setSimResult] = useState<any>(null);
+  const [simError, setSimError] = useState<string | null>(null);
   // Transparência: config sem responsável comercial registrado (veio de
   // seed/teste) e base de incidência ainda indefinida. Avisos informativos —
   // não bloqueiam a edição nem gravam nada.
@@ -1039,6 +1046,71 @@ function PricingSettingsForm({ pricing, onSave }: any) {
         </label>
       ))}
       <Button size="sm" onClick={() => onSave({ tax_percent: n(f.tax_percent), commission_percent: n(f.commission_percent), operational_fee_percent: n(f.operational_fee_percent), profit_margin_percent: n(f.profit_margin_percent), human_review_percent: n(f.human_review_percent) })}>Salvar taxas</Button>
+
+      <div className="mt-3 space-y-1.5 rounded border border-amber-300 bg-amber-50 p-2 dark:border-amber-800 dark:bg-amber-950/20">
+        <p className="text-[11px] font-medium text-amber-700">
+          Desconto por inativação — DEMONSTRATIVO (Item 16.1). Percentual fictício só para simulação; a base
+          definitiva e o tratamento do já entregue continuam sem definição. Nunca gera crédito, estorno ou
+          abatimento real.
+        </p>
+        <label className="flex flex-wrap items-center gap-2">
+          <span className="w-44 text-xs">percentual demonstrativo (%)</span>
+          <Input
+            className="w-20"
+            type="number"
+            value={inact.demo_inactivation_compensation_percent}
+            onChange={(e) => setInact({ ...inact, demo_inactivation_compensation_percent: e.target.value })}
+          />
+        </label>
+        <label className="flex flex-wrap items-center gap-2">
+          <span className="w-44 text-xs">nota / observação</span>
+          <Input
+            className="w-80"
+            value={inact.demo_inactivation_compensation_note}
+            onChange={(e) => setInact({ ...inact, demo_inactivation_compensation_note: e.target.value })}
+          />
+        </label>
+        <Button
+          size="sm"
+          variant="outline"
+          onClick={() =>
+            onSave({
+              demo_inactivation_compensation_percent: n(inact.demo_inactivation_compensation_percent),
+              demo_inactivation_compensation_note: inact.demo_inactivation_compensation_note || null,
+            })
+          }
+        >
+          Salvar configuração demonstrativa
+        </Button>
+
+        <div className="mt-2 flex flex-wrap items-center gap-2 border-t border-amber-200 pt-2">
+          <span className="w-44 text-xs">simular sobre base (R$)</span>
+          <Input className="w-24" type="number" value={simBase} onChange={(e) => setSimBase(e.target.value)} />
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={async () => {
+              setSimError(null);
+              setSimResult(null);
+              try {
+                const r = await apiClient.simulateCatalog2InactivationCompensation(Number(simBase));
+                setSimResult(r);
+              } catch (e: any) {
+                setSimError(e?.message || "Falha ao simular.");
+              }
+            }}
+          >
+            Simular
+          </Button>
+        </div>
+        {simError && <p className="text-[11px] text-red-600">{simError}</p>}
+        {simResult && (
+          <p className="text-[11px] text-amber-700">
+            SIMULAÇÃO — {simResult.percent}% de R$ {simResult.base_amount} = R$ {simResult.simulated_compensation_amount}.
+            {" "}Nenhum crédito, estorno ou abatimento real foi gerado.
+          </p>
+        )}
+      </div>
     </div>
   );
 }
