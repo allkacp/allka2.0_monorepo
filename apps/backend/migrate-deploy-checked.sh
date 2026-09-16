@@ -22,6 +22,14 @@
 # exit 1 aqui interrompe a cadeia ANTES de `up -d --no-deps backend` --
 # o container antigo continua rodando, nunca e trocado por uma versao cujo
 # banco nao esta comprovadamente compativel.
+#
+# Item 16.3 (reuniao 2026-09-14, "Conferir as ferramentas") -- achado real:
+# o diff acima e AGREGADO (todas as migrations pendentes de uma vez). Se uma
+# migration pendente ANTIGA ja tiver efeito fisico fora da trilha do Prisma
+# mas OUTRA pendente, mais nova, for genuinamente aditiva, o diff agregado
+# sai NAO-vazio e mascara a antiga -- o script abaixo confere isso, mas
+# ANTES disso roda migrate-precheck.js, que confere CADA migration pendente
+# INDIVIDUALMENTE contra o information_schema real (nunca so o agregado).
 set -eu
 
 echo "== migrate-deploy-checked: verificando pre-condicoes antes de 'prisma migrate deploy' =="
@@ -35,7 +43,18 @@ if echo "$status_output" | grep -qi "database schema is up to date"; then
 fi
 
 if echo "$status_output" | grep -qi "have not yet been applied"; then
-  echo "== Ha migration(s) pendente(s) no _prisma_migrations -- calculando o diff real contra o schema alvo antes de decidir =="
+  pending_names="$(printf '%s\n' "$status_output" | awk '/have not yet been applied/{flag=1; next} /^$/{flag=0} flag')"
+  echo "== Migration(s) pendente(s) detectada(s): =="
+  echo "$pending_names"
+
+  echo "== Conferindo CADA migration pendente individualmente contra o banco real (nao so o diff agregado) =="
+  # shellcheck disable=SC2086
+  if ! node migrate-precheck.js $pending_names; then
+    echo "##[error] ABORTANDO no precheck individual -- ver mensagem acima. NADA foi escrito no banco por este script." >&2
+    exit 1
+  fi
+
+  echo "== Precheck individual passou -- calculando o diff agregado real contra o schema alvo antes de decidir =="
   diff_output="$(npx prisma migrate diff --from-url "$DATABASE_URL" --to-schema-datamodel prisma/schema.prisma --script 2>&1)"
   echo "$diff_output"
   if echo "$diff_output" | grep -q "This is an empty migration"; then

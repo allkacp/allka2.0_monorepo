@@ -47,6 +47,7 @@ COPY apps/backend/reset-users-password.cjs /app/apps/backend/reset-users-passwor
 # docker-compose.prod.yml (substitui `npm run db:deploy` puro). Precisa
 # estar no runtime porque roda dentro do próprio container do `migrate`.
 COPY apps/backend/migrate-deploy-checked.sh /app/apps/backend/migrate-deploy-checked.sh
+COPY apps/backend/migrate-precheck.js /app/apps/backend/migrate-precheck.js
 RUN chmod +x /app/apps/backend/migrate-deploy-checked.sh
 
 WORKDIR /app/apps/backend

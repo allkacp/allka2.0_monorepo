@@ -350,6 +350,42 @@ jobs:
           echo "::error::${{ steps.classify.outputs.blocked_count }} statement(s) classificados como BLOCKED (potencialmente destrutivos ou de rename). Nunca aplicáveis por este workflow, com nenhuma confirmação — resolva manualmente fora daqui."
           exit 1
 
+      - name: Recusa incondicional se alguma migration pendente transformar DADO (não só schema)
+        # Item 16.3 (reunião 2026-09-14, "Conferir as ferramentas") — achado
+        # real: este workflow aplica reconcile_diff.sql, que é um DIFF DE
+        # SCHEMA derivado (`prisma migrate diff`) — NUNCA o migration.sql
+        # original. Se uma migration pendente tiver um UPDATE/INSERT (ex.:
+        # 20260916090000_add_catalog2_commercial_change_events, que rotula
+        # linhas pré-existentes com `price_protection_anchor_source =
+        # "detected_fallback"`), aplicar só o diff de schema e depois marcar
+        # essa migration como "aplicada" pularia essa transformação de dado
+        # PARA SEMPRE, mesmo com o schema idêntico ao alvo — um diff vazio
+        # NUNCA prova que o dado foi migrado, só que a estrutura bate.
+        # Migrations assim só podem ser aplicadas rodando o migration.sql
+        # completo de verdade (via `prisma migrate deploy`, no pipeline
+        # normal de deploy) — nunca por este reconciliador.
+        shell: bash
+        env:
+          COMMIT_SHA: ${{ inputs.commit_sha }}
+          MIGRATION_NAMES: ${{ steps.schema.outputs.migration_names }}
+        run: |
+          found=""
+          while IFS= read -r name; do
+            [ -z "$name" ] && continue
+            sql="$(git show "${COMMIT_SHA}:apps/backend/prisma/migrations/${name}/migration.sql" 2>/dev/null || true)"
+            no_comments="$(printf '%s\n' "$sql" | grep -v '^\s*--')"
+            if printf '%s\n' "$no_comments" | grep -qiE '^\s*(UPDATE|INSERT)\b'; then
+              found="${found}${name}\n"
+            fi
+          done <<< "$MIGRATION_NAMES"
+          if [ -n "$found" ]; then
+            echo "::error::A(s) seguinte(s) migration(s) pendente(s) contém(êm) UPDATE/INSERT (transformação de dado, não só schema) — este reconciliador NUNCA pode aplicá-las (só aplica o diff de SCHEMA derivado, nunca o migration.sql original, então o dado nunca seria transformado de verdade):"
+            printf '%b' "$found" >&2
+            echo "::error::Aplicar via o pipeline normal de deploy (migrate-deploy-checked.sh / prisma migrate deploy), que roda o migration.sql completo — nunca via mode=apply deste workflow."
+            exit 1
+          fi
+          echo "Nenhuma migration pendente contém UPDATE/INSERT — seguro prosseguir com o diff de schema."
+
       - name: Report-only (mode=diff)
         if: inputs.mode == 'diff'
         run: |
