@@ -5511,6 +5511,18 @@ model Catalog2PricingSettings {
   updated_at              DateTime @updatedAt
   created_at              DateTime @default(now())
 
+  // Item 16.1 (reuniao 2026-09-14, "Desconto por inativacao") — percentual
+  // DEMONSTRATIVO de compensacao por inativacao programada, editavel pelo
+  // Admin Master, usado SO para simular um resultado sobre uma base
+  // mostrada no painel. NUNCA gera credito/estorno/abatimento real — a
+  // base definitiva e o tratamento do que ja foi entregue continuam sem
+  // definicao (Item 5). `is_provisional` sempre true enquanto a linha
+  // existir, reforco redundante e explicito (mesmo padrao de
+  // Catalog2ProvisionalPreview.is_provisional).
+  demo_inactivation_compensation_percent Float?
+  demo_inactivation_compensation_note    String? @db.Text
+  demo_inactivation_is_provisional       Boolean @default(true)
+
   @@map("catalog2_pricing_settings")
 }
 
