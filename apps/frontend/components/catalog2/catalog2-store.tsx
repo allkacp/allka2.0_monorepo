@@ -30,7 +30,15 @@ const PERIOD_LABEL: Record<string, string> = { mensal: "Mensal", trimestral: "Tr
 export function Catalog2Store({ portal }: { portal: Portal }) {
   const [sp, setSp] = useSearchParams();
   const slug = sp.get("produto");
-  const preview = portal === "admin" && sp.get("preview") === "1";
+  // Item 16.2 (reunião 2026-09-14, "Checkout demonstrativo") — corrigido:
+  // antes só o portal "admin" conseguia acionar ?preview=1 aqui, mesmo já
+  // existindo uma conta comercial (company/agency) autorizada via
+  // CATALOG2_DEMO_PREVIEW_EMAILS (Item 16.1) que o backend aceita. A
+  // autorização de verdade é sempre do backend (can_preview_drafts =
+  // isMaster || e-mail exato na allowlist) — contas fora da lista recebem
+  // 404 do próprio backend (`forbidden` abaixo), então repassar o parâmetro
+  // aqui não abre nada que o backend já não decida sozinho.
+  const preview = sp.get("preview") === "1";
 
   const [refs, setRefs] = useState<{ pillars: any[]; categories: any[]; four_f: any[] }>({ pillars: [], categories: [], four_f: [] });
   const [cartOpen, setCartOpen] = useState(false);

@@ -160,14 +160,23 @@ describe("Catálogo do cliente", () => {
     expect(screen.getByText(/a partir de A definir/)).toBeInTheDocument();
   });
 
-  it("cliente comum (company/agency) NUNCA pede preview=1, mesmo que soubesse do parâmetro na URL", async () => {
+  // Item 16.2 (reunião 2026-09-14, "Checkout demonstrativo") — corrigido:
+  // antes o portal "company"/"agency" NUNCA repassava preview=1 ao backend,
+  // mesmo já existindo (Item 16.1) uma conta comercial autorizada via
+  // CATALOG2_DEMO_PREVIEW_EMAILS que o backend aceitaria — a autorização de
+  // verdade é sempre do backend (can_preview_drafts), então o frontend
+  // repassar o parâmetro não abre nada; quem não estiver na allowlist
+  // recebe 404 do próprio backend (coberto pelo teste de integração
+  // "25. admin comum não pré-visualiza rascunho..." e por evidência real de
+  // navegador desta etapa).
+  it("cliente comum (company/agency) REPASSA preview=1 ao backend — a autorização real é sempre do backend, nunca do frontend", async () => {
+    api.getClientCatalog2Products.mockResolvedValue({ data: [{ ...LIST.data[0] }], total: 1, page: 1, page_size: 12 });
     render(
       <MemoryRouter initialEntries={["/company/catalog2?preview=1"]}>
         <Catalog2Store portal="company" />
       </MemoryRouter>,
     );
-    await screen.findByText("Serviço Demo");
-    expect(api.getClientCatalog2Products).not.toHaveBeenCalledWith(expect.objectContaining({ preview: "1" }));
+    await waitFor(() => expect(api.getClientCatalog2Products).toHaveBeenCalledWith(expect.objectContaining({ preview: "1" })));
   });
 
   // Item 2 (reunião 2026-09-14, "Status e disponibilidade dos produtos"):
