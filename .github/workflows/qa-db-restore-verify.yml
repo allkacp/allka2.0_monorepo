@@ -1,11 +1,10 @@
 name: DB Restore Verify + Legacy Backup (manual, isolated)
 
-# PROPOSTA — Item 12.1 (reuniao 2026-09-14, "Fechar a preparacao da
-# publicacao"). Este arquivo foi preparado nesta sessao mas NAO foi
-# executado: disparar um workflow_dispatch exige que o arquivo ja exista no
-# ref remoto (branch/main ja publicados no GitHub), e esta sessao nao fez
-# push de proposito (instrucao explicita do bloco). Precisa de revisao e
-# push por um responsavel antes do primeiro uso.
+# Item 12.1/13.1/15 (reuniao 2026-09-14, "Fechar a preparacao da
+# publicacao" / "Validar a recuperacao do ambiente online") — integrado
+# via PR minima, separado da entrega completa do catalog2 (que continua
+# só na branch da reuniao, nao integrada). Disparo exclusivamente manual
+# (workflow_dispatch); nao dispara nem depende de nenhum deploy.
 #
 # Cobre dois gaps concretos encontrados no Item 12/12.1:
 #   1. Nenhum workflow existente restaura o CONTEUDO de um backup real pra
