@@ -51,6 +51,19 @@ services:
     depends_on:
       mysql:
         condition: service_healthy
+    # Item 15.1 (reuniao 2026-09-14) -- file-storage.ts grava uploads reais
+    # (documentos de projeto, base de conhecimento da IA, anexos diversos)
+    # em UPLOADS_ROOT = /app/apps/backend/uploads; sem volume aqui, todo
+    # deploy (docker compose up -d --no-deps backend) apaga esse diretorio
+    # (disco efemero do container). ATENCAO ao aplicar: um volume NOMEADO
+    # NOVO monta VAZIO por cima do caminho -- se ja existir algo la dentro
+    # do container atual quando esta mudanca for aplicada, popule o volume
+    # ANTES de trocar o container (procedimento documentado em
+    # docs/qa/reuniao-2026-09-14.md, Item 15.1 -- nunca aplicar direto sem
+    # conferir com o workflow "Uploads Inspect + Backup", mode=inspect,
+    # primeiro).
+    volumes:
+      - backend_uploads:/app/apps/backend/uploads
     expose:
       - "3001"
     networks:
@@ -98,6 +111,7 @@ volumes:
   mysql_data:
   caddy_data:
   caddy_config:
+  backend_uploads:
 
 networks:
   allka_internal:
