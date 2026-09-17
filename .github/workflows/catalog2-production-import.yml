@@ -199,13 +199,13 @@ jobs:
                   db.catalog2Specialty.findUnique({ where: { key: "redator" } }),
                   db.catalog2Specialty.findUnique({ where: { key: "designer" } }),
                 ]);
-                if (redator) throw new Error("Redator já existe; não sobrescrevo uma decisão comercial concorrente.");
+                if (!redator || redator.max_hourly_rate != null) throw new Error("Redator não está sem valor/hora; não sobrescrevo uma decisão comercial concorrente.");
                 if (!designer || designer.max_hourly_rate !== 100) throw new Error("Designer não está exatamente em R$ 100/h; não sobrescrevo uma alteração concorrente.");
                 await db.$transaction([
-                  db.catalog2Specialty.create({ data: { key: "redator", name: "Redator", sort_order: 4, is_active: true, max_hourly_rate: 70, hourly_rate_note: "Valor demonstrativo — ajustável no painel comercial." } }),
+                  db.catalog2Specialty.update({ where: { key: "redator" }, data: { max_hourly_rate: 70, hourly_rate_note: "Valor demonstrativo — ajustável no painel comercial." } }),
                   db.catalog2Specialty.update({ where: { key: "designer" }, data: { max_hourly_rate: 90, hourly_rate_note: "Valor demonstrativo — ajustável no painel comercial." } }),
                 ]);
-                console.log("Configuração demonstrativa aplicada: redator=R$70/h criado; designer=R$90/h atualizado.");
+                console.log("Configuração demonstrativa aplicada: redator=R$70/h preenchido; designer=R$90/h atualizado.");
               })().catch((e) => { console.error(e.message); process.exitCode = 1; }).finally(() => db.$disconnect());
             '
             exit 0
