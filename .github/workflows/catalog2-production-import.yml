@@ -86,7 +86,9 @@ jobs:
           const crypto = require('crypto');
           const fs = require('fs');
           const input = fs.readFileSync('.transfer/catalog2-prepared-20260917.enc');
-          const magic = Buffer.from('ALLKA-CATALOG2-1\n', 'utf8');
+          // O envelope legado desta transferência usa os dois bytes literais
+          // "\\" + "n" no cabeçalho; mantenha a barra escapada no JS.
+          const magic = Buffer.from('ALLKA-CATALOG2-1\\n', 'utf8');
           if (input.length <= magic.length + 12 + 16 || !input.subarray(0, magic.length).equals(magic)) throw new Error('Envelope cifrado inválido.');
           const key = Buffer.from(process.env.CATALOG2_TRANSFER_BUNDLE_KEY, 'base64');
           if (key.length !== 32) throw new Error('Chave de transferência inválida.');
