@@ -23,6 +23,8 @@ Validação: parse YAML e sintaxe dos cinco blocos Bash aprovados; execução re
 
 ## Pendências
 
+Segunda coleta `35275960284`, em 17/09 às 21:19 UTC: 1 CPU disponível; dez amostras consecutivas com `st` de 79–80%; pressão de CPU `some avg10=53.25`, `avg60=54.58`, `avg300=54.88`; pressão de memória/IO próxima de zero, 1928 MiB disponíveis. Listagens Docker continuam excedendo timeout; imagem permanece `7a2f00f`, zero reinícios, API 200. O alto steal sustentado exige verificar limitação/contenda no provedor; não permite afirmar a causa específica nem que reiniciar Docker resolverá. Solicitada captura do painel do VPS, sem pedir upgrade/reinício. Deploy ainda em andamento na consulta de 21:22 UTC; nenhuma nova tentativa iniciada pelo Codex.
+
 - Identificar a causa da lentidão/bloqueio do Docker antes de reiniciar o daemon ou repetir o deploy. Reiniciar Docker pode interromper também MySQL e outros serviços; não executado às cegas.
 - Publicar efetivamente `55adf2e`, validar saúde, backup, pacote e dry-run antes da transferência.
 - Corrigir contador administrativo: `Todos os produtos` usa `final_imported_products`, enquanto a API já fornece `counts.products`; a inconsistência foi confirmada no código, não corrigida nesta etapa operacional.
