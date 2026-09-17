@@ -70,7 +70,12 @@ jobs:
           free -m
           df -h / "$deploy_path"
           df -i / "$deploy_path"
-          timeout 8s vmstat 1 3 || true
+          echo "CPUs disponíveis: $(nproc)"
+          timeout 15s vmstat 1 11 || true
+          for pressure in cpu io memory; do
+            echo "pressure/$pressure:"
+            cat "/proc/pressure/$pressure" 2>/dev/null || true
+          done
           ps -eo pid,ppid,stat,pcpu,pmem,comm --sort=-pcpu | head -n 16
 
           echo "===== daemon Docker (somente leitura) ====="
@@ -115,7 +120,7 @@ jobs:
           fi
 
           echo ""
-          echo "===== últimas 300 linhas de log do backend (sem cores) ====="
+          echo "===== últimas 100 linhas do backend nos últimos 30 minutos ====="
           if [ -n "$cid" ]; then
             timeout 20s docker logs --tail 100 --since 30m "$cid" || echo "(leitura direta de logs excedeu 20s)"
           fi
