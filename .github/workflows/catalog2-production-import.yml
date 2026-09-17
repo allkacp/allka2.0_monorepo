@@ -50,8 +50,6 @@ jobs:
           VPS_USER: ${{ secrets.VPS_USER }}
           VPS_SSH_PORT: ${{ secrets.VPS_SSH_PORT }}
           VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
-          GHCR_PAT: ${{ secrets.GHCR_PAT }}
-          GHCR_USERNAME: ${{ secrets.GHCR_USERNAME }}
         run: |
           set -euo pipefail
           : "${CATALOG2_TRANSFER_BUNDLE_KEY:?Configure o secret CATALOG2_TRANSFER_BUNDLE_KEY}"
@@ -59,8 +57,6 @@ jobs:
           : "${VPS_USER:?Configure VPS_USER}"
           : "${VPS_SSH_PORT:?Configure VPS_SSH_PORT}"
           : "${VPS_SSH_KEY:?Configure VPS_SSH_KEY}"
-          : "${GHCR_PAT:?Configure GHCR_PAT}"
-          : "${GHCR_USERNAME:?Configure GHCR_USERNAME}"
           if [ "$MODE" = "apply" ]; then
             [[ "$EXPECTED_MANIFEST_SHA256" =~ ^[a-f0-9]{64}$ ]] || { echo "::error::O apply exige expected_manifest_sha256 de 64 caracteres hexadecimais."; exit 1; }
             [ "$CONFIRM" = "TRANSFERIR PARA PRODUCAO" ] || { echo "::error::O apply exige a frase exata de confirmação."; exit 1; }
@@ -128,8 +124,6 @@ jobs:
           VPS_USER: ${{ secrets.VPS_USER }}
           VPS_SSH_PORT: ${{ secrets.VPS_SSH_PORT }}
           VPS_DEPLOY_PATH: ${{ secrets.VPS_DEPLOY_PATH || '/opt/allka-2026' }}
-          GHCR_PAT: ${{ secrets.GHCR_PAT }}
-          GHCR_USERNAME: ${{ secrets.GHCR_USERNAME }}
         run: |
           set -euo pipefail
           remote="${VPS_USER}@${VPS_HOST}"
@@ -144,9 +138,7 @@ jobs:
           mode="$3"
           expected_manifest="$4"
           confirm="$5"
-          ghcr_user="$6"
-          ghcr_pat="$7"
-          repo="$8"
+          repo="$6"
           cleanup() { rm -rf -- "$remote_dir"; }
           trap cleanup EXIT
           cd "$deploy_path"
@@ -155,7 +147,9 @@ jobs:
           [ -n "$runtime_image" ] || { echo 'ERRO: BACKEND_IMAGE ausente no .env do VPS.' >&2; exit 1; }
           commit_tag="${runtime_image##*:}"
           tools_image="ghcr.io/${repo}/backend:tools-${commit_tag}"
-          printf '%s' "$ghcr_pat" | docker login ghcr.io -u "$ghcr_user" --password-stdin >/dev/null
+          # A imagem de ferramentas pertence a este repositório público.
+          # Pull anônimo evita depender de um PAT legado que não tem escopo
+          # de registry; nenhum segredo é usado nem impresso aqui.
           docker pull "$tools_image" >/dev/null
 
           # `.env` é passado ao Docker Compose, mas não vira variável deste
@@ -185,7 +179,7 @@ jobs:
           SCRIPT
           scp -i "$HOME/.ssh/allka_transfer_key" -P "$VPS_SSH_PORT" -o ConnectTimeout=20 -o BatchMode=yes -o StrictHostKeyChecking=accept-new -o UserKnownHostsFile="$HOME/.ssh/known_hosts" .transfer/remote-import.sh "$remote:/tmp/allka-remote-catalog2-import-${GITHUB_RUN_ID}.sh"
           repo="${GITHUB_REPOSITORY,,}"
-          ssh "${ssh_opts[@]}" "$remote" "bash /tmp/allka-remote-catalog2-import-${GITHUB_RUN_ID}.sh '$VPS_DEPLOY_PATH' '$remote_dir' '$MODE' '$EXPECTED_MANIFEST_SHA256' '$CONFIRM' '$GHCR_USERNAME' '$GHCR_PAT' '$repo'; rc=\$?; rm -f /tmp/allka-remote-catalog2-import-${GITHUB_RUN_ID}.sh; exit \$rc"
+          ssh "${ssh_opts[@]}" "$remote" "bash /tmp/allka-remote-catalog2-import-${GITHUB_RUN_ID}.sh '$VPS_DEPLOY_PATH' '$remote_dir' '$MODE' '$EXPECTED_MANIFEST_SHA256' '$CONFIRM' '$repo'; rc=\$?; rm -f /tmp/allka-remote-catalog2-import-${GITHUB_RUN_ID}.sh; exit \$rc"
 
       - name: Remove plaintext from runner
         if: always()
