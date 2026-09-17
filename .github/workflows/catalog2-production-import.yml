@@ -13,13 +13,17 @@ on:
         required: true
         default: dry_run
         type: choice
-        options: [dry_run, apply]
+        options: [dry_run, prepare_commercial_config, apply]
       expected_manifest_sha256:
         description: "Obrigatório apenas no apply: hash mostrado pelo dry_run revisado"
         required: false
         type: string
       confirm:
         description: "Obrigatório apenas no apply: TRANSFERIR PARA PRODUCAO"
+        required: false
+        type: string
+      commercial_rates_confirm:
+        description: "Obrigatório apenas em prepare_commercial_config: APLICAR VALORES DEMONSTRATIVOS"
         required: false
         type: string
 
@@ -46,6 +50,7 @@ jobs:
           MODE: ${{ inputs.mode }}
           EXPECTED_MANIFEST_SHA256: ${{ inputs.expected_manifest_sha256 }}
           CONFIRM: ${{ inputs.confirm }}
+          COMMERCIAL_RATES_CONFIRM: ${{ inputs.commercial_rates_confirm }}
           CATALOG2_TRANSFER_BUNDLE_KEY: ${{ secrets.CATALOG2_TRANSFER_BUNDLE_KEY }}
           VPS_HOST: ${{ secrets.VPS_HOST }}
           VPS_USER: ${{ secrets.VPS_USER }}
@@ -61,6 +66,9 @@ jobs:
           if [ "$MODE" = "apply" ]; then
             [[ "$EXPECTED_MANIFEST_SHA256" =~ ^[a-f0-9]{64}$ ]] || { echo "::error::O apply exige expected_manifest_sha256 de 64 caracteres hexadecimais."; exit 1; }
             [ "$CONFIRM" = "TRANSFERIR PARA PRODUCAO" ] || { echo "::error::O apply exige a frase exata de confirmação."; exit 1; }
+          fi
+          if [ "$MODE" = "prepare_commercial_config" ]; then
+            [ "$COMMERCIAL_RATES_CONFIRM" = "APLICAR VALORES DEMONSTRATIVOS" ] || { echo "::error::A preparação comercial exige a frase exata de confirmação."; exit 1; }
           fi
 
       - name: Download encrypted temporary package
@@ -121,6 +129,7 @@ jobs:
           MODE: ${{ inputs.mode }}
           EXPECTED_MANIFEST_SHA256: ${{ inputs.expected_manifest_sha256 }}
           CONFIRM: ${{ inputs.confirm }}
+          COMMERCIAL_RATES_CONFIRM: ${{ inputs.commercial_rates_confirm }}
           VPS_HOST: ${{ secrets.VPS_HOST }}
           VPS_USER: ${{ secrets.VPS_USER }}
           VPS_SSH_PORT: ${{ secrets.VPS_SSH_PORT }}
@@ -141,9 +150,10 @@ jobs:
           mode="$3"
           expected_manifest="$4"
           confirm="$5"
-          ghcr_user="$6"
-          ghcr_pat="$7"
-          repo="$8"
+          commercial_rates_confirm="$6"
+          ghcr_user="$7"
+          ghcr_pat="$8"
+          repo="$9"
           cleanup() { rm -rf -- "$remote_dir"; }
           trap cleanup EXIT
           cd "$deploy_path"
@@ -169,14 +179,39 @@ jobs:
           mysql_database="${mysql_config[2]}"
           target_url="mysql://${mysql_user}:${mysql_password}@mysql:3306/${mysql_database}"
           args=(--package=/transfer/package --target-url="$target_url" --target-env=production --expected-database-host=mysql --expected-database-name="$mysql_database")
-          if [ "$mode" = "apply" ]; then
+          backup_before_mutation() {
             backup_dir="$deploy_path/backups"
             install -d -m 700 "$backup_dir"
-            backup_path="$backup_dir/allka-before-catalog2-import-$(date -u +%Y%m%dT%H%M%SZ).sql.gz"
+            backup_path="$backup_dir/allka-before-catalog2-${mode}-$(date -u +%Y%m%dT%H%M%SZ).sql.gz"
             docker compose --env-file .env -f docker-compose.yml exec -T mysql sh -c 'MYSQL_PWD="$MYSQL_ROOT_PASSWORD" mysqldump -uroot --single-transaction --routines --events "$MYSQL_DATABASE"' | gzip -c > "$backup_path"
             test -s "$backup_path" || { echo 'ERRO: backup pré-importação vazio; abortando antes da escrita.' >&2; exit 1; }
             backup_sha="$(sha256sum "$backup_path" | awk '{print $1}')"
-            echo "backup_pre_importacao=$(basename "$backup_path") sha256=$backup_sha"
+            echo "backup_pre_mutacao=$(basename "$backup_path") sha256=$backup_sha"
+          }
+          if [ "$mode" = "prepare_commercial_config" ]; then
+            [ "$commercial_rates_confirm" = "APLICAR VALORES DEMONSTRATIVOS" ] || { echo 'ERRO: confirmação comercial inválida.' >&2; exit 1; }
+            backup_before_mutation
+            BACKEND_IMAGE="$tools_image" docker compose --env-file .env -f docker-compose.yml run --rm --no-deps backend node -e '
+              const { PrismaClient } = require("@prisma/client");
+              const db = new PrismaClient();
+              (async () => {
+                const [redator, designer] = await Promise.all([
+                  db.catalog2Specialty.findUnique({ where: { key: "redator" } }),
+                  db.catalog2Specialty.findUnique({ where: { key: "designer" } }),
+                ]);
+                if (redator) throw new Error("Redator já existe; não sobrescrevo uma decisão comercial concorrente.");
+                if (!designer || designer.max_hourly_rate !== 100) throw new Error("Designer não está exatamente em R$ 100/h; não sobrescrevo uma alteração concorrente.");
+                await db.$transaction([
+                  db.catalog2Specialty.create({ data: { key: "redator", name: "Redator", sort_order: 4, is_active: true, max_hourly_rate: 70, hourly_rate_note: "Valor demonstrativo — ajustável no painel comercial." } }),
+                  db.catalog2Specialty.update({ where: { key: "designer" }, data: { max_hourly_rate: 90, hourly_rate_note: "Valor demonstrativo — ajustável no painel comercial." } }),
+                ]);
+                console.log("Configuração demonstrativa aplicada: redator=R$70/h criado; designer=R$90/h atualizado.");
+              })().catch((e) => { console.error(e.message); process.exitCode = 1; }).finally(() => db.$disconnect());
+            '
+            exit 0
+          fi
+          if [ "$mode" = "apply" ]; then
+            backup_before_mutation
             args+=(--apply --expected-manifest-sha256="$expected_manifest" --confirm="$confirm" --backup-sha256="$backup_sha")
           fi
           echo "tools_image=$tools_image"
@@ -185,7 +220,7 @@ jobs:
           SCRIPT
           scp -i "$HOME/.ssh/allka_transfer_key" -P "$VPS_SSH_PORT" -o ConnectTimeout=20 -o BatchMode=yes -o StrictHostKeyChecking=accept-new -o UserKnownHostsFile="$HOME/.ssh/known_hosts" .transfer/remote-import.sh "$remote:/tmp/allka-remote-catalog2-import-${GITHUB_RUN_ID}.sh"
           repo="${GITHUB_REPOSITORY,,}"
-          ssh "${ssh_opts[@]}" "$remote" "bash /tmp/allka-remote-catalog2-import-${GITHUB_RUN_ID}.sh '$VPS_DEPLOY_PATH' '$remote_dir' '$MODE' '$EXPECTED_MANIFEST_SHA256' '$CONFIRM' '$GHCR_USERNAME' '$GHCR_PAT' '$repo'; rc=\$?; rm -f /tmp/allka-remote-catalog2-import-${GITHUB_RUN_ID}.sh; exit \$rc"
+          ssh "${ssh_opts[@]}" "$remote" "bash /tmp/allka-remote-catalog2-import-${GITHUB_RUN_ID}.sh '$VPS_DEPLOY_PATH' '$remote_dir' '$MODE' '$EXPECTED_MANIFEST_SHA256' '$CONFIRM' '$COMMERCIAL_RATES_CONFIRM' '$GHCR_USERNAME' '$GHCR_PAT' '$repo'; rc=\$?; rm -f /tmp/allka-remote-catalog2-import-${GITHUB_RUN_ID}.sh; exit \$rc"
 
       - name: Remove plaintext from runner
         if: always()
