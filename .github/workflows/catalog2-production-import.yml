@@ -85,7 +85,7 @@ jobs:
           node <<'NODE'
           const crypto = require('crypto');
           const fs = require('fs');
-          const input = fs.readFileSync('.transfer/catalog2-prepared-20260917.enc');
+          const input = fs.readFileSync(`.transfer/${process.env.ASSET_NAME}`);
           // O envelope legado desta transferência usa os dois bytes literais
           // "\\" + "n" no cabeçalho; mantenha a barra escapada no JS.
           const magic = Buffer.from('ALLKA-CATALOG2-2', 'utf8');
