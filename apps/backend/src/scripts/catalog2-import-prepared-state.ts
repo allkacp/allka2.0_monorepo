@@ -12,11 +12,14 @@
  *
  *   npm run catalog2:import-prepared -- --package=./scratch/catalog2-package --dry-run   (padrão)
  *   npm run catalog2:import-prepared -- --package=./scratch/catalog2-package --target-url=mysql://... --apply   (target-env=development, implícito)
- *   npm run catalog2:import-prepared -- --package=./scratch/catalog2-package --target-url=mysql://... --apply --target-env=production \
+ *   npm run catalog2:import-prepared -- --package=./scratch/catalog2-package --target-url=mysql://...@mysql:3306/allka --apply --target-env=production \
+ *     --expected-database-host=mysql \
  *     --expected-database-name=<nome exato do banco na --target-url> \
  *     --confirm="TRANSFERIR PARA PRODUCAO" \
  *     --backup-sha256=<sha256 de um backup real já validado> \
  *     --expected-manifest-sha256=<manifest_sha256 impresso por um --dry-run revisado>
+ *     (executado de DENTRO da rede Docker privada allka_internal — nunca
+ *     publicando a porta do MySQL, nunca via túnel; ver "Segurança" abaixo)
  *
  * Antes de qualquer leitura de produto, o pacote é VALIDADO: `format_version`
  * reconhecida, `package.sha256` bate com o `package.json` real (nunca
@@ -59,16 +62,23 @@
  * se não existir no destino ou tiver taxa diferente, entra em
  * "divergências de configuração global", nunca escrita por aqui).
  *
- * Segurança: reusa assertLocalDatabase tanto na origem quanto no destino —
- * nunca aponta para um host remoto, mesmo em --apply. Idempotente: chave
- * natural em toda entidade, upsert por igualdade de conteúdo (unchanged) ou
- * atualização (updated) — nunca duplica ao rodar de novo.
+ * Segurança: origem é sempre um pacote em disco (nunca uma conexão de banco
+ * — não há gate de origem a aplicar). Destino: target-env=development reusa
+ * assertLocalDatabase, intocado (só localhost/127.0.0.1/::1, nunca produção
+ * nem QA online). target-env=production usa assertExpectedProductionDatabaseHost
+ * — nunca aceita silenciosamente qualquer host: exige --expected-database-host
+ * declarado explicitamente por quem chama, batendo exato com o host real da
+ * --target-url; pensado para rodar de dentro da rede Docker privada
+ * allka_internal (nunca publicando a porta do MySQL, nunca via túnel).
+ * Idempotente: chave natural em toda entidade, upsert por igualdade de
+ * conteúdo (unchanged) ou atualização (updated) — nunca duplica ao rodar de
+ * novo.
  */
 import fs from "node:fs";
 import path from "node:path";
 import crypto from "node:crypto";
 import { PrismaClient } from "@prisma/client";
-import { assertLocalDatabase } from "../lib/assert-local-database";
+import { assertLocalDatabase, assertExpectedProductionDatabaseHost } from "../lib/assert-local-database";
 import { PACKAGE_FORMAT_VERSION } from "./catalog2-package-format";
 
 function arg(name: string): string | undefined {
@@ -182,7 +192,6 @@ async function main() {
     process.exit(1);
   }
   const targetDatabaseName = new URL(targetUrl).pathname.replace(/^\//, "");
-  assertLocalDatabase(targetUrl); // destino: nunca produção, nunca QA online — só localhost/127.0.0.1/::1 (ver gate de --target-env abaixo, localhost sozinho NÃO basta pra apply=production)
 
   // targetEnv é SEMPRE explícito — nunca inferido do endereço de conexão.
   // "development" preserva o comportamento já testado no Item 12.1 (sem
@@ -193,6 +202,36 @@ async function main() {
     process.exit(1);
   }
   const targetEnv: TargetEnv = (targetEnvArg as TargetEnv | undefined) ?? "development";
+
+  // Item 17 (continuação da publicação, 2026-09-17) — achado real: até aqui
+  // este script chamava assertLocalDatabase também para target-env=production,
+  // o que é incompatível com o destino real (o MySQL de produção não publica
+  // porta nenhuma alcançável como local — só existe na rede Docker privada
+  // allka_internal, resolvido por nome de serviço). assertLocalDatabase
+  // continua INTOCADO e é o único gate para development (mesmo
+  // comportamento de sempre: só localhost/127.0.0.1/::1). Para production,
+  // o gate é assertExpectedProductionDatabaseHost — exige um host declarado
+  // EXPLICITAMENTE por quem chama (nunca default, nunca inferido) batendo
+  // exatamente com o host real da --target-url; pensado para ser executado
+  // de DENTRO da rede Docker privada (ex.: um container temporário anexado
+  // a allka_internal via `docker run --network allka-2026_allka_internal`),
+  // apontando para o nome do serviço "mysql" — nunca publicando a porta do
+  // MySQL, nunca criando túnel.
+  if (targetEnv === "development") {
+    assertLocalDatabase(targetUrl);
+  } else {
+    const expectedHost = arg("expected-database-host");
+    if (!expectedHost) {
+      console.error('❌ --expected-database-host é obrigatório para --target-env=production (nome do host/serviço exato esperado na --target-url, ex.: "mysql" dentro da rede Docker privada allka_internal — nunca inferido, nunca localhost).');
+      process.exit(1);
+    }
+    try {
+      assertExpectedProductionDatabaseHost(targetUrl, expectedHost);
+    } catch (err) {
+      console.error(`❌ ${err instanceof Error ? err.message : err}`);
+      process.exit(1);
+    }
+  }
 
   const dst = new PrismaClient({ datasources: { db: { url: targetUrl } } });
 
