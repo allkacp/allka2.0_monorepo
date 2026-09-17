@@ -75,6 +75,32 @@ jobs:
       # a fresh database) without touching migration history at all —
       # same tradeoff already made in apps/backend/scripts/run-db-tests.ts
       # for the disposable-database integration tests below.
+      # Item 17 (continuação da publicação, 2026-09-17) — achado real: dois
+      # campos non-nullable (Catalog2NotificationJobRecipient.entity_type/
+      # entity_id) existiram em schema.prisma sem NENHUMA migration
+      # correspondente por semanas, sem nenhum teste/CI acusar nada — porque
+      # TUDO nesta suíte (inclusive o passo "db push" logo abaixo) sincroniza
+      # direto com schema.prisma e nunca passa pela pasta migrations/. Só
+      # `prisma migrate deploy`, o único caminho que produção usa de
+      # verdade, é estrito sobre isso — e só quebrou lá, ao vivo. Este passo
+      # roda `migrate deploy` (nunca `db push`) contra o banco vazio recém-
+      # criado pelo serviço mysql desta job, e confere que o resultado bate
+      # EXATO com schema.prisma — se alguém editar o schema sem gerar/
+      # commitar a migration correspondente, falha aqui, na PR, nunca de
+      # novo em produção. Roda ANTES do "db push" abaixo de propósito (o
+      # banco ainda está pristino); "db push" depois é seguro mesmo já
+      # migrado (confere que bate, não desfaz nada).
+      - name: "Migrations-only baseline matches schema.prisma (regressão: acusa migration faltante)"
+        run: |
+          npx prisma migrate deploy --schema=apps/backend/prisma/schema.prisma
+          diff_output="$(npx prisma migrate diff --from-url "$DATABASE_URL" --to-schema-datamodel apps/backend/prisma/schema.prisma --script)"
+          echo "$diff_output"
+          if ! echo "$diff_output" | grep -q "This is an empty migration"; then
+            echo "::error::schema.prisma e a pasta prisma/migrations/ estão divergentes — existe pelo menos 1 mudança no schema sem a migration correspondente (ou vice-versa). Gere/commite a migration faltante antes de mesclar — nunca corrija isto só com 'db push' ou 'migrate resolve'."
+            exit 1
+          fi
+          echo "OK — migrations-only baseline bate exatamente com schema.prisma."
+
       - name: Apply schema to a fresh database (db push)
         run: npx prisma db push --skip-generate --accept-data-loss --schema=apps/backend/prisma/schema.prisma
 
