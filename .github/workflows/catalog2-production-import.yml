@@ -36,7 +36,7 @@ jobs:
     environment: dev
     env:
       RELEASE_TAG: catalog2-transfer-2026-09-17
-      ASSET_NAME: catalog2-prepared-20260917.enc
+      ASSET_NAME: catalog2-prepared-20260917-v2.enc
       PACKAGE_SHA256: db59440d342095264dc8cf2d50573d21870763bd894d4a12d71d31a627a2c545
     steps:
       - name: Validate controlled inputs and secrets
@@ -88,7 +88,7 @@ jobs:
           const input = fs.readFileSync('.transfer/catalog2-prepared-20260917.enc');
           // O envelope legado desta transferência usa os dois bytes literais
           // "\\" + "n" no cabeçalho; mantenha a barra escapada no JS.
-          const magic = Buffer.from('ALLKA-CATALOG2-1\\n', 'utf8');
+          const magic = Buffer.from('ALLKA-CATALOG2-2', 'utf8');
           if (input.length <= magic.length + 12 + 16 || !input.subarray(0, magic.length).equals(magic)) throw new Error('Envelope cifrado inválido.');
           const key = Buffer.from(process.env.CATALOG2_TRANSFER_BUNDLE_KEY, 'base64');
           if (key.length !== 32) throw new Error('Chave de transferência inválida.');
@@ -97,9 +97,9 @@ jobs:
           const ciphertext = input.subarray(magic.length + 28);
           const decipher = crypto.createDecipheriv('aes-256-gcm', key, iv);
           decipher.setAuthTag(tag);
-          fs.writeFileSync('.transfer/catalog2-prepared-20260917.tar.gz', Buffer.concat([decipher.update(ciphertext), decipher.final()]), { mode: 0o600 });
+          fs.writeFileSync('.transfer/catalog2-prepared-20260917.zip', Buffer.concat([decipher.update(ciphertext), decipher.final()]), { mode: 0o600 });
           NODE
-          tar -xzf .transfer/catalog2-prepared-20260917.tar.gz -C .transfer
+          unzip -q .transfer/catalog2-prepared-20260917.zip -d .transfer
           test -f .transfer/catalog2-package-production-final/package.json
           actual="$(sha256sum .transfer/catalog2-package-production-final/package.json | awk '{print $1}')"
           test "$actual" = "$PACKAGE_SHA256" || { echo "::error::Checksum do pacote divergente; nada será enviado ao VPS."; exit 1; }
@@ -191,4 +191,5 @@ jobs:
         if: always()
         shell: bash
         run: |
-          rm -rf .transfer
+          chmod -R u+w .transfer 2>/dev/null || true
+          rm -rf .transfer || true
