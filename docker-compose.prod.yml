@@ -24,7 +24,14 @@ services:
     image: ${BACKEND_IMAGE:?BACKEND_IMAGE is required}
     restart: "no"
     working_dir: /app/apps/backend
-    command: ["npm", "run", "db:deploy"]
+    # Item 16.2 (reunião 2026-09-14): não roda "prisma migrate deploy" puro.
+    # migrate-deploy-checked.sh verifica primeiro se `_prisma_migrations`
+    # está de fato reconciliado com o schema físico do banco (mesmo `prisma
+    # migrate diff` do workflow de reconciliação) — só chama `migrate
+    # deploy` quando isso é seguro. Se abortar (exit 1), este serviço falha
+    # e `docker compose run --rm migrate && up -d --no-deps backend` nunca
+    # chega a trocar o backend em execução.
+    command: ["./migrate-deploy-checked.sh"]
     env_file:
       - ./.env.backend
     environment:
@@ -51,6 +58,19 @@ services:
     depends_on:
       mysql:
         condition: service_healthy
+    # Item 15.1 (reuniao 2026-09-14) -- file-storage.ts grava uploads reais
+    # (documentos de projeto, base de conhecimento da IA, anexos diversos)
+    # em UPLOADS_ROOT = /app/apps/backend/uploads; sem volume aqui, todo
+    # deploy (docker compose up -d --no-deps backend) apaga esse diretorio
+    # (disco efemero do container). ATENCAO ao aplicar: um volume NOMEADO
+    # NOVO monta VAZIO por cima do caminho -- se ja existir algo la dentro
+    # do container atual quando esta mudanca for aplicada, popule o volume
+    # ANTES de trocar o container (procedimento documentado em
+    # docs/qa/reuniao-2026-09-14.md, Item 15.1 -- nunca aplicar direto sem
+    # conferir com o workflow "Uploads Inspect + Backup", mode=inspect,
+    # primeiro).
+    volumes:
+      - backend_uploads:/app/apps/backend/uploads
     expose:
       - "3001"
     networks:
@@ -98,6 +118,7 @@ volumes:
   mysql_data:
   caddy_data:
   caddy_config:
+  backend_uploads:
 
 networks:
   allka_internal:

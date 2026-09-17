@@ -190,6 +190,19 @@ describe("OnboardingProvider — concluir tour real", () => {
 describe("OnboardingProvider — tour de painel fechado", () => {
   it("começa Grupos pela Ajuda mesmo antes de Notificações montar suas abas, e pede o clique real para abrir", async () => {
     api.getCurrentUser.mockResolvedValue({ id: "u1", account_type: "admin", admin_profile: { is_active: true, is_master: true, permissions: [] } });
+    // Isolamento: sem isto, a oferta automática do tour "primeiros-passos"
+    // (outro efeito do mesmo Provider, coberto à parte no describe "oferta
+    // no primeiro acesso") também fica elegível nesta tela e corre em
+    // paralelo com o clique abaixo — o Radix Dialog do modal de boas-vindas
+    // seta `pointer-events: none` no <body> enquanto abre, o que podia
+    // bloquear intermitentemente o clique em "start-groups-from-help" (um
+    // botão comum, sem nenhum estilo próprio) dependendo de quem vencia a
+    // corrida — exatamente o "Unable to perform pointer interaction"
+    // observado na CI. Aqui o teste é sobre o tour "grupos-comunicacao";
+    // "primeiros-passos" precisa estar decidido para não competir pelo slot.
+    api.listTourProgress.mockResolvedValue({
+      data: [{ id: "p0", user_id: "u1", tour_key: "primeiros-passos", version: 1, status: "concluido", last_step_key: "help-button", started_at: null, completed_at: "2026-01-01", dismissed_at: null, postponed_at: null, postponed_until: null, created_at: "x", updated_at: "x" }],
+    });
     const user = userEvent.setup();
     renderProvider(["/admin/dashboard"]);
     await user.click(await screen.findByText("start-groups-from-help"));

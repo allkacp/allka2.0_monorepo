@@ -11,6 +11,7 @@ import { useNavigate } from "react-router-dom";
 import { ArrowLeft, CheckCircle2, Loader2, ShieldCheck } from "lucide-react";
 import { apiClient } from "@/lib/api-client";
 import { Button } from "@/components/ui/button";
+import { useIallkaContext } from "@/contexts/iallka-context";
 
 type Portal = "company" | "agency";
 
@@ -37,6 +38,20 @@ export function Catalog2Checkout({ portal }: { portal: Portal }) {
   useEffect(() => {
     apiClient.getClientCatalog2Cart().then(setCart).catch((e: any) => setError(e?.message ?? "Não foi possível carregar a cesta."));
   }, []);
+
+  // Contexto pra Aura (Item 9, reunião 2026-09-14, "Atualizar o contexto da
+  // Aura") — só envia um id de cotação quando há EXATAMENTE uma (contexto
+  // inequívoco); com mais de uma, a Aura explica só a regra geral de
+  // proteção de preço, sem apontar uma cotação específica. Revalidado/
+  // reautorizado no servidor, nunca confiado só por estar aqui.
+  const { setScreenContext: setIallkaScreenContext } = useIallkaContext();
+  useEffect(() => {
+    setIallkaScreenContext({
+      label: "Checkout do Catálogo",
+      quoteId: quotes.length === 1 ? quotes[0].id : undefined,
+    });
+    return () => setIallkaScreenContext(null);
+  }, [quotes, setIallkaScreenContext]);
 
   const generateQuotes = useCallback(async () => {
     if (!cart) return;

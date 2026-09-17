@@ -47,6 +47,19 @@ const baseEnvSchema = z.object({
   // motor de alertas, só é registrado em src/index.ts (nunca nos testes).
   TASK_ROTATION_INTERVAL_MS: z.coerce.number().int().positive().default(60_000),
   TASK_RELEASE_SCHEDULER_INTERVAL_MS: z.coerce.number().int().positive().default(60_000),
+  // Item 5 (reunião 2026-09-14, "Inativação programada de produtos") —
+  // intervalo do job que efetiva o status "arquivado" quando a data
+  // programada chega. Só registrado em src/index.ts (nunca nos testes).
+  CATALOG2_INACTIVATION_SCHEDULER_INTERVAL_MS: z.coerce.number().int().positive().default(60_000),
+  // Item 6.1 (reunião 2026-09-14, "Completar a execução dos períodos") —
+  // intervalo do job que libera ciclos de entrega mensal vencidos. Só
+  // registrado em src/index.ts (nunca nos testes).
+  CATALOG2_DELIVERY_CYCLE_SCHEDULER_INTERVAL_MS: z.coerce.number().int().positive().default(60_000),
+  // Item 8 (reunião 2026-09-14, "Notificações dos produtos") — intervalo do
+  // job que envia o aviso de ativação (fan-out pra toda a plataforma) já
+  // registrado como pendente junto da transição de status. Só registrado em
+  // src/index.ts (nunca nos testes).
+  CATALOG2_ACTIVATION_NOTIFICATION_SCHEDULER_INTERVAL_MS: z.coerce.number().int().positive().default(60_000),
 
   // ── Canais, campanhas e banners (ata 2026-08, bloco 5/5) ────────────────
   // Intervalo do job que ativa campanhas/banners agendados, cria as entregas
@@ -91,6 +104,16 @@ const baseEnvSchema = z.object({
   // importador offline e pelas migrations do legado — nunca por rota HTTP.
   LEGACY_DATABASE_URL: z.string().optional(),
   LEGACY_IMPORT_DATABASE_URL: z.string().optional(),
+
+  // Item 16.1 (reunião 2026-09-14, "Visibilidade e teste") — lista explícita
+  // (e-mails exatos, separados por vírgula) de contas comerciais (company/
+  // agency) autorizadas a ver os 36 produtos em preview demonstrativo,
+  // mesmo com dado provisório, para homologação. NUNCA um wildcard, NUNCA
+  // inferido de account_type — só quem está literalmente nesta lista. Vazio
+  // = ninguém além do Admin Master vê preview (comportamento de sempre).
+  // Preço fictício aqui nunca autoriza cotação/contratação real — ver
+  // `simulateProvisional` em catalog2-pricing.ts, bloqueio incondicional.
+  CATALOG2_DEMO_PREVIEW_EMAILS: z.string().optional(),
   // Purpose-separated from ROADMAP_HMAC_* — only ever signs the SSO
   // handoff (POST .../allka/sso/tickets on the Roadmap), never ticket
   // creation/lookup. Deliberately optional: lib/roadmap-client.ts falls

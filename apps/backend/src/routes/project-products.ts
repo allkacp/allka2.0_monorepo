@@ -121,6 +121,12 @@ router.get("/", verifyToken, async (req, res, next) => {
           },
         },
         _count: { select: { tasks: true } },
+        // Item 6.1 (reunião 2026-09-14, "Completar a execução dos
+        // períodos") — ciclos de entrega mensal registrados pra um
+        // contrato com período (vazio pra avulso ou período não-recorrente).
+        // Os campos catalog2_period_* já vêm por baixo (sem `select` no
+        // nível raiz, todo escalar do ProjectProduct é incluído).
+        catalog2_delivery_cycles: { orderBy: { occurrence_index: "asc" } },
       },
       orderBy: { created_at: "asc" },
     });

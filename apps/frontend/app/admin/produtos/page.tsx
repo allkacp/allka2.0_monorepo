@@ -50,6 +50,7 @@ import {
   StandardPageBanner,
 } from "@/components/standard-page-shell";
 import { usePersistedViewMode, viewModeGridClass } from "@/lib/use-persisted-view-mode";
+import { CATALOG2_STATUS_LABEL, CATALOG2_STATUS_TONE } from "@/lib/catalog2-status";
 import { provisionalPrice, provisionalTaskCount } from "@/lib/catalog2-provisional";
 import { ProductEditor } from "@/app/admin/produtos/novo-catalogo/product-editor";
 import { Catalog2ProductDetail } from "@/components/catalog2-product-detail";
@@ -71,19 +72,10 @@ import { useIsAdminMaster } from "@/hooks/use-is-admin-master";
 // de Produtos"); aquela rota agora só redireciona pra cá (ver
 // novo-catalogo/page.tsx), preservando o produto selecionado via ?produto=.
 
-const STATUS_LABEL: Record<string, string> = {
-  em_preparacao: "Em preparação",
-  disponivel: "Disponível",
-  temporariamente_inativo: "Suspenso",
-  arquivado: "Arquivado",
-};
-// Pequenos acentos de status — chips sólidos legíveis nos dois temas.
-const STATUS_TONE: Record<string, string> = {
-  em_preparacao: "bg-muted text-muted-foreground",
-  disponivel: "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-200",
-  temporariamente_inativo: "bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-200",
-  arquivado: "bg-muted text-muted-foreground",
-};
+// Rótulo/cor de status — módulo compartilhado com /admin/catalogo-produtos
+// (reunião 2026-09-14, Item 2): ver apps/frontend/lib/catalog2-status.ts.
+const STATUS_LABEL: Record<string, string> = CATALOG2_STATUS_LABEL;
+const STATUS_TONE: Record<string, string> = CATALOG2_STATUS_TONE;
 
 // Estados de preparo e pendências da importação dos 36 (bloco 4/6).
 const REVIEW_STATE_LABEL: Record<string, string> = {
@@ -171,6 +163,11 @@ export default function AdminProdutosPage() {
   const [listError, setListError] = useState<string | null>(null);
   const [msg, setMsg] = useState<string | null>(null);
   const [confirm, setConfirm] = useState<{ title: string; message: string; onConfirm: () => void } | null>(null);
+  // Item 5 (reunião 2026-09-14, "Inativação programada de produtos") — a
+  // prévia (projetos/propostas afetados, datas, consequências) é carregada
+  // ANTES de abrir o diálogo, pra reaproveitar o ConfirmationDialog comum
+  // (mesmo componente do resto da tela) já com os dados prontos.
+  const [inactivationDialog, setInactivationDialog] = useState<{ product: any; preview: any } | null>(null);
 
   const bootstrap = useCallback(async () => {
     try {
@@ -248,6 +245,18 @@ export default function AdminProdutosPage() {
     catch (e: any) { setMsg(e?.message ?? "Falha."); }
   }
 
+  // Item 5: busca a prévia (projetos/propostas afetados) ANTES de abrir o
+  // diálogo de confirmação — sem isso o admin confirmaria "às cegas".
+  async function openInactivationDialog(p: any) {
+    setMsg(null);
+    try {
+      const preview = await apiClient.previewCatalog2ProductInactivation(p.id);
+      setInactivationDialog({ product: p, preview });
+    } catch (e: any) {
+      setMsg(e?.message ?? "Não foi possível carregar a prévia de inativação.");
+    }
+  }
+
   async function createProduct() {
     setMsg(null);
     try {
@@ -311,7 +320,13 @@ export default function AdminProdutosPage() {
       onClick: () => { setStatus(""); setOnlyPendencies(false); setShowCategoryFilters(false); },
     },
     {
-      key: "published", label: "Publicados", icon: CheckCircle2, count: c.products_published ?? 0,
+      // Reunião 2026-09-14 (Item 2): renomeado de "Publicados" para "Ativos"
+      // — status "disponivel" é o único status contratável, distinto de
+      // "tem versão publicada" (pré-lançamento/pausado/esgotado também
+      // exigem versão publicada, mas não são "Ativo"). Contagem vem de
+      // products_by_status (grupo real por status), não mais de
+      // products_published (que conta qualquer versão publicada).
+      key: "active", label: "Ativos", icon: CheckCircle2, count: overview.products_by_status?.disponivel ?? 0,
       active: status === "disponivel" && !onlyPendencies,
       onClick: () => { setStatus("disponivel"); setOnlyPendencies(false); setShowCategoryFilters(false); },
     },
@@ -680,9 +695,14 @@ export default function AdminProdutosPage() {
                               )}
                             </td>
                             <td className="px-2 py-3">
-                              <div className="flex items-center gap-1.5">
+                              <div className="flex flex-wrap items-center gap-1.5">
                                 {p.is_new && <Badge className="bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-200">Novo</Badge>}
                                 <Badge className={STATUS_TONE[p.status] ?? "bg-muted text-muted-foreground"}>{STATUS_LABEL[p.status] ?? p.status}</Badge>
+                                {p.inactivation_scheduled_at && (
+                                  <Badge className="bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-200">
+                                    Inativação programada para {new Date(p.inactivation_effective_at).toLocaleDateString("pt-BR")}
+                                  </Badge>
+                                )}
                               </div>
                             </td>
                             <td className="px-2 py-3">
@@ -715,7 +735,7 @@ export default function AdminProdutosPage() {
                                     <TooltipContent className="text-xs font-medium">{p.has_draft ? "Continuar configuração" : "Abrir/editar produto"}</TooltipContent>
                                   </Tooltip>
                                 </TooltipProvider>
-                                <ProductRowActionsMenu p={p} rowAction={rowAction} setConfirm={setConfirm} />
+                                <ProductRowActionsMenu p={p} rowAction={rowAction} setConfirm={setConfirm} onScheduleInactivation={openInactivationDialog} />
                               </div>
                             </td>
                           </tr>
@@ -772,6 +792,11 @@ export default function AdminProdutosPage() {
                             {rp?.functional_for_test && (
                               <ProvisionalBadge label="Especialidade e tempo provisórios para teste — funcional para teste, pendente de revisão. Nunca usado para aprovar preço comercial ou publicação." />
                             )}
+                            {p.inactivation_scheduled_at && (
+                              <Badge className="w-fit bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-200">
+                                Inativação programada para {new Date(p.inactivation_effective_at).toLocaleDateString("pt-BR")}
+                              </Badge>
+                            )}
                           </div>
                           <div className="mt-auto flex items-center justify-between gap-1 border-t border-slate-100 pt-2 dark:border-slate-800">
                             <TooltipProvider delayDuration={400}>
@@ -794,7 +819,7 @@ export default function AdminProdutosPage() {
                                 <TooltipContent className="text-xs font-medium">{p.has_draft ? "Continuar configuração" : "Abrir/editar produto"}</TooltipContent>
                               </Tooltip>
                             </TooltipProvider>
-                            <ProductRowActionsMenu p={p} rowAction={rowAction} setConfirm={setConfirm} />
+                            <ProductRowActionsMenu p={p} rowAction={rowAction} setConfirm={setConfirm} onScheduleInactivation={openInactivationDialog} />
                           </div>
                         </div>
                       </Card>
@@ -822,6 +847,31 @@ export default function AdminProdutosPage() {
             confirmText="Confirmar"
             destructive={false}
             onConfirm={() => { confirm.onConfirm(); setConfirm(null); }}
+          />
+        )}
+
+        {inactivationDialog && (
+          <ConfirmationDialog
+            open
+            onClose={() => setInactivationDialog(null)}
+            title="Programar inativação"
+            message="A partir da confirmação, os responsáveis afetados são notificados imediatamente. Propostas já vigentes continuam válidas até a data efetiva; nenhuma cotação nova pode mais ser gerada a partir de agora."
+            targetName={inactivationDialog.product.internal_name}
+            targetDetail={`Aviso: hoje · Inativação programada para: ${new Date(inactivationDialog.preview.effective_date).toLocaleDateString("pt-BR")}`}
+            consequences={[
+              `${inactivationDialog.preview.affected_projects.length} projeto(s)/pedido(s) em andamento afetado(s).`,
+              `${inactivationDialog.preview.affected_quotes.length} proposta(s) (pré-cotação) vigente(s) afetada(s).`,
+              ...inactivationDialog.preview.consequences,
+            ]}
+            confirmText="Confirmar agendamento"
+            destructive={false}
+            attention
+            onConfirm={async () => {
+              await apiClient.scheduleCatalog2ProductInactivation(inactivationDialog.product.id);
+              setMsg("Inativação programada — responsáveis notificados.");
+              await loadList();
+              await bootstrap();
+            }}
           />
         )}
 
@@ -964,11 +1014,12 @@ function RowTechDetails({ text }: { text: string }) {
 // muda o gatilho visual ao redor). Nunca inclui "Excluir": catalog2 não tem
 // exclusão — arquivar é o equivalente real, já usado aqui.
 function ProductRowActionsMenu({
-  p, rowAction, setConfirm,
+  p, rowAction, setConfirm, onScheduleInactivation,
 }: {
   p: any;
   rowAction: (fn: () => Promise<any>, ok: string) => void;
   setConfirm: (c: { title: string; message: string; onConfirm: () => void } | null) => void;
+  onScheduleInactivation: (p: any) => void;
 }) {
   return (
     <DropdownMenu>
@@ -983,22 +1034,55 @@ function ProductRowActionsMenu({
             Nova versão
           </DropdownMenuItem>
         )}
-        {p.status === "disponivel" && (
-          <DropdownMenuItem onClick={() => rowAction(() => apiClient.setCatalog2ProductStatus(p.id, "temporariamente_inativo"), "Oferta suspensa.")}>
-            Suspender
+        {p.status === "em_preparacao" && !!p.published_version_number && (
+          <DropdownMenuItem onClick={() => rowAction(() => apiClient.setCatalog2ProductStatus(p.id, "pre_lancamento"), "Produto em pré-lançamento.")}>
+            Colocar em pré-lançamento
           </DropdownMenuItem>
         )}
-        {p.status === "temporariamente_inativo" && (
-          <DropdownMenuItem onClick={() => rowAction(() => apiClient.setCatalog2ProductStatus(p.id, "disponivel"), "Oferta reativada.")}>
+        {(p.status === "em_preparacao" || p.status === "pre_lancamento") && !!p.published_version_number && (
+          <DropdownMenuItem onClick={() => rowAction(() => apiClient.setCatalog2ProductStatus(p.id, "disponivel"), "Produto ativado.")}>
             Ativar
+          </DropdownMenuItem>
+        )}
+        {p.status === "disponivel" && (
+          <>
+            <DropdownMenuItem onClick={() => rowAction(() => apiClient.setCatalog2ProductStatus(p.id, "temporariamente_inativo"), "Oferta pausada.")}>
+              Pausar
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={() => rowAction(() => apiClient.setCatalog2ProductStatus(p.id, "esgotado_temporariamente"), "Produto marcado como esgotado temporariamente.")}>
+              Marcar como esgotado
+            </DropdownMenuItem>
+          </>
+        )}
+        {(p.status === "temporariamente_inativo" || p.status === "esgotado_temporariamente") && (
+          <DropdownMenuItem onClick={() => rowAction(() => apiClient.setCatalog2ProductStatus(p.id, "disponivel"), "Oferta reativada.")}>
+            Reativar
           </DropdownMenuItem>
         )}
         {p.status !== "arquivado" && (
           <DropdownMenuItem
             className="text-red-600"
-            onClick={() => setConfirm({ title: "Arquivar produto?", message: "O produto sai do catálogo. O histórico é preservado; nada é apagado.", onConfirm: () => rowAction(() => apiClient.archiveCatalog2Product(p.id), "Produto arquivado.") })}
+            onClick={() => setConfirm({ title: "Arquivar produto?", message: "O produto sai do catálogo. O histórico é preservado; nada é apagado. Só funciona se não houver projeto/proposta ativo vinculado — se houver, use \"Programar inativação\" abaixo.", onConfirm: () => rowAction(() => apiClient.archiveCatalog2Product(p.id), "Produto arquivado.") })}
           >
-            Arquivar
+            Arquivar (direto)
+          </DropdownMenuItem>
+        )}
+        {/* Item 5 (reunião 2026-09-14): quando há vínculo ativo, o caminho
+            é agendar (aviso + 30 dias), não arquivar direto. */}
+        {p.status !== "arquivado" && !p.inactivation_scheduled_at && (
+          <DropdownMenuItem className="text-amber-700 dark:text-amber-400" onClick={() => onScheduleInactivation(p)}>
+            Programar inativação (30 dias)
+          </DropdownMenuItem>
+        )}
+        {p.inactivation_scheduled_at && (
+          <DropdownMenuItem
+            onClick={() => setConfirm({
+              title: "Cancelar inativação programada?",
+              message: "O agendamento é desfeito e o produto volta a ficar contratável normalmente. Um novo agendamento, se feito depois, contará um novo prazo de 30 dias.",
+              onConfirm: () => rowAction(() => apiClient.cancelCatalog2ProductInactivation(p.id), "Inativação programada cancelada."),
+            })}
+          >
+            Cancelar inativação programada
           </DropdownMenuItem>
         )}
       </DropdownMenuContent>

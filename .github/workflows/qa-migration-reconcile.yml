@@ -111,10 +111,24 @@ jobs:
           fi
           git show "${COMMIT_SHA}:apps/backend/prisma/schema.prisma" > pinned-schema.prisma
           schema_sha256="$(sha256sum pinned-schema.prisma | cut -d' ' -f1)"
-          migration_name="$(git ls-tree --name-only "${COMMIT_SHA}" apps/backend/prisma/migrations/ | xargs -n1 basename | grep -v '^migration_lock\.toml$' | sort | tail -1)"
+          # Item 16.2 (reunião 2026-09-14): TODAS as migrations do commit,
+          # não só a mais recente. O passo de apply mais abaixo precisa
+          # marcar `prisma migrate resolve --applied` em CADA uma que ainda
+          # estiver pendente — resolver só a última deixava as anteriores
+          # sem registro em `_prisma_migrations`, e um `migrate deploy`
+          # (deploy-backend.yml) rodado depois tentaria recriá-las de
+          # verdade, repetindo o mesmo erro que motivou este workflow
+          # ("Table 'users' already exists", run 33452356620).
+          migration_names="$(git ls-tree --name-only "${COMMIT_SHA}" apps/backend/prisma/migrations/ | xargs -n1 basename | grep -v '^migration_lock\.toml$' | sort)"
+          migration_name="$(echo "$migration_names" | tail -1)"
           echo "commit_short=${COMMIT_SHA:0:7}" >> "$GITHUB_OUTPUT"
           echo "schema_sha256=${schema_sha256}" >> "$GITHUB_OUTPUT"
           echo "migration_name=${migration_name}" >> "$GITHUB_OUTPUT"
+          {
+            echo "migration_names<<MIGRATION_NAMES_EOF"
+            echo "$migration_names"
+            echo "MIGRATION_NAMES_EOF"
+          } >> "$GITHUB_OUTPUT"
           {
             echo "## Reconciliação de baseline — commit \`${COMMIT_SHA}\`"
             echo "- schema.prisma sha256 (extraído exatamente deste commit, não da HEAD do branch): \`${schema_sha256}\`"
@@ -336,6 +350,42 @@ jobs:
           echo "::error::${{ steps.classify.outputs.blocked_count }} statement(s) classificados como BLOCKED (potencialmente destrutivos ou de rename). Nunca aplicáveis por este workflow, com nenhuma confirmação — resolva manualmente fora daqui."
           exit 1
 
+      - name: Recusa incondicional se alguma migration pendente transformar DADO (não só schema)
+        # Item 16.3 (reunião 2026-09-14, "Conferir as ferramentas") — achado
+        # real: este workflow aplica reconcile_diff.sql, que é um DIFF DE
+        # SCHEMA derivado (`prisma migrate diff`) — NUNCA o migration.sql
+        # original. Se uma migration pendente tiver um UPDATE/INSERT (ex.:
+        # 20260916090000_add_catalog2_commercial_change_events, que rotula
+        # linhas pré-existentes com `price_protection_anchor_source =
+        # "detected_fallback"`), aplicar só o diff de schema e depois marcar
+        # essa migration como "aplicada" pularia essa transformação de dado
+        # PARA SEMPRE, mesmo com o schema idêntico ao alvo — um diff vazio
+        # NUNCA prova que o dado foi migrado, só que a estrutura bate.
+        # Migrations assim só podem ser aplicadas rodando o migration.sql
+        # completo de verdade (via `prisma migrate deploy`, no pipeline
+        # normal de deploy) — nunca por este reconciliador.
+        shell: bash
+        env:
+          COMMIT_SHA: ${{ inputs.commit_sha }}
+          MIGRATION_NAMES: ${{ steps.schema.outputs.migration_names }}
+        run: |
+          found=""
+          while IFS= read -r name; do
+            [ -z "$name" ] && continue
+            sql="$(git show "${COMMIT_SHA}:apps/backend/prisma/migrations/${name}/migration.sql" 2>/dev/null || true)"
+            no_comments="$(printf '%s\n' "$sql" | grep -v '^\s*--')"
+            if printf '%s\n' "$no_comments" | grep -qiE '^\s*(UPDATE|INSERT)\b'; then
+              found="${found}${name}\n"
+            fi
+          done <<< "$MIGRATION_NAMES"
+          if [ -n "$found" ]; then
+            echo "::error::A(s) seguinte(s) migration(s) pendente(s) contém(êm) UPDATE/INSERT (transformação de dado, não só schema) — este reconciliador NUNCA pode aplicá-las (só aplica o diff de SCHEMA derivado, nunca o migration.sql original, então o dado nunca seria transformado de verdade):"
+            printf '%b' "$found" >&2
+            echo "::error::Aplicar via o pipeline normal de deploy (migrate-deploy-checked.sh / prisma migrate deploy), que roda o migration.sql completo — nunca via mode=apply deste workflow."
+            exit 1
+          fi
+          echo "Nenhuma migration pendente contém UPDATE/INSERT — seguro prosseguir com o diff de schema."
+
       - name: Report-only (mode=diff)
         if: inputs.mode == 'diff'
         run: |
@@ -370,57 +420,74 @@ jobs:
         if: inputs.mode == 'apply' && steps.diff.outputs.is_empty == 'false'
         shell: bash
         env:
-          MIGRATION_NAME: ${{ steps.schema.outputs.migration_name }}
+          MIGRATION_NAMES: ${{ steps.schema.outputs.migration_names }}
         run: |
           mkdir -p .deploy
-          cat > .deploy/remote-apply.sh <<SCRIPT
+          # Lista de migrations do commit, uma por linha, embutida como
+          # arquivo à parte (não como variável do heredoc) — evita qualquer
+          # problema de escaping de `\$`/quebra de linha dentro do SCRIPT
+          # abaixo, e o remote-apply.sh só precisa ler o arquivo.
+          printf '%s\n' "$MIGRATION_NAMES" > .deploy/migration-names.txt
+          cat > .deploy/remote-apply.sh <<'SCRIPT'
           set -euo pipefail
-          deploy_path="\$1"
-          image="\$2"
-          cd "\$deploy_path"
+          deploy_path="$1"
+          image="$2"
+          cd "$deploy_path"
           set -a
           source ./.env
           set +a
 
           echo "== Aplicando o diff (statements ja classificados e com checksum conferido) =="
-          docker compose --env-file .env -f docker-compose.yml exec -T mysql \\
-            sh -c 'exec mysql -uroot -p"\$MYSQL_ROOT_PASSWORD" "\$MYSQL_DATABASE"' \\
+          docker compose --env-file .env -f docker-compose.yml exec -T mysql \
+            sh -c 'exec mysql -uroot -p"$MYSQL_ROOT_PASSWORD" "$MYSQL_DATABASE"' \
             < reconcile_diff.sql
 
           echo "== Garantindo as linhas estruturais do catalog2 (four_f + pricing_settings), sem duplicar =="
-          docker compose --env-file .env -f docker-compose.yml exec -T mysql \\
-            sh -c 'exec mysql -uroot -p"\$MYSQL_ROOT_PASSWORD" "\$MYSQL_DATABASE"' \\
+          docker compose --env-file .env -f docker-compose.yml exec -T mysql \
+            sh -c 'exec mysql -uroot -p"$MYSQL_ROOT_PASSWORD" "$MYSQL_DATABASE"' \
             < reconcile_seed_rows.sql
 
           echo "== Confirmando diff vazio pos-aplicacao =="
-          db_url="mysql://\${MYSQL_USER:-allka}:\${MYSQL_PASSWORD}@mysql:3306/\${MYSQL_DATABASE:-allka}"
-          BACKEND_IMAGE="\$image" docker compose --env-file .env -f docker-compose.yml run --rm --no-deps \\
-            -e DATABASE_URL="\$db_url" \\
-            backend npx prisma migrate diff \\
-              --from-url "\$db_url" \\
-              --to-schema-datamodel prisma/schema.prisma \\
+          db_url="mysql://${MYSQL_USER:-allka}:${MYSQL_PASSWORD}@mysql:3306/${MYSQL_DATABASE:-allka}"
+          BACKEND_IMAGE="$image" docker compose --env-file .env -f docker-compose.yml run --rm --no-deps \
+            -e DATABASE_URL="$db_url" \
+            backend npx prisma migrate diff \
+              --from-url "$db_url" \
+              --to-schema-datamodel prisma/schema.prisma \
               --script > post_diff.sql
           cat post_diff.sql
           if ! grep -q 'This is an empty migration' post_diff.sql; then
-            echo "ERRO: diff pos-aplicacao nao esta vazio -- NAO vou marcar a baseline como resolvida. Investigar manualmente." >&2
+            echo "ERRO: diff pos-aplicacao nao esta vazio -- NAO vou marcar nenhuma migration como resolvida. Investigar manualmente." >&2
             exit 1
           fi
 
-          echo "== Confirmando que $MIGRATION_NAME ainda nao esta marcada como aplicada =="
-          status_before="\$(BACKEND_IMAGE="\$image" docker compose --env-file .env -f docker-compose.yml run --rm --no-deps -e DATABASE_URL="\$db_url" backend npx prisma migrate status || true)"
-          echo "\$status_before"
-          if echo "\$status_before" | grep -q "$MIGRATION_NAME" && echo "\$status_before" | grep -qi "up to date"; then
-            echo "AVISO: $MIGRATION_NAME ja aparece aplicada -- pulando resolve para nao sobrescrever registro existente."
-          else
-            echo "== Marcando $MIGRATION_NAME como aplicada (equivalencia comprovada acima) =="
-            BACKEND_IMAGE="\$image" docker compose --env-file .env -f docker-compose.yml run --rm --no-deps \\
-              -e DATABASE_URL="\$db_url" \\
-              backend npx prisma migrate resolve --applied "$MIGRATION_NAME"
-          fi
+          # Item 16.2 (reuniao 2026-09-14): resolve TODAS as migrations do
+          # commit que aparecerem como pendentes no `migrate status`, nao só
+          # a mais recente -- resolver só a última deixava as anteriores sem
+          # registro em `_prisma_migrations`, e um `migrate deploy` rodado
+          # depois (deploy-backend.yml) tentaria recriá-las de verdade,
+          # repetindo o mesmo erro que motivou este workflow ("Table
+          # 'users' already exists", run 33452356620). O diff acima já
+          # comprovou que o efeito de TODAS elas já está fisicamente no
+          # banco -- resolve aqui só ATUALIZA O REGISTRO, nunca reexecuta SQL.
+          status_before="$(BACKEND_IMAGE="$image" docker compose --env-file .env -f docker-compose.yml run --rm --no-deps -e DATABASE_URL="$db_url" backend npx prisma migrate status || true)"
+          echo "$status_before"
+          pending_block="$(printf '%s\n' "$status_before" | awk '/have not yet been applied/{flag=1; next} /^$/{flag=0} flag')"
+          while IFS= read -r name; do
+            [ -z "$name" ] && continue
+            if printf '%s\n' "$pending_block" | grep -qx "$name"; then
+              echo "== Marcando $name como aplicada (equivalencia comprovada pelo diff pos-aplicacao vazio) =="
+              BACKEND_IMAGE="$image" docker compose --env-file .env -f docker-compose.yml run --rm --no-deps \
+                -e DATABASE_URL="$db_url" \
+                backend npx prisma migrate resolve --applied "$name"
+            else
+              echo "$name já está marcada como aplicada -- pulando (nunca sobrescreve registro existente)."
+            fi
+          done < migration-names.txt
 
-          echo "== migrate status final =="
-          BACKEND_IMAGE="\$image" docker compose --env-file .env -f docker-compose.yml run --rm --no-deps \\
-            -e DATABASE_URL="\$db_url" \\
+          echo "== migrate status apos reconciliar todas as migrations pendentes =="
+          BACKEND_IMAGE="$image" docker compose --env-file .env -f docker-compose.yml run --rm --no-deps \
+            -e DATABASE_URL="$db_url" \
             backend npx prisma migrate status
           SCRIPT
 
@@ -444,8 +511,10 @@ jobs:
           scp -i "$HOME/.ssh/allka_deploy_key" -P "$VPS_SSH_PORT" -o StrictHostKeyChecking=accept-new -o UserKnownHostsFile="$HOME/.ssh/known_hosts" \
             .github/workflows/qa-catalog2-seed-rows.sql "$remote:${VPS_DEPLOY_PATH}/reconcile_seed_rows.sql"
           scp -i "$HOME/.ssh/allka_deploy_key" -P "$VPS_SSH_PORT" -o StrictHostKeyChecking=accept-new -o UserKnownHostsFile="$HOME/.ssh/known_hosts" \
+            .deploy/migration-names.txt "$remote:${VPS_DEPLOY_PATH}/migration-names.txt"
+          scp -i "$HOME/.ssh/allka_deploy_key" -P "$VPS_SSH_PORT" -o StrictHostKeyChecking=accept-new -o UserKnownHostsFile="$HOME/.ssh/known_hosts" \
             .deploy/remote-apply.sh "$remote:/tmp/allka-remote-apply.sh"
-          ssh "${SSH_OPTS[@]}" "$remote" "bash /tmp/allka-remote-apply.sh '${VPS_DEPLOY_PATH}' '${IMAGE}'; rc=\$?; rm -f /tmp/allka-remote-apply.sh; exit \$rc"
+          ssh "${SSH_OPTS[@]}" "$remote" "bash /tmp/allka-remote-apply.sh '${VPS_DEPLOY_PATH}' '${IMAGE}'; rc=\$?; rm -f /tmp/allka-remote-apply.sh '${VPS_DEPLOY_PATH}/migration-names.txt'; exit \$rc"
 
       - name: Nada a aplicar (diff vazio) — só confirma/marca a baseline
         if: inputs.mode == 'apply' && steps.diff.outputs.is_empty == 'true'

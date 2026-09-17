@@ -38,6 +38,7 @@ import { fmtBRL, Section, PortfolioGallery } from "@/components/product-detail-s
 import { Catalog2Thumbnail } from "@/components/catalog2-thumbnail";
 import { ProvisionalBadge } from "@/components/provisional-badge";
 import { Catalog2PricingMemoryPopover } from "@/components/catalog2-pricing-memory-popover";
+import { useIallkaContext } from "@/contexts/iallka-context";
 
 type TabId = "detalhes" | "portfolio" | "nomades";
 
@@ -85,6 +86,9 @@ export function Catalog2ProductDetail({
 }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  // Distingue "produto não existe" (404 — repetir a chamada nunca vai
+  // funcionar) de uma falha real/transitória da API (vale oferecer retry).
+  const [notFound, setNotFound] = useState(false);
   const [data, setData] = useState<any | null>(null);
   const [activeTab, setActiveTab] = useState<TabId>("detalhes");
   const [descriptionExpanded, setDescriptionExpanded] = useState(false);
@@ -94,6 +98,7 @@ export function Catalog2ProductDetail({
   const [selectedOptionKeys, setSelectedOptionKeys] = useState<string[]>([]);
   const [selectedAddonKeys, setSelectedAddonKeys] = useState<string[]>([]);
   const [selectionSimulation, setSelectionSimulation] = useState<any | null>(null);
+  const [retryToken, setRetryToken] = useState(0);
   const bodyRef = useRef<HTMLDivElement | null>(null);
   const [isWideLayout, setIsWideLayout] = useState(false);
   const [isDraggingDivider, setIsDraggingDivider] = useState(false);
@@ -137,13 +142,20 @@ export function Catalog2ProductDetail({
     let cancelled = false;
     setLoading(true);
     setError(null);
+    setNotFound(false);
     apiClient
       .getCatalog2ProductDetailPreview(productId)
       .then((res: any) => {
         if (!cancelled) setData(res);
       })
       .catch((e: any) => {
-        if (!cancelled) setError(e?.message || "Não foi possível carregar o detalhe do produto.");
+        if (cancelled) return;
+        if (e?.status === 404) {
+          setNotFound(true);
+          setError(e?.message || "Produto não encontrado.");
+        } else {
+          setError(e?.message || "Não foi possível carregar o detalhe do produto.");
+        }
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
@@ -151,11 +163,25 @@ export function Catalog2ProductDetail({
     return () => {
       cancelled = true;
     };
-  }, [productId]);
+  }, [productId, retryToken]);
 
   const product = data?.product;
   const readiness = data?.readiness;
   const provisional = readiness?.provisional ?? null;
+
+  // Contexto pra Aura (Item 9, reunião 2026-09-14, "Atualizar o contexto da
+  // Aura") — nome já visível na própria tela + id real do produto
+  // (revalidado/reautorizado no servidor, nunca confiado só por estar
+  // aqui). Some ao sair da tela.
+  const { setScreenContext: setIallkaScreenContext } = useIallkaContext();
+  useEffect(() => {
+    setIallkaScreenContext({
+      label: "Catálogo de Produtos",
+      openItemName: product?.internal_name,
+      productId,
+    });
+    return () => setIallkaScreenContext(null);
+  }, [product?.internal_name, productId, setIallkaScreenContext]);
 
   const targetVersion = useMemo(() => {
     if (!product?.versions?.length) return null;
@@ -275,11 +301,17 @@ export function Catalog2ProductDetail({
     );
   }
   if (error || !product) {
+    const canRetry = !!error && !notFound;
     return (
       <div className="flex flex-col items-center justify-center h-full py-24 gap-3 text-center px-6">
         <AlertTriangle className="h-8 w-8 text-amber-500" />
         <p className="text-sm text-muted-foreground">{error || "Produto não encontrado."}</p>
-        <Button variant="outline" onClick={onBack}>Voltar</Button>
+        <div className="flex items-center gap-2">
+          {canRetry && (
+            <Button variant="outline" onClick={() => setRetryToken((n) => n + 1)}>Tentar novamente</Button>
+          )}
+          <Button variant={canRetry ? "ghost" : "outline"} onClick={onBack}>Voltar</Button>
+        </div>
       </div>
     );
   }

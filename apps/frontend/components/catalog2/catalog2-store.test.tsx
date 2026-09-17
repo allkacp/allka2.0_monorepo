@@ -104,7 +104,7 @@ describe("Catálogo do cliente", () => {
     await user.click(await screen.findByText("Serviço Demo"));
     const addBtn = await screen.findByRole("button", { name: /Adicionar à cesta/i });
     await user.click(addBtn);
-    await waitFor(() => expect(api.addClientCatalog2CartItem).toHaveBeenCalledWith("servico-demo", expect.any(Object)));
+    await waitFor(() => expect(api.addClientCatalog2CartItem).toHaveBeenCalledWith("servico-demo", expect.any(Object), null));
     expect(await screen.findByText(/Adicionado à cesta/i)).toBeInTheDocument();
 
     api.addClientCatalog2CartItem.mockResolvedValueOnce({ created: false, item_id: "i1", already_in_cart: true });
@@ -160,13 +160,64 @@ describe("Catálogo do cliente", () => {
     expect(screen.getByText(/a partir de A definir/)).toBeInTheDocument();
   });
 
-  it("cliente comum (company/agency) NUNCA pede preview=1, mesmo que soubesse do parâmetro na URL", async () => {
+  // Item 16.2 (reunião 2026-09-14, "Checkout demonstrativo") — corrigido:
+  // antes o portal "company"/"agency" NUNCA repassava preview=1 ao backend,
+  // mesmo já existindo (Item 16.1) uma conta comercial autorizada via
+  // CATALOG2_DEMO_PREVIEW_EMAILS que o backend aceitaria — a autorização de
+  // verdade é sempre do backend (can_preview_drafts), então o frontend
+  // repassar o parâmetro não abre nada; quem não estiver na allowlist
+  // recebe 404 do próprio backend (coberto pelo teste de integração
+  // "25. admin comum não pré-visualiza rascunho..." e por evidência real de
+  // navegador desta etapa).
+  it("cliente comum (company/agency) REPASSA preview=1 ao backend — a autorização real é sempre do backend, nunca do frontend", async () => {
+    api.getClientCatalog2Products.mockResolvedValue({ data: [{ ...LIST.data[0] }], total: 1, page: 1, page_size: 12 });
     render(
       <MemoryRouter initialEntries={["/company/catalog2?preview=1"]}>
         <Catalog2Store portal="company" />
       </MemoryRouter>,
     );
-    await screen.findByText("Serviço Demo");
-    expect(api.getClientCatalog2Products).not.toHaveBeenCalledWith(expect.objectContaining({ preview: "1" }));
+    await waitFor(() => expect(api.getClientCatalog2Products).toHaveBeenCalledWith(expect.objectContaining({ preview: "1" })));
+  });
+
+  // Item 2 (reunião 2026-09-14, "Status e disponibilidade dos produtos"):
+  // pré-lançamento/pausado/esgotado aparecem no catálogo REAL (fora do
+  // preview admin) com etiqueta própria — diferente de "em_preparacao", que
+  // nunca chega até aqui (o backend já filtra fora da listagem do cliente).
+  it("produto pausado (fora do preview) aparece na listagem com etiqueta de status e motivo de indisponibilidade", async () => {
+    api.getClientCatalog2Products.mockResolvedValue({
+      data: [{
+        ...LIST.data[0],
+        status: "temporariamente_inativo",
+        status_label: "Pausado",
+        contractable: false,
+        unavailable_reason: "oferta pausada temporariamente",
+      }],
+      total: 1, page: 1, page_size: 12,
+    });
+    renderStore();
+    expect(await screen.findByText("Serviço Demo")).toBeInTheDocument();
+    expect(screen.getByText("Pausado")).toBeInTheDocument();
+    expect(screen.getByText(/Oferta pausada temporariamente\./)).toBeInTheDocument();
+  });
+
+  it("produto em pré-lançamento no detalhe: mostra etiqueta e motivo, e desabilita 'Adicionar à cesta'", async () => {
+    const user = userEvent.setup();
+    api.getClientCatalog2Product.mockResolvedValue({
+      ...DETAIL,
+      status: "pre_lancamento",
+      status_label: "Pré-lançamento",
+      contract_blocked_reason: "produto em pré-lançamento — contratação ainda não liberada",
+      can_contract: false,
+    });
+    api.configureClientCatalog2.mockResolvedValue({ ...CONFIG, can_generate_quote: false, quote_blockers: ["produto em pré-lançamento — contratação ainda não liberada"] });
+    renderStore();
+    await user.click(await screen.findByText("Serviço Demo"));
+    expect(await screen.findByRole("heading", { name: "Serviço Demo" })).toBeInTheDocument();
+    expect(screen.getByText("Pré-lançamento")).toBeInTheDocument();
+    expect(screen.getByText(/Contratação bloqueada: produto em pré-lançamento/)).toBeInTheDocument();
+    const addBtn = await screen.findByRole("button", { name: /Adicionar à cesta/i });
+    expect(addBtn).toBeDisabled();
+    const quoteBtn = screen.getByRole("button", { name: /Gerar pré-cotação/i });
+    expect(quoteBtn).toBeDisabled();
   });
 });

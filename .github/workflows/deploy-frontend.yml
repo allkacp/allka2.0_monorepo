@@ -15,19 +15,26 @@ permissions:
   contents: read
   packages: write
 
-# Os dois deploys compartilham o MESMO grupo de concorrência de propósito.
+# O grupo de concorrência `deploy-vps` (mesmo nome usado por deploy-backend.yml,
+# qa-db-backup.yml, etc.) é aplicado só no JOB `deploy` abaixo — NUNCA no
+# nível do workflow inteiro. Motivo (revisão da PR #21, reunião 2026-09-14):
+# concurrency no nível do workflow prende a RUN inteira ao grupo antes de
+# qualquer step rodar, inclusive o job `wait-for-backend` (que só espera,
+# nunca mexe no VPS). Se esse job de espera estivesse dentro do mesmo
+# grupo, ele próprio ocuparia o slot enquanto espera o Deploy Backend —
+# que por sua vez também precisa desse MESMO slot pra sequer começar —
+# espera circular (os dois travados esperando um ao outro, pra sempre).
+# Por isso só o job `deploy` (que de fato publica no VPS) entra no grupo,
+# e só depois de `needs: wait-for-backend` já ter sido satisfeito.
 #
-# Eles terminam no mesmo VPS, mexendo no mesmo .env e rodando o mesmo
-# `docker compose up -d`. Com grupos separados os dois rodavam em paralelo
-# quando um push tocava backend e frontend — e nas duas vezes em que isso
-# aconteceu (2882259 e e06c506) só o frontend subiu, sem erro visível. Push
-# que tocava só o backend (a834786) subia normal.
-#
-# `cancel-in-progress: false` para enfileirar em vez de cancelar: cancelar o
-# deploy do backend no meio deixaria o VPS num estado indefinido.
-concurrency:
-  group: deploy-vps
-  cancel-in-progress: false
+# O propósito original do grupo continua o mesmo: os dois deploys nunca
+# rodam simultaneamente contra o VPS (mesmo .env, mesmo `docker compose up
+# -d`). Com grupos separados os dois rodavam em paralelo quando um push
+# tocava backend e frontend — e nas duas vezes em que isso aconteceu
+# (2882259 e e06c506) só o frontend subiu, sem erro visível. Push que
+# tocava só o backend (a834786) subia normal. `cancel-in-progress: false`
+# para enfileirar em vez de cancelar: cancelar o deploy do backend no meio
+# deixaria o VPS num estado indefinido.
 
 env:
   REGISTRY: ghcr.io
@@ -40,9 +47,73 @@ env:
   MYSQL_USER: ${{ secrets.MYSQL_USER || 'allka' }}
 
 jobs:
+  # Job separado, DE PROPÓSITO, sem `concurrency: group: deploy-vps` — só
+  # consulta a API do GitHub (nunca toca o VPS), então nunca pode competir
+  # pelo mesmo slot que o Deploy Backend precisa pra sequer começar a
+  # rodar. Ver comentário grande acima de `env:` para o raciocínio completo
+  # da espera circular que isto evita.
+  wait-for-backend:
+    runs-on: ubuntu-latest
+    steps:
+      # Revisão da PR #21 (reunião 2026-09-14) — achado real: os dois
+      # deploys compartilhavam o MESMO grupo de concorrência só para NUNCA
+      # rodar simultaneamente (mutação concorrente do mesmo .env/VPS,
+      # incidente documentado nos commits 2882259/e06c506). Isso NUNCA
+      # garantiu qual workflow começa primeiro quando o mesmo push aciona
+      # os dois (toca apps/backend/** E apps/frontend/**, como esta
+      # entrega) — sem esta checagem, o frontend novo podia publicar ANTES
+      # do backend novo (e das migrations) terminarem, chamando rotas que
+      # ainda não existem no ar. Só espera quando ESTE commit também toca
+      # backend; deploys só-de-frontend seguem imediatos, sem espera.
+      - name: Aguardar o Deploy Backend do MESMO commit, se este push também tocou o backend
+        if: github.event_name == 'push'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          changed_backend="$(gh api "repos/${{ github.repository }}/commits/${{ github.sha }}" --jq '.files[].filename' \
+            | grep -E '^(apps/backend/|docker-compose\.prod\.yml$|docker/backend\.prod\.Dockerfile$|\.github/workflows/deploy-backend\.yml$)' | head -1 || true)"
+          if [ -z "$changed_backend" ]; then
+            echo "Este commit não toca o backend — Deploy Backend não deve disparar para ele; nada a esperar."
+            exit 0
+          fi
+          echo "Este commit também toca o backend (ex.: '$changed_backend') — aguardando o Deploy Backend deste MESMO commit (${{ github.sha }}) terminar com sucesso antes de publicar o frontend."
+          max_attempts=90
+          attempt=1
+          while [ "$attempt" -le "$max_attempts" ]; do
+            run_json="$(gh run list --repo "${{ github.repository }}" --workflow=deploy-backend.yml --json headSha,status,conclusion --limit 20 \
+              | jq -c --arg sha "${{ github.sha }}" '[.[] | select(.headSha == $sha)] | first')"
+            if [ "$run_json" != "null" ] && [ -n "$run_json" ]; then
+              status="$(echo "$run_json" | jq -r '.status')"
+              conclusion="$(echo "$run_json" | jq -r '.conclusion')"
+              if [ "$status" = "completed" ]; then
+                if [ "$conclusion" = "success" ]; then
+                  echo "Deploy Backend deste commit terminou com sucesso — seguindo com o frontend."
+                  exit 0
+                fi
+                echo "::error::Deploy Backend deste commit terminou com conclusão '$conclusion' (não success/cancelled/o que for) — NÃO publicando o frontend contra um backend/migrations que falharam. Corrija o backend primeiro e dispare o frontend de novo (workflow_dispatch) depois."
+                exit 1
+              fi
+              echo "Deploy Backend ainda em andamento (status=$status) — tentativa $attempt/$max_attempts, aguardando 20s."
+            else
+              echo "Run do Deploy Backend para este commit ainda não apareceu na lista — tentativa $attempt/$max_attempts, aguardando 20s."
+            fi
+            attempt=$((attempt + 1))
+            sleep 20
+          done
+          echo "::error::Timeout esperando o Deploy Backend deste commit terminar (${max_attempts} tentativas, ~30min). Não publicando o frontend sem confirmar que o backend/migrations tiveram sucesso."
+          exit 1
+
   deploy:
+    needs: wait-for-backend
     runs-on: ubuntu-latest
     environment: dev
+    # Só ESTE job (o que de fato publica no VPS) entra no grupo
+    # `deploy-vps` — e só depois de `needs: wait-for-backend` já ter
+    # terminado com sucesso. Ver comentário grande acima de `env:`.
+    concurrency:
+      group: deploy-vps
+      cancel-in-progress: false
 
     steps:
       - name: Checkout

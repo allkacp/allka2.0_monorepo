@@ -1,0 +1,61 @@
+-- Item 13 (reunião 2026-09-14, "Liberar as verificações finais") — corrige
+-- o drift bloqueado pelo classificador de `qa-migration-reconcile.yml`
+-- contra o banco real de produção.
+--
+-- ORIGEM do drift: a migration 20260912162856_add_ai_knowledge_document_
+-- versioning adicionou `updated_at` a uma tabela JÁ COM LINHAS, então
+-- precisou de um DEFAULT para o MySQL aceitar `ADD COLUMN ... NOT NULL`
+-- (`DEFAULT CURRENT_TIMESTAMP(3)`, só pra backfill das linhas existentes
+-- no momento daquele ALTER). `schema.prisma` sempre declarou o campo como
+-- `updated_at DateTime @updatedAt` (sem `@default`) — igual a TODA outra
+-- tabela do banco, todas sem DEFAULT em `updated_at`. Prisma sempre
+-- fornece o valor explicitamente em cada INSERT/UPDATE que gera (não
+-- existe nenhum INSERT bruto pra esta tabela em todo o repositório —
+-- conferido); o DEFAULT nunca foi lido em produção, só ficou como resíduo
+-- do backfill daquele ALTER.
+--
+-- Investigação do statement exato (Item 13, ponto 3):
+--   statement:      ALTER TABLE `ai_knowledge_documents` ALTER COLUMN `updated_at` DROP DEFAULT
+--   objeto afetado: coluna `updated_at` de `ai_knowledge_documents`
+--   schema ATUAL (produção, via SHOW CREATE TABLE):
+--       `updated_at` datetime(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3)
+--   schema ESPERADO (schema.prisma, `updated_at DateTime @updatedAt`, sem @default):
+--       `updated_at` datetime(3) NOT NULL   -- sem DEFAULT, sem ON UPDATE
+--       (confirmado: nenhuma outra tabela do baseline tem DEFAULT em
+--       updated_at; Prisma nunca gera ON UPDATE CURRENT_TIMESTAMP sozinho
+--       pra @updatedAt em MySQL — o valor é sempre setado pela aplicação)
+--   motivo do classificador: `ALTER COLUMN ... DROP DEFAULT` está na
+--   allowlist de statements "blocked" incondicionalmente (mesmo grupo de
+--   MODIFY/CHANGE/DROP COLUMN) — o classificador é estático e não pode
+--   saber que este DEFAULT específico nunca é lido por nenhum caminho de
+--   escrita real; por design, ele bloqueia o GRUPO inteiro, não cada caso.
+--
+-- Efeito verificado (nulabilidade/coleção/charset/índice — nenhum afetado):
+--   • Nulabilidade: inalterada — NOT NULL antes e depois; DROP DEFAULT só
+--     remove o valor de PREENCHIMENTO AUTOMÁTICO quando um INSERT omite a
+--     coluna, nunca a obrigatoriedade dela.
+--   • Charset/collation: não se aplica — DATETIME não tem charset/collation.
+--   • Índices: nenhum índice desta tabela toca `updated_at` (só
+--     `category_id` e `is_active` são indexados) — inalterado.
+--   • Comparações/leitura: DEFAULT nunca afeta comparação, ordenação ou
+--     igualdade de valores já gravados — só o valor usado quando um INSERT
+--     não especifica a coluna.
+--   • Efeito real em dado: só se ALGUM INSERT futuro omitir `updated_at`
+--     explicitamente — nenhum caminho de código faz isso hoje (Prisma
+--     Client sempre fornece o valor; grep confirmou zero INSERT bruto
+--     nesta tabela em todo o repositório).
+--
+-- Testado em ambiente isolado (banco descartável local, Item 13): aplicada
+-- sozinha sobre uma cópia com o DEFAULT presente, o diff seguinte
+-- (`prisma migrate diff --from-url ... --to-schema-datamodel schema.prisma`)
+-- fica vazio para esta tabela — confirma que esta migration reconcilia
+-- exatamente o estado que schema.prisma já esperava, sem introduzir nova
+-- divergência.
+--
+-- NÃO aplicada em produção nesta etapa. NÃO remove o bloqueio do
+-- classificador (ele continua recusando o statement até esta migration
+-- ser efetivamente aplicada no banco real E o `migrate resolve --applied`
+-- correspondente rodar pelo procedimento oficial). NÃO marca nada como
+-- resolvido.
+
+ALTER TABLE `ai_knowledge_documents` ALTER COLUMN `updated_at` DROP DEFAULT;

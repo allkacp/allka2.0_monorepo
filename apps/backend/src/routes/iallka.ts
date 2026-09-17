@@ -6,6 +6,11 @@ import { verifyToken, evaluateAdminMasterAccess } from "../middleware/auth";
 import { validate } from "../middleware/validate";
 import { resolveMyAgencyId, resolveProjectNewScope, getProjectScope, projectInScope } from "../lib/project-scope";
 import { buildProjectBriefingText } from "../lib/iallka-knowledge";
+import {
+  buildCatalog2ProductAuraContext,
+  resolveCatalog2QuoteAuraContext,
+  buildCatalog2HistoryAuraContext,
+} from "../lib/iallka-catalog2-context";
 import { createProjectWithSequentialCode } from "../lib/create-project";
 import { createBulkProjectProducts } from "../lib/project-products-bulk";
 import {
@@ -142,7 +147,17 @@ router.get("/sessions/:id", verifyToken, async (req: Request, res: Response, nex
 // permite anexar o briefing PRIVADO de um projeto próprio a este turno —
 // validado abaixo contra o escopo real da conta (nunca persistido na
 // sessão, nunca cacheado, nunca vazado pra outra conta/turno).
-const messageSchema = z.object({ message: z.string().min(1), project_id: z.string().optional() });
+//
+// `product_id`/`quote_id` opcionais (Item 9, reunião 2026-09-14,
+// "Atualizar o contexto da Aura") — mesma regra: só HINTS do frontend,
+// SEMPRE reautorizados/reresolvidos aqui contra o dono real da sessão antes
+// de virar contexto de prompt (ver lib/iallka-catalog2-context.ts).
+const messageSchema = z.object({
+  message: z.string().min(1),
+  project_id: z.string().optional(),
+  product_id: z.string().optional(),
+  quote_id: z.string().optional(),
+});
 
 router.post(
   "/sessions/:id/messages",
@@ -167,18 +182,18 @@ router.post(
         return;
       }
 
-      const { message, project_id } = req.body as z.infer<typeof messageSchema>;
+      const { message, project_id, product_id, quote_id } = req.body as z.infer<typeof messageSchema>;
       const history = toHistory(session.messages);
 
       // Vínculo organizacional do DONO da sessão (nunca de quem está
       // usando, no caso raro de suporte via Admin Master) — decide se ele
       // vê o catálogo2 inteiro (Admin Master) ou só o realmente contratável
       // (Company/Agency/Partner), mesma regra de checkClientVisibility.
+      const owner = await prisma.user.findUnique({ where: { id: session.user_id }, select: { account_type: true, role: true } });
       const ownerIsAdminMaster = await isAdminMaster(session.user_id);
 
       let projectBriefing: Awaited<ReturnType<typeof buildProjectBriefingText>> = null;
       if (project_id) {
-        const owner = await prisma.user.findUnique({ where: { id: session.user_id }, select: { account_type: true } });
         const scope = await getProjectScope(prisma, session.user_id, owner?.account_type ?? "");
         const project = await prisma.project.findUnique({ where: { id: project_id }, select: { agency: true, client_id: true } });
         if (!project || !projectInScope(scope, project)) {
@@ -188,12 +203,34 @@ router.post(
         projectBriefing = await buildProjectBriefingText(project_id);
       }
 
+      // Item 9: `product_id`/`quote_id` são só HINTS — cada builder
+      // reresolve/reautoriza contra o dono real da sessão; um id
+      // inexistente, não visível, ou de outra conta simplesmente não vira
+      // contexto (a Aura informa que não tem essa informação, nunca 403 —
+      // troca de tela/produto sem contexto antigo não é um erro de acesso).
+      const catalog2Product = product_id
+        ? await buildCatalog2ProductAuraContext(product_id, { isAdminMaster: ownerIsAdminMaster, clientVisibleOnly: !ownerIsAdminMaster })
+        : null;
+      let catalog2Quote: Awaited<ReturnType<typeof resolveCatalog2QuoteAuraContext>>["content"] = null;
+      if (quote_id) {
+        const resolved = await resolveCatalog2QuoteAuraContext(quote_id, session.user_id, owner?.account_type ?? "", owner?.role ?? "", ownerIsAdminMaster);
+        if (!resolved.authorized) {
+          res.status(403).json({ error: "Esta cotação não pertence à sua conta" });
+          return;
+        }
+        catalog2Quote = resolved.content;
+      }
+      const catalog2History = product_id && ownerIsAdminMaster ? await buildCatalog2HistoryAuraContext(product_id, true) : null;
+
       let result: IallkaTurnResult;
       try {
         result = await sendIallkaTurn(history, message, req.user!.id, {
           isAdminMaster: ownerIsAdminMaster,
           clientVisibleOnly: !ownerIsAdminMaster,
           projectBriefing,
+          catalog2Product,
+          catalog2Quote,
+          catalog2History,
         });
       } catch (err) {
         next(err);

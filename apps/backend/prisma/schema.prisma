@@ -1294,6 +1294,22 @@ model ProjectProduct {
   // origin_catalog2_quote_id acima).
   origin_launch_version_id        String?                 @unique
 
+  // Item 6 (reuniao 2026-09-14, "Modalidades de contratacao por periodo") —
+  // fotografia congelada no CHECKOUT, copiada da Catalog2Quote que originou
+  // esta linha. Nulo = avulso (preserva 100% o comportamento anterior).
+  // Alteracao posterior de preco/desconto NUNCA reescreve estes campos —
+  // mesmo principio de snapshot ja usado no resto desta tabela.
+  catalog2_period                         String?
+  catalog2_period_months                  Int?
+  catalog2_period_discount_percent        Float?
+  catalog2_period_reference_monthly_price Float?
+  // Fim do periodo contratado (checkout_time + meses) — "prazo de protecao
+  // do preco" mostrado ao cliente: durante o periodo pago, nada muda.
+  // Tambem e a ancora que uma FUTURA feature de renovacao usaria; nenhum
+  // gatilho automatico de cobranca/renovacao existe a partir deste campo
+  // nesta etapa (regra 5 da tarefa — nao inventar esse fluxo).
+  catalog2_period_ends_at                 DateTime?
+
   // Snapshot: preserves commercial history even if product is later edited
   product_name_snapshot     String
   product_code_snapshot     String?
@@ -1356,6 +1372,10 @@ model ProjectProduct {
   credentials               ProjectCredential[]
   payment_items             PaymentItem[]
   change_orders_as_original Catalog2ChangeOrder[] @relation("ChangeOrderOriginal")
+  // Item 6.1 (reuniao 2026-09-14) — ciclos de entrega mensal registrados
+  // pra um contrato com periodo (so quando o produto e delivery_recurrence
+  // "mensal"). Vazio pra qualquer contrato avulso ou de periodo nao-recorrente.
+  catalog2_delivery_cycles  Catalog2ProjectDeliveryCycle[]
 
   // ── Rastreio da plataforma antiga ─────────────────────────────────────
   // id numérico do registro equivalente no dump legado (Dump20260423.sql).
@@ -4709,6 +4729,53 @@ model Catalog2Specialty {
   @@map("catalog2_specialties")
 }
 
+// Questionário reutilizável (reunião 2026-09-14, Item 3 — "Cadastro
+// integrado do produto"). Biblioteca compartilhada, igual Catalog2Specialty:
+// NÃO pertence a uma tarefa/produto específico — várias tarefas (de
+// qualquer produto) podem VINCULAR (referenciar, nunca copiar) o mesmo
+// questionário via Catalog2Task.questionnaire_id. Editar as perguntas aqui
+// afeta toda tarefa que já vincula este questionário — mesmo comportamento
+// já existente para Catalog2Specialty (editar a especialidade já afeta
+// toda tarefa vinculada a ela), documentado explicitamente porque é
+// diferente do mecanismo de "importar tarefa" (esse sim é CÓPIA).
+model Catalog2Questionnaire {
+  id          String  @id @default(cuid())
+  name        String
+  description String? @db.Text
+
+  created_by_user_id String?
+  created_at          DateTime @default(now())
+  updated_at          DateTime @updatedAt
+
+  questions Catalog2QuestionnaireQuestion[]
+  tasks     Catalog2Task[]
+
+  @@index([name])
+  @@map("catalog2_questionnaires")
+}
+
+// Pergunta de um questionário — obrigatoriedade por pergunta (nunca por
+// questionário inteiro), igual ao briefing legado (CatalogTask.
+// briefing_questions), mas com tabela própria em vez de JSON solto, pra
+// permitir reuso entre tarefas/produtos e edição estruturada.
+model Catalog2QuestionnaireQuestion {
+  id               String                @id @default(cuid())
+  questionnaire_id String
+  questionnaire    Catalog2Questionnaire @relation(fields: [questionnaire_id], references: [id], onDelete: Cascade)
+
+  key         String
+  label       String
+  is_required Boolean @default(true)
+  sort_order  Int     @default(0)
+
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  @@unique([questionnaire_id, key])
+  @@index([questionnaire_id, sort_order])
+  @@map("catalog2_questionnaire_questions")
+}
+
 // Identidade ESTAVEL do produto — nao muda entre versoes. O conteudo
 // (descricao, tarefas, variacoes...) vive nas versoes.
 model Catalog2Product {
@@ -4720,6 +4787,17 @@ model Catalog2Product {
   pillar      Catalog2Pillar?   @relation(fields: [pillar_id], references: [id], onDelete: SetNull)
   category_id String?
   category    Catalog2Category? @relation(fields: [category_id], references: [id], onDelete: SetNull)
+
+  // Item 6.1 (reuniao 2026-09-14, "Completar a execucao dos periodos") —
+  // "mensal" = a entrega deste produto e RECORRENTE mes a mes de verdade
+  // (cada ciclo do periodo pago libera um novo lote de tarefas). So entao
+  // a formula "preco de referencia x meses" (Item 6) representa a
+  // realidade do servico. Nulo = ainda nao definido explicitamente -- a
+  // contratacao por periodo fica BLOQUEADA ate isso ser decidido no
+  // cadastro, NUNCA inferida so pela presenca de um desconto configurado
+  // em Catalog2ProductPeriod (um produto avulso pode ter desconto de
+  // periodo configurado sem que isso o transforme em recorrente).
+  delivery_recurrence String?
 
   // Estado do PRODUTO (nao da versao):
   //   "em_preparacao"            = sem versao publicada; nao aparece pro cliente.
@@ -4742,6 +4820,44 @@ model Catalog2Product {
   archived_by_user_id String?
   created_at          DateTime  @default(now())
   updated_at          DateTime  @updatedAt
+
+  // Item 5 (reuniao 2026-09-14, "Inativacao programada de produtos"):
+  // aviso + prazo de 30 dias, em vez do bloqueio direto dos Itens 2/2.1.
+  // scheduled_at e o momento da CONFIRMACAO do agendamento (persistido uma
+  // unica vez -- reexecutar a confirmacao NUNCA reancora); effective_at =
+  // scheduled_at + 30 dias, tambem persistido no momento da confirmacao
+  // (nunca recalculado depois, mesmo que o agendador atrase). A validacao
+  // de contratacao (checkClientVisibility) sempre compara contra
+  // effective_at ao VIVO -- nunca depende do agendador ja ter rodado.
+  inactivation_scheduled_at         DateTime?
+  inactivation_effective_at         DateTime?
+  inactivation_scheduled_by_user_id String?
+  inactivation_note                 String?   @db.Text
+  // Marcado pelo job agendado quando ele de fato vira o status pra
+  // "arquivado" -- guarda de idempotencia (nunca reprocessa/renotifica um
+  // produto ja processado, mesmo que o job rode de novo ou atrase).
+  inactivation_processed_at         DateTime?
+  // Admin cancelou o agendamento antes da data efetiva -- limpa o aviso
+  // sem apagar o historico de quando foi processado (so possivel enquanto
+  // inactivation_processed_at ainda e nulo).
+  inactivation_cancelled_at         DateTime?
+
+  // Item 8.1 (reuniao 2026-09-14, "Fechar as notificacoes dos produtos") --
+  // ultimo resultado CONHECIDO de "este produto esta comercialmente pronto"
+  // (computePricing(...).commercial_ready), atualizado a cada varredura
+  // periodica (sweepCatalog2ReadinessTransitions) enquanto status =
+  // "disponivel". Serve SO pra detectar a transicao false->true SEM uma
+  // nova mudanca de status (produto ativo que ainda nao estava pronto e
+  // fica pronto depois, por uma edicao de preco separada) -- nunca decide
+  // sozinho se um aviso deve ser reenviado (isso e responsabilidade da fila
+  // de notificacao, ver Catalog2NotificationJob). Comeca em `false`
+  // (nenhum produto "nasce" pronto sem ter sido avaliado); atualizado tanto
+  // pela varredura quanto pelos 2 gatilhos de transicao real de status
+  // (publishVersion/setProductStatus), sempre com o valor REAL avaliado
+  // naquele instante -- nunca um marcador permanente "ja foi ativado
+  // alguma vez" (uma sequencia ativacao -> pausa -> reativacao precisa
+  // continuar reconhecivel como uma NOVA ativacao legitima).
+  last_known_commercially_ready Boolean @default(false)
 
   // Merchandising administrável (reunião 10/09, "cards e interação do
   // catálogo") — campos aditivos e OPCIONAIS, todos nulos por padrao.
@@ -4766,11 +4882,231 @@ model Catalog2Product {
   cart_items          Catalog2CartItem[]
   // Linhas de pedido (Bloco 6/6) — produto CONTRATADO a partir deste catálogo.
   project_products    ProjectProduct[]
+  // Item 6 (reunião 2026-09-14, "Modalidades de contratação por período").
+  periods             Catalog2ProductPeriod[]
+  // Item 7 (reunião 2026-09-14, "Histórico de alterações do produto").
+  history_events      Catalog2ProductHistoryEvent[]
 
   @@index([status])
   @@index([pillar_id])
   @@index([category_id])
   @@map("catalog2_products")
+}
+
+// Item 6 (reunião 2026-09-14, "Modalidades de contratação por período") —
+// mecanismo administrativo EXPLÍCITO: cada linha aqui é "este produto tem
+// ESTE período configurado, com ESTE desconto". Um dos 4 períodos
+// (mensal/trimestral/semestral/anual) SEM linha aqui (ou com is_active
+// false) é "não configurado" — nunca aparece como contratável, nunca
+// herda um percentual global ou de outro produto. Avulso NUNCA tem linha
+// aqui (é a ausência de seleção de período, sempre preservado).
+model Catalog2ProductPeriod {
+  id         String          @id @default(cuid())
+  product_id String
+  product    Catalog2Product @relation(fields: [product_id], references: [id], onDelete: Cascade)
+
+  // "mensal" | "trimestral" | "semestral" | "anual"
+  period String
+  // Duração em meses (1/3/6/12) — persistida explícita (evita espalhar a
+  // tabela período→meses por vários arquivos; ver CATALOG2_PERIOD_MONTHS
+  // em catalog2-periods.ts, que é a fonte da verdade e escreve aqui).
+  months Int
+
+  // Percentual de desconto sobre (preço mensal de referência × meses).
+  // SEM VALOR PADRÃO — a reunião não definiu percentuais; todo produto
+  // nasce sem nenhum período configurado, o admin decide caso a caso.
+  discount_percent Float
+
+  // Admin pode desativar um período sem apagar a configuração (histórico
+  // de "já existiu esse percentual" preservado, mas para de valer pra
+  // contratação nova — mesma filosofia do resto do catalog2).
+  is_active Boolean @default(true)
+
+  updated_by_user_id String?
+  created_at         DateTime @default(now())
+  updated_at         DateTime @updatedAt
+
+  @@unique([product_id, period])
+  @@map("catalog2_product_periods")
+}
+
+// Item 7 (reuniao 2026-09-14, "Historico de alteracoes do produto") —
+// registro CANONICO e legivel de alteracoes do catalog2, complementar aos
+// mecanismos ja existentes (Catalog2VersionEvent — criacao/nova versao/
+// publicacao; Catalog2CommercialChangeEvent — ancora de protecao de preco,
+// Item 4.1) que continuam existindo, com seus proprios propositos, e sao
+// MESCLADOS na leitura (nunca duplicados aqui). Esta tabela cobre tudo que
+// aqueles dois NAO cobriam: conteudo/classificacao, tarefas/etapas/
+// questionarios, variacoes/adicionais, status/inativacao, periodos/
+// descontos/recorrencia. Somente INSERT — nenhuma rota de UPDATE/DELETE
+// existe pra ela (protecao contra alteracao/exclusao pelas rotas normais
+// e a propria AUSENCIA dessas rotas).
+model Catalog2ProductHistoryEvent {
+  id         String          @id @default(cuid())
+  product_id String
+  product    Catalog2Product @relation(fields: [product_id], references: [id], onDelete: Cascade)
+  // Versao relacionada, quando aplicavel (nulo pra eventos so do produto,
+  // como status/inativacao/periodos).
+  version_id String?
+  version    Catalog2ProductVersion? @relation(fields: [version_id], references: [id], onDelete: SetNull)
+
+  // "content_updated" | "classification_updated" | "task_added" |
+  // "task_updated" | "task_removed" | "questionnaire_linked" |
+  // "questionnaire_unlinked" | "questionnaire_content_updated" |
+  // "variation_added" | "addon_added" | "addon_updated" | "addon_removed" |
+  // "status_changed" | "archived" | "inactivation_scheduled" |
+  // "inactivation_cancelled" | "inactivation_processed" |
+  // "period_configured" | "period_removed" | "delivery_recurrence_set" |
+  // "step_added" | "step_updated" | "step_removed" (Item 7.1, reuniao
+  // 2026-09-14, "Fechar a integridade do historico") |
+  // "variation_updated" | "variation_removed" | "option_added" |
+  // "option_updated" | "option_removed" | "option_effect_added" |
+  // "option_effect_removed" | "addon_effect_added" | "addon_effect_removed"
+  // (Item 7.2, reuniao 2026-09-14, "Completar o historico do produto")
+  event_type String
+
+  // Texto legivel DETERMINISTICO gerado no momento do evento (nunca pela
+  // IA) — ex.: "Prazo comercial alterado de 5 para 7 dias". A IA (quando
+  // habilitada) so RESUME uma lista desses textos depois, nunca gera o
+  // registro original.
+  description String  @db.Text
+  before_json String? @db.LongText
+  after_json  String? @db.LongText
+
+  // Autor humano (quando existe) + tipo de processo responsavel — "user"
+  // (acao administrativa direta) | "import" (lote de importacao) |
+  // "system" (worker/agendador, ex.: inativacao processada).
+  actor_user_id String?
+  actor_kind    String  @default("user")
+
+  created_at DateTime @default(now())
+
+  @@index([product_id, created_at])
+  @@index([product_id, event_type])
+  @@map("catalog2_product_history_events")
+}
+
+// Item 7.1 (reuniao 2026-09-14, "Fechar a integridade do historico") —
+// marco PERSISTIDO (nunca fixo no codigo, nunca a data da reuniao) do
+// instante em que o registro de historico do catalog2 passou a estar
+// COMPLETO neste ambiente especifico. Uma unica linha singleton
+// (id="singleton"), criada de forma preguicosa (upsert idempotente) na
+// primeira vez que o codigo instrumentado roda neste banco — nunca
+// recalculada depois, nunca retroativa. Cada ambiente (dev/staging/
+// producao/banco descartavel de teste) tem seu PROPRIO marco real, nunca
+// herdado do codigo-fonte. Ver getCatalog2HistoryCoverageMarker em
+// lib/catalog2-product-history.ts.
+model Catalog2HistoryCoverageMarker {
+  id                  String   @id
+  full_coverage_since DateTime @default(now())
+  created_at          DateTime @default(now())
+
+  @@map("catalog2_history_coverage_markers")
+}
+
+// Item 8.1 (reuniao 2026-09-14, "Fechar as notificacoes dos produtos") —
+// fila DURAVEL de notificacao do catalog2, reaproveitada por TODOS os
+// eventos (ativacao, inativacao agendada/cancelada/efetivada, mudanca de
+// preco, renovacao) -- generaliza o padrao ja usado no resto do catalog2
+// (marcador de intencao persistido junto da alteracao + worker resumivel)
+// pra tambem cobrir "sem perda nem duplicacao POR DESTINATARIO" e
+// "processar em lotes, sem carregar todas as contas numa unica
+// requisicao". Um Job = 1 evento de negocio (ex.: "este agendamento de
+// inativacao"); os destinatarios (com titulo/mensagem/link JA
+// renderizados, adaptados ao perfil de cada um) vivem em
+// Catalog2NotificationJobRecipient. Criar o Job (e, quando o conjunto de
+// destinatarios ja e conhecido no momento da alteracao -- todos os casos
+// exceto ativacao, que precisa varrer TODAS as contas habilitadas) seus
+// destinatarios, SEMPRE dentro da MESMA transacao da alteracao real --
+// uma operacao revertida nunca deixa um Job (nem destinatarios) pra
+// tras. O envio em si (SystemAlert.createMany em lotes, marcando
+// `sent_at` por destinatario) e feito depois, por um worker -- nunca
+// bloqueia a requisicao que originou o evento.
+model Catalog2NotificationJob {
+  id          String   @id @default(cuid())
+  // "activation" | "inactivation_scheduled" | "inactivation_processed" |
+  // "inactivation_cancelled" | "commercial_change" | "quote_renewed"
+  event_type  String
+  entity_type String
+  entity_id   String
+  // "pending" (ainda ha destinatario com sent_at nulo, ou destinatarios
+  // ainda nem foram resolvidos) | "done" (todos os destinatarios enviados).
+  status       String    @default("pending")
+  created_at   DateTime  @default(now())
+  completed_at DateTime?
+
+  recipients Catalog2NotificationJobRecipient[]
+
+  @@index([status, event_type])
+  @@index([entity_type, entity_id])
+  @@map("catalog2_notification_jobs")
+}
+
+// 1 linha = 1 destinatario de 1 Job, com o conteudo JA renderizado pro
+// perfil dele (nunca um template generico resolvido tarde demais) --
+// `sent_at` nulo = ainda pendente; preenchido = ja virou SystemAlert,
+// nunca reenviado (guard checado fresco dentro da transacao de cada
+// lote). `@@unique([job_id, user_id])` -- nunca duplica destinatario
+// mesmo se a materializacao for chamada 2x por engano.
+model Catalog2NotificationJobRecipient {
+  id         String                  @id @default(cuid())
+  job_id     String
+  job        Catalog2NotificationJob @relation(fields: [job_id], references: [id], onDelete: Cascade)
+  user_id    String
+  type       String
+  title      String
+  message    String                  @db.Text
+  severity   String
+  category   String
+  action_url String?
+  // Entidade "dona" DESTE destinatário especificamente — nunca herdada do
+  // Job (um Job de "mudança comercial" agrupa VÁRIOS destinatários, cada
+  // um dono de uma cotação DIFERENTE; usar o entity_id do Job pra todos
+  // apontaria o "ver" de um destinatário pra cotação de outro). Pra
+  // eventos onde todos os destinatários compartilham a mesma entidade
+  // (ativação, inativação), repete o mesmo valor em cada linha — nunca um
+  // fallback implícito.
+  entity_type String
+  entity_id   String
+  sent_at    DateTime?
+  created_at DateTime                @default(now())
+
+  @@unique([job_id, user_id])
+  @@index([job_id, sent_at])
+  @@map("catalog2_notification_job_recipients")
+}
+
+// Item 6.1 (reuniao 2026-09-14, "Completar a execucao dos periodos") —
+// registro DURAVEL de cada ciclo mensal de entrega devido por um contrato
+// com periodo pago (so criado quando o produto e delivery_recurrence
+// "mensal"). O ciclo 0 (primeira entrega) nunca ganha linha aqui — ele
+// continua exatamente como sempre foi: gerado na confirmacao do pagamento
+// original, pelo caminho ja existente. Só os ciclos 1..N-1 (os meses
+// seguintes do MESMO pagamento, sem cobranca nova) sao registrados e
+// processados por este mecanismo.
+model Catalog2ProjectDeliveryCycle {
+  id                 String          @id @default(cuid())
+  project_product_id String
+  project_product    ProjectProduct  @relation(fields: [project_product_id], references: [id], onDelete: Cascade)
+
+  // 1..(meses do periodo - 1) — 0 nunca aparece aqui (ver comentario acima).
+  occurrence_index Int
+  // Data prevista de liberacao deste ciclo = confirmacao do pagamento
+  // original + occurrence_index MESES DE CALENDARIO (nao 30 dias fixos).
+  scheduled_at DateTime
+  // "pending" | "released" | "skipped"
+  status String @default("pending")
+  released_at DateTime?
+  // Payment que originou o CONTRATO (nunca um pagamento novo — o periodo
+  // já foi pago integralmente e antecipadamente no checkout original).
+  origin_payment_id String
+
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  @@unique([project_product_id, occurrence_index])
+  @@index([status, scheduled_at])
+  @@map("catalog2_project_delivery_cycles")
 }
 
 model Catalog2ProductFourF {
@@ -4840,6 +5176,8 @@ model Catalog2ProductVersion {
   cart_items       Catalog2CartItem[]     @relation("Catalog2CartVersion")
   // Linhas de pedido (Bloco 6/6) — versão CONTRATADA/congelada de um pedido.
   project_products ProjectProduct[]
+  // Item 7 (reunião 2026-09-14, "Histórico de alterações do produto").
+  history_events   Catalog2ProductHistoryEvent[]
 
   @@unique([product_id, version_number])
   @@index([state])
@@ -4992,6 +5330,12 @@ model Catalog2Task {
   specialty_id String?
   specialty    Catalog2Specialty? @relation(fields: [specialty_id], references: [id], onDelete: SetNull)
 
+  // Questionário vinculado (reunião 2026-09-14, Item 3) — perguntas que o
+  // cliente responde no briefing desta tarefa. Opcional; VÍNCULO (referência
+  // à biblioteca compartilhada), nunca cópia — ver Catalog2Questionnaire.
+  questionnaire_id String?
+  questionnaire    Catalog2Questionnaire? @relation(fields: [questionnaire_id], references: [id], onDelete: SetNull)
+
   // "humano" | "ia" | "hibrido"
   execution_mode String @default("humano")
 
@@ -5036,6 +5380,7 @@ model Catalog2Task {
 
   @@index([version_id, sort_order])
   @@index([specialty_id])
+  @@index([questionnaire_id])
   @@map("catalog2_tasks")
 }
 
@@ -5165,6 +5510,18 @@ model Catalog2PricingSettings {
   updated_by_user_id      String?
   updated_at              DateTime @updatedAt
   created_at              DateTime @default(now())
+
+  // Item 16.1 (reuniao 2026-09-14, "Desconto por inativacao") — percentual
+  // DEMONSTRATIVO de compensacao por inativacao programada, editavel pelo
+  // Admin Master, usado SO para simular um resultado sobre uma base
+  // mostrada no painel. NUNCA gera credito/estorno/abatimento real — a
+  // base definitiva e o tratamento do que ja foi entregue continuam sem
+  // definicao (Item 5). `is_provisional` sempre true enquanto a linha
+  // existir, reforco redundante e explicito (mesmo padrao de
+  // Catalog2ProvisionalPreview.is_provisional).
+  demo_inactivation_compensation_percent Float?
+  demo_inactivation_compensation_note    String? @db.Text
+  demo_inactivation_is_provisional       Boolean @default(true)
 
   @@map("catalog2_pricing_settings")
 }
@@ -5417,24 +5774,117 @@ model Catalog2Quote {
   commercial_price         Float?
   currency                 String  @default("BRL")
   // sha256 da configuracao normalizada — deteccao de clique-duplo / mudanca.
-  config_checksum          String
+  // VarChar(64) explicito (sha256 hex tem SEMPRE 64 chars, nunca trunca) —
+  // necessario pro indice composto abaixo (com renewed_from_quote_id)
+  // caber no limite de 3072 bytes de chave do MySQL/InnoDB.
+  config_checksum          String  @db.VarChar(64)
   // Snapshot legivel do calculo no momento do congelamento.
   pricing_snapshot_json    String? @db.LongText
+
+  // Item 6 (reuniao 2026-09-14, "Modalidades de contratacao por periodo") —
+  // fotografia da modalidade escolhida. Nulo = avulso (comportamento
+  // preexistente, 100% preservado). Quando preenchido, commercial_price
+  // acima já é o TOTAL a pagar antecipadamente (preço de referência
+  // mensal × meses × (1 - desconto)), calculado pelo MESMO motor
+  // (computePricing) via computeCommercialPricing em catalog2-periods.ts —
+  // nunca um cálculo paralelo.
+  contract_period                         String?
+  contract_period_months                  Int?
+  contract_period_discount_percent        Float?
+  // Preço de referência MENSAL usado no cálculo (antes do desconto) —
+  // preservado pra sempre poder explicar "de onde veio" o total, mesmo
+  // depois de uma alteração comercial futura.
+  contract_period_reference_monthly_price Float?
 
   // "rascunho" | "valida" | "expirada" | "convertida" | "cancelada"
   status      String    @default("rascunho")
   valid_until DateTime?
   is_preview  Boolean   @default(false)
 
+  // Item 4 (reuniao 2026-09-14, "Precos e protecao por 30 dias"): ancora
+  // o momento em que o preco/prazo desta cotacao foi percebido pela
+  // PRIMEIRA VEZ como desatualizado em relacao a regra comercial atual
+  // (mudanca em Catalog2PricingSettings/valor-hora de especialidade, etc).
+  // Nunca reancorado depois -- e o que impede a protecao de ser renovada
+  // indefinidamente por alteracoes comerciais sucessivas. Enquanto
+  // now < price_protection_started_at + 30 dias E now < valid_until, a
+  // cotacao continua "valida" com commercial_price/pricing_snapshot_json
+  // CONGELADOS (nunca sobrescritos), mesmo que o calculo ao vivo ja de
+  // outro valor.
+  price_protection_started_at DateTime?
+
+  // Item 4.1 (reuniao 2026-09-14, "Ajustar a protecao comercial"): de onde
+  // veio a data acima --
+  //   "event_log"        = encontramos um Catalog2CommercialChangeEvent
+  //                         real (mudanca de settings/especialidade/versao)
+  //                         depois da criacao desta cotacao -- a data e a
+  //                         data REAL da alteracao comercial.
+  //   "detected_fallback" = nao existe evento que explique o desvio (ex.:
+  //                         alteracao anterior a existencia deste log, ou a
+  //                         desta funcionalidade) -- usamos o momento da
+  //                         PRIMEIRA deteccao como salvaguarda conservadora,
+  //                         nunca inventamos uma data retroativa. Fica
+  //                         registrado aqui pra nunca ser silencioso.
+  // Nulo enquanto nenhum desvio foi detectado ainda.
+  price_protection_anchor_source String? @db.VarChar(20)
+
+  // Renovacao: quando uma cotacao vencida e renovada, uma cotacao NOVA e
+  // criada (preco/config atuais) apontando pra qual cotacao a originou --
+  // a antiga nunca e apagada nem tem seu preco sobrescrito, fica como
+  // historico completo e navegavel. VarChar(30) explicito (cuid() sempre
+  // tem 25 chars) — mesmo motivo do config_checksum acima: caber no
+  // indice composto dentro do limite de chave do MySQL/InnoDB.
+  renewed_from_quote_id String?        @db.VarChar(30) @unique
+  renewed_from_quote    Catalog2Quote? @relation("Catalog2QuoteRenewal", fields: [renewed_from_quote_id], references: [id])
+  renewed_into          Catalog2Quote? @relation("Catalog2QuoteRenewal")
+
   created_at DateTime @default(now())
   updated_at DateTime @updatedAt
 
   change_order Catalog2ChangeOrder?
 
-  @@unique([account_kind, account_id, config_checksum, status])
+  // renewed_from_quote_id entra na chave composta pra permitir múltiplas
+  // cotações históricas ("expirada") com o MESMO config_checksum ao longo
+  // de uma cadeia de renovações (cada uma com um renewed_from_quote_id
+  // diferente, ou nulo na original) — sem isso, renovar duas vezes o
+  // MESMO produto/config colidiria com esta constraint.
+  @@unique([account_kind, account_id, config_checksum, status, renewed_from_quote_id])
   @@index([account_kind, account_id, status])
   @@index([user_id])
   @@map("catalog2_quotes")
+}
+
+// Item 4.1 (reuniao 2026-09-14, "Ajustar a protecao comercial"): registro
+// append-only de TODA alteracao comercial que pode mudar o preco calculado
+// de um produto ja cotado -- e a partir daqui que a protecao de 30 dias
+// passa a contar a data REAL da alteracao, em vez da data em que alguem
+// abriu/revalidou a cotacao. Nao tem FK pra Product/Specialty/Version de
+// proposito (log historico leve, sobrevive independente do ciclo de vida
+// dessas entidades; helpers de purge de teste nao precisam ser atualizados
+// pra apagar isto junto).
+model Catalog2CommercialChangeEvent {
+  id String @id @default(cuid())
+
+  // "global_settings" (Catalog2PricingSettings mudou -- afeta TODOS os
+  // produtos, product_id/specialty_id nulos) | "specialty_rate"
+  // (Catalog2Specialty.max_hourly_rate mudou -- afeta produtos cujas
+  // tarefas usam essa especialidade) | "product_version" (uma NOVA versao
+  // substituiu a publicada -- afeta cotacoes daquele produto).
+  scope String
+
+  product_id   String?
+  specialty_id String?
+  version_id   String?
+
+  occurred_at   DateTime @default(now())
+  actor_user_id String?
+  note          String?  @db.VarChar(255)
+  created_at    DateTime @default(now())
+
+  @@index([scope, occurred_at])
+  @@index([product_id, occurred_at])
+  @@index([specialty_id, occurred_at])
+  @@map("catalog2_commercial_change_events")
 }
 
 // ─── Catalog2CutoverBatch — lote de virada comercial (fechamento técnico) ──
@@ -5545,6 +5995,11 @@ model Catalog2CartItem {
   selection_json  String @db.Text
   quantity        Int    @default(1)
   config_checksum String
+
+  // Item 6 (reunião 2026-09-14): modalidade escolhida — nulo = avulso
+  // (preserva 100% o comportamento anterior). "mensal"|"trimestral"|
+  // "semestral"|"anual" quando um período é escolhido no carrinho.
+  period String?
 
   created_at DateTime @default(now())
   updated_at DateTime @updatedAt

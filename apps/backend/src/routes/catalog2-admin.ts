@@ -12,7 +12,19 @@ import { Prisma } from "@prisma/client";
 import { prisma } from "../lib/prisma";
 import { verifyToken, evaluateAdminMasterAccess } from "../middleware/auth";
 import { writeAccessAudit } from "../lib/product-feedback-service";
-import { CATALOG2_STATUS_MEANING, CATALOG2_EXECUTION_MODES } from "../lib/catalog2-foundation";
+import { logCommercialChangeEvent } from "../lib/catalog2-commercial-change-log";
+import { CATALOG2_PERIODS, isCatalog2Period, listPeriodsForAdmin } from "../lib/catalog2-periods";
+import { recordCatalog2ProductHistory, listCatalog2ProductHistory } from "../lib/catalog2-product-history";
+import { maybeCreateCatalog2ActivationJobOnStatusTransition, notifyValidQuoteOwnersOfCommercialChange } from "../lib/catalog2-notifications";
+import { summarizeCatalog2ProductHistory } from "../lib/catalog2-product-history-ai";
+import {
+  CATALOG2_STATUS_MEANING,
+  CATALOG2_STATUS_LABEL,
+  CATALOG2_EXECUTION_MODES,
+  CATALOG2_CLIENT_VISIBLE_STATUSES,
+  CATALOG2_CONTRACTABLE_STATUSES,
+  type Catalog2Status,
+} from "../lib/catalog2-foundation";
 import {
   CATALOG2_EFFECT_TYPES,
   CONDITION_OPERATORS,
@@ -23,6 +35,9 @@ import {
 import {
   Catalog2Error,
   archiveProduct,
+  previewInactivation,
+  scheduleInactivation,
+  cancelScheduledInactivation,
   buildEffectCtx,
   createProduct,
   getProductDetail,
@@ -132,9 +147,27 @@ async function versionOfTask(taskId: string) {
   return editableVersionOrThrow(t.version_id);
 }
 async function versionOfVariation(variationId: string) {
-  const va = await prisma.catalog2Variation.findUnique({ where: { id: variationId }, select: { version_id: true } });
+  const va = await prisma.catalog2Variation.findUnique({ where: { id: variationId } });
   if (!va) throw new Catalog2Error("Variação não encontrada.", 404);
-  return editableVersionOrThrow(va.version_id);
+  const version = await editableVersionOrThrow(va.version_id);
+  return { variation: va, version };
+}
+// Item 7.2 (reunião 2026-09-14, "Completar o histórico do produto") —
+// rótulos legíveis dos efeitos ("comerciais" quando mexem em prazo/preço,
+// os demais são de conteúdo) — mesmo vocabulário fechado de
+// CATALOG2_EFFECT_TYPES, nunca inventa um tipo novo.
+const EFFECT_TYPE_LABEL: Record<string, (value: string) => string> = {
+  add_deadline_days: (v) => `+${v} dia(s) de prazo`,
+  add_fixed_amount: (v) => `+R$ ${v} no preço`,
+  add_percent: (v) => `+${v}% no preço`,
+  add_task: (v) => `adiciona a tarefa "${v}"`,
+  remove_task: (v) => `remove a tarefa "${v}"`,
+  add_step: (v) => `adiciona a etapa "${v}"`,
+  require_info: (v) => `exige informação: "${v}"`,
+  add_deliverable: (v) => `adiciona entregável: "${v}"`,
+};
+function describeEffectForHistory(effectType: string, effectValue: string): string {
+  return EFFECT_TYPE_LABEL[effectType]?.(effectValue) ?? `${effectType}: ${effectValue}`;
 }
 
 // ── Classificações (listar + criar; a ata prevê incluir novos pilares) ──
@@ -173,15 +206,345 @@ router.post("/specialties", async (req, res, next) => {
 router.put("/specialties/:id", async (req, res, next) => {
   try {
     const d = z.object({ name: z.string().min(1).max(120).optional(), max_hourly_rate: z.number().nonnegative().nullish(), hourly_rate_note: z.string().max(500).nullish() }).parse(req.body);
-    const updated = await prisma.catalog2Specialty.update({
-      where: { id: req.params.id as string },
-      data: {
-        ...(d.name !== undefined ? { name: d.name } : {}),
-        ...(d.max_hourly_rate !== undefined ? { max_hourly_rate: d.max_hourly_rate } : {}),
-        ...(d.hourly_rate_note !== undefined ? { hourly_rate_note: d.hourly_rate_note } : {}),
-      },
+    const before = await prisma.catalog2Specialty.findUnique({ where: { id: req.params.id as string }, select: { max_hourly_rate: true } });
+    const updated = await prisma.$transaction(async (tx) => {
+      const u = await tx.catalog2Specialty.update({
+        where: { id: req.params.id as string },
+        data: {
+          ...(d.name !== undefined ? { name: d.name } : {}),
+          ...(d.max_hourly_rate !== undefined ? { max_hourly_rate: d.max_hourly_rate } : {}),
+          ...(d.hourly_rate_note !== undefined ? { hourly_rate_note: d.hourly_rate_note } : {}),
+        },
+      });
+      // Item 4.1 (reunião 2026-09-14): valor/hora afeta o custo humano de
+      // qualquer tarefa que use esta especialidade — registra a data REAL da
+      // mudança pra ancorar a proteção de 30 dias das cotações que dependem
+      // dela. Só grava quando o valor realmente mudou (edição de nome/nota
+      // sozinha não é uma alteração comercial).
+      if (d.max_hourly_rate !== undefined && d.max_hourly_rate !== before?.max_hourly_rate) {
+        await logCommercialChangeEvent(tx, {
+          scope: "specialty_rate",
+          specialty_id: req.params.id as string,
+          actor_user_id: req.user!.id,
+          note: "valor/hora da especialidade alterado",
+        });
+        // Item 8.1: avisa só donos de propostas de produtos que USAM esta
+        // especialidade (vínculo real, nunca todo mundo) — intenção gravada
+        // NA MESMA transação; o envio em si é assíncrono (worker).
+        await notifyValidQuoteOwnersOfCommercialChange(tx, { scope: "specialty_rate", specialtyId: req.params.id as string });
+      }
+      return u;
     });
     res.json(updated);
+  } catch (e) { handle(e, res, next); }
+});
+
+// ── Questionários (reunião 2026-09-14, Item 3 — "Cadastro integrado do
+// produto"; Item 3.1 — "Edição e preservação dos questionários"). Biblioteca
+// reutilizável, mesmo padrão de Catalog2Specialty: listar/criar/editar
+// aqui, VINCULAR a uma tarefa em PUT /tasks/:id/questionnaire.
+//
+// Regra final de compartilhamento (Item 3.1): um questionario e VINCULO por
+// referencia ENQUANTO so uma tarefa o usa. No instante em que uma segunda
+// tarefa passa a referencia-lo -- outro produto que escolheu "selecionar
+// existente", OU o clone automatico de uma nova versao (rascunho) a partir
+// de uma PUBLICADA, que herda o mesmo questionnaire_id da tarefa original --
+// o conteudo vira efetivamente COMPARTILHADO. A partir dai, as rotas
+// genericas abaixo (PUT/POST/DELETE neste bloco) RECUSAM editar/excluir
+// diretamente (409 `questionnaire_shared_use_task_edit`): o bloqueio de
+// versao publicada sozinho nao bastaria, porque estas rotas mexem no
+// registro compartilhado direto, sem saber por qual tarefa/versao a edicao
+// esta sendo feita. A unica forma segura de editar um questionario
+// compartilhado e PUT /tasks/:id/questionnaire/content, que SEMPRE verifica
+// o compartilhamento e cria uma COPIA propria (novo Catalog2Questionnaire)
+// pra aquela tarefa antes de aplicar a edicao -- nunca altera o registro
+// original usado por outra tarefa/produto/versao publicada. A tarefa antiga
+// (a que ficou com o original) e qualquer versao publicada continuam
+// enxergando o conteudo de sempre, intacto.
+const questionnaireSchema = z.object({ name: z.string().min(1).max(200), description: z.string().max(4000).nullish() });
+const questionSchema = z.object({ key: z.string().min(1).max(60), label: z.string().min(1).max(500), is_required: z.boolean().optional(), sort_order: z.number().int().optional() });
+const questionnaireContentSchema = z.object({
+  name: z.string().min(1).max(200),
+  description: z.string().max(4000).nullish(),
+  questions: z.array(z.object({
+    key: z.string().min(1).max(60),
+    label: z.string().min(1).max(500),
+    is_required: z.boolean().optional(),
+  })).max(50),
+});
+
+async function countQuestionnaireReferrers(questionnaireId: string) {
+  return prisma.catalog2Task.count({ where: { questionnaire_id: questionnaireId } });
+}
+// Item 3.2 ("fechar a proteção de edição"): contar referências não bastava
+// — um questionário com UMA ÚNICA referência ainda precisa de proteção se
+// essa referência pertencer a uma versão PUBLICADA (a tarefa gerada em
+// execução já congelou seu próprio conteúdo via briefing_snapshot, mas o
+// registro compartilhado em si continuava editável direto, o que violaria
+// "versão publicada é imutável" por uma porta lateral). Por isso a checagem
+// agora carrega o estado da versão de cada tarefa referenciadora, não só a
+// contagem.
+async function assertQuestionnaireNotSharedForDirectEdit(questionnaireId: string) {
+  const referrers = await prisma.catalog2Task.findMany({
+    where: { questionnaire_id: questionnaireId },
+    select: { id: true, version: { select: { state: true } } },
+  });
+  if (referrers.length > 1) {
+    throw new Catalog2Error(
+      "Este questionário é usado por mais de uma tarefa — edite pelo formulário da tarefa (PUT /tasks/:id/questionnaire/content): isso cria uma cópia própria automaticamente, sem afetar as demais.",
+      409,
+      "questionnaire_shared_use_task_edit",
+    );
+  }
+  if (referrers.length === 1 && referrers[0].version.state === "publicada") {
+    throw new Catalog2Error(
+      "Este questionário pertence a uma tarefa de uma versão publicada — versão publicada é imutável. Crie uma nova versão e edite pelo rascunho.",
+      409,
+      "version_published_immutable",
+    );
+  }
+}
+// Item 7.1: as rotas GENÉRICAS de pergunta/questionário (PUT
+// /questionnaires/:id, POST .../questions, PUT/DELETE /questions/:id) só
+// chegam a executar quando `assertQuestionnaireNotSharedForDirectEdit`
+// deixa passar — ou seja, no máximo 1 tarefa referencia este questionário.
+// Resolve produto/versão por esse vínculo real (nunca inventado); devolve
+// `null` quando o questionário ainda não está vinculado a nenhuma tarefa
+// (não há produto a que atribuir o evento — nada é gravado nesse caso).
+async function productContextForQuestionnaire(questionnaireId: string): Promise<{ productId: string; versionId: string; taskName: string } | null> {
+  const task = await prisma.catalog2Task.findFirst({
+    where: { questionnaire_id: questionnaireId },
+    select: { name: true, version_id: true, version: { select: { product_id: true } } },
+  });
+  if (!task) return null;
+  return { productId: task.version.product_id, versionId: task.version_id, taskName: task.name };
+}
+
+router.get("/questionnaires", async (_req, res, next) => {
+  try {
+    const rows = await prisma.catalog2Questionnaire.findMany({
+      orderBy: { name: "asc" },
+      include: { _count: { select: { questions: true, tasks: true } } },
+    });
+    res.json({
+      data: rows.map((q) => ({
+        id: q.id, name: q.name, description: q.description,
+        question_count: q._count.questions, task_count: q._count.tasks,
+        created_at: q.created_at, updated_at: q.updated_at,
+      })),
+    });
+  } catch (e) { next(e); }
+});
+router.post("/questionnaires", async (req, res, next) => {
+  try {
+    const d = questionnaireSchema.parse(req.body);
+    const created = await prisma.catalog2Questionnaire.create({
+      data: { name: d.name, description: d.description ?? null, created_by_user_id: req.user!.id },
+    });
+    await audit(req, "questionnaire_created", { id: created.id });
+    res.status(201).json({ ...created, questions: [] });
+  } catch (e) { handle(e, res, next); }
+});
+router.get("/questionnaires/:id", async (req, res, next) => {
+  try {
+    const q = await prisma.catalog2Questionnaire.findUnique({
+      where: { id: req.params.id as string },
+      include: { questions: { orderBy: { sort_order: "asc" } } },
+    });
+    if (!q) throw new Catalog2Error("Questionário não encontrado.", 404);
+    res.json(q);
+  } catch (e) { handle(e, res, next); }
+});
+router.put("/questionnaires/:id", async (req, res, next) => {
+  try {
+    await assertQuestionnaireNotSharedForDirectEdit(req.params.id as string);
+    const d = questionnaireSchema.partial().parse(req.body);
+    const ctx = await productContextForQuestionnaire(req.params.id as string);
+    const updated = await prisma.$transaction(async (tx) => {
+      const u = await tx.catalog2Questionnaire.update({
+        where: { id: req.params.id as string },
+        data: { ...(d.name !== undefined ? { name: d.name } : {}), ...(d.description !== undefined ? { description: d.description } : {}) },
+      });
+      if (ctx) {
+        await recordCatalog2ProductHistory(tx, {
+          productId: ctx.productId, versionId: ctx.versionId, eventType: "questionnaire_content_updated",
+          description: `Questionário "${u.name}" editado diretamente (tarefa "${ctx.taskName}").`,
+          after: { name: u.name, description: u.description },
+          actorUserId: req.user!.id,
+        });
+      }
+      return u;
+    });
+    res.json(updated);
+  } catch (e) { handle(e, res, next); }
+});
+router.post("/questionnaires/:id/questions", async (req, res, next) => {
+  try {
+    const qId = req.params.id as string;
+    const exists = await prisma.catalog2Questionnaire.findUnique({ where: { id: qId }, select: { id: true, name: true } });
+    if (!exists) throw new Catalog2Error("Questionário não encontrado.", 404);
+    await assertQuestionnaireNotSharedForDirectEdit(qId);
+    const d = questionSchema.parse(req.body);
+    const ctx = await productContextForQuestionnaire(qId);
+    const created = await prisma.$transaction(async (tx) => {
+      const c = await tx.catalog2QuestionnaireQuestion.create({
+        data: { questionnaire_id: qId, key: d.key, label: d.label, is_required: d.is_required ?? true, sort_order: d.sort_order ?? 99 },
+      });
+      if (ctx) {
+        await recordCatalog2ProductHistory(tx, {
+          productId: ctx.productId, versionId: ctx.versionId, eventType: "questionnaire_content_updated",
+          description: `Pergunta "${c.label}" adicionada ao questionário "${exists.name}" (tarefa "${ctx.taskName}").`,
+          after: { key: c.key, label: c.label },
+          actorUserId: req.user!.id,
+        });
+      }
+      return c;
+    });
+    res.status(201).json(created);
+  } catch (e) { handle(e, res, next); }
+});
+router.put("/questions/:id", async (req, res, next) => {
+  try {
+    const existing = await prisma.catalog2QuestionnaireQuestion.findUnique({ where: { id: req.params.id as string } });
+    if (!existing) throw new Catalog2Error("Pergunta não encontrada.", 404);
+    await assertQuestionnaireNotSharedForDirectEdit(existing.questionnaire_id);
+    const d = questionSchema.partial().parse(req.body);
+    const ctx = await productContextForQuestionnaire(existing.questionnaire_id);
+    const updated = await prisma.$transaction(async (tx) => {
+      const u = await tx.catalog2QuestionnaireQuestion.update({ where: { id: req.params.id as string }, data: d });
+      if (ctx) {
+        await recordCatalog2ProductHistory(tx, {
+          productId: ctx.productId, versionId: ctx.versionId, eventType: "questionnaire_content_updated",
+          description: `Pergunta "${existing.label}" atualizada (tarefa "${ctx.taskName}").`,
+          before: { key: existing.key, label: existing.label, is_required: existing.is_required },
+          after: { key: u.key, label: u.label, is_required: u.is_required },
+          actorUserId: req.user!.id,
+        });
+      }
+      return u;
+    });
+    res.json(updated);
+  } catch (e) { handle(e, res, next); }
+});
+router.delete("/questions/:id", async (req, res, next) => {
+  try {
+    // Item 3.1: excluir uma pergunta ainda referenciada por outra tarefa
+    // (via o mesmo questionário) apagaria conteúdo de quem não pediu —
+    // bloqueado igual às demais edições diretas.
+    const existing = await prisma.catalog2QuestionnaireQuestion.findUnique({ where: { id: req.params.id as string } });
+    if (!existing) throw new Catalog2Error("Pergunta não encontrada.", 404);
+    await assertQuestionnaireNotSharedForDirectEdit(existing.questionnaire_id);
+    const ctx = await productContextForQuestionnaire(existing.questionnaire_id);
+    await prisma.$transaction(async (tx) => {
+      await tx.catalog2QuestionnaireQuestion.delete({ where: { id: req.params.id as string } });
+      if (ctx) {
+        await recordCatalog2ProductHistory(tx, {
+          productId: ctx.productId, versionId: ctx.versionId, eventType: "questionnaire_content_updated",
+          description: `Pergunta "${existing.label}" removida (tarefa "${ctx.taskName}").`,
+          before: { key: existing.key, label: existing.label },
+          actorUserId: req.user!.id,
+        });
+      }
+    });
+    res.json({ ok: true });
+  } catch (e) { handle(e, res, next); }
+});
+router.put("/questionnaires/:id/questions/order", async (req, res, next) => {
+  try {
+    await assertQuestionnaireNotSharedForDirectEdit(req.params.id as string);
+    const ids = z.array(z.string()).parse(req.body?.order ?? []);
+    await prisma.$transaction(ids.map((id, i) => prisma.catalog2QuestionnaireQuestion.update({ where: { id }, data: { sort_order: i + 1 } })));
+    res.json({ ok: true });
+  } catch (e) { handle(e, res, next); }
+});
+// Edição SEGURA de um questionário a partir de UMA tarefa (Item 3.1):
+// recebe o conteúdo completo desejado (título, descrição, perguntas na
+// ordem final) e SEMPRE verifica compartilhamento antes de escrever — se
+// o questionário vinculado a esta tarefa também é usado por outra tarefa
+// (outro produto, OU a versão publicada da qual este rascunho foi
+// clonado), cria uma CÓPIA independente, revincula esta tarefa a ela, e
+// só então grava o conteúdo editado — o original usado alhures nunca é
+// tocado. Se ninguém mais usa (contagem <= 1), edita no próprio registro.
+// Um único save transacional cobre criar/editar/excluir/reordenar
+// perguntas de uma vez (o formulário da tarefa manda o estado final).
+router.put("/tasks/:id/questionnaire/content", async (req, res, next) => {
+  try {
+    const taskVersion = await versionOfTask(req.params.id as string);
+    const task = await prisma.catalog2Task.findUnique({ where: { id: req.params.id as string }, select: { id: true, name: true, questionnaire_id: true } });
+    if (!task) throw new Catalog2Error("Tarefa não encontrada.", 404);
+    if (!task.questionnaire_id) throw new Catalog2Error("Esta tarefa não tem questionário vinculado.", 404);
+    const d = questionnaireContentSchema.parse(req.body);
+
+    const referrers = await countQuestionnaireReferrers(task.questionnaire_id);
+    const forked = referrers > 1;
+
+    const result = await prisma.$transaction(async (tx) => {
+      let targetId = task.questionnaire_id as string;
+      if (forked) {
+        const copy = await tx.catalog2Questionnaire.create({
+          data: { name: d.name, description: d.description ?? null, created_by_user_id: req.user!.id },
+        });
+        targetId = copy.id;
+        await tx.catalog2Task.update({ where: { id: task.id }, data: { questionnaire_id: targetId } });
+      } else {
+        await tx.catalog2Questionnaire.update({ where: { id: targetId }, data: { name: d.name, description: d.description ?? null } });
+        await tx.catalog2QuestionnaireQuestion.deleteMany({ where: { questionnaire_id: targetId } });
+      }
+      for (const [i, q] of d.questions.entries()) {
+        await tx.catalog2QuestionnaireQuestion.create({
+          data: { questionnaire_id: targetId, key: q.key, label: q.label, is_required: q.is_required ?? true, sort_order: i + 1 },
+        });
+      }
+      const saved = await tx.catalog2Questionnaire.findUniqueOrThrow({
+        where: { id: targetId },
+        include: { questions: { orderBy: { sort_order: "asc" } } },
+      });
+      // Item 7.1: gravado NA MESMA transação — se isto falhar, a cópia/
+      // edição do questionário acima também é revertida (nunca fica
+      // "meio salvo" sem o registro correspondente).
+      await recordCatalog2ProductHistory(tx, {
+        productId: taskVersion.product_id, versionId: taskVersion.id, eventType: "questionnaire_content_updated",
+        description: `Conteúdo do questionário "${saved.name}" atualizado na tarefa "${task.name}"${forked ? " (cópia própria criada — conteúdo compartilhado preservado)" : ""}.`,
+        after: { questionnaire_id: saved.id, question_count: saved.questions.length, forked },
+        actorUserId: req.user!.id,
+      });
+      return saved;
+    });
+
+    await audit(req, "task_questionnaire_content_saved", { task_id: task.id, questionnaire_id: result.id, forked });
+    res.json({ ok: true, forked, questionnaire: result });
+  } catch (e) { handle(e, res, next); }
+});
+// Vincula/desvincula um questionário a UMA tarefa (referência — nunca
+// copia perguntas). Respeita versão publicada via versionOfTask.
+router.put("/tasks/:id/questionnaire", async (req, res, next) => {
+  try {
+    const version = await versionOfTask(req.params.id as string);
+    const before = await prisma.catalog2Task.findUniqueOrThrow({ where: { id: req.params.id as string }, select: { name: true, questionnaire_id: true } });
+    const questionnaireId = req.body?.questionnaire_id === null ? null : z.string().min(1).parse(req.body?.questionnaire_id);
+    let questionnaireName: string | null = null;
+    if (questionnaireId) {
+      const exists = await prisma.catalog2Questionnaire.findUnique({ where: { id: questionnaireId }, select: { id: true, name: true } });
+      if (!exists) throw new Catalog2Error("Questionário não encontrado.", 404);
+      questionnaireName = exists.name;
+    }
+    const updated = await prisma.$transaction(async (tx) => {
+      const u = await tx.catalog2Task.update({ where: { id: req.params.id as string }, data: { questionnaire_id: questionnaireId } });
+      if (before.questionnaire_id !== u.questionnaire_id) {
+        await recordCatalog2ProductHistory(tx, {
+          productId: version.product_id, versionId: version.id,
+          eventType: questionnaireId ? "questionnaire_linked" : "questionnaire_unlinked",
+          description: questionnaireId
+            ? `Questionário "${questionnaireName}" vinculado à tarefa "${before.name}".`
+            : `Questionário desvinculado da tarefa "${before.name}".`,
+          before: { questionnaire_id: before.questionnaire_id },
+          after: { questionnaire_id: u.questionnaire_id },
+          actorUserId: req.user!.id,
+        });
+      }
+      return u;
+    });
+    res.json({ ok: true, questionnaire_id: updated.questionnaire_id });
   } catch (e) { handle(e, res, next); }
 });
 
@@ -203,14 +566,61 @@ router.put("/pricing-settings", async (req, res, next) => {
       human_review_percent: z.number().nonnegative().nullish(),
       currency: z.string().length(3).optional(),
       notes: z.string().max(2000).nullish(),
+      // Item 16.1 — percentual DEMONSTRATIVO de compensação por inativação,
+      // nunca entra em computePricing, nunca gera crédito real (só simulação).
+      demo_inactivation_compensation_percent: z.number().min(0).max(100).nullish(),
+      demo_inactivation_compensation_note: z.string().max(2000).nullish(),
     }).parse(req.body);
     const data: Record<string, unknown> = { updated_by_user_id: req.user!.id };
-    for (const k of ["tax_percent", "commission_percent", "operational_fee_percent", "profit_margin_percent", "human_review_percent", "currency", "notes"] as const) {
+    for (const k of ["tax_percent", "commission_percent", "operational_fee_percent", "profit_margin_percent", "human_review_percent", "currency", "notes", "demo_inactivation_compensation_percent", "demo_inactivation_compensation_note"] as const) {
       if (d[k] !== undefined) data[k] = d[k];
     }
-    const s = await prisma.catalog2PricingSettings.upsert({ where: { id: "default" }, create: { id: "default", ...data }, update: data });
+    const before = await prisma.catalog2PricingSettings.findUnique({ where: { id: "default" } });
+    const s = await prisma.$transaction(async (tx) => {
+      const updated = await tx.catalog2PricingSettings.upsert({ where: { id: "default" }, create: { id: "default", ...data }, update: data });
+      // Item 4.1 (reunião 2026-09-14): esta config é global — afeta o
+      // cálculo de TODOS os produtos. Só grava evento quando um campo que
+      // realmente entra na conta (computePricing) mudou de valor — moeda/
+      // observações não afetam preço, não contam como alteração comercial.
+      const priceAffecting = ["tax_percent", "commission_percent", "operational_fee_percent", "profit_margin_percent", "human_review_percent"] as const;
+      const changed = priceAffecting.some((k) => (before as Record<string, unknown> | null)?.[k] !== (updated as Record<string, unknown>)[k]);
+      if (changed) {
+        await logCommercialChangeEvent(tx, { scope: "global_settings", actor_user_id: req.user!.id, note: "configuração comercial global alterada" });
+        // Item 8.1: avisa os donos de propostas vigentes ainda protegidas —
+        // intenção gravada NA MESMA transação; o envio é assíncrono (worker).
+        await notifyValidQuoteOwnersOfCommercialChange(tx, { scope: "global_settings" });
+      }
+      return updated;
+    });
     await audit(req, "pricing_settings_updated", {});
     res.json(s);
+  } catch (e) { handle(e, res, next); }
+});
+
+// Item 16.1 (reunião 2026-09-14, "Desconto por inativação") — simula o
+// resultado do percentual DEMONSTRATIVO sobre uma base informada pelo
+// próprio Admin Master. NUNCA persiste crédito/estorno, NUNCA toca em
+// Catalog2Quote/pagamento — cálculo puro, resposta imediata, sempre
+// marcada como simulação. A base definitiva (o que "já foi entregue"
+// significa em R$) continua indefinida (Item 5) — o admin informa a base
+// manualmente aqui só para ver o percentual em ação.
+router.post("/pricing-settings/simulate-inactivation-compensation", async (req, res, next) => {
+  try {
+    const { base_amount } = z.object({ base_amount: z.number().nonnegative() }).parse(req.body);
+    const s = await prisma.catalog2PricingSettings.findUnique({ where: { id: "default" } });
+    const percent = s?.demo_inactivation_compensation_percent ?? null;
+    if (percent == null) {
+      res.status(400).json({ error: "Percentual demonstrativo de compensação ainda não configurado — defina em PUT /pricing-settings antes de simular." });
+      return;
+    }
+    res.json({
+      is_simulation: true,
+      is_provisional: true,
+      base_amount,
+      percent,
+      simulated_compensation_amount: Math.round(base_amount * (percent / 100) * 100) / 100,
+      note: "SIMULAÇÃO — nenhum crédito, estorno ou abatimento real foi gerado. Base definitiva e tratamento do que já foi entregue continuam sem definição (Item 5).",
+    });
   } catch (e) { handle(e, res, next); }
 });
 
@@ -384,6 +794,7 @@ router.get("/products", async (req, res, next) => {
           category: p.category,
           origin: p.origin,
           status: p.status,
+          status_label: CATALOG2_STATUS_LABEL[p.status as Catalog2Status] ?? p.status,
           summary: descriptionSource?.summary || null,
           published_version_number: pub?.version_number ?? null,
           published_at: pub?.published_at ?? null,
@@ -423,6 +834,9 @@ router.get("/products", async (req, res, next) => {
                 included_items_count: safeJsonArray(p.provisional_preview.included_items_json).length,
               }
             : null,
+          // Item 5 (reunião 2026-09-14, "Inativação programada de produtos").
+          inactivation_scheduled_at: p.inactivation_scheduled_at,
+          inactivation_effective_at: p.inactivation_effective_at,
         };
       }),
       total, page, page_size: pageSize,
@@ -467,10 +881,20 @@ router.put("/versions/:id", async (req, res, next) => {
     // deliverables/client_info/internal_notes ficam no full_description
     // estruturado por marcadores? Não — mantemos simples: só os campos do
     // schema. Os extras entram no summary/description conforme a UI.
+    const before = await prisma.catalog2ProductVersion.findUniqueOrThrow({ where: { id: req.params.id as string } });
     const data: Record<string, unknown> = { updated_by_user_id: req.user!.id };
     for (const k of ["title", "summary", "full_description", "change_summary"] as const) if (d[k] !== undefined) data[k] = d[k];
     const updated = await prisma.catalog2ProductVersion.update({ where: { id: req.params.id as string }, data });
-    await prisma.catalog2VersionEvent.create({ data: { version_id: updated.id, event_type: "updated", actor_user_id: req.user!.id, note: "Informações gerais editadas." } });
+    // Item 7 (reunião 2026-09-14): descrição legível com o que realmente
+    // mudou — reaproveita o MESMO Catalog2VersionEvent já escrito aqui
+    // (nunca um segundo mecanismo paralelo pro mesmo evento); só enriquece
+    // o texto com um diff antes/depois em vez da nota genérica de sempre.
+    const changedLabels: string[] = [];
+    if (d.title !== undefined && d.title !== before.title) changedLabels.push(`título alterado de "${before.title}" para "${d.title}"`);
+    if (d.summary !== undefined && d.summary !== before.summary) changedLabels.push("resumo atualizado");
+    if (d.full_description !== undefined && d.full_description !== before.full_description) changedLabels.push("descrição completa atualizada");
+    const note = changedLabels.length > 0 ? `Conteúdo editado — ${changedLabels.join("; ")}.` : "Informações gerais editadas.";
+    await prisma.catalog2VersionEvent.create({ data: { version_id: updated.id, event_type: "updated", actor_user_id: req.user!.id, note } });
     res.json({ ok: true });
   } catch (e) { handle(e, res, next); }
 });
@@ -493,6 +917,16 @@ router.put("/products/:id/classifications", async (req, res, next) => {
         await tx.catalog2ProductFourF.deleteMany({ where: { product_id: product.id } });
         for (const four_f_id of d.four_f_ids) await tx.catalog2ProductFourF.create({ data: { product_id: product.id, four_f_id } });
       }
+      // Item 7: dentro da MESMA transação — se a atualização acima falhar
+      // (rollback), este registro nunca fica gravado sozinho.
+      await recordCatalog2ProductHistory(tx, {
+        productId: product.id,
+        eventType: "classification_updated",
+        description: "Classificação atualizada (pilar/categoria/4F).",
+        before: { pillar_id: product.pillar_id, category_id: product.category_id },
+        after: { pillar_id: d.pillar_id ?? null, category_id: d.category_id ?? null, four_f_ids: d.four_f_ids },
+        actorUserId: req.user!.id,
+      });
     });
     res.json({ ok: true });
   } catch (e) { handle(e, res, next); }
@@ -500,16 +934,249 @@ router.put("/products/:id/classifications", async (req, res, next) => {
 
 router.patch("/products/:id/status", async (req, res, next) => {
   try {
-    const updated = await setProductStatus(req.params.id as string, String(req.body?.status ?? ""));
+    const before = await prisma.catalog2Product.findUnique({ where: { id: req.params.id as string }, select: { status: true } });
+    // Item 7.1: alteração + evento confirmados juntos — se a gravação do
+    // histórico falhar, a mudança de status também é revertida.
+    const updated = await prisma.$transaction(async (tx) => {
+      const u = await setProductStatus(req.params.id as string, String(req.body?.status ?? ""), tx);
+      if (before && before.status !== u.status) {
+        await recordCatalog2ProductHistory(tx, {
+          productId: u.id,
+          eventType: "status_changed",
+          description: `Situação alterada de "${CATALOG2_STATUS_LABEL[before.status as Catalog2Status] ?? before.status}" para "${CATALOG2_STATUS_LABEL[u.status as Catalog2Status] ?? u.status}".`,
+          before: { status: before.status },
+          after: { status: u.status },
+          actorUserId: req.user!.id,
+        });
+        // Item 8 (reunião 2026-09-14, "Notificações dos produtos"): a outra
+        // transição real pra "disponivel" (além da 1ª publicação, ver
+        // publishVersion) — registra a INTENÇÃO de anunciar na MESMA
+        // transação; o envio em si acontece de forma assíncrona/resumível
+        // (catalog2-notifications.ts), nunca aqui.
+        await maybeCreateCatalog2ActivationJobOnStatusTransition(tx, {
+          productId: u.id, beforeStatus: before.status, afterStatus: u.status, publishedVersionId: u.published_version_id,
+        });
+      }
+      return u;
+    });
     await audit(req, "product_status", { id: updated.id, status: updated.status });
     res.json({ ok: true, status: updated.status });
   } catch (e) { handle(e, res, next); }
 });
 router.post("/products/:id/archive", async (req, res, next) => {
   try {
-    const updated = await archiveProduct(req.params.id as string, req.user!.id);
+    const updated = await prisma.$transaction(async (tx) => {
+      const u = await archiveProduct(req.params.id as string, req.user!.id, tx);
+      await recordCatalog2ProductHistory(tx, {
+        productId: u.id,
+        eventType: "archived",
+        description: "Produto arquivado — sai do catálogo, histórico preservado.",
+        actorUserId: req.user!.id,
+      });
+      return u;
+    });
     await audit(req, "product_archived", { id: updated.id });
     res.json({ ok: true, status: updated.status });
+  } catch (e) { handle(e, res, next); }
+});
+
+// ── Inativação programada (Item 5, reunião 2026-09-14) ──────────────────
+// Prévia (somente leitura) do que a ação de inativar afetaria — usada pela
+// tela de confirmação no Cadastro de Produtos ANTES do admin confirmar.
+router.get("/products/:id/inactivation/preview", async (req, res, next) => {
+  try {
+    res.json(await previewInactivation(req.params.id as string));
+  } catch (e) { handle(e, res, next); }
+});
+router.post("/products/:id/inactivation/schedule", async (req, res, next) => {
+  try {
+    const note = typeof req.body?.note === "string" ? req.body.note.slice(0, 2000) : undefined;
+    // Item 7.1: o `update` do produto (dentro de scheduleInactivation) e o
+    // evento de histórico são confirmados juntos — nota: a notificação
+    // (SystemAlert) continua sendo um efeito colateral fora desta
+    // transação, ver comentário em scheduleInactivation.
+    const result = await prisma.$transaction(async (tx) => {
+      const r = await scheduleInactivation(req.params.id as string, req.user!.id, note, tx);
+      // Item 7: reexecutar a confirmação (idempotente, ver Item 5) NUNCA
+      // gera um segundo evento — só a confirmação real (1ª vez) registra.
+      if (!r.already_scheduled) {
+        await recordCatalog2ProductHistory(tx, {
+          productId: r.product.id,
+          eventType: "inactivation_scheduled",
+          description: `Inativação programada para ${r.product.inactivation_effective_at?.toISOString().slice(0, 10)}.`,
+          after: { scheduled_at: r.product.inactivation_scheduled_at, effective_at: r.product.inactivation_effective_at, note },
+          actorUserId: req.user!.id,
+        });
+      }
+      return r;
+    });
+    await audit(req, "product_inactivation_scheduled", { id: result.product.id, already_scheduled: result.already_scheduled });
+    res.status(result.already_scheduled ? 200 : 201).json(result);
+  } catch (e) { handle(e, res, next); }
+});
+router.post("/products/:id/inactivation/cancel", async (req, res, next) => {
+  try {
+    const updated = await prisma.$transaction(async (tx) => {
+      const u = await cancelScheduledInactivation(req.params.id as string, tx);
+      await recordCatalog2ProductHistory(tx, {
+        productId: u.id,
+        eventType: "inactivation_cancelled",
+        description: "Inativação programada cancelada — produto volta a ficar contratável normalmente.",
+        actorUserId: req.user!.id,
+      });
+      return u;
+    });
+    await audit(req, "product_inactivation_cancelled", { id: updated.id });
+    res.json({ ok: true, product: updated });
+  } catch (e) { handle(e, res, next); }
+});
+
+// ── Histórico de alterações do produto (Item 7, reunião 2026-09-14) ─────
+// Leitura paginada e filtrável — mescla Catalog2ProductHistoryEvent com os
+// dois mecanismos já existentes (Catalog2VersionEvent/CommercialChangeEvent),
+// ver lib/catalog2-product-history.ts. Nunca há rota de edição/exclusão
+// aqui — proteção contra alteração via rota normal é a AUSÊNCIA da rota.
+router.get("/products/:id/history", async (req, res, next) => {
+  try {
+    const product = await prisma.catalog2Product.findUnique({ where: { id: req.params.id as string }, select: { id: true } });
+    if (!product) throw new Catalog2Error("Produto não encontrado.", 404);
+    const q = z.object({
+      page: z.coerce.number().int().min(1).optional(),
+      page_size: z.coerce.number().int().min(1).max(100).optional(),
+      category: z.string().optional(),
+      date_from: z.coerce.date().optional(),
+      date_to: z.coerce.date().optional(),
+    }).parse(req.query);
+    const result = await listCatalog2ProductHistory(product.id, {
+      page: q.page,
+      pageSize: q.page_size,
+      category: q.category,
+      dateFrom: q.date_from,
+      dateTo: q.date_to,
+    });
+    res.json(result);
+  } catch (e) { handle(e, res, next); }
+});
+// Resumo por IA de um trecho recente do histórico já registrado (nunca
+// gera o registro em si, só resume — se a IA falhar/estiver indisponível o
+// histórico continua 100% utilizável via a rota acima).
+router.post("/products/:id/history/summary", async (req, res, next) => {
+  try {
+    const product = await prisma.catalog2Product.findUnique({ where: { id: req.params.id as string }, select: { id: true, internal_name: true } });
+    if (!product) throw new Catalog2Error("Produto não encontrado.", 404);
+    const recent = await listCatalog2ProductHistory(product.id, { page: 1, pageSize: 50 });
+    const result = await summarizeCatalog2ProductHistory(product.internal_name, recent.data);
+    res.json(result);
+  } catch (e) { handle(e, res, next); }
+});
+
+// ── Modalidades de contratação por período (Item 6, reunião 2026-09-14) ──
+// Sempre devolve os 4 períodos possíveis (mensal/trimestral/semestral/
+// anual), com `configured:false` pros que não têm desconto definido —
+// "período sem configuração aparece como não configurado" é o próprio
+// formato desta resposta, não um filtro escondido.
+router.get("/products/:id/periods", async (req, res, next) => {
+  try {
+    const product = await prisma.catalog2Product.findUnique({ where: { id: req.params.id as string }, select: { id: true, delivery_recurrence: true } });
+    if (!product) throw new Catalog2Error("Produto não encontrado.", 404);
+    res.json({ delivery_recurrence: product.delivery_recurrence, data: await listPeriodsForAdmin(product.id) });
+  } catch (e) { handle(e, res, next); }
+});
+// Item 6.1 (reunião 2026-09-14, "Completar a execução dos períodos"): define
+// explicitamente se a entrega deste produto é recorrente mês a mês de
+// verdade — pré-requisito pra QUALQUER período ficar disponível pra
+// contratação (nunca inferido pela presença de um desconto configurado).
+router.put("/products/:id/delivery-recurrence", async (req, res, next) => {
+  try {
+    const d = z.object({ delivery_recurrence: z.enum(["mensal"]).nullable() }).parse(req.body);
+    const product = await prisma.catalog2Product.findUnique({ where: { id: req.params.id as string }, select: { id: true, delivery_recurrence: true } });
+    if (!product) throw new Catalog2Error("Produto não encontrado.", 404);
+    const updated = await prisma.$transaction(async (tx) => {
+      const u = await tx.catalog2Product.update({ where: { id: product.id }, data: { delivery_recurrence: d.delivery_recurrence } });
+      if (product.delivery_recurrence !== u.delivery_recurrence) {
+        await recordCatalog2ProductHistory(tx, {
+          productId: product.id,
+          eventType: "delivery_recurrence_set",
+          description: u.delivery_recurrence === "mensal"
+            ? "Entrega mensal recorrente ativada — períodos passam a poder ser configurados."
+            : "Entrega mensal recorrente desativada — nenhum período fica disponível até ser marcada de novo.",
+          before: { delivery_recurrence: product.delivery_recurrence },
+          after: { delivery_recurrence: u.delivery_recurrence },
+          actorUserId: req.user!.id,
+        });
+      }
+      return u;
+    });
+    await audit(req, "product_delivery_recurrence_set", { id: product.id, delivery_recurrence: d.delivery_recurrence });
+    res.json({ ok: true, delivery_recurrence: updated.delivery_recurrence });
+  } catch (e) { handle(e, res, next); }
+});
+router.put("/products/:id/periods/:period", async (req, res, next) => {
+  try {
+    const period = req.params.period as string;
+    if (!isCatalog2Period(period)) {
+      throw new Catalog2Error(`Período inválido: ${period}. Use um de ${CATALOG2_PERIODS.join(", ")}.`, 400, "invalid_period");
+    }
+    const d = z.object({
+      discount_percent: z.number().min(0).max(90),
+      is_active: z.boolean().optional(),
+    }).parse(req.body);
+    const product = await prisma.catalog2Product.findUnique({ where: { id: req.params.id as string }, select: { id: true } });
+    if (!product) throw new Catalog2Error("Produto não encontrado.", 404);
+    const months = { mensal: 1, trimestral: 3, semestral: 6, anual: 12 }[period];
+    const before = await prisma.catalog2ProductPeriod.findUnique({ where: { product_id_period: { product_id: product.id, period } } });
+    // Item 7.1: upsert + evento de histórico confirmados juntos. O
+    // logCommercialChangeEvent (Item 4.1, âncora de proteção de preço —
+    // consumidor diferente, nunca lido pelo admin) continua fora desta
+    // transação, preservado como já era: mecanismo mais antigo, nunca
+    // reescrito por esta revisão.
+    const label = before ? `alterado de ${before.discount_percent}% para ${d.discount_percent}%` : `definido em ${d.discount_percent}%`;
+    const row = await prisma.$transaction(async (tx) => {
+      const r = await tx.catalog2ProductPeriod.upsert({
+        where: { product_id_period: { product_id: product.id, period } },
+        create: { product_id: product.id, period, months, discount_percent: d.discount_percent, is_active: d.is_active ?? true, updated_by_user_id: req.user!.id },
+        update: { discount_percent: d.discount_percent, ...(d.is_active !== undefined ? { is_active: d.is_active } : {}), updated_by_user_id: req.user!.id },
+      });
+      // Item 7: registro DEDICADO ao histórico legível (antes/depois +
+      // categoria filtrável "períodos") — coexiste de propósito com o
+      // logCommercialChangeEvent, que serve um consumidor diferente.
+      await recordCatalog2ProductHistory(tx, {
+        productId: product.id,
+        eventType: "period_configured",
+        description: `Desconto do período "${period}" ${label}.`,
+        before: before ? { discount_percent: before.discount_percent, is_active: before.is_active } : null,
+        after: { discount_percent: d.discount_percent, is_active: d.is_active ?? true },
+        actorUserId: req.user!.id,
+      });
+      return r;
+    });
+    await logCommercialChangeEvent(prisma, {
+      scope: "product_version", product_id: product.id, actor_user_id: req.user!.id,
+      note: `configuração do período "${period}" alterada (desconto ${d.discount_percent}%)`,
+    });
+    await audit(req, "product_period_configured", { id: product.id, period, discount_percent: d.discount_percent });
+    res.json(row);
+  } catch (e) { handle(e, res, next); }
+});
+router.delete("/products/:id/periods/:period", async (req, res, next) => {
+  try {
+    const period = req.params.period as string;
+    if (!isCatalog2Period(period)) throw new Catalog2Error(`Período inválido: ${period}.`, 400, "invalid_period");
+    const existing = await prisma.catalog2ProductPeriod.findUnique({ where: { product_id_period: { product_id: req.params.id as string, period } } });
+    await prisma.$transaction(async (tx) => {
+      await tx.catalog2ProductPeriod.deleteMany({ where: { product_id: req.params.id as string, period } });
+      if (existing) {
+        await recordCatalog2ProductHistory(tx, {
+          productId: req.params.id as string,
+          eventType: "period_removed",
+          description: `Configuração do período "${period}" removida (era ${existing.discount_percent}% de desconto).`,
+          before: { discount_percent: existing.discount_percent, is_active: existing.is_active },
+          actorUserId: req.user!.id,
+        });
+      }
+    });
+    await audit(req, "product_period_removed", { id: req.params.id, period });
+    res.json({ ok: true });
   } catch (e) { handle(e, res, next); }
 });
 
@@ -540,77 +1207,173 @@ router.post("/versions/:id/publish", async (req, res, next) => {
 const variationSchema = z.object({ key: z.string().min(1).max(60), name: z.string().min(1).max(120), is_required: z.boolean().optional(), selection_type: z.enum(["single"]).optional(), sort_order: z.number().int().optional(), notes: z.string().max(2000).nullish() });
 router.post("/versions/:id/variations", async (req, res, next) => {
   try {
-    await editableVersionOrThrow(req.params.id as string);
+    const version = await editableVersionOrThrow(req.params.id as string);
     const d = variationSchema.parse(req.body);
-    const created = await prisma.catalog2Variation.create({ data: { version_id: req.params.id as string, key: d.key, name: d.name, is_required: d.is_required ?? true, sort_order: d.sort_order ?? 99, notes: d.notes ?? null } });
+    const created = await prisma.$transaction(async (tx) => {
+      const c = await tx.catalog2Variation.create({ data: { version_id: req.params.id as string, key: d.key, name: d.name, is_required: d.is_required ?? true, sort_order: d.sort_order ?? 99, notes: d.notes ?? null } });
+      await recordCatalog2ProductHistory(tx, {
+        productId: version.product_id, versionId: version.id, eventType: "variation_added",
+        description: `Variação "${c.name}" adicionada.`, after: { key: c.key, name: c.name },
+        actorUserId: req.user!.id,
+      });
+      return c;
+    });
     res.status(201).json(created);
   } catch (e) { handle(e, res, next); }
 });
+// Item 7.2: "variação atualizada" cobre nome/obrigatoriedade/ORDEM
+// (sort_order) — a reunião pediu "criação, edição, exclusão e ordenação";
+// como não existe uma rota de reordenação em lote pra variações (ao
+// contrário de tarefas/etapas), a ordem muda pelo mesmo PUT que edita os
+// demais campos — o diff abaixo cobre isso especificamente.
 router.put("/variations/:id", async (req, res, next) => {
   try {
-    await versionOfVariation(req.params.id as string);
+    const { variation: before, version } = await versionOfVariation(req.params.id as string);
     const d = variationSchema.partial().parse(req.body);
-    res.json(await prisma.catalog2Variation.update({ where: { id: req.params.id as string }, data: d }));
+    const updated = await prisma.$transaction(async (tx) => {
+      const u = await tx.catalog2Variation.update({ where: { id: req.params.id as string }, data: d });
+      const changed: string[] = [];
+      if (d.name !== undefined && d.name !== before.name) changed.push(`nome de "${before.name}" para "${d.name}"`);
+      if (d.is_required !== undefined && d.is_required !== before.is_required) changed.push(d.is_required ? "passou a ser obrigatória" : "deixou de ser obrigatória");
+      if (d.sort_order !== undefined && d.sort_order !== before.sort_order) changed.push(`ordem de ${before.sort_order} para ${d.sort_order}`);
+      if (d.notes !== undefined && d.notes !== before.notes) changed.push("observações atualizadas");
+      if (changed.length > 0) {
+        await recordCatalog2ProductHistory(tx, {
+          productId: version.product_id, versionId: version.id, eventType: "variation_updated",
+          description: `Variação "${u.name}" atualizada — ${changed.join("; ")}.`,
+          before: { name: before.name, is_required: before.is_required, sort_order: before.sort_order, notes: before.notes },
+          after: { name: u.name, is_required: u.is_required, sort_order: u.sort_order, notes: u.notes },
+          actorUserId: req.user!.id,
+        });
+      }
+      return u;
+    });
+    res.json(updated);
   } catch (e) { handle(e, res, next); }
 });
 router.delete("/variations/:id", async (req, res, next) => {
   try {
-    await versionOfVariation(req.params.id as string);
-    await prisma.catalog2Variation.delete({ where: { id: req.params.id as string } });
+    const { variation: before, version } = await versionOfVariation(req.params.id as string);
+    await prisma.$transaction(async (tx) => {
+      await tx.catalog2Variation.delete({ where: { id: req.params.id as string } });
+      await recordCatalog2ProductHistory(tx, {
+        productId: version.product_id, versionId: version.id, eventType: "variation_removed",
+        description: `Variação "${before.name}" removida.`, before: { key: before.key, name: before.name },
+        actorUserId: req.user!.id,
+      });
+    });
     res.json({ ok: true });
   } catch (e) { handle(e, res, next); }
 });
 const optionSchema = z.object({ key: z.string().min(1).max(60), label: z.string().min(1).max(160), sort_order: z.number().int().optional(), is_default: z.boolean().optional() });
 router.post("/variations/:id/options", async (req, res, next) => {
   try {
-    await versionOfVariation(req.params.id as string);
+    const { variation, version } = await versionOfVariation(req.params.id as string);
     const d = optionSchema.parse(req.body);
-    res.status(201).json(await prisma.catalog2VariationOption.create({ data: { variation_id: req.params.id as string, ...d, sort_order: d.sort_order ?? 99 } }));
+    const created = await prisma.$transaction(async (tx) => {
+      const c = await tx.catalog2VariationOption.create({ data: { variation_id: req.params.id as string, ...d, sort_order: d.sort_order ?? 99 } });
+      await recordCatalog2ProductHistory(tx, {
+        productId: version.product_id, versionId: version.id, eventType: "option_added",
+        description: `Opção "${c.label}" adicionada à variação "${variation.name}".`,
+        after: { key: c.key, label: c.label },
+        actorUserId: req.user!.id,
+      });
+      return c;
+    });
+    res.status(201).json(created);
   } catch (e) { handle(e, res, next); }
 });
 router.put("/options/:id", async (req, res, next) => {
   try {
-    const o = await prisma.catalog2VariationOption.findUnique({ where: { id: req.params.id as string }, select: { variation_id: true } });
+    const o = await prisma.catalog2VariationOption.findUnique({ where: { id: req.params.id as string } });
     if (!o) throw new Catalog2Error("Opção não encontrada.", 404);
-    await versionOfVariation(o.variation_id);
+    const { variation, version } = await versionOfVariation(o.variation_id);
     const d = optionSchema.partial().parse(req.body);
-    res.json(await prisma.catalog2VariationOption.update({ where: { id: req.params.id as string }, data: d }));
+    const updated = await prisma.$transaction(async (tx) => {
+      const u = await tx.catalog2VariationOption.update({ where: { id: req.params.id as string }, data: d });
+      const changed: string[] = [];
+      if (d.label !== undefined && d.label !== o.label) changed.push(`rótulo de "${o.label}" para "${d.label}"`);
+      if (d.sort_order !== undefined && d.sort_order !== o.sort_order) changed.push(`ordem de ${o.sort_order} para ${d.sort_order}`);
+      if (d.is_default !== undefined && d.is_default !== o.is_default) changed.push(d.is_default ? "passou a ser padrão" : "deixou de ser padrão");
+      if (changed.length > 0) {
+        await recordCatalog2ProductHistory(tx, {
+          productId: version.product_id, versionId: version.id, eventType: "option_updated",
+          description: `Opção "${u.label}" (variação "${variation.name}") atualizada — ${changed.join("; ")}.`,
+          before: { label: o.label, sort_order: o.sort_order, is_default: o.is_default },
+          after: { label: u.label, sort_order: u.sort_order, is_default: u.is_default },
+          actorUserId: req.user!.id,
+        });
+      }
+      return u;
+    });
+    res.json(updated);
   } catch (e) { handle(e, res, next); }
 });
 router.delete("/options/:id", async (req, res, next) => {
   try {
-    const o = await prisma.catalog2VariationOption.findUnique({ where: { id: req.params.id as string }, select: { variation_id: true } });
+    const o = await prisma.catalog2VariationOption.findUnique({ where: { id: req.params.id as string } });
     if (!o) throw new Catalog2Error("Opção não encontrada.", 404);
-    await versionOfVariation(o.variation_id);
-    await prisma.catalog2VariationOption.delete({ where: { id: req.params.id as string } });
+    const { variation, version } = await versionOfVariation(o.variation_id);
+    await prisma.$transaction(async (tx) => {
+      await tx.catalog2VariationOption.delete({ where: { id: req.params.id as string } });
+      await recordCatalog2ProductHistory(tx, {
+        productId: version.product_id, versionId: version.id, eventType: "option_removed",
+        description: `Opção "${o.label}" removida da variação "${variation.name}".`,
+        before: { key: o.key, label: o.label },
+        actorUserId: req.user!.id,
+      });
+    });
     res.json({ ok: true });
   } catch (e) { handle(e, res, next); }
 });
 
 // ── Efeitos (opção / adicional) — vocabulário fechado ────────────────
 const effectSchema = z.object({ effect_type: z.enum(CATALOG2_EFFECT_TYPES), effect_value: z.string().min(1).max(500), sort_order: z.number().int().optional() });
-async function versionOfOption(optionId: string): Promise<string> {
-  const o = await prisma.catalog2VariationOption.findUnique({ where: { id: optionId }, include: { variation: { select: { version_id: true } } } });
+async function versionOfOption(optionId: string) {
+  const o = await prisma.catalog2VariationOption.findUnique({ where: { id: optionId }, include: { variation: { select: { name: true, version_id: true } } } });
   if (!o) throw new Catalog2Error("Opção não encontrada.", 404);
-  await editableVersionOrThrow(o.variation.version_id);
-  return o.variation.version_id;
+  const version = await editableVersionOrThrow(o.variation.version_id);
+  return { option: o, variationName: o.variation.name, version };
 }
+// Item 7.2: efeitos são os "efeitos COMERCIAIS" de uma opção quando o tipo
+// mexe em prazo/preço (add_deadline_days/add_fixed_amount/add_percent) —
+// os demais tipos (tarefa/etapa/texto) também são registrados, com a MESMA
+// descrição legível já usada no configurador (describeEffectForHistory),
+// nunca uma segunda taxonomia.
 router.post("/options/:id/effects", async (req, res, next) => {
   try {
-    const versionId = await versionOfOption(req.params.id as string);
+    const { option, variationName, version } = await versionOfOption(req.params.id as string);
     const d = effectSchema.parse(req.body);
-    const ctx = await buildEffectCtx(versionId);
+    const ctx = await buildEffectCtx(version.id);
     const err = validateEffect(d.effect_type, d.effect_value, ctx);
     if (err) throw new Catalog2Error(err, 422, "invalid_effect");
-    res.status(201).json(await prisma.catalog2OptionEffect.create({ data: { variation_option_id: req.params.id as string, ...d, sort_order: d.sort_order ?? 99 } }));
+    const created = await prisma.$transaction(async (tx) => {
+      const c = await tx.catalog2OptionEffect.create({ data: { variation_option_id: req.params.id as string, ...d, sort_order: d.sort_order ?? 99 } });
+      await recordCatalog2ProductHistory(tx, {
+        productId: version.product_id, versionId: version.id, eventType: "option_effect_added",
+        description: `Efeito adicionado à opção "${option.label}" (variação "${variationName}") — ${describeEffectForHistory(c.effect_type, c.effect_value)}.`,
+        after: { effect_type: c.effect_type, effect_value: c.effect_value },
+        actorUserId: req.user!.id,
+      });
+      return c;
+    });
+    res.status(201).json(created);
   } catch (e) { handle(e, res, next); }
 });
 router.delete("/option-effects/:id", async (req, res, next) => {
   try {
-    const e = await prisma.catalog2OptionEffect.findUnique({ where: { id: req.params.id as string }, select: { variation_option_id: true } });
+    const e = await prisma.catalog2OptionEffect.findUnique({ where: { id: req.params.id as string } });
     if (!e) throw new Catalog2Error("Efeito não encontrado.", 404);
-    await versionOfOption(e.variation_option_id);
-    await prisma.catalog2OptionEffect.delete({ where: { id: req.params.id as string } });
+    const { option, variationName, version } = await versionOfOption(e.variation_option_id);
+    await prisma.$transaction(async (tx) => {
+      await tx.catalog2OptionEffect.delete({ where: { id: req.params.id as string } });
+      await recordCatalog2ProductHistory(tx, {
+        productId: version.product_id, versionId: version.id, eventType: "option_effect_removed",
+        description: `Efeito removido da opção "${option.label}" (variação "${variationName}") — ${describeEffectForHistory(e.effect_type, e.effect_value)}.`,
+        before: { effect_type: e.effect_type, effect_value: e.effect_value },
+        actorUserId: req.user!.id,
+      });
+    });
     res.json({ ok: true });
   } catch (err) { handle(err, res, next); }
 });
@@ -623,51 +1386,144 @@ const addonSchema = z.object({
 });
 router.post("/versions/:id/addons", async (req, res, next) => {
   try {
-    await editableVersionOrThrow(req.params.id as string);
+    const version = await editableVersionOrThrow(req.params.id as string);
     const d = addonSchema.parse(req.body);
-    res.status(201).json(await prisma.catalog2Addon.create({ data: { version_id: req.params.id as string, key: d.key, name: d.name, description: d.description ?? null, sort_order: d.sort_order ?? 99, is_default_selected: d.is_default_selected ?? false, is_active: d.is_active ?? true, base_cost: d.base_cost ?? null, target_task_id: d.target_task_id ?? null, target_step_id: d.target_step_id ?? null } }));
+    const created = await prisma.$transaction(async (tx) => {
+      const c = await tx.catalog2Addon.create({ data: { version_id: req.params.id as string, key: d.key, name: d.name, description: d.description ?? null, sort_order: d.sort_order ?? 99, is_default_selected: d.is_default_selected ?? false, is_active: d.is_active ?? true, base_cost: d.base_cost ?? null, target_task_id: d.target_task_id ?? null, target_step_id: d.target_step_id ?? null } });
+      await recordCatalog2ProductHistory(tx, {
+        productId: version.product_id, versionId: version.id, eventType: "addon_added",
+        description: `Adicional "${c.name}" adicionado.`, after: { key: c.key, name: c.name },
+        actorUserId: req.user!.id,
+      });
+      return c;
+    });
+    res.status(201).json(created);
   } catch (e) { handle(e, res, next); }
 });
-async function versionOfAddon(addonId: string): Promise<string> {
-  const a = await prisma.catalog2Addon.findUnique({ where: { id: addonId }, select: { version_id: true } });
+async function versionOfAddon(addonId: string) {
+  const a = await prisma.catalog2Addon.findUnique({ where: { id: addonId }, include: { version: { select: { id: true, product_id: true } } } });
   if (!a) throw new Catalog2Error("Adicional não encontrado.", 404);
   await editableVersionOrThrow(a.version_id);
-  return a.version_id;
+  return a;
 }
+// Item 7.1: "adicionais" — o Item 7 só cobria a criação (`addon_added`);
+// atualização e remoção fechadas aqui.
 router.put("/addons/:id", async (req, res, next) => {
   try {
-    await versionOfAddon(req.params.id as string);
+    const before = await versionOfAddon(req.params.id as string);
     const d = addonSchema.partial().parse(req.body);
-    res.json(await prisma.catalog2Addon.update({ where: { id: req.params.id as string }, data: d }));
+    const updated = await prisma.$transaction(async (tx) => {
+      const u = await tx.catalog2Addon.update({ where: { id: req.params.id as string }, data: d });
+      const changed: string[] = [];
+      if (d.name !== undefined && d.name !== before.name) changed.push(`nome de "${before.name}" para "${d.name}"`);
+      if (d.base_cost !== undefined && d.base_cost !== before.base_cost) changed.push(`custo base de ${before.base_cost ?? "?"} para ${d.base_cost ?? "?"}`);
+      if (d.is_active !== undefined && d.is_active !== before.is_active) changed.push(d.is_active ? "ativado" : "desativado");
+      if (changed.length > 0) {
+        await recordCatalog2ProductHistory(tx, {
+          productId: before.version.product_id, versionId: before.version.id, eventType: "addon_updated",
+          description: `Adicional "${u.name}" atualizado — ${changed.join("; ")}.`,
+          before: { name: before.name, base_cost: before.base_cost, is_active: before.is_active },
+          after: { name: u.name, base_cost: u.base_cost, is_active: u.is_active },
+          actorUserId: req.user!.id,
+        });
+      }
+      return u;
+    });
+    res.json(updated);
   } catch (e) { handle(e, res, next); }
 });
 router.delete("/addons/:id", async (req, res, next) => {
   try {
-    await versionOfAddon(req.params.id as string);
-    await prisma.catalog2Addon.delete({ where: { id: req.params.id as string } });
+    const before = await versionOfAddon(req.params.id as string);
+    await prisma.$transaction(async (tx) => {
+      await tx.catalog2Addon.delete({ where: { id: req.params.id as string } });
+      await recordCatalog2ProductHistory(tx, {
+        productId: before.version.product_id, versionId: before.version.id, eventType: "addon_removed",
+        description: `Adicional "${before.name}" removido.`, before: { key: before.key, name: before.name },
+        actorUserId: req.user!.id,
+      });
+    });
     res.json({ ok: true });
   } catch (e) { handle(e, res, next); }
 });
+// Item 7.2: efeitos de adicional fecham a última lacuna declarada no Item
+// 7.1 — mesmo padrão/rótulos dos efeitos de opção (describeEffectForHistory).
 router.post("/addons/:id/effects", async (req, res, next) => {
   try {
-    const versionId = await versionOfAddon(req.params.id as string);
+    const addon = await versionOfAddon(req.params.id as string);
     const d = effectSchema.parse(req.body);
-    const err = validateEffect(d.effect_type, d.effect_value, await buildEffectCtx(versionId));
+    const err = validateEffect(d.effect_type, d.effect_value, await buildEffectCtx(addon.version_id));
     if (err) throw new Catalog2Error(err, 422, "invalid_effect");
-    res.status(201).json(await prisma.catalog2AddonEffect.create({ data: { addon_id: req.params.id as string, ...d, sort_order: d.sort_order ?? 99 } }));
+    const created = await prisma.$transaction(async (tx) => {
+      const c = await tx.catalog2AddonEffect.create({ data: { addon_id: req.params.id as string, ...d, sort_order: d.sort_order ?? 99 } });
+      await recordCatalog2ProductHistory(tx, {
+        productId: addon.version.product_id, versionId: addon.version.id, eventType: "addon_effect_added",
+        description: `Efeito adicionado ao adicional "${addon.name}" — ${describeEffectForHistory(c.effect_type, c.effect_value)}.`,
+        after: { effect_type: c.effect_type, effect_value: c.effect_value },
+        actorUserId: req.user!.id,
+      });
+      return c;
+    });
+    res.status(201).json(created);
   } catch (e) { handle(e, res, next); }
 });
 router.delete("/addon-effects/:id", async (req, res, next) => {
   try {
-    const e = await prisma.catalog2AddonEffect.findUnique({ where: { id: req.params.id as string }, select: { addon_id: true } });
+    const e = await prisma.catalog2AddonEffect.findUnique({ where: { id: req.params.id as string } });
     if (!e) throw new Catalog2Error("Efeito não encontrado.", 404);
-    await versionOfAddon(e.addon_id);
-    await prisma.catalog2AddonEffect.delete({ where: { id: req.params.id as string } });
+    const addon = await versionOfAddon(e.addon_id);
+    await prisma.$transaction(async (tx) => {
+      await tx.catalog2AddonEffect.delete({ where: { id: req.params.id as string } });
+      await recordCatalog2ProductHistory(tx, {
+        productId: addon.version.product_id, versionId: addon.version.id, eventType: "addon_effect_removed",
+        description: `Efeito removido do adicional "${addon.name}" — ${describeEffectForHistory(e.effect_type, e.effect_value)}.`,
+        before: { effect_type: e.effect_type, effect_value: e.effect_value },
+        actorUserId: req.user!.id,
+      });
+    });
     res.json({ ok: true });
   } catch (err) { handle(err, res, next); }
 });
 
 // ── Tarefas e etapas ───────────────────────────────────────────────
+// Busca de tarefas de QUALQUER produto/versão — biblioteca de "tarefas
+// reutilizáveis" (reunião 2026-09-14, Item 3). Catalog2Task pertence
+// exclusivamente a UMA versão (sem tabela de biblioteca própria); "usar uma
+// existente" aqui sempre COPIA a tarefa encontrada pra versão de destino
+// (ver /versions/:id/tasks/import abaixo) — nunca vincula por referência,
+// porque não há como uma linha em catalog2_tasks pertencer a duas versões
+// ao mesmo tempo. Isso é intencional e diferente do questionário (que É
+// vínculo/referência) — documentado aqui e na UI para não confundir.
+router.get("/tasks/search", async (req, res, next) => {
+  try {
+    const q = typeof req.query.q === "string" ? req.query.q.trim().slice(0, 120) : "";
+    if (q.length < 2) { res.json({ data: [] }); return; }
+    const excludeVersionId = typeof req.query.exclude_version_id === "string" ? req.query.exclude_version_id : undefined;
+    const where: Prisma.Catalog2TaskWhereInput = { OR: [{ name: { contains: q } }, { key: { contains: q } }] };
+    if (excludeVersionId) where.version_id = { not: excludeVersionId };
+    const rows = await prisma.catalog2Task.findMany({
+      where,
+      take: 25,
+      orderBy: { updated_at: "desc" },
+      include: {
+        specialty: { select: { name: true } },
+        questionnaire: { select: { id: true, name: true } },
+        version: { select: { version_number: true, state: true, product: { select: { internal_name: true } } } },
+        _count: { select: { steps: true } },
+      },
+    });
+    res.json({
+      data: rows.map((t) => ({
+        id: t.id, key: t.key, name: t.name, execution_mode: t.execution_mode,
+        estimated_minutes: t.estimated_minutes, specialty_name: t.specialty?.name ?? null,
+        step_count: t._count.steps,
+        questionnaire: t.questionnaire ? { id: t.questionnaire.id, name: t.questionnaire.name } : null,
+        product_name: t.version.product.internal_name,
+        version_label: `v${t.version.version_number} (${t.version.state})`,
+      })),
+    });
+  } catch (e) { next(e); }
+});
 const taskSchema = z.object({
   key: z.string().min(1).max(60), name: z.string().min(1).max(200), description: z.string().max(8000).nullish(), objective: z.string().max(4000).nullish(),
   sort_order: z.number().int().optional(), specialty_id: z.string().nullish(),
@@ -677,14 +1533,24 @@ const taskSchema = z.object({
 });
 router.post("/versions/:id/tasks", async (req, res, next) => {
   try {
-    await editableVersionOrThrow(req.params.id as string);
+    const version = await editableVersionOrThrow(req.params.id as string);
     const d = taskSchema.parse(req.body);
-    res.status(201).json(await prisma.catalog2Task.create({ data: { version_id: req.params.id as string, key: d.key, name: d.name, description: d.description ?? null, objective: d.objective ?? null, sort_order: d.sort_order ?? 99, specialty_id: d.specialty_id ?? null, execution_mode: d.execution_mode ?? "humano", estimated_minutes: d.estimated_minutes ?? null, requires_review: d.requires_review ?? false, requires_client_approval: d.requires_client_approval ?? false, is_conditional: d.is_conditional ?? false } }));
+    const created = await prisma.$transaction(async (tx) => {
+      const c = await tx.catalog2Task.create({ data: { version_id: req.params.id as string, key: d.key, name: d.name, description: d.description ?? null, objective: d.objective ?? null, sort_order: d.sort_order ?? 99, specialty_id: d.specialty_id ?? null, execution_mode: d.execution_mode ?? "humano", estimated_minutes: d.estimated_minutes ?? null, requires_review: d.requires_review ?? false, requires_client_approval: d.requires_client_approval ?? false, is_conditional: d.is_conditional ?? false } });
+      await recordCatalog2ProductHistory(tx, {
+        productId: version.product_id, versionId: version.id, eventType: "task_added",
+        description: `Tarefa "${c.name}" adicionada.`, after: { key: c.key, name: c.name },
+        actorUserId: req.user!.id,
+      });
+      return c;
+    });
+    res.status(201).json(created);
   } catch (e) { handle(e, res, next); }
 });
 router.put("/tasks/:id", async (req, res, next) => {
   try {
-    await versionOfTask(req.params.id as string);
+    const version = await versionOfTask(req.params.id as string);
+    const before = await prisma.catalog2Task.findUniqueOrThrow({ where: { id: req.params.id as string } });
     const d = taskSchema.partial().parse(req.body);
     const data: typeof d & { effort_is_provisional?: boolean; effort_source?: string; effort_provisional_reason?: string | null } = { ...d };
     // Reunião 10/09 ("36 produtos funcionalmente completos para teste"):
@@ -697,13 +1563,38 @@ router.put("/tasks/:id", async (req, res, next) => {
       data.effort_source = "human_reviewed";
       data.effort_provisional_reason = null;
     }
-    res.json(await prisma.catalog2Task.update({ where: { id: req.params.id as string }, data }));
+    const updated = await prisma.$transaction(async (tx) => {
+      const u = await tx.catalog2Task.update({ where: { id: req.params.id as string }, data });
+      const changed: string[] = [];
+      if (d.name !== undefined && d.name !== before.name) changed.push(`nome de "${before.name}" para "${d.name}"`);
+      if (d.specialty_id !== undefined && d.specialty_id !== before.specialty_id) changed.push("especialidade");
+      if (d.estimated_minutes !== undefined && d.estimated_minutes !== before.estimated_minutes) changed.push(`tempo estimado de ${before.estimated_minutes ?? "?"} para ${d.estimated_minutes ?? "?"} min`);
+      if (changed.length > 0) {
+        await recordCatalog2ProductHistory(tx, {
+          productId: version.product_id, versionId: version.id, eventType: "task_updated",
+          description: `Tarefa "${u.name}" atualizada — ${changed.join("; ")}.`,
+          before: { name: before.name, specialty_id: before.specialty_id, estimated_minutes: before.estimated_minutes },
+          after: { name: u.name, specialty_id: u.specialty_id, estimated_minutes: u.estimated_minutes },
+          actorUserId: req.user!.id,
+        });
+      }
+      return u;
+    });
+    res.json(updated);
   } catch (e) { handle(e, res, next); }
 });
 router.delete("/tasks/:id", async (req, res, next) => {
   try {
-    await versionOfTask(req.params.id as string);
-    await prisma.catalog2Task.delete({ where: { id: req.params.id as string } });
+    const version = await versionOfTask(req.params.id as string);
+    const before = await prisma.catalog2Task.findUniqueOrThrow({ where: { id: req.params.id as string } });
+    await prisma.$transaction(async (tx) => {
+      await tx.catalog2Task.delete({ where: { id: req.params.id as string } });
+      await recordCatalog2ProductHistory(tx, {
+        productId: version.product_id, versionId: version.id, eventType: "task_removed",
+        description: `Tarefa "${before.name}" removida.`, before: { key: before.key, name: before.name },
+        actorUserId: req.user!.id,
+      });
+    });
     res.json({ ok: true });
   } catch (e) { handle(e, res, next); }
 });
@@ -728,6 +1619,62 @@ router.post("/tasks/:id/duplicate", async (req, res, next) => {
   } catch (e) { handle(e, res, next); }
 });
 
+// "Selecionar existente" (biblioteca de tarefas reutilizáveis, ver /tasks/
+// search acima) — COPIA a tarefa de origem (com etapas e config de IA) pra
+// versão de destino. Nunca altera a tarefa/produto de origem — igual
+// /tasks/:id/duplicate, só que a versão de destino é OUTRA (potencialmente
+// de outro produto). Vínculo de questionário é preservado por REFERÊNCIA
+// (mesmo questionnaire_id — é biblioteca compartilhada, não se copia).
+router.post("/versions/:id/tasks/import", async (req, res, next) => {
+  try {
+    const destVersionId = req.params.id as string;
+    const destVersion = await editableVersionOrThrow(destVersionId);
+    const sourceTaskId = z.string().min(1).parse(req.body?.source_task_id);
+    const src = await prisma.catalog2Task.findUnique({ where: { id: sourceTaskId }, include: { steps: true, ai: true } });
+    if (!src) throw new Catalog2Error("Tarefa de origem não encontrada.", 404);
+
+    let key = src.key;
+    let n = 2;
+    // eslint-disable-next-line no-await-in-loop
+    while (await prisma.catalog2Task.findFirst({ where: { version_id: destVersionId, key }, select: { id: true } })) {
+      key = `${src.key}-${n}`;
+      n++;
+    }
+
+    const imported = await prisma.$transaction(async (tx) => {
+      const t = await tx.catalog2Task.create({
+        data: {
+          version_id: destVersionId, key, name: src.name,
+          description: src.description, objective: src.objective, sort_order: 99,
+          specialty_id: src.specialty_id, execution_mode: src.execution_mode, estimated_minutes: src.estimated_minutes,
+          requires_review: src.requires_review, requires_client_approval: src.requires_client_approval, is_conditional: src.is_conditional,
+          questionnaire_id: src.questionnaire_id,
+          // Copia o estado de procedência do esforço COMO ESTAVA na origem —
+          // nunca inventa "revisado" nem reseta pra provisório sozinho (regra
+          // do Item 3: nunca preencher dado automaticamente nem remover a
+          // marcação de provisório sem revisão real).
+          effort_is_provisional: src.effort_is_provisional, effort_provisional_reason: src.effort_provisional_reason, effort_source: src.effort_source,
+        },
+      });
+      for (const s of src.steps) {
+        await tx.catalog2TaskStep.create({ data: { task_id: t.id, key: s.key, name: s.name, description: s.description, sort_order: s.sort_order, estimated_minutes: s.estimated_minutes, is_conditional: s.is_conditional } });
+      }
+      if (src.ai) {
+        await tx.catalog2TaskAI.create({ data: { task_id: t.id, provider: src.ai.provider, model: src.ai.model, est_input_tokens: src.ai.est_input_tokens, est_output_tokens: src.ai.est_output_tokens, unit_cost_input_per_1k: src.ai.unit_cost_input_per_1k, unit_cost_output_per_1k: src.ai.unit_cost_output_per_1k, currency: src.ai.currency, est_review_rounds: src.ai.est_review_rounds, cost_note: src.ai.cost_note, human_review_required: src.ai.human_review_required } });
+      }
+      await recordCatalog2ProductHistory(tx, {
+        productId: destVersion.product_id, versionId: destVersion.id, eventType: "task_added",
+        description: `Tarefa "${t.name}" importada da biblioteca (cópia).`,
+        after: { key: t.key, name: t.name, source_task_id: sourceTaskId },
+        actorUserId: req.user!.id, actorKind: "user",
+      });
+      return t;
+    });
+    await audit(req, "task_imported", { task_id: imported.id, source_task_id: sourceTaskId, dest_version_id: destVersionId });
+    res.status(201).json({ ok: true, task_id: imported.id });
+  } catch (e) { handle(e, res, next); }
+});
+
 // Reordenar tarefas (lista de ids na ordem desejada) — persiste no banco.
 router.put("/versions/:id/tasks/order", async (req, res, next) => {
   try {
@@ -739,28 +1686,66 @@ router.put("/versions/:id/tasks/order", async (req, res, next) => {
 });
 
 const stepSchema = z.object({ key: z.string().min(1).max(60), name: z.string().min(1).max(200), description: z.string().max(8000).nullish(), sort_order: z.number().int().optional(), estimated_minutes: z.number().int().nonnegative().nullish(), is_conditional: z.boolean().optional() });
+// Item 7.1: "etapas" — o Item 7 nunca instrumentou etapas (só tarefas) —
+// fechado aqui (add/update/remove; reordenar segue o mesmo padrão de baixo
+// valor informativo já adotado pra tarefas/perguntas, não instrumentado).
 router.post("/tasks/:id/steps", async (req, res, next) => {
   try {
-    await versionOfTask(req.params.id as string);
+    const version = await versionOfTask(req.params.id as string);
+    const task = await prisma.catalog2Task.findUniqueOrThrow({ where: { id: req.params.id as string }, select: { name: true } });
     const d = stepSchema.parse(req.body);
-    res.status(201).json(await prisma.catalog2TaskStep.create({ data: { task_id: req.params.id as string, key: d.key, name: d.name, description: d.description ?? null, sort_order: d.sort_order ?? 99, estimated_minutes: d.estimated_minutes ?? null, is_conditional: d.is_conditional ?? false } }));
+    const created = await prisma.$transaction(async (tx) => {
+      const c = await tx.catalog2TaskStep.create({ data: { task_id: req.params.id as string, key: d.key, name: d.name, description: d.description ?? null, sort_order: d.sort_order ?? 99, estimated_minutes: d.estimated_minutes ?? null, is_conditional: d.is_conditional ?? false } });
+      await recordCatalog2ProductHistory(tx, {
+        productId: version.product_id, versionId: version.id, eventType: "step_added",
+        description: `Etapa "${c.name}" adicionada à tarefa "${task.name}".`, after: { key: c.key, name: c.name },
+        actorUserId: req.user!.id,
+      });
+      return c;
+    });
+    res.status(201).json(created);
   } catch (e) { handle(e, res, next); }
 });
 async function versionOfStep(stepId: string) {
-  const s = await prisma.catalog2TaskStep.findUnique({ where: { id: stepId }, include: { task: { select: { version_id: true } } } });
+  const s = await prisma.catalog2TaskStep.findUnique({ where: { id: stepId }, include: { task: { select: { name: true, version_id: true } } } });
   if (!s) throw new Catalog2Error("Etapa não encontrada.", 404);
-  return editableVersionOrThrow(s.task.version_id);
+  const version = await editableVersionOrThrow(s.task.version_id);
+  return { step: s, taskName: s.task.name, version };
 }
 router.put("/steps/:id", async (req, res, next) => {
   try {
-    await versionOfStep(req.params.id as string);
-    res.json(await prisma.catalog2TaskStep.update({ where: { id: req.params.id as string }, data: stepSchema.partial().parse(req.body) }));
+    const { step: before, taskName, version } = await versionOfStep(req.params.id as string);
+    const d = stepSchema.partial().parse(req.body);
+    const updated = await prisma.$transaction(async (tx) => {
+      const u = await tx.catalog2TaskStep.update({ where: { id: req.params.id as string }, data: d });
+      const changed: string[] = [];
+      if (d.name !== undefined && d.name !== before.name) changed.push(`nome de "${before.name}" para "${d.name}"`);
+      if (d.estimated_minutes !== undefined && d.estimated_minutes !== before.estimated_minutes) changed.push(`tempo estimado de ${before.estimated_minutes ?? "?"} para ${d.estimated_minutes ?? "?"} min`);
+      if (changed.length > 0) {
+        await recordCatalog2ProductHistory(tx, {
+          productId: version.product_id, versionId: version.id, eventType: "step_updated",
+          description: `Etapa "${u.name}" da tarefa "${taskName}" atualizada — ${changed.join("; ")}.`,
+          before: { name: before.name, estimated_minutes: before.estimated_minutes },
+          after: { name: u.name, estimated_minutes: u.estimated_minutes },
+          actorUserId: req.user!.id,
+        });
+      }
+      return u;
+    });
+    res.json(updated);
   } catch (e) { handle(e, res, next); }
 });
 router.delete("/steps/:id", async (req, res, next) => {
   try {
-    await versionOfStep(req.params.id as string);
-    await prisma.catalog2TaskStep.delete({ where: { id: req.params.id as string } });
+    const { step: before, taskName, version } = await versionOfStep(req.params.id as string);
+    await prisma.$transaction(async (tx) => {
+      await tx.catalog2TaskStep.delete({ where: { id: req.params.id as string } });
+      await recordCatalog2ProductHistory(tx, {
+        productId: version.product_id, versionId: version.id, eventType: "step_removed",
+        description: `Etapa "${before.name}" removida da tarefa "${taskName}".`, before: { key: before.key, name: before.name },
+        actorUserId: req.user!.id,
+      });
+    });
     res.json({ ok: true });
   } catch (e) { handle(e, res, next); }
 });
@@ -1304,8 +2289,25 @@ async function computeProductReadiness(p: ReadinessProduct) {
     source_index: p.import_origin?.source_index ?? null,
     review_state: p.import_origin?.review_state ?? null,
     status: p.status,
+    status_label: CATALOG2_STATUS_LABEL[p.status as Catalog2Status] ?? p.status,
     published: !!published,
-    client_visible: p.status === "disponivel" && !!published && pend.length === 0 && !!pricing?.commercial_ready,
+    // Item 2 (reunião 2026-09-14): status, publicação e prontidão comercial
+    // são eixos independentes — um não apaga o outro. client_visible espelha
+    // a mesma regra usada de verdade no catálogo do cliente
+    // (checkClientVisibility, catalog2-client.ts): status "Ativo" continua
+    // exigindo prontidão comercial pra aparecer; os demais status visíveis
+    // (pré-lançamento/pausado/esgotado) aparecem mesmo sem preço/prazo
+    // prontos, porque a contratação já está bloqueada pelo status.
+    client_visible:
+      CATALOG2_CLIENT_VISIBLE_STATUSES.includes(p.status as Catalog2Status) &&
+      !!published &&
+      pend.length === 0 &&
+      (p.status !== "disponivel" || !!pricing?.commercial_ready),
+    client_contractable:
+      CATALOG2_CONTRACTABLE_STATUSES.includes(p.status as Catalog2Status) &&
+      !!published &&
+      pend.length === 0 &&
+      !!pricing?.commercial_ready,
     task_count: taskCount,
     step_count: stepCount,
     has_active_tasks: hasActiveTasks,

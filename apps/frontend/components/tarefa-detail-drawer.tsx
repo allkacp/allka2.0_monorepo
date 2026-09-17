@@ -38,6 +38,7 @@ import {
   Zap,
 } from "lucide-react";
 import { apiClient, ApiError } from "@/lib/api-client";
+import { useIallkaContext } from "@/contexts/iallka-context";
 import { Button } from "@/components/ui/button";
 import { EmbeddedSlideScreen } from "@/components/embedded-slide-screen";
 import { TaskRotationPanel } from "@/components/task-rotation-panel";
@@ -511,6 +512,17 @@ export function TarefaDetailDrawer({
   const [tab, setTab] = useState<TabKey>("dados");
   const [isEditMode, setIsEditMode] = useState(false);
   const [editStatus, setEditStatus] = useState<string>("");
+
+  // Contexto pra Aura (Item 9, reunião 2026-09-14, "Atualizar o contexto da
+  // Aura") — só quando o drawer está aberto com uma tarefa real; nome já
+  // visível na própria tela, id revalidado/reautorizado no servidor. Some
+  // ao fechar/trocar de tarefa (nunca reutiliza dado da tarefa anterior).
+  const { setScreenContext: setIallkaScreenContext } = useIallkaContext();
+  useEffect(() => {
+    if (!open || !tarefa) return;
+    setIallkaScreenContext({ label: "Tarefas", openItemName: tarefa.titulo ?? tarefa.name, taskId: tarefa.id });
+    return () => setIallkaScreenContext(null);
+  }, [open, tarefa?.id, tarefa?.titulo, tarefa?.name, setIallkaScreenContext]);
 
   // Async data
   const [stages, setStages] = useState<TaskStage[]>([]);

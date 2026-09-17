@@ -315,6 +315,21 @@ router.post("/:id/checkout", async (req, res, next) => {
     const ctx = await resolveClientContext(req.user!.id, req.user!.account_type, req.user!.role);
     const pagadorSnapshot: "AGENCIA" | "CLIENTE" = ctx.account_kind === "agency" ? "AGENCIA" : "CLIENTE";
 
+    // Item 2.1 (reunião 2026-09-14): todo aditivo — nova contratação,
+    // aumento de quantidade ou ampliação de escopo — sempre nasce de uma
+    // Catalog2Quote NOVA e sempre cria uma linha de ProjectProduct NOVA
+    // (nunca altera a execução já contratada). "/approve" já revalida a
+    // cotação naquele momento, mas o produto pode ter sido pausado/
+    // esgotado/arquivado DEPOIS da aprovação e ANTES deste checkout — sem
+    // esta revalidação aqui, uma cotação antiga (só porque `status` no
+    // banco ainda dizia "valida") autorizaria uma contratação nova de um
+    // produto hoje indisponível. Mesma regra e mesma função usada no
+    // checkout da compra original (POST /api/catalog2/checkout) —
+    // reaproveita `contractable` via checkClientVisibility.
+    const quote = await prisma.catalog2Quote.findUniqueOrThrow({ where: { id: co.quote_id } });
+    const quoteOwnerCtx = await resolveClientContext(quote.user_id, quote.account_kind === "agency" ? "agencias" : "empresas", "");
+    await revalidateAndFreezeQuote(quoteOwnerCtx, co.quote_id);
+
     const result = await prisma.$transaction(async (tx) => {
       const pp = await attachCatalog2QuoteToProject(tx, {
         projectId: co.project_id,

@@ -15,6 +15,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { ConfirmationDialog } from "@/components/confirmation-dialog";
+import { catalog2StatusLabel, catalog2StatusTone } from "@/lib/catalog2-status";
 
 type Portal = "admin" | "company" | "agency";
 
@@ -23,10 +24,21 @@ function money(v: number | null | undefined, currency = "BRL") {
   return `${currency} ${Number(v).toFixed(2)}`;
 }
 
+// Item 6 (reunião 2026-09-14, "Modalidades de contratação por período").
+const PERIOD_LABEL: Record<string, string> = { mensal: "Mensal", trimestral: "Trimestral", semestral: "Semestral", anual: "Anual" };
+
 export function Catalog2Store({ portal }: { portal: Portal }) {
   const [sp, setSp] = useSearchParams();
   const slug = sp.get("produto");
-  const preview = portal === "admin" && sp.get("preview") === "1";
+  // Item 16.2 (reunião 2026-09-14, "Checkout demonstrativo") — corrigido:
+  // antes só o portal "admin" conseguia acionar ?preview=1 aqui, mesmo já
+  // existindo uma conta comercial (company/agency) autorizada via
+  // CATALOG2_DEMO_PREVIEW_EMAILS (Item 16.1) que o backend aceita. A
+  // autorização de verdade é sempre do backend (can_preview_drafts =
+  // isMaster || e-mail exato na allowlist) — contas fora da lista recebem
+  // 404 do próprio backend (`forbidden` abaixo), então repassar o parâmetro
+  // aqui não abre nada que o backend já não decida sozinho.
+  const preview = sp.get("preview") === "1";
 
   const [refs, setRefs] = useState<{ pillars: any[]; categories: any[]; four_f: any[] }>({ pillars: [], categories: [], four_f: [] });
   const [cartOpen, setCartOpen] = useState(false);
@@ -192,11 +204,22 @@ function CatalogList({ refs, sp, setParam, setParams, onOpen, preview }: any) {
                       {p.is_preview && p.status !== "disponivel" && (
                         <Badge className="bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-200">Em preparação</Badge>
                       )}
+                      {/* Reunião 2026-09-14 (Item 2): produto visível fora do
+                          preview mas ainda não contratável neste status —
+                          pré-lançamento/pausado/esgotado. */}
+                      {!p.is_preview && p.status && p.status !== "disponivel" && (
+                        <Badge className={catalog2StatusTone(p.status)}>{p.status_label ?? catalog2StatusLabel(p.status)}</Badge>
+                      )}
                     </div>
                   </div>
                   {p.is_preview && (p.pendencies?.length ?? 0) > 0 && (
                     <p className="mt-0.5 text-[11px] text-amber-600 dark:text-amber-400">
                       Falta: {p.pendencies.join(", ")}
+                    </p>
+                  )}
+                  {!p.is_preview && p.unavailable_reason && (
+                    <p className="mt-0.5 text-[11px] text-amber-600 dark:text-amber-400">
+                      {p.unavailable_reason.charAt(0).toUpperCase() + p.unavailable_reason.slice(1)}.
                     </p>
                   )}
                   {p.short_description && <p className="mt-1 line-clamp-2 text-xs text-neutral-500">{p.short_description}</p>}
@@ -232,6 +255,10 @@ function ProductDetail({ slug, preview, onBack, onCartChanged }: any) {
   const [product, setProduct] = useState<any>(null);
   const [state, setState] = useState<"loading" | "ready" | "notfound">("loading");
   const [sel, setSel] = useState<any>({ variation_option_keys: [], addon_keys: [], quantity: 1, answers: {} });
+  // Item 6 (reunião 2026-09-14, "Modalidades de contratação por período") —
+  // null = avulso (comportamento preexistente). "mensal"|"trimestral"|
+  // "semestral"|"anual" quando o cliente escolhe um período oferecido.
+  const [period, setPeriod] = useState<string | null>(null);
   const [config, setConfig] = useState<any>(null);
   const [msg, setMsg] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -260,11 +287,11 @@ function ProductDetail({ slug, preview, onBack, onCartChanged }: any) {
     const body = JSON.stringify(sel);
     let alive = true;
     apiClient
-      .configureClientCatalog2(slug, JSON.parse(body), preview)
+      .configureClientCatalog2(slug, JSON.parse(body), preview, period)
       .then((c: any) => { if (alive) setConfig(c); })
       .catch(() => {});
     return () => { alive = false; };
-  }, [sel, state, product, slug, preview]);
+  }, [sel, period, state, product, slug, preview]);
 
   if (state === "loading") return <div className="flex items-center gap-2 py-16 text-sm text-neutral-500"><Loader2 className="h-5 w-5 animate-spin" /> Carregando…</div>;
   if (state === "notfound") return (
@@ -276,8 +303,15 @@ function ProductDetail({ slug, preview, onBack, onCartChanged }: any) {
 
   const p = product;
   const pricing = config?.pricing ?? p.pricing;
+  // Item 6: quando um período está selecionado, este é o breakdown que
+  // manda — `pricing` acima continua calculado só como referência avulsa.
+  const periodPricing = period ? config?.period_pricing : null;
   const selErrors: string[] = config?.selection_errors ?? [];
   const canQuote = !!config?.can_generate_quote;
+  // Reunião 2026-09-14 (Item 2): produto visível mas bloqueado NESTE status
+  // (pré-lançamento/pausado/esgotado) — motivo real vindo do backend
+  // (getClientProduct.contract_blocked_reason), não deduzido no cliente.
+  const statusBlockedReason: string | null = p.is_preview ? null : (p.contract_blocked_reason ?? null);
 
   function pickOption(variationKey: string, optionKey: string, optKeysOfVar: string[]) {
     setSel((s: any) => ({
@@ -295,7 +329,7 @@ function ProductDetail({ slug, preview, onBack, onCartChanged }: any) {
     setBusy(true);
     setMsg(null);
     try {
-      const r: any = await apiClient.addClientCatalog2CartItem(slug, sel);
+      const r: any = await apiClient.addClientCatalog2CartItem(slug, sel, period);
       setMsg(r.already_in_cart ? "Já está na cesta." : "Adicionado à cesta.");
       await onCartChanged();
     } catch (e: any) {
@@ -311,7 +345,7 @@ function ProductDetail({ slug, preview, onBack, onCartChanged }: any) {
     setBusy(true);
     setMsg(null);
     try {
-      const q: any = await apiClient.createClientCatalog2Quote(slug, sel);
+      const q: any = await apiClient.createClientCatalog2Quote(slug, sel, period);
       setMsg(`Pré-cotação ${q.status} gerada — ${money(q.commercial_price, q.currency)} · ${q.commercial_deadline_days ?? "?"} dia(s). Válida até ${new Date(q.valid_until).toLocaleDateString("pt-BR")}.`);
     } catch (e: any) {
       setMsg(e?.message ?? "Não foi possível gerar a cotação.");
@@ -325,7 +359,12 @@ function ProductDetail({ slug, preview, onBack, onCartChanged }: any) {
       <Button size="sm" variant="ghost" onClick={onBack}><ArrowLeft className="h-4 w-4" /> Voltar ao catálogo</Button>
 
       <header className="space-y-1">
-        <h2 className="text-lg font-semibold text-neutral-900 dark:text-neutral-50">{p.name}</h2>
+        <div className="flex flex-wrap items-center gap-2">
+          <h2 className="text-lg font-semibold text-neutral-900 dark:text-neutral-50">{p.name}</h2>
+          {!p.is_preview && statusBlockedReason && (
+            <Badge className={catalog2StatusTone(p.status)}>{p.status_label ?? catalog2StatusLabel(p.status)}</Badge>
+          )}
+        </div>
         <div className="flex flex-wrap gap-1 text-[11px] text-neutral-500">
           {p.pillar?.name && <span className="rounded bg-neutral-100 px-1.5 py-0.5 dark:bg-neutral-800">{p.pillar.name}</span>}
           {p.category?.name && <span className="rounded bg-neutral-100 px-1.5 py-0.5 dark:bg-neutral-800">{p.category.name}</span>}
@@ -337,6 +376,13 @@ function ProductDetail({ slug, preview, onBack, onCartChanged }: any) {
         <p className="rounded bg-amber-50 px-3 py-2 text-xs text-amber-700 dark:bg-amber-950/30">
           {p.preview_notice}
           {p.pendencies?.length > 0 && <> Pendências: {p.pendencies.join(", ")}.</>}
+        </p>
+      )}
+
+      {!p.is_preview && statusBlockedReason && (
+        <p className="rounded bg-amber-50 px-3 py-2 text-xs text-amber-700 dark:bg-amber-950/30">
+          <AlertTriangle className="mr-1 inline h-3 w-3" />
+          Contratação bloqueada: {statusBlockedReason}.
         </p>
       )}
 
@@ -412,22 +458,103 @@ function ProductDetail({ slug, preview, onBack, onCartChanged }: any) {
               onChange={(e) => setSel((s: any) => ({ ...s, quantity: Math.max(1, Number(e.target.value) || 1) }))}
             />
           </label>
+
+          {/* Item 6: só aparece se o produto tem algum período CONFIGURADO
+              pelo admin — avulso continua sempre disponível/selecionado por padrão. */}
+          {(p.available_periods ?? []).length > 0 && (
+            <fieldset className="rounded-lg border border-neutral-200 p-3 dark:border-neutral-800">
+              <legend className="px-1 text-sm font-medium">Modalidade de contratação</legend>
+              <div className="flex flex-wrap gap-2">
+                <button
+                  className={`rounded border px-3 py-1.5 text-sm ${!period ? "border-neutral-900 bg-neutral-900 text-white dark:border-white dark:bg-white dark:text-neutral-900" : "border-neutral-300 dark:border-neutral-700"}`}
+                  onClick={() => setPeriod(null)}
+                >
+                  Avulso
+                </button>
+                {p.available_periods.map((pp: any) => (
+                  <button
+                    key={pp.period}
+                    className={`rounded border px-3 py-1.5 text-sm ${period === pp.period ? "border-neutral-900 bg-neutral-900 text-white dark:border-white dark:bg-white dark:text-neutral-900" : "border-neutral-300 dark:border-neutral-700"}`}
+                    onClick={() => setPeriod(pp.period)}
+                  >
+                    {PERIOD_LABEL[pp.period] ?? pp.period} {pp.discount_percent > 0 ? `(−${pp.discount_percent}%)` : ""}
+                  </button>
+                ))}
+              </div>
+            </fieldset>
+          )}
         </div>
 
         {/* Painel de preço/prazo — recalculado no backend */}
         <aside className="h-fit space-y-2 rounded-lg border border-neutral-200 p-4 text-sm dark:border-neutral-800">
-          <div className="flex items-center justify-between">
-            <span className="text-neutral-500">Prazo comercial</span>
-            <span className="font-medium">
-              {pricing?.commercial_deadline_pending || pricing?.commercial_deadline_days == null
-                ? "a definir"
-                : `${pricing.commercial_deadline_days} dia(s)`}
-            </span>
-          </div>
-          <div className="flex items-center justify-between">
-            <span className="text-neutral-500">Preço comercial</span>
-            <span className="text-lg font-semibold">{money(pricing?.commercial_price, pricing?.currency)}</span>
-          </div>
+          {!period ? (
+            <>
+              <div className="flex items-center justify-between">
+                <span className="text-neutral-500">Prazo comercial</span>
+                <span className="font-medium">
+                  {pricing?.commercial_deadline_pending || pricing?.commercial_deadline_days == null
+                    ? "a definir"
+                    : `${pricing.commercial_deadline_days} dia(s)`}
+                </span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-neutral-500">Preço comercial</span>
+                <span className="text-lg font-semibold">{money(pricing?.commercial_price, pricing?.currency)}</span>
+              </div>
+            </>
+          ) : (
+            // Item 6 — os 6 pontos pedidos: duração, valor mensal de
+            // referência, desconto, total antecipado, valor mensal
+            // equivalente (comparativo) e prazo de proteção do preço.
+            <div className="space-y-1.5 rounded-md bg-neutral-50 p-2.5 dark:bg-neutral-800/50">
+              <div className="flex items-center justify-between text-xs font-semibold text-neutral-700 dark:text-neutral-200">
+                <span>{PERIOD_LABEL[period] ?? period}</span>
+                <span>{periodPricing?.months ?? "—"} mês(es)</span>
+              </div>
+              {!periodPricing?.available ? (
+                <p className="text-xs text-amber-600">
+                  <AlertTriangle className="mr-1 inline h-3 w-3" />
+                  {(periodPricing?.quote_blockers ?? ["carregando…"]).join("; ")}
+                </p>
+              ) : (
+                <>
+                  <div className="flex items-center justify-between text-xs text-neutral-500">
+                    <span>Valor mensal de referência</span>
+                    <span>{money(periodPricing.reference_monthly_price, periodPricing.currency)}</span>
+                  </div>
+                  <div className="flex items-center justify-between text-xs text-neutral-500">
+                    <span>Desconto do período</span>
+                    <span>{periodPricing.discount_percent}%</span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-neutral-500">Total a pagar (antecipado)</span>
+                    <span className="text-lg font-semibold">{money(periodPricing.total_price, periodPricing.currency)}</span>
+                  </div>
+                  <div className="flex items-center justify-between text-xs text-neutral-500">
+                    <span>Valor mensal equivalente</span>
+                    <span title="Comparativo — o pagamento é único e antecipado, não cobrado por mês.">
+                      {money(periodPricing.monthly_equivalent_price, periodPricing.currency)} (comparativo)
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between text-xs text-neutral-500">
+                    <span>Prazo do 1º ciclo</span>
+                    <span>{periodPricing.commercial_deadline_days ?? "a definir"} dia(s)</span>
+                  </div>
+                  {/* Item 6.1 (reunião 2026-09-14): frequência de entrega
+                      explicada junto do total antecipado — nunca "12
+                      cópias geradas no pagamento". */}
+                  <p className="pt-1 text-[11px] text-neutral-500">
+                    {periodPricing.months > 1
+                      ? `Entrega liberada mês a mês: o 1º ciclo assim que a compra for confirmada, e mais ${periodPricing.months - 1} ciclo(s) automaticamente, um por mês, ao longo do período — sem cobrança nova.`
+                      : "Entrega liberada assim que a compra for confirmada."}
+                  </p>
+                  <p className="pt-1 text-[11px] text-neutral-400">
+                    Preço protegido durante todo o período contratado ({periodPricing.months} mês(es)) a partir da confirmação — alterações futuras de preço/desconto não afetam este contrato.
+                  </p>
+                </>
+              )}
+            </div>
+          )}
           {config?.deliverables?.length > 0 && (
             <div className="pt-1">
               <div className="text-xs font-medium text-neutral-500">Entregáveis</div>
@@ -447,7 +574,13 @@ function ProductDetail({ slug, preview, onBack, onCartChanged }: any) {
 
           {p.can_configure && (
             <div className="space-y-2 pt-2">
-              <Button size="sm" className="w-full" disabled={busy || selErrors.length > 0} onClick={addToCart}>
+              <Button
+                size="sm"
+                className="w-full"
+                disabled={busy || selErrors.length > 0 || !!statusBlockedReason}
+                onClick={addToCart}
+                title={statusBlockedReason ?? ""}
+              >
                 <ShoppingCart className="h-4 w-4" /> Adicionar à cesta
               </Button>
               <Button
@@ -527,9 +660,19 @@ function CartDrawer({ portal, cart, onClose, onChanged, onOpenProduct }: any) {
                   <button className="text-red-500" disabled={busy} onClick={() => remove(it.id)}><Trash2 className="h-4 w-4" /></button>
                 </div>
                 <div className="mt-1 text-xs text-neutral-500">
-                  qtd {it.quantity} · {it.pricing ? money(it.pricing.commercial_price, it.pricing.currency) : "recalcular"}
+                  qtd {it.quantity}
+                  {it.period ? (
+                    <> · {PERIOD_LABEL[it.period] ?? it.period} — {it.period_pricing?.available ? money(it.period_pricing.total_price, it.period_pricing.currency) : "período indisponível"}</>
+                  ) : (
+                    <> · {it.pricing ? money(it.pricing.commercial_price, it.pricing.currency) : "recalcular"}</>
+                  )}
                   {!it.current && <span className="ml-1 text-amber-600">(nova versão publicada — revise)</span>}
                 </div>
+                {it.period && it.period_pricing?.available && it.period_pricing.months > 1 && (
+                  <div className="mt-0.5 text-[11px] text-neutral-400">
+                    Entrega mês a mês — {it.period_pricing.months} ciclo(s), pagamento único antecipado.
+                  </div>
+                )}
               </li>
             ))}
           </ul>

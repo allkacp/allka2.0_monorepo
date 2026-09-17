@@ -10,7 +10,7 @@
 
 import { Prisma } from "@prisma/client";
 import { prisma } from "./prisma";
-import { CATALOG2_STATUSES, type Catalog2Status } from "./catalog2-foundation";
+import { CATALOG2_STATUSES, CATALOG2_CLIENT_VISIBLE_STATUSES, type Catalog2Status } from "./catalog2-foundation";
 import {
   CONDITION_OPERATORS,
   CONDITION_TRIGGER_SOURCES,
@@ -19,6 +19,10 @@ import {
   type EffectValidationCtx,
 } from "./catalog2-effects";
 import { computePricing, defaultSelection } from "./catalog2-pricing";
+import { logCommercialChangeEvent } from "./catalog2-commercial-change-log";
+import { recordCatalog2ProductHistory } from "./catalog2-product-history";
+import { maybeCreateCatalog2ActivationJobOnStatusTransition, notifyValidQuoteOwnersOfCommercialChange, createCatalog2NotificationJob, type Catalog2NotificationRecipientInput } from "./catalog2-notifications";
+import type { DbClient } from "./project-scope";
 
 export class Catalog2Error extends Error {
   constructor(
@@ -176,6 +180,10 @@ async function cloneVersionStructure(db: Prisma.TransactionClient, src: FullVers
         requires_review: t.requires_review,
         requires_client_approval: t.requires_client_approval,
         is_conditional: t.is_conditional,
+        // Vínculo de questionário (reunião 2026-09-14, Item 3) segue pra
+        // versão nova igual especialidade — é referência à biblioteca
+        // compartilhada, não dado próprio da versão.
+        questionnaire_id: t.questionnaire_id,
       },
     });
     taskIdByKey.set(t.key, nt.id);
@@ -433,7 +441,7 @@ export async function publishVersion(
   // "pendência comercial" — o motor já sinaliza; publicamos assim mesmo
   // porque a ata prevê "situação comercial explicitamente pendente".
 
-  return prisma.$transaction(async (tx) => {
+  const result = await prisma.$transaction(async (tx) => {
     const version = await tx.catalog2ProductVersion.findUnique({ where: { id: versionId } });
     if (!version) throw new Catalog2Error("Versão não encontrada.", 404);
     if (version.state === "publicada") throw new Catalog2Error("Esta versão já está publicada.", 409, "already_published");
@@ -451,14 +459,42 @@ export async function publishVersion(
       },
     });
     const product = await tx.catalog2Product.findUnique({ where: { id: version.product_id } });
+    const beforeStatus = product?.status ?? "em_preparacao";
+    const afterStatus = beforeStatus === "em_preparacao" ? "disponivel" : beforeStatus;
     await tx.catalog2Product.update({
       where: { id: version.product_id },
       data: {
         published_version_id: published.id,
-        status: product?.status === "em_preparacao" ? "disponivel" : product?.status,
+        status: afterStatus,
       },
     });
+    // Item 8/8.1 (reunião 2026-09-14, "Notificações dos produtos"): a 1ª
+    // publicação de um produto "em_preparacao" é uma das 2 transições reais
+    // pra "disponivel" (a outra é PATCH /products/:id/status) — registra a
+    // INTENÇÃO de anunciar (Job na mesma transação; o envio em si é
+    // assíncrono/resumível — ver catalog2-notifications.ts).
+    await maybeCreateCatalog2ActivationJobOnStatusTransition(tx, {
+      productId: version.product_id, beforeStatus, afterStatus, publishedVersionId: published.id,
+    });
     await logVersionEvent(tx, published.id, "published", actorUserId, opts.changeSummary ?? "Versão publicada.");
+    // Item 4.1 (reunião 2026-09-14, "Ajustar a proteção comercial"): só
+    // conta como ALTERAÇÃO COMERCIAL (e portanto pode ancorar a proteção de
+    // 30 dias de cotações já geradas) quando esta publicação SUBSTITUI uma
+    // versão já publicada antes — a primeira publicação de um produto nunca
+    // é uma "alteração" (não havia nada cotado ainda pra proteger).
+    if (product?.published_version_id) {
+      await logCommercialChangeEvent(tx, {
+        scope: "product_version",
+        product_id: version.product_id,
+        version_id: published.id,
+        actor_user_id: actorUserId,
+        note: "nova versão publicada substituindo a anterior",
+      });
+      // Item 8.1: a INTENÇÃO de avisar donos de propostas vigentes fica
+      // gravada NA MESMA transação da repúblicação — o envio em si é
+      // assíncrono/resumível (worker), nunca bloqueia esta requisição.
+      await notifyValidQuoteOwnersOfCommercialChange(tx, { scope: "product_version", productId: version.product_id });
+    }
     return published;
   }).catch((err) => {
     if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2002" && opts.clientActionId) {
@@ -467,27 +503,382 @@ export async function publishVersion(
     }
     throw err;
   });
+
+  return result;
 }
 
-export async function setProductStatus(productId: string, status: string) {
+// Vínculo comercial ATIVO: pedidos/projetos em andamento nascidos deste
+// produto (ProjectProduct.status PENDENTE/EM_EXECUCAO — CONCLUIDO/CANCELADO/
+// TRANSFERIDO não contam, já não representam compromisso em aberto). Item 2
+// (reunião 2026-09-14), limite comercial: inativar (arquivar) um produto com
+// vínculo ativo depende do aviso de 30 dias — outro item, ainda não
+// implementado — então até lá essa transição fica bloqueada aqui, com o
+// motivo explícito.
+const ACTIVE_PROJECT_PRODUCT_STATUSES = ["PENDENTE", "EM_EXECUCAO"];
+
+async function assertNoActiveProjectLinks(productId: string) {
+  const count = await prisma.projectProduct.count({
+    where: { catalog2_product_id: productId, status: { in: ACTIVE_PROJECT_PRODUCT_STATUSES } },
+  });
+  if (count > 0) {
+    throw new Catalog2Error(
+      `Este produto está vinculado a ${count} projeto(s)/pedido(s) em andamento — arquivamento direto bloqueado. Use "Programar inativação" (Item 5) para avisar os responsáveis e agendar a inativação em 30 dias.`,
+      409,
+      "active_project_links",
+    );
+  }
+}
+
+// Item 2.1 (reunião 2026-09-14, "fechar as lacunas de disponibilidade") —
+// "proposta vigente": a estrutura real mais próxima de uma proposta
+// comercial ligada a um produto catalog2 é a Catalog2Quote (pré-cotação:
+// preço/prazo comerciais congelados, com prazo de validade e status
+// valida/expirada/cancelada/convertida). Não existe um modelo "Proposta"
+// dedicado no catalog2 — Catalog2Quote É a proposta real do sistema; a
+// cesta (Catalog2CartItem) NUNCA conta aqui, porque não tem preço
+// congelado nem prazo de validade — é só uma lista de intenção, não uma
+// proposta. Uma quote "valida" mas já expirada por tempo (valid_until no
+// passado) não é mais vigente, mesmo que ninguém tenha chamado
+// /revalidate ainda para atualizar o campo no banco — por isso o corte é
+// por tempo, não só pelo literal salvo.
+async function assertNoActiveQuotes(productId: string) {
+  const now = new Date();
+  const quotes = await prisma.catalog2Quote.findMany({
+    where: { product_id: productId, status: "valida" },
+    select: { id: true, valid_until: true },
+  });
+  const vigentes = quotes.filter((q) => q.valid_until == null || q.valid_until >= now);
+  if (vigentes.length > 0) {
+    throw new Catalog2Error(
+      `Este produto tem ${vigentes.length} proposta(s) (pré-cotação) vigente(s) — arquivamento direto bloqueado. Use "Programar inativação" (Item 5) para avisar os responsáveis e agendar a inativação em 30 dias.`,
+      409,
+      "active_quotes",
+    );
+  }
+}
+
+async function assertNoActiveCommercialLinks(productId: string) {
+  await assertNoActiveProjectLinks(productId);
+  await assertNoActiveQuotes(productId);
+}
+
+// Item 7.1: `db` é opcional (default `prisma`) — quando o chamador precisa
+// gravar o evento de histórico ATOMICAMENTE junto desta alteração, passa o
+// `tx` da MESMA transação; o padrão continua funcionando sem transação pra
+// quem não precisa disso.
+export async function setProductStatus(productId: string, status: string, db: DbClient = prisma) {
   if (!CATALOG2_STATUSES.includes(status as Catalog2Status)) {
     throw new Catalog2Error(`Situação inválida: ${status}`, 400, "invalid_status");
   }
   const product = await prisma.catalog2Product.findUnique({ where: { id: productId }, select: { id: true, published_version_id: true } });
   if (!product) throw new Catalog2Error("Produto não encontrado.", 404);
-  if ((status === "disponivel" || status === "temporariamente_inativo") && !product.published_version_id) {
-    throw new Catalog2Error("O produto precisa de uma versão publicada antes de ficar disponível.", 409, "needs_published_version");
+  // Todo status visível no catálogo do cliente (disponível/pausado/
+  // pré-lançamento/esgotado) exige versão publicada — não há o que mostrar
+  // sem isso. em_preparacao e arquivado não exigem.
+  if (CATALOG2_CLIENT_VISIBLE_STATUSES.includes(status as Catalog2Status) && !product.published_version_id) {
+    throw new Catalog2Error("O produto precisa de uma versão publicada antes de ficar visível no catálogo.", 409, "needs_published_version");
   }
-  return prisma.catalog2Product.update({ where: { id: productId }, data: { status } });
+  if (status === "arquivado") {
+    await assertNoActiveCommercialLinks(productId);
+  }
+  return db.catalog2Product.update({ where: { id: productId }, data: { status } });
 }
 
-export async function archiveProduct(productId: string, actorUserId: string) {
+export async function archiveProduct(productId: string, actorUserId: string, db: DbClient = prisma) {
   const product = await prisma.catalog2Product.findUnique({ where: { id: productId } });
   if (!product) throw new Catalog2Error("Produto não encontrado.", 404);
-  return prisma.catalog2Product.update({
+  await assertNoActiveCommercialLinks(productId);
+  return db.catalog2Product.update({
     where: { id: productId },
     data: { status: "arquivado", archived_at: new Date(), archived_by_user_id: actorUserId },
   });
+}
+
+// ── Item 5 (reunião 2026-09-14, "Inativação programada de produtos") ────
+//
+// Substitui, para quem tem vínculo ativo, o bloqueio direto acima (que
+// continua existindo — arquivar direto sem nenhum vínculo ativo continua
+// instantâneo) por um fluxo de AVISO + PRAZO: o admin agenda agora,
+// clientes/responsáveis são notificados, e só depois de 30 dias o produto
+// vira "arquivado" de verdade. Nunca mexe em ProjectProduct/Payment/
+// ProjectTask — só no PRÓPRIO Catalog2Product e nas notificações.
+
+export const CATALOG2_INACTIVATION_NOTICE_DAYS = 30;
+
+export interface InactivationState {
+  isScheduled: boolean;
+  isEffective: boolean;
+  scheduledAt: Date | null;
+  effectiveAt: Date | null;
+}
+
+/**
+ * Estado da inativação programada, calculado AO VIVO contra a data atual —
+ * nunca depende do agendador já ter processado. É isto que garante a regra
+ * "mesmo se o agendador atrasar, a validação da contratação respeita a data
+ * já vencida" (Item 5, regra 4): `isEffective` vira `true` no instante exato
+ * em que `now >= effectiveAt`, com ou sem o job ter rodado.
+ */
+export function computeInactivationState(product: { inactivation_scheduled_at: Date | null; inactivation_effective_at: Date | null }): InactivationState {
+  const scheduledAt = product.inactivation_scheduled_at ?? null;
+  const effectiveAt = product.inactivation_effective_at ?? null;
+  const isEffective = !!effectiveAt && new Date() >= effectiveAt;
+  return { isScheduled: !!scheduledAt, isEffective, scheduledAt, effectiveAt };
+}
+
+async function affectedProjectsForInactivation(productId: string) {
+  const rows = await prisma.projectProduct.findMany({
+    where: { catalog2_product_id: productId, status: { in: ACTIVE_PROJECT_PRODUCT_STATUSES } },
+    select: {
+      id: true,
+      status: true,
+      product_name_snapshot: true,
+      preco_final_cliente_snapshot: true,
+      // Item 8 (reunião 2026-09-14, "Notificações dos produtos"):
+      // `admin_responsible_user_id` é o admin INTERNO responsável pelo
+      // projeto — avisar só ele pode não alcançar quem de fato contratou.
+      // `created_by_user_id` é a autoria real (sempre resolvida do token
+      // autenticado, nunca aceita do payload — ver comentário do campo em
+      // schema.prisma) — o cliente/agência real por trás do projeto.
+      project: { select: { id: true, title: true, project_code: true, admin_responsible_user_id: true, created_by_user_id: true } },
+    },
+  });
+  const byProject = new Map<string, { project_id: string; title: string; project_code: string | null; admin_responsible_user_id: string | null; created_by_user_id: string | null; items: Array<{ project_product_id: string; name: string; price: number | null; status: string }> }>();
+  for (const pp of rows) {
+    if (!byProject.has(pp.project.id)) {
+      byProject.set(pp.project.id, {
+        project_id: pp.project.id,
+        title: pp.project.title,
+        project_code: pp.project.project_code,
+        admin_responsible_user_id: pp.project.admin_responsible_user_id,
+        created_by_user_id: pp.project.created_by_user_id,
+        items: [],
+      });
+    }
+    byProject.get(pp.project.id)!.items.push({
+      project_product_id: pp.id,
+      name: pp.product_name_snapshot,
+      price: pp.preco_final_cliente_snapshot,
+      status: pp.status,
+    });
+  }
+  return [...byProject.values()];
+}
+
+async function affectedQuotesForInactivation(productId: string) {
+  const now = new Date();
+  const quotes = await prisma.catalog2Quote.findMany({
+    where: { product_id: productId, status: "valida" },
+    select: { id: true, user_id: true, account_kind: true, account_id: true, commercial_price: true, currency: true, valid_until: true },
+  });
+  return quotes.filter((q) => q.valid_until == null || q.valid_until >= now);
+}
+
+/** Prévia (somente leitura) do que a ação de inativar afetaria — usada pela
+ * tela de confirmação no Cadastro de Produtos antes de o admin confirmar. */
+export async function previewInactivation(productId: string) {
+  const product = await prisma.catalog2Product.findUnique({ where: { id: productId } });
+  if (!product) throw new Catalog2Error("Produto não encontrado.", 404);
+  if (product.status === "arquivado") throw new Catalog2Error("Este produto já está inativo.", 409, "already_archived");
+
+  const [affectedProjects, affectedQuotes] = await Promise.all([
+    affectedProjectsForInactivation(productId),
+    affectedQuotesForInactivation(productId),
+  ]);
+
+  const state = computeInactivationState(product);
+  const noticeDate = state.scheduledAt ?? new Date();
+  const effectiveDate = state.effectiveAt ?? new Date(noticeDate.getTime() + CATALOG2_INACTIVATION_NOTICE_DAYS * 24 * 3600 * 1000);
+
+  return {
+    product_id: product.id,
+    already_scheduled: state.isScheduled,
+    notice_date: noticeDate,
+    effective_date: effectiveDate,
+    affected_projects: affectedProjects,
+    affected_quotes: affectedQuotes.map((q) => ({ id: q.id, commercial_price: q.commercial_price, currency: q.currency, valid_until: q.valid_until, account_kind: q.account_kind })),
+    consequences: [
+      "A partir da confirmação, novas cotações e novos aditivos deste produto ficam bloqueados imediatamente — mesmo antes da data efetiva.",
+      "Propostas (cotações) já vigentes continuam válidas — respeitando sua própria validade e a proteção de preço de 30 dias — até a data efetiva da inativação, nunca depois.",
+      `Em ${CATALOG2_INACTIVATION_NOTICE_DAYS} dias (na data efetiva), o produto fica "Inativo": some do catálogo e nenhuma cotação, aditivo ou proposta antiga pode mais virar contratação, mesmo que o processamento automático atrase.`,
+      "Projetos, tarefas e pagamentos já contratados não são alterados por esta ação.",
+    ],
+  };
+}
+
+// Item 8 (reunião 2026-09-14, "Notificações dos produtos"): 3 fases —
+// "scheduled"/"processed" já existiam (Item 5); "cancelled" é nova (o
+// agendamento nunca avisava ninguém ao ser cancelado). Nenhuma fase promete
+// desconto/compensação — a compensação financeira do Item 5 continua
+// pendente, e o texto nunca sugere o contrário.
+// Item 8.1: a INTENÇÃO (Job + destinatários já resolvidos e renderizados)
+// é gravada dentro do `db` (tx) do chamador — SEMPRE a mesma transação da
+// alteração real (agendar/cancelar/efetivar) — nunca um efeito colateral
+// solto depois do commit. O envio em si é assíncrono/resumível (worker).
+async function notifyInactivationRecipients(
+  db: DbClient,
+  product: { id: string; internal_name: string },
+  opts: { effectiveAt: Date | null; phase: "scheduled" | "processed" | "cancelled" },
+) {
+  const [affectedProjects, affectedQuotes] = await Promise.all([
+    affectedProjectsForInactivation(product.id),
+    affectedQuotesForInactivation(product.id),
+  ]);
+  // Item 8: dois públicos DISTINTOS, cada um com seu próprio destino —
+  // nunca manda um cliente pra uma tela administrativa (e vice-versa),
+  // corrigindo uma lacuna do Item 5 (o `action_url` era sempre `/admin/...`
+  // mesmo pra destinatários clientes).
+  const adminRecipients = new Set<string>();
+  const clientRecipients = new Set<string>();
+  for (const p of affectedProjects) {
+    if (p.admin_responsible_user_id) adminRecipients.add(p.admin_responsible_user_id);
+    if (p.created_by_user_id) clientRecipients.add(p.created_by_user_id);
+  }
+  for (const q of affectedQuotes) clientRecipients.add(q.user_id);
+  // Nunca notifica a mesma pessoa duas vezes com destinos diferentes — se
+  // por acaso o mesmo user_id aparecer nos dois papéis (ex.: admin que
+  // também é dono de uma cotação de teste), o link administrativo prevalece.
+  for (const id of adminRecipients) clientRecipients.delete(id);
+
+  const dateLabel = opts.effectiveAt ? opts.effectiveAt.toISOString().slice(0, 10) : null;
+  const eventType =
+    opts.phase === "scheduled" ? ("inactivation_scheduled" as const)
+    : opts.phase === "processed" ? ("inactivation_processed" as const)
+    : ("inactivation_cancelled" as const);
+  const type =
+    opts.phase === "scheduled" ? "catalog2.product_inactivation_scheduled"
+    : opts.phase === "processed" ? "catalog2.product_inactivation_processed"
+    : "catalog2.product_inactivation_cancelled";
+  const title =
+    opts.phase === "scheduled" ? "Inativação programada — Catálogo 2.0"
+    : opts.phase === "processed" ? "Produto inativado — Catálogo 2.0"
+    : "Inativação cancelada — Catálogo 2.0";
+  const message =
+    opts.phase === "scheduled"
+      ? `O produto "${product.internal_name}" foi programado para inativação em ${dateLabel}. Propostas e projetos já vinculados continuam válidos até essa data.`
+      : opts.phase === "processed"
+      ? `O produto "${product.internal_name}" foi inativado em ${dateLabel} — não pode mais ser contratado (cotações, aditivos ou propostas antigas incluídos).`
+      : `A inativação programada do produto "${product.internal_name}" foi cancelada — o produto volta a ficar contratável normalmente.`;
+
+  const recipients: Catalog2NotificationRecipientInput[] = [
+    ...[...adminRecipients].map((userId): Catalog2NotificationRecipientInput => ({
+      userId, type, title, message, severity: "warning", category: "alerta", actionUrl: `/admin/produtos?produto=${product.id}`,
+    })),
+    ...[...clientRecipients].map((userId): Catalog2NotificationRecipientInput => ({
+      userId, type, title, message, severity: "warning", category: "alerta", actionUrl: "/dashboard",
+    })),
+  ];
+  if (recipients.length === 0) return 0;
+  await createCatalog2NotificationJob(db, { eventType, entityType: "catalog2_product", entityId: product.id, recipients });
+  return recipients.length;
+}
+
+/**
+ * Confirma o agendamento — idempotente: reexecutar (duplo clique, retry)
+ * NUNCA reancora o prazo nem renotifica; devolve o agendamento já existente.
+ * A intenção de notificar os responsáveis pelos projetos e cotações
+ * afetados é gravada aqui mesmo (Job, ver catalog2-notifications.ts),
+ * dentro da mesma transação — reaproveitando o SystemAlert já usado em
+ * todo o resto do catalog2, nunca um canal novo; o envio em si é
+ * assíncrono (worker).
+ */
+export async function scheduleInactivation(productId: string, actorUserId: string, note?: string, db: DbClient = prisma) {
+  const product = await prisma.catalog2Product.findUnique({ where: { id: productId } });
+  if (!product) throw new Catalog2Error("Produto não encontrado.", 404);
+  if (product.status === "arquivado") throw new Catalog2Error("Este produto já está inativo.", 409, "already_archived");
+
+  if (product.inactivation_scheduled_at) {
+    return { already_scheduled: true, product };
+  }
+
+  const scheduledAt = new Date();
+  const effectiveAt = new Date(scheduledAt.getTime() + CATALOG2_INACTIVATION_NOTICE_DAYS * 24 * 3600 * 1000);
+  const updated = await db.catalog2Product.update({
+    where: { id: productId },
+    data: {
+      inactivation_scheduled_at: scheduledAt,
+      inactivation_effective_at: effectiveAt,
+      inactivation_scheduled_by_user_id: actorUserId,
+      inactivation_note: note ?? null,
+      inactivation_cancelled_at: null,
+    },
+  });
+
+  // Item 8.1: a INTENÇÃO de notificar (Job + destinatários) é gravada no
+  // MESMO `db` (tx do chamador, quando houver) da alteração real — uma
+  // operação revertida nunca deixa um Job pra trás. O ENVIO em si continua
+  // assíncrono (worker), nunca bloqueia esta chamada.
+  await notifyInactivationRecipients(db, updated, { effectiveAt, phase: "scheduled" });
+
+  return { already_scheduled: false, product: updated };
+}
+
+/** Cancela um agendamento AINDA NÃO efetivado — nunca depois que o job já processou. */
+export async function cancelScheduledInactivation(productId: string, db: DbClient = prisma) {
+  const product = await prisma.catalog2Product.findUnique({ where: { id: productId } });
+  if (!product) throw new Catalog2Error("Produto não encontrado.", 404);
+  if (!product.inactivation_scheduled_at) throw new Catalog2Error("Este produto não tem inativação agendada.", 409, "not_scheduled");
+  if (product.inactivation_processed_at) throw new Catalog2Error("A inativação já foi efetivada — não é mais possível cancelar.", 409, "already_processed");
+  const updated = await db.catalog2Product.update({
+    where: { id: productId },
+    data: {
+      inactivation_scheduled_at: null,
+      inactivation_effective_at: null,
+      inactivation_scheduled_by_user_id: null,
+      inactivation_note: null,
+      inactivation_cancelled_at: new Date(),
+    },
+  });
+  // Item 8/8.1: "ao efetivar OU CANCELAR o agendamento, atualize os
+  // interessados" — o Item 5 nunca avisava ninguém no cancelamento;
+  // fechado aqui, mesmos destinatários (responsável interno + cliente/
+  // agência do projeto + donos de cotações vigentes). Intenção gravada no
+  // MESMO `db` (tx do chamador) desta alteração.
+  await notifyInactivationRecipients(db, updated, { effectiveAt: null, phase: "cancelled" });
+  return updated;
+}
+
+/**
+ * Processa TODOS os produtos com inativação vencida — chamado pelo job
+ * agendado (ver catalog2-inactivation-scheduler.ts). Idempotente por
+ * produto: guarda de corrida dentro da transação (releitura +
+ * `inactivation_processed_at` nulo) garante que reprocessar (reexecução do
+ * job, atraso, restart) nunca vira o status duas vezes nem renotifica.
+ */
+export async function processDueInactivations(): Promise<{ processed: string[] }> {
+  const due = await prisma.catalog2Product.findMany({
+    where: { inactivation_effective_at: { lte: new Date() }, inactivation_processed_at: null, status: { not: "arquivado" } },
+    select: { id: true },
+  });
+  const processed: string[] = [];
+  for (const row of due) {
+    const result = await prisma.$transaction(async (tx) => {
+      const fresh = await tx.catalog2Product.findUnique({ where: { id: row.id } });
+      if (!fresh || fresh.inactivation_processed_at || fresh.status === "arquivado" || !fresh.inactivation_effective_at || fresh.inactivation_effective_at > new Date()) {
+        return null; // já processado por outra corrida, ou não está mais devido
+      }
+      const now = new Date();
+      const updated = await tx.catalog2Product.update({
+        where: { id: row.id },
+        data: { status: "arquivado", archived_at: now, inactivation_processed_at: now },
+      });
+      await recordCatalog2ProductHistory(tx, {
+        productId: updated.id,
+        eventType: "inactivation_processed",
+        description: "Produto inativado — data efetiva alcançada, contratação bloqueada.",
+        actorUserId: null,
+        actorKind: "system",
+      });
+      // Item 8.1: intenção gravada NA MESMA transação que efetiva a
+      // inativação — nunca um efeito colateral solto depois do commit.
+      await notifyInactivationRecipients(tx, updated, { effectiveAt: updated.inactivation_effective_at ?? new Date(), phase: "processed" });
+      return updated;
+    });
+    if (result) {
+      processed.push(result.id);
+    }
+  }
+  return { processed };
 }
 
 // ── "Novo por 3 meses" — DERIVADO da publicação ─────────────────────────
@@ -514,7 +905,7 @@ export async function getProductDetail(productId: string) {
           conditions: { orderBy: { sort_order: "asc" } },
           tasks: {
             orderBy: { sort_order: "asc" },
-            include: { steps: { orderBy: { sort_order: "asc" } }, specialty: true, ai: true, dependencies: true },
+            include: { steps: { orderBy: { sort_order: "asc" } }, specialty: true, ai: true, dependencies: true, questionnaire: { include: { questions: { orderBy: { sort_order: "asc" } } } } },
           },
         },
       },
@@ -609,6 +1000,16 @@ export async function getProductDetail(productId: string) {
         effort_is_provisional: t.effort_is_provisional,
         effort_source: t.effort_source,
         specialty: t.specialty ? { id: t.specialty.id, key: t.specialty.key, name: t.specialty.name, max_hourly_rate: t.specialty.max_hourly_rate } : null,
+        // Vínculo de questionário (reunião 2026-09-14, Item 3) — referência à
+        // biblioteca compartilhada, nunca uma cópia das perguntas.
+        questionnaire: t.questionnaire
+          ? {
+              id: t.questionnaire.id,
+              name: t.questionnaire.name,
+              description: t.questionnaire.description,
+              questions: t.questionnaire.questions.map((q) => ({ id: q.id, key: q.key, label: q.label, is_required: q.is_required, sort_order: q.sort_order })),
+            }
+          : null,
         depends_on: t.dependencies.map((d) => d.depends_on_task_id),
         ai: t.ai
           ? {

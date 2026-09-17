@@ -339,6 +339,47 @@ describe("Novo catálogo — fundação", () => {
     assert.equal(susp.status, 200);
   });
 
+  // Item 2 (reunião 2026-09-14, "Status e disponibilidade dos produtos"):
+  // pré-lançamento e esgotado temporariamente são status NOVOS — mesma
+  // exigência de versão publicada que disponivel/pausado já tinham (não faz
+  // sentido aparecer visível no catálogo sem conteúdo real pra mostrar).
+  it("status novos (pré-lançamento/esgotado): exigem versão publicada, igual aos demais status visíveis no catálogo", async () => {
+    const master = await mkUser("master");
+    const p = await createProduct({ internal_name: "[TESTE] Estados novos" }, master.id);
+    catProducts.push(p.id);
+
+    const blockedPre = await api(`/api/admin/catalog2/products/${p.id}/status`, { method: "PATCH", token: tokenFor(master), body: { status: "pre_lancamento" } });
+    assert.equal(blockedPre.status, 409);
+    assert.equal(blockedPre.json.code, "needs_published_version");
+
+    const blockedEsg = await api(`/api/admin/catalog2/products/${p.id}/status`, { method: "PATCH", token: tokenFor(master), body: { status: "esgotado_temporariamente" } });
+    assert.equal(blockedEsg.status, 409);
+
+    const v1 = await prisma.catalog2ProductVersion.findFirstOrThrow({ where: { product_id: p.id } });
+    await publishVersion(v1.id, master.id, { force: true });
+
+    const okPre = await api(`/api/admin/catalog2/products/${p.id}/status`, { method: "PATCH", token: tokenFor(master), body: { status: "pre_lancamento" } });
+    assert.equal(okPre.status, 200);
+    assert.equal(okPre.json.status, "pre_lancamento");
+
+    const okEsg = await api(`/api/admin/catalog2/products/${p.id}/status`, { method: "PATCH", token: tokenFor(master), body: { status: "esgotado_temporariamente" } });
+    assert.equal(okEsg.status, 200);
+    assert.equal(okEsg.json.status, "esgotado_temporariamente");
+
+    // /overview e /readiness refletem o novo status com o rótulo certo.
+    const readiness = await api(`/api/admin/catalog2/products/${p.id}/readiness`, { token: tokenFor(master) });
+    assert.equal(readiness.status, 200);
+    assert.equal(readiness.json.status, "esgotado_temporariamente");
+    assert.equal(readiness.json.status_label, "Esgotado temporariamente");
+    // visível no catálogo mesmo esgotado, mas nunca contratável.
+    assert.equal(readiness.json.client_visible, true);
+    assert.equal(readiness.json.client_contractable, false);
+
+    const invalid = await api(`/api/admin/catalog2/products/${p.id}/status`, { method: "PATCH", token: tokenFor(master), body: { status: "esgotado" } });
+    assert.equal(invalid.status, 400);
+    assert.equal(invalid.json.code, "invalid_status");
+  });
+
   it("não existe versão rascunho duplicada por produto", async () => {
     const master = await mkUser("master");
     const p = await createProduct({ internal_name: "[TESTE] Um rascunho" }, master.id);

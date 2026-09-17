@@ -266,4 +266,375 @@ describe("Construtor: regras, prazos e precificação", () => {
     assert.deepEqual(a.lines.final_price, b.lines.final_price);
     assert.equal(a.quantity, 3);
   });
+
+  // Item 3 (reunião 2026-09-14, "Cadastro integrado do produto") — daqui pra
+  // baixo: tarefas reutilizáveis, especialidade nova durante a tarefa, e
+  // questionário (biblioteca compartilhada, vínculo por referência).
+  describe("Cadastro integrado do produto (Item 3)", () => {
+    it("questionário: criar, listar, editar, adicionar/editar/remover perguntas, reordenar", async () => {
+      const created = await api("/api/admin/catalog2/questionnaires", { method: "POST", token: TOKEN, body: { name: "[TESTE] Briefing básico", description: "desc" } });
+      assert.equal(created.status, 201);
+      assert.deepEqual(created.json.questions, []);
+      const qId = created.json.id;
+
+      const list = await api("/api/admin/catalog2/questionnaires", { token: TOKEN });
+      assert.equal(list.status, 200);
+      assert.ok(list.json.data.some((q: any) => q.id === qId && q.question_count === 0));
+
+      const q1 = await api(`/api/admin/catalog2/questionnaires/${qId}/questions`, { method: "POST", token: TOKEN, body: { key: "objetivo", label: "Qual o objetivo?", is_required: true } });
+      assert.equal(q1.status, 201);
+      const q2 = await api(`/api/admin/catalog2/questionnaires/${qId}/questions`, { method: "POST", token: TOKEN, body: { key: "publico", label: "Qual o público?", is_required: false } });
+      assert.equal(q2.status, 201);
+
+      const detail = await api(`/api/admin/catalog2/questionnaires/${qId}`, { token: TOKEN });
+      assert.equal(detail.json.questions.length, 2);
+      assert.equal(detail.json.questions[0].is_required, true);
+      assert.equal(detail.json.questions[1].is_required, false);
+
+      // editar pergunta
+      const upd = await api(`/api/admin/catalog2/questions/${q1.json.id}`, { method: "PUT", token: TOKEN, body: { label: "Qual é o objetivo da campanha?" } });
+      assert.equal(upd.status, 200);
+      assert.equal(upd.json.label, "Qual é o objetivo da campanha?");
+
+      // reordenar (inverte)
+      const reorder = await api(`/api/admin/catalog2/questionnaires/${qId}/questions/order`, { method: "PUT", token: TOKEN, body: { order: [q2.json.id, q1.json.id] } });
+      assert.equal(reorder.status, 200);
+      const afterReorder = await api(`/api/admin/catalog2/questionnaires/${qId}`, { token: TOKEN });
+      assert.equal(afterReorder.json.questions[0].id, q2.json.id);
+
+      // remover pergunta
+      const del = await api(`/api/admin/catalog2/questions/${q2.json.id}`, { method: "DELETE", token: TOKEN });
+      assert.equal(del.status, 200);
+      const afterDel = await api(`/api/admin/catalog2/questionnaires/${qId}`, { token: TOKEN });
+      assert.equal(afterDel.json.questions.length, 1);
+
+      // editar metadado do questionário
+      const editQ = await api(`/api/admin/catalog2/questionnaires/${qId}`, { method: "PUT", token: TOKEN, body: { name: "[TESTE] Briefing renomeado" } });
+      assert.equal(editQ.status, 200);
+      assert.equal(editQ.json.name, "[TESTE] Briefing renomeado");
+    });
+
+    it("vincular questionário a uma tarefa é REFERÊNCIA, não cópia: editar o questionário afeta as DUAS tarefas que o vinculam", async () => {
+      const q = await api("/api/admin/catalog2/questionnaires", { method: "POST", token: TOKEN, body: { name: "[TESTE] Compartilhado" } });
+      const qId = q.json.id;
+      await api(`/api/admin/catalog2/questionnaires/${qId}/questions`, { method: "POST", token: TOKEN, body: { key: "p1", label: "Pergunta original" } });
+
+      const pA = await api("/api/admin/catalog2/products", { method: "POST", token: TOKEN, body: { internal_name: `[TESTE LOCAL] QA ${crypto.randomBytes(3).toString("hex")}` } });
+      products.push(pA.json.id);
+      const vA = pA.json.versions[0].id;
+      const taskA = await api(`/api/admin/catalog2/versions/${vA}/tasks`, { method: "POST", token: TOKEN, body: { key: "ta", name: "Tarefa A" } });
+
+      const pB = await api("/api/admin/catalog2/products", { method: "POST", token: TOKEN, body: { internal_name: `[TESTE LOCAL] QB ${crypto.randomBytes(3).toString("hex")}` } });
+      products.push(pB.json.id);
+      const vB = pB.json.versions[0].id;
+      const taskB = await api(`/api/admin/catalog2/versions/${vB}/tasks`, { method: "POST", token: TOKEN, body: { key: "tb", name: "Tarefa B" } });
+
+      const linkA = await api(`/api/admin/catalog2/tasks/${taskA.json.id}/questionnaire`, { method: "PUT", token: TOKEN, body: { questionnaire_id: qId } });
+      assert.equal(linkA.status, 200);
+      const linkB = await api(`/api/admin/catalog2/tasks/${taskB.json.id}/questionnaire`, { method: "PUT", token: TOKEN, body: { questionnaire_id: qId } });
+      assert.equal(linkB.status, 200);
+
+      // Vínculo confirmado: as duas tarefas apontam pro MESMO registro.
+      const detailA = await api(`/api/admin/catalog2/products/${pA.json.id}`, { token: TOKEN });
+      const detailB = await api(`/api/admin/catalog2/products/${pB.json.id}`, { token: TOKEN });
+      const qOnA = detailA.json.versions[0].tasks.find((t: any) => t.id === taskA.json.id).questionnaire;
+      const qOnB = detailB.json.versions[0].tasks.find((t: any) => t.id === taskB.json.id).questionnaire;
+      assert.equal(qOnA.id, qId);
+      assert.equal(qOnB.id, qId);
+      assert.equal(qOnA.questions[0].label, "Pergunta original");
+      assert.equal(qOnB.questions[0].label, "Pergunta original");
+
+      // Item 3.1: exatamente PORQUE é vínculo (2 tarefas o usam agora), editar
+      // a pergunta pela rota genérica direto no registro compartilhado é
+      // bloqueado — a proteção do conteúdo compartilhado é o assunto do
+      // Item 3.1, testada em detalhe (com cópia automática) no describe
+      // "Edição e preservação dos questionários" logo abaixo.
+      const questionId = (await api(`/api/admin/catalog2/questionnaires/${qId}`, { token: TOKEN })).json.questions[0].id;
+      const directEdit = await api(`/api/admin/catalog2/questions/${questionId}`, { method: "PUT", token: TOKEN, body: { label: "Pergunta editada" } });
+      assert.equal(directEdit.status, 409);
+      assert.equal(directEdit.json.code, "questionnaire_shared_use_task_edit");
+
+      // desvincular de A não afeta B
+      await api(`/api/admin/catalog2/tasks/${taskA.json.id}/questionnaire`, { method: "PUT", token: TOKEN, body: { questionnaire_id: null } });
+      const detailA2 = await api(`/api/admin/catalog2/products/${pA.json.id}`, { token: TOKEN });
+      const detailB2 = await api(`/api/admin/catalog2/products/${pB.json.id}`, { token: TOKEN });
+      assert.equal(detailA2.json.versions[0].tasks.find((t: any) => t.id === taskA.json.id).questionnaire, null);
+      assert.ok(detailB2.json.versions[0].tasks.find((t: any) => t.id === taskB.json.id).questionnaire, "B continua vinculado");
+    });
+
+    it("vincular questionário numa versão PUBLICADA é bloqueado (versão imutável)", async () => {
+      const q = await api("/api/admin/catalog2/questionnaires", { method: "POST", token: TOKEN, body: { name: "[TESTE] X" } });
+      const p = await api("/api/admin/catalog2/products", {
+        method: "POST", token: TOKEN,
+        body: { internal_name: `[TESTE LOCAL] Pub questionário ${crypto.randomBytes(3).toString("hex")}`, pillar_id: (await prisma.catalog2Pillar.findFirstOrThrow()).id, category_id: (await prisma.catalog2Category.findFirstOrThrow()).id, four_f_ids: [(await prisma.catalog2FourF.findFirstOrThrow()).id] },
+      });
+      products.push(p.json.id);
+      const v1 = p.json.versions[0].id;
+      await api(`/api/admin/catalog2/versions/${v1}`, { method: "PUT", token: TOKEN, body: { full_description: "desc" } });
+      const spec = await prisma.catalog2Specialty.findFirstOrThrow();
+      await prisma.catalog2Specialty.update({ where: { id: spec.id }, data: { max_hourly_rate: 100 } });
+      const task = await api(`/api/admin/catalog2/versions/${v1}/tasks`, { method: "POST", token: TOKEN, body: { key: "t", name: "T", specialty_id: spec.id, estimated_minutes: 60 } });
+      await api(`/api/admin/catalog2/versions/${v1}/publish`, { method: "POST", token: TOKEN, body: { client_action_id: `pub-q-${crypto.randomBytes(4).toString("hex")}` } });
+
+      const blocked = await api(`/api/admin/catalog2/tasks/${task.json.id}/questionnaire`, { method: "PUT", token: TOKEN, body: { questionnaire_id: q.json.id } });
+      assert.equal(blocked.status, 409);
+      assert.equal(blocked.json.code, "version_published_immutable");
+    });
+
+    it("especialidade nova criada durante a configuração da tarefa (POST /specialties) fica disponível e pode ser usada numa tarefa", async () => {
+      const key = `copywriter_${crypto.randomBytes(3).toString("hex")}`;
+      const created = await api("/api/admin/catalog2/specialties", { method: "POST", token: TOKEN, body: { key, name: "Copywriter de teste", max_hourly_rate: 80 } });
+      assert.equal(created.status, 201);
+      const list = await api("/api/admin/catalog2/specialties", { token: TOKEN });
+      assert.ok(list.json.data.some((s: any) => s.id === created.json.id));
+
+      const p = await api("/api/admin/catalog2/products", { method: "POST", token: TOKEN, body: { internal_name: `[TESTE LOCAL] Esp ${crypto.randomBytes(3).toString("hex")}` } });
+      products.push(p.json.id);
+      const v1 = p.json.versions[0].id;
+      const task = await api(`/api/admin/catalog2/versions/${v1}/tasks`, { method: "POST", token: TOKEN, body: { key: "t", name: "T", specialty_id: created.json.id, estimated_minutes: 30 } });
+      assert.equal(task.status, 201);
+      const detail = await api(`/api/admin/catalog2/products/${p.json.id}`, { token: TOKEN });
+      assert.equal(detail.json.versions[0].tasks[0].specialty.id, created.json.id);
+    });
+
+    it("selecionar tarefa existente (GET /tasks/search + POST .../tasks/import): COPIA a tarefa (com etapas) pra outra versão, nunca altera o produto de origem", async () => {
+      const pSrc = await api("/api/admin/catalog2/products", { method: "POST", token: TOKEN, body: { internal_name: `[TESTE LOCAL] Origem ${crypto.randomBytes(3).toString("hex")}` } });
+      products.push(pSrc.json.id);
+      const vSrc = pSrc.json.versions[0].id;
+      const spec = await prisma.catalog2Specialty.findFirstOrThrow();
+      const srcTask = await api(`/api/admin/catalog2/versions/${vSrc}/tasks`, { method: "POST", token: TOKEN, body: { key: "revisao-seo", name: "Revisão de SEO", specialty_id: spec.id, estimated_minutes: 45 } });
+      await api(`/api/admin/catalog2/tasks/${srcTask.json.id}/steps`, { method: "POST", token: TOKEN, body: { key: "s1", name: "Checar meta tags", estimated_minutes: 15 } });
+
+      const search = await api(`/api/admin/catalog2/tasks/search?q=SEO`, { token: TOKEN });
+      assert.equal(search.status, 200);
+      const found = search.json.data.find((t: any) => t.id === srcTask.json.id);
+      assert.ok(found, "tarefa de origem aparece na busca");
+      assert.equal(found.step_count, 1);
+      assert.equal(found.product_name, pSrc.json.internal_name);
+
+      const pDest = await api("/api/admin/catalog2/products", { method: "POST", token: TOKEN, body: { internal_name: `[TESTE LOCAL] Destino ${crypto.randomBytes(3).toString("hex")}` } });
+      products.push(pDest.json.id);
+      const vDest = pDest.json.versions[0].id;
+      const imp = await api(`/api/admin/catalog2/versions/${vDest}/tasks/import`, { method: "POST", token: TOKEN, body: { source_task_id: srcTask.json.id } });
+      assert.equal(imp.status, 201, JSON.stringify(imp.json));
+
+      const destDetail = await api(`/api/admin/catalog2/products/${pDest.json.id}`, { token: TOKEN });
+      const importedTask = destDetail.json.versions[0].tasks.find((t: any) => t.id === imp.json.task_id);
+      assert.ok(importedTask, "tarefa copiada aparece na versão de destino");
+      assert.equal(importedTask.name, "Revisão de SEO");
+      assert.equal(importedTask.steps.length, 1);
+      assert.equal(importedTask.steps[0].name, "Checar meta tags");
+
+      // editar a CÓPIA nunca deve alterar a ORIGEM.
+      await api(`/api/admin/catalog2/tasks/${importedTask.id}`, { method: "PUT", token: TOKEN, body: { name: "Revisão de SEO (editada no destino)" } });
+      const srcDetailAfter = await api(`/api/admin/catalog2/products/${pSrc.json.id}`, { token: TOKEN });
+      const srcTaskAfter = srcDetailAfter.json.versions[0].tasks.find((t: any) => t.id === srcTask.json.id);
+      assert.equal(srcTaskAfter.name, "Revisão de SEO", "produto de origem intacto");
+      assert.equal(srcTaskAfter.steps.length, 1, "etapas de origem intactas");
+    });
+
+    it("importar tarefa numa versão PUBLICADA (destino) é bloqueado (versão imutável)", async () => {
+      const pSrc = await api("/api/admin/catalog2/products", { method: "POST", token: TOKEN, body: { internal_name: `[TESTE LOCAL] Origem2 ${crypto.randomBytes(3).toString("hex")}` } });
+      products.push(pSrc.json.id);
+      const srcTask = await api(`/api/admin/catalog2/versions/${pSrc.json.versions[0].id}/tasks`, { method: "POST", token: TOKEN, body: { key: "t", name: "T" } });
+
+      const pDest = await api("/api/admin/catalog2/products", {
+        method: "POST", token: TOKEN,
+        body: { internal_name: `[TESTE LOCAL] Destino pub ${crypto.randomBytes(3).toString("hex")}`, pillar_id: (await prisma.catalog2Pillar.findFirstOrThrow()).id, category_id: (await prisma.catalog2Category.findFirstOrThrow()).id, four_f_ids: [(await prisma.catalog2FourF.findFirstOrThrow()).id] },
+      });
+      products.push(pDest.json.id);
+      const vDest = pDest.json.versions[0].id;
+      await api(`/api/admin/catalog2/versions/${vDest}`, { method: "PUT", token: TOKEN, body: { full_description: "desc" } });
+      const spec = await prisma.catalog2Specialty.findFirstOrThrow();
+      await prisma.catalog2Specialty.update({ where: { id: spec.id }, data: { max_hourly_rate: 100 } });
+      await api(`/api/admin/catalog2/versions/${vDest}/tasks`, { method: "POST", token: TOKEN, body: { key: "t2", name: "T2", specialty_id: spec.id, estimated_minutes: 60 } });
+      await api(`/api/admin/catalog2/versions/${vDest}/publish`, { method: "POST", token: TOKEN, body: { client_action_id: `pub-imp-${crypto.randomBytes(4).toString("hex")}` } });
+
+      const blocked = await api(`/api/admin/catalog2/versions/${vDest}/tasks/import`, { method: "POST", token: TOKEN, body: { source_task_id: srcTask.json.id } });
+      assert.equal(blocked.status, 409);
+      assert.equal(blocked.json.code, "version_published_immutable");
+    });
+
+    it("admin comum (não Admin Master) não acessa nenhum dos endpoints novos (404)", async () => {
+      const commonProfile = await prisma.adminProfile.create({ data: { name: `C3 comum ${crypto.randomBytes(4).toString("hex")}`, is_master: false, is_active: true } });
+      adminProfiles.push(commonProfile.id);
+      const commonId = `c3common-${crypto.randomBytes(5).toString("hex")}`;
+      const commonUser = await prisma.user.create({ data: { id: commonId, email: `${commonId}@example.test`, password_hash: "x", name: "Comum", role: "admin", account_type: "admin", is_active: true, status: "ativo", admin_profile_id: commonProfile.id } });
+      users.push(commonUser.id);
+      const commonToken = tokenFor(commonUser);
+
+      assert.equal((await api("/api/admin/catalog2/questionnaires", { token: commonToken })).status, 404);
+      assert.equal((await api("/api/admin/catalog2/tasks/search?q=ab", { token: commonToken })).status, 404);
+      assert.equal((await api("/api/admin/catalog2/specialties", { method: "POST", token: commonToken, body: { key: "x", name: "X" } })).status, 404);
+    });
+  });
+
+  // Item 3.1 (reunião 2026-09-14, "Edição e preservação dos questionários") —
+  // regra final: vínculo por referência enquanto só 1 tarefa usa; a partir
+  // da 2ª tarefa (outro produto OU o clone de uma nova versão a partir da
+  // publicada), o conteúdo é efetivamente compartilhado e só pode ser
+  // editado via PUT /tasks/:id/questionnaire/content, que cria uma cópia
+  // própria automaticamente sem tocar o original.
+  describe("Edição e preservação dos questionários (Item 3.1)", () => {
+    async function mkTaskWithQuestionnaire(internalName: string) {
+      const p = await api("/api/admin/catalog2/products", { method: "POST", token: TOKEN, body: { internal_name: internalName } });
+      products.push(p.json.id);
+      const v = p.json.versions[0].id;
+      const task = await api(`/api/admin/catalog2/versions/${v}/tasks`, { method: "POST", token: TOKEN, body: { key: "t", name: "T" } });
+      return { productId: p.json.id, versionId: v, taskId: task.json.id };
+    }
+
+    it("dois produtos usam o mesmo questionário: editar pelo formulário de UM cria cópia própria e preserva o conteúdo do OUTRO", async () => {
+      const q = await api("/api/admin/catalog2/questionnaires", { method: "POST", token: TOKEN, body: { name: "[TESTE] Compartilhado 3.1" } });
+      const qId = q.json.id;
+      await api(`/api/admin/catalog2/questionnaires/${qId}/questions`, { method: "POST", token: TOKEN, body: { key: "p1", label: "Pergunta original", is_required: true } });
+
+      const A = await mkTaskWithQuestionnaire(`[TESTE LOCAL] 3.1 A ${crypto.randomBytes(3).toString("hex")}`);
+      const B = await mkTaskWithQuestionnaire(`[TESTE LOCAL] 3.1 B ${crypto.randomBytes(3).toString("hex")}`);
+      await api(`/api/admin/catalog2/tasks/${A.taskId}/questionnaire`, { method: "PUT", token: TOKEN, body: { questionnaire_id: qId } });
+      await api(`/api/admin/catalog2/tasks/${B.taskId}/questionnaire`, { method: "PUT", token: TOKEN, body: { questionnaire_id: qId } });
+
+      // Editar pelo formulário da tarefa A.
+      const edit = await api(`/api/admin/catalog2/tasks/${A.taskId}/questionnaire/content`, {
+        method: "PUT", token: TOKEN,
+        body: { name: "[TESTE] Editado em A", description: null, questions: [{ key: "p1", label: "Pergunta editada em A", is_required: true }] },
+      });
+      assert.equal(edit.status, 200, JSON.stringify(edit.json));
+      assert.equal(edit.json.forked, true, "era usado por 2 tarefas — precisa copiar, não pode editar o original");
+      assert.notEqual(edit.json.questionnaire.id, qId, "A passou a apontar pra uma cópia nova");
+
+      const detailA = await api(`/api/admin/catalog2/products/${A.productId}`, { token: TOKEN });
+      const detailB = await api(`/api/admin/catalog2/products/${B.productId}`, { token: TOKEN });
+      const qOnA = detailA.json.versions[0].tasks.find((t: any) => t.id === A.taskId).questionnaire;
+      const qOnB = detailB.json.versions[0].tasks.find((t: any) => t.id === B.taskId).questionnaire;
+      assert.equal(qOnA.name, "[TESTE] Editado em A");
+      assert.equal(qOnA.questions[0].label, "Pergunta editada em A");
+      assert.equal(qOnB.id, qId, "B continua apontando pro original");
+      assert.equal(qOnB.name, "[TESTE] Compartilhado 3.1", "conteúdo de B intacto");
+      assert.equal(qOnB.questions[0].label, "Pergunta original", "pergunta de B intacta");
+    });
+
+    it("versão publicada mantém as perguntas originais após editar o rascunho clonado (fork acontece no primeiro edit do rascunho)", async () => {
+      const q = await api("/api/admin/catalog2/questionnaires", { method: "POST", token: TOKEN, body: { name: "[TESTE] Publicado 3.1" } });
+      const qId = q.json.id;
+      await api(`/api/admin/catalog2/questionnaires/${qId}/questions`, { method: "POST", token: TOKEN, body: { key: "p1", label: "Pergunta publicada", is_required: true } });
+
+      const p = await api("/api/admin/catalog2/products", {
+        method: "POST", token: TOKEN,
+        body: { internal_name: `[TESTE LOCAL] 3.1 Pub ${crypto.randomBytes(3).toString("hex")}`, pillar_id: (await prisma.catalog2Pillar.findFirstOrThrow()).id, category_id: (await prisma.catalog2Category.findFirstOrThrow()).id, four_f_ids: [(await prisma.catalog2FourF.findFirstOrThrow()).id] },
+      });
+      products.push(p.json.id);
+      const v1 = p.json.versions[0].id;
+      await api(`/api/admin/catalog2/versions/${v1}`, { method: "PUT", token: TOKEN, body: { full_description: "desc" } });
+      const spec = await prisma.catalog2Specialty.findFirstOrThrow();
+      await prisma.catalog2Specialty.update({ where: { id: spec.id }, data: { max_hourly_rate: 100 } });
+      const task1 = await api(`/api/admin/catalog2/versions/${v1}/tasks`, { method: "POST", token: TOKEN, body: { key: "t", name: "T", specialty_id: spec.id, estimated_minutes: 60 } });
+      await api(`/api/admin/catalog2/tasks/${task1.json.id}/questionnaire`, { method: "PUT", token: TOKEN, body: { questionnaire_id: qId } });
+      await api(`/api/admin/catalog2/versions/${v1}/publish`, { method: "POST", token: TOKEN, body: { client_action_id: `pub-31-${crypto.randomBytes(4).toString("hex")}` } });
+
+      // Nova versão rascunho — clona a estrutura, incluindo o vínculo do questionário (por referência).
+      const nv = await api(`/api/admin/catalog2/products/${p.json.id}/versions`, { method: "POST", token: TOKEN });
+      assert.equal(nv.status, 201);
+      const detailAfterClone = await api(`/api/admin/catalog2/products/${p.json.id}`, { token: TOKEN });
+      const draftVersion = detailAfterClone.json.versions.find((v: any) => v.state === "rascunho");
+      const draftTask = draftVersion.tasks[0];
+      assert.equal(draftTask.questionnaire.id, qId, "rascunho clonado começa apontando pro MESMO questionário (referência)");
+
+      // Editar pelo rascunho.
+      const edit = await api(`/api/admin/catalog2/tasks/${draftTask.id}/questionnaire/content`, {
+        method: "PUT", token: TOKEN,
+        body: { name: "[TESTE] Editado no rascunho", description: null, questions: [{ key: "p1", label: "Pergunta editada no rascunho", is_required: true }] },
+      });
+      assert.equal(edit.status, 200, JSON.stringify(edit.json));
+      assert.equal(edit.json.forked, true, "publicada + rascunho == 2 referências no momento do edit");
+
+      const detailAfterEdit = await api(`/api/admin/catalog2/products/${p.json.id}`, { token: TOKEN });
+      const publishedTaskAfter = detailAfterEdit.json.versions.find((v: any) => v.id === v1).tasks[0];
+      const draftTaskAfter = detailAfterEdit.json.versions.find((v: any) => v.state === "rascunho").tasks[0];
+      assert.equal(publishedTaskAfter.questionnaire.id, qId, "versão publicada continua no questionário original");
+      assert.equal(publishedTaskAfter.questionnaire.questions[0].label, "Pergunta publicada", "conteúdo original intacto");
+      assert.equal(draftTaskAfter.questionnaire.name, "[TESTE] Editado no rascunho");
+      assert.notEqual(draftTaskAfter.questionnaire.id, qId);
+    });
+
+    it("editar/excluir diretamente um questionário COMPARTILHADO (rotas genéricas) é bloqueado — só o formulário da tarefa pode, porque só ele sabe copiar", async () => {
+      const q = await api("/api/admin/catalog2/questionnaires", { method: "POST", token: TOKEN, body: { name: "[TESTE] Bloqueio direto" } });
+      const qId = q.json.id;
+      const question = await api(`/api/admin/catalog2/questionnaires/${qId}/questions`, { method: "POST", token: TOKEN, body: { key: "p1", label: "P1" } });
+
+      const A = await mkTaskWithQuestionnaire(`[TESTE LOCAL] 3.1 Direct A ${crypto.randomBytes(3).toString("hex")}`);
+      const B = await mkTaskWithQuestionnaire(`[TESTE LOCAL] 3.1 Direct B ${crypto.randomBytes(3).toString("hex")}`);
+      await api(`/api/admin/catalog2/tasks/${A.taskId}/questionnaire`, { method: "PUT", token: TOKEN, body: { questionnaire_id: qId } });
+      await api(`/api/admin/catalog2/tasks/${B.taskId}/questionnaire`, { method: "PUT", token: TOKEN, body: { questionnaire_id: qId } });
+
+      const editQuestionnaire = await api(`/api/admin/catalog2/questionnaires/${qId}`, { method: "PUT", token: TOKEN, body: { name: "Tentativa direta" } });
+      assert.equal(editQuestionnaire.status, 409);
+      assert.equal(editQuestionnaire.json.code, "questionnaire_shared_use_task_edit");
+
+      const addQuestion = await api(`/api/admin/catalog2/questionnaires/${qId}/questions`, { method: "POST", token: TOKEN, body: { key: "p2", label: "P2" } });
+      assert.equal(addQuestion.status, 409);
+
+      const editQuestion = await api(`/api/admin/catalog2/questions/${question.json.id}`, { method: "PUT", token: TOKEN, body: { label: "Tentativa direta" } });
+      assert.equal(editQuestion.status, 409);
+
+      const deleteQuestion = await api(`/api/admin/catalog2/questions/${question.json.id}`, { method: "DELETE", token: TOKEN });
+      assert.equal(deleteQuestion.status, 409, "excluir pergunta ainda usada por outra tarefa é bloqueado — nunca perde conteúdo referenciado");
+
+      const reorder = await api(`/api/admin/catalog2/questionnaires/${qId}/questions/order`, { method: "PUT", token: TOKEN, body: { order: [question.json.id] } });
+      assert.equal(reorder.status, 409);
+
+      // conteúdo permanece intocado após todas as tentativas bloqueadas.
+      const stillIntact = await api(`/api/admin/catalog2/questionnaires/${qId}`, { token: TOKEN });
+      assert.equal(stillIntact.json.name, "[TESTE] Bloqueio direto");
+      assert.equal(stillIntact.json.questions.length, 1);
+      assert.equal(stillIntact.json.questions[0].label, "P1");
+    });
+
+    it("questionário usado por só 1 tarefa: edição direta continua permitida (não força cópia à toa)", async () => {
+      const q = await api("/api/admin/catalog2/questionnaires", { method: "POST", token: TOKEN, body: { name: "[TESTE] Não compartilhado" } });
+      const qId = q.json.id;
+      const A = await mkTaskWithQuestionnaire(`[TESTE LOCAL] 3.1 Solo ${crypto.randomBytes(3).toString("hex")}`);
+      await api(`/api/admin/catalog2/tasks/${A.taskId}/questionnaire`, { method: "PUT", token: TOKEN, body: { questionnaire_id: qId } });
+
+      const editDirect = await api(`/api/admin/catalog2/questionnaires/${qId}`, { method: "PUT", token: TOKEN, body: { name: "Editado direto, sem problema" } });
+      assert.equal(editDirect.status, 200);
+      assert.equal(editDirect.json.name, "Editado direto, sem problema");
+    });
+
+    it("editar pelo formulário da tarefa com erro de validação (nome vazio) não altera o conteúdo existente", async () => {
+      const q = await api("/api/admin/catalog2/questionnaires", { method: "POST", token: TOKEN, body: { name: "[TESTE] Erro validação" } });
+      const qId = q.json.id;
+      await api(`/api/admin/catalog2/questionnaires/${qId}/questions`, { method: "POST", token: TOKEN, body: { key: "p1", label: "Original" } });
+      const A = await mkTaskWithQuestionnaire(`[TESTE LOCAL] 3.1 Err ${crypto.randomBytes(3).toString("hex")}`);
+      await api(`/api/admin/catalog2/tasks/${A.taskId}/questionnaire`, { method: "PUT", token: TOKEN, body: { questionnaire_id: qId } });
+
+      const bad = await api(`/api/admin/catalog2/tasks/${A.taskId}/questionnaire/content`, { method: "PUT", token: TOKEN, body: { name: "", description: null, questions: [{ key: "p1", label: "X" }] } });
+      assert.equal(bad.status, 400);
+
+      const stillIntact = await api(`/api/admin/catalog2/questionnaires/${qId}`, { token: TOKEN });
+      assert.equal(stillIntact.json.name, "[TESTE] Erro validação");
+      assert.equal(stillIntact.json.questions[0].label, "Original");
+    });
+
+    it("editar questionário numa versão PUBLICADA (sem rascunho novo) continua bloqueado pela imutabilidade da versão", async () => {
+      const q = await api("/api/admin/catalog2/questionnaires", { method: "POST", token: TOKEN, body: { name: "[TESTE] Pub imutável" } });
+      const qId = q.json.id;
+      const p = await api("/api/admin/catalog2/products", {
+        method: "POST", token: TOKEN,
+        body: { internal_name: `[TESTE LOCAL] 3.1 Imut ${crypto.randomBytes(3).toString("hex")}`, pillar_id: (await prisma.catalog2Pillar.findFirstOrThrow()).id, category_id: (await prisma.catalog2Category.findFirstOrThrow()).id, four_f_ids: [(await prisma.catalog2FourF.findFirstOrThrow()).id] },
+      });
+      products.push(p.json.id);
+      const v1 = p.json.versions[0].id;
+      await api(`/api/admin/catalog2/versions/${v1}`, { method: "PUT", token: TOKEN, body: { full_description: "desc" } });
+      const spec = await prisma.catalog2Specialty.findFirstOrThrow();
+      await prisma.catalog2Specialty.update({ where: { id: spec.id }, data: { max_hourly_rate: 100 } });
+      const task = await api(`/api/admin/catalog2/versions/${v1}/tasks`, { method: "POST", token: TOKEN, body: { key: "t", name: "T", specialty_id: spec.id, estimated_minutes: 60 } });
+      await api(`/api/admin/catalog2/tasks/${task.json.id}/questionnaire`, { method: "PUT", token: TOKEN, body: { questionnaire_id: qId } });
+      await api(`/api/admin/catalog2/versions/${v1}/publish`, { method: "POST", token: TOKEN, body: { client_action_id: `pub-31b-${crypto.randomBytes(4).toString("hex")}` } });
+
+      const blocked = await api(`/api/admin/catalog2/tasks/${task.json.id}/questionnaire/content`, { method: "PUT", token: TOKEN, body: { name: "X", description: null, questions: [] } });
+      assert.equal(blocked.status, 409);
+      assert.equal(blocked.json.code, "version_published_immutable");
+    });
+  });
 });

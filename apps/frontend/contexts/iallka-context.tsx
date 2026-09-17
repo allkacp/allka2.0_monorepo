@@ -28,6 +28,18 @@ export interface IallkaScreenContext {
    * backend, que revalida o vínculo de novo antes de usar o briefing —
    * nunca confiado só por estar aqui. */
   projectId?: string;
+  /** ID da tarefa (ProjectTask) aberta no drawer (Item 9, reunião
+   * 2026-09-14, "Atualizar o contexto da Aura") — mesmo princípio de
+   * projectId: só um HINT, o backend nunca confia nele sozinho. */
+  taskId?: string;
+  /** ID do produto catalog2 em foco (Cadastro de Produtos ou Catálogo) —
+   * mesmo princípio: HINT, sempre revalidado/reautorizado no servidor
+   * antes de virar contexto de prompt. */
+  productId?: string;
+  /** ID de uma cotação catalog2 IDENTIFICADA (ex.: checkout com uma única
+   * proposta) — mesmo princípio; nunca enviado quando há mais de uma
+   * cotação na tela (contexto ambíguo vira "sem cotação específica"). */
+  quoteId?: string;
 }
 
 interface Suggestion {
@@ -120,7 +132,13 @@ export function IallkaContextProvider({ children }: { children: ReactNode }) {
   }, [location.pathname]);
 
   const screenArea = useMemo(() => screenAreaForRoute(location.pathname), [location.pathname]);
-  const screenContext = registeredContext?.pathname === location.pathname ? registeredContext : {};
+  // Tipado explicitamente: sem isso, o TS infere `RegisteredScreenContext | {}`
+  // pro ramo "fora da tela que registrou" e perde os campos opcionais de
+  // IallkaScreenContext no branch `{}` (TS2339 em todo uso de
+  // screenContext.* abaixo). Todos os campos são opcionais, então `{}`
+  // já é um IallkaScreenContext válido — só faltava a anotação.
+  const screenContext: IallkaScreenContext =
+    registeredContext?.pathname === location.pathname ? registeredContext : {};
 
   const suggestions = useMemo(() => {
     switch (screenArea) {

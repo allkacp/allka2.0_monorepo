@@ -23,7 +23,10 @@ import { getCategoryKnowledgeSections, getProjectDocumentsText } from "./ai-know
 const TEST_LOCAL_PREFIX = "[TESTE LOCAL]";
 
 export interface KnowledgeSource {
-  type: "produto" | "documento" | "projeto";
+  // "cotacao"/"historico" — Item 9 (reunião 2026-09-14, "Atualizar o
+  // contexto da Aura"): fontes específicas de uma cotação identificada e do
+  // histórico de um produto (Admin Master), ver iallka-catalog2-context.ts.
+  type: "produto" | "documento" | "projeto" | "cotacao" | "historico";
   name: string;
   detail?: string;
   updated_at?: string;

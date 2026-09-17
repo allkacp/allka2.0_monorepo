@@ -255,4 +255,45 @@ describe("IAllka — nova matriz de acesso (Admin Master, Company, Agency, Partn
     });
     assert.equal(r.status, 403);
   });
+
+  it("12. cotação de outra conta é recusada antes de qualquer chamada de IA (Item 9, reunião 2026-09-14, 'Atualizar o contexto da Aura')", async () => {
+    const companyA = await mkUser("company");
+    const companyB = await mkUser("company");
+    const created = await api("/api/iallka/sessions", { method: "POST", token: tokenFor(companyA) });
+    sessions.push(created.json.id);
+
+    // Produto/versão mínimos, só pra satisfazer a FK real da cotação —
+    // nenhuma regra comercial deste produto importa pra este teste.
+    const pillar = await prisma.catalog2Pillar.findFirst();
+    const category = await prisma.catalog2Category.findFirst();
+    const product = await prisma.catalog2Product.create({
+      data: { slug: `iallka-iso-${crypto.randomBytes(4).toString("hex")}`, internal_name: "[TESTE] Isolamento Aura", pillar_id: pillar?.id, category_id: category?.id, status: "em_preparacao" },
+    });
+    const version = await prisma.catalog2ProductVersion.create({
+      data: { product_id: product.id, version_number: 1, state: "rascunho", title: "T", summary: "s", full_description: "d" },
+    });
+
+    // Cotação pertence à Company B (nunca a companyA, dona da sessão).
+    const companyBFull = await prisma.user.findUnique({ where: { id: companyB.id } });
+    const quote = await prisma.catalog2Quote.create({
+      data: {
+        account_kind: "company", account_id: companyBFull!.company_id!, user_id: companyB.id,
+        product_id: product.id, version_id: version.id,
+        selection_json: "{}", quantity: 1, commercial_price: 500, currency: "BRL",
+        config_checksum: crypto.randomBytes(16).toString("hex"),
+        status: "valida", is_preview: false,
+      },
+    });
+
+    const r = await api(`/api/iallka/sessions/${created.json.id}/messages`, {
+      method: "POST",
+      token: tokenFor(companyA),
+      body: { message: "explique esta cotação", quote_id: quote.id },
+    });
+    assert.equal(r.status, 403);
+
+    await prisma.catalog2Quote.delete({ where: { id: quote.id } }).catch(() => {});
+    await prisma.catalog2ProductVersion.delete({ where: { id: version.id } }).catch(() => {});
+    await prisma.catalog2Product.delete({ where: { id: product.id } }).catch(() => {});
+  });
 });
