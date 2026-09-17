@@ -88,6 +88,18 @@ jobs:
           fi
 
           echo ""
+          echo "===== mounts do backend (evidência real de persistência de uploads — Item 17, 2026-09-17) ====="
+          echo "\"deveria estar persistente\" não é confirmação — isto lê o mount de verdade do contêiner EM EXECUÇÃO, sem escrever nada."
+          if [ -z "$cid" ]; then
+            echo "Nenhum container 'backend' encontrado pelo compose — sem mounts pra inspecionar."
+          else
+            timeout 20s docker inspect "$cid" --format '{{json .Mounts}}' | timeout 10s python3 -m json.tool 2>/dev/null || timeout 20s docker inspect "$cid" --format '{{json .Mounts}}'
+            echo ""
+            echo "-- volume nomeado 'backend_uploads' (se existir) --"
+            timeout 20s docker volume inspect "$(basename "$deploy_path")_backend_uploads" 2>&1 || echo "(volume com esse nome não encontrado — nome pode variar por prefixo do projeto compose, ver o campo Name acima em .Mounts)"
+          fi
+
+          echo ""
           echo "===== últimas 300 linhas de log do backend (sem cores) ====="
           timeout 20s docker compose --env-file .env -f docker-compose.yml logs --no-color --tail 300 backend || echo "(leitura de logs excedeu 20s)"
 
