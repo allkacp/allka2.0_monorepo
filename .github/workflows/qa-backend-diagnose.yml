@@ -72,9 +72,23 @@ jobs:
 
           echo ""
           echo "===== inspect: backend (state/exitcode/restarts/health) ====="
+          # Item 18 (reunião 2026-09-14, continuação em 2026-09-17) — achado
+          # real: `docker compose ps -q backend` é uma operação de LISTAGEM,
+          # e o daemon Docker deste VPS ficou repetidamente lento/travado
+          # SÓ para listagens (docker ps, docker compose ps) nesta sessão,
+          # mesmo com a aplicação respondendo normalmente por fora — sem
+          # nunca timar operações pontuais por ID/nome já conhecido. Nome do
+          # container é determinístico sob docker compose (projeto
+          # "allka-2026" + serviço "backend" + índice 1) — usado como
+          # fallback direto, sem depender de nenhuma listagem, se a consulta
+          # via compose falhar ou vier vazia.
           cid="$(timeout 45s docker compose --env-file .env -f docker-compose.yml ps -q backend 2>/dev/null || true)"
+          if [ -z "$cid" ] && timeout 15s docker inspect allka-2026-backend-1 >/dev/null 2>&1; then
+            echo "(docker compose ps -q não retornou nada — usando o nome determinístico do container como fallback, sem listagem)"
+            cid="allka-2026-backend-1"
+          fi
           if [ -z "$cid" ]; then
-            echo "Nenhum container 'backend' encontrado pelo compose."
+            echo "Nenhum container 'backend' encontrado (nem pelo compose, nem pelo nome determinístico)."
           else
             timeout 45s docker inspect "$cid" --format '
           Status:        {{.State.Status}}
