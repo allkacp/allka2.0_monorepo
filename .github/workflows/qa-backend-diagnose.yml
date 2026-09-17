@@ -63,20 +63,20 @@ jobs:
           cd "$deploy_path"
 
           echo "===== daemon Docker (somente leitura) ====="
-          timeout 10s systemctl is-active docker || echo "(systemctl docker excedeu 10s ou retornou estado não ativo)"
-          timeout 10s docker version --format 'Server: {{.Server.Version}}' || echo "(docker version excedeu 10s)"
-          timeout 10s docker ps -a --format 'table {{.Names}}\t{{.Status}}\t{{.Image}}' || echo "(docker ps excedeu 10s)"
+          timeout 30s systemctl is-active docker || echo "(systemctl docker excedeu 30s ou retornou estado não ativo)"
+          timeout 30s docker version --format 'Server: {{.Server.Version}}' || echo "(docker version excedeu 30s)"
+          timeout 30s docker ps -a --format 'table {{.Names}}\t{{.Status}}\t{{.Image}}' || echo "(docker ps excedeu 30s)"
 
           echo "===== docker compose ps --all ====="
-          timeout 20s docker compose --env-file .env -f docker-compose.yml ps --all || echo "(docker compose ps excedeu 20s)"
+          timeout 45s docker compose --env-file .env -f docker-compose.yml ps --all || echo "(docker compose ps excedeu 45s)"
 
           echo ""
           echo "===== inspect: backend (state/exitcode/restarts/health) ====="
-          cid="$(timeout 20s docker compose --env-file .env -f docker-compose.yml ps -q backend 2>/dev/null || true)"
+          cid="$(timeout 45s docker compose --env-file .env -f docker-compose.yml ps -q backend 2>/dev/null || true)"
           if [ -z "$cid" ]; then
             echo "Nenhum container 'backend' encontrado pelo compose."
           else
-            timeout 20s docker inspect "$cid" --format '
+            timeout 45s docker inspect "$cid" --format '
           Status:        {{.State.Status}}
           Running:       {{.State.Running}}
           ExitCode:      {{.State.ExitCode}}
@@ -89,11 +89,11 @@ jobs:
 
           echo ""
           echo "===== últimas 300 linhas de log do backend (sem cores) ====="
-          timeout 20s docker compose --env-file .env -f docker-compose.yml logs --no-color --tail 300 backend || echo "(leitura de logs excedeu 20s)"
+          timeout 45s docker compose --env-file .env -f docker-compose.yml logs --no-color --tail 300 backend || echo "(leitura de logs excedeu 45s)"
 
           echo ""
           echo "===== HTTP dentro da rede docker (container caddy -> backend:3001) ====="
-          timeout 20s docker compose --env-file .env -f docker-compose.yml exec -T caddy wget -qS -O /dev/null http://backend:3001/api/health 2>&1 || echo "(falhou ou excedeu 20s — ver acima)"
+          timeout 30s docker compose --env-file .env -f docker-compose.yml exec -T caddy wget -qS -O /dev/null http://backend:3001/api/health 2>&1 || echo "(falhou ou excedeu 30s — ver acima)"
 
           echo ""
           echo "===== HTTP local no VPS (via caddy, porta 80 do host) ====="
@@ -116,7 +116,7 @@ jobs:
           SSH_OPTS=(-i "$HOME/.ssh/allka_deploy_key" -p "$VPS_SSH_PORT" -o ConnectTimeout=15 -o ConnectionAttempts=2 -o BatchMode=yes -o StrictHostKeyChecking=accept-new -o UserKnownHostsFile="$HOME/.ssh/known_hosts")
           scp -i "$HOME/.ssh/allka_deploy_key" -P "$VPS_SSH_PORT" -o StrictHostKeyChecking=accept-new -o UserKnownHostsFile="$HOME/.ssh/known_hosts" \
             .deploy/remote-diagnose.sh "$remote:/tmp/allka-remote-diagnose.sh"
-          timeout 100s ssh "${SSH_OPTS[@]}" "$remote" "bash /tmp/allka-remote-diagnose.sh '${VPS_DEPLOY_PATH}'; rm -f /tmp/allka-remote-diagnose.sh" > raw_diagnose.txt 2>&1
+          timeout 300s ssh "${SSH_OPTS[@]}" "$remote" "bash /tmp/allka-remote-diagnose.sh '${VPS_DEPLOY_PATH}'; rm -f /tmp/allka-remote-diagnose.sh" > raw_diagnose.txt 2>&1
 
           # Sanitização — nunca imprimir isto sem passar por aqui primeiro.
           sed -E \
