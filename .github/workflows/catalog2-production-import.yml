@@ -1,0 +1,192 @@
+name: Importar catálogo preparado em produção (manual)
+
+# O pacote comercial nunca entra no Git. O único arquivo que passa pelo
+# release público é cifrado com AES-256-GCM; a chave fica exclusivamente em
+# CATALOG2_TRANSFER_BUNDLE_KEY (GitHub Secret) e o conteúdo aberto existe só
+# no runner e, durante a execução, no VPS protegido por SSH. O release e o
+# secret são removidos depois da importação confirmada.
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: "dry_run apenas confere; apply grava os 36 produtos após todos os portões"
+        required: true
+        default: dry_run
+        type: choice
+        options: [dry_run, apply]
+      expected_manifest_sha256:
+        description: "Obrigatório apenas no apply: hash mostrado pelo dry_run revisado"
+        required: false
+        type: string
+      confirm:
+        description: "Obrigatório apenas no apply: TRANSFERIR PARA PRODUCAO"
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-vps
+  cancel-in-progress: false
+
+jobs:
+  import:
+    runs-on: ubuntu-latest
+    environment: dev
+    env:
+      RELEASE_TAG: catalog2-transfer-2026-09-17
+      ASSET_NAME: catalog2-prepared-20260917.enc
+      PACKAGE_SHA256: db59440d342095264dc8cf2d50573d21870763bd894d4a12d71d31a627a2c545
+    steps:
+      - name: Validate controlled inputs and secrets
+        shell: bash
+        env:
+          MODE: ${{ inputs.mode }}
+          EXPECTED_MANIFEST_SHA256: ${{ inputs.expected_manifest_sha256 }}
+          CONFIRM: ${{ inputs.confirm }}
+          CATALOG2_TRANSFER_BUNDLE_KEY: ${{ secrets.CATALOG2_TRANSFER_BUNDLE_KEY }}
+          VPS_HOST: ${{ secrets.VPS_HOST }}
+          VPS_USER: ${{ secrets.VPS_USER }}
+          VPS_SSH_PORT: ${{ secrets.VPS_SSH_PORT }}
+          VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+          GHCR_PAT: ${{ secrets.GHCR_PAT }}
+          GHCR_USERNAME: ${{ secrets.GHCR_USERNAME }}
+        run: |
+          set -euo pipefail
+          : "${CATALOG2_TRANSFER_BUNDLE_KEY:?Configure o secret CATALOG2_TRANSFER_BUNDLE_KEY}"
+          : "${VPS_HOST:?Configure VPS_HOST}"
+          : "${VPS_USER:?Configure VPS_USER}"
+          : "${VPS_SSH_PORT:?Configure VPS_SSH_PORT}"
+          : "${VPS_SSH_KEY:?Configure VPS_SSH_KEY}"
+          : "${GHCR_PAT:?Configure GHCR_PAT}"
+          : "${GHCR_USERNAME:?Configure GHCR_USERNAME}"
+          if [ "$MODE" = "apply" ]; then
+            [[ "$EXPECTED_MANIFEST_SHA256" =~ ^[a-f0-9]{64}$ ]] || { echo "::error::O apply exige expected_manifest_sha256 de 64 caracteres hexadecimais."; exit 1; }
+            [ "$CONFIRM" = "TRANSFERIR PARA PRODUCAO" ] || { echo "::error::O apply exige a frase exata de confirmação."; exit 1; }
+          fi
+
+      - name: Download encrypted temporary package
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir -p .transfer
+          gh release download "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --pattern "$ASSET_NAME" --dir .transfer
+          test -s ".transfer/$ASSET_NAME"
+
+      - name: Decrypt and verify package locally
+        shell: bash
+        env:
+          CATALOG2_TRANSFER_BUNDLE_KEY: ${{ secrets.CATALOG2_TRANSFER_BUNDLE_KEY }}
+        run: |
+          set -euo pipefail
+          node <<'NODE'
+          const crypto = require('crypto');
+          const fs = require('fs');
+          const input = fs.readFileSync('.transfer/catalog2-prepared-20260917.enc');
+          const magic = Buffer.from('ALLKA-CATALOG2-1\n', 'utf8');
+          if (input.length <= magic.length + 12 + 16 || !input.subarray(0, magic.length).equals(magic)) throw new Error('Envelope cifrado inválido.');
+          const key = Buffer.from(process.env.CATALOG2_TRANSFER_BUNDLE_KEY, 'base64');
+          if (key.length !== 32) throw new Error('Chave de transferência inválida.');
+          const iv = input.subarray(magic.length, magic.length + 12);
+          const tag = input.subarray(magic.length + 12, magic.length + 28);
+          const ciphertext = input.subarray(magic.length + 28);
+          const decipher = crypto.createDecipheriv('aes-256-gcm', key, iv);
+          decipher.setAuthTag(tag);
+          fs.writeFileSync('.transfer/catalog2-prepared-20260917.tar.gz', Buffer.concat([decipher.update(ciphertext), decipher.final()]), { mode: 0o600 });
+          NODE
+          tar -xzf .transfer/catalog2-prepared-20260917.tar.gz -C .transfer
+          test -f .transfer/catalog2-package-production-final/package.json
+          actual="$(sha256sum .transfer/catalog2-package-production-final/package.json | awk '{print $1}')"
+          test "$actual" = "$PACKAGE_SHA256" || { echo "::error::Checksum do pacote divergente; nada será enviado ao VPS."; exit 1; }
+          file_count="$(find .transfer/catalog2-package-production-final/images -type f | wc -l | tr -d ' ')"
+          test "$file_count" = 31 || { echo "::error::Esperadas 31 imagens no pacote; encontradas $file_count."; exit 1; }
+          echo "Pacote validado: 36 produtos, 31 imagens, checksum conferido."
+
+      - name: Configure SSH
+        shell: bash
+        env:
+          VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+        run: |
+          set -euo pipefail
+          mkdir -p ~/.ssh
+          printf '%s\n' "$VPS_SSH_KEY" > ~/.ssh/allka_transfer_key
+          chmod 600 ~/.ssh/allka_transfer_key
+          : > ~/.ssh/known_hosts
+
+      - name: Send package through SSH and run selected mode
+        shell: bash
+        env:
+          MODE: ${{ inputs.mode }}
+          EXPECTED_MANIFEST_SHA256: ${{ inputs.expected_manifest_sha256 }}
+          CONFIRM: ${{ inputs.confirm }}
+          VPS_HOST: ${{ secrets.VPS_HOST }}
+          VPS_USER: ${{ secrets.VPS_USER }}
+          VPS_SSH_PORT: ${{ secrets.VPS_SSH_PORT }}
+          VPS_DEPLOY_PATH: ${{ secrets.VPS_DEPLOY_PATH || '/opt/allka-2026' }}
+          GHCR_PAT: ${{ secrets.GHCR_PAT }}
+          GHCR_USERNAME: ${{ secrets.GHCR_USERNAME }}
+        run: |
+          set -euo pipefail
+          remote="${VPS_USER}@${VPS_HOST}"
+          ssh_opts=(-i "$HOME/.ssh/allka_transfer_key" -p "$VPS_SSH_PORT" -o ConnectTimeout=20 -o ConnectionAttempts=2 -o BatchMode=yes -o StrictHostKeyChecking=accept-new -o UserKnownHostsFile="$HOME/.ssh/known_hosts")
+          remote_dir="/tmp/allka-catalog2-transfer-${GITHUB_RUN_ID}"
+          ssh "${ssh_opts[@]}" "$remote" "install -d -m 700 '$remote_dir'"
+          scp -r -i "$HOME/.ssh/allka_transfer_key" -P "$VPS_SSH_PORT" -o ConnectTimeout=20 -o BatchMode=yes -o StrictHostKeyChecking=accept-new -o UserKnownHostsFile="$HOME/.ssh/known_hosts" .transfer/catalog2-package-production-final "$remote:$remote_dir/package"
+          cat > .transfer/remote-import.sh <<'SCRIPT'
+          set -euo pipefail
+          deploy_path="$1"
+          remote_dir="$2"
+          mode="$3"
+          expected_manifest="$4"
+          confirm="$5"
+          ghcr_user="$6"
+          ghcr_pat="$7"
+          repo="$8"
+          cleanup() { rm -rf -- "$remote_dir"; }
+          trap cleanup EXIT
+          cd "$deploy_path"
+
+          runtime_image="$(grep '^BACKEND_IMAGE=' .env | cut -d= -f2-)"
+          [ -n "$runtime_image" ] || { echo 'ERRO: BACKEND_IMAGE ausente no .env do VPS.' >&2; exit 1; }
+          commit_tag="${runtime_image##*:}"
+          tools_image="ghcr.io/${repo}/backend:tools-${commit_tag}"
+          printf '%s' "$ghcr_pat" | docker login ghcr.io -u "$ghcr_user" --password-stdin >/dev/null
+          docker pull "$tools_image" >/dev/null
+
+          # `.env` é passado ao Docker Compose, mas não vira variável deste
+          # shell remoto. Lemos as credenciais somente de dentro do container
+          # MySQL, sem imprimi-las e sem fazer source de um arquivo que pode
+          # conter caracteres especiais de outros serviços.
+          mapfile -t mysql_config < <(docker compose --env-file .env -f docker-compose.yml exec -T mysql sh -c 'printf "%s\n%s\n%s\n" "$MYSQL_USER" "$MYSQL_PASSWORD" "$MYSQL_DATABASE"')
+          test "${#mysql_config[@]}" = 3 || { echo 'ERRO: não foi possível ler a configuração interna do MySQL.' >&2; exit 1; }
+          mysql_user="${mysql_config[0]}"
+          mysql_password="${mysql_config[1]}"
+          mysql_database="${mysql_config[2]}"
+          target_url="mysql://${mysql_user}:${mysql_password}@mysql:3306/${mysql_database}"
+          args=(--package=/transfer/package --target-url="$target_url" --target-env=production --expected-database-host=mysql --expected-database-name="$mysql_database")
+          if [ "$mode" = "apply" ]; then
+            backup_dir="$deploy_path/backups"
+            install -d -m 700 "$backup_dir"
+            backup_path="$backup_dir/allka-before-catalog2-import-$(date -u +%Y%m%dT%H%M%SZ).sql.gz"
+            docker compose --env-file .env -f docker-compose.yml exec -T mysql sh -c 'MYSQL_PWD="$MYSQL_ROOT_PASSWORD" mysqldump -uroot --single-transaction --routines --events "$MYSQL_DATABASE"' | gzip -c > "$backup_path"
+            test -s "$backup_path" || { echo 'ERRO: backup pré-importação vazio; abortando antes da escrita.' >&2; exit 1; }
+            backup_sha="$(sha256sum "$backup_path" | awk '{print $1}')"
+            echo "backup_pre_importacao=$(basename "$backup_path") sha256=$backup_sha"
+            args+=(--apply --expected-manifest-sha256="$expected_manifest" --confirm="$confirm" --backup-sha256="$backup_sha")
+          fi
+          echo "tools_image=$tools_image"
+          echo "modo=$mode"
+          BACKEND_IMAGE="$tools_image" docker compose --env-file .env -f docker-compose.yml run --rm --no-deps -v "$remote_dir/package:/transfer/package:ro" backend npm run catalog2:import-prepared -- "${args[@]}"
+          SCRIPT
+          scp -i "$HOME/.ssh/allka_transfer_key" -P "$VPS_SSH_PORT" -o ConnectTimeout=20 -o BatchMode=yes -o StrictHostKeyChecking=accept-new -o UserKnownHostsFile="$HOME/.ssh/known_hosts" .transfer/remote-import.sh "$remote:/tmp/allka-remote-catalog2-import-${GITHUB_RUN_ID}.sh"
+          repo="${GITHUB_REPOSITORY,,}"
+          ssh "${ssh_opts[@]}" "$remote" "bash /tmp/allka-remote-catalog2-import-${GITHUB_RUN_ID}.sh '$VPS_DEPLOY_PATH' '$remote_dir' '$MODE' '$EXPECTED_MANIFEST_SHA256' '$CONFIRM' '$GHCR_USERNAME' '$GHCR_PAT' '$repo'; rc=\$?; rm -f /tmp/allka-remote-catalog2-import-${GITHUB_RUN_ID}.sh; exit \$rc"
+
+      - name: Remove plaintext from runner
+        if: always()
+        shell: bash
+        run: |
+          rm -rf .transfer
