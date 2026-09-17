@@ -156,8 +156,17 @@ jobs:
           printf '%s' "$ghcr_pat" | docker login ghcr.io -u "$ghcr_user" --password-stdin >/dev/null
           docker pull "$tools_image" >/dev/null
 
-          target_url="mysql://${MYSQL_USER}:${MYSQL_PASSWORD}@mysql:3306/${MYSQL_DATABASE}"
-          args=(--package=/transfer/package --target-url="$target_url" --target-env=production --expected-database-host=mysql --expected-database-name="$MYSQL_DATABASE")
+          # `.env` é passado ao Docker Compose, mas não vira variável deste
+          # shell remoto. Lemos as credenciais somente de dentro do container
+          # MySQL, sem imprimi-las e sem fazer source de um arquivo que pode
+          # conter caracteres especiais de outros serviços.
+          mapfile -t mysql_config < <(docker compose --env-file .env -f docker-compose.yml exec -T mysql sh -c 'printf "%s\n%s\n%s\n" "$MYSQL_USER" "$MYSQL_PASSWORD" "$MYSQL_DATABASE"')
+          test "${#mysql_config[@]}" = 3 || { echo 'ERRO: não foi possível ler a configuração interna do MySQL.' >&2; exit 1; }
+          mysql_user="${mysql_config[0]}"
+          mysql_password="${mysql_config[1]}"
+          mysql_database="${mysql_config[2]}"
+          target_url="mysql://${mysql_user}:${mysql_password}@mysql:3306/${mysql_database}"
+          args=(--package=/transfer/package --target-url="$target_url" --target-env=production --expected-database-host=mysql --expected-database-name="$mysql_database")
           if [ "$mode" = "apply" ]; then
             backup_dir="$deploy_path/backups"
             install -d -m 700 "$backup_dir"
