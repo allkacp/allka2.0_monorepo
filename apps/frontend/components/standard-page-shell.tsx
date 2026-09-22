@@ -112,7 +112,7 @@ export function isStandardShellRoute(pathname: string): boolean {
 
 // Painel branco flutuante — wrapper mais externo da tela.
 export const STANDARD_SHELL_PANEL_CLASS =
-  "admin-empresas-panel w-full h-full rounded-2xl lg:rounded-[1.5rem] border border-slate-200/70 dark:border-slate-700/60 bg-white dark:bg-slate-900 shadow-[0_20px_50px_-12px_rgba(15,23,42,0.18),0_4px_16px_-4px_rgba(15,23,42,0.10)] p-3 sm:p-5 lg:p-[12px] overflow-hidden";
+  "admin-empresas-panel w-full h-full rounded-2xl lg:rounded-[1.5rem] border border-slate-200/70 dark:border-slate-700/60 bg-white dark:bg-slate-900 shadow-[0_20px_50px_-12px_rgba(15,23,42,0.18),0_4px_16px_-4px_rgba(15,23,42,0.10)] p-1.5 sm:p-2 lg:p-2 overflow-hidden";
 
 // Cartão principal da tabela (usar como className do <Card>).
 export const STANDARD_SHELL_TABLE_CARD_CLASS =
@@ -273,9 +273,7 @@ export function StandardMetricCard({
         </div>
         <div className="flex items-end justify-between gap-2">
           <div>
-            <p className="text-lg font-bold leading-none text-white">
-              {value}
-            </p>
+            <p className="text-lg font-bold leading-none text-white">{value}</p>
             <p className="mt-0.5 text-[9px] text-white/60 inline-block leading-tight">
               Sem comparação disponível
             </p>
@@ -301,7 +299,7 @@ export function StandardPageBanner({
   actions?: React.ReactNode;
 }) {
   return (
-    <div className="relative overflow-hidden rounded-2xl mb-5 lg:mb-7 shadow-[0_4px_24px_-4px_rgba(0,0,0,0.15)]">
+    <div className="relative mb-2 overflow-hidden rounded-2xl shadow-[0_4px_24px_-4px_rgba(0,0,0,0.15)] sm:mb-3">
       <div
         className="absolute inset-0"
         style={{
@@ -316,10 +314,10 @@ export function StandardPageBanner({
             "radial-gradient(circle at 88% 15%, rgba(255,255,255,0.35), transparent 45%)",
         }}
       />
-      <div className="relative z-10 flex flex-col sm:flex-row sm:items-center gap-3 px-4 sm:px-5 py-3 sm:py-4">
-        <div className="flex items-center gap-3 min-w-0 flex-1">
-          <div className="h-10 w-10 rounded-full flex items-center justify-center shrink-0 bg-gradient-to-br from-blue-500 to-fuchsia-600 shadow-md">
-            <Icon className="h-5 w-5 text-white" />
+      <div className="relative z-10 flex flex-col gap-2 px-3 py-2.5 sm:flex-row sm:items-center sm:px-4 sm:py-3">
+        <div className="flex min-w-0 flex-1 items-center gap-2.5">
+          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-blue-500 to-fuchsia-600 shadow-md">
+            <Icon className="h-4 w-4 text-white" />
           </div>
           <div className="min-w-0">
             <div className="flex items-center gap-1 shrink-0">

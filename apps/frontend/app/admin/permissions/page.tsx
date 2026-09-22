@@ -1,473 +1,705 @@
 ﻿// @ts-nocheck
-import { useState, useRef } from "react"
-import { ExportButton } from "@/components/export-button"
-import { PinToTrayButton } from "@/components/pin-to-tray-button"
-import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Card, CardContent } from "@/components/ui/card"
-import { Badge } from "@/components/ui/badge"
-import { NeonBadge } from "@/components/neon-badge"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { PermissionProfileSlidePanel } from "@/components/permission-profile-slide-panel"
-import { ConfirmationDialog } from "@/components/confirmation-dialog"
+import { useState, useRef } from "react";
+import { ExportButton } from "@/components/export-button";
+import { PinToTrayButton } from "@/components/pin-to-tray-button";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Card, CardContent } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { NeonBadge } from "@/components/neon-badge";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { PermissionProfileSlidePanel } from "@/components/permission-profile-slide-panel";
+import { ConfirmationDialog } from "@/components/confirmation-dialog";
 import {
-  Search, Plus, Users, Shield, Settings, BarChart3, Edit, Trash2,
-  Building2, Briefcase, Compass, Store, DollarSign, Lock, FileText, LayoutDashboard, Minus,
-} from "lucide-react"
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
+  Search,
+  Plus,
+  Users,
+  Shield,
+  Settings,
+  BarChart3,
+  Edit,
+  Trash2,
+  Building2,
+  Briefcase,
+  Compass,
+  Store,
+  DollarSign,
+  Lock,
+  FileText,
+  LayoutDashboard,
+  Minus,
+} from "lucide-react";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import {
   STANDARD_SHELL_PANEL_CLASS,
   STANDARD_SHELL_TABLE_CARD_CLASS,
   StandardPageBanner,
-  StandardMetricCard,
-} from "@/components/standard-page-shell"
+} from "@/components/standard-page-shell";
 
 // ─── Shared module/action meta (mirrors slide panel) ─────────────────────────────
-type Scope = "none" | "own" | "all"
-interface ModulePerm { view: Scope; create: Scope; edit: Scope; delete: Scope }
+type Scope = "none" | "own" | "all";
+interface ModulePerm {
+  view: Scope;
+  create: Scope;
+  edit: Scope;
+  delete: Scope;
+}
 
 const MODULES = [
-  { key: "dashboard",   label: "Dashboard",    icon: LayoutDashboard, group: "Visão Geral"    },
-  { key: "users",       label: "Usuários",      icon: Users,           group: "Gestão"         },
-  { key: "companies",   label: "Empresas",      icon: Building2,       group: "Gestão"         },
-  { key: "agencies",    label: "Agências",      icon: Briefcase,       group: "Gestão"         },
-  { key: "nomades",     label: "Nômades",       icon: Compass,         group: "Gestão"         },
-  { key: "projects",    label: "Projetos",      icon: Briefcase,       group: "Operações"      },
-  { key: "products",    label: "Produtos",      icon: Store,           group: "Operações"      },
-  { key: "financial",   label: "Financeiro",    icon: DollarSign,      group: "Financeiro"     },
-  { key: "reports",     label: "Relatórios",    icon: BarChart3,       group: "Financeiro"     },
-  { key: "settings",    label: "Configurações", icon: Settings,        group: "Administração"  },
-  { key: "permissions", label: "Permissões",    icon: Lock,            group: "Administração"  },
-  { key: "terms",       label: "Termos",        icon: FileText,        group: "Administração"  },
-]
+  {
+    key: "dashboard",
+    label: "Dashboard",
+    icon: LayoutDashboard,
+    group: "Visão Geral",
+  },
+  { key: "users", label: "Usuários", icon: Users, group: "Gestão" },
+  { key: "companies", label: "Empresas", icon: Building2, group: "Gestão" },
+  { key: "agencies", label: "Agências", icon: Briefcase, group: "Gestão" },
+  { key: "nomades", label: "Nômades", icon: Compass, group: "Gestão" },
+  { key: "projects", label: "Projetos", icon: Briefcase, group: "Operações" },
+  { key: "products", label: "Produtos", icon: Store, group: "Operações" },
+  {
+    key: "financial",
+    label: "Financeiro",
+    icon: DollarSign,
+    group: "Financeiro",
+  },
+  { key: "reports", label: "Relatórios", icon: BarChart3, group: "Financeiro" },
+  {
+    key: "settings",
+    label: "Configurações",
+    icon: Settings,
+    group: "Administração",
+  },
+  {
+    key: "permissions",
+    label: "Permissões",
+    icon: Lock,
+    group: "Administração",
+  },
+  { key: "terms", label: "Termos", icon: FileText, group: "Administração" },
+];
 const ACTIONS: { key: keyof ModulePerm; label: string }[] = [
-  { key: "view",   label: "Visualizar" },
-  { key: "create", label: "Criar"      },
-  { key: "edit",   label: "Editar"     },
-  { key: "delete", label: "Excluir"    },
-]
-const GROUPS = Array.from(new Set(MODULES.map((m) => m.group)))
+  { key: "view", label: "Visualizar" },
+  { key: "create", label: "Criar" },
+  { key: "edit", label: "Editar" },
+  { key: "delete", label: "Excluir" },
+];
+const GROUPS = Array.from(new Set(MODULES.map((m) => m.group)));
 
 function scopeSummary(perms: Record<string, ModulePerm>) {
-  let own = 0; let all = 0
-  MODULES.forEach((m) => ACTIONS.forEach((a) => {
-    const v = perms?.[m.key]?.[a.key] ?? "none"
-    if (v === "own") own++
-    if (v === "all") all++
-  }))
-  return { own, all, total: MODULES.length * ACTIONS.length }
+  let own = 0;
+  let all = 0;
+  MODULES.forEach((m) =>
+    ACTIONS.forEach((a) => {
+      const v = perms?.[m.key]?.[a.key] ?? "none";
+      if (v === "own") own++;
+      if (v === "all") all++;
+    }),
+  );
+  return { own, all, total: MODULES.length * ACTIONS.length };
 }
 
 // ─── Read-only scope cell ───────────────────────────────────────────────────
 function ReadonlyScopeCell({ value }: { value: Scope }) {
   if (value === "own")
-    return <NeonBadge color="blue" className="text-[10px] font-bold">Próprios</NeonBadge>
+    return (
+      <NeonBadge color="blue" className="text-[10px] font-bold">
+        Próprios
+      </NeonBadge>
+    );
   if (value === "all")
-    return <NeonBadge color="emerald" className="text-[10px] font-bold">Todos</NeonBadge>
+    return (
+      <NeonBadge color="emerald" className="text-[10px] font-bold">
+        Todos
+      </NeonBadge>
+    );
   return (
     <span className="w-5 h-5 rounded-full border-2 border-dashed border-slate-200 flex items-center justify-center mx-auto">
       <Minus className="h-2.5 w-2.5 text-slate-300" />
     </span>
-  )
+  );
 }
 
 interface PermissionProfile {
-  id: number
-  name: string
-  description: string
-  users: number
-  permissions: Record<string, ModulePerm>
+  id: number;
+  name: string;
+  description: string;
+  users: number;
+  permissions: Record<string, ModulePerm>;
 }
 
 // Stat cards agora vêm do shell compartilhado (standard-page-shell.tsx).
+function PermissionCompactStat({ label, value, icon: Icon, color }: any) {
+  const tone: Record<string, string> = {
+    blue: "bg-blue-50 text-blue-600 ring-blue-100",
+    emerald: "bg-emerald-50 text-emerald-600 ring-emerald-100",
+    violet: "bg-violet-50 text-violet-600 ring-violet-100",
+  };
+  return (
+    <div className="flex min-w-0 items-center gap-3 px-4 py-2.5 sm:px-5">
+      <span
+        className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl ring-1 ${tone[color]}`}
+      >
+        <Icon className="h-5 w-5" />
+      </span>
+      <div className="min-w-0">
+        <p className="truncate text-[10px] font-bold uppercase tracking-wide text-[#5d7195]">
+          {label}
+        </p>
+        <div className="flex items-center gap-2">
+          <span className="text-2xl font-bold leading-7 text-[#10264f]">
+            {value}
+          </span>
+          <span className="hidden rounded-full bg-emerald-50 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-600 sm:inline">
+            +0% mês
+          </span>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 export default function PermissionsPage() {
-  const [searchQuery, setSearchQuery] = useState("")
-  const [selectedProfile, setSelectedProfile] = useState<PermissionProfile | null>(null)
-  const [isPanelOpen, setIsPanelOpen] = useState(false)
-  const [deleteDialog, setDeleteDialog] = useState<{ open: boolean; profile: PermissionProfile | null }>({
+  const [searchQuery, setSearchQuery] = useState("");
+  const [selectedProfile, setSelectedProfile] =
+    useState<PermissionProfile | null>(null);
+  const [isPanelOpen, setIsPanelOpen] = useState(false);
+  const [deleteDialog, setDeleteDialog] = useState<{
+    open: boolean;
+    profile: PermissionProfile | null;
+  }>({
     open: false,
     profile: null,
-  })
-  const pageRef = useRef<HTMLDivElement>(null)
+  });
+  const pageRef = useRef<HTMLDivElement>(null);
 
-  const ALL: Scope = "all"; const OWN: Scope = "own"; const NONE: Scope = "none"
-  type P = Record<string, ModulePerm>
-  const fullModule = (v: Scope = ALL): ModulePerm => ({ view: v, create: v, edit: v, delete: v })
+  const ALL: Scope = "all";
+  const OWN: Scope = "own";
+  const NONE: Scope = "none";
+  type P = Record<string, ModulePerm>;
+  const fullModule = (v: Scope = ALL): ModulePerm => ({
+    view: v,
+    create: v,
+    edit: v,
+    delete: v,
+  });
 
   // NOTE: mock data — no backend endpoint for permission profiles exists yet;
   // this whole page renders from this hardcoded array (out of scope to wire up here).
   const [profiles, setProfiles] = useState<PermissionProfile[]>([
     {
-      id: 1, name: "Super Admin", description: "Acesso irrestrito a toda a plataforma", users: 2,
-      permissions: Object.fromEntries(MODULES.map((m) => [m.key, fullModule(ALL)])) as P,
+      id: 1,
+      name: "Super Admin",
+      description: "Acesso irrestrito a toda a plataforma",
+      users: 2,
+      permissions: Object.fromEntries(
+        MODULES.map((m) => [m.key, fullModule(ALL)]),
+      ) as P,
     },
     {
-      id: 2, name: "Gerente de Operações", description: "Gestão de projetos, nômades e empresas", users: 5,
+      id: 2,
+      name: "Gerente de Operações",
+      description: "Gestão de projetos, nômades e empresas",
+      users: 5,
       permissions: {
-        dashboard:   { view: ALL,  create: NONE, edit: NONE, delete: NONE },
-        users:       { view: ALL,  create: OWN,  edit: OWN,  delete: NONE },
-        companies:   { view: ALL,  create: NONE, edit: OWN,  delete: NONE },
-        agencies:    { view: ALL,  create: NONE, edit: OWN,  delete: NONE },
-        nomades:     { view: ALL,  create: ALL,  edit: ALL,  delete: NONE },
-        projects:    { view: ALL,  create: ALL,  edit: ALL,  delete: OWN  },
-        products:    { view: ALL,  create: NONE, edit: NONE, delete: NONE },
-        financial:   { view: OWN,  create: NONE, edit: NONE, delete: NONE },
-        reports:     { view: ALL,  create: NONE, edit: NONE, delete: NONE },
-        settings:    { view: NONE, create: NONE, edit: NONE, delete: NONE },
+        dashboard: { view: ALL, create: NONE, edit: NONE, delete: NONE },
+        users: { view: ALL, create: OWN, edit: OWN, delete: NONE },
+        companies: { view: ALL, create: NONE, edit: OWN, delete: NONE },
+        agencies: { view: ALL, create: NONE, edit: OWN, delete: NONE },
+        nomades: { view: ALL, create: ALL, edit: ALL, delete: NONE },
+        projects: { view: ALL, create: ALL, edit: ALL, delete: OWN },
+        products: { view: ALL, create: NONE, edit: NONE, delete: NONE },
+        financial: { view: OWN, create: NONE, edit: NONE, delete: NONE },
+        reports: { view: ALL, create: NONE, edit: NONE, delete: NONE },
+        settings: { view: NONE, create: NONE, edit: NONE, delete: NONE },
         permissions: { view: NONE, create: NONE, edit: NONE, delete: NONE },
-        terms:       { view: NONE, create: NONE, edit: NONE, delete: NONE },
+        terms: { view: NONE, create: NONE, edit: NONE, delete: NONE },
       } as P,
     },
     {
-      id: 3, name: "Analista Financeiro", description: "Relatórios e dados financeiros da plataforma", users: 3,
+      id: 3,
+      name: "Analista Financeiro",
+      description: "Relatórios e dados financeiros da plataforma",
+      users: 3,
       permissions: {
-        dashboard:   { view: ALL,  create: NONE, edit: NONE, delete: NONE },
-        users:       { view: ALL,  create: NONE, edit: NONE, delete: NONE },
-        companies:   { view: ALL,  create: NONE, edit: NONE, delete: NONE },
-        agencies:    { view: ALL,  create: NONE, edit: NONE, delete: NONE },
-        nomades:     { view: ALL,  create: NONE, edit: NONE, delete: NONE },
-        projects:    { view: ALL,  create: NONE, edit: NONE, delete: NONE },
-        products:    { view: ALL,  create: NONE, edit: NONE, delete: NONE },
-        financial:   { view: ALL,  create: OWN,  edit: OWN,  delete: NONE },
-        reports:     { view: ALL,  create: ALL,  edit: ALL,  delete: NONE },
-        settings:    { view: NONE, create: NONE, edit: NONE, delete: NONE },
+        dashboard: { view: ALL, create: NONE, edit: NONE, delete: NONE },
+        users: { view: ALL, create: NONE, edit: NONE, delete: NONE },
+        companies: { view: ALL, create: NONE, edit: NONE, delete: NONE },
+        agencies: { view: ALL, create: NONE, edit: NONE, delete: NONE },
+        nomades: { view: ALL, create: NONE, edit: NONE, delete: NONE },
+        projects: { view: ALL, create: NONE, edit: NONE, delete: NONE },
+        products: { view: ALL, create: NONE, edit: NONE, delete: NONE },
+        financial: { view: ALL, create: OWN, edit: OWN, delete: NONE },
+        reports: { view: ALL, create: ALL, edit: ALL, delete: NONE },
+        settings: { view: NONE, create: NONE, edit: NONE, delete: NONE },
         permissions: { view: NONE, create: NONE, edit: NONE, delete: NONE },
-        terms:       { view: ALL,  create: NONE, edit: NONE, delete: NONE },
+        terms: { view: ALL, create: NONE, edit: NONE, delete: NONE },
       } as P,
     },
     {
-      id: 4, name: "Empresa Básico", description: "Perfil padrão para usuários de empresa", users: 18,
+      id: 4,
+      name: "Empresa Básico",
+      description: "Perfil padrão para usuários de empresa",
+      users: 18,
       permissions: {
-        dashboard:   { view: ALL,  create: NONE, edit: NONE, delete: NONE },
-        users:       { view: OWN,  create: NONE, edit: OWN,  delete: NONE },
-        companies:   { view: OWN,  create: NONE, edit: OWN,  delete: NONE },
-        agencies:    { view: ALL,  create: NONE, edit: NONE, delete: NONE },
-        nomades:     { view: ALL,  create: NONE, edit: NONE, delete: NONE },
-        projects:    { view: OWN,  create: OWN,  edit: OWN,  delete: OWN  },
-        products:    { view: ALL,  create: NONE, edit: NONE, delete: NONE },
-        financial:   { view: OWN,  create: NONE, edit: NONE, delete: NONE },
-        reports:     { view: OWN,  create: NONE, edit: NONE, delete: NONE },
-        settings:    { view: NONE, create: NONE, edit: NONE, delete: NONE },
+        dashboard: { view: ALL, create: NONE, edit: NONE, delete: NONE },
+        users: { view: OWN, create: NONE, edit: OWN, delete: NONE },
+        companies: { view: OWN, create: NONE, edit: OWN, delete: NONE },
+        agencies: { view: ALL, create: NONE, edit: NONE, delete: NONE },
+        nomades: { view: ALL, create: NONE, edit: NONE, delete: NONE },
+        projects: { view: OWN, create: OWN, edit: OWN, delete: OWN },
+        products: { view: ALL, create: NONE, edit: NONE, delete: NONE },
+        financial: { view: OWN, create: NONE, edit: NONE, delete: NONE },
+        reports: { view: OWN, create: NONE, edit: NONE, delete: NONE },
+        settings: { view: NONE, create: NONE, edit: NONE, delete: NONE },
         permissions: { view: NONE, create: NONE, edit: NONE, delete: NONE },
-        terms:       { view: OWN,  create: NONE, edit: NONE, delete: NONE },
+        terms: { view: OWN, create: NONE, edit: NONE, delete: NONE },
       } as P,
     },
-  ])
+  ]);
 
   const handleCreateProfile = () => {
-    setSelectedProfile(null)
-    setIsPanelOpen(true)
-  }
+    setSelectedProfile(null);
+    setIsPanelOpen(true);
+  };
 
   const handleEditProfile = (profile: PermissionProfile) => {
-    setSelectedProfile(profile)
-    setIsPanelOpen(true)
-  }
+    setSelectedProfile(profile);
+    setIsPanelOpen(true);
+  };
 
   const handleSaveProfile = (profileData: any) => {
     if (selectedProfile) {
       setProfiles((prev) =>
-        prev.map((p) => (p.id === selectedProfile.id ? { ...p, ...profileData } : p)),
-      )
+        prev.map((p) =>
+          p.id === selectedProfile.id ? { ...p, ...profileData } : p,
+        ),
+      );
     } else {
       setProfiles((prev) => [
         ...prev,
-        { ...profileData, id: Math.max(0, ...prev.map((p) => p.id)) + 1, users: 0 },
-      ])
+        {
+          ...profileData,
+          id: Math.max(0, ...prev.map((p) => p.id)) + 1,
+          users: 0,
+        },
+      ]);
     }
-    setIsPanelOpen(false)
-  }
+    setIsPanelOpen(false);
+  };
 
   const handleDeleteProfile = (profile: PermissionProfile) => {
-    setDeleteDialog({ open: true, profile })
-  }
+    setDeleteDialog({ open: true, profile });
+  };
 
   const handleConfirmDeleteProfile = () => {
     if (deleteDialog.profile) {
-      setProfiles((prev) => prev.filter((p) => p.id !== deleteDialog.profile!.id))
+      setProfiles((prev) =>
+        prev.filter((p) => p.id !== deleteDialog.profile!.id),
+      );
     }
-  }
+  };
 
   const filteredProfiles = profiles.filter((profile) =>
     profile.name.toLowerCase().includes(searchQuery.toLowerCase()),
-  )
+  );
 
   const stats = [
-    { label: "Total de Perfis", value: profiles.length, icon: Shield, color: "blue" as const },
+    {
+      label: "Total de Perfis",
+      value: profiles.length,
+      icon: Shield,
+      color: "blue" as const,
+    },
     {
       label: "Usuários com Perfil",
       value: profiles.reduce((acc, p) => acc + p.users, 0),
       icon: Users,
       color: "emerald" as const,
     },
-    { label: "Módulos Configuráveis", value: MODULES.length, icon: Settings, color: "violet" as const },
-  ]
+    {
+      label: "Módulos Configuráveis",
+      value: MODULES.length,
+      icon: Settings,
+      color: "violet" as const,
+    },
+  ];
 
   return (
-    <div className={STANDARD_SHELL_PANEL_CLASS}>
-    <div className="relative h-full min-h-0 flex flex-col" ref={pageRef}>
-      <div className="shrink-0 -mb-[11px]">
-      <StandardPageBanner
-        icon={Shield}
-        title="Gestão de Permissões"
-        description="Configure perfis de acesso e permissões granulares"
-        actions={<>
-          <div className="bg-white rounded-lg">
-            <ExportButton pageRef={pageRef} filename="permissoes" />
-          </div>
-          <PinToTrayButton id="page-permissoes" label="Permissões" icon={Shield} path="/admin/permissoes" />
-          <TooltipProvider delayDuration={400}>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <button
-                  onClick={handleCreateProfile}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-white/70 text-white bg-white/10 hover:bg-white/20 transition-colors text-xs font-semibold whitespace-nowrap"
-                >
-                  <Plus className="h-3.5 w-3.5 shrink-0" />
-                  Novo Perfil
-                </button>
-              </TooltipTrigger>
-              <TooltipContent side="bottom" sideOffset={6}>Criar novo perfil de permissão</TooltipContent>
-            </Tooltip>
-          </TooltipProvider>
-        </>}
-      />
-      </div>
+    <div className={`${STANDARD_SHELL_PANEL_CLASS} !p-1.5 sm:!p-2`}>
+      <div className="relative h-full min-h-0 flex flex-col" ref={pageRef}>
+        <div className="shrink-0 -mb-[11px]">
+          <StandardPageBanner
+            icon={Shield}
+            title="Gestão de Permissões"
+            description="Configure perfis de acesso e permissões granulares"
+            actions={
+              <>
+                <div className="bg-white rounded-lg">
+                  <ExportButton pageRef={pageRef} filename="permissoes" />
+                </div>
+                <PinToTrayButton
+                  id="page-permissoes"
+                  label="Permissões"
+                  icon={Shield}
+                  path="/admin/permissoes"
+                />
+                <TooltipProvider delayDuration={400}>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <button
+                        onClick={handleCreateProfile}
+                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-white/70 text-white bg-white/10 hover:bg-white/20 transition-colors text-xs font-semibold whitespace-nowrap"
+                      >
+                        <Plus className="h-3.5 w-3.5 shrink-0" />
+                        Novo Perfil
+                      </button>
+                    </TooltipTrigger>
+                    <TooltipContent side="bottom" sideOffset={6}>
+                      Criar novo perfil de permissão
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
+              </>
+            }
+          />
+        </div>
 
-      <div className="flex-1 min-h-0 overflow-y-auto">
-      <div className="space-y-5">
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-        {stats.map((stat, index) => (
-          <StandardMetricCard key={index} label={stat.label} value={stat.value} icon={stat.icon} colorKey={stat.color} />
-        ))}
-      </div>
-
-      <Card className={STANDARD_SHELL_TABLE_CARD_CLASS}>
-        <CardContent className="pt-4">
-          <div className="flex flex-col gap-4">
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
-              <Input
-                placeholder="Buscar perfis..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="pl-10"
-              />
+        <div className="allka-users-scroll flex-1 min-h-0 overflow-y-scroll">
+          <div className="space-y-2 pr-1">
+            <div className="grid grid-cols-1 overflow-hidden rounded-xl border border-slate-200/80 bg-white/80 sm:grid-cols-3 sm:divide-x sm:divide-slate-200">
+              {stats.map((stat, index) => (
+                <PermissionCompactStat
+                  key={index}
+                  label={stat.label}
+                  value={stat.value}
+                  icon={stat.icon}
+                  color={stat.color}
+                />
+              ))}
             </div>
 
-            <Tabs defaultValue="all" className="w-full">
-              <TabsList className="grid w-full grid-cols-2">
-                <TabsTrigger value="all">Perfis de Acesso</TabsTrigger>
-                <TabsTrigger value="matrix">Matriz de Permissões</TabsTrigger>
-              </TabsList>
+            <Card className={STANDARD_SHELL_TABLE_CARD_CLASS}>
+              <CardContent className="p-2">
+                <div className="flex flex-col gap-2">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <div className="relative min-w-[220px] flex-1">
+                      <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+                      <Input
+                        placeholder="Buscar perfis..."
+                        value={searchQuery}
+                        onChange={(e) => setSearchQuery(e.target.value)}
+                        className="h-9 rounded-lg border-slate-200 bg-white pl-9 text-sm shadow-sm"
+                      />
+                    </div>
 
-              <TabsContent value="all" className="space-y-2 mt-4">
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-2 xl:grid-cols-3 gap-3">
-                  {filteredProfiles.map((profile) => {
-                    const sm = scopeSummary(profile.permissions)
-                    return (
-                      <Card
-                        key={profile.id}
-                        className="hover:shadow-md transition-shadow border-slate-200 overflow-hidden"
-                      >
-                        {/* Card header */}
-                        <div className="flex items-start justify-between px-4 pt-4 pb-3">
-                          <div className="flex items-start gap-3">
-                            <div className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0" style={{ background: "linear-gradient(135deg,#0f172a,#1e3a8a)" }}>
-                              <Shield className="h-4.5 w-4.5 text-blue-300" />
-                            </div>
-                            <div>
-                              <p className="font-semibold text-sm text-slate-800 leading-tight">{profile.name}</p>
-                              <p className="text-xs text-muted-foreground mt-0.5 line-clamp-1">{profile.description}</p>
-                            </div>
-                          </div>
-                          <div className="flex gap-1.5 shrink-0">
-                            <TooltipProvider delayDuration={400}>
-                              <Tooltip>
-                                <TooltipTrigger asChild>
+                    <Tabs defaultValue="all" className="min-w-[280px] flex-1">
+                      <TabsList className="grid h-9 w-full max-w-[360px] grid-cols-2 rounded-lg bg-slate-100 p-1">
+                        <TabsTrigger value="all">Perfis de Acesso</TabsTrigger>
+                        <TabsTrigger value="matrix">
+                          Matriz de Permissões
+                        </TabsTrigger>
+                      </TabsList>
+
+                      <TabsContent value="all" className="mt-2 space-y-2">
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-2 xl:grid-cols-3 gap-3">
+                          {filteredProfiles.map((profile) => {
+                            const sm = scopeSummary(profile.permissions);
+                            return (
+                              <Card
+                                key={profile.id}
+                                className="hover:shadow-md transition-shadow border-slate-200 overflow-hidden"
+                              >
+                                {/* Card header */}
+                                <div className="flex items-start justify-between px-4 pt-4 pb-3">
+                                  <div className="flex items-start gap-3">
+                                    <div
+                                      className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0"
+                                      style={{
+                                        background:
+                                          "linear-gradient(135deg,#0f172a,#1e3a8a)",
+                                      }}
+                                    >
+                                      <Shield className="h-4.5 w-4.5 text-blue-300" />
+                                    </div>
+                                    <div>
+                                      <p className="font-semibold text-sm text-slate-800 leading-tight">
+                                        {profile.name}
+                                      </p>
+                                      <p className="text-xs text-muted-foreground mt-0.5 line-clamp-1">
+                                        {profile.description}
+                                      </p>
+                                    </div>
+                                  </div>
+                                  <div className="flex gap-1.5 shrink-0">
+                                    <TooltipProvider delayDuration={400}>
+                                      <Tooltip>
+                                        <TooltipTrigger asChild>
+                                          <button
+                                            onClick={() =>
+                                              handleEditProfile(profile)
+                                            }
+                                            className="h-7 w-7 flex items-center justify-center rounded-[8px] bg-white dark:bg-slate-800 border border-[#e8edf5] dark:border-slate-700 text-[#6E2C96] dark:text-slate-500 shadow-[0_4px_10px_rgba(15,23,42,0.06)] hover:bg-gradient-to-br hover:from-[#2558FF] hover:via-[#6E2C96] hover:to-[#D92293] hover:text-white dark:hover:text-[#0a1628] hover:border-transparent hover:shadow-[0_8px_18px_rgba(15,23,42,0.18)] hover:-translate-y-px transition-all duration-150"
+                                          >
+                                            <Edit className="h-3.5 w-3.5" />
+                                          </button>
+                                        </TooltipTrigger>
+                                        <TooltipContent className="text-xs font-medium">
+                                          Editar perfil
+                                        </TooltipContent>
+                                      </Tooltip>
+                                    </TooltipProvider>
+                                    <TooltipProvider delayDuration={400}>
+                                      <Tooltip>
+                                        <TooltipTrigger asChild>
+                                          <button
+                                            onClick={() =>
+                                              handleDeleteProfile(profile)
+                                            }
+                                            className="h-7 w-7 flex items-center justify-center rounded-[8px] bg-white dark:bg-slate-800 border border-[#e8edf5] dark:border-slate-700 text-rose-500 dark:text-slate-500 shadow-[0_4px_10px_rgba(15,23,42,0.06)] hover:bg-gradient-to-br hover:from-[#2558FF] hover:via-[#6E2C96] hover:to-[#D92293] hover:text-white dark:hover:text-[#0a1628] hover:border-transparent hover:shadow-[0_8px_18px_rgba(15,23,42,0.18)] hover:-translate-y-px transition-all duration-150"
+                                          >
+                                            <Trash2 className="h-3.5 w-3.5" />
+                                          </button>
+                                        </TooltipTrigger>
+                                        <TooltipContent className="text-xs font-medium">
+                                          Excluir perfil
+                                        </TooltipContent>
+                                      </Tooltip>
+                                    </TooltipProvider>
+                                  </div>
+                                </div>
+
+                                {/* Stats row */}
+                                <div className="flex items-center gap-2 px-4 py-2 border-t border-b border-slate-100 bg-slate-50">
+                                  <Users className="h-3.5 w-3.5 text-slate-400" />
+                                  <span className="text-xs text-slate-500">
+                                    {profile.users} usuários
+                                  </span>
+                                  <span className="mx-1 text-slate-200">·</span>
+                                  {sm.all > 0 && (
+                                    <NeonBadge
+                                      color="emerald"
+                                      className="text-[10px] font-bold"
+                                    >
+                                      {sm.all} Todos
+                                    </NeonBadge>
+                                  )}
+                                  {sm.own > 0 && (
+                                    <NeonBadge
+                                      color="blue"
+                                      className="text-[10px] font-bold"
+                                    >
+                                      {sm.own} Próprios
+                                    </NeonBadge>
+                                  )}
+                                  <span className="ml-auto text-[10px] text-slate-400">
+                                    {sm.all + sm.own}/{sm.total} ativas
+                                  </span>
+                                </div>
+
+                                {/* Module quick-grid */}
+                                <div className="px-4 py-3">
+                                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wide mb-2">
+                                    Módulos
+                                  </p>
+                                  <div className="flex flex-wrap gap-1">
+                                    {MODULES.map((mod) => {
+                                      const perm =
+                                        profile.permissions?.[mod.key];
+                                      if (!perm) return null;
+                                      const hasAny = Object.values(perm).some(
+                                        (v) => v !== "none",
+                                      );
+                                      const isAll = Object.values(perm).every(
+                                        (v) => v === "all",
+                                      );
+                                      if (!hasAny) return null;
+                                      return (
+                                        <NeonBadge
+                                          key={mod.key}
+                                          color={isAll ? "emerald" : "blue"}
+                                          className="text-[10px] font-medium"
+                                        >
+                                          {mod.label}
+                                        </NeonBadge>
+                                      );
+                                    })}
+                                  </div>
+                                </div>
+                              </Card>
+                            );
+                          })}
+                        </div>
+                      </TabsContent>
+
+                      <TabsContent value="matrix" className="mt-2">
+                        {filteredProfiles.length === 0 ? (
+                          <p className="text-sm text-muted-foreground text-center py-8">
+                            Nenhum perfil encontrado.
+                          </p>
+                        ) : (
+                          <div className="space-y-4">
+                            {filteredProfiles.map((profile) => (
+                              <Card
+                                key={profile.id}
+                                className="overflow-hidden border-slate-200"
+                              >
+                                {/* Profile header */}
+                                <div
+                                  className="flex items-center gap-3 px-4 py-3"
+                                  style={{
+                                    background:
+                                      "linear-gradient(135deg,#0f172a,#1e3a8a)",
+                                  }}
+                                >
+                                  <Shield className="h-4 w-4 text-blue-300" />
+                                  <p className="text-sm font-semibold text-white">
+                                    {profile.name}
+                                  </p>
+                                  <p className="text-xs text-slate-400 ml-1">
+                                    — {profile.description}
+                                  </p>
                                   <button
                                     onClick={() => handleEditProfile(profile)}
-                                    className="h-7 w-7 flex items-center justify-center rounded-[8px] bg-white dark:bg-slate-800 border border-[#e8edf5] dark:border-slate-700 text-[#6E2C96] dark:text-slate-500 shadow-[0_4px_10px_rgba(15,23,42,0.06)] hover:bg-gradient-to-br hover:from-[#2558FF] hover:via-[#6E2C96] hover:to-[#D92293] hover:text-white dark:hover:text-[#0a1628] hover:border-transparent hover:shadow-[0_8px_18px_rgba(15,23,42,0.18)] hover:-translate-y-px transition-all duration-150"
+                                    className="ml-auto p-1.5 rounded hover:bg-white/10 text-slate-300 hover:text-white transition-colors"
                                   >
                                     <Edit className="h-3.5 w-3.5" />
                                   </button>
-                                </TooltipTrigger>
-                                <TooltipContent className="text-xs font-medium">Editar perfil</TooltipContent>
-                              </Tooltip>
-                            </TooltipProvider>
-                            <TooltipProvider delayDuration={400}>
-                              <Tooltip>
-                                <TooltipTrigger asChild>
-                                  <button
-                                    onClick={() => handleDeleteProfile(profile)}
-                                    className="h-7 w-7 flex items-center justify-center rounded-[8px] bg-white dark:bg-slate-800 border border-[#e8edf5] dark:border-slate-700 text-rose-500 dark:text-slate-500 shadow-[0_4px_10px_rgba(15,23,42,0.06)] hover:bg-gradient-to-br hover:from-[#2558FF] hover:via-[#6E2C96] hover:to-[#D92293] hover:text-white dark:hover:text-[#0a1628] hover:border-transparent hover:shadow-[0_8px_18px_rgba(15,23,42,0.18)] hover:-translate-y-px transition-all duration-150"
-                                  >
-                                    <Trash2 className="h-3.5 w-3.5" />
-                                  </button>
-                                </TooltipTrigger>
-                                <TooltipContent className="text-xs font-medium">Excluir perfil</TooltipContent>
-                              </Tooltip>
-                            </TooltipProvider>
-                          </div>
-                        </div>
+                                </div>
 
-                        {/* Stats row */}
-                        <div className="flex items-center gap-2 px-4 py-2 border-t border-b border-slate-100 bg-slate-50">
-                          <Users className="h-3.5 w-3.5 text-slate-400" />
-                          <span className="text-xs text-slate-500">{profile.users} usuários</span>
-                          <span className="mx-1 text-slate-200">·</span>
-                          {sm.all > 0 && (
-                            <NeonBadge color="emerald" className="text-[10px] font-bold">
-                              {sm.all} Todos
-                            </NeonBadge>
-                          )}
-                          {sm.own > 0 && (
-                            <NeonBadge color="blue" className="text-[10px] font-bold">
-                              {sm.own} Próprios
-                            </NeonBadge>
-                          )}
-                          <span className="ml-auto text-[10px] text-slate-400">{sm.all + sm.own}/{sm.total} ativas</span>
-                        </div>
-
-                        {/* Module quick-grid */}
-                        <div className="px-4 py-3">
-                          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wide mb-2">Módulos</p>
-                          <div className="flex flex-wrap gap-1">
-                            {MODULES.map((mod) => {
-                              const perm = profile.permissions?.[mod.key]
-                              if (!perm) return null
-                              const hasAny = Object.values(perm).some((v) => v !== "none")
-                              const isAll  = Object.values(perm).every((v) => v === "all")
-                              if (!hasAny) return null
-                              return (
-                                <NeonBadge
-                                  key={mod.key}
-                                  color={isAll ? "emerald" : "blue"}
-                                  className="text-[10px] font-medium"
-                                >
-                                  {mod.label}
-                                </NeonBadge>
-                              )
-                            })}
-                          </div>
-                        </div>
-                      </Card>
-                    )
-                  })}
-                </div>
-              </TabsContent>
-
-              <TabsContent value="matrix" className="mt-4">
-                {filteredProfiles.length === 0 ? (
-                  <p className="text-sm text-muted-foreground text-center py-8">Nenhum perfil encontrado.</p>
-                ) : (
-                  <div className="space-y-4">
-                    {filteredProfiles.map((profile) => (
-                      <Card key={profile.id} className="overflow-hidden border-slate-200">
-                        {/* Profile header */}
-                        <div
-                          className="flex items-center gap-3 px-4 py-3"
-                          style={{ background: "linear-gradient(135deg,#0f172a,#1e3a8a)" }}
-                        >
-                          <Shield className="h-4 w-4 text-blue-300" />
-                          <p className="text-sm font-semibold text-white">{profile.name}</p>
-                          <p className="text-xs text-slate-400 ml-1">— {profile.description}</p>
-                          <button
-                            onClick={() => handleEditProfile(profile)}
-                            className="ml-auto p-1.5 rounded hover:bg-white/10 text-slate-300 hover:text-white transition-colors"
-                          >
-                            <Edit className="h-3.5 w-3.5" />
-                          </button>
-                        </div>
-
-                        {/* Read-only matrix */}
-                        <div className="overflow-x-auto">
-                          <table className="w-full text-sm border-collapse">
-                            <thead>
-                              <tr className="bg-slate-100">
-                                <th className="text-left px-4 py-2 text-xs font-semibold text-slate-500 border-r border-slate-200" style={{ width: 180 }}>Módulo</th>
-                                {ACTIONS.map((a) => (
-                                  <th key={a.key} className="text-center px-2 py-2 text-xs font-semibold text-slate-500 border-r border-slate-200 last:border-r-0" style={{ width: 110 }}>
-                                    {a.label}
-                                  </th>
-                                ))}
-                              </tr>
-                            </thead>
-                            <tbody>
-                              {GROUPS.map((group) => {
-                                const groupMods = MODULES.filter((m) => m.group === group)
-                                const groupHasAny = groupMods.some((m) =>
-                                  ACTIONS.some((a) => (profile.permissions?.[m.key]?.[a.key] ?? "none") !== "none")
-                                )
-                                if (!groupHasAny) return null
-                                return [
-                                  <tr key={`hdr-${group}`}>
-                                    <td colSpan={ACTIONS.length + 1} className="px-4 py-1 bg-slate-50 border-y border-slate-100">
-                                      <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{group}</span>
-                                    </td>
-                                  </tr>,
-                                  ...groupMods.map((mod, idx) => {
-                                    const Icon = mod.icon
-                                    const perm = profile.permissions?.[mod.key]
-                                    const hasAny = perm && ACTIONS.some((a) => perm[a.key] !== "none")
-                                    if (!hasAny) return null
-                                    return (
-                                      <tr
-                                        key={mod.key}
-                                        className={`border-b border-slate-100 ${
-                                          idx % 2 === 0 ? "bg-white" : "bg-slate-50/40"
-                                        }`}
-                                      >
-                                        <td className="px-4 py-2 border-r border-slate-100">
-                                          <div className="flex items-center gap-2">
-                                            <Icon className="h-3.5 w-3.5 text-slate-400 shrink-0" />
-                                            <span className="text-xs font-medium text-slate-700">{mod.label}</span>
-                                          </div>
-                                        </td>
-                                        {ACTIONS.map((action) => (
-                                          <td key={action.key} className="px-2 py-2 border-r border-slate-100 last:border-r-0 text-center">
-                                            <ReadonlyScopeCell value={perm?.[action.key] ?? "none"} />
-                                          </td>
+                                {/* Read-only matrix */}
+                                <div className="overflow-x-auto">
+                                  <table className="w-full text-sm border-collapse">
+                                    <thead>
+                                      <tr className="bg-slate-100">
+                                        <th
+                                          className="text-left px-4 py-2 text-xs font-semibold text-slate-500 border-r border-slate-200"
+                                          style={{ width: 180 }}
+                                        >
+                                          Módulo
+                                        </th>
+                                        {ACTIONS.map((a) => (
+                                          <th
+                                            key={a.key}
+                                            className="text-center px-2 py-2 text-xs font-semibold text-slate-500 border-r border-slate-200 last:border-r-0"
+                                            style={{ width: 110 }}
+                                          >
+                                            {a.label}
+                                          </th>
                                         ))}
                                       </tr>
-                                    )
-                                  }),
-                                ]
-                              })}
-                            </tbody>
-                          </table>
-                        </div>
-                      </Card>
-                    ))}
+                                    </thead>
+                                    <tbody>
+                                      {GROUPS.map((group) => {
+                                        const groupMods = MODULES.filter(
+                                          (m) => m.group === group,
+                                        );
+                                        const groupHasAny = groupMods.some(
+                                          (m) =>
+                                            ACTIONS.some(
+                                              (a) =>
+                                                (profile.permissions?.[m.key]?.[
+                                                  a.key
+                                                ] ?? "none") !== "none",
+                                            ),
+                                        );
+                                        if (!groupHasAny) return null;
+                                        return [
+                                          <tr key={`hdr-${group}`}>
+                                            <td
+                                              colSpan={ACTIONS.length + 1}
+                                              className="px-4 py-1 bg-slate-50 border-y border-slate-100"
+                                            >
+                                              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+                                                {group}
+                                              </span>
+                                            </td>
+                                          </tr>,
+                                          ...groupMods.map((mod, idx) => {
+                                            const Icon = mod.icon;
+                                            const perm =
+                                              profile.permissions?.[mod.key];
+                                            const hasAny =
+                                              perm &&
+                                              ACTIONS.some(
+                                                (a) => perm[a.key] !== "none",
+                                              );
+                                            if (!hasAny) return null;
+                                            return (
+                                              <tr
+                                                key={mod.key}
+                                                className={`border-b border-slate-100 ${
+                                                  idx % 2 === 0
+                                                    ? "bg-white"
+                                                    : "bg-slate-50/40"
+                                                }`}
+                                              >
+                                                <td className="px-4 py-2 border-r border-slate-100">
+                                                  <div className="flex items-center gap-2">
+                                                    <Icon className="h-3.5 w-3.5 text-slate-400 shrink-0" />
+                                                    <span className="text-xs font-medium text-slate-700">
+                                                      {mod.label}
+                                                    </span>
+                                                  </div>
+                                                </td>
+                                                {ACTIONS.map((action) => (
+                                                  <td
+                                                    key={action.key}
+                                                    className="px-2 py-2 border-r border-slate-100 last:border-r-0 text-center"
+                                                  >
+                                                    <ReadonlyScopeCell
+                                                      value={
+                                                        perm?.[action.key] ??
+                                                        "none"
+                                                      }
+                                                    />
+                                                  </td>
+                                                ))}
+                                              </tr>
+                                            );
+                                          }),
+                                        ];
+                                      })}
+                                    </tbody>
+                                  </table>
+                                </div>
+                              </Card>
+                            ))}
+                          </div>
+                        )}
+                      </TabsContent>
+                    </Tabs>
                   </div>
-                )}
-              </TabsContent>
-            </Tabs>
+                </div>
+              </CardContent>
+            </Card>
           </div>
-        </CardContent>
-      </Card>
-      </div>
-      </div>
+        </div>
 
-      <PermissionProfileSlidePanel
-        open={isPanelOpen}
-        onClose={() => setIsPanelOpen(false)}
-        profile={selectedProfile}
-        onSave={handleSaveProfile}
-      />
+        <PermissionProfileSlidePanel
+          open={isPanelOpen}
+          onClose={() => setIsPanelOpen(false)}
+          profile={selectedProfile}
+          onSave={handleSaveProfile}
+        />
 
-      <ConfirmationDialog
-        open={deleteDialog.open}
-        onClose={() => setDeleteDialog({ open: false, profile: null })}
-        onConfirm={handleConfirmDeleteProfile}
-        title="Excluir Perfil"
-        message={`Tem certeza que deseja excluir o perfil "${deleteDialog.profile?.name}"? Usuários vinculados a ele perdem essas permissões.`}
-        confirmText="Excluir"
-        cancelText="Cancelar"
-        destructive
-      />
+        <ConfirmationDialog
+          open={deleteDialog.open}
+          onClose={() => setDeleteDialog({ open: false, profile: null })}
+          onConfirm={handleConfirmDeleteProfile}
+          title="Excluir Perfil"
+          message={`Tem certeza que deseja excluir o perfil "${deleteDialog.profile?.name}"? Usuários vinculados a ele perdem essas permissões.`}
+          confirmText="Excluir"
+          cancelText="Cancelar"
+          destructive
+        />
+      </div>
     </div>
-    </div>
-  )
+  );
 }

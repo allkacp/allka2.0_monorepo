@@ -22,6 +22,10 @@ import {
   Link2,
   Camera,
   X,
+  TrendingUp,
+  Eye,
+  MessageCircle,
+  MoreHorizontal,
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -38,7 +42,6 @@ import {
   STANDARD_SHELL_PANEL_CLASS,
   STANDARD_SHELL_TABLE_CARD_CLASS,
   StandardPageBanner,
-  StandardMetricCard,
 } from "@/components/standard-page-shell";
 import { ExportButton } from "@/components/export-button";
 import { PinToTrayButton } from "@/components/pin-to-tray-button";
@@ -60,6 +63,12 @@ import { useTableScrollSync } from "@/hooks/useTableScrollSync";
 import { useToast } from "@/components/ui/use-toast";
 import { apiClient } from "@/lib/api-client";
 import { LegacyIdBadge } from "@/components/legacy-id-badge";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
 // Client é uma entidade real, separada de Company — servida por
 // /api/client-records (NÃO /api/clients, que é o legado sobre Company).
@@ -122,36 +131,93 @@ const avatarColors = [
   "from-cyan-500 to-blue-600",
   "from-pink-500 to-rose-700",
 ];
-const avatarColor = (index: number) => avatarColors[Math.abs(index) % avatarColors.length];
+const avatarColor = (index: number) =>
+  avatarColors[Math.abs(index) % avatarColors.length];
 
-function ClientAvatar({ client, index }: { client: ClientRecord; index: number }) {
+function ClientCompactStatCard({
+  label,
+  value,
+  icon: Icon,
+  color = "blue",
+}: {
+  label: string;
+  value: number;
+  icon: typeof Tag;
+  color?: "blue" | "emerald" | "violet" | "orange";
+}) {
+  const palette = {
+    blue: "bg-sky-50 text-[#1877e8] ring-sky-100",
+    emerald: "bg-emerald-50 text-[#05ae70] ring-emerald-100",
+    violet: "bg-violet-50 text-[#8238e9] ring-violet-100",
+    orange: "bg-orange-50 text-[#ff6a1a] ring-orange-100",
+  } as const;
+  return (
+    <div className="flex min-w-0 items-center gap-3 px-5 py-2.5 first:rounded-l-xl last:rounded-r-xl">
+      <div
+        className={`flex h-14 w-14 shrink-0 items-center justify-center rounded-full ring-1 ${palette[color]}`}
+      >
+        <Icon className="h-7 w-7 stroke-[2]" />
+      </div>
+      <div className="min-w-0 leading-none">
+        <p className="truncate text-[11px] font-bold uppercase tracking-[0.02em] text-[#31578f]">
+          {label}
+        </p>
+        <div className="mt-1.5 flex min-w-0 items-center gap-2">
+          <span className="text-[28px] font-extrabold tracking-tight text-[#0c2455]">
+            {value}
+          </span>
+          <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-1 text-[10px] font-semibold text-emerald-600">
+            <TrendingUp className="h-3 w-3" />
+            +0% <span className="font-normal text-slate-400">no mês</span>
+          </span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ClientAvatar({
+  client,
+  index,
+}: {
+  client: ClientRecord;
+  index: number;
+}) {
   if (client.avatar) {
     return (
       <img
         src={client.avatar}
         alt={client.name}
-        className="w-10 h-10 rounded-full object-cover flex-shrink-0 shadow-sm"
+        className="h-9 w-9 rounded-full object-cover flex-shrink-0 shadow-sm"
       />
     );
   }
   return (
     <div
-      className={`w-10 h-10 rounded-full bg-gradient-to-br ${avatarColor(index)} flex items-center justify-center flex-shrink-0 shadow-sm`}
+      className={`h-9 w-9 rounded-full bg-gradient-to-br ${avatarColor(index)} flex items-center justify-center flex-shrink-0 shadow-sm`}
     >
-      <span className="text-xs font-bold text-white">{clientInitials(client.name)}</span>
+      <span className="text-xs font-bold text-white">
+        {clientInitials(client.name)}
+      </span>
     </div>
   );
 }
 
-const STATUS_CONFIG: Record<string, { label: string; color: "emerald" | "slate" | "blue" }> = {
+const STATUS_CONFIG: Record<
+  string,
+  { label: string; color: "emerald" | "slate" | "blue" }
+> = {
   active: { label: "Ativo", color: "emerald" },
   inactive: { label: "Inativo", color: "slate" },
   prospect: { label: "Prospecto", color: "blue" },
 };
 const STATUS_DOT_CLASSES: Record<string, string> = {
-  active: "border-emerald-500 bg-emerald-200 text-emerald-900 shadow-[0_0_12px_rgba(16,185,129,0.65)] dark:bg-emerald-800/70 dark:text-emerald-100",
-  inactive: "border-slate-400 bg-slate-300 text-slate-800 shadow-[0_0_8px_rgba(100,116,139,0.4)] dark:bg-slate-800 dark:text-slate-300",
-  prospect: "border-blue-500 bg-blue-200 text-blue-900 shadow-[0_0_12px_rgba(59,130,246,0.65)] dark:bg-blue-800/70 dark:text-blue-100",
+  active:
+    "border-emerald-500 bg-emerald-200 text-emerald-900 shadow-[0_0_12px_rgba(16,185,129,0.65)] dark:bg-emerald-800/70 dark:text-emerald-100",
+  inactive:
+    "border-slate-400 bg-slate-300 text-slate-800 shadow-[0_0_8px_rgba(100,116,139,0.4)] dark:bg-slate-800 dark:text-slate-300",
+  prospect:
+    "border-blue-500 bg-blue-200 text-blue-900 shadow-[0_0_12px_rgba(59,130,246,0.65)] dark:bg-blue-800/70 dark:text-blue-100",
 };
 const STATUS_DOT_BG: Record<string, string> = {
   active: "bg-emerald-500",
@@ -159,18 +225,55 @@ const STATUS_DOT_BG: Record<string, string> = {
   prospect: "bg-blue-500",
 };
 
-type ColKey = "id" | "cliente" | "segmento" | "contato" | "tipo" | "vinculo" | "status" | "cadastro";
+type ColKey =
+  | "id"
+  | "cliente"
+  | "segmento"
+  | "contato"
+  | "tipo"
+  | "vinculo"
+  | "status"
+  | "cadastro";
 const ALL_COLUMNS: { key: ColKey; label: string; info: string }[] = [
   { key: "id", label: "ID", info: "Código sequencial do cliente." },
   { key: "cliente", label: "Cliente", info: "Nome e documento do cliente." },
-  { key: "segmento", label: "Segmento", info: "Segmento de mercado informado no cadastro." },
-  { key: "contato", label: "Contato", info: "E-mail, telefone e site do cliente." },
-  { key: "tipo", label: "Tipo", info: "Pessoa Jurídica (PJ) ou Pessoa Física (PF)." },
-  { key: "vinculo", label: "Vínculo", info: "Agency, Company ou Partner responsável por este cliente." },
+  {
+    key: "segmento",
+    label: "Segmento",
+    info: "Segmento de mercado informado no cadastro.",
+  },
+  {
+    key: "contato",
+    label: "Contato",
+    info: "E-mail, telefone e site do cliente.",
+  },
+  {
+    key: "tipo",
+    label: "Tipo",
+    info: "Pessoa Jurídica (PJ) ou Pessoa Física (PF).",
+  },
+  {
+    key: "vinculo",
+    label: "Vínculo",
+    info: "Agency, Company ou Partner responsável por este cliente.",
+  },
   { key: "status", label: "Status", info: "Situação comercial do cliente." },
-  { key: "cadastro", label: "Cadastro", info: "Data em que o cliente foi cadastrado." },
+  {
+    key: "cadastro",
+    label: "Cadastro",
+    info: "Data em que o cliente foi cadastrado.",
+  },
 ];
-const DEFAULT_VISIBLE: ColKey[] = ["id", "cliente", "segmento", "contato", "tipo", "vinculo", "status", "cadastro"];
+const DEFAULT_VISIBLE: ColKey[] = [
+  "id",
+  "cliente",
+  "segmento",
+  "contato",
+  "tipo",
+  "vinculo",
+  "status",
+  "cadastro",
+];
 
 // Stat cards agora vêm do shell compartilhado (standard-page-shell.tsx).
 
@@ -209,7 +312,9 @@ export default function AdminClientesPage() {
   const [error, setError] = useState<string | null>(null);
   const pageRef = useRef<HTMLDivElement>(null);
   const searchBoxRef = useRef<HTMLDivElement>(null);
-  const searchTimeout = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const searchTimeout = useRef<ReturnType<typeof setTimeout> | undefined>(
+    undefined,
+  );
   const { toast } = useToast();
 
   const [filterPanelOpen, setFilterPanelOpen] = useState(false);
@@ -217,20 +322,29 @@ export default function AdminClientesPage() {
   // Padrão da plataforma: a lista abre só com quem está ativo. Inativo e
   // prospecto aparecem quando a pessoa marca no painel de filtros. O backend
   // só aceita um status por vez, por isso o Set começa com um único valor.
-  const [statusFilter, setStatusFilter] = useState<Set<string>>(new Set(["active"]));
-  const [visibleCols, setVisibleCols] = useState<Set<ColKey>>(new Set(DEFAULT_VISIBLE));
+  const [statusFilter, setStatusFilter] = useState<Set<string>>(
+    new Set(["active"]),
+  );
+  const [visibleCols, setVisibleCols] = useState<Set<ColKey>>(
+    new Set(DEFAULT_VISIBLE),
+  );
   const [pageJumpValue, setPageJumpValue] = useState("");
 
   const navigate = useNavigate();
   const { clientId: urlClientId } = useParams<{ clientId?: string }>();
 
   const [infoPanelOpen, setInfoPanelOpen] = useState(false);
-  const [infoPanelClient, setInfoPanelClient] = useState<ClientRecord | null>(null);
-  const openInfoPanel = useCallback((client: ClientRecord) => {
-    setInfoPanelClient(client);
-    setInfoPanelOpen(true);
-    navigate(`/admin/clientes/${client.sequence_number}`, { replace: true });
-  }, [navigate]);
+  const [infoPanelClient, setInfoPanelClient] = useState<ClientRecord | null>(
+    null,
+  );
+  const openInfoPanel = useCallback(
+    (client: ClientRecord) => {
+      setInfoPanelClient(client);
+      setInfoPanelOpen(true);
+      navigate(`/admin/clientes/${client.sequence_number}`, { replace: true });
+    },
+    [navigate],
+  );
   const closeInfoPanel = useCallback(() => {
     setInfoPanelOpen(false);
     navigate("/admin/clientes", { replace: true });
@@ -267,9 +381,18 @@ export default function AdminClientesPage() {
         apiClient.getPartners({ limit: "200" }),
       ]);
       setLinkOptions({
-        agency: ((ag as any).data || []).map((a: any) => ({ id: a.id, name: a.name })),
-        company: ((co as any).data || []).map((c: any) => ({ id: c.id, name: c.name })),
-        partner: ((pa as any).data || []).map((p: any) => ({ id: p.id, name: p.user?.name || p.user?.email || p.id })),
+        agency: ((ag as any).data || []).map((a: any) => ({
+          id: a.id,
+          name: a.name,
+        })),
+        company: ((co as any).data || []).map((c: any) => ({
+          id: c.id,
+          name: c.name,
+        })),
+        partner: ((pa as any).data || []).map((p: any) => ({
+          id: p.id,
+          name: p.user?.name || p.user?.email || p.id,
+        })),
       });
     } catch (err) {
       console.error("[AdminClientes] Failed to load link options:", err);
@@ -280,9 +403,18 @@ export default function AdminClientesPage() {
     loadLinkOptions();
   }, [loadLinkOptions]);
 
-  const agencyNameById = useMemo(() => Object.fromEntries(linkOptions.agency.map((a) => [a.id, a.name])), [linkOptions]);
-  const companyNameById = useMemo(() => Object.fromEntries(linkOptions.company.map((c) => [c.id, c.name])), [linkOptions]);
-  const partnerNameById = useMemo(() => Object.fromEntries(linkOptions.partner.map((p) => [p.id, p.name])), [linkOptions]);
+  const agencyNameById = useMemo(
+    () => Object.fromEntries(linkOptions.agency.map((a) => [a.id, a.name])),
+    [linkOptions],
+  );
+  const companyNameById = useMemo(
+    () => Object.fromEntries(linkOptions.company.map((c) => [c.id, c.name])),
+    [linkOptions],
+  );
+  const partnerNameById = useMemo(
+    () => Object.fromEntries(linkOptions.partner.map((p) => [p.id, p.name])),
+    [linkOptions],
+  );
 
   // ── Criar / editar cliente ──────────────────────────────────────────────
   const [formOpen, setFormOpen] = useState(false);
@@ -305,7 +437,8 @@ export default function AdminClientesPage() {
   };
   const handleClientCepChange = async (raw: string) => {
     const digits = raw.replace(/\D/g, "").slice(0, 8);
-    const formatted = digits.length > 5 ? `${digits.slice(0, 5)}-${digits.slice(5)}` : digits;
+    const formatted =
+      digits.length > 5 ? `${digits.slice(0, 5)}-${digits.slice(5)}` : digits;
     setForm((f) => ({ ...f, zip_code: formatted }));
     setClientCepError("");
     if (digits.length !== 8) return;
@@ -332,8 +465,15 @@ export default function AdminClientesPage() {
     }
   };
 
-  const { sortKey, sortDir, handleSort, sortData, columnFilters, toggleColumnFilter, clearColumnFilter } =
-    useSorting<ClientRecord>();
+  const {
+    sortKey,
+    sortDir,
+    handleSort,
+    sortData,
+    columnFilters,
+    toggleColumnFilter,
+    clearColumnFilter,
+  } = useSorting<ClientRecord>();
 
   const {
     tableScrollRef,
@@ -377,7 +517,10 @@ export default function AdminClientesPage() {
 
   useEffect(() => {
     const onClickOutside = (e: MouseEvent) => {
-      if (searchBoxRef.current && !searchBoxRef.current.contains(e.target as Node)) {
+      if (
+        searchBoxRef.current &&
+        !searchBoxRef.current.contains(e.target as Node)
+      ) {
         setSearchFocused(false);
       }
     };
@@ -425,10 +568,12 @@ export default function AdminClientesPage() {
       if (totalPages > maxVisible) pages.push("...");
     } else if (page >= totalPages - halfVisible) {
       pages.push("...");
-      for (let i = totalPages - maxVisible + 1; i <= totalPages; i++) pages.push(i);
+      for (let i = totalPages - maxVisible + 1; i <= totalPages; i++)
+        pages.push(i);
     } else {
       pages.push("...");
-      for (let i = page - halfVisible; i <= page + halfVisible; i++) pages.push(i);
+      for (let i = page - halfVisible; i <= page + halfVisible; i++)
+        pages.push(i);
       pages.push("...");
     }
     return pages;
@@ -452,6 +597,7 @@ export default function AdminClientesPage() {
   const totalPj = clients.filter((c) => c.type === "pj").length;
   const totalPf = clients.filter((c) => c.type === "pf").length;
   const totalActive = clients.filter((c) => c.status === "active").length;
+  const totalUnlinked = clients.filter((c) => c.links.length === 0).length;
 
   function openCreate() {
     setEditingId(null);
@@ -462,8 +608,16 @@ export default function AdminClientesPage() {
 
   function openEdit(c: ClientRecord) {
     const link = c.links[0];
-    const linkType: LinkType = !link ? "none" : link.agency_id ? "agency" : link.company_id ? "company" : "partner";
-    const linkId = link ? (link.agency_id || link.company_id || link.partner_id || "") : "";
+    const linkType: LinkType = !link
+      ? "none"
+      : link.agency_id
+        ? "agency"
+        : link.company_id
+          ? "company"
+          : "partner";
+    const linkId = link
+      ? link.agency_id || link.company_id || link.partner_id || ""
+      : "";
     setEditingId(c.id);
     setForm({
       name: c.name,
@@ -510,7 +664,9 @@ export default function AdminClientesPage() {
       return;
     }
     if (form.linkType !== "none" && !form.linkId) {
-      setFormError("Selecione qual Agency/Company/Partner este cliente pertence, ou marque \"Sem vínculo\"");
+      setFormError(
+        'Selecione qual Agency/Company/Partner este cliente pertence, ou marque "Sem vínculo"',
+      );
       return;
     }
     setSaving(true);
@@ -567,7 +723,12 @@ export default function AdminClientesPage() {
         // ordenação padrão do Admin é ascendente (cli_00001 primeiro), ele
         // cai na última página. Pula pra lá direto em vez de voltar pra
         // página 1, senão o cliente recém-criado fica "escondido".
-        const countResp: any = await apiClient.getClientRecords({ page: "1", limit: "1", sortBy: "sequence_number", sortDir: "asc" });
+        const countResp: any = await apiClient.getClientRecords({
+          page: "1",
+          limit: "1",
+          sortBy: "sequence_number",
+          sortDir: "asc",
+        });
         const newTotal = countResp.total ?? 0;
         setPage(Math.max(1, Math.ceil(newTotal / pageSize)));
         load();
@@ -592,7 +753,9 @@ export default function AdminClientesPage() {
       </button>
       {getPageNumbers().map((p, index) =>
         p === "..." ? (
-          <span key={index} className="text-xs text-slate-300 px-0.5">·</span>
+          <span key={index} className="text-xs text-slate-300 px-0.5">
+            ·
+          </span>
         ) : (
           <button
             key={index}
@@ -603,7 +766,14 @@ export default function AdminClientesPage() {
                 ? "text-white shadow-[0_6px_14px_rgba(110,44,150,0.25)]"
                 : "text-slate-500 hover:text-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 dark:text-slate-400"
             }`}
-            style={p === page ? { background: "linear-gradient(135deg, #111A4D 0%, #6E2C96 55%, #D92293 100%)" } : undefined}
+            style={
+              p === page
+                ? {
+                    background:
+                      "linear-gradient(135deg, #111A4D 0%, #6E2C96 55%, #D92293 100%)",
+                  }
+                : undefined
+            }
           >
             {p}
           </button>
@@ -627,7 +797,9 @@ export default function AdminClientesPage() {
                 max={totalPages}
                 value={pageJumpValue}
                 onChange={(e) => setPageJumpValue(e.target.value)}
-                onKeyDown={(e) => { if (e.key === "Enter") commitPageJump(); }}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") commitPageJump();
+                }}
                 placeholder="Pág."
                 aria-label="Ir para a página"
                 className="h-7 w-14 text-xs text-center rounded-[8px] border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
@@ -639,13 +811,20 @@ export default function AdminClientesPage() {
               >
                 <span
                   className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none"
-                  style={{ background: "linear-gradient(135deg,#000000 0%,#1a2a6f 45%,#c81a7f 100%)" }}
+                  style={{
+                    background:
+                      "linear-gradient(135deg,#000000 0%,#1a2a6f 45%,#c81a7f 100%)",
+                  }}
                 />
-                <span className="relative z-10 text-[#7d1b6a] dark:text-[#c07ab0] group-hover:text-white transition-colors">Ir</span>
+                <span className="relative z-10 text-[#7d1b6a] dark:text-[#c07ab0] group-hover:text-white transition-colors">
+                  Ir
+                </span>
               </button>
             </div>
           </TooltipTrigger>
-          <TooltipContent side="bottom">Ir diretamente para uma página</TooltipContent>
+          <TooltipContent side="bottom">
+            Ir diretamente para uma página
+          </TooltipContent>
         </Tooltip>
       </TooltipProvider>
     </div>
@@ -657,12 +836,15 @@ export default function AdminClientesPage() {
         <TooltipTrigger asChild>
           <span className="text-xs text-slate-500 dark:text-slate-400 whitespace-nowrap cursor-default">
             {(() => {
-              const start = total === 0 ? 0 : Math.min((page - 1) * pageSize + 1, total);
+              const start =
+                total === 0 ? 0 : Math.min((page - 1) * pageSize + 1, total);
               const end = Math.min(page * pageSize, total);
               return (
                 <>
                   {start}-{end} de{" "}
-                  <span className="font-semibold text-slate-600 dark:text-slate-300">{total}</span>{" "}
+                  <span className="font-semibold text-slate-600 dark:text-slate-300">
+                    {total}
+                  </span>{" "}
                   cliente{total !== 1 ? "s" : ""}
                 </>
               );
@@ -677,795 +859,1431 @@ export default function AdminClientesPage() {
   );
 
   const currentLinkOptions =
-    form.linkType === "agency" ? linkOptions.agency : form.linkType === "company" ? linkOptions.company : form.linkType === "partner" ? linkOptions.partner : [];
+    form.linkType === "agency"
+      ? linkOptions.agency
+      : form.linkType === "company"
+        ? linkOptions.company
+        : form.linkType === "partner"
+          ? linkOptions.partner
+          : [];
 
   return (
-    <div className={STANDARD_SHELL_PANEL_CLASS}>
-    <div ref={pageRef} className="relative h-full min-h-0 flex flex-col overflow-hidden">
-      <div className="shrink-0 -mb-[11px]">
-      <StandardPageBanner
-        icon={Tag}
-        title="Clientes"
-        description="Todos os clientes reais da plataforma — vinculados a Agency, Company, Partner ou sem vínculo"
-        actions={
-          <>
-            <div className="bg-white rounded-lg">
-              <ExportButton pageRef={pageRef} filename="clientes" />
-            </div>
-            <PinToTrayButton id="page-clientes" label="Clientes" icon={Tag} path="/admin/clientes" />
-            <TooltipProvider delayDuration={400}>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <button
-                    onClick={openCreate}
-                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-white/70 text-white bg-white/10 hover:bg-white/20 transition-colors text-xs font-semibold whitespace-nowrap"
-                  >
-                    <Plus className="h-3.5 w-3.5 shrink-0" />
-                    Criar novo cliente
-                  </button>
-                </TooltipTrigger>
-                <TooltipContent side="bottom" sideOffset={6}>Cadastrar novo cliente</TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
-          </>
-        }
-      />
-      </div>
-
-      <div className="flex-1 min-h-0 overflow-y-auto">
-      <div className="space-y-5">
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        <StandardMetricCard label="Total de Clientes" value={total} icon={Tag} colorKey="blue" />
-        <StandardMetricCard label="Pessoa Jurídica" value={totalPj} icon={Building2} colorKey="violet" />
-        <StandardMetricCard label="Pessoa Física" value={totalPf} icon={User} colorKey="emerald" />
-        <StandardMetricCard label="Ativos" value={totalActive} icon={Tag} colorKey="orange" />
-      </div>
-
-      <div className={STANDARD_SHELL_TABLE_CARD_CLASS}>
-        <div className="flex items-center gap-2 flex-wrap px-[18px] py-3">
-          <div ref={searchBoxRef} className="relative flex-1 min-w-[220px] max-w-sm">
-            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-            <Input
-              className="pl-8 h-9 text-sm"
-              placeholder="Nome, ID, e-mail ou documento..."
-              autoComplete="new-password"
-              value={searchInput}
-              onFocus={() => setSearchFocused(true)}
-              onChange={(e) => handleSearchChange(e.target.value)}
-            />
-            {searchFocused && searchInput && (
-              <div className="absolute z-20 mt-1 w-full rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 shadow-lg max-h-64 overflow-y-auto">
-                {searchSuggestions.length === 0 ? (
-                  <p className="text-xs text-slate-400 px-3 py-2">Nenhum resultado</p>
-                ) : (
-                  searchSuggestions.map((c, i) => (
-                    <button
-                      key={c.id}
-                      onClick={() => {
-                        setSearchInput(c.name);
-                        setSearch(c.name);
-                        setSearchFocused(false);
-                      }}
-                      className="w-full flex items-center gap-2.5 px-3 py-2 text-left hover:bg-slate-50 dark:hover:bg-slate-700/60 transition-colors"
-                    >
-                      <ClientAvatar client={c} index={i} />
-                      <div className="min-w-0 flex-1">
-                        <p className="text-sm font-medium text-slate-700 dark:text-slate-200 truncate">{c.name}</p>
-                        <p className="text-[11px] text-slate-400 font-mono">{formatClientSequenceId(c.sequence_number)}</p>
-                      </div>
-                    </button>
-                  ))
-                )}
-              </div>
-            )}
-          </div>
-
-          <div className="ml-auto flex items-center gap-2">
-            <IconToolbarButton icon={Filter} tooltip="Filtros" onClick={() => setFilterPanelOpen(true)} />
-            <IconToolbarButton icon={Settings2} tooltip="Configurar colunas" onClick={() => setColConfigOpen(true)} />
-          </div>
+    <div className={`${STANDARD_SHELL_PANEL_CLASS} !p-1.5 sm:!p-2 lg:!p-2`}>
+      <div
+        ref={pageRef}
+        className="relative h-full min-h-0 flex flex-col overflow-hidden"
+      >
+        <div className="shrink-0 -mb-[11px]">
+          <StandardPageBanner
+            icon={Tag}
+            title="Clientes"
+            description="Todos os clientes reais da plataforma — vinculados a Agency, Company, Partner ou sem vínculo"
+            actions={
+              <>
+                <div className="bg-white rounded-lg">
+                  <ExportButton pageRef={pageRef} filename="clientes" />
+                </div>
+                <PinToTrayButton
+                  id="page-clientes"
+                  label="Clientes"
+                  icon={Tag}
+                  path="/admin/clientes"
+                />
+                <TooltipProvider delayDuration={400}>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <button
+                        onClick={openCreate}
+                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-white/70 text-white bg-white/10 hover:bg-white/20 transition-colors text-xs font-semibold whitespace-nowrap"
+                      >
+                        <Plus className="h-3.5 w-3.5 shrink-0" />
+                        Criar novo cliente
+                      </button>
+                    </TooltipTrigger>
+                    <TooltipContent side="bottom" sideOffset={6}>
+                      Cadastrar novo cliente
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
+              </>
+            }
+          />
         </div>
 
-        <div className="flex flex-wrap items-center justify-between gap-3 px-[18px] py-2 border-y border-[#e8edf5] dark:border-slate-800 bg-white dark:bg-slate-900/30">
-          <div className="flex items-center gap-3">
-            <ItemsPerPageSelect
-              value={pageSize.toString()}
-              onValueChange={(value) => { setPageSize(Number(value)); setPage(1); }}
-              variant="top"
-            />
-            <CountText side="bottom" />
-          </div>
-
-          {hasHorizontalOverflow && (
-            <div
-              ref={topScrollRef}
-              onScroll={handleTopBarScroll}
-              title="Arraste para rolar a tabela na horizontal e ver as colunas que não couberem na tela"
-              className="hidden md:block flex-1 min-w-[80px] overflow-x-scroll allka-table-scroll self-center"
-              style={{ height: 12 }}
-            >
-              <div style={{ minWidth: 1020, height: 1 }} />
-            </div>
-          )}
-
-          {totalPages > 1 && <PaginationControls />}
-        </div>
-
-        {loading ? (
-          <div className="flex items-center justify-center py-16 gap-2 text-muted-foreground">
-            <Loader2 className="h-5 w-5 animate-spin" />
-            <span className="text-sm">Carregando clientes...</span>
-          </div>
-        ) : error ? (
-          <div className="flex flex-col items-center justify-center py-16 gap-2 text-red-500">
-            <span className="text-sm font-medium">{error}</span>
-            <button onClick={load} className="text-xs underline">Tentar novamente</button>
-          </div>
-        ) : rows.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-16 gap-2 text-muted-foreground">
-            <Building2 className="h-8 w-8 opacity-40" />
-            <span className="text-sm">Nenhum cliente encontrado</span>
-          </div>
-        ) : (
-          <div ref={tableScrollRef} onScroll={handleTableScroll} className="overflow-x-auto allka-table-scroll-body">
-            <table className="tabela-cartao w-full text-xs min-w-[1020px]">
-              <thead>
-                <tr className="border-b border-slate-200/60 dark:border-slate-700/60">
-                  <th
-                    className="py-3.5 px-2 text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-[0.04em] text-center"
-                    style={{ position: "sticky", left: 0, top: 0, zIndex: 3, minWidth: 84, background: "var(--table-head)", boxShadow: "0 1px 0 rgba(148,163,184,0.22)", borderRight: "1px solid rgba(100,116,139,0.18)" }}
-                  >
-                    Ações
-                  </th>
-                  {visibleColumns.map((col) => (
-                    <th
-                      key={col.key}
-                      className="py-3.5 px-4 text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-[0.04em] select-none [&_button]:!text-[11px]"
-                      style={{
-                        textAlign: "left",
-                        position: "sticky",
-                        top: 0,
-                        zIndex: 2,
-                        background: "var(--table-head)",
-                        boxShadow: "0 1px 0 rgba(148,163,184,0.22)",
-                        borderRight: "1px solid rgba(148,163,184,0.16)",
-                      }}
-                    >
-                      <div className="inline-flex items-center gap-1">
-                        <SortableHeader
-                          label={col.label}
-                          field={col.key === "id" ? "sequence_number" : col.key === "cliente" ? "name" : col.key === "cadastro" ? "created_at" : col.key}
-                          type={col.key === "cadastro" ? "date" : col.key === "id" ? "number" : "text"}
-                          sortKey={sortKey as string}
-                          sortDir={sortDir}
-                          onSort={handleSort}
-                          columnFilters={columnFilters}
-                          onFilter={toggleColumnFilter}
-                          onClearFilter={clearColumnFilter}
-                          filterValues={col.key === "status" ? Object.keys(STATUS_CONFIG) : undefined}
-                        />
-                        <TooltipProvider>
-                          <Tooltip>
-                            <TooltipTrigger asChild>
-                              <span className="text-slate-300 dark:text-slate-600 cursor-help text-[10px]">ⓘ</span>
-                            </TooltipTrigger>
-                            <TooltipContent className="text-xs max-w-[200px]">{col.info}</TooltipContent>
-                          </Tooltip>
-                        </TooltipProvider>
-                      </div>
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {rows.map((c, i) => {
-                  const link = c.links[0];
-                  const linkType: LinkType = !link ? "none" : link.agency_id ? "agency" : link.company_id ? "company" : "partner";
-                  const linkName =
-                    linkType === "agency" ? agencyNameById[link!.agency_id!] :
-                    linkType === "company" ? companyNameById[link!.company_id!] :
-                    linkType === "partner" ? partnerNameById[link!.partner_id!] : undefined;
-                  return (
-                  <tr
-                    key={c.id}
-                    className={`group transition-colors ${
-                      i % 2 === 0
-                        ? "bg-[#F1F4F9] dark:bg-[oklch(0.14_0.026_258)] hover:bg-[#D9E1ED] dark:hover:bg-[oklch(0.21_0.024_258)]"
-                        : "bg-[#DCE3EE] dark:bg-[oklch(0.185_0.024_258)] hover:bg-[#C7D2E3] dark:hover:bg-[oklch(0.21_0.024_258)]"
-                    }`}
-                  >
-                    <td
-                      className={`px-1 py-2 transition-colors ${
-                        i % 2 === 0
-                          ? "bg-[#ECEFF4] group-hover:bg-[#D9E1ED] dark:bg-[oklch(0.14_0.026_258)] dark:group-hover:bg-[oklch(0.21_0.024_258)]"
-                          : "bg-[#D6DCE8] group-hover:bg-[#C7D2E3] dark:bg-[oklch(0.185_0.024_258)] dark:group-hover:bg-[oklch(0.21_0.024_258)]"
-                      }`}
-                      style={{ position: "sticky", left: 0, zIndex: 1, minWidth: 84, borderRight: "1px solid rgba(100,116,139,0.18)" }}
-                    >
-                      <div className="flex items-center justify-center gap-1">
-                        <TooltipProvider delayDuration={400}>
-                          <Tooltip>
-                            <TooltipTrigger asChild>
-                              <button
-                                onClick={(e) => { e.stopPropagation(); openInfoPanel(c); }}
-                                className="h-[21px] w-[21px] flex items-center justify-center rounded-full bg-[#2558FF] text-white shadow-[0_2px_6px_rgba(37,88,255,0.35)] hover:bg-gradient-to-br hover:from-[#2558FF] hover:via-[#6E2C96] hover:to-[#D92293] hover:text-white dark:hover:text-[#0a1628] hover:shadow-[0_2px_10px_rgba(110,44,150,0.5)] transition-all"
-                              >
-                                <Plus className="h-3 w-3" />
-                              </button>
-                            </TooltipTrigger>
-                            <TooltipContent className="text-xs font-medium">Mais informações</TooltipContent>
-                          </Tooltip>
-                        </TooltipProvider>
-                        <TooltipProvider delayDuration={400}>
-                          <Tooltip>
-                            <TooltipTrigger asChild>
-                              <button
-                                onClick={(e) => { e.stopPropagation(); openEdit(c); }}
-                                className="h-[26px] w-[26px] flex items-center justify-center rounded-[8px] bg-white dark:bg-slate-800 border border-[#e8edf5] dark:border-slate-700 text-[#6E2C96] dark:text-slate-500 shadow-[0_4px_10px_rgba(15,23,42,0.06)] hover:bg-gradient-to-br hover:from-[#2558FF] hover:via-[#6E2C96] hover:to-[#D92293] hover:text-white dark:hover:text-[#0a1628] hover:border-transparent hover:shadow-[0_8px_18px_rgba(15,23,42,0.18)] hover:-translate-y-px transition-all duration-150"
-                              >
-                                <Pencil className="h-3.5 w-3.5" />
-                              </button>
-                            </TooltipTrigger>
-                            <TooltipContent className="text-xs font-medium">Editar cliente</TooltipContent>
-                          </Tooltip>
-                        </TooltipProvider>
-                      </div>
-                    </td>
-
-                    {visibleCols.has("id") && (
-                      <td data-rotulo="ID" className="py-3 px-4 text-xs font-mono text-slate-500 dark:text-slate-400 whitespace-nowrap" style={{ borderRight: "1px solid rgba(148,163,184,0.15)" }}>
-                        <div className="flex flex-col gap-0.5">
-                          {formatClientSequenceId(c.sequence_number)}
-                          <LegacyIdBadge legacyId={(c as any).legacy_id} entidade="cliente" />
-                        </div>
-                      </td>
-                    )}
-                    {visibleCols.has("cliente") && (
-                      <td data-rotulo="Cliente" className="py-3 px-4" style={{ borderRight: "1px solid rgba(148,163,184,0.15)" }}>
-                        <div className="flex items-center gap-3">
-                          <ClientAvatar client={c} index={i} />
-                          <div className="min-w-0 flex-1">
-                            <p className="font-bold text-sm text-slate-800 dark:text-slate-100 truncate">{c.name}</p>
-                            {c.document && <p className="text-xs text-slate-400 dark:text-slate-500 truncate">{c.document}</p>}
-                          </div>
-                        </div>
-                      </td>
-                    )}
-                    {visibleCols.has("segmento") && (
-                      <td data-rotulo="Segmento" className="py-3 px-4" style={{ borderRight: "1px solid rgba(148,163,184,0.15)" }}>
-                        {c.segment ? (
-                          <span className="inline-flex items-center gap-1 text-[13px] text-slate-600 dark:text-slate-400">
-                            <Tag className="h-3 w-3" />{c.segment}
-                          </span>
-                        ) : (
-                          <span className="text-slate-300 dark:text-slate-600">—</span>
-                        )}
-                      </td>
-                    )}
-                    {visibleCols.has("contato") && (
-                      <td data-rotulo="Contato" className="py-3 px-4" style={{ borderRight: "1px solid rgba(148,163,184,0.15)" }}>
-                        <div className="space-y-1">
-                          {c.email ? (
-                            <a href={`mailto:${c.email}`} className="flex items-center gap-1.5 text-[13px] text-slate-500 dark:text-slate-300 hover:text-blue-600 dark:hover:text-blue-400 transition-colors">
-                              <Mail className="h-3 w-3 text-slate-400 flex-shrink-0" />
-                              <span className="truncate max-w-[160px]">{c.email}</span>
-                            </a>
-                          ) : (
-                            <div className="flex items-center gap-1.5 text-[13px] text-slate-300 dark:text-slate-600">
-                              <Mail className="h-3 w-3 flex-shrink-0" /><span>—</span>
-                            </div>
-                          )}
-                          {c.phone ? (
-                            <div className="flex items-center gap-1.5 text-[13px] text-slate-500 dark:text-slate-500">
-                              <Phone className="h-3 w-3 flex-shrink-0" />{c.phone}
-                            </div>
-                          ) : (
-                            <div className="flex items-center gap-1.5 text-[13px] text-slate-300 dark:text-slate-600">
-                              <Phone className="h-3 w-3 flex-shrink-0" /><span>—</span>
-                            </div>
-                          )}
-                          {c.website && (
-                            <a href={c.website} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1.5 text-[13px] text-slate-500 dark:text-slate-500 hover:underline">
-                              <Globe className="h-3 w-3 flex-shrink-0" />
-                              <span className="truncate max-w-[130px]">{c.website.replace(/^https?:\/\//, "")}</span>
-                            </a>
-                          )}
-                        </div>
-                      </td>
-                    )}
-                    {visibleCols.has("tipo") && (
-                      <td data-rotulo="Tipo" className="py-3 px-4" style={{ borderRight: "1px solid rgba(148,163,184,0.15)" }}>
-                        <NeonBadge color={c.type === "pj" ? "blue" : "violet"} tooltip={c.type === "pj" ? "Pessoa Jurídica" : "Pessoa Física"}>
-                          {c.type === "pj" ? "PJ" : "PF"}
-                        </NeonBadge>
-                      </td>
-                    )}
-                    {visibleCols.has("vinculo") && (
-                      <td data-rotulo="Vínculo" className="py-3 px-4" style={{ borderRight: "1px solid rgba(148,163,184,0.15)" }}>
-                        <div className="flex flex-col gap-0.5">
-                          {linkType === "none" ? (
-                            <span className="text-slate-300 dark:text-slate-600 text-[13px]">Sem vínculo</span>
-                          ) : (
-                            <>
-                              <NeonBadge color={linkType === "agency" ? "blue" : linkType === "company" ? "violet" : "emerald"}>
-                                {linkType === "agency" ? "Agency" : linkType === "company" ? "Company" : "Partner"}
-                              </NeonBadge>
-                              {linkName && <span className="text-[11px] text-slate-400 truncate max-w-[140px]">{linkName}</span>}
-                            </>
-                          )}
-                        </div>
-                      </td>
-                    )}
-                    {visibleCols.has("status") && (
-                      <td data-rotulo="Status" className="py-3 px-4" style={{ borderRight: "1px solid rgba(148,163,184,0.15)" }}>
-                        <span className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-[11px] font-bold w-fit border ${STATUS_DOT_CLASSES[c.status] ?? STATUS_DOT_CLASSES.active}`}>
-                          <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${STATUS_DOT_BG[c.status] ?? STATUS_DOT_BG.active}`} />
-                          {STATUS_CONFIG[c.status]?.label ?? c.status ?? "Ativo"}
-                        </span>
-                      </td>
-                    )}
-                    {visibleCols.has("cadastro") && (
-                      <td data-rotulo="Cadastro" className="py-3 px-4 text-xs text-slate-500 dark:text-slate-400">
-                        {c.created_at ? fmtDate(c.created_at) : "—"}
-                      </td>
-                    )}
-                  </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        )}
-
-        {rows.length > 0 && (
-          <div className="flex flex-wrap items-center justify-between gap-3 px-[18px] py-2 border-t border-[#e8edf5] dark:border-slate-800 bg-white dark:bg-slate-900/20">
-            <div className="flex items-center gap-3">
-              <ItemsPerPageSelect
-                value={pageSize.toString()}
-                onValueChange={(value) => { setPageSize(Number(value)); setPage(1); }}
-                variant="bottom"
+        <div className="allka-users-scroll flex-1 min-h-0 overflow-y-scroll">
+          <div className="space-y-2 pr-1">
+            <div className="grid grid-cols-2 overflow-hidden rounded-xl border border-slate-200/80 bg-white/80 xl:grid-cols-5 xl:divide-x xl:divide-slate-200">
+              <ClientCompactStatCard
+                label="Total de clientes"
+                value={total}
+                icon={Tag}
+                color="blue"
               />
-              <CountText side="top" />
-            </div>
-
-            {hasHorizontalOverflow && (
-              <div
-                ref={bottomScrollRef}
-                onScroll={handleBottomBarScroll}
-                title="Arraste para rolar a tabela na horizontal e ver as colunas que não couberem na tela"
-                className="hidden md:block flex-1 min-w-[80px] overflow-x-scroll allka-table-scroll self-center"
-                style={{ height: 12 }}
-              >
-                <div style={{ minWidth: 1020, height: 1 }} />
-              </div>
-            )}
-
-            {totalPages > 1 && <PaginationControls />}
-          </div>
-        )}
-      </div>
-      </div>
-      </div>
-
-      {/* Filtros panel */}
-      <StandardModalDialog
-        open={filterPanelOpen}
-        onClose={() => setFilterPanelOpen(false)}
-        title="Filtros"
-        subtitle="Filtre a lista de clientes por status"
-      >
-        <div className="p-5 flex-1 overflow-y-auto space-y-3">
-          <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Status</p>
-          {Object.entries(STATUS_CONFIG).map(([key, cfg]) => (
-            <label key={key} className="flex items-center gap-2 text-sm cursor-pointer">
-              <input
-                type="checkbox"
-                checked={statusFilter.has(key)}
-                onChange={() => {
-                  setStatusFilter((prev) => {
-                    const next = new Set(prev);
-                    if (next.has(key)) next.delete(key);
-                    else next.add(key);
-                    return next;
-                  });
-                  setPage(1);
-                }}
+              <ClientCompactStatCard
+                label="Pessoa jurídica"
+                value={totalPj}
+                icon={Building2}
+                color="violet"
               />
-              <NeonBadge color={cfg.color}>{cfg.label}</NeonBadge>
-            </label>
-          ))}
-        </div>
-      </StandardModalDialog>
-
-      {/* Column config panel */}
-      <StandardModalDialog
-        open={colConfigOpen}
-        onClose={() => setColConfigOpen(false)}
-        title="Configurar colunas"
-        subtitle="Escolha quais colunas aparecem na tabela"
-      >
-        <div className="p-5 flex-1 overflow-y-auto space-y-2">
-          {ALL_COLUMNS.map((col) => (
-            <label key={col.key} className="flex items-center gap-2 text-sm cursor-pointer py-1">
-              <input type="checkbox" checked={visibleCols.has(col.key)} onChange={() => toggleCol(col.key)} />
-              {col.label}
-            </label>
-          ))}
-        </div>
-      </StandardModalDialog>
-
-      {/* "+" info panel */}
-      <StandardModalDialog
-        open={infoPanelOpen}
-        onClose={closeInfoPanel}
-        title={
-          infoPanelClient ? (
-            <div className="flex items-center gap-3">
-              <ClientAvatar client={infoPanelClient} index={0} />
-              <div className="min-w-0">
-                <p className="truncate">{infoPanelClient.name}</p>
-              </div>
+              <ClientCompactStatCard
+                label="Pessoa física"
+                value={totalPf}
+                icon={User}
+                color="emerald"
+              />
+              <ClientCompactStatCard
+                label="Ativos"
+                value={totalActive}
+                icon={Tag}
+                color="orange"
+              />
+              <ClientCompactStatCard
+                label="Sem vínculo"
+                value={totalUnlinked}
+                icon={Link2}
+                color="blue"
+              />
             </div>
-          ) : (
-            "Cliente"
-          )
-        }
-        subtitle={
-          infoPanelClient
-            ? `${formatClientSequenceId(infoPanelClient.sequence_number)} · ${infoPanelClient.address || "Endereço não informado"}`
-            : undefined
-        }
-      >
-        {infoPanelClient && (() => {
-          const link = infoPanelClient.links[0];
-          const linkType: LinkType = !link ? "none" : link.agency_id ? "agency" : link.company_id ? "company" : "partner";
-          const linkName =
-            linkType === "agency" ? agencyNameById[link!.agency_id!] :
-            linkType === "company" ? companyNameById[link!.company_id!] :
-            linkType === "partner" ? partnerNameById[link!.partner_id!] : undefined;
-          return (
-          <div className="flex-1 overflow-y-auto p-5">
-            <div className="space-y-6">
-              <div>
-                <h3 className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-3">
-                  Dados do cliente
-                </h3>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div className="rounded-xl border border-slate-200 dark:border-slate-700 p-3.5">
-                    <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide mb-1.5">Contato</p>
-                    <p className="flex items-center gap-1.5 text-sm text-slate-700 dark:text-slate-300">
-                      <Mail className="h-3.5 w-3.5 text-slate-400 flex-shrink-0" />
-                      {infoPanelClient.email || "—"}
-                    </p>
-                    <p className="flex items-center gap-1.5 text-sm text-slate-700 dark:text-slate-300 mt-1">
-                      <Phone className="h-3.5 w-3.5 text-slate-400 flex-shrink-0" />
-                      {infoPanelClient.phone || "—"}
-                    </p>
-                  </div>
-                  <div className="rounded-xl border border-slate-200 dark:border-slate-700 p-3.5">
-                    <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide mb-1.5">Documento · Tipo</p>
-                    <p className="flex items-center gap-1.5 text-sm font-mono text-slate-700 dark:text-slate-300">
-                      <Hash className="h-3.5 w-3.5 text-slate-400 flex-shrink-0" />
-                      {infoPanelClient.document || "—"}
-                    </p>
-                    <p className="text-sm text-slate-700 dark:text-slate-300 mt-1">
-                      {infoPanelClient.type === "pj" ? "Pessoa Jurídica" : "Pessoa Física"}
-                    </p>
-                  </div>
-                  <div className="rounded-xl border border-slate-200 dark:border-slate-700 p-3.5">
-                    <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide mb-1.5">Status</p>
-                    <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-bold border ${STATUS_DOT_CLASSES[infoPanelClient.status] ?? STATUS_DOT_CLASSES.active}`}>
-                      {STATUS_CONFIG[infoPanelClient.status]?.label ?? infoPanelClient.status ?? "Ativo"}
-                    </span>
-                  </div>
-                  <div className="rounded-xl border border-slate-200 dark:border-slate-700 p-3.5">
-                    <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide mb-1.5">Vínculo</p>
-                    <p className="flex items-center gap-1.5 text-sm text-slate-700 dark:text-slate-300">
-                      <Link2 className="h-3.5 w-3.5 text-slate-400 flex-shrink-0" />
-                      {linkType === "none" ? "Sem vínculo" : `${linkType === "agency" ? "Agency" : linkType === "company" ? "Company" : "Partner"}${linkName ? " · " + linkName : ""}`}
-                    </p>
-                  </div>
-                  <div className="rounded-xl border border-slate-200 dark:border-slate-700 p-3.5 sm:col-span-2">
-                    <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide mb-1.5">Endereço</p>
-                    <p className="flex items-start gap-1.5 text-sm text-slate-700 dark:text-slate-300">
-                      <MapPin className="h-3.5 w-3.5 text-slate-400 flex-shrink-0 mt-0.5" />
-                      <span>
-                        {[
-                          [infoPanelClient.address, infoPanelClient.number].filter(Boolean).join(", "),
-                          infoPanelClient.neighborhood,
-                          infoPanelClient.city,
-                          infoPanelClient.state,
-                          infoPanelClient.zip_code,
-                        ]
-                          .filter(Boolean)
-                          .join(" · ") || "Não informado"}
-                      </span>
-                    </p>
-                  </div>
-                  <div className="rounded-xl border border-slate-200 dark:border-slate-700 p-3.5 sm:col-span-2">
-                    <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide mb-1.5">Cadastrado em</p>
-                    <p className="text-sm text-slate-700 dark:text-slate-300">
-                      {infoPanelClient.created_at ? fmtDate(infoPanelClient.created_at) : "—"}
-                    </p>
-                  </div>
-                  {infoPanelClient.notes && (
-                    <div className="rounded-xl border border-slate-200 dark:border-slate-700 p-3.5 sm:col-span-2">
-                      <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide mb-1.5">Observações</p>
-                      <p className="text-sm text-slate-700 dark:text-slate-300 whitespace-pre-wrap">{infoPanelClient.notes}</p>
+
+            <div className={STANDARD_SHELL_TABLE_CARD_CLASS}>
+              <div className="flex flex-wrap items-center gap-2 px-3 py-2">
+                <div
+                  ref={searchBoxRef}
+                  className="relative flex-1 min-w-[220px] max-w-sm"
+                >
+                  <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                  <Input
+                    className="pl-8 h-9 text-sm"
+                    placeholder="Nome, ID, e-mail ou documento..."
+                    autoComplete="new-password"
+                    value={searchInput}
+                    onFocus={() => setSearchFocused(true)}
+                    onChange={(e) => handleSearchChange(e.target.value)}
+                  />
+                  {searchFocused && searchInput && (
+                    <div className="absolute z-20 mt-1 w-full rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 shadow-lg max-h-64 overflow-y-auto">
+                      {searchSuggestions.length === 0 ? (
+                        <p className="text-xs text-slate-400 px-3 py-2">
+                          Nenhum resultado
+                        </p>
+                      ) : (
+                        searchSuggestions.map((c, i) => (
+                          <button
+                            key={c.id}
+                            onClick={() => {
+                              setSearchInput(c.name);
+                              setSearch(c.name);
+                              setSearchFocused(false);
+                            }}
+                            className="w-full flex items-center gap-2.5 px-3 py-2 text-left hover:bg-slate-50 dark:hover:bg-slate-700/60 transition-colors"
+                          >
+                            <ClientAvatar client={c} index={i} />
+                            <div className="min-w-0 flex-1">
+                              <p className="text-sm font-medium text-slate-700 dark:text-slate-200 truncate">
+                                {c.name}
+                              </p>
+                              <p className="text-[11px] text-slate-400 font-mono">
+                                {formatClientSequenceId(c.sequence_number)}
+                              </p>
+                            </div>
+                          </button>
+                        ))
+                      )}
                     </div>
                   )}
                 </div>
-              </div>
-            </div>
-          </div>
-          );
-        })()}
-      </StandardModalDialog>
 
-      {/* Criar / editar cliente */}
-      <EmbeddedSlideScreen
-        open={formOpen}
-        onClose={closeForm}
-        title={editingId ? "Editar cliente" : "Criar novo cliente"}
-        subtitle={editingId ? "Altere os dados e/ou o vínculo deste cliente" : "Defina os dados e o vínculo (opcional) deste cliente"}
-        pin={{
-          id: editingId ? `clientes-edit-${editingId}` : "clientes-create",
-          label: editingId ? `Editar: ${form.name || "Cliente"}` : "Criar novo cliente",
-          icon: editingId ? Pencil : Plus,
-          path: "/admin/clientes",
-          activateKey: editingId ? `edit:${editingId}` : "create",
-        }}
-        footer={
-          <div className="flex items-center justify-end gap-2">
-            <Button variant="outline" onClick={closeForm} disabled={saving}>
-              Cancelar
-            </Button>
-            <Button onClick={handleSave} disabled={saving} className="btn-brand">
-              {saving ? "Salvando..." : editingId ? "Salvar alterações" : "Salvar cliente"}
-            </Button>
-          </div>
-        }
-      >
-        <div className="flex-1 overflow-y-auto p-5 space-y-4">
-          <div className="space-y-2">
-            <Label>Foto de perfil (opcional)</Label>
-            <div className="flex items-center gap-3">
-              <div className="relative h-14 w-14 flex-shrink-0">
-                {form.avatar ? (
-                  <img src={form.avatar} alt="Prévia" className="h-14 w-14 rounded-full object-cover shadow-sm" />
-                ) : (
-                  <div className="h-14 w-14 rounded-full bg-gradient-to-br from-blue-500 to-blue-700 flex items-center justify-center shadow-sm">
-                    <span className="text-sm font-bold text-white">{form.name ? clientInitials(form.name) : "?"}</span>
+                <div className="ml-auto flex flex-wrap items-center gap-2">
+                  <div className="flex overflow-hidden rounded-lg border border-slate-200">
+                    {[
+                      { value: "active", label: "Ativos" },
+                      { value: "inactive", label: "Inativos" },
+                      { value: "all", label: "Todos" },
+                    ].map(({ value, label }) => {
+                      const selected =
+                        value === "all"
+                          ? statusFilter.size === 0
+                          : statusFilter.size === 1 && statusFilter.has(value);
+                      return (
+                        <button
+                          key={value}
+                          onClick={() => {
+                            setStatusFilter(
+                              value === "all" ? new Set() : new Set([value]),
+                            );
+                            setPage(1);
+                          }}
+                          className={`px-2.5 py-1.5 text-xs font-medium transition-colors ${selected ? "bg-[linear-gradient(105deg,#061637_0%,#321360_48%,#C5107A_100%)] text-white shadow-sm" : "bg-white text-slate-500 hover:bg-slate-50"}`}
+                        >
+                          {label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                  <IconToolbarButton
+                    icon={Filter}
+                    tooltip="Filtros"
+                    onClick={() => setFilterPanelOpen(true)}
+                  />
+                  <IconToolbarButton
+                    icon={Settings2}
+                    tooltip="Configurar colunas"
+                    onClick={() => setColConfigOpen(true)}
+                  />
+                  <ItemsPerPageSelect
+                    value={pageSize.toString()}
+                    onValueChange={(value) => {
+                      setPageSize(Number(value));
+                      setPage(1);
+                    }}
+                    variant="top"
+                  />
+                  <span className="hidden border-l border-slate-200 pl-2 text-xs text-slate-500 xl:block">
+                    <CountText side="bottom" />
+                  </span>
+                  <div className="hidden xl:block">
+                    {totalPages > 1 && <PaginationControls />}
+                  </div>
+                </div>
+              </div>
+
+              <div className="hidden flex-wrap items-center justify-between gap-3 px-[18px] py-2 border-y border-[#e8edf5] dark:border-slate-800 bg-white dark:bg-slate-900/30">
+                <div className="flex items-center gap-3">
+                  <ItemsPerPageSelect
+                    value={pageSize.toString()}
+                    onValueChange={(value) => {
+                      setPageSize(Number(value));
+                      setPage(1);
+                    }}
+                    variant="top"
+                  />
+                  <CountText side="bottom" />
+                </div>
+
+                {hasHorizontalOverflow && (
+                  <div
+                    ref={topScrollRef}
+                    onScroll={handleTopBarScroll}
+                    title="Arraste para rolar a tabela na horizontal e ver as colunas que não couberem na tela"
+                    className="hidden md:block flex-1 min-w-[80px] overflow-x-scroll allka-table-scroll self-center"
+                    style={{ height: 12 }}
+                  >
+                    <div style={{ minWidth: 1020, height: 1 }} />
                   </div>
                 )}
-                <button
-                  type="button"
-                  onClick={() => avatarInputRef.current?.click()}
-                  className="absolute -bottom-1 -right-1 bg-blue-600 hover:bg-blue-700 rounded-full p-1.5 text-white transition-colors border border-white dark:border-slate-900"
-                >
-                  <Camera className="h-3 w-3" />
-                </button>
-                <input
-                  ref={avatarInputRef}
-                  type="file"
-                  accept="image/*"
-                  onChange={handleAvatarUpload}
-                  className="hidden"
-                />
+
+                {totalPages > 1 && <PaginationControls />}
               </div>
-              {form.avatar && (
-                <Button type="button" variant="outline" size="sm" onClick={() => setForm({ ...form, avatar: "" })}>
-                  <X className="h-3.5 w-3.5 mr-1" /> Remover
-                </Button>
+
+              {loading ? (
+                <div className="flex items-center justify-center py-16 gap-2 text-muted-foreground">
+                  <Loader2 className="h-5 w-5 animate-spin" />
+                  <span className="text-sm">Carregando clientes...</span>
+                </div>
+              ) : error ? (
+                <div className="flex flex-col items-center justify-center py-16 gap-2 text-red-500">
+                  <span className="text-sm font-medium">{error}</span>
+                  <button onClick={load} className="text-xs underline">
+                    Tentar novamente
+                  </button>
+                </div>
+              ) : rows.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-16 gap-2 text-muted-foreground">
+                  <Building2 className="h-8 w-8 opacity-40" />
+                  <span className="text-sm">Nenhum cliente encontrado</span>
+                </div>
+              ) : (
+                <div
+                  ref={tableScrollRef}
+                  onScroll={handleTableScroll}
+                  className="overflow-hidden allka-table-scroll-body"
+                >
+                  <table className="tabela-cartao w-full table-fixed text-xs">
+                    <thead>
+                      <tr className="border-b border-slate-200/60 dark:border-slate-700/60">
+                        <th
+                          className="hidden py-2.5 px-2 text-[11px] font-bold text-[#365a91] dark:text-slate-400 uppercase tracking-[0.04em] text-center"
+                          style={{
+                            position: "sticky",
+                            left: 0,
+                            top: 0,
+                            zIndex: 3,
+                            minWidth: 84,
+                            background: "var(--table-head)",
+                            boxShadow: "0 1px 0 rgba(148,163,184,0.22)",
+                            borderRight: "1px solid rgba(100,116,139,0.18)",
+                          }}
+                        >
+                          Ações
+                        </th>
+                        {visibleColumns.map((col) => (
+                          <th
+                            key={col.key}
+                            className="relative py-2.5 px-4 text-[11px] font-bold text-[#365a91] dark:text-slate-400 uppercase tracking-[0.04em] select-none [&_button]:!text-[11px]"
+                            style={{
+                              textAlign: "left",
+                              position: "sticky",
+                              top: 0,
+                              zIndex: 2,
+                              background: "var(--table-head)",
+                              boxShadow: "0 1px 0 rgba(148,163,184,0.22)",
+                              borderRight: "1px solid rgba(148,163,184,0.16)",
+                              width:
+                                col.key === "id"
+                                  ? "8%"
+                                  : col.key === "cliente"
+                                    ? "27%"
+                                    : col.key === "segmento"
+                                      ? "14%"
+                                      : col.key === "contato"
+                                        ? "9%"
+                                        : col.key === "tipo"
+                                          ? "7%"
+                                          : col.key === "vinculo"
+                                            ? "15%"
+                                            : col.key === "status"
+                                              ? "10%"
+                                              : "10%",
+                            }}
+                          >
+                            <div className="inline-flex items-center gap-1">
+                              <SortableHeader
+                                label={col.label}
+                                field={
+                                  col.key === "id"
+                                    ? "sequence_number"
+                                    : col.key === "cliente"
+                                      ? "name"
+                                      : col.key === "cadastro"
+                                        ? "created_at"
+                                        : col.key
+                                }
+                                type={
+                                  col.key === "cadastro"
+                                    ? "date"
+                                    : col.key === "id"
+                                      ? "number"
+                                      : "text"
+                                }
+                                sortKey={sortKey as string}
+                                sortDir={sortDir}
+                                onSort={handleSort}
+                                columnFilters={columnFilters}
+                                onFilter={toggleColumnFilter}
+                                onClearFilter={clearColumnFilter}
+                                filterValues={
+                                  col.key === "status"
+                                    ? Object.keys(STATUS_CONFIG)
+                                    : undefined
+                                }
+                              />
+                              <TooltipProvider>
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <span className="text-slate-300 dark:text-slate-600 cursor-help text-[10px]">
+                                      ⓘ
+                                    </span>
+                                  </TooltipTrigger>
+                                  <TooltipContent className="text-xs max-w-[200px]">
+                                    {col.info}
+                                  </TooltipContent>
+                                </Tooltip>
+                              </TooltipProvider>
+                            </div>
+                          </th>
+                        ))}
+                        <th className="w-24 py-2 text-center text-[11px] font-bold uppercase tracking-[0.04em] text-slate-500">
+                          Ações
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                      {rows.map((c, i) => {
+                        const link = c.links[0];
+                        const linkType: LinkType = !link
+                          ? "none"
+                          : link.agency_id
+                            ? "agency"
+                            : link.company_id
+                              ? "company"
+                              : "partner";
+                        const linkName =
+                          linkType === "agency"
+                            ? agencyNameById[link!.agency_id!]
+                            : linkType === "company"
+                              ? companyNameById[link!.company_id!]
+                              : linkType === "partner"
+                                ? partnerNameById[link!.partner_id!]
+                                : undefined;
+                        return (
+                          <tr
+                            key={c.id}
+                            onClick={() => openInfoPanel(c)}
+                            className={`group transition-colors ${
+                              i % 2 === 0
+                                ? "cursor-pointer bg-white dark:bg-[oklch(0.14_0.026_258)] hover:bg-[#f3f7ff] dark:hover:bg-[oklch(0.21_0.024_258)]"
+                                : "cursor-pointer bg-[#f5f8fc] dark:bg-[oklch(0.185_0.024_258)] hover:bg-[#eaf2ff] dark:hover:bg-[oklch(0.21_0.024_258)]"
+                            }`}
+                          >
+                            <td
+                              className={`hidden px-1 py-1.5 transition-colors ${
+                                i % 2 === 0
+                                  ? "bg-white group-hover:bg-[#f3f7ff] dark:bg-[oklch(0.14_0.026_258)] dark:group-hover:bg-[oklch(0.21_0.024_258)]"
+                                  : "bg-[#f5f8fc] group-hover:bg-[#eaf2ff] dark:bg-[oklch(0.185_0.024_258)] dark:group-hover:bg-[oklch(0.21_0.024_258)]"
+                              }`}
+                              style={{
+                                position: "sticky",
+                                left: 0,
+                                zIndex: 1,
+                                minWidth: 84,
+                                borderRight: "1px solid rgba(100,116,139,0.18)",
+                              }}
+                            >
+                              <div className="flex items-center justify-center gap-1">
+                                <TooltipProvider delayDuration={400}>
+                                  <Tooltip>
+                                    <TooltipTrigger asChild>
+                                      <button
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          openInfoPanel(c);
+                                        }}
+                                        className="h-[26px] w-[26px] flex items-center justify-center rounded-[8px] bg-white dark:bg-slate-800 border border-[#e8edf5] dark:border-slate-700 text-[#2558FF] shadow-[0_4px_10px_rgba(15,23,42,0.06)] hover:bg-gradient-to-br hover:from-[#2558FF] hover:via-[#6E2C96] hover:to-[#D92293] hover:text-white dark:hover:text-[#0a1628] hover:border-transparent hover:shadow-[0_8px_18px_rgba(15,23,42,0.18)] hover:-translate-y-px transition-all duration-150"
+                                      >
+                                        <Plus className="h-3 w-3" />
+                                      </button>
+                                    </TooltipTrigger>
+                                    <TooltipContent className="text-xs font-medium">
+                                      Mais informações
+                                    </TooltipContent>
+                                  </Tooltip>
+                                </TooltipProvider>
+                                <TooltipProvider delayDuration={400}>
+                                  <Tooltip>
+                                    <TooltipTrigger asChild>
+                                      <button
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          openEdit(c);
+                                        }}
+                                        className="h-[26px] w-[26px] flex items-center justify-center rounded-[8px] bg-white dark:bg-slate-800 border border-[#e8edf5] dark:border-slate-700 text-[#6E2C96] dark:text-slate-500 shadow-[0_4px_10px_rgba(15,23,42,0.06)] hover:bg-gradient-to-br hover:from-[#2558FF] hover:via-[#6E2C96] hover:to-[#D92293] hover:text-white dark:hover:text-[#0a1628] hover:border-transparent hover:shadow-[0_8px_18px_rgba(15,23,42,0.18)] hover:-translate-y-px transition-all duration-150"
+                                      >
+                                        <Pencil className="h-3.5 w-3.5" />
+                                      </button>
+                                    </TooltipTrigger>
+                                    <TooltipContent className="text-xs font-medium">
+                                      Editar cliente
+                                    </TooltipContent>
+                                  </Tooltip>
+                                </TooltipProvider>
+                                <DropdownMenu>
+                                  <DropdownMenuTrigger asChild>
+                                    <button
+                                      aria-label={`Mais ações — ${c.name}`}
+                                      title="Mais ações"
+                                      className="flex h-[26px] w-[26px] items-center justify-center rounded-[8px] border border-[#e8edf5] bg-white text-slate-400 shadow-[0_4px_10px_rgba(15,23,42,0.06)] transition-all hover:-translate-y-px hover:border-transparent hover:bg-gradient-to-br hover:from-[#2558FF] hover:via-[#6E2C96] hover:to-[#D92293] hover:text-white"
+                                    >
+                                      <MoreHorizontal className="h-3.5 w-3.5" />
+                                    </button>
+                                  </DropdownMenuTrigger>
+                                  <DropdownMenuContent
+                                    align="end"
+                                    className="w-52 rounded-xl p-1.5"
+                                  >
+                                    <DropdownMenuItem
+                                      className="cursor-pointer rounded-lg py-2"
+                                      onClick={() => openInfoPanel(c)}
+                                    >
+                                      Ver todas as informações
+                                    </DropdownMenuItem>
+                                    <DropdownMenuItem
+                                      className="cursor-pointer rounded-lg py-2"
+                                      onClick={() => openEdit(c)}
+                                    >
+                                      Editar cliente
+                                    </DropdownMenuItem>
+                                  </DropdownMenuContent>
+                                </DropdownMenu>
+                              </div>
+                            </td>
+
+                            {visibleCols.has("id") && (
+                              <td
+                                data-rotulo="ID"
+                                className="py-1.5 px-2 text-center text-sm font-bold text-[#31578F] dark:text-slate-300 whitespace-nowrap"
+                                style={{
+                                  borderRight:
+                                    "1px solid rgba(148,163,184,0.15)",
+                                }}
+                              >
+                                <div className="flex flex-col gap-0.5">
+                                  {formatClientSequenceId(c.sequence_number)}
+                                  <LegacyIdBadge
+                                    legacyId={(c as any).legacy_id}
+                                    entidade="cliente"
+                                  />
+                                </div>
+                              </td>
+                            )}
+                            {visibleCols.has("cliente") && (
+                              <td
+                                data-rotulo="Cliente"
+                                className="py-1.5 px-4"
+                                style={{
+                                  borderRight:
+                                    "1px solid rgba(148,163,184,0.15)",
+                                }}
+                              >
+                                <div className="flex items-center gap-3">
+                                  <ClientAvatar client={c} index={i} />
+                                  <div className="min-w-0 flex-1">
+                                    <p className="font-bold text-sm text-slate-800 dark:text-slate-100 truncate">
+                                      {c.name}
+                                    </p>
+                                    {c.document && (
+                                      <p className="text-xs text-slate-400 dark:text-slate-500 truncate">
+                                        {c.document}
+                                      </p>
+                                    )}
+                                  </div>
+                                </div>
+                              </td>
+                            )}
+                            {visibleCols.has("segmento") && (
+                              <td
+                                data-rotulo="Segmento"
+                                className="py-1.5 px-4"
+                                style={{
+                                  borderRight:
+                                    "1px solid rgba(148,163,184,0.15)",
+                                }}
+                              >
+                                {c.segment ? (
+                                  <span
+                                    title={c.segment}
+                                    className="flex items-center gap-1 truncate text-[13px] text-slate-600 dark:text-slate-400"
+                                  >
+                                    <Tag className="h-3 w-3" />
+                                    <span className="truncate">
+                                      {c.segment}
+                                    </span>
+                                  </span>
+                                ) : (
+                                  <span className="text-slate-300 dark:text-slate-600">
+                                    —
+                                  </span>
+                                )}
+                              </td>
+                            )}
+                            {visibleCols.has("contato") && (
+                              <td
+                                data-rotulo="Contato"
+                                className="py-1.5 px-4"
+                                style={{
+                                  borderRight:
+                                    "1px solid rgba(148,163,184,0.15)",
+                                }}
+                              >
+                                <div className="flex items-center justify-center gap-1.5">
+                                  {c.email && (
+                                    <TooltipProvider>
+                                      <Tooltip>
+                                        <TooltipTrigger asChild>
+                                          <a
+                                            href={`mailto:${c.email}`}
+                                            onClick={(event) =>
+                                              event.stopPropagation()
+                                            }
+                                            className="flex h-7 w-7 items-center justify-center rounded-lg text-[#2558FF] hover:bg-blue-50"
+                                          >
+                                            <Mail className="h-4 w-4" />
+                                          </a>
+                                        </TooltipTrigger>
+                                        <TooltipContent className="text-xs">
+                                          {c.email}
+                                        </TooltipContent>
+                                      </Tooltip>
+                                    </TooltipProvider>
+                                  )}
+                                  {c.phone && (
+                                    <TooltipProvider>
+                                      <Tooltip>
+                                        <TooltipTrigger asChild>
+                                          <a
+                                            href={`tel:${c.phone.replace(/\D/g, "")}`}
+                                            onClick={(event) =>
+                                              event.stopPropagation()
+                                            }
+                                            className="flex h-7 w-7 items-center justify-center rounded-lg text-[#31578F] hover:bg-slate-100"
+                                          >
+                                            <Phone className="h-4 w-4" />
+                                          </a>
+                                        </TooltipTrigger>
+                                        <TooltipContent className="text-xs">
+                                          {c.phone}
+                                        </TooltipContent>
+                                      </Tooltip>
+                                    </TooltipProvider>
+                                  )}
+                                  {c.phone && (
+                                    <TooltipProvider>
+                                      <Tooltip>
+                                        <TooltipTrigger asChild>
+                                          <a
+                                            href={`https://wa.me/${c.phone.replace(/\D/g, "")}`}
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            onClick={(event) =>
+                                              event.stopPropagation()
+                                            }
+                                            className="flex h-7 w-7 items-center justify-center rounded-lg text-emerald-600 hover:bg-emerald-50"
+                                          >
+                                            <MessageCircle className="h-4 w-4" />
+                                          </a>
+                                        </TooltipTrigger>
+                                        <TooltipContent className="text-xs">
+                                          WhatsApp: {c.phone}
+                                        </TooltipContent>
+                                      </Tooltip>
+                                    </TooltipProvider>
+                                  )}
+                                  {c.website && (
+                                    <TooltipProvider>
+                                      <Tooltip>
+                                        <TooltipTrigger asChild>
+                                          <a
+                                            href={c.website}
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            onClick={(event) =>
+                                              event.stopPropagation()
+                                            }
+                                            className="flex h-7 w-7 items-center justify-center rounded-lg text-violet-600 hover:bg-violet-50"
+                                          >
+                                            <Globe className="h-4 w-4" />
+                                          </a>
+                                        </TooltipTrigger>
+                                        <TooltipContent className="text-xs">
+                                          {c.website.replace(
+                                            /^https?:\/\//,
+                                            "",
+                                          )}
+                                        </TooltipContent>
+                                      </Tooltip>
+                                    </TooltipProvider>
+                                  )}
+                                </div>
+                              </td>
+                            )}
+                            {visibleCols.has("tipo") && (
+                              <td
+                                data-rotulo="Tipo"
+                                className="py-1.5 px-4"
+                                style={{
+                                  borderRight:
+                                    "1px solid rgba(148,163,184,0.15)",
+                                }}
+                              >
+                                <NeonBadge
+                                  color={c.type === "pj" ? "blue" : "violet"}
+                                  tooltip={
+                                    c.type === "pj"
+                                      ? "Pessoa Jurídica"
+                                      : "Pessoa Física"
+                                  }
+                                >
+                                  {c.type === "pj" ? "PJ" : "PF"}
+                                </NeonBadge>
+                              </td>
+                            )}
+                            {visibleCols.has("vinculo") && (
+                              <td
+                                data-rotulo="Vínculo"
+                                className="py-1.5 px-4"
+                                style={{
+                                  borderRight:
+                                    "1px solid rgba(148,163,184,0.15)",
+                                }}
+                              >
+                                <div className="flex flex-col gap-0.5">
+                                  {linkType === "none" ? (
+                                    <span className="text-slate-300 dark:text-slate-600 text-[13px]">
+                                      Sem vínculo
+                                    </span>
+                                  ) : (
+                                    <>
+                                      <NeonBadge
+                                        color={
+                                          linkType === "agency"
+                                            ? "blue"
+                                            : linkType === "company"
+                                              ? "violet"
+                                              : "emerald"
+                                        }
+                                      >
+                                        {linkType === "agency"
+                                          ? "Agency"
+                                          : linkType === "company"
+                                            ? "Company"
+                                            : "Partner"}
+                                      </NeonBadge>
+                                      {linkName && (
+                                        <span className="text-[11px] text-slate-400 truncate max-w-[140px]">
+                                          {linkName}
+                                        </span>
+                                      )}
+                                    </>
+                                  )}
+                                </div>
+                              </td>
+                            )}
+                            {visibleCols.has("status") && (
+                              <td
+                                data-rotulo="Status"
+                                className="py-1.5 px-4"
+                                style={{
+                                  borderRight:
+                                    "1px solid rgba(148,163,184,0.15)",
+                                }}
+                              >
+                                <span
+                                  className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-[11px] font-bold w-fit border ${STATUS_DOT_CLASSES[c.status] ?? STATUS_DOT_CLASSES.active}`}
+                                >
+                                  <span
+                                    className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${STATUS_DOT_BG[c.status] ?? STATUS_DOT_BG.active}`}
+                                  />
+                                  {STATUS_CONFIG[c.status]?.label ??
+                                    c.status ??
+                                    "Ativo"}
+                                </span>
+                              </td>
+                            )}
+                            {visibleCols.has("cadastro") && (
+                              <td
+                                data-rotulo="Cadastro"
+                                className="py-1.5 px-4 text-xs text-slate-500 dark:text-slate-400"
+                              >
+                                {c.created_at ? fmtDate(c.created_at) : "—"}
+                              </td>
+                            )}
+                            <td
+                              className="py-1.5 px-2 text-center"
+                              onClick={(event) => event.stopPropagation()}
+                            >
+                              <div className="flex items-center justify-center gap-1">
+                                <TooltipProvider delayDuration={400}>
+                                  <Tooltip>
+                                    <TooltipTrigger asChild>
+                                      <button
+                                        onClick={() => openInfoPanel(c)}
+                                        className="h-[26px] w-[26px] flex items-center justify-center rounded-[8px] border border-[#e8edf5] bg-white text-[#2558FF] shadow-[0_4px_10px_rgba(15,23,42,0.06)] transition-all hover:-translate-y-px hover:border-transparent hover:bg-gradient-to-br hover:from-[#2558FF] hover:via-[#6E2C96] hover:to-[#D92293] hover:text-white"
+                                      >
+                                        <Eye className="h-3.5 w-3.5" />
+                                      </button>
+                                    </TooltipTrigger>
+                                    <TooltipContent className="text-xs font-medium">
+                                      Ver detalhes
+                                    </TooltipContent>
+                                  </Tooltip>
+                                </TooltipProvider>
+                                <TooltipProvider delayDuration={400}>
+                                  <Tooltip>
+                                    <TooltipTrigger asChild>
+                                      <button
+                                        onClick={() => openEdit(c)}
+                                        className="h-[26px] w-[26px] flex items-center justify-center rounded-[8px] border border-[#e8edf5] bg-white text-[#2558FF] shadow-[0_4px_10px_rgba(15,23,42,0.06)] transition-all hover:-translate-y-px hover:border-transparent hover:bg-gradient-to-br hover:from-[#2558FF] hover:via-[#6E2C96] hover:to-[#D92293] hover:text-white"
+                                      >
+                                        <Pencil className="h-3.5 w-3.5" />
+                                      </button>
+                                    </TooltipTrigger>
+                                    <TooltipContent className="text-xs font-medium">
+                                      Editar cliente
+                                    </TooltipContent>
+                                  </Tooltip>
+                                </TooltipProvider>
+                                <DropdownMenu>
+                                  <DropdownMenuTrigger asChild>
+                                    <button
+                                      aria-label={`Mais ações — ${c.name}`}
+                                      title="Mais ações"
+                                      className="flex h-[26px] w-[26px] items-center justify-center rounded-[8px] border border-[#e8edf5] bg-white text-slate-400 shadow-[0_4px_10px_rgba(15,23,42,0.06)] transition-all hover:-translate-y-px hover:border-transparent hover:bg-gradient-to-br hover:from-[#2558FF] hover:via-[#6E2C96] hover:to-[#D92293] hover:text-white"
+                                    >
+                                      <MoreHorizontal className="h-3.5 w-3.5" />
+                                    </button>
+                                  </DropdownMenuTrigger>
+                                  <DropdownMenuContent
+                                    align="end"
+                                    className="w-52 rounded-xl p-1.5"
+                                  >
+                                    <DropdownMenuItem
+                                      className="cursor-pointer rounded-lg py-2"
+                                      onClick={() => openInfoPanel(c)}
+                                    >
+                                      Ver todas as informações
+                                    </DropdownMenuItem>
+                                    <DropdownMenuItem
+                                      className="cursor-pointer rounded-lg py-2"
+                                      onClick={() => openEdit(c)}
+                                    >
+                                      Editar cliente
+                                    </DropdownMenuItem>
+                                  </DropdownMenuContent>
+                                </DropdownMenu>
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+
+              {rows.length > 0 && (
+                <div className="flex flex-wrap items-center justify-between gap-3 px-[18px] py-2 border-t border-[#e8edf5] dark:border-slate-800 bg-white dark:bg-slate-900/20">
+                  <div className="flex items-center gap-3">
+                    <ItemsPerPageSelect
+                      value={pageSize.toString()}
+                      onValueChange={(value) => {
+                        setPageSize(Number(value));
+                        setPage(1);
+                      }}
+                      variant="bottom"
+                    />
+                    <CountText side="top" />
+                  </div>
+
+                  {hasHorizontalOverflow && (
+                    <div
+                      ref={bottomScrollRef}
+                      onScroll={handleBottomBarScroll}
+                      title="Arraste para rolar a tabela na horizontal e ver as colunas que não couberem na tela"
+                      className="hidden md:block flex-1 min-w-[80px] overflow-x-scroll allka-table-scroll self-center"
+                      style={{ height: 12 }}
+                    >
+                      <div style={{ minWidth: 1020, height: 1 }} />
+                    </div>
+                  )}
+
+                  {totalPages > 1 && <PaginationControls />}
+                </div>
               )}
             </div>
           </div>
+        </div>
 
-          <div className="space-y-2">
-            <Label>Nome / Razão social *</Label>
-            <Input
-              placeholder="Ex: Empresa XYZ Ltda ou João Silva"
-              value={form.name}
-              onChange={(e) => setForm({ ...form, name: e.target.value })}
-            />
-          </div>
-
-          <div className="space-y-2">
-            <Label>Tipo</Label>
-            <Select value={form.type} onValueChange={(v: "pj" | "pf") => setForm({ ...form, type: v })}>
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="pj">Pessoa Jurídica (PJ)</SelectItem>
-                <SelectItem value="pf">Pessoa Física (PF)</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-
-          <div className="space-y-2">
-            <Label>Documento {form.type === "pj" ? "(CNPJ)" : "(CPF)"}</Label>
-            <Input
-              placeholder={form.type === "pj" ? "00.000.000/0001-00" : "000.000.000-00"}
-              value={form.document}
-              onChange={(e) => setForm({ ...form, document: e.target.value })}
-            />
-          </div>
-
-          <div className="space-y-2">
-            <Label>E-mail</Label>
-            <Input
-              type="email"
-              placeholder="contato@cliente.com"
-              value={form.email}
-              onChange={(e) => setForm({ ...form, email: e.target.value })}
-            />
-          </div>
-
-          <div className="space-y-2">
-            <Label>Telefone</Label>
-            <Input
-              placeholder="(11) 98765-4321"
-              value={form.phone}
-              onChange={(e) => setForm({ ...form, phone: e.target.value })}
-            />
-          </div>
-
-          <div className="space-y-2">
-            <Label>Segmento</Label>
-            <Input
-              placeholder="Ex: Varejo, Educação, Saúde..."
-              value={form.segment}
-              onChange={(e) => setForm({ ...form, segment: e.target.value })}
-            />
-          </div>
-
-          <div className="space-y-2">
-            <Label>Website</Label>
-            <Input
-              placeholder="https://cliente.com"
-              value={form.website}
-              onChange={(e) => setForm({ ...form, website: e.target.value })}
-            />
-          </div>
-
-          <div className="space-y-2">
-            <Label>Status</Label>
-            <Select value={form.status} onValueChange={(v) => setForm({ ...form, status: v })}>
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="active">Ativo</SelectItem>
-                <SelectItem value="inactive">Inativo</SelectItem>
-                <SelectItem value="prospect">Prospecto</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-
-          <div className="pt-2 border-t border-slate-100 dark:border-slate-800 space-y-3">
-            <h3 className="text-sm font-semibold text-slate-700 dark:text-slate-300">Endereço</h3>
-            <div className="space-y-2">
-              <Label>CEP</Label>
-              <div className="relative">
-                <Input
-                  placeholder="00000-000"
-                  value={form.zip_code}
-                  onChange={(e) => handleClientCepChange(e.target.value)}
-                  className="pr-7"
-                  maxLength={9}
+        {/* Filtros panel */}
+        <StandardModalDialog
+          open={filterPanelOpen}
+          onClose={() => setFilterPanelOpen(false)}
+          title="Filtros"
+          subtitle="Filtre a lista de clientes por status"
+        >
+          <div className="p-5 flex-1 overflow-y-auto space-y-3">
+            <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">
+              Status
+            </p>
+            {Object.entries(STATUS_CONFIG).map(([key, cfg]) => (
+              <label
+                key={key}
+                className="flex items-center gap-2 text-sm cursor-pointer"
+              >
+                <input
+                  type="checkbox"
+                  checked={statusFilter.has(key)}
+                  onChange={() => {
+                    setStatusFilter((prev) => {
+                      const next = new Set(prev);
+                      if (next.has(key)) next.delete(key);
+                      else next.add(key);
+                      return next;
+                    });
+                    setPage(1);
+                  }}
                 />
-                {clientCepLoading && (
-                  <Loader2 className="h-3.5 w-3.5 animate-spin text-slate-400 absolute right-2 top-1/2 -translate-y-1/2" />
+                <NeonBadge color={cfg.color}>{cfg.label}</NeonBadge>
+              </label>
+            ))}
+          </div>
+        </StandardModalDialog>
+
+        {/* Column config panel */}
+        <StandardModalDialog
+          open={colConfigOpen}
+          onClose={() => setColConfigOpen(false)}
+          title="Configurar colunas"
+          subtitle="Escolha quais colunas aparecem na tabela"
+        >
+          <div className="p-5 flex-1 overflow-y-auto space-y-2">
+            {ALL_COLUMNS.map((col) => (
+              <label
+                key={col.key}
+                className="flex items-center gap-2 text-sm cursor-pointer py-1"
+              >
+                <input
+                  type="checkbox"
+                  checked={visibleCols.has(col.key)}
+                  onChange={() => toggleCol(col.key)}
+                />
+                {col.label}
+              </label>
+            ))}
+          </div>
+        </StandardModalDialog>
+
+        {/* "+" info panel */}
+        <StandardModalDialog
+          open={infoPanelOpen}
+          onClose={closeInfoPanel}
+          maxWidthPx={1260}
+          headerClassName="min-h-[84px]"
+          title={
+            infoPanelClient ? (
+              <div className="flex items-center gap-3">
+                <ClientAvatar client={infoPanelClient} index={0} />
+                <div className="min-w-0">
+                  <p className="truncate">{infoPanelClient.name}</p>
+                </div>
+              </div>
+            ) : (
+              "Cliente"
+            )
+          }
+          subtitle={
+            infoPanelClient
+              ? `${formatClientSequenceId(infoPanelClient.sequence_number)} · ${infoPanelClient.address || "Endereço não informado"}`
+              : undefined
+          }
+        >
+          {infoPanelClient &&
+            (() => {
+              const link = infoPanelClient.links[0];
+              const linkType: LinkType = !link
+                ? "none"
+                : link.agency_id
+                  ? "agency"
+                  : link.company_id
+                    ? "company"
+                    : "partner";
+              const linkName =
+                linkType === "agency"
+                  ? agencyNameById[link!.agency_id!]
+                  : linkType === "company"
+                    ? companyNameById[link!.company_id!]
+                    : linkType === "partner"
+                      ? partnerNameById[link!.partner_id!]
+                      : undefined;
+              return (
+                <div className="flex-1 overflow-y-auto bg-white px-0 py-3">
+                  <div className="space-y-3">
+                    <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+                      <div className="rounded-2xl border border-blue-100 bg-blue-50/70 p-4 shadow-sm">
+                        <p className="text-[10px] font-bold uppercase tracking-wide text-blue-500">
+                          Tipo de cliente
+                        </p>
+                        <p className="mt-1 text-base font-bold text-slate-900">
+                          {infoPanelClient.type === "pj"
+                            ? "Pessoa Jurídica"
+                            : "Pessoa Física"}
+                        </p>
+                        <p className="mt-1 text-xs text-slate-500">
+                          {infoPanelClient.document ||
+                            "Documento não informado"}
+                        </p>
+                      </div>
+                      <div className="rounded-2xl border border-emerald-100 bg-emerald-50/70 p-4 shadow-sm">
+                        <p className="text-[10px] font-bold uppercase tracking-wide text-emerald-600">
+                          Status
+                        </p>
+                        <p className="mt-1 text-base font-bold text-slate-900">
+                          {STATUS_CONFIG[infoPanelClient.status]?.label ??
+                            "Ativo"}
+                        </p>
+                        <p className="mt-1 text-xs text-slate-500">
+                          Situação atual do cadastro
+                        </p>
+                      </div>
+                      <div className="rounded-2xl border border-violet-100 bg-violet-50/70 p-4 shadow-sm">
+                        <p className="text-[10px] font-bold uppercase tracking-wide text-violet-500">
+                          Vínculo
+                        </p>
+                        <p className="mt-1 text-base font-bold text-slate-900">
+                          {linkType === "none"
+                            ? "Sem vínculo"
+                            : linkType === "agency"
+                              ? "Agency"
+                              : linkType === "company"
+                                ? "Company"
+                                : "Partner"}
+                        </p>
+                        <p className="mt-1 truncate text-xs text-slate-500">
+                          {linkName || "Não atribuído"}
+                        </p>
+                      </div>
+                      <div className="rounded-2xl border border-orange-100 bg-orange-50/70 p-4 shadow-sm">
+                        <p className="text-[10px] font-bold uppercase tracking-wide text-orange-500">
+                          Cadastrado em
+                        </p>
+                        <p className="mt-1 text-base font-bold text-slate-900">
+                          {infoPanelClient.created_at
+                            ? fmtDate(infoPanelClient.created_at)
+                            : "—"}
+                        </p>
+                        <p className="mt-1 text-xs text-slate-500">
+                          Registro do cliente
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+                      <div className="mb-3 flex items-center gap-2">
+                        <div className="rounded-xl bg-blue-50 p-2">
+                          <Building2 className="h-4 w-4 text-blue-600" />
+                        </div>
+                        <div>
+                          <h3 className="text-sm font-bold text-slate-900">
+                            Dados do cliente
+                          </h3>
+                          <p className="text-xs text-slate-500">
+                            Informações cadastrais e formas de contato.
+                          </p>
+                        </div>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="ml-auto h-8 text-xs"
+                          onClick={() => {
+                            closeInfoPanel();
+                            openEdit(infoPanelClient);
+                          }}
+                        >
+                          <Pencil className="mr-1.5 h-3.5 w-3.5" />
+                          Editar dados
+                        </Button>
+                      </div>
+                      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                        <div className="rounded-xl border border-slate-200 p-3.5">
+                          <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide mb-1.5">
+                            Contato
+                          </p>
+                          <p className="flex items-center gap-1.5 text-sm text-slate-700 dark:text-slate-300">
+                            <Mail className="h-3.5 w-3.5 text-slate-400 flex-shrink-0" />
+                            {infoPanelClient.email || "—"}
+                          </p>
+                          <p className="flex items-center gap-1.5 text-sm text-slate-700 dark:text-slate-300 mt-1">
+                            <Phone className="h-3.5 w-3.5 text-slate-400 flex-shrink-0" />
+                            {infoPanelClient.phone || "—"}
+                          </p>
+                        </div>
+                        <div className="rounded-xl border border-slate-200 p-3.5">
+                          <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide mb-1.5">
+                            Documento · Tipo
+                          </p>
+                          <p className="flex items-center gap-1.5 text-sm font-mono text-slate-700 dark:text-slate-300">
+                            <Hash className="h-3.5 w-3.5 text-slate-400 flex-shrink-0" />
+                            {infoPanelClient.document || "—"}
+                          </p>
+                          <p className="text-sm text-slate-700 dark:text-slate-300 mt-1">
+                            {infoPanelClient.type === "pj"
+                              ? "Pessoa Jurídica"
+                              : "Pessoa Física"}
+                          </p>
+                        </div>
+                        <div className="rounded-xl border border-slate-200 p-3.5">
+                          <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide mb-1.5">
+                            Status
+                          </p>
+                          <span
+                            className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-bold border ${STATUS_DOT_CLASSES[infoPanelClient.status] ?? STATUS_DOT_CLASSES.active}`}
+                          >
+                            {STATUS_CONFIG[infoPanelClient.status]?.label ??
+                              infoPanelClient.status ??
+                              "Ativo"}
+                          </span>
+                        </div>
+                        <div className="rounded-xl border border-slate-200 p-3.5">
+                          <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide mb-1.5">
+                            Vínculo
+                          </p>
+                          <p className="flex items-center gap-1.5 text-sm text-slate-700 dark:text-slate-300">
+                            <Link2 className="h-3.5 w-3.5 text-slate-400 flex-shrink-0" />
+                            {linkType === "none"
+                              ? "Sem vínculo"
+                              : `${linkType === "agency" ? "Agency" : linkType === "company" ? "Company" : "Partner"}${linkName ? " · " + linkName : ""}`}
+                          </p>
+                        </div>
+                        <div className="rounded-xl border border-slate-200 p-3.5 sm:col-span-2">
+                          <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide mb-1.5">
+                            Endereço
+                          </p>
+                          <p className="flex items-start gap-1.5 text-sm text-slate-700 dark:text-slate-300">
+                            <MapPin className="h-3.5 w-3.5 text-slate-400 flex-shrink-0 mt-0.5" />
+                            <span>
+                              {[
+                                [
+                                  infoPanelClient.address,
+                                  infoPanelClient.number,
+                                ]
+                                  .filter(Boolean)
+                                  .join(", "),
+                                infoPanelClient.neighborhood,
+                                infoPanelClient.city,
+                                infoPanelClient.state,
+                                infoPanelClient.zip_code,
+                              ]
+                                .filter(Boolean)
+                                .join(" · ") || "Não informado"}
+                            </span>
+                          </p>
+                        </div>
+                        <div className="rounded-xl border border-slate-200 p-3.5 sm:col-span-2">
+                          <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide mb-1.5">
+                            Cadastrado em
+                          </p>
+                          <p className="text-sm text-slate-700 dark:text-slate-300">
+                            {infoPanelClient.created_at
+                              ? fmtDate(infoPanelClient.created_at)
+                              : "—"}
+                          </p>
+                        </div>
+                        {infoPanelClient.notes && (
+                          <div className="rounded-xl border border-slate-200 p-3.5 sm:col-span-2">
+                            <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide mb-1.5">
+                              Observações
+                            </p>
+                            <p className="text-sm text-slate-700 dark:text-slate-300 whitespace-pre-wrap">
+                              {infoPanelClient.notes}
+                            </p>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              );
+            })()}
+        </StandardModalDialog>
+
+        {/* Criar / editar cliente */}
+        <EmbeddedSlideScreen
+          open={formOpen}
+          onClose={closeForm}
+          title={editingId ? "Editar cliente" : "Criar novo cliente"}
+          subtitle={
+            editingId
+              ? "Altere os dados e/ou o vínculo deste cliente"
+              : "Defina os dados e o vínculo (opcional) deste cliente"
+          }
+          pin={{
+            id: editingId ? `clientes-edit-${editingId}` : "clientes-create",
+            label: editingId
+              ? `Editar: ${form.name || "Cliente"}`
+              : "Criar novo cliente",
+            icon: editingId ? Pencil : Plus,
+            path: "/admin/clientes",
+            activateKey: editingId ? `edit:${editingId}` : "create",
+          }}
+          footer={
+            <div className="flex items-center justify-end gap-2">
+              <Button variant="outline" onClick={closeForm} disabled={saving}>
+                Cancelar
+              </Button>
+              <Button
+                onClick={handleSave}
+                disabled={saving}
+                className="btn-brand"
+              >
+                {saving
+                  ? "Salvando..."
+                  : editingId
+                    ? "Salvar alterações"
+                    : "Salvar cliente"}
+              </Button>
+            </div>
+          }
+        >
+          <div className="flex-1 overflow-y-auto p-5 space-y-4">
+            <div className="space-y-2">
+              <Label>Foto de perfil (opcional)</Label>
+              <div className="flex items-center gap-3">
+                <div className="relative h-14 w-14 flex-shrink-0">
+                  {form.avatar ? (
+                    <img
+                      src={form.avatar}
+                      alt="Prévia"
+                      className="h-14 w-14 rounded-full object-cover shadow-sm"
+                    />
+                  ) : (
+                    <div className="h-14 w-14 rounded-full bg-gradient-to-br from-blue-500 to-blue-700 flex items-center justify-center shadow-sm">
+                      <span className="text-sm font-bold text-white">
+                        {form.name ? clientInitials(form.name) : "?"}
+                      </span>
+                    </div>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => avatarInputRef.current?.click()}
+                    className="absolute -bottom-1 -right-1 bg-blue-600 hover:bg-blue-700 rounded-full p-1.5 text-white transition-colors border border-white dark:border-slate-900"
+                  >
+                    <Camera className="h-3 w-3" />
+                  </button>
+                  <input
+                    ref={avatarInputRef}
+                    type="file"
+                    accept="image/*"
+                    onChange={handleAvatarUpload}
+                    className="hidden"
+                  />
+                </div>
+                {form.avatar && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setForm({ ...form, avatar: "" })}
+                  >
+                    <X className="h-3.5 w-3.5 mr-1" /> Remover
+                  </Button>
                 )}
               </div>
-              {clientCepError && (
-                <p className="text-xs text-red-500">{clientCepError}</p>
-              )}
             </div>
-            <div className="grid grid-cols-3 gap-3">
-              <div className="col-span-2 space-y-2">
-                <Label>Rua / Avenida</Label>
-                <Input
-                  placeholder="Ex: Rua Paulo Lobo"
-                  value={form.address}
-                  onChange={(e) => setForm({ ...form, address: e.target.value })}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label>Número</Label>
-                <Input
-                  placeholder="Ex: 123"
-                  value={form.number}
-                  onChange={(e) => setForm({ ...form, number: e.target.value })}
-                />
-              </div>
-            </div>
+
             <div className="space-y-2">
-              <Label>Bairro</Label>
+              <Label>Nome / Razão social *</Label>
               <Input
-                placeholder="Ex: Cambuí"
-                value={form.neighborhood}
-                onChange={(e) => setForm({ ...form, neighborhood: e.target.value })}
+                placeholder="Ex: Empresa XYZ Ltda ou João Silva"
+                value={form.name}
+                onChange={(e) => setForm({ ...form, name: e.target.value })}
               />
             </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-2">
-                <Label>Cidade</Label>
-                <Input
-                  placeholder="Ex: Campinas"
-                  value={form.city}
-                  onChange={(e) => setForm({ ...form, city: e.target.value })}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label>Estado (UF)</Label>
-                <Input
-                  placeholder="SP"
-                  maxLength={2}
-                  value={form.state}
-                  onChange={(e) => setForm({ ...form, state: e.target.value.toUpperCase() })}
-                />
-              </div>
-            </div>
-          </div>
 
-          <div className="pt-2 border-t border-slate-100 dark:border-slate-800 space-y-2">
-            <Label>Observações</Label>
-            <Textarea
-              placeholder="Notas sobre este cliente..."
-              value={form.notes}
-              onChange={(e) => setForm({ ...form, notes: e.target.value })}
-              className="h-24"
-            />
-          </div>
-
-          {/* Vínculo — exclusivo do Admin */}
-          <div className="pt-2 border-t border-slate-100 dark:border-slate-800 space-y-3">
-            <h3 className="text-sm font-semibold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
-              <Link2 className="h-3.5 w-3.5 text-slate-400" />
-              Vínculo
-            </h3>
             <div className="space-y-2">
-              <Label>Este cliente pertence a</Label>
+              <Label>Tipo</Label>
               <Select
-                value={form.linkType}
-                onValueChange={(v: LinkType) => setForm({ ...form, linkType: v, linkId: "" })}
+                value={form.type}
+                onValueChange={(v: "pj" | "pf") =>
+                  setForm({ ...form, type: v })
+                }
               >
                 <SelectTrigger>
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="none">Sem vínculo</SelectItem>
-                  <SelectItem value="agency">Agency</SelectItem>
-                  <SelectItem value="company">Company</SelectItem>
-                  <SelectItem value="partner">Partner</SelectItem>
+                  <SelectItem value="pj">Pessoa Jurídica (PJ)</SelectItem>
+                  <SelectItem value="pf">Pessoa Física (PF)</SelectItem>
                 </SelectContent>
               </Select>
             </div>
-            {form.linkType !== "none" && (
+
+            <div className="space-y-2">
+              <Label>Documento {form.type === "pj" ? "(CNPJ)" : "(CPF)"}</Label>
+              <Input
+                placeholder={
+                  form.type === "pj" ? "00.000.000/0001-00" : "000.000.000-00"
+                }
+                value={form.document}
+                onChange={(e) => setForm({ ...form, document: e.target.value })}
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label>E-mail</Label>
+              <Input
+                type="email"
+                placeholder="contato@cliente.com"
+                value={form.email}
+                onChange={(e) => setForm({ ...form, email: e.target.value })}
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label>Telefone</Label>
+              <Input
+                placeholder="(11) 98765-4321"
+                value={form.phone}
+                onChange={(e) => setForm({ ...form, phone: e.target.value })}
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label>Segmento</Label>
+              <Input
+                placeholder="Ex: Varejo, Educação, Saúde..."
+                value={form.segment}
+                onChange={(e) => setForm({ ...form, segment: e.target.value })}
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label>Website</Label>
+              <Input
+                placeholder="https://cliente.com"
+                value={form.website}
+                onChange={(e) => setForm({ ...form, website: e.target.value })}
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label>Status</Label>
+              <Select
+                value={form.status}
+                onValueChange={(v) => setForm({ ...form, status: v })}
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="active">Ativo</SelectItem>
+                  <SelectItem value="inactive">Inativo</SelectItem>
+                  <SelectItem value="prospect">Prospecto</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="pt-2 border-t border-slate-100 dark:border-slate-800 space-y-3">
+              <h3 className="text-sm font-semibold text-slate-700 dark:text-slate-300">
+                Endereço
+              </h3>
               <div className="space-y-2">
-                <Label>
-                  {form.linkType === "agency" ? "Qual Agency" : form.linkType === "company" ? "Qual Company" : "Qual Partner"}
-                </Label>
-                <Select value={form.linkId} onValueChange={(v) => setForm({ ...form, linkId: v })}>
+                <Label>CEP</Label>
+                <div className="relative">
+                  <Input
+                    placeholder="00000-000"
+                    value={form.zip_code}
+                    onChange={(e) => handleClientCepChange(e.target.value)}
+                    className="pr-7"
+                    maxLength={9}
+                  />
+                  {clientCepLoading && (
+                    <Loader2 className="h-3.5 w-3.5 animate-spin text-slate-400 absolute right-2 top-1/2 -translate-y-1/2" />
+                  )}
+                </div>
+                {clientCepError && (
+                  <p className="text-xs text-red-500">{clientCepError}</p>
+                )}
+              </div>
+              <div className="grid grid-cols-3 gap-3">
+                <div className="col-span-2 space-y-2">
+                  <Label>Rua / Avenida</Label>
+                  <Input
+                    placeholder="Ex: Rua Paulo Lobo"
+                    value={form.address}
+                    onChange={(e) =>
+                      setForm({ ...form, address: e.target.value })
+                    }
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Número</Label>
+                  <Input
+                    placeholder="Ex: 123"
+                    value={form.number}
+                    onChange={(e) =>
+                      setForm({ ...form, number: e.target.value })
+                    }
+                  />
+                </div>
+              </div>
+              <div className="space-y-2">
+                <Label>Bairro</Label>
+                <Input
+                  placeholder="Ex: Cambuí"
+                  value={form.neighborhood}
+                  onChange={(e) =>
+                    setForm({ ...form, neighborhood: e.target.value })
+                  }
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-2">
+                  <Label>Cidade</Label>
+                  <Input
+                    placeholder="Ex: Campinas"
+                    value={form.city}
+                    onChange={(e) => setForm({ ...form, city: e.target.value })}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Estado (UF)</Label>
+                  <Input
+                    placeholder="SP"
+                    maxLength={2}
+                    value={form.state}
+                    onChange={(e) =>
+                      setForm({ ...form, state: e.target.value.toUpperCase() })
+                    }
+                  />
+                </div>
+              </div>
+            </div>
+
+            <div className="pt-2 border-t border-slate-100 dark:border-slate-800 space-y-2">
+              <Label>Observações</Label>
+              <Textarea
+                placeholder="Notas sobre este cliente..."
+                value={form.notes}
+                onChange={(e) => setForm({ ...form, notes: e.target.value })}
+                className="h-24"
+              />
+            </div>
+
+            {/* Vínculo — exclusivo do Admin */}
+            <div className="pt-2 border-t border-slate-100 dark:border-slate-800 space-y-3">
+              <h3 className="text-sm font-semibold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
+                <Link2 className="h-3.5 w-3.5 text-slate-400" />
+                Vínculo
+              </h3>
+              <div className="space-y-2">
+                <Label>Este cliente pertence a</Label>
+                <Select
+                  value={form.linkType}
+                  onValueChange={(v: LinkType) =>
+                    setForm({ ...form, linkType: v, linkId: "" })
+                  }
+                >
                   <SelectTrigger>
-                    <SelectValue placeholder="Selecione..." />
+                    <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    {currentLinkOptions.map((o) => (
-                      <SelectItem key={o.id} value={o.id}>{o.name}</SelectItem>
-                    ))}
+                    <SelectItem value="none">Sem vínculo</SelectItem>
+                    <SelectItem value="agency">Agency</SelectItem>
+                    <SelectItem value="company">Company</SelectItem>
+                    <SelectItem value="partner">Partner</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
-            )}
-          </div>
+              {form.linkType !== "none" && (
+                <div className="space-y-2">
+                  <Label>
+                    {form.linkType === "agency"
+                      ? "Qual Agency"
+                      : form.linkType === "company"
+                        ? "Qual Company"
+                        : "Qual Partner"}
+                  </Label>
+                  <Select
+                    value={form.linkId}
+                    onValueChange={(v) => setForm({ ...form, linkId: v })}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Selecione..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {currentLinkOptions.map((o) => (
+                        <SelectItem key={o.id} value={o.id}>
+                          {o.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
+            </div>
 
-          {formError && <p className="text-xs text-red-600">{formError}</p>}
-        </div>
-      </EmbeddedSlideScreen>
-    </div>
+            {formError && <p className="text-xs text-red-600">{formError}</p>}
+          </div>
+        </EmbeddedSlideScreen>
+      </div>
     </div>
   );
 }

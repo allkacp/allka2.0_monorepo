@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useMemo } from "react";
+import { useState, useEffect, useRef, useMemo, type MouseEvent as ReactMouseEvent } from "react";
 import { useItemsPerPage } from "@/lib/use-items-per-page";
 import { useNavigate, useParams } from "react-router-dom";
 import { ButtonLoader, PageLoader } from "@/components/ui/loading";
@@ -111,7 +111,6 @@ import {
 import { createPortal } from "react-dom";
 import { usePlatformUsers } from "@/contexts/platform-users-context";
 import { apiClient } from "@/lib/api-client";
-import { LegacyIdBadge } from "@/components/legacy-id-badge";
 import { useUsers } from "@/hooks/useUsers";
 import {
   DropdownMenu,
@@ -126,7 +125,7 @@ import { useAppFrameMetrics } from "@/hooks/useAppFrameMetrics";
 
 type ColKey = "codigo" | "usuario" | "contato" | "tipo_funcao" | "vinculo" | "status" | "ultimo_acesso";
 const ALL_COLUMNS: { key: ColKey; label: string; info: string }[] = [
-  { key: "codigo", label: "ID", info: "ID público sequencial do usuário (ex.: User_00001). Não é o id técnico." },
+  { key: "codigo", label: "ID", info: "Identificador curto e estável do usuário." },
   { key: "usuario", label: "Usuário", info: "Nome, e-mail e status de presença do usuário." },
   { key: "contato", label: "Contato", info: "Atalhos para ligar ou chamar no WhatsApp." },
   { key: "tipo_funcao", label: "Tipo / Função", info: "Tipo de conta, função na plataforma e sinalizações de LGPD." },
@@ -135,6 +134,15 @@ const ALL_COLUMNS: { key: ColKey; label: string; info: string }[] = [
   { key: "ultimo_acesso", label: "Último Acesso", info: "Data do último login e tempo de inatividade." },
 ];
 const DEFAULT_VISIBLE: ColKey[] = ["codigo", "usuario", "contato", "tipo_funcao", "vinculo", "status", "ultimo_acesso"];
+const DEFAULT_COLUMN_WIDTHS: Record<ColKey, number> = {
+  codigo: 48,
+  usuario: 340,
+  contato: 80,
+  tipo_funcao: 102,
+  vinculo: 104,
+  status: 112,
+  ultimo_acesso: 122,
+};
 
 // ── Conta vinculada (Agency/Company/Partner/Nômade) ────────────────────────
 const LINK_TYPE_LABEL: Record<string, string> = {
@@ -182,9 +190,9 @@ function userCodeToNum(code?: string | null): number | null {
 export default function UsuariosPage() {
   const { addUser: addPlatformUser, updateUser: updatePlatformUser } =
     usePlatformUsers();
-  // Filtro de status é resolvido no backend (is_active=true/false), não só
-  // no array em memória — evita a tela carregar/mostrar os 129 quando o
-  // padrão devia ser só os ativos. "all" = sem parâmetro is_active.
+  // A fonte da tela é sempre a lista completa. Assim, os indicadores do
+  // topo continuam globais e estáveis quando o usuário filtra a tabela.
+  // Ativos/Inativos/Todos é aplicado apenas na lista visível abaixo.
   const [statusFilter, setStatusFilter] = useState("active");
   const {
     users: apiUsers,
@@ -195,7 +203,7 @@ export default function UsuariosPage() {
   } = useUsers({
     admin: true,
     limit: 1000,
-    is_active: statusFilter === "active" ? true : statusFilter === "inactive" ? false : undefined,
+    is_active: undefined,
   });
   // Fica `true` depois da primeira vez que `usersLoading` termina (com
   // resultado ou vazio) e nunca mais volta a `false` — é o que distingue
@@ -211,6 +219,29 @@ export default function UsuariosPage() {
   const { sidebarWidth, sidebarSettings, previewTheme } = useSidebar();
   const { headerHeight: infoModalHeaderHeight } = useAppFrameMetrics();
   const [visibleCols, setVisibleCols] = useState<Set<ColKey>>(new Set(DEFAULT_VISIBLE));
+  const [columnWidths, setColumnWidths] = useState<Record<ColKey, number>>(DEFAULT_COLUMN_WIDTHS);
+  const resizingColumnRef = useRef<{ key: ColKey; startX: number; startWidth: number } | null>(null);
+
+  const beginColumnResize = (key: ColKey, event: ReactMouseEvent<HTMLDivElement>) => {
+    event.preventDefault();
+    event.stopPropagation();
+    resizingColumnRef.current = { key, startX: event.clientX, startWidth: columnWidths[key] };
+    const onMove = (moveEvent: MouseEvent) => {
+      const active = resizingColumnRef.current;
+      if (!active) return;
+      setColumnWidths((current) => ({
+        ...current,
+        [active.key]: Math.max(72, active.startWidth + moveEvent.clientX - active.startX),
+      }));
+    };
+    const onEnd = () => {
+      resizingColumnRef.current = null;
+      document.removeEventListener("mousemove", onMove);
+      document.removeEventListener("mouseup", onEnd);
+    };
+    document.addEventListener("mousemove", onMove);
+    document.addEventListener("mouseup", onEnd);
+  };
   const {
     tableScrollRef,
     topScrollRef,
@@ -323,6 +354,7 @@ type UsuarioDaLista = User & {
   // a 1ª só coleta o motivo e avança, a 2ª é a única que chama DELETE.
   const [deleteStep, setDeleteStep] = useState<1 | 2>(1);
   const [searchTerm, setSearchTerm] = useState("");
+  const [usersView, setUsersView] = useState<"list" | "cards">("list");
   /**
    * Funções que existem de fato na plataforma (conferido contra o banco).
    * O filtro avançado oferecia só "admin"/"user", e decidia pelo texto:
@@ -503,7 +535,7 @@ type UsuarioDaLista = User & {
 
   // Pagination
   const [currentPage, setCurrentPage] = useState(1);
-  const [pageSize, setPageSize] = useItemsPerPage("admin-usuarios", 10);
+  const [pageSize, setPageSize] = useItemsPerPage(`admin-usuarios:${currentUserId ?? "anonymous"}`, 10);
   const [paginatedUsers, setPaginatedUsers] = useState<UsuarioDaLista[]>([]);
 
   useEffect(() => {
@@ -1384,10 +1416,16 @@ type UsuarioDaLista = User & {
       borderClass: "border-2 border-orange-300/70",
       strokeColor: "white",
     },
+    rose: {
+      gradient: "from-rose-500 to-pink-600",
+      borderClass: "border-2 border-rose-300/70",
+      strokeColor: "white",
+    },
   };
 
   const totalUsers = users.length;
   const activeUsers = users.filter((u) => u.is_active).length;
+  const inactiveUsers = users.filter((u) => !u.is_active).length;
   const adminUsers = users.filter((u) => u.role === "admin" || u.account_type === "admin").length;
   const active90 = users.filter((u) => {
     const last = new Date(u.last_login || Date.now());
@@ -1436,6 +1474,7 @@ type UsuarioDaLista = User & {
     return {
       total: daSerie(serie(() => true)),
       active: daSerie(serie((u) => u.is_active !== false)),
+      inactive: daSerie(serie((u) => u.is_active === false)),
       admins: daSerie(serie((u) => u.role === "admin")),
       active90: {
         data: serie(() => true),
@@ -1472,7 +1511,7 @@ type UsuarioDaLista = User & {
     const [hov, setHov] = useState(false);
     return (
       <div
-        className={`relative rounded-xl overflow-hidden cursor-default transition-all duration-200 bg-gradient-to-br ${colors.gradient} ${colors.borderClass} ${hov ? "shadow-xl scale-[1.02]" : "shadow-lg"}`}
+        className={`relative overflow-hidden cursor-default transition-all duration-200 bg-white dark:bg-slate-900 ${colors.borderClass} ${hov ? "shadow-md" : ""}`}
         onMouseEnter={() => setHov(true)}
         onMouseLeave={() => setHov(false)}
       >
@@ -1527,22 +1566,22 @@ type UsuarioDaLista = User & {
         </div>
         <div className="px-2.5 pt-1.5 pb-1.5">
           <div className="flex items-center justify-between mb-0.5">
-            <p className="text-[10px] font-semibold text-white/80 uppercase tracking-wider leading-tight truncate">
+            <p className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider leading-tight truncate">
               {label}
             </p>
             <div className="bg-white/20 rounded-md p-0.5 flex-shrink-0 ml-1">
-              <Icon className="h-2.5 w-2.5 text-white" />
+              <Icon className="h-2.5 w-2.5 text-indigo-600" />
             </div>
           </div>
           <div className="flex items-end justify-between gap-2">
             <div>
-              <p className="text-lg font-bold leading-none text-white">
+              <p className="text-lg font-bold leading-none text-slate-900 dark:text-slate-100">
                 {value}
               </p>
               {(() => {
                 if (prevValue === null) {
                   return (
-                    <span className="inline-block mt-0.5 text-[9px] text-white/60">
+                    <span className="inline-block mt-0.5 text-[9px] text-slate-400">
                       sem histórico para comparar
                     </span>
                   );
@@ -1561,26 +1600,77 @@ type UsuarioDaLista = User & {
                 return (
                   <div className="inline-flex items-center gap-1 mt-0.5 px-1.5 py-0.5 rounded-md bg-white/20">
                     <Seta className="h-2.5 w-2.5 text-white" />
-                    <span className="text-[9px] font-semibold text-white">
+                    <span className="text-[9px] font-semibold text-slate-700">
                       {baseFraca
                         ? `${delta >= 0 ? "+" : ""}${delta}`
                         : `${up ? "+" : "-"}${pct}%`}
                     </span>
                     {/* No celular o card tem ~190px: este texto empurrava o
                         gráfico para fora e ele aparecia cortado na borda. */}
-                    <span className="hidden sm:inline text-[9px] text-white/60">
+                    <span className="hidden sm:inline text-[9px] text-slate-400">
                       {baseFraca ? "no mês" : "vs. anterior"}
                     </span>
                   </div>
                 );
               })()}
             </div>
-            <div className="flex-shrink-0">
+            <div className="hidden flex-shrink-0">
               <Sparkline
                 data={statsHistory[sparkKey].data}
                 color={colors.strokeColor}
               />
             </div>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  const CompactStatCard = ({
+    label,
+    value,
+    prevValue,
+    prevLabel,
+    pct,
+    up,
+    icon: Icon,
+    colorKey,
+  }: {
+    label: string;
+    value: number;
+    prevValue: number | null;
+    prevLabel: string;
+    pct: number;
+    up: boolean;
+    icon: any;
+    colorKey: keyof typeof statColorMap;
+  }) => {
+    const styleByColor = {
+      blue: "bg-sky-50 text-[#1877e8] ring-sky-100",
+      emerald: "bg-emerald-50 text-[#05ae70] ring-emerald-100",
+      violet: "bg-violet-50 text-[#8238e9] ring-violet-100",
+      orange: "bg-orange-50 text-[#ff6a1a] ring-orange-100",
+      rose: "bg-rose-50 text-[#e2336d] ring-rose-100",
+    } as const;
+    const delta = prevValue === null ? null : value - prevValue;
+    return (
+      <div className="flex min-w-0 items-center gap-3 px-5 py-2.5 first:rounded-l-xl last:rounded-r-xl">
+        <div className={`flex h-14 w-14 shrink-0 items-center justify-center rounded-full ring-1 ${styleByColor[colorKey]}`}>
+          <Icon className="h-7 w-7 stroke-[2]" />
+        </div>
+        <div className="min-w-0 leading-none">
+          <p className="truncate text-[11px] font-bold uppercase tracking-[0.02em] text-[#31578f] dark:text-slate-300">{label}</p>
+          <div className="mt-1.5 flex min-w-0 items-center gap-2">
+            <span className="text-[28px] font-extrabold tracking-tight text-[#0c2455] dark:text-white">{value}</span>
+            {delta === null ? (
+              <span className="truncate rounded-full bg-slate-100 px-2 py-1 text-[10px] text-slate-500">sem histórico para comparar</span>
+            ) : (
+              <span className={`inline-flex shrink-0 items-center gap-1 rounded-full px-2 py-1 text-[10px] font-semibold ${up ? "bg-emerald-50 text-emerald-600" : "bg-rose-50 text-rose-600"}`}>
+                {up ? <TrendingUp className="h-3 w-3" /> : <TrendingDown className="h-3 w-3" />}
+                {pct > 999 || prevValue < 10 ? `${delta >= 0 ? "+" : ""}${delta}` : `${up ? "+" : "-"}${pct}%`}
+                <span className="font-normal text-slate-400">{prevLabel === "mês passado" ? "no mês" : "vs. anterior"}</span>
+              </span>
+            )}
           </div>
         </div>
       </div>
@@ -1616,13 +1706,13 @@ type UsuarioDaLista = User & {
   }
 
   return (
-    <div className={STANDARD_SHELL_PANEL_CLASS}>
+    <div className={`${STANDARD_SHELL_PANEL_CLASS} !p-1.5 sm:!p-2 lg:!p-2`}>
     <div className="relative h-full min-h-0 flex flex-col overflow-hidden" ref={pageRef}>
       <div className="shrink-0 -mb-[11px]">
       <StandardPageBanner
         icon={Users}
         title="Usuários"
-        description="Gerencie todos os usuários da plataforma"
+        description="Gerencie todos os usuários da plataforma e mantenha sua equipe sempre produtiva."
         actions={<>
           <div className="bg-white rounded-lg">
             <ExportButton pageRef={pageRef} filename="usuarios" />
@@ -1646,11 +1736,11 @@ type UsuarioDaLista = User & {
       />
       </div>
 
-      <div className="flex-1 min-h-0 overflow-y-auto">
-      <div className="space-y-5">
+      <div className="flex-1 min-h-0 overflow-y-scroll allka-users-scroll">
+      <div className="space-y-2 pr-1">
       {/* Stats Cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        <StatCard
+      <div className="grid grid-cols-2 xl:grid-cols-5 divide-x divide-slate-200 dark:divide-slate-700 rounded-xl border border-slate-200/80 dark:border-slate-700 bg-white/80 dark:bg-slate-900/70 overflow-hidden">
+        <CompactStatCard
           label="Total de Usuários"
           value={totalUsers}
           prevValue={statsHistory.total.prev}
@@ -1663,11 +1753,10 @@ type UsuarioDaLista = User & {
             ),
           )}
           up={totalUsers >= statsHistory.total.prev}
-          sparkKey="total"
           icon={Users}
           colorKey="blue"
         />
-        <StatCard
+        <CompactStatCard
           label="Usuários Ativos"
           value={activeUsers}
           prevValue={statsHistory.active.prev}
@@ -1680,11 +1769,26 @@ type UsuarioDaLista = User & {
             ),
           )}
           up={activeUsers >= statsHistory.active.prev}
-          sparkKey="active"
           icon={Activity}
           colorKey="emerald"
         />
-        <StatCard
+        <CompactStatCard
+          label="Usuários Inativos"
+          value={inactiveUsers}
+          prevValue={statsHistory.inactive.prev}
+          prevLabel={statsHistory.inactive.label}
+          pct={Math.round(
+            Math.abs(
+              ((inactiveUsers - statsHistory.inactive.prev) /
+                (statsHistory.inactive.prev || 1)) *
+                100,
+            ),
+          )}
+          up={inactiveUsers >= statsHistory.inactive.prev}
+          icon={UserX}
+          colorKey="rose"
+        />
+        <CompactStatCard
           label="Administradores"
           value={adminUsers}
           prevValue={statsHistory.admins.prev}
@@ -1697,11 +1801,10 @@ type UsuarioDaLista = User & {
             ),
           )}
           up={adminUsers >= statsHistory.admins.prev}
-          sparkKey="admins"
           icon={Shield}
           colorKey="violet"
         />
-        <StatCard
+        <CompactStatCard
           label="Ativos 90 dias"
           value={active90}
           prevValue={statsHistory.active90.prev}
@@ -1714,7 +1817,6 @@ type UsuarioDaLista = User & {
             ),
           )}
           up={active90 >= statsHistory.active90.prev}
-          sparkKey="active90"
           icon={Clock}
           colorKey="orange"
         />
@@ -1723,7 +1825,7 @@ type UsuarioDaLista = User & {
       {/* Main Table Card */}
       <div className={STANDARD_SHELL_TABLE_CARD_CLASS}>
         {/* Row 1 — search + icon toolbar buttons */}
-        <div className="flex items-center gap-2 flex-wrap px-[18px] py-3">
+        <div className="flex items-center gap-2 flex-wrap px-3 py-2">
           <div ref={searchBoxRef} className="relative flex-1 min-w-[220px] max-w-sm">
             <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <Input
@@ -1779,19 +1881,32 @@ type UsuarioDaLista = User & {
                       ? "text-white"
                       : "text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800"
                   }`}
-                  style={statusFilter === value ? { background: "linear-gradient(135deg,#000000 0%,#1a2a6f 45%,#c81a7f 100%)" } : undefined}
+                  style={statusFilter === value ? { background: "linear-gradient(105deg,#061637 0%,#321360 48%,#C5107A 100%)" } : undefined}
                 >
                   {label}
                 </button>
               ))}
             </div>
             <IconToolbarButton icon={Filter} tooltip="Filtros" onClick={() => setIsFilterModalOpen(true)} />
-            <IconToolbarButton icon={Settings2} tooltip="Configurar colunas" onClick={() => setColConfigOpen(true)} />
+            <div className="flex overflow-hidden rounded-lg border border-slate-200 dark:border-slate-700">
+              <button onClick={() => setUsersView("list")} aria-label="Visualização em lista" className={`px-3 py-1.5 text-xs font-semibold transition-all ${usersView === "list" ? "bg-[linear-gradient(105deg,#061637_0%,#321360_48%,#C5107A_100%)] text-white shadow-sm" : "bg-white text-[#31578F] hover:bg-[#F4F7FC]"}`}>Lista</button>
+              <button onClick={() => setUsersView("cards")} aria-label="Visualização em cards" className={`px-3 py-1.5 text-xs font-semibold transition-all ${usersView === "cards" ? "bg-[linear-gradient(105deg,#061637_0%,#321360_48%,#C5107A_100%)] text-white shadow-sm" : "bg-white text-[#31578F] hover:bg-[#F4F7FC]"}`}>Cards</button>
+            </div>
+            <ItemsPerPageSelect
+              value={pageSize.toString()}
+              onValueChange={(value) => {
+                setPageSize(Number(value));
+                setCurrentPage(1);
+              }}
+              variant="top"
+            />
+            <span className="hidden xl:block border-l border-slate-200 pl-2 text-xs text-slate-500 dark:border-slate-700 dark:text-slate-400"><CountText side="bottom" /></span>
+            <div className="hidden xl:block">{totalPages > 1 && <PaginationControls />}</div>
           </div>
         </div>
 
-        {/* Row 2 — items-per-page + count + scrollbar mirror + numbered pagination (mirrors admin/empresas) */}
-        <div className="flex flex-wrap items-center justify-between gap-3 px-[18px] py-2 border-y border-[#e8edf5] dark:border-slate-800 bg-white dark:bg-slate-900/30">
+        {/* Mantido apenas para telas compactas, onde os controles acima podem quebrar de linha. */}
+        <div className="hidden flex-wrap items-center justify-between gap-3 px-3 py-1.5 border-y border-[#e8edf5] dark:border-slate-800 bg-white dark:bg-slate-900/30">
           <div className="flex items-center gap-3">
             <ItemsPerPageSelect
               value={pageSize.toString()}
@@ -2850,17 +2965,29 @@ type UsuarioDaLista = User & {
                 </div>
               )}
 
+            <div className="relative min-h-[240px]">
             {/* Users Table */}
+            {usersView === "cards" && (
+              <div className="grid grid-cols-1 gap-2 p-3 sm:grid-cols-2 xl:grid-cols-3">
+                {paginatedUsers.map((user) => (
+                  <button key={user.id} onClick={() => handleUserAction(user, "view")} className="group flex items-center gap-3 rounded-xl border border-slate-200 bg-white p-3 text-left shadow-sm transition hover:border-indigo-200 hover:shadow-md dark:border-slate-700 dark:bg-slate-900">
+                    <Avatar className="h-10 w-10"><AvatarFallback className="bg-gradient-to-br from-indigo-500 to-fuchsia-600 text-xs font-bold text-white">{user.name.split(" ").map((part) => part[0]).join("").slice(0, 2).toUpperCase()}</AvatarFallback></Avatar>
+                    <span className="min-w-0 flex-1"><span className="block truncate text-sm font-bold text-slate-800 dark:text-slate-100">{user.name}</span><span className="block truncate text-xs text-slate-500">{user.email}</span><span className="mt-1 inline-flex rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold text-emerald-700">{user.is_active ? "Ativo" : "Inativo"}</span></span>
+                    <MoreHorizontal className="h-4 w-4 text-slate-400" />
+                  </button>
+                ))}
+              </div>
+            )}
             <div
               ref={tableScrollRef}
               onScroll={handleTableScroll}
-              className="overflow-x-auto allka-table-scroll-body"
+              className={`${usersView === "list" ? "overflow-x-auto" : "hidden"} allka-table-scroll-body`}
             >
               <table className="tabela-cartao w-full text-xs min-w-[960px]">
                 <thead>
                   <tr className="border-b border-slate-200/60 dark:border-slate-700/60">
                     <th
-                      className="py-3.5 px-2 text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-[0.04em] text-center"
+                      className="hidden py-3.5 px-2 text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-[0.04em] text-center"
                       style={{ position: "sticky", left: 0, top: 0, zIndex: 3, minWidth: 128, background: "var(--table-head)", boxShadow: "0 1px 0 rgba(148,163,184,0.22)", borderRight: "1px solid rgba(100,116,139,0.18)" }}
                     >
                       Ações
@@ -2868,11 +2995,13 @@ type UsuarioDaLista = User & {
                     {ALL_COLUMNS.filter((c) => visibleCols.has(c.key)).map((col) => (
                       <th
                         key={col.key}
-                        className="py-3.5 px-4 text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-[0.04em] select-none [&_button]:!text-[11px]"
+                        className="relative py-2.5 px-4 text-[11px] font-bold text-[#365a91] dark:text-slate-400 uppercase tracking-[0.04em] select-none [&_button]:!text-[11px]"
                         style={{
                           position: "sticky",
                           top: 0,
                           zIndex: 2,
+                          width: columnWidths[col.key],
+                          minWidth: columnWidths[col.key],
                           background: "var(--table-head)",
                           boxShadow: "0 1px 0 rgba(148,163,184,0.22)",
                           borderRight: "1px solid rgba(148,163,184,0.16)",
@@ -2964,8 +3093,16 @@ type UsuarioDaLista = User & {
                             </Tooltip>
                           </TooltipProvider>
                         </div>
+                        <div
+                          role="separator"
+                          aria-orientation="vertical"
+                          aria-label={`Redimensionar coluna ${col.label}`}
+                          onMouseDown={(event) => beginColumnResize(col.key, event)}
+                          className="absolute -right-0.5 top-1/2 z-20 h-7 w-1.5 -translate-y-1/2 cursor-col-resize rounded-full bg-slate-200/90 opacity-70 transition-all hover:w-2 hover:bg-fuchsia-400 hover:opacity-100"
+                        />
                       </th>
                     ))}
+                    <th className="w-12 py-2 text-center text-[11px] font-bold uppercase tracking-[0.04em] text-slate-500">Ações</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
@@ -2986,15 +3123,16 @@ type UsuarioDaLista = User & {
                     return (
                       <tr
                         key={user.id}
-                        className={`group transition-colors ${
+                        onClick={() => handleUserAction(user, "view")}
+                        className={`group cursor-pointer transition-colors ${
                           i % 2 === 0
-                            ? "bg-[#F1F4F9] dark:bg-[oklch(0.14_0.026_258)] hover:bg-[#D9E1ED] dark:hover:bg-[oklch(0.21_0.024_258)]"
-                            : "bg-[#DCE3EE] dark:bg-[oklch(0.185_0.024_258)] hover:bg-[#C7D2E3] dark:hover:bg-[oklch(0.21_0.024_258)]"
+                            ? "bg-white dark:bg-[oklch(0.14_0.026_258)] hover:bg-[#f3f7ff] dark:hover:bg-[oklch(0.21_0.024_258)]"
+                            : "bg-[#f5f8fc] dark:bg-[oklch(0.185_0.024_258)] hover:bg-[#eaf2ff] dark:hover:bg-[oklch(0.21_0.024_258)]"
                         }`}
                       >
                         {/* Actions — pinned left: +, ver, bloquear/desbloquear, excluir */}
                         <td
-                          className={`px-1 py-2 transition-colors ${
+                          className={`hidden px-1 py-2 transition-colors ${
                             i % 2 === 0
                               ? "bg-[#ECEFF4] group-hover:bg-[#D9E1ED] dark:bg-[oklch(0.14_0.026_258)] dark:group-hover:bg-[oklch(0.21_0.024_258)]"
                               : "bg-[#D6DCE8] group-hover:bg-[#C7D2E3] dark:bg-[oklch(0.185_0.024_258)] dark:group-hover:bg-[oklch(0.21_0.024_258)]"
@@ -3114,27 +3252,21 @@ type UsuarioDaLista = User & {
                         </td>
 
                         {visibleCols.has("codigo") && (
-                          <td data-rotulo="ID" className="py-3 px-4" style={{ borderRight: "1px solid rgba(148,163,184,0.15)" }}>
-                            <div className="flex flex-col gap-0.5">
-                              <span className="text-xs font-mono text-slate-500 dark:text-slate-400">
-                                {(() => {
-                                  const n = userCodeToNum(user.user_code);
-                                  return n ? `User_${n}` : user.user_code || "—";
-                                })()}
-                              </span>
-                              <LegacyIdBadge
-                                legacyId={(user as any).legacy_id}
-                                entidade="usuário"
-                              />
-                            </div>
+                          <td data-rotulo="ID" className="py-1.5 px-2 text-center" style={{ borderRight: "1px solid rgba(148,163,184,0.15)" }}>
+                            <span className="text-sm font-bold text-[#31578F] dark:text-slate-300">
+                              {(() => {
+                                const n = userCodeToNum(user.user_code);
+                                return n ? String(n).padStart(2, "0") : "—";
+                              })()}
+                            </span>
                           </td>
                         )}
 
                         {visibleCols.has("usuario") && (
-                          <td data-rotulo="Usuário" className="py-3 px-4" style={{ borderRight: "1px solid rgba(148,163,184,0.15)" }}>
+                          <td data-rotulo="Usuário" className="py-1.5 px-4" style={{ borderRight: "1px solid rgba(148,163,184,0.15)" }}>
                             <div className="flex items-center gap-2.5">
                               <div className="relative">
-                                <Avatar className="h-10 w-10 shadow-sm">
+                                <Avatar className="h-9 w-9 shadow-sm">
                                   <AvatarFallback
                                     className={`text-xs font-bold text-white bg-gradient-to-br ${
                                       user.account_type === "admin"
@@ -3206,7 +3338,7 @@ type UsuarioDaLista = User & {
                         )}
 
                         {visibleCols.has("contato") && (
-                          <td data-rotulo="Contato" className="py-3 px-4" style={{ borderRight: "1px solid rgba(148,163,184,0.15)" }}>
+                          <td data-rotulo="Contato" className="py-1.5 px-2" style={{ borderRight: "1px solid rgba(148,163,184,0.15)" }}>
                             <div className="flex items-center gap-1">
                               <TooltipProvider>
                                 <Tooltip>
@@ -3215,9 +3347,9 @@ type UsuarioDaLista = User & {
                                       variant="ghost"
                                       size="sm"
                                       onClick={() => handlePhoneCall(user.phone)}
-                                      className="h-5 w-5 p-0 text-blue-500 hover:text-blue-700 hover:bg-blue-50 dark:text-blue-400 dark:hover:bg-blue-900/30 rounded"
+                                      className="h-7 w-7 rounded-full p-0 text-[#0879f9] transition-all duration-200 hover:-translate-y-0.5 hover:scale-110 hover:bg-blue-50 hover:text-[#005fd4] dark:text-blue-400 dark:hover:bg-blue-900/30"
                                     >
-                                      <Phone className="h-2.5 w-2.5" />
+                                      <Phone className="h-4 w-4 stroke-[2.3]" />
                                     </Button>
                                   </TooltipTrigger>
                                   <TooltipContent className="text-xs">
@@ -3232,9 +3364,9 @@ type UsuarioDaLista = User & {
                                       variant="ghost"
                                       size="sm"
                                       onClick={() => handleWhatsApp(user.phone)}
-                                      className="h-5 w-5 p-0 text-emerald-500 hover:text-emerald-700 hover:bg-emerald-50 dark:text-emerald-400 dark:hover:bg-emerald-900/30 rounded"
+                                      className="h-7 w-7 rounded-full p-0 text-[#08bd73] transition-all duration-200 hover:-translate-y-0.5 hover:scale-110 hover:bg-emerald-50 hover:text-[#009d5b] dark:text-emerald-400 dark:hover:bg-emerald-900/30"
                                     >
-                                      <MessageCircle className="h-2.5 w-2.5" />
+                                      <svg viewBox="0 0 32 32" aria-hidden="true" className="h-4 w-4 fill-current"><path d="M16 3C8.84 3 3 8.77 3 15.85c0 2.27.6 4.48 1.75 6.43L3 29l6.92-1.8A13.04 13.04 0 0 0 16 28.7c7.16 0 13-5.77 13-12.85S23.16 3 16 3Zm0 23.44c-1.91 0-3.78-.51-5.42-1.47l-.39-.23-4.1 1.07 1.1-3.96-.25-.4a10.96 10.96 0 0 1-1.68-5.86C5.26 9.68 10.09 4.9 16 4.9s10.74 4.79 10.74 10.69S21.91 26.44 16 26.44Zm5.9-8.01c-.32-.16-1.9-.93-2.2-1.04-.3-.11-.51-.16-.73.16-.21.32-.83 1.04-1.02 1.25-.19.21-.38.24-.7.08-.32-.16-1.35-.49-2.57-1.55-.95-.83-1.59-1.85-1.77-2.17-.19-.32-.02-.49.14-.65.14-.14.32-.38.48-.57.16-.19.21-.32.32-.53.11-.21.05-.4-.03-.56-.08-.16-.73-1.75-1-2.4-.26-.62-.53-.54-.73-.55h-.62c-.21 0-.56.08-.86.4-.3.32-1.13 1.09-1.13 2.65s1.16 3.07 1.33 3.28c.16.21 2.29 3.47 5.54 4.87.77.33 1.37.53 1.84.67.77.24 1.47.2 2.02.12.62-.09 1.9-.77 2.17-1.52.27-.75.27-1.39.19-1.52-.08-.13-.3-.21-.62-.37Z" /></svg>
                                     </Button>
                                   </TooltipTrigger>
                                   <TooltipContent className="text-xs">
@@ -3247,72 +3379,56 @@ type UsuarioDaLista = User & {
                         )}
 
                         {visibleCols.has("tipo_funcao") && (
-                          <td data-rotulo="Tipo / Função" className="py-3 px-4" style={{ borderRight: "1px solid rgba(148,163,184,0.15)" }}>
-                            <div className="space-y-0.5">
-                              <NeonBadge color={accountBadge.badgeColor}>
-                                {accountBadge.label}
-                              </NeonBadge>
-                              <p className="text-xs text-slate-600 dark:text-slate-400">
-                                {getRoleLabel(user.role)}
-                              </p>
-                              <TooltipProvider>
-                                <Tooltip>
-                                  <TooltipTrigger asChild>
-                                    {user.has_lgpd_consent ? (
-                                      <span className="inline-flex items-center gap-1 rounded-full border border-emerald-200 bg-emerald-50 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-700 w-fit cursor-default dark:border-emerald-400/20 dark:bg-emerald-500/10 dark:text-emerald-300">
-                                        <CheckCircle2 className="h-2.5 w-2.5" />
-                                        LGPD
-                                      </span>
-                                    ) : (
-                                      <span className="inline-flex items-center gap-1 rounded-full border border-rose-200 bg-rose-50 px-1.5 py-0.5 text-[10px] font-semibold text-rose-700 w-fit cursor-default dark:border-rose-400/20 dark:bg-rose-500/10 dark:text-rose-300">
-                                        <XCircle className="h-2.5 w-2.5" />
-                                        LGPD
-                                      </span>
-                                    )}
-                                  </TooltipTrigger>
-                                  <TooltipContent className="text-xs">
-                                    {user.has_lgpd_consent ? "Consentimento LGPD registrado" : "Consentimento LGPD pendente"}
-                                  </TooltipContent>
-                                </Tooltip>
-                              </TooltipProvider>
-                            </div>
+                          <td data-rotulo="Tipo / Função" className="py-1.5 px-2" style={{ borderRight: "1px solid rgba(148,163,184,0.15)" }}>
+                            <TooltipProvider>
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <span className={`inline-flex cursor-default items-center rounded-full px-2.5 py-1 text-[11px] font-semibold ${accountBadge.label === "Admin" ? "bg-violet-100 text-violet-700" : accountBadge.label === "Agency" ? "bg-orange-100 text-orange-700" : accountBadge.label === "Nomad" ? "bg-blue-100 text-blue-700" : accountBadge.label === "Company" ? "bg-fuchsia-100 text-fuchsia-700" : "bg-slate-100 text-slate-700"}`}>
+                                    {accountBadge.label === "Agency" ? "Agência" : accountBadge.label === "Nomad" ? "Nômade" : accountBadge.label === "Company" ? "Empresa" : accountBadge.label === "User" ? "Usuário" : accountBadge.label}
+                                  </span>
+                                </TooltipTrigger>
+                                <TooltipContent className="max-w-xs text-xs">
+                                  <p className="font-semibold">{getRoleLabel(user.role)}</p>
+                                  <p className="mt-1 text-slate-400">LGPD: {user.has_lgpd_consent ? "consentimento registrado" : "consentimento pendente"}</p>
+                                </TooltipContent>
+                              </Tooltip>
+                            </TooltipProvider>
                           </td>
                         )}
 
                         {visibleCols.has("vinculo") && (
-                          <td data-rotulo="Conta vinculada" className="py-3 px-4" style={{ borderRight: "1px solid rgba(148,163,184,0.15)" }}>
+                          <td data-rotulo="Conta vinculada" className="py-1.5 px-2" style={{ borderRight: "1px solid rgba(148,163,184,0.15)" }}>
                             {(() => {
                               const linked = getLinkedAccount(user);
                               if (linked === "unknown")
                                 return (
-                                  <div className="space-y-1">
-                                    <p className="text-xs text-amber-600 dark:text-amber-400">Tipo desconhecido</p>
-                                    <NeonBadge color="amber">TIPO DESCONHECIDO</NeonBadge>
-                                  </div>
+                                  <span className="inline-flex rounded-full bg-amber-100 px-2.5 py-1 text-[11px] font-semibold text-amber-700">Vínculo pendente</span>
                                 );
                               if (!linked)
                                 return (
-                                  <div className="space-y-1">
-                                    <p className="text-xs text-slate-400 dark:text-slate-500">Sem vínculo</p>
-                                    <NeonBadge color="gray">NÃO VINCULADO</NeonBadge>
-                                  </div>
+                                  <span className="inline-flex rounded-full bg-slate-100 px-2.5 py-1 text-[11px] font-semibold text-slate-500">Sem vínculo</span>
                                 );
                               const linkBadge = getAccountTypeBadge(user.profile_link_type, user.role);
                               return (
-                                <div className="space-y-1">
-                                  <p className="text-xs font-medium text-slate-700 dark:text-slate-300 truncate max-w-[160px]">
-                                    {linked.name}
-                                  </p>
-                                  <NeonBadge color={linkBadge.badgeColor}>{linkBadge.label.toUpperCase()}</NeonBadge>
-                                </div>
+                                <TooltipProvider>
+                                  <Tooltip>
+                                    <TooltipTrigger asChild>
+                                      <span className="inline-flex cursor-default rounded-full bg-[#EAF2FF] px-2.5 py-1 text-[11px] font-semibold text-[#1268E8]">Vinculado</span>
+                                    </TooltipTrigger>
+                                    <TooltipContent className="max-w-xs text-xs">
+                                      <p className="font-semibold">{linked.name}</p>
+                                      <p className="mt-1 text-slate-400">Tipo: {linkBadge.label}</p>
+                                    </TooltipContent>
+                                  </Tooltip>
+                                </TooltipProvider>
                               );
                             })()}
                           </td>
                         )}
 
                         {visibleCols.has("status") && (
-                          <td data-rotulo="Status" className="py-3 px-4" style={{ borderRight: "1px solid rgba(148,163,184,0.15)" }}>
-                            <div className="space-y-1">
+                          <td data-rotulo="Status" className="py-1.5 px-4" style={{ borderRight: "1px solid rgba(148,163,184,0.15)" }}>
+                            <div className="flex items-center gap-1.5 whitespace-nowrap">
                               {user.auto_paused ? (
                                 <span className="allka-badge allka-badge-status-pausado">
                                   <span className="w-1.5 h-1.5 rounded-full flex-shrink-0 bg-amber-500" />
@@ -3343,23 +3459,13 @@ type UsuarioDaLista = User & {
                         )}
 
                         {visibleCols.has("ultimo_acesso") && (
-                          <td data-rotulo="Último acesso" className="py-3 px-4">
-                            <div className="space-y-0.5">
-                              <p className="text-xs font-medium text-slate-900 dark:text-slate-100">
+                          <td data-rotulo="Último acesso" className="py-1.5 px-2">
+                            <div className="flex items-center gap-1 whitespace-nowrap text-sm font-medium text-slate-700 dark:text-slate-200">
+                              <span>
                                 {user.last_login
-                                  ? new Date(user.last_login).toLocaleDateString(
-                                      "pt-BR",
-                                    )
+                                  ? `${new Date(user.last_login).toLocaleDateString("pt-BR")} ${new Date(user.last_login).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}`
                                   : "Nunca"}
-                              </p>
-                              <p className="text-xs text-slate-500 dark:text-slate-400">
-                                {user.last_login
-                                  ? new Date(user.last_login).toLocaleTimeString(
-                                      "pt-BR",
-                                      { hour: "2-digit", minute: "2-digit" },
-                                    )
-                                  : ""}
-                              </p>
+                              </span>
                               {user.inactivity_bucket === "inactive_30" && (
                                 <NeonBadge color="amber" tooltip="Sem acesso há mais de 30 dias.">30d+</NeonBadge>
                               )}
@@ -3372,6 +3478,24 @@ type UsuarioDaLista = User & {
                             </div>
                           </td>
                         )}
+                        <td className="w-12 px-2 py-1 text-center" onClick={(e) => e.stopPropagation()}>
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <button
+                                onClick={(e) => e.stopPropagation()}
+                                aria-label={`Mais ações — ${user.name}`}
+                                className="inline-flex h-8 w-8 items-center justify-center rounded-full text-[#12376D] transition-all hover:bg-white hover:text-[#6419D2] hover:shadow-sm dark:hover:bg-slate-800"
+                              ><MoreHorizontal className="h-4 w-4" /></button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end" className="w-56 rounded-2xl border-slate-100 bg-white p-2 text-[#092B61] shadow-xl">
+                              <DropdownMenuItem className="gap-3 rounded-xl py-2.5 focus:bg-[#F3F7FF]" onClick={() => handleUserAction(user, "view")}><Eye className="h-4 w-4 text-[#0F55B8]" />Ver perfil</DropdownMenuItem>
+                              <DropdownMenuItem className="gap-3 rounded-xl py-2.5 focus:bg-[#F3F7FF]" onClick={() => handleUserAction(user, "edit")}><Pencil className="h-4 w-4 text-[#0F55B8]" />Editar usuário</DropdownMenuItem>
+                              <DropdownMenuItem className="gap-3 rounded-xl py-2.5 focus:bg-[#F3F7FF]" onClick={() => openInfoPanel(user)}><Key className="h-4 w-4 text-[#0F55B8]" />Gerenciar permissões</DropdownMenuItem>
+                              <DropdownMenuSeparator />
+                              <DropdownMenuItem className="gap-3 rounded-xl py-2.5 text-red-600 focus:bg-red-50 focus:text-red-600" onClick={() => handleUserAction(user, "block")}><UserX className="h-4 w-4" />{user.is_active ? "Desativar usuário" : "Ativar usuário"}</DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        </td>
                       </tr>
                     );
                   })}
@@ -3394,11 +3518,21 @@ type UsuarioDaLista = User & {
               </div>
             )}
 
+            {usersLoading && hasLoadedUsersOnceRef.current && (
+              <div className="absolute inset-0 z-30 flex items-center justify-center bg-white/72 backdrop-blur-[1px] dark:bg-slate-950/65">
+                <div className="inline-flex items-center gap-2 rounded-full border border-indigo-100 bg-white px-4 py-2 text-xs font-semibold text-[#4A1AA0] shadow-lg dark:border-slate-700 dark:bg-slate-900 dark:text-violet-300">
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Atualizando lista…
+                </div>
+              </div>
+            )}
+            </div>
+
           </div>
 
-          {/* Row 3 — bottom mirror of row 2 (items-per-page + count + scrollbar + pagination) */}
+          {/* A paginação fica na barra de ferramentas, mantendo a lista compacta. */}
           {filteredUsers.length > 0 && (
-            <div className="flex flex-wrap items-center justify-between gap-3 px-[18px] py-2 border-t border-[#e8edf5] dark:border-slate-800 bg-white dark:bg-slate-900/20">
+            <div className="hidden flex-wrap items-center justify-between gap-3 px-[18px] py-2 border-t border-[#e8edf5] dark:border-slate-800 bg-white dark:bg-slate-900/20">
               <div className="flex items-center gap-3">
                 <ItemsPerPageSelect
                   value={pageSize.toString()}
@@ -3474,6 +3608,7 @@ type UsuarioDaLista = User & {
           <StandardModalDialog
             open={infoPanelOpen}
             onClose={() => setInfoPanelOpen(false)}
+            headerClassName="rounded-xl px-5 py-3.5 shadow-sm"
             title={
               <div className="flex items-center gap-3">
                 <button
@@ -3488,10 +3623,13 @@ type UsuarioDaLista = User & {
                     </AvatarFallback>
                   </Avatar>
                 </button>
-                <span>Detalhes do usuário</span>
+                <div className="min-w-0">
+                  <span className="block truncate">{safe(infoPanelUser.name)}</span>
+                  <span className="block mt-0.5 text-[11px] font-medium text-white/70">Perfil do usuário</span>
+                </div>
               </div>
             }
-            subtitle={`${safe(infoPanelUser.name)} · ${safe(infoPanelUser.email)}`}
+            subtitle={`${safe(infoPanelUser.email)} · ID ${String(userCodeToNum(infoPanelUser.user_code) || safe(infoPanelUser.user_code)).padStart(2, "0")}`}
           >
                 <div className="flex-1 overflow-y-auto p-4">
                   <div className="space-y-4">

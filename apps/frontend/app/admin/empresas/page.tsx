@@ -20,9 +20,11 @@ import {
   STANDARD_SHELL_PANEL_CLASS,
   STANDARD_SHELL_TABLE_CARD_CLASS,
   StandardPageBanner,
-  StandardMetricCard,
 } from "@/components/standard-page-shell";
-import { usePinEntry, useConsumePendingActivation } from "@/contexts/open-screens-context";
+import {
+  usePinEntry,
+  useConsumePendingActivation,
+} from "@/contexts/open-screens-context";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -76,6 +78,7 @@ import {
   Briefcase,
   Wallet,
   Pin,
+  MoreHorizontal,
 } from "lucide-react";
 import { useSorting, SortableHeader } from "@/hooks/useSorting";
 import { ExportButton } from "@/components/export-button";
@@ -140,6 +143,48 @@ const gradientMap: Record<string, string> = {
   "bg-gradient-to-tr from-black via-slate-900 to-gray-900":
     "linear-gradient(to top right, #000000, #0f172a, #111827)",
 };
+
+function CompanyCompactStatCard({
+  label,
+  value,
+  icon: Icon,
+  tone,
+}: {
+  label: string;
+  value: number;
+  icon: React.ElementType;
+  tone: "blue" | "emerald" | "violet" | "orange";
+}) {
+  const palette = {
+    blue: "bg-blue-50 text-blue-600 ring-blue-100",
+    emerald: "bg-emerald-50 text-emerald-600 ring-emerald-100",
+    violet: "bg-violet-50 text-violet-600 ring-violet-100",
+    orange: "bg-orange-50 text-orange-600 ring-orange-100",
+  }[tone];
+
+  return (
+    <div className="flex min-w-0 items-center gap-3 px-4 py-2.5 sm:px-5">
+      <span
+        className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl ring-1 ${palette}`}
+      >
+        <Icon className="h-5 w-5" />
+      </span>
+      <div className="min-w-0">
+        <p className="truncate text-[10px] font-bold uppercase tracking-wide text-[#5d7195]">
+          {label}
+        </p>
+        <div className="flex items-center gap-2">
+          <span className="text-2xl font-bold leading-7 text-[#10264f]">
+            {value}
+          </span>
+          <span className="hidden rounded-full bg-emerald-50 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-600 sm:inline">
+            +0% mês
+          </span>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 // "partner" não é mais um CompanyType — Partner é um upgrade da própria
 // Agency (Company.partner_status), não uma organização separada com
@@ -235,7 +280,6 @@ const EMPTY_CREATE_WITH_OWNER_FORM = {
   nomadPixKey: "",
   nomadPixKeyType: "cpf",
 };
-
 
 // Companies loaded from API via useCompanies hook
 
@@ -333,7 +377,9 @@ function CreateTypeTabs({
             <Tooltip>
               <TooltipTrigger asChild>
                 <button
-                  ref={(el) => { tabRefs.current[t] = el; }}
+                  ref={(el) => {
+                    tabRefs.current[t] = el;
+                  }}
                   type="button"
                   role="tab"
                   aria-pressed={active}
@@ -348,7 +394,10 @@ function CreateTypeTabs({
                   }`}
                   style={
                     active
-                      ? { background: "linear-gradient(135deg, #111A4D 0%, #6E2C96 55%, #D92293 100%)" }
+                      ? {
+                          background:
+                            "linear-gradient(135deg, #111A4D 0%, #6E2C96 55%, #D92293 100%)",
+                        }
                       : undefined
                   }
                 >
@@ -356,7 +405,11 @@ function CreateTypeTabs({
                   <span className="truncate">{getLabel(t)}</span>
                 </button>
               </TooltipTrigger>
-              <TooltipContent side="bottom" sideOffset={6} className="max-w-[220px]">
+              <TooltipContent
+                side="bottom"
+                sideOffset={6}
+                className="max-w-[220px]"
+              >
                 {getInfo(t)}
               </TooltipContent>
             </Tooltip>
@@ -399,7 +452,9 @@ function CreateFormSection({
           <Icon className="h-4 w-4 text-[#7d1b6a] dark:text-[#c07ab0]" />
         </div>
         <div className="min-w-0">
-          <h3 className="text-sm font-semibold text-slate-700 dark:text-slate-200 truncate">{title}</h3>
+          <h3 className="text-sm font-semibold text-slate-700 dark:text-slate-200 truncate">
+            {title}
+          </h3>
           {description && (
             <p className="text-xs text-slate-400 truncate">{description}</p>
           )}
@@ -485,7 +540,9 @@ function CreateWithOwnerAddressFields({
           <Input
             placeholder="Ex: Rua Paulo Lobo"
             value={form[addressKey] || ""}
-            onChange={(e) => setForm((f: any) => ({ ...f, [addressKey]: e.target.value }))}
+            onChange={(e) =>
+              setForm((f: any) => ({ ...f, [addressKey]: e.target.value }))
+            }
           />
         </div>
         <div className="space-y-2">
@@ -493,7 +550,9 @@ function CreateWithOwnerAddressFields({
           <Input
             placeholder="Ex: 123"
             value={form[numberKey] || ""}
-            onChange={(e) => setForm((f: any) => ({ ...f, [numberKey]: e.target.value }))}
+            onChange={(e) =>
+              setForm((f: any) => ({ ...f, [numberKey]: e.target.value }))
+            }
           />
         </div>
       </div>
@@ -503,7 +562,9 @@ function CreateWithOwnerAddressFields({
           <Input
             placeholder="Ex: Cambuí"
             value={form[neighborhoodKey] || ""}
-            onChange={(e) => setForm((f: any) => ({ ...f, [neighborhoodKey]: e.target.value }))}
+            onChange={(e) =>
+              setForm((f: any) => ({ ...f, [neighborhoodKey]: e.target.value }))
+            }
           />
         </div>
         <div className="space-y-2">
@@ -511,7 +572,9 @@ function CreateWithOwnerAddressFields({
           <Input
             placeholder="Ex: Campinas"
             value={form[cityKey] || ""}
-            onChange={(e) => setForm((f: any) => ({ ...f, [cityKey]: e.target.value }))}
+            onChange={(e) =>
+              setForm((f: any) => ({ ...f, [cityKey]: e.target.value }))
+            }
           />
         </div>
         <div className="space-y-2">
@@ -520,7 +583,12 @@ function CreateWithOwnerAddressFields({
             placeholder="SP"
             maxLength={2}
             value={form[stateKey] || ""}
-            onChange={(e) => setForm((f: any) => ({ ...f, [stateKey]: e.target.value.toUpperCase() }))}
+            onChange={(e) =>
+              setForm((f: any) => ({
+                ...f,
+                [stateKey]: e.target.value.toUpperCase(),
+              }))
+            }
           />
         </div>
       </div>
@@ -643,7 +711,9 @@ export default function EmpresasPage() {
       const max = el.scrollWidth - el.clientWidth;
       el.scrollLeft = ratio * max;
     });
-    requestAnimationFrame(() => { isSyncingScroll.current = false; });
+    requestAnimationFrame(() => {
+      isSyncingScroll.current = false;
+    });
   }, []);
   const handleTopBarScroll = useCallback(
     () => syncScrollFrom(topScrollRef.current),
@@ -689,7 +759,6 @@ export default function EmpresasPage() {
     | "tipo"
     | "membro_desde";
   const allColumns: { key: ColKey; label: string; required?: boolean }[] = [
-    { key: "acoes", label: "Ações", required: true },
     { key: "id", label: "ID", required: true },
     { key: "empresa", label: "Empresa", required: true },
     { key: "contato", label: "Contato" },
@@ -698,6 +767,7 @@ export default function EmpresasPage() {
     { key: "plano", label: "Plano" },
     { key: "tipo", label: "Tipo" },
     { key: "membro_desde", label: "Membro Desde" },
+    { key: "acoes", label: "Ações", required: true },
   ];
   // Explicação de cada coluna, mostrada no tooltip do ícone de info do cabeçalho
   const COLUMN_INFO: Partial<Record<ColKey, string>> = {
@@ -713,13 +783,13 @@ export default function EmpresasPage() {
   };
   // Colunas visíveis por padrão (o usuário pode ligar as demais na engrenagem)
   const DEFAULT_VISIBLE_COLS: ColKey[] = [
-    "acoes",
     "id",
     "empresa",
     "contato",
     "status",
     "plano",
     "tipo",
+    "acoes",
   ];
   // v2: bumped after adding the "id" and "membro_desde" columns and
   // redefining the default visible set — ensures everyone (including
@@ -755,7 +825,9 @@ export default function EmpresasPage() {
   }, []);
 
   // ── Company "more info" slide panel (opened via the + button) ───────────
-  const [infoPanelCompany, setInfoPanelCompany] = useState<Company | null>(null);
+  const [infoPanelCompany, setInfoPanelCompany] = useState<Company | null>(
+    null,
+  );
   const [infoPanelOpen, setInfoPanelOpen] = useState(false);
   const [infoPanelSummary, setInfoPanelSummary] = useState<{
     projects: { total: number; byStatus: Record<string, number> };
@@ -1037,22 +1109,33 @@ export default function EmpresasPage() {
       if (found) handleViewCompany(found);
     }
   });
-  const [createWithOwnerSubmitting, setCreateWithOwnerSubmitting] = useState(false);
+  const [createWithOwnerSubmitting, setCreateWithOwnerSubmitting] =
+    useState(false);
   const createWithOwnerAvatarInputRef = useRef<HTMLInputElement>(null);
   const createWithOwnerNomadAvatarInputRef = useRef<HTMLInputElement>(null);
-  const [createWithOwnerForm, setCreateWithOwnerForm] = useState(EMPTY_CREATE_WITH_OWNER_FORM);
-  const [showCreateWithOwnerPassword, setShowCreateWithOwnerPassword] = useState(false);
-  const [createWithOwnerCepLoading, setCreateWithOwnerCepLoading] = useState(false);
+  const [createWithOwnerForm, setCreateWithOwnerForm] = useState(
+    EMPTY_CREATE_WITH_OWNER_FORM,
+  );
+  const [showCreateWithOwnerPassword, setShowCreateWithOwnerPassword] =
+    useState(false);
+  const [createWithOwnerCepLoading, setCreateWithOwnerCepLoading] =
+    useState(false);
   const [createWithOwnerCepError, setCreateWithOwnerCepError] = useState("");
   // Erros por campo do Novo Cadastro — só os 3 campos realmente exigidos
   // pelo backend (name/email/password, ver createUserSchema em
   // apps/backend/src/routes/users.ts) + organizationName quando o tipo
   // precisa. Chave = id do campo (mesmo id usado no <Input>/<Label>).
-  const [createWithOwnerErrors, setCreateWithOwnerErrors] = useState<Record<string, string>>({});
-  const [createWithOwnerErrorSummary, setCreateWithOwnerErrorSummary] = useState(false);
+  const [createWithOwnerErrors, setCreateWithOwnerErrors] = useState<
+    Record<string, string>
+  >({});
+  const [createWithOwnerErrorSummary, setCreateWithOwnerErrorSummary] =
+    useState(false);
   const createWithOwnerScrollRef = useRef<HTMLDivElement>(null);
   // FASE 7 — proteção contra perda de dados ao Cancelar/Voltar
-  const [createWithOwnerDiscardConfirmOpen, setCreateWithOwnerDiscardConfirmOpen] = useState(false);
+  const [
+    createWithOwnerDiscardConfirmOpen,
+    setCreateWithOwnerDiscardConfirmOpen,
+  ] = useState(false);
   const [editPanelOpen, setEditPanelOpen] = useState(false);
   const [viewPanelOpen, setViewPanelOpen] = useState(false);
   const [selectedCompany, setSelectedCompany] = useState<Company | null>(null);
@@ -1113,7 +1196,8 @@ export default function EmpresasPage() {
   const [deleteDialogActions, setDeleteDialogActions] = useState<
     Record<string, CompanyDeleteUserAction>
   >({});
-  const [deleteDialogLoadingMembers, setDeleteDialogLoadingMembers] = useState(false);
+  const [deleteDialogLoadingMembers, setDeleteDialogLoadingMembers] =
+    useState(false);
 
   // Empresa Nomad (CNPJ, gerida junto de Company/Agência — não um perfil
   // profissional isolado): desativar/reativar (reversível, 1 etapa) e
@@ -1173,10 +1257,14 @@ export default function EmpresasPage() {
     // sucesso — não precisa de refetch pra "confirmar" o que a própria
     // resposta 2xx já confirmou.
     setApiNomades((prev) =>
-      prev.map((n) => (n.id === nomadStatusDialog.nomadId ? { ...n, status: newStatus } : n)),
+      prev.map((n) =>
+        n.id === nomadStatusDialog.nomadId ? { ...n, status: newStatus } : n,
+      ),
     );
     toast({
-      title: nomadStatusDialog.willActivate ? "Empresa Nomad reativada" : "Empresa Nomad desativada",
+      title: nomadStatusDialog.willActivate
+        ? "Empresa Nomad reativada"
+        : "Empresa Nomad desativada",
       description: nomadStatusDialog.willActivate
         ? `"${nomadStatusDialog.name}" volta a operar normalmente na plataforma.`
         : `"${nomadStatusDialog.name}" não poderá operar como Nomad enquanto estiver desativada. O CNPJ, o histórico e a carteira continuam intactos — reative a qualquer momento por aqui.`,
@@ -1220,7 +1308,9 @@ export default function EmpresasPage() {
     // some da lista mesmo que o filtro atual continuasse mostrando-o
     // (agora não existe mais), e o total (derivado de filteredCompanies)
     // se ajusta sozinho.
-    setApiNomades((prev) => prev.filter((n) => n.id !== nomadRemoveDialog.nomadId));
+    setApiNomades((prev) =>
+      prev.filter((n) => n.id !== nomadRemoveDialog.nomadId),
+    );
     toast({
       title: "Empresa Nomad excluída",
       description: `O cadastro empresarial de "${nomadRemoveDialog.name}" foi removido. A conta de login vinculada não foi apagada — ela ficou desativada, exatamente como um bloqueio.`,
@@ -1228,14 +1318,20 @@ export default function EmpresasPage() {
     window.dispatchEvent(new Event("allka:admin-counts-changed"));
   };
 
-  const nomadRemoveRelationsList = (relations: typeof nomadRemoveDialog.relations) => {
+  const nomadRemoveRelationsList = (
+    relations: typeof nomadRemoveDialog.relations,
+  ) => {
     if (!relations) return [];
     const items: string[] = [];
-    if (relations.walletTransactions > 0) items.push(`${relations.walletTransactions} lançamento(s) de carteira`);
+    if (relations.walletTransactions > 0)
+      items.push(`${relations.walletTransactions} lançamento(s) de carteira`);
     if (relations.hasBankAccount) items.push("conta bancária cadastrada");
-    if (relations.qualifications > 0) items.push(`${relations.qualifications} qualificação(ões)`);
-    if (relations.withdrawalRequests > 0) items.push(`${relations.withdrawalRequests} solicitação(ões) de saque`);
-    if (relations.taskExecutions > 0) items.push(`${relations.taskExecutions} tarefa(s) executada(s)`);
+    if (relations.qualifications > 0)
+      items.push(`${relations.qualifications} qualificação(ões)`);
+    if (relations.withdrawalRequests > 0)
+      items.push(`${relations.withdrawalRequests} solicitação(ões) de saque`);
+    if (relations.taskExecutions > 0)
+      items.push(`${relations.taskExecutions} tarefa(s) executada(s)`);
     return items;
   };
 
@@ -1250,12 +1346,19 @@ export default function EmpresasPage() {
     const partnerParam = params.get("partner");
     if (typeParam && ["company", "agency", "nomad"].includes(typeParam)) {
       const agencyPartnerFilter =
-        typeParam === "agency" && (partnerParam === "only" || partnerParam === "non")
+        typeParam === "agency" &&
+        (partnerParam === "only" || partnerParam === "non")
           ? partnerParam
           : "all";
-      return { types: [typeParam], agencyPartnerFilter: agencyPartnerFilter as "all" | "only" | "non" };
+      return {
+        types: [typeParam],
+        agencyPartnerFilter: agencyPartnerFilter as "all" | "only" | "non",
+      };
     }
-    return { types: [] as string[], agencyPartnerFilter: "all" as "all" | "only" | "non" };
+    return {
+      types: [] as string[],
+      agencyPartnerFilter: "all" as "all" | "only" | "non",
+    };
   };
   const [advancedFilters, setAdvancedFilters] = useState(() => ({
     ...EMPTY_ADVANCED_FILTERS,
@@ -1270,10 +1373,16 @@ export default function EmpresasPage() {
   useEffect(() => {
     const next = readTypeFilterFromUrl(location.search);
     setAdvancedFilters((prev) => {
-      const sameType = prev.types.length === next.types.length && prev.types[0] === next.types[0];
+      const sameType =
+        prev.types.length === next.types.length &&
+        prev.types[0] === next.types[0];
       const samePartner = prev.agencyPartnerFilter === next.agencyPartnerFilter;
       if (sameType && samePartner) return prev;
-      return { ...prev, types: next.types, agencyPartnerFilter: next.agencyPartnerFilter };
+      return {
+        ...prev,
+        types: next.types,
+        agencyPartnerFilter: next.agencyPartnerFilter,
+      };
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [location.search]);
@@ -1304,7 +1413,6 @@ export default function EmpresasPage() {
     "data_cadastro",
   ]);
   const [showFieldPicker, setShowFieldPicker] = useState(false);
-
 
   // Demo data injected for real-API companies so the UI can be previewed
   const DEMO_DPO = [
@@ -1440,7 +1548,11 @@ export default function EmpresasPage() {
       name: a.name || "",
       legal_name: a.name || "",
       type: "agency" as CompanyType,
-      status: (a.status === "ativo" ? "active" : a.status === "inativo" ? "inactive" : "pending") as CompanyStatus,
+      status: (a.status === "ativo"
+        ? "active"
+        : a.status === "inativo"
+          ? "inactive"
+          : "pending") as CompanyStatus,
       email: a.email || a.user?.email || "",
       phone: a.phone || "",
       document: a.cnpj || "",
@@ -1454,11 +1566,7 @@ export default function EmpresasPage() {
       // Presente só quando essa Agency foi convidada/virou Partner — ver
       // "Convidar para Partner"/badge na linha da tabela.
       partner_status: a.partner_profile?.status as
-        | "invited"
-        | "active"
-        | "declined"
-        | "suspended"
-        | undefined,
+        "invited" | "active" | "declined" | "suspended" | undefined,
       logo_gradient: "bg-gradient-to-br from-blue-900 via-blue-800 to-cyan-900",
       zip_code: a.zip_code || "",
       street: a.address || "",
@@ -1484,7 +1592,11 @@ export default function EmpresasPage() {
       name: n.name || "",
       legal_name: n.name || "",
       type: "nomad" as CompanyType,
-      status: (n.status === "ativo" ? "active" : n.status === "inativo" || n.status === "reprovado" ? "inactive" : "pending") as CompanyStatus,
+      status: (n.status === "ativo"
+        ? "active"
+        : n.status === "inativo" || n.status === "reprovado"
+          ? "inactive"
+          : "pending") as CompanyStatus,
       email: n.email || "",
       phone: n.whatsapp || "",
       document: n.cnpj || "",
@@ -1499,7 +1611,8 @@ export default function EmpresasPage() {
       users_count: n.user_id ? 1 : 0,
       projects_count: n._count?.task_executions ?? 0,
       created_at: n.created_at || new Date().toISOString(),
-      logo_gradient: "bg-gradient-to-br from-green-900 via-emerald-800 to-teal-900",
+      logo_gradient:
+        "bg-gradient-to-br from-green-900 via-emerald-800 to-teal-900",
       zip_code: n.zip_code || "",
       street: n.address || "",
       number: n.number || "",
@@ -1528,7 +1641,10 @@ export default function EmpresasPage() {
   // Nomad ativo.
   const matchesTypeAndPartnerFilter = useCallback(
     (company: Company) => {
-      if (advancedFilters.types.length > 0 && !advancedFilters.types.includes(company.type)) {
+      if (
+        advancedFilters.types.length > 0 &&
+        !advancedFilters.types.includes(company.type)
+      ) {
         return false;
       }
       if (
@@ -1536,8 +1652,15 @@ export default function EmpresasPage() {
         advancedFilters.types[0] === "agency" &&
         advancedFilters.agencyPartnerFilter !== "all"
       ) {
-        const isPartner = company.partner_status === "active" || company.partner_status === "invited";
-        if (advancedFilters.agencyPartnerFilter === "only" ? !isPartner : isPartner) return false;
+        const isPartner =
+          company.partner_status === "active" ||
+          company.partner_status === "invited";
+        if (
+          advancedFilters.agencyPartnerFilter === "only"
+            ? !isPartner
+            : isPartner
+        )
+          return false;
       }
       return true;
     },
@@ -1834,7 +1957,10 @@ export default function EmpresasPage() {
             >
               <span
                 className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none"
-                style={{ background: "linear-gradient(135deg,#000000 0%,#1a2a6f 45%,#c81a7f 100%)" }}
+                style={{
+                  background:
+                    "linear-gradient(135deg,#000000 0%,#1a2a6f 45%,#c81a7f 100%)",
+                }}
               />
               <span className="relative z-10 text-[#7d1b6a] dark:text-[#c07ab0] group-hover:text-white transition-colors">
                 Ir
@@ -1866,11 +1992,35 @@ export default function EmpresasPage() {
   // existente — ver "Convidar para Partner" na linha da tabela).
   const CREATE_TYPE_CONFIG: Record<
     CompanyEntityType,
-    { account_type: string; role: string; needsOrgName: boolean; orgLabel: string; entityLabel: string }
+    {
+      account_type: string;
+      role: string;
+      needsOrgName: boolean;
+      orgLabel: string;
+      entityLabel: string;
+    }
   > = {
-    company: { account_type: "empresas", role: "company_admin", needsOrgName: true, orgLabel: "Nome da Empresa", entityLabel: "Empresa" },
-    agency: { account_type: "agencias", role: "agency_admin", needsOrgName: true, orgLabel: "Nome da Agência", entityLabel: "Agência" },
-    nomad: { account_type: "nomades", role: "nomad", needsOrgName: false, orgLabel: "", entityLabel: "Nômade" },
+    company: {
+      account_type: "empresas",
+      role: "company_admin",
+      needsOrgName: true,
+      orgLabel: "Nome da Empresa",
+      entityLabel: "Empresa",
+    },
+    agency: {
+      account_type: "agencias",
+      role: "agency_admin",
+      needsOrgName: true,
+      orgLabel: "Nome da Agência",
+      entityLabel: "Agência",
+    },
+    nomad: {
+      account_type: "nomades",
+      role: "nomad",
+      needsOrgName: false,
+      orgLabel: "",
+      entityLabel: "Nômade",
+    },
   };
 
   // Genérico pros 3 tipos — cada um usa o mesmo conjunto de campos de
@@ -1879,7 +2029,8 @@ export default function EmpresasPage() {
   const handleCreateWithOwnerCepChange = async (raw: string) => {
     const prefix = createWithOwnerForm.type;
     const digits = raw.replace(/\D/g, "").slice(0, 8);
-    const formatted = digits.length > 5 ? `${digits.slice(0, 5)}-${digits.slice(5)}` : digits;
+    const formatted =
+      digits.length > 5 ? `${digits.slice(0, 5)}-${digits.slice(5)}` : digits;
     setCreateWithOwnerForm((f) => ({ ...f, [`${prefix}ZipCode`]: formatted }));
     setCreateWithOwnerCepError("");
     if (digits.length !== 8) return;
@@ -1906,23 +2057,33 @@ export default function EmpresasPage() {
     }
   };
 
-  const handleCreateWithOwnerLogoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleCreateWithOwnerLogoUpload = (
+    e: React.ChangeEvent<HTMLInputElement>,
+  ) => {
     const file = e.target.files?.[0];
     if (!file) return;
     const reader = new FileReader();
     reader.onload = (event) => {
-      setCreateWithOwnerForm((f) => ({ ...f, companyLogo: event.target?.result as string }));
+      setCreateWithOwnerForm((f) => ({
+        ...f,
+        companyLogo: event.target?.result as string,
+      }));
     };
     reader.readAsDataURL(file);
     e.target.value = "";
   };
 
-  const handleCreateWithOwnerNomadAvatarUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleCreateWithOwnerNomadAvatarUpload = (
+    e: React.ChangeEvent<HTMLInputElement>,
+  ) => {
     const file = e.target.files?.[0];
     if (!file) return;
     const reader = new FileReader();
     reader.onload = (event) => {
-      setCreateWithOwnerForm((f) => ({ ...f, nomadAvatar: event.target?.result as string }));
+      setCreateWithOwnerForm((f) => ({
+        ...f,
+        nomadAvatar: event.target?.result as string,
+      }));
     };
     reader.readAsDataURL(file);
     e.target.value = "";
@@ -1939,7 +2100,10 @@ export default function EmpresasPage() {
     const cfg = CREATE_TYPE_CONFIG[f.type as CompanyEntityType];
     const errors: Record<string, string> = {};
     if (cfg.needsOrgName && !f.organizationName.trim()) {
-      const orgFieldId = f.type === "agency" ? "create-agency-org-name" : "create-company-org-name";
+      const orgFieldId =
+        f.type === "agency"
+          ? "create-agency-org-name"
+          : "create-company-org-name";
       errors[orgFieldId] = `${cfg.orgLabel} é obrigatório.`;
     }
     if (f.type === "nomad" && !f.nomadCnpj.trim()) {
@@ -1956,7 +2120,8 @@ export default function EmpresasPage() {
     if (!f.password) {
       errors["create-company-password"] = "Senha é obrigatória.";
     } else if (f.password.length < 6) {
-      errors["create-company-password"] = "A senha precisa ter ao menos 6 caracteres.";
+      errors["create-company-password"] =
+        "A senha precisa ter ao menos 6 caracteres.";
     }
     return errors;
   };
@@ -1977,8 +2142,12 @@ export default function EmpresasPage() {
     if (el && scrollContainer) {
       const elRect = el.getBoundingClientRect();
       const containerRect = scrollContainer.getBoundingClientRect();
-      const offset = elRect.top - containerRect.top + scrollContainer.scrollTop - 24;
-      scrollContainer.scrollTo({ top: Math.max(0, offset), behavior: "smooth" });
+      const offset =
+        elRect.top - containerRect.top + scrollContainer.scrollTop - 24;
+      scrollContainer.scrollTo({
+        top: Math.max(0, offset),
+        behavior: "smooth",
+      });
       (el as HTMLElement).focus({ preventScroll: true });
     }
   };
@@ -2041,7 +2210,9 @@ export default function EmpresasPage() {
       if (firstErrorField) focusAndScrollToField(firstErrorField);
       toast({
         title: "Revise os campos destacados",
-        description: firstErrorField ? errors[firstErrorField] : "Preencha os campos obrigatórios antes de continuar.",
+        description: firstErrorField
+          ? errors[firstErrorField]
+          : "Preencha os campos obrigatórios antes de continuar.",
         variant: "destructive",
       });
       return;
@@ -2054,7 +2225,9 @@ export default function EmpresasPage() {
       // usuário principal na mesma transação — endpoint único (POST
       // /api/users) pros 4 tipos (Tarefa 9/11).
       await apiClient.createUser({
-        ...(cfg.needsOrgName ? { organization_name: f.organizationName.trim() } : {}),
+        ...(cfg.needsOrgName
+          ? { organization_name: f.organizationName.trim() }
+          : {}),
         name: f.name.trim(),
         email: f.email.trim(),
         password: f.password,
@@ -2068,18 +2241,32 @@ export default function EmpresasPage() {
           ? {
               ...(f.companyCnpj ? { company_cnpj: f.companyCnpj } : {}),
               ...(f.companyPhone ? { company_phone: f.companyPhone } : {}),
-              ...(f.companyWebsite ? { company_website: f.companyWebsite } : {}),
-              ...(f.companySegment ? { company_segment: f.companySegment } : {}),
+              ...(f.companyWebsite
+                ? { company_website: f.companyWebsite }
+                : {}),
+              ...(f.companySegment
+                ? { company_segment: f.companySegment }
+                : {}),
               ...(f.companyStatus ? { company_status: f.companyStatus } : {}),
-              ...(f.companyAddress ? { company_address: f.companyAddress } : {}),
+              ...(f.companyAddress
+                ? { company_address: f.companyAddress }
+                : {}),
               ...(f.companyNumber ? { company_number: f.companyNumber } : {}),
-              ...(f.companyNeighborhood ? { company_neighborhood: f.companyNeighborhood } : {}),
+              ...(f.companyNeighborhood
+                ? { company_neighborhood: f.companyNeighborhood }
+                : {}),
               ...(f.companyCity ? { company_city: f.companyCity } : {}),
               ...(f.companyState ? { company_state: f.companyState } : {}),
-              ...(f.companyZipCode ? { company_zip_code: f.companyZipCode } : {}),
+              ...(f.companyZipCode
+                ? { company_zip_code: f.companyZipCode }
+                : {}),
               ...(f.companyPixKey ? { company_pix_key: f.companyPixKey } : {}),
-              ...(f.companyPixKey ? { company_pix_key_type: f.companyPixKeyType } : {}),
-              ...(f.companyDescription ? { company_description: f.companyDescription } : {}),
+              ...(f.companyPixKey
+                ? { company_pix_key_type: f.companyPixKeyType }
+                : {}),
+              ...(f.companyDescription
+                ? { company_description: f.companyDescription }
+                : {}),
               ...(f.companyLogo ? { company_logo: f.companyLogo } : {}),
             }
           : {}),
@@ -2090,12 +2277,16 @@ export default function EmpresasPage() {
               ...(f.agencyStatus ? { agency_status: f.agencyStatus } : {}),
               ...(f.agencyAddress ? { agency_address: f.agencyAddress } : {}),
               ...(f.agencyNumber ? { agency_number: f.agencyNumber } : {}),
-              ...(f.agencyNeighborhood ? { agency_neighborhood: f.agencyNeighborhood } : {}),
+              ...(f.agencyNeighborhood
+                ? { agency_neighborhood: f.agencyNeighborhood }
+                : {}),
               ...(f.agencyCity ? { agency_city: f.agencyCity } : {}),
               ...(f.agencyState ? { agency_state: f.agencyState } : {}),
               ...(f.agencyZipCode ? { agency_zip_code: f.agencyZipCode } : {}),
               ...(f.agencyPixKey ? { agency_pix_key: f.agencyPixKey } : {}),
-              ...(f.agencyPixKey ? { agency_pix_key_type: f.agencyPixKeyType } : {}),
+              ...(f.agencyPixKey
+                ? { agency_pix_key_type: f.agencyPixKeyType }
+                : {}),
             }
           : {}),
         ...(f.type === "nomad"
@@ -2107,12 +2298,16 @@ export default function EmpresasPage() {
               ...(f.nomadAvatar ? { nomad_avatar: f.nomadAvatar } : {}),
               ...(f.nomadAddress ? { nomad_address: f.nomadAddress } : {}),
               ...(f.nomadNumber ? { nomad_number: f.nomadNumber } : {}),
-              ...(f.nomadNeighborhood ? { nomad_neighborhood: f.nomadNeighborhood } : {}),
+              ...(f.nomadNeighborhood
+                ? { nomad_neighborhood: f.nomadNeighborhood }
+                : {}),
               ...(f.nomadCity ? { nomad_city: f.nomadCity } : {}),
               ...(f.nomadState ? { nomad_state: f.nomadState } : {}),
               ...(f.nomadZipCode ? { nomad_zip_code: f.nomadZipCode } : {}),
               ...(f.nomadPixKey ? { nomad_pix_key: f.nomadPixKey } : {}),
-              ...(f.nomadPixKey ? { nomad_pix_key_type: f.nomadPixKeyType } : {}),
+              ...(f.nomadPixKey
+                ? { nomad_pix_key_type: f.nomadPixKeyType }
+                : {}),
             }
           : {}),
       });
@@ -2168,8 +2363,16 @@ export default function EmpresasPage() {
   // Cada endpoint (Company/Agency/Nomade) usa seu próprio vocabulário de
   // status — a tela unifica pra active/inactive/pending, então salvar
   // precisa reconverter pro valor nativo daquele tipo.
-  const STATUS_TO_AGENCY: Record<string, string> = { active: "ativo", inactive: "inativo", pending: "pendente" };
-  const STATUS_TO_NOMAD: Record<string, string> = { active: "ativo", inactive: "inativo", pending: "aguardando_aprovacao" };
+  const STATUS_TO_AGENCY: Record<string, string> = {
+    active: "ativo",
+    inactive: "inativo",
+    pending: "pendente",
+  };
+  const STATUS_TO_NOMAD: Record<string, string> = {
+    active: "ativo",
+    inactive: "inativo",
+    pending: "aguardando_aprovacao",
+  };
 
   const handleSaveCompany = async (data: any) => {
     try {
@@ -2185,7 +2388,9 @@ export default function EmpresasPage() {
           cnpj: data.document || data.cnpj || undefined,
           email: data.email || undefined,
           phone: data.phone || undefined,
-          status: data.status ? STATUS_TO_AGENCY[data.status] || data.status : undefined,
+          status: data.status
+            ? STATUS_TO_AGENCY[data.status] || data.status
+            : undefined,
           // Antes descartados aqui mesmo depois de preenchidos no form —
           // as colunas já existem em Agency (schema.prisma), só nunca
           // tinham sido enviadas pelo frontend nem aceitas pelo backend
@@ -2209,7 +2414,9 @@ export default function EmpresasPage() {
           name: data.name || data.legal_name,
           email: data.email || undefined,
           whatsapp: data.phone || undefined,
-          status: data.status ? STATUS_TO_NOMAD[data.status] || data.status : undefined,
+          status: data.status
+            ? STATUS_TO_NOMAD[data.status] || data.status
+            : undefined,
         });
       } else {
         await updateCompany(selectedCompany._apiId, {
@@ -2263,7 +2470,9 @@ export default function EmpresasPage() {
     if (company?.type === "company" && company._apiId) {
       setDeleteDialogLoadingMembers(true);
       try {
-        const res: any = await apiClient.getUsers({ company_id: company._apiId });
+        const res: any = await apiClient.getUsers({
+          company_id: company._apiId,
+        });
         const members = (res?.data || []).map((u: any) => ({
           id: u.id,
           name: u.name || "",
@@ -2271,7 +2480,12 @@ export default function EmpresasPage() {
         }));
         setDeleteDialogMembers(members);
         setDeleteDialogActions(
-          Object.fromEntries(members.map((m: any) => [m.id, "unlink" as CompanyDeleteUserAction])),
+          Object.fromEntries(
+            members.map((m: any) => [
+              m.id,
+              "unlink" as CompanyDeleteUserAction,
+            ]),
+          ),
         );
       } catch {
         setDeleteDialogMembers([]);
@@ -2329,7 +2543,8 @@ export default function EmpresasPage() {
     const info = {
       all: "",
       company: "Empresa cliente direta, sem vínculo com agência ou parceiro.",
-      agency: "Empresa vinculada a um projeto conduzido por uma agência parceira.",
+      agency:
+        "Empresa vinculada a um projeto conduzido por uma agência parceira.",
       nomad: "Empresa atendida por um nômade (freelancer) da plataforma.",
       partner: "Empresa indicada por um parceiro de indicação (referral).",
     };
@@ -2359,7 +2574,10 @@ export default function EmpresasPage() {
     }));
     const params = new URLSearchParams();
     if (t !== "all") params.set("type", t);
-    navigate({ pathname: "/admin/empresas", search: params.toString() ? `?${params.toString()}` : "" });
+    navigate({
+      pathname: "/admin/empresas",
+      search: params.toString() ? `?${params.toString()}` : "",
+    });
   };
 
   // Subfiltro Partner — só chamado com Agência já selecionada (o controle
@@ -2418,7 +2636,8 @@ export default function EmpresasPage() {
       icon={Users}
       title="Usuário Principal"
       description={
-        CREATE_TYPE_CONFIG[createWithOwnerForm.type as CompanyEntityType].needsOrgName
+        CREATE_TYPE_CONFIG[createWithOwnerForm.type as CompanyEntityType]
+          .needsOrgName
           ? "Será o administrador desta conta — pode criar e gerenciar os demais usuários da equipe depois."
           : "Login de acesso desta conta."
       }
@@ -2426,7 +2645,11 @@ export default function EmpresasPage() {
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <div className="space-y-2">
           <Label htmlFor="create-company-name">
-            Nome {CREATE_TYPE_CONFIG[createWithOwnerForm.type as CompanyEntityType].needsOrgName ? "do responsável" : "completo"}{" "}
+            Nome{" "}
+            {CREATE_TYPE_CONFIG[createWithOwnerForm.type as CompanyEntityType]
+              .needsOrgName
+              ? "do responsável"
+              : "completo"}{" "}
             <span className="text-red-500">*</span>
           </Label>
           <Input
@@ -2438,9 +2661,16 @@ export default function EmpresasPage() {
               clearCreateWithOwnerError("create-company-name");
             }}
             aria-invalid={!!createWithOwnerErrors["create-company-name"]}
-            aria-describedby={createWithOwnerErrors["create-company-name"] ? "create-company-name-error" : undefined}
+            aria-describedby={
+              createWithOwnerErrors["create-company-name"]
+                ? "create-company-name-error"
+                : undefined
+            }
           />
-          <CreateFieldError id="create-company-name" message={createWithOwnerErrors["create-company-name"]} />
+          <CreateFieldError
+            id="create-company-name"
+            message={createWithOwnerErrors["create-company-name"]}
+          />
         </div>
         <div className="space-y-2">
           <Label htmlFor="create-company-email">
@@ -2457,9 +2687,16 @@ export default function EmpresasPage() {
               clearCreateWithOwnerError("create-company-email");
             }}
             aria-invalid={!!createWithOwnerErrors["create-company-email"]}
-            aria-describedby={createWithOwnerErrors["create-company-email"] ? "create-company-email-error" : undefined}
+            aria-describedby={
+              createWithOwnerErrors["create-company-email"]
+                ? "create-company-email-error"
+                : undefined
+            }
           />
-          <CreateFieldError id="create-company-email" message={createWithOwnerErrors["create-company-email"]} />
+          <CreateFieldError
+            id="create-company-email"
+            message={createWithOwnerErrors["create-company-email"]}
+          />
         </div>
       </div>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -2475,18 +2712,27 @@ export default function EmpresasPage() {
               autoComplete="new-password"
               value={createWithOwnerForm.password}
               onChange={(e) => {
-                setCreateWithOwnerForm((f) => ({ ...f, password: e.target.value }));
+                setCreateWithOwnerForm((f) => ({
+                  ...f,
+                  password: e.target.value,
+                }));
                 clearCreateWithOwnerError("create-company-password");
               }}
               className="pr-9"
               aria-invalid={!!createWithOwnerErrors["create-company-password"]}
-              aria-describedby={createWithOwnerErrors["create-company-password"] ? "create-company-password-error" : undefined}
+              aria-describedby={
+                createWithOwnerErrors["create-company-password"]
+                  ? "create-company-password-error"
+                  : undefined
+              }
             />
             <button
               type="button"
               onClick={() => setShowCreateWithOwnerPassword((v) => !v)}
               className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 transition-colors"
-              aria-label={showCreateWithOwnerPassword ? "Ocultar senha" : "Mostrar senha"}
+              aria-label={
+                showCreateWithOwnerPassword ? "Ocultar senha" : "Mostrar senha"
+              }
             >
               {showCreateWithOwnerPassword ? (
                 <EyeOff className="h-4 w-4" />
@@ -2495,15 +2741,22 @@ export default function EmpresasPage() {
               )}
             </button>
           </div>
-          <CreateFieldError id="create-company-password" message={createWithOwnerErrors["create-company-password"]} />
+          <CreateFieldError
+            id="create-company-password"
+            message={createWithOwnerErrors["create-company-password"]}
+          />
         </div>
         <div className="space-y-2">
-          <Label htmlFor="create-company-phone">Telefone do responsável (opcional)</Label>
+          <Label htmlFor="create-company-phone">
+            Telefone do responsável (opcional)
+          </Label>
           <Input
             id="create-company-phone"
             placeholder="+55 11 98765-4321"
             value={createWithOwnerForm.phone}
-            onChange={(e) => setCreateWithOwnerForm((f) => ({ ...f, phone: e.target.value }))}
+            onChange={(e) =>
+              setCreateWithOwnerForm((f) => ({ ...f, phone: e.target.value }))
+            }
           />
         </div>
       </div>
@@ -2511,1467 +2764,1684 @@ export default function EmpresasPage() {
   );
 
   return (
-    <div className={STANDARD_SHELL_PANEL_CLASS}>
-    <div
-      className="relative h-full min-h-0 flex flex-col overflow-hidden"
-      ref={pageRef}
-    >
-      {/* Listagem nunca desmonta — só fica oculta ("hidden") quando o Novo
+    <div className={`${STANDARD_SHELL_PANEL_CLASS} !p-1.5 sm:!p-2`}>
+      <div
+        className="relative h-full min-h-0 flex flex-col overflow-hidden"
+        ref={pageRef}
+      >
+        {/* Listagem nunca desmonta — só fica oculta ("hidden") quando o Novo
           Cadastro está aberto E em foco, pra preservar estado só-de-DOM que
           não vive em nenhum useState (ex.: posição de scroll horizontal da
           tabela). Sem efeito cascata/espiadinha aqui — alternar entre esta
           tela e o Novo Cadastro agora é feito pela Bandeja de Telas global
           (ícone flutuante abaixo do chat, ver components/open-screens-tray.tsx),
           registrada logo abaixo via usePinEntry (survive a navegação). */}
-      <div
-        className={
-          createWithOwnerOpen && createWithOwnerFocused
-            ? "hidden"
-            : "h-full min-h-0 flex flex-col"
-        }
-      >
-      <div className="shrink-0 -mb-[11px]">
-      <StandardPageBanner
-        icon={Building2}
-        title="Empresas"
-        description="Gerencie todas as empresas cadastradas na plataforma."
-        actions={
-          <>
-            <div className="bg-white rounded-lg">
-              <ExportButton pageRef={pageRef} filename="empresas" />
-            </div>
-            <TooltipProvider delayDuration={400}>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <button
-                    type="button"
-                    onClick={toggleListPinned}
-                    aria-pressed={listPinned}
-                    className={`flex items-center justify-center h-8 w-8 rounded-lg border transition-colors ${
-                      listPinned
-                        ? "border-white bg-white/25 text-white"
-                        : "border-white/70 bg-white/10 text-white hover:bg-white/20"
-                    }`}
-                  >
-                    <Pin className={`h-3.5 w-3.5 ${listPinned ? "fill-current" : ""}`} />
-                  </button>
-                </TooltipTrigger>
-                <TooltipContent side="bottom" sideOffset={6}>
-                  {listPinned ? "Remover da Bandeja de Telas" : "Adicionar à Bandeja de Telas"}
-                </TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
-            <TooltipProvider delayDuration={400}>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <button
-                    onClick={() => {
-                      setCreateWithOwnerOpen(true);
-                      setCreateWithOwnerFocused(true);
-                    }}
-                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-white/70 text-white bg-white/10 hover:bg-white/20 transition-colors text-xs font-semibold whitespace-nowrap"
-                  >
-                    <Plus className="h-3.5 w-3.5 shrink-0" />
-                    Novo Cadastro
-                  </button>
-                </TooltipTrigger>
-                <TooltipContent side="bottom" sideOffset={6}>
-                  Criar empresa, agência, nômade ou partner
-                </TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
-          </>
-        }
-      />
-      </div>
-
-      <div className="flex-1 min-h-0 overflow-y-auto">
-      <div className="space-y-5">
-      {/* Stats Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-        <StandardMetricCard
-          label="Total de Empresas"
-          value={stats.total}
-          icon={Building2}
-          colorKey="blue"
-        />
-        <StandardMetricCard
-          label="Empresas Ativas"
-          value={stats.active}
-          icon={Activity}
-          colorKey="emerald"
-        />
-        <StandardMetricCard
-          label="Total de Usuários"
-          value={stats.totalUsers}
-          icon={Users}
-          colorKey="violet"
-        />
-        <StandardMetricCard
-          label="Total de Projetos"
-          value={stats.totalProjects}
-          icon={FolderOpen}
-          colorKey="orange"
-        />
-      </div>
-
-      {/* Main Table Card */}
-      <Card className={STANDARD_SHELL_TABLE_CARD_CLASS}>
-        {/* Card Top Bar — row 1: search + filters + gear */}
-        <div className="admin-empresas-toolbar-row flex flex-wrap items-center gap-2.5 px-4 py-3 bg-white dark:bg-slate-900/30">
-          {/* Search — com autocompletar por nome/ID */}
-          <div
-            ref={searchBoxRef}
-            className="flex-1 relative min-w-[220px] basis-full sm:basis-auto"
-          >
-            <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-[#7d1b6a]/50 dark:text-[#c07ab0]/60 z-10" />
-            <Input
-              placeholder="Buscar por nome, CNPJ, e-mail ou responsável..."
-              aria-label="Buscar empresas"
-              autoComplete="new-password"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              onFocus={() => setSearchFocused(true)}
-              onKeyDown={(e) => {
-                if (e.key === "Escape") {
-                  setSearchFocused(false);
-                  (e.target as HTMLInputElement).blur();
-                }
-              }}
-              className="pl-10 pr-9 h-11 text-sm bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 rounded-[14px] shadow-sm focus-visible:ring-2 focus-visible:ring-[#7d1b6a]/40 focus-visible:border-[#7d1b6a]/60 w-full"
+        <div
+          className={
+            createWithOwnerOpen && createWithOwnerFocused
+              ? "hidden"
+              : "h-full min-h-0 flex flex-col"
+          }
+        >
+          <div className="shrink-0 -mb-[11px]">
+            <StandardPageBanner
+              icon={Building2}
+              title="Empresas"
+              description="Gerencie todas as empresas cadastradas na plataforma."
+              actions={
+                <>
+                  <div className="bg-white rounded-lg">
+                    <ExportButton pageRef={pageRef} filename="empresas" />
+                  </div>
+                  <TooltipProvider delayDuration={400}>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <button
+                          type="button"
+                          onClick={toggleListPinned}
+                          aria-pressed={listPinned}
+                          className={`flex items-center justify-center h-8 w-8 rounded-lg border transition-colors ${
+                            listPinned
+                              ? "border-white bg-white/25 text-white"
+                              : "border-white/70 bg-white/10 text-white hover:bg-white/20"
+                          }`}
+                        >
+                          <Pin
+                            className={`h-3.5 w-3.5 ${listPinned ? "fill-current" : ""}`}
+                          />
+                        </button>
+                      </TooltipTrigger>
+                      <TooltipContent side="bottom" sideOffset={6}>
+                        {listPinned
+                          ? "Remover da Bandeja de Telas"
+                          : "Adicionar à Bandeja de Telas"}
+                      </TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
+                  <TooltipProvider delayDuration={400}>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <button
+                          onClick={() => {
+                            setCreateWithOwnerOpen(true);
+                            setCreateWithOwnerFocused(true);
+                          }}
+                          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-white/70 text-white bg-white/10 hover:bg-white/20 transition-colors text-xs font-semibold whitespace-nowrap"
+                        >
+                          <Plus className="h-3.5 w-3.5 shrink-0" />
+                          Novo Cadastro
+                        </button>
+                      </TooltipTrigger>
+                      <TooltipContent side="bottom" sideOffset={6}>
+                        Criar empresa, agência, nômade ou partner
+                      </TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
+                </>
+              }
             />
-            {searchQuery.trim() && (
-              <button
-                type="button"
-                aria-label="Limpar busca"
-                onClick={() => setSearchQuery("")}
-                className="absolute right-3 top-1/2 -translate-y-1/2 h-5 w-5 flex items-center justify-center rounded-full text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors z-10"
-              >
-                <X className="h-3.5 w-3.5" />
-              </button>
-            )}
-            {searchFocused && searchQuery.trim() && (
-              <div className="absolute left-0 right-0 top-[calc(100%+6px)] z-20 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-[14px] shadow-xl overflow-hidden">
-                {searchSuggestions.length === 0 ? (
-                  <p className="px-4 py-3 text-xs text-slate-400">
-                    Nenhuma empresa encontrada com esse termo
-                  </p>
-                ) : (
-                  searchSuggestions.map((c) => (
-                    <button
-                      key={c.id}
-                      onClick={() => {
-                        setSearchQuery(c.name);
-                        setSearchFocused(false);
-                      }}
-                      className="w-full flex items-center gap-2.5 px-4 py-2.5 text-left hover:bg-slate-50 dark:hover:bg-slate-700/60 transition-colors"
-                    >
-                      <CompanyAvatar company={c} />
-                      <div className="min-w-0 flex-1">
-                        <p className="text-sm font-medium text-slate-700 dark:text-slate-200 truncate">
-                          {c.name}
-                        </p>
-                        <p className="text-[11px] text-slate-400 font-mono">
-                          emp_
-                          {c.sequence_number ?? c.id}
-                        </p>
-                      </div>
-                    </button>
-                  ))
-                )}
-              </div>
-            )}
           </div>
 
-          {/* Quick type filter chips — Todos/Company/Agency/Nomad. Partner NÃO
+          <div className="allka-users-scroll flex-1 min-h-0 overflow-y-scroll">
+            <div className="space-y-2 pr-1">
+              {/* Stats Cards */}
+              <div className="grid grid-cols-2 overflow-hidden rounded-xl border border-slate-200/80 bg-white/80 xl:grid-cols-4 xl:divide-x xl:divide-slate-200">
+                <CompanyCompactStatCard
+                  label="Total de Empresas"
+                  value={stats.total}
+                  icon={Building2}
+                  tone="blue"
+                />
+                <CompanyCompactStatCard
+                  label="Empresas Ativas"
+                  value={stats.active}
+                  icon={Activity}
+                  tone="emerald"
+                />
+                <CompanyCompactStatCard
+                  label="Total de Usuários"
+                  value={stats.totalUsers}
+                  icon={Users}
+                  tone="violet"
+                />
+                <CompanyCompactStatCard
+                  label="Total de Projetos"
+                  value={stats.totalProjects}
+                  icon={FolderOpen}
+                  tone="orange"
+                />
+              </div>
+
+              {/* Main Table Card */}
+              <Card className={STANDARD_SHELL_TABLE_CARD_CLASS}>
+                {/* Card Top Bar — row 1: search + filters + gear */}
+                <div className="admin-empresas-toolbar-row flex flex-wrap items-center gap-2 px-3 py-2 bg-white dark:bg-slate-900/30">
+                  {/* Search — com autocompletar por nome/ID */}
+                  <div
+                    ref={searchBoxRef}
+                    className="flex-1 relative min-w-[220px] basis-full sm:basis-auto"
+                  >
+                    <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-[#7d1b6a]/50 dark:text-[#c07ab0]/60 z-10" />
+                    <Input
+                      placeholder="Buscar por nome, CNPJ, e-mail ou responsável..."
+                      aria-label="Buscar empresas"
+                      autoComplete="new-password"
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                      onFocus={() => setSearchFocused(true)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Escape") {
+                          setSearchFocused(false);
+                          (e.target as HTMLInputElement).blur();
+                        }
+                      }}
+                      className="h-9 w-full rounded-lg border-slate-200 bg-white pl-8 pr-9 text-sm shadow-sm focus-visible:border-[#7d1b6a]/60 focus-visible:ring-2 focus-visible:ring-[#7d1b6a]/40"
+                    />
+                    {searchQuery.trim() && (
+                      <button
+                        type="button"
+                        aria-label="Limpar busca"
+                        onClick={() => setSearchQuery("")}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 h-5 w-5 flex items-center justify-center rounded-full text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors z-10"
+                      >
+                        <X className="h-3.5 w-3.5" />
+                      </button>
+                    )}
+                    {searchFocused && searchQuery.trim() && (
+                      <div className="absolute left-0 right-0 top-[calc(100%+6px)] z-20 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-[14px] shadow-xl overflow-hidden">
+                        {searchSuggestions.length === 0 ? (
+                          <p className="px-4 py-3 text-xs text-slate-400">
+                            Nenhuma empresa encontrada com esse termo
+                          </p>
+                        ) : (
+                          searchSuggestions.map((c) => (
+                            <button
+                              key={c.id}
+                              onClick={() => {
+                                setSearchQuery(c.name);
+                                setSearchFocused(false);
+                              }}
+                              className="w-full flex items-center gap-2.5 px-4 py-2.5 text-left hover:bg-slate-50 dark:hover:bg-slate-700/60 transition-colors"
+                            >
+                              <CompanyAvatar company={c} />
+                              <div className="min-w-0 flex-1">
+                                <p className="text-sm font-medium text-slate-700 dark:text-slate-200 truncate">
+                                  {c.name}
+                                </p>
+                                <p className="text-[11px] text-slate-400 font-mono">
+                                  emp_
+                                  {c.sequence_number ?? c.id}
+                                </p>
+                              </div>
+                            </button>
+                          ))
+                        )}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Quick type filter chips — Todos/Company/Agency/Nomad. Partner NÃO
               é um chip principal aqui — é subfiltro exclusivo de Agência,
               ver bloco logo abaixo. */}
-          <div
-            className="flex items-center gap-1.5 flex-shrink-0"
-            role="group"
-            aria-label="Filtrar por tipo de organização"
-          >
-            {(["all", "company", "agency", "nomad"] as CompanyType[]).map((t) => {
-              const active = t === "all" ? advancedFilters.types.length === 0 : advancedFilters.types.length === 1 && advancedFilters.types[0] === t;
-              return (
-                <button
-                  key={t}
-                  type="button"
-                  aria-pressed={active}
-                  onClick={() => applyTypeFilter(t)}
-                  className={`px-3 py-1.5 rounded-full text-xs font-medium border transition-colors whitespace-nowrap ${
-                    active
-                      ? "text-white border-transparent"
-                      : "bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:border-[#7d1b6a]/50"
-                  }`}
-                  style={active ? { background: "linear-gradient(135deg,#000000 0%,#1a2a6f 45%,#c81a7f 100%)" } : undefined}
-                >
-                  {getTypeLabel(t)}
-                </button>
-              );
-            })}
-          </div>
+                  <div
+                    className="flex items-center gap-1.5 flex-shrink-0"
+                    role="group"
+                    aria-label="Filtrar por tipo de organização"
+                  >
+                    {(
+                      ["all", "company", "agency", "nomad"] as CompanyType[]
+                    ).map((t) => {
+                      const active =
+                        t === "all"
+                          ? advancedFilters.types.length === 0
+                          : advancedFilters.types.length === 1 &&
+                            advancedFilters.types[0] === t;
+                      return (
+                        <button
+                          key={t}
+                          type="button"
+                          aria-pressed={active}
+                          onClick={() => applyTypeFilter(t)}
+                          className={`px-2.5 py-1.5 text-xs font-medium border transition-colors whitespace-nowrap ${
+                            active
+                              ? "text-white border-transparent"
+                              : "bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:border-[#7d1b6a]/50"
+                          }`}
+                          style={
+                            active
+                              ? {
+                                  background:
+                                    "linear-gradient(135deg,#000000 0%,#1a2a6f 45%,#c81a7f 100%)",
+                                }
+                              : undefined
+                          }
+                        >
+                          {getTypeLabel(t)}
+                        </button>
+                      );
+                    })}
+                  </div>
 
-          {/* Subfiltro Partner — só aparece com Agência selecionada. Visual
+                  {/* Subfiltro Partner — só aparece com Agência selecionada. Visual
               claramente subordinado (menor, indentado, ícone de prêmio) pra
               nunca parecer um 5º tipo principal no mesmo nível dos chips
               acima. Some e limpa o próprio estado assim que outro tipo é
               escolhido (ver applyTypeFilter). */}
-          {advancedFilters.types.length === 1 && advancedFilters.types[0] === "agency" && (
-            <div
-              className="flex items-center gap-1 flex-shrink-0 pl-1.5 ml-0.5 border-l border-slate-200 dark:border-slate-700"
-              role="group"
-              aria-label="Subfiltro Partner dentro de Agência"
-            >
-              {(
-                [
-                  { value: "all", label: "Todas as Agências" },
-                  { value: "only", label: "Partners" },
-                  { value: "non", label: "Não Partners" },
-                ] as const
-              ).map((opt) => {
-                const active = advancedFilters.agencyPartnerFilter === opt.value;
-                return (
-                  <button
-                    key={opt.value}
-                    type="button"
-                    aria-pressed={active}
-                    onClick={() => applyAgencyPartnerFilter(opt.value)}
-                    className={`px-2.5 py-1 rounded-full text-[11px] font-medium border transition-colors whitespace-nowrap inline-flex items-center gap-1 ${
-                      active
-                        ? "bg-amber-100 dark:bg-amber-900/30 border-amber-300 dark:border-amber-700 text-amber-800 dark:text-amber-300"
-                        : "bg-white dark:bg-slate-800 text-slate-500 dark:text-slate-400 border-slate-200 dark:border-slate-700 hover:border-amber-300"
-                    }`}
-                  >
-                    {opt.value !== "all" && <Award className="h-2.5 w-2.5" />}
-                    {opt.label}
-                  </button>
-                );
-              })}
-            </div>
-          )}
+                  {advancedFilters.types.length === 1 &&
+                    advancedFilters.types[0] === "agency" && (
+                      <div
+                        className="flex items-center gap-1 flex-shrink-0 pl-1.5 ml-0.5 border-l border-slate-200 dark:border-slate-700"
+                        role="group"
+                        aria-label="Subfiltro Partner dentro de Agência"
+                      >
+                        {(
+                          [
+                            { value: "all", label: "Todas as Agências" },
+                            { value: "only", label: "Partners" },
+                            { value: "non", label: "Não Partners" },
+                          ] as const
+                        ).map((opt) => {
+                          const active =
+                            advancedFilters.agencyPartnerFilter === opt.value;
+                          return (
+                            <button
+                              key={opt.value}
+                              type="button"
+                              aria-pressed={active}
+                              onClick={() =>
+                                applyAgencyPartnerFilter(opt.value)
+                              }
+                              className={`px-2.5 py-1 rounded-full text-[11px] font-medium border transition-colors whitespace-nowrap inline-flex items-center gap-1 ${
+                                active
+                                  ? "bg-amber-100 dark:bg-amber-900/30 border-amber-300 dark:border-amber-700 text-amber-800 dark:text-amber-300"
+                                  : "bg-white dark:bg-slate-800 text-slate-500 dark:text-slate-400 border-slate-200 dark:border-slate-700 hover:border-amber-300"
+                              }`}
+                            >
+                              {opt.value !== "all" && (
+                                <Award className="h-2.5 w-2.5" />
+                              )}
+                              {opt.label}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    )}
 
-          {/* Limpar filtros — aparece quando QUALQUER filtro real está ativo,
+                  {/* Limpar filtros — aparece quando QUALQUER filtro real está ativo,
               incluindo os campos que só existem dentro do modal "Filtros
               avançados" (cnpj, email, phone, location, período, etc.), não
               só os chips rápidos da toolbar. Comparar contra
               EMPTY_ADVANCED_FILTERS (mesma constante do reset do modal e do
               valor inicial do useState) evita ter que listar cada campo à
               mão aqui — ver ETAPA 5 / correção. */}
-          {(searchQuery.trim() !== "" ||
-            JSON.stringify(advancedFilters) !== JSON.stringify(EMPTY_ADVANCED_FILTERS)) && (
-            <button
-              type="button"
-              onClick={() => {
-                setSearchQuery("");
-                setSearchFocused(false);
-                setAdvancedFilters(EMPTY_ADVANCED_FILTERS);
-              }}
-              className="text-xs font-medium text-slate-500 dark:text-slate-400 hover:text-[#7d1b6a] dark:hover:text-[#c07ab0] underline-offset-2 hover:underline transition-colors flex-shrink-0"
-            >
-              Limpar filtros
-            </button>
-          )}
+                  {(searchQuery.trim() !== "" ||
+                    JSON.stringify(advancedFilters) !==
+                      JSON.stringify(EMPTY_ADVANCED_FILTERS)) && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSearchQuery("");
+                        setSearchFocused(false);
+                        setAdvancedFilters(EMPTY_ADVANCED_FILTERS);
+                      }}
+                      className="text-xs font-medium text-slate-500 dark:text-slate-400 hover:text-[#7d1b6a] dark:hover:text-[#c07ab0] underline-offset-2 hover:underline transition-colors flex-shrink-0"
+                    >
+                      Limpar filtros
+                    </button>
+                  )}
 
-          {/* Filter Button — icon only, same gradient-on-hover pattern as "Nova Empresa" */}
-          <TooltipProvider delayDuration={400}>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <button
-                  type="button"
-                  aria-label="Filtros avançados"
-                  onClick={() => setIsFilterModalOpen(true)}
-                  className="group relative flex items-center justify-center h-11 w-11 rounded-[12px] border border-slate-200 dark:border-slate-700 hover:border-transparent overflow-hidden transition-all flex-shrink-0"
-                >
-                  <span
-                    className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none"
-                    style={{ background: "linear-gradient(135deg,#000000 0%,#1a2a6f 45%,#c81a7f 100%)" }}
-                  />
-                  <Filter className="relative z-10 h-5 w-5 text-[#7d1b6a] dark:text-[#c07ab0] group-hover:text-white transition-colors" />
-                </button>
-              </TooltipTrigger>
-              <TooltipContent side="bottom" sideOffset={6}>Filtros avançados</TooltipContent>
-            </Tooltip>
-          </TooltipProvider>
+                  {/* Filter Button — icon only, same gradient-on-hover pattern as "Nova Empresa" */}
+                  <TooltipProvider delayDuration={400}>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <button
+                          type="button"
+                          aria-label="Filtros avançados"
+                          onClick={() => setIsFilterModalOpen(true)}
+                          className="group relative flex h-9 w-9 flex-shrink-0 items-center justify-center overflow-hidden rounded-lg border border-slate-200 transition-all hover:border-transparent"
+                        >
+                          <span
+                            className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none"
+                            style={{
+                              background:
+                                "linear-gradient(135deg,#000000 0%,#1a2a6f 45%,#c81a7f 100%)",
+                            }}
+                          />
+                          <Filter className="relative z-10 h-5 w-5 text-[#7d1b6a] dark:text-[#c07ab0] group-hover:text-white transition-colors" />
+                        </button>
+                      </TooltipTrigger>
+                      <TooltipContent side="bottom" sideOffset={6}>
+                        Filtros avançados
+                      </TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
 
-          {/* Column config — opens the slide panel (rendered at the end of the component) */}
-          <TooltipProvider delayDuration={400}>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <button
-                  type="button"
-                  aria-label="Configurar colunas"
-                  onClick={() => setColConfigOpen(true)}
-                  className="group relative flex items-center justify-center h-11 w-11 rounded-[12px] border border-slate-200 dark:border-slate-700 hover:border-transparent overflow-hidden transition-all flex-shrink-0"
-                >
-                  <span
-                    className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none"
-                    style={{ background: "linear-gradient(135deg,#000000 0%,#1a2a6f 45%,#c81a7f 100%)" }}
-                  />
-                  <Settings2 className="relative z-10 h-5 w-5 text-[#7d1b6a] dark:text-[#c07ab0] group-hover:text-white transition-colors" />
-                </button>
-              </TooltipTrigger>
-              <TooltipContent side="bottom" sideOffset={6}>Configurar colunas</TooltipContent>
-            </Tooltip>
-          </TooltipProvider>
-        </div>
-
-        {/* Card Top Bar — row 2: items + count + scrollbar + pagination (mirrors footer) */}
-        <div className="flex flex-wrap items-center justify-between gap-3 px-[18px] py-2 border-y border-[#e8edf5] dark:border-slate-800 bg-white dark:bg-slate-900/30">
-          <div className="flex items-center gap-3">
-            <ItemsPerPageSelect
-              value={pageSize.toString()}
-              onValueChange={(value) => {
-                setPageSize(Number(value));
-                setCurrentPage(1);
-              }}
-              variant="top"
-            />
-            <TooltipProvider delayDuration={400}>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <span className="text-xs text-slate-500 dark:text-slate-400 whitespace-nowrap cursor-default">
-                    {(() => {
-                      const start = Math.min(
+                  {/* Column config — opens the slide panel (rendered at the end of the component) */}
+                  <TooltipProvider delayDuration={400}>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <button
+                          type="button"
+                          aria-label="Configurar colunas"
+                          onClick={() => setColConfigOpen(true)}
+                          className="group relative flex h-9 w-9 flex-shrink-0 items-center justify-center overflow-hidden rounded-lg border border-slate-200 transition-all hover:border-transparent"
+                        >
+                          <span
+                            className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none"
+                            style={{
+                              background:
+                                "linear-gradient(135deg,#000000 0%,#1a2a6f 45%,#c81a7f 100%)",
+                            }}
+                          />
+                          <Settings2 className="relative z-10 h-5 w-5 text-[#7d1b6a] dark:text-[#c07ab0] group-hover:text-white transition-colors" />
+                        </button>
+                      </TooltipTrigger>
+                      <TooltipContent side="bottom" sideOffset={6}>
+                        Configurar colunas
+                      </TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
+                  <div className="ml-auto hidden items-center gap-2 xl:flex">
+                    <ItemsPerPageSelect
+                      value={pageSize.toString()}
+                      onValueChange={(value) => {
+                        setPageSize(Number(value));
+                        setCurrentPage(1);
+                      }}
+                      variant="top"
+                    />
+                    <span className="whitespace-nowrap border-l border-slate-200 pl-2 text-xs text-slate-500">
+                      {Math.min(
                         (currentPage - 1) * pageSize + 1,
                         filteredCompanies.length,
-                      );
-                      const end = Math.min(
+                      )}
+                      -
+                      {Math.min(
                         currentPage * pageSize,
                         filteredCompanies.length,
-                      );
-                      return (
-                        <>
-                          {start}-{end} de{" "}
-                          <span className="font-semibold text-slate-600 dark:text-slate-300">
-                            {filteredCompanies.length}
-                          </span>{" "}
-                          empresa{filteredCompanies.length !== 1 ? "s" : ""}
-                        </>
-                      );
-                    })()}
-                  </span>
-                </TooltipTrigger>
-                <TooltipContent side="bottom" sideOffset={6}>
-                  Intervalo de empresas exibido nesta página, do total encontrado com os filtros atuais
-                </TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
-          </div>
+                      )}{" "}
+                      de {filteredCompanies.length}
+                    </span>
+                    <button
+                      onClick={() =>
+                        setCurrentPage(Math.max(1, currentPage - 1))
+                      }
+                      disabled={currentPage === 1}
+                      className="rounded-md p-1 text-slate-500 disabled:opacity-30"
+                      aria-label="Página anterior"
+                    >
+                      <ChevronLeft className="h-4 w-4" />
+                    </button>
+                    <span className="min-w-6 rounded-md bg-[#31578f] px-1.5 py-1 text-center text-xs font-bold text-white">
+                      {currentPage}
+                    </span>
+                    <button
+                      onClick={() =>
+                        setCurrentPage(Math.min(totalPages, currentPage + 1))
+                      }
+                      disabled={currentPage === totalPages}
+                      className="rounded-md p-1 text-slate-500 disabled:opacity-30"
+                      aria-label="Próxima página"
+                    >
+                      <ChevronRight className="h-4 w-4" />
+                    </button>
+                  </div>
+                </div>
 
-          {/* Top horizontal scrollbar mirror (gradient) — only when needed */}
-          {hasHorizontalOverflow && (
-            <div
-              ref={topScrollRef}
-              onScroll={handleTopBarScroll}
-              title="Arraste para rolar a tabela na horizontal e ver as colunas que não couberem na tela"
-              className="hidden md:block flex-1 min-w-[80px] overflow-x-scroll empresas-table-scroll self-center"
-              style={{ height: 12 }}
-            >
-              <div
-                style={{
-                  minWidth: colWidths.reduce((a, b) => a + b, 0),
-                  height: 1,
-                }}
-              />
-            </div>
-          )}
-
-          <div className="flex items-center gap-1 flex-shrink-0">
-            <button
-              onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
-              disabled={currentPage === 1}
-              title="Página anterior"
-              className="h-7 w-7 flex items-center justify-center rounded-[8px] text-slate-500 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-30 disabled:pointer-events-none transition-colors"
-            >
-              <ChevronLeft className="h-3.5 w-3.5" />
-            </button>
-            {getPageNumbers().map((page, index) =>
-              page === "..." ? (
-                <span key={index} className="text-xs text-slate-300 px-0.5">
-                  ·
-                </span>
-              ) : (
-                <button
-                  key={index}
-                  onClick={() => setCurrentPage(Number(page))}
-                  title={
-                    page === currentPage
-                      ? "Página atual"
-                      : `Ir para a página ${page}`
-                  }
-                  className={`h-7 w-7 flex items-center justify-center rounded-[8px] text-xs font-bold transition-colors ${
-                    page === currentPage
-                      ? "text-white shadow-[0_6px_14px_rgba(110,44,150,0.25)]"
-                      : "text-slate-500 hover:text-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 dark:text-slate-400"
-                  }`}
-                  style={
-                    page === currentPage
-                      ? {
-                          background:
-                            "linear-gradient(135deg, #111A4D 0%, #6E2C96 55%, #D92293 100%)",
-                        }
-                      : undefined
-                  }
-                >
-                  {page}
-                </button>
-              ),
-            )}
-            <button
-              onClick={() =>
-                setCurrentPage(Math.min(totalPages, currentPage + 1))
-              }
-              disabled={currentPage === totalPages}
-              title="Próxima página"
-              className="h-7 w-7 flex items-center justify-center rounded-[8px] text-slate-500 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-30 disabled:pointer-events-none transition-colors"
-            >
-              <ChevronRight className="h-3.5 w-3.5" />
-            </button>
-            <PageJumpField className="ml-1.5 pl-1.5 border-l border-slate-200 dark:border-slate-700" />
-          </div>
-        </div>
-
-        {/* Table */}
-        <div
-          ref={tableScrollRef}
-          onScroll={handleTableScroll}
-          className="overflow-x-auto empresas-table-body"
-        >
-          <table
-            className="text-xs"
-            style={{
-              tableLayout: "fixed",
-              width: "100%",
-              minWidth: colWidths.reduce((a, b) => a + b, 0),
-            }}
-          >
-            <colgroup>
-              {colWidths.map((w, i) => (
-                <col key={i} style={{ width: w }} />
-              ))}
-            </colgroup>
-            <thead>
-              <tr className="border-b border-slate-200/60 dark:border-slate-700/60">
-                {visibleColumnsList.map((col, i) => (
-                  <th
-                    key={col.key}
-                    className="py-3.5 text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-[0.04em] select-none relative [&_button]:!text-[11px]"
-                    style={{
-                      paddingLeft: 16,
-                      paddingRight: 16,
-                      textAlign: col.key === "acoes" ? "center" : "left",
-                      position: "sticky",
-                      top: 0,
-                      zIndex: col.key === "acoes" ? 3 : 2,
-                      background: "var(--table-head)",
-                      boxShadow: "0 1px 0 rgba(148,163,184,0.22)",
-                      borderRight: "1px solid rgba(148,163,184,0.16)",
-                      ...(col.key === "acoes"
-                        ? {
-                            left: 0,
-                            minWidth: 99,
-                            paddingLeft: 8,
-                            paddingRight: 8,
-                            borderRight: "1px solid rgba(100,116,139,0.18)",
-                            boxShadow: "0 1px 0 rgba(148,163,184,0.22)",
-                          }
-                        : {}),
-                    }}
-                  >
-                    <TooltipProvider delayDuration={300}>
+                {/* Card Top Bar — row 2: items + count + scrollbar + pagination (mirrors footer) */}
+                <div className="hidden flex-wrap items-center justify-between gap-3 px-[18px] py-2 border-y border-[#e8edf5] dark:border-slate-800 bg-white dark:bg-slate-900/30">
+                  <div className="flex items-center gap-3">
+                    <ItemsPerPageSelect
+                      value={pageSize.toString()}
+                      onValueChange={(value) => {
+                        setPageSize(Number(value));
+                        setCurrentPage(1);
+                      }}
+                      variant="top"
+                    />
+                    <TooltipProvider delayDuration={400}>
                       <Tooltip>
                         <TooltipTrigger asChild>
-                          <div
-                            className={`inline-flex items-center gap-1 ${col.key === "acoes" ? "justify-center w-full" : ""}`}
-                          >
-                            {sortableColMap[col.key] ? (
-                              <SortableHeader
-                                label={col.label}
-                                field={String(sortableColMap[col.key]!)}
-                                type={
-                                  col.key === "status" ||
-                                  col.key === "plano" ||
-                                  col.key === "tipo"
-                                    ? "status"
-                                    : "text"
-                                }
-                                sortKey={
-                                  companySortKey ? String(companySortKey) : null
-                                }
-                                sortDir={companySortDir}
-                                onSort={(f, d) => handleCompanySort(f as any, d)}
-                                columnFilters={columnFilters}
-                                onFilter={toggleColumnFilter}
-                                onClearFilter={clearColumnFilter}
-                                filterValues={
-                                  col.key === "status"
-                                    ? [
-                                        ...new Set(
-                                          filteredCompanies.map((c) =>
-                                            String(c.status),
-                                          ),
-                                        ),
-                                      ]
-                                    : col.key === "plano"
-                                      ? [
-                                          ...new Set(
-                                            filteredCompanies.map((c) =>
-                                              String(c.plan),
-                                            ),
-                                          ),
-                                        ]
-                                      : col.key === "tipo"
-                                        ? [
-                                            ...new Set(
-                                              filteredCompanies.map((c) =>
-                                                String(c.type),
-                                              ),
-                                            ),
-                                          ]
-                                        : undefined
-                                }
-                              />
-                            ) : (
-                              col.label
-                            )}
-                            {COLUMN_INFO[col.key] && (
-                              <Info className="h-3 w-3 text-slate-300 dark:text-slate-600 flex-shrink-0" />
-                            )}
-                          </div>
+                          <span className="text-xs text-slate-500 dark:text-slate-400 whitespace-nowrap cursor-default">
+                            {(() => {
+                              const start = Math.min(
+                                (currentPage - 1) * pageSize + 1,
+                                filteredCompanies.length,
+                              );
+                              const end = Math.min(
+                                currentPage * pageSize,
+                                filteredCompanies.length,
+                              );
+                              return (
+                                <>
+                                  {start}-{end} de{" "}
+                                  <span className="font-semibold text-slate-600 dark:text-slate-300">
+                                    {filteredCompanies.length}
+                                  </span>{" "}
+                                  empresa
+                                  {filteredCompanies.length !== 1 ? "s" : ""}
+                                </>
+                              );
+                            })()}
+                          </span>
                         </TooltipTrigger>
-                        {COLUMN_INFO[col.key] && (
-                          <TooltipContent
-                            side="top"
-                            className="max-w-[220px] text-xs"
-                          >
-                            {COLUMN_INFO[col.key]}
-                          </TooltipContent>
-                        )}
+                        <TooltipContent side="bottom" sideOffset={6}>
+                          Intervalo de empresas exibido nesta página, do total
+                          encontrado com os filtros atuais
+                        </TooltipContent>
                       </Tooltip>
                     </TooltipProvider>
-                    {col.key !== "acoes" && (
-                      <span
-                        onMouseDown={(e) => onResizeMouseDown(e, i)}
-                        className="absolute top-0 right-0 h-full w-2.5 flex items-center justify-center cursor-col-resize z-10 group"
-                        style={{ transform: "translateX(50%)" }}
-                      >
-                        <span className="h-4 w-px bg-slate-300 dark:bg-slate-600 group-hover:bg-blue-400 dark:group-hover:bg-blue-500 transition-colors" />
-                      </span>
-                    )}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-[#edf1f7] dark:divide-[oklch(0.20_0.022_258)]">
-              {paginatedCompanies.map((company, rowIndex) => (
-                <tr
-                  key={company.id}
-                  className={`group transition-colors cursor-pointer ${
-                    rowIndex % 2 === 0
-                      ? "bg-white dark:bg-slate-900 hover:bg-indigo-50/70 dark:hover:bg-slate-800/60"
-                      : "bg-slate-50/60 dark:bg-slate-900/40 hover:bg-indigo-50/70 dark:hover:bg-slate-800/60"
-                  }`}
-                >
-                  {/* Actions — pinned to the left, first column */}
-                  {mostrarCol("acoes") && (
-                    <td
-                      className={`px-1 py-2 transition-colors ${
-                        rowIndex % 2 === 0
-                          ? "bg-white group-hover:bg-indigo-50/70 dark:bg-slate-900 dark:group-hover:bg-slate-800/60"
-                          : "bg-slate-50/60 group-hover:bg-indigo-50/70 dark:bg-slate-900/40 dark:group-hover:bg-slate-800/60"
-                      }`}
-                      style={{
-                        position: "sticky",
-                        left: 0,
-                        zIndex: 1,
-                        minWidth: 99,
-                        borderRight: "1px solid rgba(100,116,139,0.18)",
-                      }}
+                  </div>
+
+                  {/* Top horizontal scrollbar mirror (gradient) — only when needed */}
+                  {hasHorizontalOverflow && (
+                    <div
+                      ref={topScrollRef}
+                      onScroll={handleTopBarScroll}
+                      title="Arraste para rolar a tabela na horizontal e ver as colunas que não couberem na tela"
+                      className="hidden md:block flex-1 min-w-[80px] overflow-x-scroll empresas-table-scroll self-center"
+                      style={{ height: 12 }}
                     >
-                      {/* Square action buttons + "more" popover */}
-                      <div className="flex items-center justify-center gap-0.5">
-                        {/* Mais informações — abre o painel deslizante padrão */}
-                        <TooltipProvider delayDuration={400}>
-                          <Tooltip>
-                            <TooltipTrigger asChild>
-                              <button
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  openInfoPanel(company);
-                                }}
-                                className="h-[21px] w-[21px] flex items-center justify-center rounded-full bg-[#2558FF] text-white shadow-[0_2px_6px_rgba(37,88,255,0.35)] hover:bg-gradient-to-br hover:from-[#2558FF] hover:via-[#6E2C96] hover:to-[#D92293] hover:text-white dark:hover:text-[#0a1628] hover:shadow-[0_2px_10px_rgba(110,44,150,0.5)] transition-all"
-                              >
-                                <Plus className="h-3 w-3" />
-                              </button>
-                            </TooltipTrigger>
-                            <TooltipContent className="text-xs font-medium">
-                              Mais informações
-                            </TooltipContent>
-                          </Tooltip>
-                        </TooltipProvider>
-                        {/* Ver detalhes */}
-                        <TooltipProvider delayDuration={400}>
-                          <Tooltip>
-                            <TooltipTrigger asChild>
-                              <button
-                                onClick={() => handleViewCompany(company)}
-                                className="h-[26px] w-[26px] flex items-center justify-center rounded-[8px] bg-white dark:bg-slate-800 border border-[#e8edf5] dark:border-slate-700 text-[#2558FF] dark:text-slate-500 shadow-[0_4px_10px_rgba(15,23,42,0.06)] hover:bg-gradient-to-br hover:from-[#2558FF] hover:via-[#6E2C96] hover:to-[#D92293] hover:text-white dark:hover:text-[#0a1628] hover:border-transparent hover:shadow-[0_8px_18px_rgba(15,23,42,0.18)] hover:-translate-y-px transition-all duration-150"
-                              >
-                                <Eye className="h-3.5 w-3.5" />
-                              </button>
-                            </TooltipTrigger>
-                            <TooltipContent className="text-xs font-medium">
-                              Ver detalhes
-                            </TooltipContent>
-                          </Tooltip>
-                        </TooltipProvider>
-                        {/* Editar empresa */}
-                        <TooltipProvider delayDuration={400}>
-                          <Tooltip>
-                            <TooltipTrigger asChild>
-                              <button
-                                onClick={() => handleEditCompany(company)}
-                                className="h-[26px] w-[26px] flex items-center justify-center rounded-[8px] bg-white dark:bg-slate-800 border border-[#e8edf5] dark:border-slate-700 text-[#6E2C96] dark:text-slate-500 shadow-[0_4px_10px_rgba(15,23,42,0.06)] hover:bg-gradient-to-br hover:from-[#2558FF] hover:via-[#6E2C96] hover:to-[#D92293] hover:text-white dark:hover:text-[#0a1628] hover:border-transparent hover:shadow-[0_8px_18px_rgba(15,23,42,0.18)] hover:-translate-y-px transition-all duration-150"
-                              >
-                                <Pencil className="h-3.5 w-3.5" />
-                              </button>
-                            </TooltipTrigger>
-                            <TooltipContent className="text-xs font-medium">
-                              Editar empresa
-                            </TooltipContent>
-                          </Tooltip>
-                        </TooltipProvider>
-                        {/* Convidar para Partner — só faz sentido pra Agency sem convite ativo/pendente */}
-                        {company.type === "agency" &&
-                          company.partner_status !== "active" &&
-                          company.partner_status !== "invited" && (
-                            <TooltipProvider delayDuration={400}>
+                      <div
+                        style={{
+                          minWidth: colWidths.reduce((a, b) => a + b, 0),
+                          height: 1,
+                        }}
+                      />
+                    </div>
+                  )}
+
+                  <div className="flex items-center gap-1 flex-shrink-0">
+                    <button
+                      onClick={() =>
+                        setCurrentPage(Math.max(1, currentPage - 1))
+                      }
+                      disabled={currentPage === 1}
+                      title="Página anterior"
+                      className="h-7 w-7 flex items-center justify-center rounded-[8px] text-slate-500 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-30 disabled:pointer-events-none transition-colors"
+                    >
+                      <ChevronLeft className="h-3.5 w-3.5" />
+                    </button>
+                    {getPageNumbers().map((page, index) =>
+                      page === "..." ? (
+                        <span
+                          key={index}
+                          className="text-xs text-slate-300 px-0.5"
+                        >
+                          ·
+                        </span>
+                      ) : (
+                        <button
+                          key={index}
+                          onClick={() => setCurrentPage(Number(page))}
+                          title={
+                            page === currentPage
+                              ? "Página atual"
+                              : `Ir para a página ${page}`
+                          }
+                          className={`h-7 w-7 flex items-center justify-center rounded-[8px] text-xs font-bold transition-colors ${
+                            page === currentPage
+                              ? "text-white shadow-[0_6px_14px_rgba(110,44,150,0.25)]"
+                              : "text-slate-500 hover:text-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 dark:text-slate-400"
+                          }`}
+                          style={
+                            page === currentPage
+                              ? {
+                                  background:
+                                    "linear-gradient(135deg, #111A4D 0%, #6E2C96 55%, #D92293 100%)",
+                                }
+                              : undefined
+                          }
+                        >
+                          {page}
+                        </button>
+                      ),
+                    )}
+                    <button
+                      onClick={() =>
+                        setCurrentPage(Math.min(totalPages, currentPage + 1))
+                      }
+                      disabled={currentPage === totalPages}
+                      title="Próxima página"
+                      className="h-7 w-7 flex items-center justify-center rounded-[8px] text-slate-500 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-30 disabled:pointer-events-none transition-colors"
+                    >
+                      <ChevronRight className="h-3.5 w-3.5" />
+                    </button>
+                    <PageJumpField className="ml-1.5 pl-1.5 border-l border-slate-200 dark:border-slate-700" />
+                  </div>
+                </div>
+
+                {/* Table */}
+                <div
+                  ref={tableScrollRef}
+                  onScroll={handleTableScroll}
+                  className="overflow-hidden empresas-table-body"
+                >
+                  <table
+                    className="w-full table-fixed text-xs"
+                    style={{
+                      tableLayout: "fixed",
+                      width: "100%",
+                      minWidth: 0,
+                    }}
+                  >
+                    <thead>
+                      <tr className="border-b border-slate-200/60 dark:border-slate-700/60">
+                        {visibleColumnsList.map((col, i) => (
+                          <th
+                            key={col.key}
+                            className="py-2.5 text-[11px] font-bold text-[#5d7195] dark:text-slate-400 uppercase tracking-[0.04em] select-none relative [&_button]:!text-[11px]"
+                            style={{
+                              paddingLeft: 16,
+                              paddingRight: 16,
+                              textAlign:
+                                col.key === "acoes" ? "center" : "left",
+                              position: "sticky",
+                              top: 0,
+                              zIndex: col.key === "acoes" ? 3 : 2,
+                              background: "var(--table-head)",
+                              boxShadow: "0 1px 0 rgba(148,163,184,0.22)",
+                              borderRight: "1px solid rgba(148,163,184,0.16)",
+                            }}
+                          >
+                            <TooltipProvider delayDuration={300}>
                               <Tooltip>
                                 <TooltipTrigger asChild>
-                                  <button
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      handleInvitePartner(company);
-                                    }}
-                                    className="h-[26px] w-[26px] flex items-center justify-center rounded-[8px] bg-white dark:bg-slate-800 border border-[#e8edf5] dark:border-slate-700 text-amber-500 dark:text-amber-400 shadow-[0_4px_10px_rgba(15,23,42,0.06)] hover:bg-gradient-to-br hover:from-[#2558FF] hover:via-[#6E2C96] hover:to-[#D92293] hover:text-white dark:hover:text-[#0a1628] hover:border-transparent hover:shadow-[0_8px_18px_rgba(15,23,42,0.18)] hover:-translate-y-px transition-all duration-150"
+                                  <div
+                                    className={`inline-flex items-center gap-1 ${col.key === "acoes" ? "justify-center w-full" : ""}`}
                                   >
-                                    <Award className="h-3.5 w-3.5" />
-                                  </button>
+                                    {sortableColMap[col.key] ? (
+                                      <SortableHeader
+                                        label={col.label}
+                                        field={String(sortableColMap[col.key]!)}
+                                        type={
+                                          col.key === "status" ||
+                                          col.key === "plano" ||
+                                          col.key === "tipo"
+                                            ? "status"
+                                            : "text"
+                                        }
+                                        sortKey={
+                                          companySortKey
+                                            ? String(companySortKey)
+                                            : null
+                                        }
+                                        sortDir={companySortDir}
+                                        onSort={(f, d) =>
+                                          handleCompanySort(f as any, d)
+                                        }
+                                        columnFilters={columnFilters}
+                                        onFilter={toggleColumnFilter}
+                                        onClearFilter={clearColumnFilter}
+                                        filterValues={
+                                          col.key === "status"
+                                            ? [
+                                                ...new Set(
+                                                  filteredCompanies.map((c) =>
+                                                    String(c.status),
+                                                  ),
+                                                ),
+                                              ]
+                                            : col.key === "plano"
+                                              ? [
+                                                  ...new Set(
+                                                    filteredCompanies.map((c) =>
+                                                      String(c.plan),
+                                                    ),
+                                                  ),
+                                                ]
+                                              : col.key === "tipo"
+                                                ? [
+                                                    ...new Set(
+                                                      filteredCompanies.map(
+                                                        (c) => String(c.type),
+                                                      ),
+                                                    ),
+                                                  ]
+                                                : undefined
+                                        }
+                                      />
+                                    ) : (
+                                      col.label
+                                    )}
+                                    {COLUMN_INFO[col.key] && (
+                                      <Info className="h-3 w-3 text-slate-300 dark:text-slate-600 flex-shrink-0" />
+                                    )}
+                                  </div>
                                 </TooltipTrigger>
-                                <TooltipContent className="text-xs font-medium">
-                                  Convidar para Partner
-                                </TooltipContent>
+                                {COLUMN_INFO[col.key] && (
+                                  <TooltipContent
+                                    side="top"
+                                    className="max-w-[220px] text-xs"
+                                  >
+                                    {COLUMN_INFO[col.key]}
+                                  </TooltipContent>
+                                )}
                               </Tooltip>
                             </TooltipProvider>
-                          )}
-                        {/* Nomad é uma empresa (CNPJ), não um perfil profissional
+                            {col.key !== "acoes" && (
+                              <span
+                                onMouseDown={(e) => onResizeMouseDown(e, i)}
+                                className="absolute top-0 right-0 h-full w-2.5 flex items-center justify-center cursor-col-resize z-10 group"
+                                style={{ transform: "translateX(50%)" }}
+                              >
+                                <span className="h-4 w-px bg-slate-300 dark:bg-slate-600 group-hover:bg-blue-400 dark:group-hover:bg-blue-500 transition-colors" />
+                              </span>
+                            )}
+                          </th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-[#edf1f7] dark:divide-[oklch(0.20_0.022_258)]">
+                      {paginatedCompanies.map((company, rowIndex) => (
+                        <tr
+                          key={company.id}
+                          className={`group transition-colors cursor-pointer ${
+                            rowIndex % 2 === 0
+                              ? "bg-white dark:bg-slate-900 hover:bg-indigo-50/70 dark:hover:bg-slate-800/60"
+                              : "bg-slate-50/60 dark:bg-slate-900/40 hover:bg-indigo-50/70 dark:hover:bg-slate-800/60"
+                          }`}
+                        >
+                          {/* Actions — pinned to the left, first column */}
+                          {mostrarCol("acoes") && (
+                            <td
+                              className={`hidden px-1 py-2 transition-colors ${
+                                rowIndex % 2 === 0
+                                  ? "bg-white group-hover:bg-indigo-50/70 dark:bg-slate-900 dark:group-hover:bg-slate-800/60"
+                                  : "bg-slate-50/60 group-hover:bg-indigo-50/70 dark:bg-slate-900/40 dark:group-hover:bg-slate-800/60"
+                              }`}
+                              style={{
+                                position: "sticky",
+                                left: 0,
+                                zIndex: 1,
+                                minWidth: 99,
+                                borderRight: "1px solid rgba(100,116,139,0.18)",
+                              }}
+                            >
+                              {/* Square action buttons + "more" popover */}
+                              <div className="flex items-center justify-center gap-0.5">
+                                {/* Mais informações — abre o painel deslizante padrão */}
+                                <TooltipProvider delayDuration={400}>
+                                  <Tooltip>
+                                    <TooltipTrigger asChild>
+                                      <button
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          openInfoPanel(company);
+                                        }}
+                                        className="h-[21px] w-[21px] flex items-center justify-center rounded-full bg-[#2558FF] text-white shadow-[0_2px_6px_rgba(37,88,255,0.35)] hover:bg-gradient-to-br hover:from-[#2558FF] hover:via-[#6E2C96] hover:to-[#D92293] hover:text-white dark:hover:text-[#0a1628] hover:shadow-[0_2px_10px_rgba(110,44,150,0.5)] transition-all"
+                                      >
+                                        <Plus className="h-3 w-3" />
+                                      </button>
+                                    </TooltipTrigger>
+                                    <TooltipContent className="text-xs font-medium">
+                                      Mais informações
+                                    </TooltipContent>
+                                  </Tooltip>
+                                </TooltipProvider>
+                                {/* Ver detalhes */}
+                                <TooltipProvider delayDuration={400}>
+                                  <Tooltip>
+                                    <TooltipTrigger asChild>
+                                      <button
+                                        onClick={() =>
+                                          handleViewCompany(company)
+                                        }
+                                        className="h-[26px] w-[26px] flex items-center justify-center rounded-[8px] bg-white dark:bg-slate-800 border border-[#e8edf5] dark:border-slate-700 text-[#2558FF] dark:text-slate-500 shadow-[0_4px_10px_rgba(15,23,42,0.06)] hover:bg-gradient-to-br hover:from-[#2558FF] hover:via-[#6E2C96] hover:to-[#D92293] hover:text-white dark:hover:text-[#0a1628] hover:border-transparent hover:shadow-[0_8px_18px_rgba(15,23,42,0.18)] hover:-translate-y-px transition-all duration-150"
+                                      >
+                                        <Eye className="h-3.5 w-3.5" />
+                                      </button>
+                                    </TooltipTrigger>
+                                    <TooltipContent className="text-xs font-medium">
+                                      Ver detalhes
+                                    </TooltipContent>
+                                  </Tooltip>
+                                </TooltipProvider>
+                                {/* Editar empresa */}
+                                <TooltipProvider delayDuration={400}>
+                                  <Tooltip>
+                                    <TooltipTrigger asChild>
+                                      <button
+                                        onClick={() =>
+                                          handleEditCompany(company)
+                                        }
+                                        className="h-[26px] w-[26px] flex items-center justify-center rounded-[8px] bg-white dark:bg-slate-800 border border-[#e8edf5] dark:border-slate-700 text-[#6E2C96] dark:text-slate-500 shadow-[0_4px_10px_rgba(15,23,42,0.06)] hover:bg-gradient-to-br hover:from-[#2558FF] hover:via-[#6E2C96] hover:to-[#D92293] hover:text-white dark:hover:text-[#0a1628] hover:border-transparent hover:shadow-[0_8px_18px_rgba(15,23,42,0.18)] hover:-translate-y-px transition-all duration-150"
+                                      >
+                                        <Pencil className="h-3.5 w-3.5" />
+                                      </button>
+                                    </TooltipTrigger>
+                                    <TooltipContent className="text-xs font-medium">
+                                      Editar empresa
+                                    </TooltipContent>
+                                  </Tooltip>
+                                </TooltipProvider>
+                                {/* Convidar para Partner — só faz sentido pra Agency sem convite ativo/pendente */}
+                                {company.type === "agency" &&
+                                  company.partner_status !== "active" &&
+                                  company.partner_status !== "invited" && (
+                                    <TooltipProvider delayDuration={400}>
+                                      <Tooltip>
+                                        <TooltipTrigger asChild>
+                                          <button
+                                            onClick={(e) => {
+                                              e.stopPropagation();
+                                              handleInvitePartner(company);
+                                            }}
+                                            className="h-[26px] w-[26px] flex items-center justify-center rounded-[8px] bg-white dark:bg-slate-800 border border-[#e8edf5] dark:border-slate-700 text-amber-500 dark:text-amber-400 shadow-[0_4px_10px_rgba(15,23,42,0.06)] hover:bg-gradient-to-br hover:from-[#2558FF] hover:via-[#6E2C96] hover:to-[#D92293] hover:text-white dark:hover:text-[#0a1628] hover:border-transparent hover:shadow-[0_8px_18px_rgba(15,23,42,0.18)] hover:-translate-y-px transition-all duration-150"
+                                          >
+                                            <Award className="h-3.5 w-3.5" />
+                                          </button>
+                                        </TooltipTrigger>
+                                        <TooltipContent className="text-xs font-medium">
+                                          Convidar para Partner
+                                        </TooltipContent>
+                                      </Tooltip>
+                                    </TooltipProvider>
+                                  )}
+                                {/* Nomad é uma empresa (CNPJ), não um perfil profissional
                             isolado — duas ações distintas, nunca "Excluir
                             empresa definitivamente" sem checar vínculos, ver
                             DELETE /api/nomades/:id. */}
-                        {company.type === "nomad" ? (
-                          <>
-                            <TooltipProvider delayDuration={400}>
-                              <Tooltip>
-                                <TooltipTrigger asChild>
-                                  <button
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      requestToggleNomadStatus(company);
-                                    }}
-                                    aria-label={
-                                      company.status === "active"
-                                        ? `Desativar empresa Nomad ${company.name}`
-                                        : `Reativar empresa Nomad ${company.name}`
-                                    }
-                                    className={`h-[26px] w-[26px] flex items-center justify-center rounded-[8px] bg-white dark:bg-slate-800 border border-[#e8edf5] dark:border-slate-700 shadow-[0_4px_10px_rgba(15,23,42,0.06)] hover:bg-gradient-to-br hover:from-[#2558FF] hover:via-[#6E2C96] hover:to-[#D92293] hover:text-white dark:hover:text-[#0a1628] hover:border-transparent hover:shadow-[0_8px_18px_rgba(15,23,42,0.18)] hover:-translate-y-px transition-all duration-150 ${
-                                      company.status === "active" ? "text-amber-500 dark:text-amber-400" : "text-emerald-500 dark:text-emerald-400"
-                                    }`}
-                                  >
-                                    {company.status === "active" ? (
-                                      <PauseCircle className="h-3.5 w-3.5" />
-                                    ) : (
-                                      <CheckCircle className="h-3.5 w-3.5" />
-                                    )}
-                                  </button>
-                                </TooltipTrigger>
-                                <TooltipContent className="text-xs font-medium">
-                                  {company.status === "active" ? "Desativar empresa Nomad" : "Reativar empresa Nomad"}
-                                </TooltipContent>
-                              </Tooltip>
-                            </TooltipProvider>
-                            <TooltipProvider delayDuration={400}>
-                              <Tooltip>
-                                <TooltipTrigger asChild>
-                                  <button
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      requestRemoveNomadProfile(company);
-                                    }}
-                                    aria-label={`Excluir empresa Nomad ${company.name}`}
-                                    className="h-[26px] w-[26px] flex items-center justify-center rounded-[8px] bg-white dark:bg-slate-800 border border-[#e8edf5] dark:border-slate-700 text-red-500 dark:text-red-400 shadow-[0_4px_10px_rgba(15,23,42,0.06)] hover:bg-gradient-to-br hover:from-[#2558FF] hover:via-[#6E2C96] hover:to-[#D92293] hover:text-white dark:hover:text-[#0a1628] hover:border-transparent hover:shadow-[0_8px_18px_rgba(15,23,42,0.18)] hover:-translate-y-px transition-all duration-150"
-                                  >
-                                    <Trash2 className="h-3.5 w-3.5" />
-                                  </button>
-                                </TooltipTrigger>
-                                <TooltipContent className="text-xs font-medium">
-                                  Excluir empresa Nomad
-                                </TooltipContent>
-                              </Tooltip>
-                            </TooltipProvider>
-                          </>
-                        ) : (
-                          /* Excluir empresa */
-                          <TooltipProvider delayDuration={400}>
-                            <Tooltip>
-                              <TooltipTrigger asChild>
-                                <button
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    handleDeleteCompany(company.id);
-                                  }}
-                                  className="h-[26px] w-[26px] flex items-center justify-center rounded-[8px] bg-white dark:bg-slate-800 border border-[#e8edf5] dark:border-slate-700 text-red-500 dark:text-red-400 shadow-[0_4px_10px_rgba(15,23,42,0.06)] hover:bg-gradient-to-br hover:from-[#2558FF] hover:via-[#6E2C96] hover:to-[#D92293] hover:text-white dark:hover:text-[#0a1628] hover:border-transparent hover:shadow-[0_8px_18px_rgba(15,23,42,0.18)] hover:-translate-y-px transition-all duration-150"
-                                >
-                                  <Trash2 className="h-3.5 w-3.5" />
-                                </button>
-                              </TooltipTrigger>
-                              <TooltipContent className="text-xs font-medium">
-                                Excluir empresa
-                              </TooltipContent>
-                            </Tooltip>
-                          </TooltipProvider>
-                        )}
-                      </div>
-                    </td>
-                  )}
-
-                  {/* ID */}
-                  {mostrarCol("id") && (
-                    <td
-                      className="px-4 py-3"
-                      style={{
-                        borderRight: "1px solid rgba(148,163,184,0.15)",
-                        overflow: "hidden",
-                      }}
-                    >
-                      <span className="text-xs font-mono font-semibold text-slate-500 dark:text-slate-400">
-                        emp_
-                        {company.sequence_number ?? company.id}
-                      </span>
-                    </td>
-                  )}
-
-                  {/* Company */}
-                  {mostrarCol("empresa") && (
-                    <td
-                      className="px-4 py-3"
-                      style={{
-                        borderRight: "1px solid rgba(148,163,184,0.15)",
-                        overflow: "hidden",
-                      }}
-                    >
-                      <div className="flex items-center gap-3">
-                        <CompanyAvatar company={company} />
-                        <div className="min-w-0 flex-1">
-                          <TruncatedText
-                            text={company.name}
-                            className="font-bold text-sm text-slate-800 dark:text-slate-100"
-                          />
-                          {company.location && (
-                            <TruncatedText
-                              text={company.location}
-                              className="text-xs text-slate-400 dark:text-slate-500"
-                            />
-                          )}
-                          <div className="flex flex-wrap gap-1 mt-1">
-                            {/* DPO ausente: badge clicável que abre edição */}
-                            {!company.lgpd?.dpo_name && (
-                              <TooltipProvider delayDuration={200}>
-                                <Tooltip>
-                                  <TooltipTrigger asChild>
-                                    <button
-                                      className="inline-flex items-center gap-1 rounded-full px-[7px] py-0.5 text-[9px] font-bold border border-orange-500 bg-orange-200 text-orange-900 shadow-[0_0_10px_rgba(249,115,22,0.6)] dark:bg-orange-800/70 dark:text-orange-100 hover:shadow-[0_0_12px_rgba(249,115,22,0.7)] transition-all"
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        handleEditCompany(company);
-                                      }}
-                                    >
-                                      <AlertTriangle className="h-3 w-3" />
-                                      Sem DPO
-                                    </button>
-                                  </TooltipTrigger>
-                                  <TooltipContent
-                                    side="right"
-                                    className="max-w-[220px] p-3 space-y-1.5"
-                                  >
-                                    <p className="font-semibold text-sm">
-                                      DPO não cadastrado
-                                    </p>
-                                    <p className="text-xs leading-relaxed text-slate-400">
-                                      O DPO (Encarregado de Proteção de Dados) é
-                                      exigido pela LGPD para empresas que tratam
-                                      dados pessoais.
-                                    </p>
-                                    <p className="text-xs text-blue-400 font-medium">
-                                      Clique para completar o cadastro →
-                                    </p>
-                                  </TooltipContent>
-                                </Tooltip>
-                              </TooltipProvider>
-                            )}
-                            {/* DPO cadastrado: indicador verde com detalhes no tooltip */}
-                            {company.lgpd?.dpo_name && (
-                              <TooltipProvider delayDuration={200}>
-                                <Tooltip>
-                                  <TooltipTrigger asChild>
-                                    <span className="inline-flex items-center gap-1 rounded-full px-[7px] py-0.5 text-[9px] font-bold border border-emerald-500 bg-emerald-200 text-emerald-900 shadow-[0_0_10px_rgba(16,185,129,0.6)] dark:bg-emerald-800/70 dark:text-emerald-100 cursor-default">
-                                      <ShieldCheck className="h-3 w-3" />
-                                      DPO cadastrado
-                                    </span>
-                                  </TooltipTrigger>
-                                  <TooltipContent
-                                    side="right"
-                                    className="max-w-[220px] p-3 space-y-1"
-                                  >
-                                    <p className="font-semibold text-sm">
-                                      DPO cadastrado
-                                    </p>
-                                    <p className="text-xs text-slate-300">
-                                      {company.lgpd.dpo_name}
-                                    </p>
-                                    {company.lgpd.dpo_email && (
-                                      <p className="text-xs text-slate-400">
-                                        {company.lgpd.dpo_email}
-                                      </p>
-                                    )}
-                                    {company.lgpd.dpo_phone && (
-                                      <p className="text-xs text-slate-400">
-                                        {company.lgpd.dpo_phone}
-                                      </p>
-                                    )}
-                                  </TooltipContent>
-                                </Tooltip>
-                              </TooltipProvider>
-                            )}
-                            {/* Política de privacidade ainda não aceita */}
-                            {company.lgpd &&
-                              !company.lgpd.privacy_policy_accepted && (
-                                <span className="inline-flex items-center rounded-full px-[7px] py-0.5 text-[9px] font-bold border border-amber-500 bg-amber-200 text-amber-900 shadow-[0_0_10px_rgba(245,158,11,0.6)] dark:bg-amber-800/70 dark:text-amber-100">
-                                  Política pendente
-                                </span>
-                              )}
-                          </div>
-                        </div>
-                      </div>
-                    </td>
-                  )}
-
-                  {/* Contact */}
-                  {mostrarCol("contato") && (
-                    <td
-                      className="px-4 py-3"
-                      style={{
-                        borderRight: "1px solid rgba(148,163,184,0.15)",
-                        overflow: "hidden",
-                      }}
-                    >
-                      <div className="space-y-1">
-                        {company.email ? (
-                          <a
-                            href={`mailto:${company.email}`}
-                            className="flex items-center gap-1.5 text-[13px] text-slate-500 dark:text-slate-300 hover:text-blue-600 dark:hover:text-blue-400 transition-colors group min-w-0"
-                          >
-                            <Mail className="h-3 w-3 text-slate-400 group-hover:text-blue-500 transition-colors flex-shrink-0" />
-                            <TruncatedText
-                              text={company.email}
-                              className="group-hover:underline underline-offset-2"
-                            />
-                          </a>
-                        ) : (
-                          <div className="flex items-center gap-1.5 text-[13px] text-slate-300 dark:text-slate-600">
-                            <Mail className="h-3 w-3 flex-shrink-0" />
-                            <span>—</span>
-                          </div>
-                        )}
-                        {company.phone ? (
-                          <a
-                            href={`https://wa.me/${company.phone.replace(/\D/g, "")}`}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="flex items-center gap-1.5 text-[13px] text-slate-500 dark:text-slate-500 hover:text-emerald-600 dark:hover:text-emerald-400 transition-colors group min-w-0"
-                          >
-                            <svg
-                              viewBox="0 0 24 24"
-                              className="h-3 w-3 fill-current text-slate-400 group-hover:text-emerald-500 transition-colors flex-shrink-0"
-                              xmlns="http://www.w3.org/2000/svg"
-                            >
-                              <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z" />
-                            </svg>
-                            <TruncatedText
-                              text={company.phone}
-                              className="group-hover:underline underline-offset-2"
-                            />
-                          </a>
-                        ) : (
-                          <div className="flex items-center gap-1.5 text-[13px] text-slate-300 dark:text-slate-600">
-                            <Phone className="h-3 w-3 flex-shrink-0" />
-                            <span>—</span>
-                          </div>
-                        )}
-                      </div>
-                    </td>
-                  )}
-
-                  {/* CNPJ + Users */}
-                  {mostrarCol("cnpj") && (
-                    <td
-                      className="px-4 py-3"
-                      style={{
-                        borderRight: "1px solid rgba(148,163,184,0.15)",
-                        overflow: "hidden",
-                      }}
-                    >
-                      <div className="space-y-1">
-                        <div className="flex items-center gap-1.5 min-w-0">
-                          <Hash className="h-3 w-3 text-slate-400 flex-shrink-0" />
-                          <TruncatedText
-                            text={company.document}
-                            className="text-[13px] font-mono tracking-tight text-slate-600 dark:text-slate-300"
-                          />
-                        </div>
-                        <div className="flex items-center gap-1.5 text-[13px] text-slate-400 dark:text-slate-500">
-                          <Users className="h-3 w-3 text-slate-400 flex-shrink-0" />
-                          {company.users_count} usuários
-                        </div>
-                      </div>
-                    </td>
-                  )}
-
-                  {/* Status */}
-                  {mostrarCol("status") && (
-                    <td
-                      className="px-4 py-3"
-                      style={{
-                        borderRight: "1px solid rgba(148,163,184,0.15)",
-                        overflow: "hidden",
-                      }}
-                    >
-                      <span
-                        className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-[11px] font-bold w-fit border ${
-                          company.status === "active"
-                            ? "border-emerald-500 bg-emerald-200 text-emerald-900 shadow-[0_0_12px_rgba(16,185,129,0.65)] dark:bg-emerald-800/70 dark:text-emerald-100"
-                            : company.status === "inactive"
-                              ? "border-slate-400 bg-slate-300 text-slate-800 shadow-[0_0_8px_rgba(100,116,139,0.4)] dark:bg-slate-800 dark:text-slate-300"
-                              : "border-amber-500 bg-amber-200 text-amber-900 shadow-[0_0_12px_rgba(245,158,11,0.65)] dark:bg-amber-800/70 dark:text-amber-100"
-                        }`}
-                      >
-                        <span
-                          className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${
-                            company.status === "active"
-                              ? "bg-emerald-500"
-                              : company.status === "inactive"
-                                ? "bg-slate-400"
-                                : "bg-amber-500"
-                          }`}
-                        />
-                        {company.status === "active"
-                          ? "Ativo"
-                          : company.status === "inactive"
-                            ? "Inativo"
-                            : "Pendente"}
-                      </span>
-                    </td>
-                  )}
-
-                  {/* Plan */}
-                  {mostrarCol("plano") && (
-                    <td
-                      className="px-4 py-3"
-                      style={{
-                        borderRight: "1px solid rgba(148,163,184,0.15)",
-                        overflow: "hidden",
-                      }}
-                    >
-                      {(() => {
-                        const planBadgeBase =
-                          "inline-flex items-center rounded-full px-2.5 py-1 text-[11px] font-bold border w-fit cursor-default";
-                        const planMap: Record<
-                          string,
-                          {
-                            name: string;
-                            price: string;
-                            discount: string;
-                            info: string;
-                            color: string;
-                          }
-                        > = {
-                          lite: {
-                            name: "Lite",
-                            price: "R$ 300/mês",
-                            discount: "—",
-                            info: "Ativa conta agency na plataforma",
-                            color: "border-slate-400 bg-slate-300 text-slate-800 shadow-[0_0_8px_rgba(100,116,139,0.4)] dark:bg-slate-800 dark:text-slate-300",
-                          },
-                          start: {
-                            name: "Start",
-                            price: "R$ 500/mês",
-                            discount: "5%",
-                            info: "5% de desconto em todos os produtos",
-                            color: "border-emerald-500 bg-emerald-200 text-emerald-900 shadow-[0_0_10px_rgba(16,185,129,0.6)] dark:bg-emerald-800/70 dark:text-emerald-100",
-                          },
-                          standard: {
-                            name: "Standard",
-                            price: "R$ 1.000/mês",
-                            discount: "10%",
-                            info: "10% de desconto em todos os produtos",
-                            color: "border-blue-500 bg-blue-200 text-blue-900 shadow-[0_0_10px_rgba(59,130,246,0.6)] dark:bg-blue-800/70 dark:text-blue-100",
-                          },
-                          growth: {
-                            name: "Growth",
-                            price: "R$ 1.500/mês",
-                            discount: "15%",
-                            info: "15% de desconto em todos os produtos",
-                            color: "border-indigo-500 bg-indigo-200 text-indigo-900 shadow-[0_0_10px_rgba(99,102,241,0.6)] dark:bg-indigo-800/70 dark:text-indigo-100",
-                          },
-                          scale: {
-                            name: "Scale",
-                            price: "R$ 3.000/mês",
-                            discount: "20%",
-                            info: "20% de desconto em todos os produtos",
-                            color: "border-violet-500 bg-violet-200 text-violet-900 shadow-[0_0_10px_rgba(139,92,246,0.6)] dark:bg-violet-800/70 dark:text-violet-100",
-                          },
-                          squad: {
-                            name: "Squad",
-                            price: "R$ 5.000/mês",
-                            discount: "20%",
-                            info: "Agências — 20% desconto + pós pago + squad dedicado",
-                            color: "border-orange-500 bg-orange-200 text-orange-900 shadow-[0_0_10px_rgba(249,115,22,0.6)] dark:bg-orange-800/70 dark:text-orange-100",
-                          },
-                          enterprise: {
-                            name: "Enterprise",
-                            price: "R$ 5.000/mês",
-                            discount: "—",
-                            info: "Empresas — pós pago + atendimento exclusivo + squad dedicado",
-                            color: "border-purple-500 bg-purple-200 text-purple-900 shadow-[0_0_11px_rgba(168,85,247,0.6)] dark:bg-purple-800/70 dark:text-purple-100",
-                          },
-                          // backwards compat
-                          basic: {
-                            name: "Lite",
-                            price: "R$ 300/mês",
-                            discount: "—",
-                            info: "Ativa conta agency na plataforma",
-                            color: "border-slate-400 bg-slate-300 text-slate-800 shadow-[0_0_8px_rgba(100,116,139,0.4)] dark:bg-slate-800 dark:text-slate-300",
-                          },
-                          starter: {
-                            name: "Start",
-                            price: "R$ 500/mês",
-                            discount: "5%",
-                            info: "5% de desconto em todos os produtos",
-                            color: "border-emerald-500 bg-emerald-200 text-emerald-900 shadow-[0_0_10px_rgba(16,185,129,0.6)] dark:bg-emerald-800/70 dark:text-emerald-100",
-                          },
-                          premium: {
-                            name: "Standard",
-                            price: "R$ 1.000/mês",
-                            discount: "10%",
-                            info: "10% de desconto em todos os produtos",
-                            color: "border-blue-500 bg-blue-200 text-blue-900 shadow-[0_0_10px_rgba(59,130,246,0.6)] dark:bg-blue-800/70 dark:text-blue-100",
-                          },
-                          gold: {
-                            name: "Growth",
-                            price: "R$ 1.500/mês",
-                            discount: "15%",
-                            info: "15% de desconto em todos os produtos",
-                            color: "border-indigo-500 bg-indigo-200 text-indigo-900 shadow-[0_0_10px_rgba(99,102,241,0.6)] dark:bg-indigo-800/70 dark:text-indigo-100",
-                          },
-                          silver: {
-                            name: "Lite",
-                            price: "R$ 300/mês",
-                            discount: "—",
-                            info: "Ativa conta agency na plataforma",
-                            color: "border-slate-400 bg-slate-300 text-slate-800 shadow-[0_0_8px_rgba(100,116,139,0.4)] dark:bg-slate-800 dark:text-slate-300",
-                          },
-                          platinum: {
-                            name: "Enterprise",
-                            price: "R$ 5.000/mês",
-                            discount: "—",
-                            info: "Empresas — pós pago + atendimento exclusivo + squad dedicado",
-                            color: "border-purple-500 bg-purple-200 text-purple-900 shadow-[0_0_11px_rgba(168,85,247,0.6)] dark:bg-purple-800/70 dark:text-purple-100",
-                          },
-                        };
-                        const key = (
-                          (company.partner_level || company.account_type) ??
-                          ""
-                        ).toLowerCase();
-                        const plan = planMap[key];
-                        if (!plan)
-                          return (
-                            <span className="text-xs text-slate-400">—</span>
-                          );
-                        return (
-                          <TooltipProvider>
-                            <Tooltip>
-                              <TooltipTrigger asChild>
-                                <span
-                                  className={`${planBadgeBase} ${plan.color}`}
-                                >
-                                  {plan.name}
-                                </span>
-                              </TooltipTrigger>
-                              <TooltipContent className="text-xs max-w-[200px] space-y-1 p-2.5">
-                                <p className="font-bold">{plan.name}</p>
-                                <p className="text-slate-300">{plan.price}</p>
-                                {plan.discount !== "—" && (
-                                  <p className="text-green-400">
-                                    {plan.discount} de desconto em produtos
-                                  </p>
+                                {company.type === "nomad" ? (
+                                  <>
+                                    <TooltipProvider delayDuration={400}>
+                                      <Tooltip>
+                                        <TooltipTrigger asChild>
+                                          <button
+                                            onClick={(e) => {
+                                              e.stopPropagation();
+                                              requestToggleNomadStatus(company);
+                                            }}
+                                            aria-label={
+                                              company.status === "active"
+                                                ? `Desativar empresa Nomad ${company.name}`
+                                                : `Reativar empresa Nomad ${company.name}`
+                                            }
+                                            className={`h-[26px] w-[26px] flex items-center justify-center rounded-[8px] bg-white dark:bg-slate-800 border border-[#e8edf5] dark:border-slate-700 shadow-[0_4px_10px_rgba(15,23,42,0.06)] hover:bg-gradient-to-br hover:from-[#2558FF] hover:via-[#6E2C96] hover:to-[#D92293] hover:text-white dark:hover:text-[#0a1628] hover:border-transparent hover:shadow-[0_8px_18px_rgba(15,23,42,0.18)] hover:-translate-y-px transition-all duration-150 ${
+                                              company.status === "active"
+                                                ? "text-amber-500 dark:text-amber-400"
+                                                : "text-emerald-500 dark:text-emerald-400"
+                                            }`}
+                                          >
+                                            {company.status === "active" ? (
+                                              <PauseCircle className="h-3.5 w-3.5" />
+                                            ) : (
+                                              <CheckCircle className="h-3.5 w-3.5" />
+                                            )}
+                                          </button>
+                                        </TooltipTrigger>
+                                        <TooltipContent className="text-xs font-medium">
+                                          {company.status === "active"
+                                            ? "Desativar empresa Nomad"
+                                            : "Reativar empresa Nomad"}
+                                        </TooltipContent>
+                                      </Tooltip>
+                                    </TooltipProvider>
+                                    <TooltipProvider delayDuration={400}>
+                                      <Tooltip>
+                                        <TooltipTrigger asChild>
+                                          <button
+                                            onClick={(e) => {
+                                              e.stopPropagation();
+                                              requestRemoveNomadProfile(
+                                                company,
+                                              );
+                                            }}
+                                            aria-label={`Excluir empresa Nomad ${company.name}`}
+                                            className="h-[26px] w-[26px] flex items-center justify-center rounded-[8px] bg-white dark:bg-slate-800 border border-[#e8edf5] dark:border-slate-700 text-red-500 dark:text-red-400 shadow-[0_4px_10px_rgba(15,23,42,0.06)] hover:bg-gradient-to-br hover:from-[#2558FF] hover:via-[#6E2C96] hover:to-[#D92293] hover:text-white dark:hover:text-[#0a1628] hover:border-transparent hover:shadow-[0_8px_18px_rgba(15,23,42,0.18)] hover:-translate-y-px transition-all duration-150"
+                                          >
+                                            <Trash2 className="h-3.5 w-3.5" />
+                                          </button>
+                                        </TooltipTrigger>
+                                        <TooltipContent className="text-xs font-medium">
+                                          Excluir empresa Nomad
+                                        </TooltipContent>
+                                      </Tooltip>
+                                    </TooltipProvider>
+                                  </>
+                                ) : (
+                                  /* Excluir empresa */
+                                  <TooltipProvider delayDuration={400}>
+                                    <Tooltip>
+                                      <TooltipTrigger asChild>
+                                        <button
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            handleDeleteCompany(company.id);
+                                          }}
+                                          className="h-[26px] w-[26px] flex items-center justify-center rounded-[8px] bg-white dark:bg-slate-800 border border-[#e8edf5] dark:border-slate-700 text-red-500 dark:text-red-400 shadow-[0_4px_10px_rgba(15,23,42,0.06)] hover:bg-gradient-to-br hover:from-[#2558FF] hover:via-[#6E2C96] hover:to-[#D92293] hover:text-white dark:hover:text-[#0a1628] hover:border-transparent hover:shadow-[0_8px_18px_rgba(15,23,42,0.18)] hover:-translate-y-px transition-all duration-150"
+                                        >
+                                          <Trash2 className="h-3.5 w-3.5" />
+                                        </button>
+                                      </TooltipTrigger>
+                                      <TooltipContent className="text-xs font-medium">
+                                        Excluir empresa
+                                      </TooltipContent>
+                                    </Tooltip>
+                                  </TooltipProvider>
                                 )}
-                                <p className="text-slate-400 leading-snug">
-                                  {plan.info}
-                                </p>
-                              </TooltipContent>
-                            </Tooltip>
-                          </TooltipProvider>
-                        );
-                      })()}
-                    </td>
-                  )}
+                              </div>
+                            </td>
+                          )}
 
-                  {/* Type */}
-                  {mostrarCol("tipo") && (
-                    <td
-                      className="px-4 py-3"
-                      style={{
-                        borderRight: "1px solid rgba(148,163,184,0.15)",
-                        overflow: "hidden",
-                      }}
-                    >
-                      <div className="flex flex-col gap-1 items-start">
-                        <TooltipProvider>
-                          <Tooltip>
-                            <TooltipTrigger asChild>
+                          {/* ID */}
+                          {mostrarCol("id") && (
+                            <td
+                              className="px-4 py-3"
+                              style={{
+                                borderRight: "1px solid rgba(148,163,184,0.15)",
+                                overflow: "hidden",
+                              }}
+                            >
+                              <span className="text-xs font-mono font-semibold text-slate-500 dark:text-slate-400">
+                                emp_
+                                {company.sequence_number ?? company.id}
+                              </span>
+                            </td>
+                          )}
+
+                          {/* Company */}
+                          {mostrarCol("empresa") && (
+                            <td
+                              className="px-4 py-3"
+                              style={{
+                                borderRight: "1px solid rgba(148,163,184,0.15)",
+                                overflow: "hidden",
+                              }}
+                            >
+                              <div className="flex items-center gap-3">
+                                <CompanyAvatar company={company} />
+                                <div className="min-w-0 flex-1">
+                                  <TruncatedText
+                                    text={company.name}
+                                    className="font-bold text-sm text-slate-800 dark:text-slate-100"
+                                  />
+                                  {company.location && (
+                                    <TruncatedText
+                                      text={company.location}
+                                      className="text-xs text-slate-400 dark:text-slate-500"
+                                    />
+                                  )}
+                                  <div className="flex flex-wrap gap-1 mt-1">
+                                    {/* DPO ausente: badge clicável que abre edição */}
+                                    {!company.lgpd?.dpo_name && (
+                                      <TooltipProvider delayDuration={200}>
+                                        <Tooltip>
+                                          <TooltipTrigger asChild>
+                                            <button
+                                              className="inline-flex items-center gap-1 rounded-full px-[7px] py-0.5 text-[9px] font-bold border border-orange-500 bg-orange-200 text-orange-900 shadow-[0_0_10px_rgba(249,115,22,0.6)] dark:bg-orange-800/70 dark:text-orange-100 hover:shadow-[0_0_12px_rgba(249,115,22,0.7)] transition-all"
+                                              onClick={(e) => {
+                                                e.stopPropagation();
+                                                handleEditCompany(company);
+                                              }}
+                                            >
+                                              <AlertTriangle className="h-3 w-3" />
+                                              Sem DPO
+                                            </button>
+                                          </TooltipTrigger>
+                                          <TooltipContent
+                                            side="right"
+                                            className="max-w-[220px] p-3 space-y-1.5"
+                                          >
+                                            <p className="font-semibold text-sm">
+                                              DPO não cadastrado
+                                            </p>
+                                            <p className="text-xs leading-relaxed text-slate-400">
+                                              O DPO (Encarregado de Proteção de
+                                              Dados) é exigido pela LGPD para
+                                              empresas que tratam dados
+                                              pessoais.
+                                            </p>
+                                            <p className="text-xs text-blue-400 font-medium">
+                                              Clique para completar o cadastro →
+                                            </p>
+                                          </TooltipContent>
+                                        </Tooltip>
+                                      </TooltipProvider>
+                                    )}
+                                    {/* DPO cadastrado: indicador verde com detalhes no tooltip */}
+                                    {company.lgpd?.dpo_name && (
+                                      <TooltipProvider delayDuration={200}>
+                                        <Tooltip>
+                                          <TooltipTrigger asChild>
+                                            <span className="inline-flex items-center gap-1 rounded-full px-[7px] py-0.5 text-[9px] font-bold border border-emerald-500 bg-emerald-200 text-emerald-900 shadow-[0_0_10px_rgba(16,185,129,0.6)] dark:bg-emerald-800/70 dark:text-emerald-100 cursor-default">
+                                              <ShieldCheck className="h-3 w-3" />
+                                              DPO cadastrado
+                                            </span>
+                                          </TooltipTrigger>
+                                          <TooltipContent
+                                            side="right"
+                                            className="max-w-[220px] p-3 space-y-1"
+                                          >
+                                            <p className="font-semibold text-sm">
+                                              DPO cadastrado
+                                            </p>
+                                            <p className="text-xs text-slate-300">
+                                              {company.lgpd.dpo_name}
+                                            </p>
+                                            {company.lgpd.dpo_email && (
+                                              <p className="text-xs text-slate-400">
+                                                {company.lgpd.dpo_email}
+                                              </p>
+                                            )}
+                                            {company.lgpd.dpo_phone && (
+                                              <p className="text-xs text-slate-400">
+                                                {company.lgpd.dpo_phone}
+                                              </p>
+                                            )}
+                                          </TooltipContent>
+                                        </Tooltip>
+                                      </TooltipProvider>
+                                    )}
+                                    {/* Política de privacidade ainda não aceita */}
+                                    {company.lgpd &&
+                                      !company.lgpd.privacy_policy_accepted && (
+                                        <span className="inline-flex items-center rounded-full px-[7px] py-0.5 text-[9px] font-bold border border-amber-500 bg-amber-200 text-amber-900 shadow-[0_0_10px_rgba(245,158,11,0.6)] dark:bg-amber-800/70 dark:text-amber-100">
+                                          Política pendente
+                                        </span>
+                                      )}
+                                  </div>
+                                </div>
+                              </div>
+                            </td>
+                          )}
+
+                          {/* Contact */}
+                          {mostrarCol("contato") && (
+                            <td
+                              className="px-4 py-3"
+                              style={{
+                                borderRight: "1px solid rgba(148,163,184,0.15)",
+                                overflow: "hidden",
+                              }}
+                            >
+                              <div className="flex items-center justify-center gap-1.5">
+                                {company.email && (
+                                  <TooltipProvider>
+                                    <Tooltip>
+                                      <TooltipTrigger asChild>
+                                        <a
+                                          href={`mailto:${company.email}`}
+                                          onClick={(event) =>
+                                            event.stopPropagation()
+                                          }
+                                          className="flex h-7 w-7 items-center justify-center rounded-lg text-[#2558FF] hover:bg-blue-50"
+                                        >
+                                          <Mail className="h-4 w-4" />
+                                        </a>
+                                      </TooltipTrigger>
+                                      <TooltipContent className="text-xs">
+                                        {company.email}
+                                      </TooltipContent>
+                                    </Tooltip>
+                                  </TooltipProvider>
+                                )}
+                                {company.phone && (
+                                  <TooltipProvider>
+                                    <Tooltip>
+                                      <TooltipTrigger asChild>
+                                        <a
+                                          href={`tel:${company.phone.replace(/\D/g, "")}`}
+                                          onClick={(event) =>
+                                            event.stopPropagation()
+                                          }
+                                          className="flex h-7 w-7 items-center justify-center rounded-lg text-[#31578F] hover:bg-slate-100"
+                                        >
+                                          <Phone className="h-4 w-4" />
+                                        </a>
+                                      </TooltipTrigger>
+                                      <TooltipContent className="text-xs">
+                                        {company.phone}
+                                      </TooltipContent>
+                                    </Tooltip>
+                                  </TooltipProvider>
+                                )}
+                                {company.phone && (
+                                  <TooltipProvider>
+                                    <Tooltip>
+                                      <TooltipTrigger asChild>
+                                        <a
+                                          href={`https://wa.me/${company.phone.replace(/\D/g, "")}`}
+                                          target="_blank"
+                                          rel="noopener noreferrer"
+                                          onClick={(event) =>
+                                            event.stopPropagation()
+                                          }
+                                          className="flex h-7 w-7 items-center justify-center rounded-lg text-emerald-600 hover:bg-emerald-50"
+                                        >
+                                          <svg
+                                            viewBox="0 0 24 24"
+                                            className="h-3 w-3 fill-current text-slate-400 group-hover:text-emerald-500 transition-colors flex-shrink-0"
+                                            xmlns="http://www.w3.org/2000/svg"
+                                          >
+                                            <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z" />
+                                          </svg>
+                                        </a>
+                                      </TooltipTrigger>
+                                      <TooltipContent className="text-xs">
+                                        WhatsApp: {company.phone}
+                                      </TooltipContent>
+                                    </Tooltip>
+                                  </TooltipProvider>
+                                )}
+                              </div>
+                            </td>
+                          )}
+
+                          {/* CNPJ + Users */}
+                          {mostrarCol("cnpj") && (
+                            <td
+                              className="px-4 py-3"
+                              style={{
+                                borderRight: "1px solid rgba(148,163,184,0.15)",
+                                overflow: "hidden",
+                              }}
+                            >
+                              <div className="space-y-1">
+                                <div className="flex items-center gap-1.5 min-w-0">
+                                  <Hash className="h-3 w-3 text-slate-400 flex-shrink-0" />
+                                  <TruncatedText
+                                    text={company.document}
+                                    className="text-[13px] font-mono tracking-tight text-slate-600 dark:text-slate-300"
+                                  />
+                                </div>
+                                <div className="flex items-center gap-1.5 text-[13px] text-slate-400 dark:text-slate-500">
+                                  <Users className="h-3 w-3 text-slate-400 flex-shrink-0" />
+                                  {company.users_count} usuários
+                                </div>
+                              </div>
+                            </td>
+                          )}
+
+                          {/* Status */}
+                          {mostrarCol("status") && (
+                            <td
+                              className="px-4 py-3"
+                              style={{
+                                borderRight: "1px solid rgba(148,163,184,0.15)",
+                                overflow: "hidden",
+                              }}
+                            >
                               <span
-                                className={`inline-flex items-center rounded-full px-2.5 py-1 text-[11px] font-bold border w-fit cursor-default ${
-                                  company.type === "company"
-                                    ? "border-blue-500 bg-blue-200 text-blue-900 shadow-[0_0_10px_rgba(59,130,246,0.6)] dark:bg-blue-800/70 dark:text-blue-100"
-                                    : company.type === "agency"
-                                      ? "border-violet-500 bg-violet-200 text-violet-900 shadow-[0_0_10px_rgba(139,92,246,0.6)] dark:bg-violet-800/70 dark:text-violet-100"
-                                      : "border-orange-500 bg-orange-200 text-orange-900 shadow-[0_0_10px_rgba(249,115,22,0.6)] dark:bg-orange-800/70 dark:text-orange-100"
+                                className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-[11px] font-bold w-fit border ${
+                                  company.status === "active"
+                                    ? "border-emerald-500 bg-emerald-200 text-emerald-900 shadow-[0_0_12px_rgba(16,185,129,0.65)] dark:bg-emerald-800/70 dark:text-emerald-100"
+                                    : company.status === "inactive"
+                                      ? "border-slate-400 bg-slate-300 text-slate-800 shadow-[0_0_8px_rgba(100,116,139,0.4)] dark:bg-slate-800 dark:text-slate-300"
+                                      : "border-amber-500 bg-amber-200 text-amber-900 shadow-[0_0_12px_rgba(245,158,11,0.65)] dark:bg-amber-800/70 dark:text-amber-100"
                                 }`}
                               >
-                                {getTypeLabel(company.type)}
+                                <span
+                                  className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${
+                                    company.status === "active"
+                                      ? "bg-emerald-500"
+                                      : company.status === "inactive"
+                                        ? "bg-slate-400"
+                                        : "bg-amber-500"
+                                  }`}
+                                />
+                                {company.status === "active"
+                                  ? "Ativo"
+                                  : company.status === "inactive"
+                                    ? "Inativo"
+                                    : "Pendente"}
                               </span>
-                            </TooltipTrigger>
-                            <TooltipContent className="text-xs max-w-[220px] leading-snug">
-                              {getTypeInfo(company.type)}
-                            </TooltipContent>
-                          </Tooltip>
-                        </TooltipProvider>
-                        {company.type === "agency" &&
-                          company.program_level &&
-                          (() => {
-                            const lvl =
-                              PARTNER_LEVEL_CONFIG[
-                                company.program_level as keyof typeof PARTNER_LEVEL_CONFIG
-                              ];
-                            return lvl ? (
-                              <span
-                                className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium border ${lvl.badge}`}
-                              >
-                                {lvl.icon} {lvl.label}
+                            </td>
+                          )}
+
+                          {/* Plan */}
+                          {mostrarCol("plano") && (
+                            <td
+                              className="px-4 py-3"
+                              style={{
+                                borderRight: "1px solid rgba(148,163,184,0.15)",
+                                overflow: "hidden",
+                              }}
+                            >
+                              {(() => {
+                                const planBadgeBase =
+                                  "inline-flex items-center rounded-full px-2.5 py-1 text-[11px] font-bold border w-fit cursor-default";
+                                const planMap: Record<
+                                  string,
+                                  {
+                                    name: string;
+                                    price: string;
+                                    discount: string;
+                                    info: string;
+                                    color: string;
+                                  }
+                                > = {
+                                  lite: {
+                                    name: "Lite",
+                                    price: "R$ 300/mês",
+                                    discount: "—",
+                                    info: "Ativa conta agency na plataforma",
+                                    color:
+                                      "border-slate-400 bg-slate-300 text-slate-800 shadow-[0_0_8px_rgba(100,116,139,0.4)] dark:bg-slate-800 dark:text-slate-300",
+                                  },
+                                  start: {
+                                    name: "Start",
+                                    price: "R$ 500/mês",
+                                    discount: "5%",
+                                    info: "5% de desconto em todos os produtos",
+                                    color:
+                                      "border-emerald-500 bg-emerald-200 text-emerald-900 shadow-[0_0_10px_rgba(16,185,129,0.6)] dark:bg-emerald-800/70 dark:text-emerald-100",
+                                  },
+                                  standard: {
+                                    name: "Standard",
+                                    price: "R$ 1.000/mês",
+                                    discount: "10%",
+                                    info: "10% de desconto em todos os produtos",
+                                    color:
+                                      "border-blue-500 bg-blue-200 text-blue-900 shadow-[0_0_10px_rgba(59,130,246,0.6)] dark:bg-blue-800/70 dark:text-blue-100",
+                                  },
+                                  growth: {
+                                    name: "Growth",
+                                    price: "R$ 1.500/mês",
+                                    discount: "15%",
+                                    info: "15% de desconto em todos os produtos",
+                                    color:
+                                      "border-indigo-500 bg-indigo-200 text-indigo-900 shadow-[0_0_10px_rgba(99,102,241,0.6)] dark:bg-indigo-800/70 dark:text-indigo-100",
+                                  },
+                                  scale: {
+                                    name: "Scale",
+                                    price: "R$ 3.000/mês",
+                                    discount: "20%",
+                                    info: "20% de desconto em todos os produtos",
+                                    color:
+                                      "border-violet-500 bg-violet-200 text-violet-900 shadow-[0_0_10px_rgba(139,92,246,0.6)] dark:bg-violet-800/70 dark:text-violet-100",
+                                  },
+                                  squad: {
+                                    name: "Squad",
+                                    price: "R$ 5.000/mês",
+                                    discount: "20%",
+                                    info: "Agências — 20% desconto + pós pago + squad dedicado",
+                                    color:
+                                      "border-orange-500 bg-orange-200 text-orange-900 shadow-[0_0_10px_rgba(249,115,22,0.6)] dark:bg-orange-800/70 dark:text-orange-100",
+                                  },
+                                  enterprise: {
+                                    name: "Enterprise",
+                                    price: "R$ 5.000/mês",
+                                    discount: "—",
+                                    info: "Empresas — pós pago + atendimento exclusivo + squad dedicado",
+                                    color:
+                                      "border-purple-500 bg-purple-200 text-purple-900 shadow-[0_0_11px_rgba(168,85,247,0.6)] dark:bg-purple-800/70 dark:text-purple-100",
+                                  },
+                                  // backwards compat
+                                  basic: {
+                                    name: "Lite",
+                                    price: "R$ 300/mês",
+                                    discount: "—",
+                                    info: "Ativa conta agency na plataforma",
+                                    color:
+                                      "border-slate-400 bg-slate-300 text-slate-800 shadow-[0_0_8px_rgba(100,116,139,0.4)] dark:bg-slate-800 dark:text-slate-300",
+                                  },
+                                  starter: {
+                                    name: "Start",
+                                    price: "R$ 500/mês",
+                                    discount: "5%",
+                                    info: "5% de desconto em todos os produtos",
+                                    color:
+                                      "border-emerald-500 bg-emerald-200 text-emerald-900 shadow-[0_0_10px_rgba(16,185,129,0.6)] dark:bg-emerald-800/70 dark:text-emerald-100",
+                                  },
+                                  premium: {
+                                    name: "Standard",
+                                    price: "R$ 1.000/mês",
+                                    discount: "10%",
+                                    info: "10% de desconto em todos os produtos",
+                                    color:
+                                      "border-blue-500 bg-blue-200 text-blue-900 shadow-[0_0_10px_rgba(59,130,246,0.6)] dark:bg-blue-800/70 dark:text-blue-100",
+                                  },
+                                  gold: {
+                                    name: "Growth",
+                                    price: "R$ 1.500/mês",
+                                    discount: "15%",
+                                    info: "15% de desconto em todos os produtos",
+                                    color:
+                                      "border-indigo-500 bg-indigo-200 text-indigo-900 shadow-[0_0_10px_rgba(99,102,241,0.6)] dark:bg-indigo-800/70 dark:text-indigo-100",
+                                  },
+                                  silver: {
+                                    name: "Lite",
+                                    price: "R$ 300/mês",
+                                    discount: "—",
+                                    info: "Ativa conta agency na plataforma",
+                                    color:
+                                      "border-slate-400 bg-slate-300 text-slate-800 shadow-[0_0_8px_rgba(100,116,139,0.4)] dark:bg-slate-800 dark:text-slate-300",
+                                  },
+                                  platinum: {
+                                    name: "Enterprise",
+                                    price: "R$ 5.000/mês",
+                                    discount: "—",
+                                    info: "Empresas — pós pago + atendimento exclusivo + squad dedicado",
+                                    color:
+                                      "border-purple-500 bg-purple-200 text-purple-900 shadow-[0_0_11px_rgba(168,85,247,0.6)] dark:bg-purple-800/70 dark:text-purple-100",
+                                  },
+                                };
+                                const key = (
+                                  (company.partner_level ||
+                                    company.account_type) ??
+                                  ""
+                                ).toLowerCase();
+                                const plan = planMap[key];
+                                if (!plan)
+                                  return (
+                                    <span className="text-xs text-slate-400">
+                                      —
+                                    </span>
+                                  );
+                                return (
+                                  <TooltipProvider>
+                                    <Tooltip>
+                                      <TooltipTrigger asChild>
+                                        <span
+                                          className={`${planBadgeBase} ${plan.color}`}
+                                        >
+                                          {plan.name}
+                                        </span>
+                                      </TooltipTrigger>
+                                      <TooltipContent className="text-xs max-w-[200px] space-y-1 p-2.5">
+                                        <p className="font-bold">{plan.name}</p>
+                                        <p className="text-slate-300">
+                                          {plan.price}
+                                        </p>
+                                        {plan.discount !== "—" && (
+                                          <p className="text-green-400">
+                                            {plan.discount} de desconto em
+                                            produtos
+                                          </p>
+                                        )}
+                                        <p className="text-slate-400 leading-snug">
+                                          {plan.info}
+                                        </p>
+                                      </TooltipContent>
+                                    </Tooltip>
+                                  </TooltipProvider>
+                                );
+                              })()}
+                            </td>
+                          )}
+
+                          {/* Type */}
+                          {mostrarCol("tipo") && (
+                            <td
+                              className="px-4 py-3"
+                              style={{
+                                borderRight: "1px solid rgba(148,163,184,0.15)",
+                                overflow: "hidden",
+                              }}
+                            >
+                              <div className="flex flex-col gap-1 items-start">
+                                <TooltipProvider>
+                                  <Tooltip>
+                                    <TooltipTrigger asChild>
+                                      <span
+                                        className={`inline-flex items-center rounded-full px-2.5 py-1 text-[11px] font-bold border w-fit cursor-default ${
+                                          company.type === "company"
+                                            ? "border-blue-500 bg-blue-200 text-blue-900 shadow-[0_0_10px_rgba(59,130,246,0.6)] dark:bg-blue-800/70 dark:text-blue-100"
+                                            : company.type === "agency"
+                                              ? "border-violet-500 bg-violet-200 text-violet-900 shadow-[0_0_10px_rgba(139,92,246,0.6)] dark:bg-violet-800/70 dark:text-violet-100"
+                                              : "border-orange-500 bg-orange-200 text-orange-900 shadow-[0_0_10px_rgba(249,115,22,0.6)] dark:bg-orange-800/70 dark:text-orange-100"
+                                        }`}
+                                      >
+                                        {getTypeLabel(company.type)}
+                                      </span>
+                                    </TooltipTrigger>
+                                    <TooltipContent className="text-xs max-w-[220px] leading-snug">
+                                      {getTypeInfo(company.type)}
+                                    </TooltipContent>
+                                  </Tooltip>
+                                </TooltipProvider>
+                                {company.type === "agency" &&
+                                  company.program_level &&
+                                  (() => {
+                                    const lvl =
+                                      PARTNER_LEVEL_CONFIG[
+                                        company.program_level as keyof typeof PARTNER_LEVEL_CONFIG
+                                      ];
+                                    return lvl ? (
+                                      <span
+                                        className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium border ${lvl.badge}`}
+                                      >
+                                        {lvl.icon} {lvl.label}
+                                      </span>
+                                    ) : null;
+                                  })()}
+                                {company.type === "agency" &&
+                                  company.partner_status === "active" && (
+                                    <span className="allka-badge allka-badge-partner">
+                                      <Award className="h-3 w-3" /> Partner
+                                    </span>
+                                  )}
+                                {company.type === "agency" &&
+                                  company.partner_status === "invited" && (
+                                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium border border-amber-400 bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300">
+                                      <Award className="h-3 w-3" /> Convite
+                                      pendente
+                                    </span>
+                                  )}
+                              </div>
+                            </td>
+                          )}
+
+                          {/* Membro Desde */}
+                          {mostrarCol("membro_desde") && (
+                            <td
+                              className="px-4 py-3"
+                              style={{
+                                borderRight: "1px solid rgba(148,163,184,0.15)",
+                                overflow: "hidden",
+                              }}
+                            >
+                              <span className="text-xs text-slate-500 dark:text-slate-400">
+                                {company.created_at
+                                  ? new Date(
+                                      company.created_at,
+                                    ).toLocaleDateString("pt-BR")
+                                  : "—"}
                               </span>
-                            ) : null;
-                          })()}
-                        {company.type === "agency" && company.partner_status === "active" && (
-                          <span className="allka-badge allka-badge-partner">
-                            <Award className="h-3 w-3" /> Partner
-                          </span>
-                        )}
-                        {company.type === "agency" && company.partner_status === "invited" && (
-                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium border border-amber-400 bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300">
-                            <Award className="h-3 w-3" /> Convite pendente
-                          </span>
-                        )}
-                      </div>
-                    </td>
-                  )}
+                            </td>
+                          )}
+                          {mostrarCol("acoes") && (
+                            <td
+                              className="px-2 py-1.5 text-center"
+                              onClick={(event) => event.stopPropagation()}
+                            >
+                              <DropdownMenu>
+                                <DropdownMenuTrigger asChild>
+                                  <button
+                                    aria-label={`Mais ações para ${company.name}`}
+                                    className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-[#31578f] transition-colors hover:bg-blue-50 hover:text-[#2558ff]"
+                                  >
+                                    <MoreHorizontal className="h-4 w-4" />
+                                  </button>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent
+                                  align="end"
+                                  className="min-w-40"
+                                >
+                                  <DropdownMenuItem
+                                    onClick={() => openInfoPanel(company)}
+                                  >
+                                    <Info className="mr-2 h-3.5 w-3.5" /> Mais
+                                    informações
+                                  </DropdownMenuItem>
+                                  <DropdownMenuItem
+                                    onClick={() => handleViewCompany(company)}
+                                  >
+                                    <Eye className="mr-2 h-3.5 w-3.5" /> Ver
+                                    detalhes
+                                  </DropdownMenuItem>
+                                  <DropdownMenuItem
+                                    onClick={() => handleEditCompany(company)}
+                                  >
+                                    <Pencil className="mr-2 h-3.5 w-3.5" />{" "}
+                                    Editar empresa
+                                  </DropdownMenuItem>
+                                </DropdownMenuContent>
+                              </DropdownMenu>
+                            </td>
+                          )}
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
 
-                  {/* Membro Desde */}
-                  {mostrarCol("membro_desde") && (
-                    <td
-                      className="px-4 py-3"
-                      style={{
-                        borderRight: "1px solid rgba(148,163,184,0.15)",
-                        overflow: "hidden",
-                      }}
-                    >
-                      <span className="text-xs text-slate-500 dark:text-slate-400">
-                        {company.created_at
-                          ? new Date(company.created_at).toLocaleDateString(
-                              "pt-BR",
-                            )
-                          : "—"}
-                      </span>
-                    </td>
-                  )}
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+                {/* Empty State */}
+                {paginatedCompanies.length === 0 && (
+                  <div className="flex flex-col items-center justify-center py-16 text-slate-400">
+                    <div className="w-14 h-14 rounded-2xl bg-slate-100 dark:bg-slate-800 flex items-center justify-center mb-3">
+                      <Building2 className="h-7 w-7 opacity-40" />
+                    </div>
+                    <p className="text-sm font-medium text-slate-500 dark:text-slate-400">
+                      Nenhuma empresa encontrada
+                    </p>
+                    <p className="text-xs text-slate-400 dark:text-slate-500 mt-1">
+                      Tente ajustar os filtros ou busca
+                    </p>
+                  </div>
+                )}
 
-        {/* Empty State */}
-        {paginatedCompanies.length === 0 && (
-          <div className="flex flex-col items-center justify-center py-16 text-slate-400">
-            <div className="w-14 h-14 rounded-2xl bg-slate-100 dark:bg-slate-800 flex items-center justify-center mb-3">
-              <Building2 className="h-7 w-7 opacity-40" />
-            </div>
-            <p className="text-sm font-medium text-slate-500 dark:text-slate-400">
-              Nenhuma empresa encontrada
-            </p>
-            <p className="text-xs text-slate-400 dark:text-slate-500 mt-1">
-              Tente ajustar os filtros ou busca
-            </p>
-          </div>
-        )}
+                {/* Bottom Pagination */}
+                {filteredCompanies.length > 0 && (
+                  <div className="admin-empresas-pagination-row flex flex-wrap items-center justify-between gap-3 px-[18px] py-3 border-t border-[#e8edf5] dark:border-slate-800 bg-white dark:bg-slate-900/20">
+                    <div className="flex items-center gap-3 flex-wrap">
+                      <ItemsPerPageSelect
+                        value={pageSize.toString()}
+                        onValueChange={(value) => {
+                          setPageSize(Number(value));
+                          setCurrentPage(1);
+                        }}
+                        variant="bottom"
+                      />
+                      <TooltipProvider delayDuration={400}>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <span className="text-xs text-slate-500 dark:text-slate-400 whitespace-nowrap cursor-default">
+                              {(() => {
+                                const start = Math.min(
+                                  (currentPage - 1) * pageSize + 1,
+                                  filteredCompanies.length,
+                                );
+                                const end = Math.min(
+                                  currentPage * pageSize,
+                                  filteredCompanies.length,
+                                );
+                                return (
+                                  <>
+                                    Exibindo{" "}
+                                    <span className="font-semibold text-slate-600 dark:text-slate-300">
+                                      {start}
+                                    </span>{" "}
+                                    a{" "}
+                                    <span className="font-semibold text-slate-600 dark:text-slate-300">
+                                      {end}
+                                    </span>{" "}
+                                    de{" "}
+                                    <span className="font-semibold text-slate-600 dark:text-slate-300">
+                                      {filteredCompanies.length}
+                                    </span>{" "}
+                                    registro
+                                    {filteredCompanies.length !== 1 ? "s" : ""}
+                                  </>
+                                );
+                              })()}
+                            </span>
+                          </TooltipTrigger>
+                          <TooltipContent side="top" sideOffset={6}>
+                            Intervalo de empresas exibido nesta página, do total
+                            encontrado com os filtros atuais
+                          </TooltipContent>
+                        </Tooltip>
+                      </TooltipProvider>
+                    </div>
 
-        {/* Bottom Pagination */}
-        {filteredCompanies.length > 0 && (
-          <div className="admin-empresas-pagination-row flex flex-wrap items-center justify-between gap-3 px-[18px] py-3 border-t border-[#e8edf5] dark:border-slate-800 bg-white dark:bg-slate-900/20">
-            <div className="flex items-center gap-3 flex-wrap">
-              <ItemsPerPageSelect
-                value={pageSize.toString()}
-                onValueChange={(value) => {
-                  setPageSize(Number(value));
-                  setCurrentPage(1);
-                }}
-                variant="bottom"
-              />
-              <TooltipProvider delayDuration={400}>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <span className="text-xs text-slate-500 dark:text-slate-400 whitespace-nowrap cursor-default">
-                      {(() => {
-                        const start = Math.min(
-                          (currentPage - 1) * pageSize + 1,
-                          filteredCompanies.length,
-                        );
-                        const end = Math.min(
-                          currentPage * pageSize,
-                          filteredCompanies.length,
-                        );
-                        return (
-                          <>
-                            Exibindo{" "}
-                            <span className="font-semibold text-slate-600 dark:text-slate-300">
-                              {start}
-                            </span>{" "}
-                            a{" "}
-                            <span className="font-semibold text-slate-600 dark:text-slate-300">
-                              {end}
-                            </span>{" "}
-                            de{" "}
-                            <span className="font-semibold text-slate-600 dark:text-slate-300">
-                              {filteredCompanies.length}
-                            </span>{" "}
-                            registro{filteredCompanies.length !== 1 ? "s" : ""}
-                          </>
-                        );
-                      })()}
-                    </span>
-                  </TooltipTrigger>
-                  <TooltipContent side="top" sideOffset={6}>
-                    Intervalo de empresas exibido nesta página, do total encontrado com os filtros atuais
-                  </TooltipContent>
-                </Tooltip>
-              </TooltipProvider>
-            </div>
-
-            {/* Horizontal scrollbar mirror — sits between the count text and
+                    {/* Horizontal scrollbar mirror — sits between the count text and
                 the pagination, synced with the table's horizontal scroll.
                 Only rendered when the table actually overflows. Ref, handler
                 and width calc unchanged — only spacing/alignment touched. */}
-            {hasHorizontalOverflow && (
-              <div
-                ref={bottomScrollRef}
-                onScroll={handleBottomBarScroll}
-                title="Arraste para rolar a tabela na horizontal e ver as colunas que não couberem na tela"
-                className="hidden md:block flex-1 min-w-[80px] overflow-x-scroll empresas-table-scroll self-center mx-1"
-                style={{ height: 12 }}
-              >
-                <div
-                  style={{
-                    minWidth: colWidths.reduce((a, b) => a + b, 0),
-                    height: 1,
-                  }}
-                />
-              </div>
-            )}
+                    {hasHorizontalOverflow && (
+                      <div
+                        ref={bottomScrollRef}
+                        onScroll={handleBottomBarScroll}
+                        title="Arraste para rolar a tabela na horizontal e ver as colunas que não couberem na tela"
+                        className="hidden md:block flex-1 min-w-[80px] overflow-x-scroll empresas-table-scroll self-center mx-1"
+                        style={{ height: 12 }}
+                      >
+                        <div
+                          style={{
+                            minWidth: colWidths.reduce((a, b) => a + b, 0),
+                            height: 1,
+                          }}
+                        />
+                      </div>
+                    )}
 
-            <nav
-              aria-label="Paginação da tabela de empresas"
-              className="flex items-center gap-1 flex-wrap"
-            >
-              <button
-                type="button"
-                onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
-                disabled={currentPage === 1}
-                aria-label="Página anterior"
-                title="Página anterior"
-                className="h-7 px-2 flex items-center gap-1 justify-center rounded-[8px] border border-transparent text-slate-500 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-30 disabled:pointer-events-none transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#7d1b6a]/40"
-              >
-                <ChevronLeft className="h-3.5 w-3.5" />
-                <span className="text-xs font-medium">Anterior</span>
-              </button>
-              {getPageNumbers().map((page, index) =>
-                page === "..." ? (
-                  <span key={index} className="text-xs text-slate-300 px-0.5">
-                    ·
-                  </span>
-                ) : (
-                  <button
-                    key={index}
-                    type="button"
-                    onClick={() => setCurrentPage(Number(page))}
-                    aria-current={page === currentPage ? "page" : undefined}
-                    aria-label={
-                      page === currentPage
-                        ? `Página atual, ${page}`
-                        : `Ir para a página ${page}`
-                    }
-                    title={
-                      page === currentPage
-                        ? "Página atual"
-                        : `Ir para a página ${page}`
-                    }
-                    className={`h-7 w-7 flex items-center justify-center rounded-[8px] text-xs font-bold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#7d1b6a]/40 ${
-                      page === currentPage
-                        ? "text-white shadow-[0_6px_14px_rgba(110,44,150,0.25)]"
-                        : "text-slate-500 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 dark:text-slate-400"
-                    }`}
-                    style={
-                      page === currentPage
-                        ? {
-                            background:
-                              "linear-gradient(135deg, #111A4D 0%, #6E2C96 55%, #D92293 100%)",
-                          }
-                        : undefined
-                    }
-                  >
-                    {page}
-                  </button>
-                ),
-              )}
-              <button
-                type="button"
-                onClick={() =>
-                  setCurrentPage(Math.min(totalPages, currentPage + 1))
-                }
-                disabled={currentPage === totalPages}
-                aria-label="Próxima página"
-                title="Próxima página"
-                className="h-7 px-2 flex items-center gap-1 justify-center rounded-[8px] border border-transparent text-slate-500 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-30 disabled:pointer-events-none transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#7d1b6a]/40"
-              >
-                <span className="text-xs font-medium">Próximo</span>
-                <ChevronRight className="h-3.5 w-3.5" />
-              </button>
-              <PageJumpField className="ml-1.5 pl-1.5 border-l border-slate-200 dark:border-slate-700" />
-            </nav>
+                    <nav
+                      aria-label="Paginação da tabela de empresas"
+                      className="flex items-center gap-1 flex-wrap"
+                    >
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setCurrentPage(Math.max(1, currentPage - 1))
+                        }
+                        disabled={currentPage === 1}
+                        aria-label="Página anterior"
+                        title="Página anterior"
+                        className="h-7 px-2 flex items-center gap-1 justify-center rounded-[8px] border border-transparent text-slate-500 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-30 disabled:pointer-events-none transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#7d1b6a]/40"
+                      >
+                        <ChevronLeft className="h-3.5 w-3.5" />
+                        <span className="text-xs font-medium">Anterior</span>
+                      </button>
+                      {getPageNumbers().map((page, index) =>
+                        page === "..." ? (
+                          <span
+                            key={index}
+                            className="text-xs text-slate-300 px-0.5"
+                          >
+                            ·
+                          </span>
+                        ) : (
+                          <button
+                            key={index}
+                            type="button"
+                            onClick={() => setCurrentPage(Number(page))}
+                            aria-current={
+                              page === currentPage ? "page" : undefined
+                            }
+                            aria-label={
+                              page === currentPage
+                                ? `Página atual, ${page}`
+                                : `Ir para a página ${page}`
+                            }
+                            title={
+                              page === currentPage
+                                ? "Página atual"
+                                : `Ir para a página ${page}`
+                            }
+                            className={`h-7 w-7 flex items-center justify-center rounded-[8px] text-xs font-bold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#7d1b6a]/40 ${
+                              page === currentPage
+                                ? "text-white shadow-[0_6px_14px_rgba(110,44,150,0.25)]"
+                                : "text-slate-500 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 dark:text-slate-400"
+                            }`}
+                            style={
+                              page === currentPage
+                                ? {
+                                    background:
+                                      "linear-gradient(135deg, #111A4D 0%, #6E2C96 55%, #D92293 100%)",
+                                  }
+                                : undefined
+                            }
+                          >
+                            {page}
+                          </button>
+                        ),
+                      )}
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setCurrentPage(Math.min(totalPages, currentPage + 1))
+                        }
+                        disabled={currentPage === totalPages}
+                        aria-label="Próxima página"
+                        title="Próxima página"
+                        className="h-7 px-2 flex items-center gap-1 justify-center rounded-[8px] border border-transparent text-slate-500 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-30 disabled:pointer-events-none transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#7d1b6a]/40"
+                      >
+                        <span className="text-xs font-medium">Próximo</span>
+                        <ChevronRight className="h-3.5 w-3.5" />
+                      </button>
+                      <PageJumpField className="ml-1.5 pl-1.5 border-l border-slate-200 dark:border-slate-700" />
+                    </nav>
+                  </div>
+                )}
+              </Card>
+            </div>
           </div>
-        )}
-      </Card>
-      </div>
-      </div>
-      </div>
+        </div>
 
-      {/* Advanced Filters Modal — Popup 1 */}
-      {isFilterModalOpen &&
-        (() => {
-          const allFilterFields = [
-            { id: "nome", label: "Nome da Empresa", section: "identificacao" },
-            { id: "cnpj", label: "CNPJ", section: "identificacao" },
-            { id: "email", label: "E-mail", section: "identificacao" },
-            {
-              id: "telefone",
-              label: "Telefone / WhatsApp",
-              section: "identificacao",
-            },
-            {
-              id: "localizacao",
-              label: "Cidade / Estado",
-              section: "identificacao",
-            },
-            { id: "tipo", label: "Tipo de conta", section: "tipo_status" },
-            { id: "status", label: "Status", section: "tipo_status" },
-            { id: "plano", label: "Plano", section: "plano_parceiro" },
-            {
-              id: "parceiro",
-              label: "Nível de Parceiro",
-              section: "plano_parceiro",
-            },
-            { id: "usuarios", label: "Usuários", section: "volumes" },
-            { id: "projetos", label: "Projetos", section: "volumes" },
-            { id: "data_cadastro", label: "Data de Cadastro", section: "data" },
-            { id: "bitrix", label: "Bitrix ID", section: "integracoes" },
-            { id: "asaas", label: "Asaas ID", section: "integracoes" },
-          ];
-          const has = (id: string) => visibleFields.includes(id);
-          const hasSection = (...ids: string[]) => ids.some((id) => has(id));
-          const handleDrop = (targetId: string) => {
-            if (!draggingFilterId || draggingFilterId === targetId) return;
-            const from = savedFilters.findIndex(
-              (f) => f.id === draggingFilterId,
-            );
-            const to = savedFilters.findIndex((f) => f.id === targetId);
-            if (from === -1 || to === -1) return;
-            const reordered = [...savedFilters];
-            const [moved] = reordered.splice(from, 1);
-            reordered.splice(to, 0, moved);
-            setSavedFilters(reordered);
-            setDraggingFilterId(null);
-            setDragOverFilterId(null);
-          };
-          const guardedFilterClose = () => {
-            if (unsavedChanges) {
-              setPendingClose(() => () => closeFilterPanel(true));
-              return;
-            }
-            closeFilterPanel(true);
-          };
-          return (
-            <StandardModalDialog
-              open={isFilterModalOpen}
-              onClose={guardedFilterClose}
-              title="Filtros Avançados"
-              subtitle={
-                unsavedChanges
-                  ? "• Alterações não salvas"
-                  : selectedFilterId && !isEditingFilter
-                    ? "Filtro carregado"
-                    : "Configure e aplique filtros"
+        {/* Advanced Filters Modal — Popup 1 */}
+        {isFilterModalOpen &&
+          (() => {
+            const allFilterFields = [
+              {
+                id: "nome",
+                label: "Nome da Empresa",
+                section: "identificacao",
+              },
+              { id: "cnpj", label: "CNPJ", section: "identificacao" },
+              { id: "email", label: "E-mail", section: "identificacao" },
+              {
+                id: "telefone",
+                label: "Telefone / WhatsApp",
+                section: "identificacao",
+              },
+              {
+                id: "localizacao",
+                label: "Cidade / Estado",
+                section: "identificacao",
+              },
+              { id: "tipo", label: "Tipo de conta", section: "tipo_status" },
+              { id: "status", label: "Status", section: "tipo_status" },
+              { id: "plano", label: "Plano", section: "plano_parceiro" },
+              {
+                id: "parceiro",
+                label: "Nível de Parceiro",
+                section: "plano_parceiro",
+              },
+              { id: "usuarios", label: "Usuários", section: "volumes" },
+              { id: "projetos", label: "Projetos", section: "volumes" },
+              {
+                id: "data_cadastro",
+                label: "Data de Cadastro",
+                section: "data",
+              },
+              { id: "bitrix", label: "Bitrix ID", section: "integracoes" },
+              { id: "asaas", label: "Asaas ID", section: "integracoes" },
+            ];
+            const has = (id: string) => visibleFields.includes(id);
+            const hasSection = (...ids: string[]) => ids.some((id) => has(id));
+            const handleDrop = (targetId: string) => {
+              if (!draggingFilterId || draggingFilterId === targetId) return;
+              const from = savedFilters.findIndex(
+                (f) => f.id === draggingFilterId,
+              );
+              const to = savedFilters.findIndex((f) => f.id === targetId);
+              if (from === -1 || to === -1) return;
+              const reordered = [...savedFilters];
+              const [moved] = reordered.splice(from, 1);
+              reordered.splice(to, 0, moved);
+              setSavedFilters(reordered);
+              setDraggingFilterId(null);
+              setDragOverFilterId(null);
+            };
+            const guardedFilterClose = () => {
+              if (unsavedChanges) {
+                setPendingClose(() => () => closeFilterPanel(true));
+                return;
               }
-              footer={
-                <div className="flex items-center justify-between w-full">
-                  <button
-                    onClick={() => {
-                      setAdvancedFilters(EMPTY_ADVANCED_FILTERS);
-                      setUnsavedChanges(false);
-                    }}
-                    className="text-[11px] text-slate-400 hover:text-red-500 transition-colors flex items-center gap-1"
-                  >
-                    <X className="h-3 w-3" /> Limpar filtros
-                  </button>
+              closeFilterPanel(true);
+            };
+            return (
+              <StandardModalDialog
+                open={isFilterModalOpen}
+                onClose={guardedFilterClose}
+                title="Filtros Avançados"
+                subtitle={
+                  unsavedChanges
+                    ? "• Alterações não salvas"
+                    : selectedFilterId && !isEditingFilter
+                      ? "Filtro carregado"
+                      : "Configure e aplique filtros"
+                }
+                footer={
+                  <div className="flex items-center justify-between w-full">
+                    <button
+                      onClick={() => {
+                        setAdvancedFilters(EMPTY_ADVANCED_FILTERS);
+                        setUnsavedChanges(false);
+                      }}
+                      className="text-[11px] text-slate-400 hover:text-red-500 transition-colors flex items-center gap-1"
+                    >
+                      <X className="h-3 w-3" /> Limpar filtros
+                    </button>
 
-                  <div className="flex items-center gap-2">
-                    {/* Save / update filter */}
-                    {showSaveInput ? (
-                      <div className="flex items-center gap-1.5">
-                        <input
-                          autoFocus
-                          type="text"
-                          value={filterNameInput}
-                          onChange={(e) => setFilterNameInput(e.target.value)}
-                          onKeyDown={(e) => {
-                            if (e.key === "Enter" && filterNameInput.trim()) {
+                    <div className="flex items-center gap-2">
+                      {/* Save / update filter */}
+                      {showSaveInput ? (
+                        <div className="flex items-center gap-1.5">
+                          <input
+                            autoFocus
+                            type="text"
+                            value={filterNameInput}
+                            onChange={(e) => setFilterNameInput(e.target.value)}
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter" && filterNameInput.trim()) {
+                                const newId = `filter-${Date.now()}`;
+                                setSavedFilters([
+                                  ...savedFilters,
+                                  {
+                                    id: newId,
+                                    name: filterNameInput.trim(),
+                                    filters: advancedFilters,
+                                  },
+                                ]);
+                                setSelectedFilterId(newId);
+                                setUnsavedChanges(false);
+                                setShowSaveInput(false);
+                                setFilterNameInput("");
+                              }
+                              if (e.key === "Escape") {
+                                setShowSaveInput(false);
+                                setFilterNameInput("");
+                              }
+                            }}
+                            placeholder={`Filtro ${savedFilters.length + 1}`}
+                            className="h-7 px-2 rounded-md text-[11px] border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-1 focus:ring-blue-400 w-36"
+                          />
+                          <button
+                            disabled={!filterNameInput.trim()}
+                            onClick={() => {
                               const newId = `filter-${Date.now()}`;
                               setSavedFilters([
                                 ...savedFilters,
@@ -3985,63 +4455,51 @@ export default function EmpresasPage() {
                               setUnsavedChanges(false);
                               setShowSaveInput(false);
                               setFilterNameInput("");
-                            }
-                            if (e.key === "Escape") {
+                            }}
+                            className="h-7 px-3 rounded-md text-[11px] font-medium bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-600 hover:to-emerald-700 disabled:opacity-40 text-white transition-all shadow-sm"
+                          >
+                            OK
+                          </button>
+                          <button
+                            onClick={() => {
                               setShowSaveInput(false);
                               setFilterNameInput("");
-                            }
-                          }}
-                          placeholder={`Filtro ${savedFilters.length + 1}`}
-                          className="h-7 px-2 rounded-md text-[11px] border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-1 focus:ring-blue-400 w-36"
-                        />
-                        <button
-                          disabled={!filterNameInput.trim()}
-                          onClick={() => {
-                            const newId = `filter-${Date.now()}`;
-                            setSavedFilters([
-                              ...savedFilters,
-                              {
-                                id: newId,
-                                name: filterNameInput.trim(),
-                                filters: advancedFilters,
-                              },
-                            ]);
-                            setSelectedFilterId(newId);
-                            setUnsavedChanges(false);
-                            setShowSaveInput(false);
-                            setFilterNameInput("");
-                          }}
-                          className="h-7 px-3 rounded-md text-[11px] font-medium bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-600 hover:to-emerald-700 disabled:opacity-40 text-white transition-all shadow-sm"
-                        >
-                          OK
-                        </button>
-                        <button
-                          onClick={() => {
-                            setShowSaveInput(false);
-                            setFilterNameInput("");
-                          }}
-                          className="h-7 w-7 flex items-center justify-center rounded-md text-[11px] border border-slate-200 dark:border-slate-700 text-slate-400 hover:text-red-500 hover:border-red-300 transition-colors"
-                        >
-                          <X className="h-3 w-3" />
-                        </button>
-                      </div>
-                    ) : selectedFilterId && unsavedChanges ? (
-                      <div className="flex items-center gap-1.5">
-                        <button
-                          onClick={() => {
-                            setSavedFilters(
-                              savedFilters.map((f) =>
-                                f.id === selectedFilterId
-                                  ? { ...f, filters: advancedFilters }
-                                  : f,
-                              ),
-                            );
-                            setUnsavedChanges(false);
-                          }}
-                          className="h-7 px-3 rounded-md text-[11px] font-medium bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white transition-all shadow-sm"
-                        >
-                          Atualizar filtro
-                        </button>
+                            }}
+                            className="h-7 w-7 flex items-center justify-center rounded-md text-[11px] border border-slate-200 dark:border-slate-700 text-slate-400 hover:text-red-500 hover:border-red-300 transition-colors"
+                          >
+                            <X className="h-3 w-3" />
+                          </button>
+                        </div>
+                      ) : selectedFilterId && unsavedChanges ? (
+                        <div className="flex items-center gap-1.5">
+                          <button
+                            onClick={() => {
+                              setSavedFilters(
+                                savedFilters.map((f) =>
+                                  f.id === selectedFilterId
+                                    ? { ...f, filters: advancedFilters }
+                                    : f,
+                                ),
+                              );
+                              setUnsavedChanges(false);
+                            }}
+                            className="h-7 px-3 rounded-md text-[11px] font-medium bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white transition-all shadow-sm"
+                          >
+                            Atualizar filtro
+                          </button>
+                          <button
+                            onClick={() => {
+                              setFilterNameInput(
+                                `Filtro ${savedFilters.length + 1}`,
+                              );
+                              setShowSaveInput(true);
+                            }}
+                            className="h-7 px-3 rounded-md text-[11px] font-medium border border-emerald-400 text-emerald-600 hover:bg-emerald-50 transition-colors"
+                          >
+                            Salvar como novo
+                          </button>
+                        </div>
+                      ) : (
                         <button
                           onClick={() => {
                             setFilterNameInput(
@@ -4049,43 +4507,30 @@ export default function EmpresasPage() {
                             );
                             setShowSaveInput(true);
                           }}
-                          className="h-7 px-3 rounded-md text-[11px] font-medium border border-emerald-400 text-emerald-600 hover:bg-emerald-50 transition-colors"
+                          className="h-7 px-3 rounded-md text-[11px] font-medium bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-600 hover:to-emerald-700 text-white transition-all shadow-sm"
                         >
-                          Salvar como novo
+                          Salvar filtro
                         </button>
-                      </div>
-                    ) : (
+                      )}
+
+                      <div className="w-px h-5 bg-slate-200 dark:bg-slate-700" />
+
                       <button
-                        onClick={() => {
-                          setFilterNameInput(
-                            `Filtro ${savedFilters.length + 1}`,
-                          );
-                          setShowSaveInput(true);
-                        }}
-                        className="h-7 px-3 rounded-md text-[11px] font-medium bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-600 hover:to-emerald-700 text-white transition-all shadow-sm"
+                        onClick={() => closeFilterPanel(true)}
+                        className="h-7 px-3 rounded-md text-[11px] font-medium border border-slate-200 dark:border-slate-600 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
                       >
-                        Salvar filtro
+                        Cancelar
                       </button>
-                    )}
-
-                    <div className="w-px h-5 bg-slate-200 dark:bg-slate-700" />
-
-                    <button
-                      onClick={() => closeFilterPanel(true)}
-                      className="h-7 px-3 rounded-md text-[11px] font-medium border border-slate-200 dark:border-slate-600 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
-                    >
-                      Cancelar
-                    </button>
-                    <button
-                      onClick={() => closeFilterPanel(false)}
-                      className="h-7 px-4 rounded-md text-[11px] font-semibold btn-brand transition-all shadow-sm"
-                    >
-                      Aplicar Filtros
-                    </button>
+                      <button
+                        onClick={() => closeFilterPanel(false)}
+                        className="h-7 px-4 rounded-md text-[11px] font-semibold btn-brand transition-all shadow-sm"
+                      >
+                        Aplicar Filtros
+                      </button>
+                    </div>
                   </div>
-                </div>
-              }
-            >
+                }
+              >
                 {/* Body */}
                 <div className="flex flex-1 overflow-hidden min-h-0">
                   {/* Left — Saved Filters */}
@@ -4783,242 +5228,256 @@ export default function EmpresasPage() {
                     </div>
                   </div>
                 </div>
-            </StandardModalDialog>
-          );
-        })()}
-      {/* Configurar colunas — Popup 1 */}
-      {colConfigOpen && (
-        <StandardModalDialog
-          open={colConfigOpen}
-          onClose={closeColConfig}
-          title="Configurar colunas"
-          subtitle={`${visibleCols.size} de ${allColumns.length} visíveis`}
-          footer={
-            <div className="flex items-center justify-end gap-3 w-full">
-              <button
-                onClick={() => setVisibleCols(new Set(DEFAULT_VISIBLE_COLS))}
-                className="h-9 px-4 rounded-lg text-xs font-medium border border-slate-200 dark:border-slate-700 text-slate-500 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"
-              >
-                Restaurar padrão
-              </button>
-              <button
-                onClick={() => setVisibleCols(new Set(allColumns.map((c) => c.key)))}
-                className="h-9 px-4 rounded-lg text-xs font-semibold btn-brand transition-all"
-              >
-                Mostrar todas
-              </button>
-            </div>
-          }
-        >
-          <div className="flex-1 overflow-y-auto p-6">
-            <div className="max-w-3xl mx-auto grid grid-cols-1 sm:grid-cols-2 gap-2">
-              {allColumns.map((col) => (
-                <label
-                  key={col.key}
-                  className={`flex items-center gap-3 px-4 py-3 rounded-xl border cursor-pointer transition-colors ${
-                    visibleCols.has(col.key)
-                      ? "bg-blue-50 border-blue-200 dark:bg-blue-900/20 dark:border-blue-800"
-                      : "border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800"
-                  } ${col.required ? "opacity-60 pointer-events-none" : ""}`}
+              </StandardModalDialog>
+            );
+          })()}
+        {/* Configurar colunas — Popup 1 */}
+        {colConfigOpen && (
+          <StandardModalDialog
+            open={colConfigOpen}
+            onClose={closeColConfig}
+            title="Configurar colunas"
+            subtitle={`${visibleCols.size} de ${allColumns.length} visíveis`}
+            footer={
+              <div className="flex items-center justify-end gap-3 w-full">
+                <button
+                  onClick={() => setVisibleCols(new Set(DEFAULT_VISIBLE_COLS))}
+                  className="h-9 px-4 rounded-lg text-xs font-medium border border-slate-200 dark:border-slate-700 text-slate-500 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"
                 >
-                  <Checkbox
-                    checked={visibleCols.has(col.key)}
-                    onCheckedChange={() => !col.required && toggleCol(col.key)}
-                    disabled={col.required}
-                    className="h-4 w-4"
-                  />
-                  <div className="flex-1 min-w-0">
-                    <span className="text-sm font-medium text-slate-700 dark:text-slate-300">
-                      {col.label}
-                    </span>
-                    {COLUMN_INFO[col.key] && (
-                      <p className="text-[11px] text-slate-400 mt-0.5">
-                        {COLUMN_INFO[col.key]}
-                      </p>
-                    )}
-                  </div>
-                  {col.required && (
-                    <span className="text-[9px] text-slate-400 flex-shrink-0">
-                      obrigatória
-                    </span>
-                  )}
-                </label>
-              ))}
-            </div>
-          </div>
-        </StandardModalDialog>
-      )}
-
-      {/* Mais informações da empresa — Popup 1 (botão +) */}
-      {infoPanelCompany &&
-        (() => {
-          const company = infoPanelCompany;
-          return (
-            <StandardModalDialog
-              open={infoPanelOpen}
-              onClose={closeInfoPanel}
-              title={
-                <div className="flex items-center gap-3">
-                  <CompanyAvatar company={company} />
-                  <span className="truncate">{company.name}</span>
-                </div>
-              }
-              subtitle={`emp_${company.sequence_number ?? company.id} · ${company.location || "Localização não informada"}`}
-              footer={
-                <div className="flex items-center justify-end gap-2 w-full">
-                  <Button
-                    variant="outline"
-                    onClick={() => {
-                      closeInfoPanel();
-                      handleEditCompany(company);
-                    }}
+                  Restaurar padrão
+                </button>
+                <button
+                  onClick={() =>
+                    setVisibleCols(new Set(allColumns.map((c) => c.key)))
+                  }
+                  className="h-9 px-4 rounded-lg text-xs font-semibold btn-brand transition-all"
+                >
+                  Mostrar todas
+                </button>
+              </div>
+            }
+          >
+            <div className="flex-1 overflow-y-auto p-6">
+              <div className="max-w-3xl mx-auto grid grid-cols-1 sm:grid-cols-2 gap-2">
+                {allColumns.map((col) => (
+                  <label
+                    key={col.key}
+                    className={`flex items-center gap-3 px-4 py-3 rounded-xl border cursor-pointer transition-colors ${
+                      visibleCols.has(col.key)
+                        ? "bg-blue-50 border-blue-200 dark:bg-blue-900/20 dark:border-blue-800"
+                        : "border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800"
+                    } ${col.required ? "opacity-60 pointer-events-none" : ""}`}
                   >
-                    <Pencil className="h-3.5 w-3.5 mr-1.5" />
-                    Editar empresa
-                  </Button>
-                  {company.type === "nomad" ? (
-                    <>
-                      <Button
-                        variant="outline"
-                        className="border-amber-200 dark:border-amber-900/50 text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-950/30"
-                        onClick={() => {
-                          closeInfoPanel();
-                          requestToggleNomadStatus(company);
-                        }}
-                      >
-                        {company.status === "active" ? (
-                          <PauseCircle className="h-3.5 w-3.5 mr-1.5" />
-                        ) : (
-                          <CheckCircle className="h-3.5 w-3.5 mr-1.5" />
-                        )}
-                        {company.status === "active" ? "Desativar empresa Nomad" : "Reativar empresa Nomad"}
-                      </Button>
+                    <Checkbox
+                      checked={visibleCols.has(col.key)}
+                      onCheckedChange={() =>
+                        !col.required && toggleCol(col.key)
+                      }
+                      disabled={col.required}
+                      className="h-4 w-4"
+                    />
+                    <div className="flex-1 min-w-0">
+                      <span className="text-sm font-medium text-slate-700 dark:text-slate-300">
+                        {col.label}
+                      </span>
+                      {COLUMN_INFO[col.key] && (
+                        <p className="text-[11px] text-slate-400 mt-0.5">
+                          {COLUMN_INFO[col.key]}
+                        </p>
+                      )}
+                    </div>
+                    {col.required && (
+                      <span className="text-[9px] text-slate-400 flex-shrink-0">
+                        obrigatória
+                      </span>
+                    )}
+                  </label>
+                ))}
+              </div>
+            </div>
+          </StandardModalDialog>
+        )}
+
+        {/* Mais informações da empresa — Popup 1 (botão +) */}
+        {infoPanelCompany &&
+          (() => {
+            const company = infoPanelCompany;
+            return (
+              <StandardModalDialog
+                open={infoPanelOpen}
+                onClose={closeInfoPanel}
+                title={
+                  <div className="flex items-center gap-3">
+                    <CompanyAvatar company={company} />
+                    <span className="truncate">{company.name}</span>
+                  </div>
+                }
+                subtitle={`emp_${company.sequence_number ?? company.id} · ${company.location || "Localização não informada"}`}
+                footer={
+                  <div className="flex items-center justify-end gap-2 w-full">
+                    <Button
+                      variant="outline"
+                      onClick={() => {
+                        closeInfoPanel();
+                        handleEditCompany(company);
+                      }}
+                    >
+                      <Pencil className="h-3.5 w-3.5 mr-1.5" />
+                      Editar empresa
+                    </Button>
+                    {company.type === "nomad" ? (
+                      <>
+                        <Button
+                          variant="outline"
+                          className="border-amber-200 dark:border-amber-900/50 text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-950/30"
+                          onClick={() => {
+                            closeInfoPanel();
+                            requestToggleNomadStatus(company);
+                          }}
+                        >
+                          {company.status === "active" ? (
+                            <PauseCircle className="h-3.5 w-3.5 mr-1.5" />
+                          ) : (
+                            <CheckCircle className="h-3.5 w-3.5 mr-1.5" />
+                          )}
+                          {company.status === "active"
+                            ? "Desativar empresa Nomad"
+                            : "Reativar empresa Nomad"}
+                        </Button>
+                        <Button
+                          variant="outline"
+                          className="border-rose-200 dark:border-rose-900/50 text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/30"
+                          onClick={() => {
+                            closeInfoPanel();
+                            requestRemoveNomadProfile(company);
+                          }}
+                        >
+                          <Trash2 className="h-3.5 w-3.5 mr-1.5" />
+                          Excluir empresa Nomad
+                        </Button>
+                      </>
+                    ) : (
                       <Button
                         variant="outline"
                         className="border-rose-200 dark:border-rose-900/50 text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/30"
                         onClick={() => {
                           closeInfoPanel();
-                          requestRemoveNomadProfile(company);
+                          handleDeleteCompany(company.id);
                         }}
                       >
                         <Trash2 className="h-3.5 w-3.5 mr-1.5" />
-                        Excluir empresa Nomad
+                        Excluir empresa
                       </Button>
-                    </>
-                  ) : (
-                    <Button
-                      variant="outline"
-                      className="border-rose-200 dark:border-rose-900/50 text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/30"
-                      onClick={() => {
-                        closeInfoPanel();
-                        handleDeleteCompany(company.id);
-                      }}
-                    >
-                      <Trash2 className="h-3.5 w-3.5 mr-1.5" />
-                      Excluir empresa
-                    </Button>
-                  )}
-                </div>
-              }
-            >
-              <div className="flex-1 overflow-y-auto p-5">
-                <div className="max-w-3xl mx-auto space-y-6">
-                  {/* Dados completos da empresa */}
-                  <div>
-                    <h3 className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-3">
-                      Dados da empresa
-                    </h3>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                      <div className="rounded-xl border border-slate-200 dark:border-slate-700 p-3.5">
-                        <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide mb-1.5">
-                          Contato
-                        </p>
-                        <p className="flex items-center gap-1.5 text-sm text-slate-700 dark:text-slate-300">
-                          <Mail className="h-3.5 w-3.5 text-slate-400 flex-shrink-0" />
-                          {company.email || "—"}
-                        </p>
-                        <p className="flex items-center gap-1.5 text-sm text-slate-700 dark:text-slate-300 mt-1">
-                          <Phone className="h-3.5 w-3.5 text-slate-400 flex-shrink-0" />
-                          {company.phone || "—"}
-                        </p>
-                      </div>
-                      <div className="rounded-xl border border-slate-200 dark:border-slate-700 p-3.5">
-                        <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide mb-1.5">
-                          CNPJ · Usuários
-                        </p>
-                        <p className="flex items-center gap-1.5 text-sm font-mono text-slate-700 dark:text-slate-300">
-                          <Hash className="h-3.5 w-3.5 text-slate-400 flex-shrink-0" />
-                          {company.document || "—"}
-                        </p>
-                        <p className="flex items-center gap-1.5 text-sm text-slate-700 dark:text-slate-300 mt-1">
-                          <Users className="h-3.5 w-3.5 text-slate-400 flex-shrink-0" />
-                          {company.users_count} usuário
-                          {company.users_count !== 1 ? "s" : ""}
-                        </p>
-                      </div>
-                      <div className="rounded-xl border border-slate-200 dark:border-slate-700 p-3.5">
-                        <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide mb-1.5">
-                          Status
-                        </p>
-                        <span
-                          className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-bold border ${
-                            company.status === "active"
-                              ? "border-emerald-500 bg-emerald-200 text-emerald-900 dark:bg-emerald-800/70 dark:text-emerald-100"
+                    )}
+                  </div>
+                }
+              >
+                <div className="flex-1 overflow-y-auto p-5">
+                  <div className="max-w-3xl mx-auto space-y-6">
+                    {/* Dados completos da empresa */}
+                    <div>
+                      <h3 className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-3">
+                        Dados da empresa
+                      </h3>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div className="rounded-xl border border-slate-200 dark:border-slate-700 p-3.5">
+                          <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide mb-1.5">
+                            Contato
+                          </p>
+                          <p className="flex items-center gap-1.5 text-sm text-slate-700 dark:text-slate-300">
+                            <Mail className="h-3.5 w-3.5 text-slate-400 flex-shrink-0" />
+                            {company.email || "—"}
+                          </p>
+                          <p className="flex items-center gap-1.5 text-sm text-slate-700 dark:text-slate-300 mt-1">
+                            <Phone className="h-3.5 w-3.5 text-slate-400 flex-shrink-0" />
+                            {company.phone || "—"}
+                          </p>
+                        </div>
+                        <div className="rounded-xl border border-slate-200 dark:border-slate-700 p-3.5">
+                          <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide mb-1.5">
+                            CNPJ · Usuários
+                          </p>
+                          <p className="flex items-center gap-1.5 text-sm font-mono text-slate-700 dark:text-slate-300">
+                            <Hash className="h-3.5 w-3.5 text-slate-400 flex-shrink-0" />
+                            {company.document || "—"}
+                          </p>
+                          <p className="flex items-center gap-1.5 text-sm text-slate-700 dark:text-slate-300 mt-1">
+                            <Users className="h-3.5 w-3.5 text-slate-400 flex-shrink-0" />
+                            {company.users_count} usuário
+                            {company.users_count !== 1 ? "s" : ""}
+                          </p>
+                        </div>
+                        <div className="rounded-xl border border-slate-200 dark:border-slate-700 p-3.5">
+                          <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide mb-1.5">
+                            Status
+                          </p>
+                          <span
+                            className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-bold border ${
+                              company.status === "active"
+                                ? "border-emerald-500 bg-emerald-200 text-emerald-900 dark:bg-emerald-800/70 dark:text-emerald-100"
+                                : company.status === "inactive"
+                                  ? "border-slate-400 bg-slate-300 text-slate-800 dark:bg-slate-800 dark:text-slate-300"
+                                  : "border-amber-500 bg-amber-200 text-amber-900 dark:bg-amber-800/70 dark:text-amber-100"
+                            }`}
+                          >
+                            {company.status === "active"
+                              ? "Ativo"
                               : company.status === "inactive"
-                                ? "border-slate-400 bg-slate-300 text-slate-800 dark:bg-slate-800 dark:text-slate-300"
-                                : "border-amber-500 bg-amber-200 text-amber-900 dark:bg-amber-800/70 dark:text-amber-100"
-                          }`}
-                        >
-                          {company.status === "active"
-                            ? "Ativo"
-                            : company.status === "inactive"
-                              ? "Inativo"
-                              : "Pendente"}
-                        </span>
-                      </div>
-                      <div className="rounded-xl border border-slate-200 dark:border-slate-700 p-3.5">
-                        <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide mb-1.5">
-                          Plano · Tipo
-                        </p>
-                        <p className="text-sm text-slate-700 dark:text-slate-300 capitalize">
-                          {(company.partner_level || company.account_type || "—") +
-                            " · " +
-                            getTypeLabel(company.type)}
-                        </p>
-                      </div>
-                      <div className="rounded-xl border border-slate-200 dark:border-slate-700 p-3.5 sm:col-span-2">
-                        <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide mb-1.5">
-                          Membro desde
-                        </p>
-                        <p className="text-sm text-slate-700 dark:text-slate-300">
-                          {company.created_at
-                            ? new Date(company.created_at).toLocaleDateString("pt-BR")
-                            : "—"}
-                        </p>
+                                ? "Inativo"
+                                : "Pendente"}
+                          </span>
+                        </div>
+                        <div className="rounded-xl border border-slate-200 dark:border-slate-700 p-3.5">
+                          <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide mb-1.5">
+                            Plano · Tipo
+                          </p>
+                          <p className="text-sm text-slate-700 dark:text-slate-300 capitalize">
+                            {(company.partner_level ||
+                              company.account_type ||
+                              "—") +
+                              " · " +
+                              getTypeLabel(company.type)}
+                          </p>
+                        </div>
+                        <div className="rounded-xl border border-slate-200 dark:border-slate-700 p-3.5 sm:col-span-2">
+                          <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide mb-1.5">
+                            Membro desde
+                          </p>
+                          <p className="text-sm text-slate-700 dark:text-slate-300">
+                            {company.created_at
+                              ? new Date(company.created_at).toLocaleDateString(
+                                  "pt-BR",
+                                )
+                              : "—"}
+                          </p>
+                        </div>
                       </div>
                     </div>
-                  </div>
 
-                  {/* Projetos — contagem por etapa */}
-                  <div>
-                    <h3 className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-3">
-                      Projetos
-                    </h3>
-                    {infoPanelLoading ? (
-                      <p className="text-xs text-slate-400">Carregando...</p>
-                    ) : infoPanelSummary ? (
-                      <>
-                        <p className="text-sm text-slate-600 dark:text-slate-300 mb-3">
-                          <span className="text-2xl font-bold text-slate-800 dark:text-slate-100 mr-2">
-                            {infoPanelSummary.projects.total}
-                          </span>
-                          projeto{infoPanelSummary.projects.total !== 1 ? "s" : ""}{" "}
-                          no total
-                        </p>
-                        {infoPanelSummary.projects.total > 0 ? (
-                          <div className="flex flex-wrap gap-2">
-                            {Object.entries(infoPanelSummary.projects.byStatus).map(
-                              ([status, count]) => (
+                    {/* Projetos — contagem por etapa */}
+                    <div>
+                      <h3 className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-3">
+                        Projetos
+                      </h3>
+                      {infoPanelLoading ? (
+                        <p className="text-xs text-slate-400">Carregando...</p>
+                      ) : infoPanelSummary ? (
+                        <>
+                          <p className="text-sm text-slate-600 dark:text-slate-300 mb-3">
+                            <span className="text-2xl font-bold text-slate-800 dark:text-slate-100 mr-2">
+                              {infoPanelSummary.projects.total}
+                            </span>
+                            projeto
+                            {infoPanelSummary.projects.total !== 1
+                              ? "s"
+                              : ""}{" "}
+                            no total
+                          </p>
+                          {infoPanelSummary.projects.total > 0 ? (
+                            <div className="flex flex-wrap gap-2">
+                              {Object.entries(
+                                infoPanelSummary.projects.byStatus,
+                              ).map(([status, count]) => (
                                 <span
                                   key={status}
                                   className="inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold border border-slate-300 bg-slate-100 text-slate-700 dark:bg-slate-800 dark:border-slate-600 dark:text-slate-300"
@@ -5028,69 +5487,69 @@ export default function EmpresasPage() {
                                     {count}
                                   </span>
                                 </span>
-                              ),
-                            )}
-                          </div>
-                        ) : (
-                          <p className="text-xs text-slate-400">
-                            Nenhum projeto cadastrado para esta empresa.
-                          </p>
-                        )}
-                      </>
-                    ) : (
-                      <p className="text-xs text-slate-400">
-                        Não foi possível carregar os projetos.
-                      </p>
-                    )}
-                  </div>
-
-                  {/* Usuários */}
-                  <div>
-                    <h3 className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-3">
-                      Usuários vinculados
-                    </h3>
-                    {infoPanelLoading ? (
-                      <p className="text-xs text-slate-400">Carregando...</p>
-                    ) : infoPanelSummary && infoPanelSummary.users.length > 0 ? (
-                      <div className="space-y-2">
-                        {infoPanelSummary.users.map((u) => (
-                          <div
-                            key={u.id}
-                            className="flex items-center justify-between rounded-xl border border-slate-200 dark:border-slate-700 px-3.5 py-2.5"
-                          >
-                            <div className="min-w-0">
-                              <p className="text-sm font-medium text-slate-700 dark:text-slate-300 truncate">
-                                {u.name}
-                              </p>
-                              <p className="text-xs text-slate-400 truncate">
-                                {u.email}
-                              </p>
+                              ))}
                             </div>
-                            <span
-                              className={`flex-shrink-0 ml-3 inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-bold border ${
-                                u.is_active
-                                  ? "border-emerald-500 bg-emerald-200 text-emerald-900 dark:bg-emerald-800/70 dark:text-emerald-100"
-                                  : "border-slate-400 bg-slate-300 text-slate-800 dark:bg-slate-800 dark:text-slate-300"
-                              }`}
+                          ) : (
+                            <p className="text-xs text-slate-400">
+                              Nenhum projeto cadastrado para esta empresa.
+                            </p>
+                          )}
+                        </>
+                      ) : (
+                        <p className="text-xs text-slate-400">
+                          Não foi possível carregar os projetos.
+                        </p>
+                      )}
+                    </div>
+
+                    {/* Usuários */}
+                    <div>
+                      <h3 className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-3">
+                        Usuários vinculados
+                      </h3>
+                      {infoPanelLoading ? (
+                        <p className="text-xs text-slate-400">Carregando...</p>
+                      ) : infoPanelSummary &&
+                        infoPanelSummary.users.length > 0 ? (
+                        <div className="space-y-2">
+                          {infoPanelSummary.users.map((u) => (
+                            <div
+                              key={u.id}
+                              className="flex items-center justify-between rounded-xl border border-slate-200 dark:border-slate-700 px-3.5 py-2.5"
                             >
-                              {u.is_active ? "Ativo" : "Inativo"}
-                            </span>
-                          </div>
-                        ))}
-                      </div>
-                    ) : (
-                      <p className="text-xs text-slate-400">
-                        Nenhum usuário cadastrado para esta empresa.
-                      </p>
-                    )}
+                              <div className="min-w-0">
+                                <p className="text-sm font-medium text-slate-700 dark:text-slate-300 truncate">
+                                  {u.name}
+                                </p>
+                                <p className="text-xs text-slate-400 truncate">
+                                  {u.email}
+                                </p>
+                              </div>
+                              <span
+                                className={`flex-shrink-0 ml-3 inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-bold border ${
+                                  u.is_active
+                                    ? "border-emerald-500 bg-emerald-200 text-emerald-900 dark:bg-emerald-800/70 dark:text-emerald-100"
+                                    : "border-slate-400 bg-slate-300 text-slate-800 dark:bg-slate-800 dark:text-slate-300"
+                                }`}
+                              >
+                                {u.is_active ? "Ativo" : "Inativo"}
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <p className="text-xs text-slate-400">
+                          Nenhum usuário cadastrado para esta empresa.
+                        </p>
+                      )}
+                    </div>
                   </div>
                 </div>
-              </div>
-            </StandardModalDialog>
-          );
-        })()}
+              </StandardModalDialog>
+            );
+          })()}
 
-      {/* Nova Empresa — sempre com usuário principal (company_admin) obrigatório,
+        {/* Nova Empresa — sempre com usuário principal (company_admin) obrigatório,
           criado atomicamente junto (Tarefa 9/11). CompanyCreateSlidePanel (empresa
           sem usuário) continua existindo só para o "Cadastrar empresa" inline
           dentro da criação de projeto — não usado aqui de propósito.
@@ -5106,14 +5565,14 @@ export default function EmpresasPage() {
           Nunca fecha/descarta sozinha — só os botões explícitos (seta de
           voltar, X, Cancelar) fecham de fato, via
           handleCreateWithOwnerCancelOrBack. */}
-      <div
-        className={`admin-empresas-create absolute inset-0 z-20 min-h-0 flex flex-col overflow-hidden bg-white dark:bg-slate-900 rounded-2xl shadow-[0_24px_60px_-12px_rgba(0,0,0,0.35)] transition-all duration-300 ease-[cubic-bezier(0.32,0.72,0,1)] ${
-          createWithOwnerOpen && createWithOwnerFocused
-            ? "translate-x-0 scale-100 opacity-100"
-            : "translate-x-[6%] scale-[0.97] opacity-0 pointer-events-none"
-        }`}
-        aria-hidden={!createWithOwnerOpen || !createWithOwnerFocused}
-      >
+        <div
+          className={`admin-empresas-create absolute inset-0 z-20 min-h-0 flex flex-col overflow-hidden bg-white dark:bg-slate-900 rounded-2xl shadow-[0_24px_60px_-12px_rgba(0,0,0,0.35)] transition-all duration-300 ease-[cubic-bezier(0.32,0.72,0,1)] ${
+            createWithOwnerOpen && createWithOwnerFocused
+              ? "translate-x-0 scale-100 opacity-100"
+              : "translate-x-[6%] scale-[0.97] opacity-0 pointer-events-none"
+          }`}
+          aria-hidden={!createWithOwnerOpen || !createWithOwnerFocused}
+        >
           <div
             className="shrink-0 flex items-center gap-3 px-6 py-4 rounded-2xl"
             style={{
@@ -5151,475 +5610,675 @@ export default function EmpresasPage() {
                         : "border-white/40 bg-white/10 text-white/80 hover:bg-white/20 hover:text-white"
                     }`}
                   >
-                    <Pin className={`h-3.5 w-3.5 ${createPinned ? "fill-current" : ""}`} />
+                    <Pin
+                      className={`h-3.5 w-3.5 ${createPinned ? "fill-current" : ""}`}
+                    />
                   </button>
                 </TooltipTrigger>
                 <TooltipContent side="bottom" sideOffset={6}>
-                  {createPinned ? "Remover da Bandeja de Telas" : "Adicionar à Bandeja de Telas"}
+                  {createPinned
+                    ? "Remover da Bandeja de Telas"
+                    : "Adicionar à Bandeja de Telas"}
                 </TooltipContent>
               </Tooltip>
             </TooltipProvider>
           </div>
 
-          <div ref={createWithOwnerScrollRef} className="flex-1 min-h-0 overflow-y-auto py-5">
-          <div className="space-y-4">
-            <CreateTypeTabs
-              value={createWithOwnerForm.type}
-              onChange={(t) => {
-                setCreateWithOwnerForm((f) => ({ ...f, type: t }));
-                // Erro de nome de organização é por tipo (create-company-org-name
-                // vs create-agency-org-name) — some junto com a troca de aba pra
-                // não deixar o resumo de erro aceso sem nenhum campo vermelho visível.
-                clearCreateWithOwnerError("create-company-org-name");
-                clearCreateWithOwnerError("create-agency-org-name");
-              }}
-              getLabel={getTypeLabel}
-              getInfo={getTypeInfo}
-            />
+          <div
+            ref={createWithOwnerScrollRef}
+            className="flex-1 min-h-0 overflow-y-auto py-5"
+          >
+            <div className="space-y-4">
+              <CreateTypeTabs
+                value={createWithOwnerForm.type}
+                onChange={(t) => {
+                  setCreateWithOwnerForm((f) => ({ ...f, type: t }));
+                  // Erro de nome de organização é por tipo (create-company-org-name
+                  // vs create-agency-org-name) — some junto com a troca de aba pra
+                  // não deixar o resumo de erro aceso sem nenhum campo vermelho visível.
+                  clearCreateWithOwnerError("create-company-org-name");
+                  clearCreateWithOwnerError("create-agency-org-name");
+                }}
+                getLabel={getTypeLabel}
+                getInfo={getTypeInfo}
+              />
 
-            {createWithOwnerForm.type === "company" && (
-              <>
-                <CreateFormSection
-                  icon={Building2}
-                  title="Dados da Empresa"
-                  description="Informações principais da organização."
-                >
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                    <div className="space-y-2">
-                      <Label htmlFor="create-company-org-name">
-                        Nome da Empresa <span className="text-red-500">*</span>
-                      </Label>
-                      <Input
-                        id="create-company-org-name"
-                        placeholder="Ex: Acme Ltda"
-                        value={createWithOwnerForm.organizationName}
-                        onChange={(e) => {
-                          setCreateWithOwnerForm((f) => ({ ...f, organizationName: e.target.value }));
-                          clearCreateWithOwnerError("create-company-org-name");
-                        }}
-                        aria-invalid={!!createWithOwnerErrors["create-company-org-name"]}
-                        aria-describedby={createWithOwnerErrors["create-company-org-name"] ? "create-company-org-name-error" : undefined}
-                      />
-                      <CreateFieldError id="create-company-org-name" message={createWithOwnerErrors["create-company-org-name"]} />
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="create-company-cnpj">CNPJ</Label>
-                      <Input
-                        id="create-company-cnpj"
-                        placeholder="00.000.000/0000-00"
-                        value={createWithOwnerForm.companyCnpj}
-                        onChange={(e) => setCreateWithOwnerForm((f) => ({ ...f, companyCnpj: e.target.value }))}
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="create-company-phone-biz">Telefone da empresa</Label>
-                      <Input
-                        id="create-company-phone-biz"
-                        placeholder="+55 11 3000-0000"
-                        value={createWithOwnerForm.companyPhone}
-                        onChange={(e) => setCreateWithOwnerForm((f) => ({ ...f, companyPhone: e.target.value }))}
-                      />
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                    <div className="space-y-2">
-                      <Label htmlFor="create-company-website">Website</Label>
-                      <Input
-                        id="create-company-website"
-                        placeholder="https://empresa.com"
-                        value={createWithOwnerForm.companyWebsite}
-                        onChange={(e) => setCreateWithOwnerForm((f) => ({ ...f, companyWebsite: e.target.value }))}
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="create-company-segment">Segmento</Label>
-                      <Input
-                        id="create-company-segment"
-                        placeholder="Ex: Varejo, Educação, Saúde..."
-                        value={createWithOwnerForm.companySegment}
-                        onChange={(e) => setCreateWithOwnerForm((f) => ({ ...f, companySegment: e.target.value }))}
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="create-company-status">Status</Label>
-                      <Select
-                        value={createWithOwnerForm.companyStatus}
-                        onValueChange={(v) => setCreateWithOwnerForm((f) => ({ ...f, companyStatus: v }))}
-                      >
-                        <SelectTrigger id="create-company-status">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="ativo">Ativo</SelectItem>
-                          <SelectItem value="inativo">Inativo</SelectItem>
-                          <SelectItem value="prospecto">Prospecto</SelectItem>
-                          <SelectItem value="inadimplente">Inadimplente</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label>Logo da empresa (opcional)</Label>
-                    <div className="flex items-center gap-3">
-                      <div className="h-9 w-9 rounded-full overflow-hidden flex-shrink-0 bg-gradient-to-br from-blue-500 to-blue-700 flex items-center justify-center shadow-sm">
-                        {createWithOwnerForm.companyLogo ? (
-                          <img src={createWithOwnerForm.companyLogo} alt="Logo" className="h-full w-full object-cover" />
-                        ) : (
-                          <Building2 className="h-4 w-4 text-white" />
-                        )}
+              {createWithOwnerForm.type === "company" && (
+                <>
+                  <CreateFormSection
+                    icon={Building2}
+                    title="Dados da Empresa"
+                    description="Informações principais da organização."
+                  >
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                      <div className="space-y-2">
+                        <Label htmlFor="create-company-org-name">
+                          Nome da Empresa{" "}
+                          <span className="text-red-500">*</span>
+                        </Label>
+                        <Input
+                          id="create-company-org-name"
+                          placeholder="Ex: Acme Ltda"
+                          value={createWithOwnerForm.organizationName}
+                          onChange={(e) => {
+                            setCreateWithOwnerForm((f) => ({
+                              ...f,
+                              organizationName: e.target.value,
+                            }));
+                            clearCreateWithOwnerError(
+                              "create-company-org-name",
+                            );
+                          }}
+                          aria-invalid={
+                            !!createWithOwnerErrors["create-company-org-name"]
+                          }
+                          aria-describedby={
+                            createWithOwnerErrors["create-company-org-name"]
+                              ? "create-company-org-name-error"
+                              : undefined
+                          }
+                        />
+                        <CreateFieldError
+                          id="create-company-org-name"
+                          message={
+                            createWithOwnerErrors["create-company-org-name"]
+                          }
+                        />
                       </div>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        onClick={() => createWithOwnerAvatarInputRef.current?.click()}
-                      >
-                        <Camera className="h-3.5 w-3.5 mr-1" /> Escolher
-                      </Button>
-                      <input
-                        ref={createWithOwnerAvatarInputRef}
-                        type="file"
-                        accept="image/*"
-                        onChange={handleCreateWithOwnerLogoUpload}
-                        className="hidden"
+                      <div className="space-y-2">
+                        <Label htmlFor="create-company-cnpj">CNPJ</Label>
+                        <Input
+                          id="create-company-cnpj"
+                          placeholder="00.000.000/0000-00"
+                          value={createWithOwnerForm.companyCnpj}
+                          onChange={(e) =>
+                            setCreateWithOwnerForm((f) => ({
+                              ...f,
+                              companyCnpj: e.target.value,
+                            }))
+                          }
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="create-company-phone-biz">
+                          Telefone da empresa
+                        </Label>
+                        <Input
+                          id="create-company-phone-biz"
+                          placeholder="+55 11 3000-0000"
+                          value={createWithOwnerForm.companyPhone}
+                          onChange={(e) =>
+                            setCreateWithOwnerForm((f) => ({
+                              ...f,
+                              companyPhone: e.target.value,
+                            }))
+                          }
+                        />
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                      <div className="space-y-2">
+                        <Label htmlFor="create-company-website">Website</Label>
+                        <Input
+                          id="create-company-website"
+                          placeholder="https://empresa.com"
+                          value={createWithOwnerForm.companyWebsite}
+                          onChange={(e) =>
+                            setCreateWithOwnerForm((f) => ({
+                              ...f,
+                              companyWebsite: e.target.value,
+                            }))
+                          }
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="create-company-segment">Segmento</Label>
+                        <Input
+                          id="create-company-segment"
+                          placeholder="Ex: Varejo, Educação, Saúde..."
+                          value={createWithOwnerForm.companySegment}
+                          onChange={(e) =>
+                            setCreateWithOwnerForm((f) => ({
+                              ...f,
+                              companySegment: e.target.value,
+                            }))
+                          }
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="create-company-status">Status</Label>
+                        <Select
+                          value={createWithOwnerForm.companyStatus}
+                          onValueChange={(v) =>
+                            setCreateWithOwnerForm((f) => ({
+                              ...f,
+                              companyStatus: v,
+                            }))
+                          }
+                        >
+                          <SelectTrigger id="create-company-status">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="ativo">Ativo</SelectItem>
+                            <SelectItem value="inativo">Inativo</SelectItem>
+                            <SelectItem value="prospecto">Prospecto</SelectItem>
+                            <SelectItem value="inadimplente">
+                              Inadimplente
+                            </SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label>Logo da empresa (opcional)</Label>
+                      <div className="flex items-center gap-3">
+                        <div className="h-9 w-9 rounded-full overflow-hidden flex-shrink-0 bg-gradient-to-br from-blue-500 to-blue-700 flex items-center justify-center shadow-sm">
+                          {createWithOwnerForm.companyLogo ? (
+                            <img
+                              src={createWithOwnerForm.companyLogo}
+                              alt="Logo"
+                              className="h-full w-full object-cover"
+                            />
+                          ) : (
+                            <Building2 className="h-4 w-4 text-white" />
+                          )}
+                        </div>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={() =>
+                            createWithOwnerAvatarInputRef.current?.click()
+                          }
+                        >
+                          <Camera className="h-3.5 w-3.5 mr-1" /> Escolher
+                        </Button>
+                        <input
+                          ref={createWithOwnerAvatarInputRef}
+                          type="file"
+                          accept="image/*"
+                          onChange={handleCreateWithOwnerLogoUpload}
+                          className="hidden"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label htmlFor="create-company-description">
+                        Descrição (opcional)
+                      </Label>
+                      <Textarea
+                        id="create-company-description"
+                        placeholder="Breve descrição sobre a empresa..."
+                        className="h-20"
+                        value={createWithOwnerForm.companyDescription}
+                        onChange={(e) =>
+                          setCreateWithOwnerForm((f) => ({
+                            ...f,
+                            companyDescription: e.target.value,
+                          }))
+                        }
                       />
                     </div>
-                  </div>
+                  </CreateFormSection>
 
-                  <div className="space-y-2">
-                    <Label htmlFor="create-company-description">Descrição (opcional)</Label>
-                    <Textarea
-                      id="create-company-description"
-                      placeholder="Breve descrição sobre a empresa..."
-                      className="h-20"
-                      value={createWithOwnerForm.companyDescription}
-                      onChange={(e) => setCreateWithOwnerForm((f) => ({ ...f, companyDescription: e.target.value }))}
+                  <CreateFormSection
+                    icon={MapPin}
+                    title="Endereço"
+                    description="Localização da empresa."
+                  >
+                    <CreateWithOwnerAddressFields
+                      prefix="company"
+                      form={createWithOwnerForm}
+                      setForm={setCreateWithOwnerForm}
+                      cepLoading={createWithOwnerCepLoading}
+                      cepError={createWithOwnerCepError}
+                      onCepChange={handleCreateWithOwnerCepChange}
                     />
-                  </div>
-                </CreateFormSection>
+                  </CreateFormSection>
 
-                <CreateFormSection icon={MapPin} title="Endereço" description="Localização da empresa.">
-                  <CreateWithOwnerAddressFields
-                    prefix="company"
-                    form={createWithOwnerForm}
-                    setForm={setCreateWithOwnerForm}
-                    cepLoading={createWithOwnerCepLoading}
-                    cepError={createWithOwnerCepError}
-                    onCepChange={handleCreateWithOwnerCepChange}
-                  />
-                </CreateFormSection>
-
-                <CreateFormSection icon={Wallet} title="Dados Financeiros" description="Informações de recebimento via Pix.">
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    <div className="space-y-2">
-                      <Label htmlFor="create-company-pix-key">Chave PIX</Label>
-                      <Input
-                        id="create-company-pix-key"
-                        placeholder="CPF, CNPJ, e-mail, telefone ou chave aleatória"
-                        value={createWithOwnerForm.companyPixKey}
-                        onChange={(e) => setCreateWithOwnerForm((f) => ({ ...f, companyPixKey: e.target.value }))}
-                      />
+                  <CreateFormSection
+                    icon={Wallet}
+                    title="Dados Financeiros"
+                    description="Informações de recebimento via Pix."
+                  >
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <div className="space-y-2">
+                        <Label htmlFor="create-company-pix-key">
+                          Chave PIX
+                        </Label>
+                        <Input
+                          id="create-company-pix-key"
+                          placeholder="CPF, CNPJ, e-mail, telefone ou chave aleatória"
+                          value={createWithOwnerForm.companyPixKey}
+                          onChange={(e) =>
+                            setCreateWithOwnerForm((f) => ({
+                              ...f,
+                              companyPixKey: e.target.value,
+                            }))
+                          }
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="create-company-pix-key-type">
+                          Tipo de chave PIX
+                        </Label>
+                        <Select
+                          value={createWithOwnerForm.companyPixKeyType}
+                          onValueChange={(v) =>
+                            setCreateWithOwnerForm((f) => ({
+                              ...f,
+                              companyPixKeyType: v,
+                            }))
+                          }
+                        >
+                          <SelectTrigger id="create-company-pix-key-type">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="cpf">CPF</SelectItem>
+                            <SelectItem value="cnpj">CNPJ</SelectItem>
+                            <SelectItem value="email">E-mail</SelectItem>
+                            <SelectItem value="phone">Telefone</SelectItem>
+                            <SelectItem value="random">Aleatória</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
                     </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="create-company-pix-key-type">Tipo de chave PIX</Label>
+                  </CreateFormSection>
+                </>
+              )}
+
+              {createWithOwnerForm.type === "agency" && (
+                <>
+                  <CreateFormSection
+                    icon={Briefcase}
+                    title="Dados da Agência"
+                    description="Informações principais da agência."
+                  >
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                      <div className="space-y-2">
+                        <Label htmlFor="create-agency-org-name">
+                          Nome da Agência{" "}
+                          <span className="text-red-500">*</span>
+                        </Label>
+                        <Input
+                          id="create-agency-org-name"
+                          placeholder="Ex: Agência Acme"
+                          value={createWithOwnerForm.organizationName}
+                          onChange={(e) => {
+                            setCreateWithOwnerForm((f) => ({
+                              ...f,
+                              organizationName: e.target.value,
+                            }));
+                            clearCreateWithOwnerError("create-agency-org-name");
+                          }}
+                          aria-invalid={
+                            !!createWithOwnerErrors["create-agency-org-name"]
+                          }
+                          aria-describedby={
+                            createWithOwnerErrors["create-agency-org-name"]
+                              ? "create-agency-org-name-error"
+                              : undefined
+                          }
+                        />
+                        <CreateFieldError
+                          id="create-agency-org-name"
+                          message={
+                            createWithOwnerErrors["create-agency-org-name"]
+                          }
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="create-agency-cnpj">CNPJ</Label>
+                        <Input
+                          id="create-agency-cnpj"
+                          placeholder="00.000.000/0000-00"
+                          value={createWithOwnerForm.agencyCnpj}
+                          onChange={(e) =>
+                            setCreateWithOwnerForm((f) => ({
+                              ...f,
+                              agencyCnpj: e.target.value,
+                            }))
+                          }
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="create-agency-phone">
+                          Telefone da agência
+                        </Label>
+                        <Input
+                          id="create-agency-phone"
+                          placeholder="+55 11 3000-0000"
+                          value={createWithOwnerForm.agencyPhone}
+                          onChange={(e) =>
+                            setCreateWithOwnerForm((f) => ({
+                              ...f,
+                              agencyPhone: e.target.value,
+                            }))
+                          }
+                        />
+                      </div>
+                    </div>
+                    <div className="space-y-2 max-w-xs">
+                      <Label htmlFor="create-agency-status">Status</Label>
                       <Select
-                        value={createWithOwnerForm.companyPixKeyType}
-                        onValueChange={(v) => setCreateWithOwnerForm((f) => ({ ...f, companyPixKeyType: v }))}
+                        value={createWithOwnerForm.agencyStatus}
+                        onValueChange={(v) =>
+                          setCreateWithOwnerForm((f) => ({
+                            ...f,
+                            agencyStatus: v,
+                          }))
+                        }
                       >
-                        <SelectTrigger id="create-company-pix-key-type">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="cpf">CPF</SelectItem>
-                          <SelectItem value="cnpj">CNPJ</SelectItem>
-                          <SelectItem value="email">E-mail</SelectItem>
-                          <SelectItem value="phone">Telefone</SelectItem>
-                          <SelectItem value="random">Aleatória</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                  </div>
-                </CreateFormSection>
-              </>
-            )}
-
-            {createWithOwnerForm.type === "agency" && (
-              <>
-                <CreateFormSection
-                  icon={Briefcase}
-                  title="Dados da Agência"
-                  description="Informações principais da agência."
-                >
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                    <div className="space-y-2">
-                      <Label htmlFor="create-agency-org-name">
-                        Nome da Agência <span className="text-red-500">*</span>
-                      </Label>
-                      <Input
-                        id="create-agency-org-name"
-                        placeholder="Ex: Agência Acme"
-                        value={createWithOwnerForm.organizationName}
-                        onChange={(e) => {
-                          setCreateWithOwnerForm((f) => ({ ...f, organizationName: e.target.value }));
-                          clearCreateWithOwnerError("create-agency-org-name");
-                        }}
-                        aria-invalid={!!createWithOwnerErrors["create-agency-org-name"]}
-                        aria-describedby={createWithOwnerErrors["create-agency-org-name"] ? "create-agency-org-name-error" : undefined}
-                      />
-                      <CreateFieldError id="create-agency-org-name" message={createWithOwnerErrors["create-agency-org-name"]} />
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="create-agency-cnpj">CNPJ</Label>
-                      <Input
-                        id="create-agency-cnpj"
-                        placeholder="00.000.000/0000-00"
-                        value={createWithOwnerForm.agencyCnpj}
-                        onChange={(e) => setCreateWithOwnerForm((f) => ({ ...f, agencyCnpj: e.target.value }))}
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="create-agency-phone">Telefone da agência</Label>
-                      <Input
-                        id="create-agency-phone"
-                        placeholder="+55 11 3000-0000"
-                        value={createWithOwnerForm.agencyPhone}
-                        onChange={(e) => setCreateWithOwnerForm((f) => ({ ...f, agencyPhone: e.target.value }))}
-                      />
-                    </div>
-                  </div>
-                  <div className="space-y-2 max-w-xs">
-                    <Label htmlFor="create-agency-status">Status</Label>
-                    <Select
-                      value={createWithOwnerForm.agencyStatus}
-                      onValueChange={(v) => setCreateWithOwnerForm((f) => ({ ...f, agencyStatus: v }))}
-                    >
-                      <SelectTrigger id="create-agency-status">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="ativo">Ativo</SelectItem>
-                        <SelectItem value="inativo">Inativo</SelectItem>
-                        <SelectItem value="pendente">Pendente</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </CreateFormSection>
-
-                <CreateFormSection icon={MapPin} title="Endereço" description="Localização da agência.">
-                  <CreateWithOwnerAddressFields
-                    prefix="agency"
-                    form={createWithOwnerForm}
-                    setForm={setCreateWithOwnerForm}
-                    cepLoading={createWithOwnerCepLoading}
-                    cepError={createWithOwnerCepError}
-                    onCepChange={handleCreateWithOwnerCepChange}
-                  />
-                </CreateFormSection>
-
-                <CreateFormSection icon={Wallet} title="Dados Financeiros" description="Informações de recebimento via Pix.">
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    <div className="space-y-2">
-                      <Label htmlFor="create-agency-pix-key">Chave PIX</Label>
-                      <Input
-                        id="create-agency-pix-key"
-                        placeholder="CPF, CNPJ, e-mail, telefone ou chave aleatória"
-                        value={createWithOwnerForm.agencyPixKey}
-                        onChange={(e) => setCreateWithOwnerForm((f) => ({ ...f, agencyPixKey: e.target.value }))}
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="create-agency-pix-key-type">Tipo de chave PIX</Label>
-                      <Select
-                        value={createWithOwnerForm.agencyPixKeyType}
-                        onValueChange={(v) => setCreateWithOwnerForm((f) => ({ ...f, agencyPixKeyType: v }))}
-                      >
-                        <SelectTrigger id="create-agency-pix-key-type">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="cpf">CPF</SelectItem>
-                          <SelectItem value="cnpj">CNPJ</SelectItem>
-                          <SelectItem value="email">E-mail</SelectItem>
-                          <SelectItem value="phone">Telefone</SelectItem>
-                          <SelectItem value="random">Aleatória</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                  </div>
-                </CreateFormSection>
-              </>
-            )}
-
-            {createWithOwnerForm.type === "nomad" && (
-              <>
-                <CreateFormSection
-                  icon={MapPin}
-                  title="Dados do Nômade"
-                  description="Contato e situação atual na plataforma."
-                >
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    <div className="space-y-2">
-                      <Label htmlFor="create-nomad-cnpj">
-                        CNPJ <span className="text-red-500">*</span>
-                      </Label>
-                      <Input
-                        id="create-nomad-cnpj"
-                        placeholder="00.000.000/0001-00"
-                        value={createWithOwnerForm.nomadCnpj}
-                        onChange={(e) => {
-                          setCreateWithOwnerForm((f) => ({ ...f, nomadCnpj: e.target.value }));
-                          clearCreateWithOwnerError("create-nomad-cnpj");
-                        }}
-                        aria-invalid={!!createWithOwnerErrors["create-nomad-cnpj"]}
-                        aria-describedby={createWithOwnerErrors["create-nomad-cnpj"] ? "create-nomad-cnpj-error" : undefined}
-                      />
-                      <CreateFieldError id="create-nomad-cnpj" message={createWithOwnerErrors["create-nomad-cnpj"]} />
-                      <p className="text-[11px] text-slate-400">
-                        Obrigatório para prestar serviços à plataforma.
-                      </p>
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="create-nomad-whatsapp">WhatsApp</Label>
-                      <Input
-                        id="create-nomad-whatsapp"
-                        placeholder="+55 11 98765-4321"
-                        value={createWithOwnerForm.nomadWhatsapp}
-                        onChange={(e) => setCreateWithOwnerForm((f) => ({ ...f, nomadWhatsapp: e.target.value }))}
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="create-nomad-status">Status</Label>
-                      <Select
-                        value={createWithOwnerForm.nomadStatus}
-                        onValueChange={(v) => setCreateWithOwnerForm((f) => ({ ...f, nomadStatus: v }))}
-                      >
-                        <SelectTrigger id="create-nomad-status">
+                        <SelectTrigger id="create-agency-status">
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
                           <SelectItem value="ativo">Ativo</SelectItem>
                           <SelectItem value="inativo">Inativo</SelectItem>
-                          <SelectItem value="aguardando_aprovacao">Aguardando aprovação</SelectItem>
-                          <SelectItem value="reprovado">Reprovado</SelectItem>
-                          <SelectItem value="pausado">Pausado</SelectItem>
+                          <SelectItem value="pendente">Pendente</SelectItem>
                         </SelectContent>
                       </Select>
                     </div>
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Foto de perfil (opcional)</Label>
-                    <div className="flex items-center gap-3">
-                      <div className="h-12 w-12 rounded-full overflow-hidden flex-shrink-0 bg-gradient-to-br from-blue-500 to-blue-700 flex items-center justify-center shadow-sm">
-                        {createWithOwnerForm.nomadAvatar ? (
-                          <img src={createWithOwnerForm.nomadAvatar} alt="Foto" className="h-full w-full object-cover" />
-                        ) : (
-                          <Users className="h-5 w-5 text-white" />
-                        )}
+                  </CreateFormSection>
+
+                  <CreateFormSection
+                    icon={MapPin}
+                    title="Endereço"
+                    description="Localização da agência."
+                  >
+                    <CreateWithOwnerAddressFields
+                      prefix="agency"
+                      form={createWithOwnerForm}
+                      setForm={setCreateWithOwnerForm}
+                      cepLoading={createWithOwnerCepLoading}
+                      cepError={createWithOwnerCepError}
+                      onCepChange={handleCreateWithOwnerCepChange}
+                    />
+                  </CreateFormSection>
+
+                  <CreateFormSection
+                    icon={Wallet}
+                    title="Dados Financeiros"
+                    description="Informações de recebimento via Pix."
+                  >
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <div className="space-y-2">
+                        <Label htmlFor="create-agency-pix-key">Chave PIX</Label>
+                        <Input
+                          id="create-agency-pix-key"
+                          placeholder="CPF, CNPJ, e-mail, telefone ou chave aleatória"
+                          value={createWithOwnerForm.agencyPixKey}
+                          onChange={(e) =>
+                            setCreateWithOwnerForm((f) => ({
+                              ...f,
+                              agencyPixKey: e.target.value,
+                            }))
+                          }
+                        />
                       </div>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        onClick={() => createWithOwnerNomadAvatarInputRef.current?.click()}
-                      >
-                        <Camera className="h-3.5 w-3.5 mr-1" /> Escolher imagem
-                      </Button>
-                      <input
-                        ref={createWithOwnerNomadAvatarInputRef}
-                        type="file"
-                        accept="image/*"
-                        onChange={handleCreateWithOwnerNomadAvatarUpload}
-                        className="hidden"
-                      />
+                      <div className="space-y-2">
+                        <Label htmlFor="create-agency-pix-key-type">
+                          Tipo de chave PIX
+                        </Label>
+                        <Select
+                          value={createWithOwnerForm.agencyPixKeyType}
+                          onValueChange={(v) =>
+                            setCreateWithOwnerForm((f) => ({
+                              ...f,
+                              agencyPixKeyType: v,
+                            }))
+                          }
+                        >
+                          <SelectTrigger id="create-agency-pix-key-type">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="cpf">CPF</SelectItem>
+                            <SelectItem value="cnpj">CNPJ</SelectItem>
+                            <SelectItem value="email">E-mail</SelectItem>
+                            <SelectItem value="phone">Telefone</SelectItem>
+                            <SelectItem value="random">Aleatória</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
                     </div>
-                  </div>
-                </CreateFormSection>
+                  </CreateFormSection>
+                </>
+              )}
 
-                {usuarioPrincipalSection}
-
-                <CreateFormSection
-                  icon={Award}
-                  title="Dados Profissionais"
-                  description="Nível de experiência na plataforma."
-                >
-                  <div className="max-w-xs space-y-2">
-                    <Label htmlFor="create-nomad-level">Nível</Label>
-                    <Select
-                      value={createWithOwnerForm.nomadLevel}
-                      onValueChange={(v) => setCreateWithOwnerForm((f) => ({ ...f, nomadLevel: v }))}
-                    >
-                      <SelectTrigger id="create-nomad-level">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="bronze">Bronze</SelectItem>
-                        <SelectItem value="silver">Silver</SelectItem>
-                        <SelectItem value="gold">Gold</SelectItem>
-                        <SelectItem value="platinum">Platinum</SelectItem>
-                        <SelectItem value="diamond">Diamond</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </CreateFormSection>
-
-                <CreateFormSection icon={MapPin} title="Endereço" description="Localização do nômade.">
-                  <CreateWithOwnerAddressFields
-                    prefix="nomad"
-                    form={createWithOwnerForm}
-                    setForm={setCreateWithOwnerForm}
-                    cepLoading={createWithOwnerCepLoading}
-                    cepError={createWithOwnerCepError}
-                    onCepChange={handleCreateWithOwnerCepChange}
-                  />
-                </CreateFormSection>
-
-                <CreateFormSection icon={Wallet} title="Dados Financeiros" description="Informações de recebimento via Pix.">
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    <div className="space-y-2">
-                      <Label htmlFor="create-nomad-pix-key">Chave PIX</Label>
-                      <Input
-                        id="create-nomad-pix-key"
-                        placeholder="CPF, e-mail, telefone ou chave aleatória"
-                        value={createWithOwnerForm.nomadPixKey}
-                        onChange={(e) => setCreateWithOwnerForm((f) => ({ ...f, nomadPixKey: e.target.value }))}
-                      />
+              {createWithOwnerForm.type === "nomad" && (
+                <>
+                  <CreateFormSection
+                    icon={MapPin}
+                    title="Dados do Nômade"
+                    description="Contato e situação atual na plataforma."
+                  >
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <div className="space-y-2">
+                        <Label htmlFor="create-nomad-cnpj">
+                          CNPJ <span className="text-red-500">*</span>
+                        </Label>
+                        <Input
+                          id="create-nomad-cnpj"
+                          placeholder="00.000.000/0001-00"
+                          value={createWithOwnerForm.nomadCnpj}
+                          onChange={(e) => {
+                            setCreateWithOwnerForm((f) => ({
+                              ...f,
+                              nomadCnpj: e.target.value,
+                            }));
+                            clearCreateWithOwnerError("create-nomad-cnpj");
+                          }}
+                          aria-invalid={
+                            !!createWithOwnerErrors["create-nomad-cnpj"]
+                          }
+                          aria-describedby={
+                            createWithOwnerErrors["create-nomad-cnpj"]
+                              ? "create-nomad-cnpj-error"
+                              : undefined
+                          }
+                        />
+                        <CreateFieldError
+                          id="create-nomad-cnpj"
+                          message={createWithOwnerErrors["create-nomad-cnpj"]}
+                        />
+                        <p className="text-[11px] text-slate-400">
+                          Obrigatório para prestar serviços à plataforma.
+                        </p>
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="create-nomad-whatsapp">WhatsApp</Label>
+                        <Input
+                          id="create-nomad-whatsapp"
+                          placeholder="+55 11 98765-4321"
+                          value={createWithOwnerForm.nomadWhatsapp}
+                          onChange={(e) =>
+                            setCreateWithOwnerForm((f) => ({
+                              ...f,
+                              nomadWhatsapp: e.target.value,
+                            }))
+                          }
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="create-nomad-status">Status</Label>
+                        <Select
+                          value={createWithOwnerForm.nomadStatus}
+                          onValueChange={(v) =>
+                            setCreateWithOwnerForm((f) => ({
+                              ...f,
+                              nomadStatus: v,
+                            }))
+                          }
+                        >
+                          <SelectTrigger id="create-nomad-status">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="ativo">Ativo</SelectItem>
+                            <SelectItem value="inativo">Inativo</SelectItem>
+                            <SelectItem value="aguardando_aprovacao">
+                              Aguardando aprovação
+                            </SelectItem>
+                            <SelectItem value="reprovado">Reprovado</SelectItem>
+                            <SelectItem value="pausado">Pausado</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
                     </div>
                     <div className="space-y-2">
-                      <Label htmlFor="create-nomad-pix-key-type">Tipo de chave PIX</Label>
+                      <Label>Foto de perfil (opcional)</Label>
+                      <div className="flex items-center gap-3">
+                        <div className="h-12 w-12 rounded-full overflow-hidden flex-shrink-0 bg-gradient-to-br from-blue-500 to-blue-700 flex items-center justify-center shadow-sm">
+                          {createWithOwnerForm.nomadAvatar ? (
+                            <img
+                              src={createWithOwnerForm.nomadAvatar}
+                              alt="Foto"
+                              className="h-full w-full object-cover"
+                            />
+                          ) : (
+                            <Users className="h-5 w-5 text-white" />
+                          )}
+                        </div>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={() =>
+                            createWithOwnerNomadAvatarInputRef.current?.click()
+                          }
+                        >
+                          <Camera className="h-3.5 w-3.5 mr-1" /> Escolher
+                          imagem
+                        </Button>
+                        <input
+                          ref={createWithOwnerNomadAvatarInputRef}
+                          type="file"
+                          accept="image/*"
+                          onChange={handleCreateWithOwnerNomadAvatarUpload}
+                          className="hidden"
+                        />
+                      </div>
+                    </div>
+                  </CreateFormSection>
+
+                  {usuarioPrincipalSection}
+
+                  <CreateFormSection
+                    icon={Award}
+                    title="Dados Profissionais"
+                    description="Nível de experiência na plataforma."
+                  >
+                    <div className="max-w-xs space-y-2">
+                      <Label htmlFor="create-nomad-level">Nível</Label>
                       <Select
-                        value={createWithOwnerForm.nomadPixKeyType}
-                        onValueChange={(v) => setCreateWithOwnerForm((f) => ({ ...f, nomadPixKeyType: v }))}
+                        value={createWithOwnerForm.nomadLevel}
+                        onValueChange={(v) =>
+                          setCreateWithOwnerForm((f) => ({
+                            ...f,
+                            nomadLevel: v,
+                          }))
+                        }
                       >
-                        <SelectTrigger id="create-nomad-pix-key-type">
+                        <SelectTrigger id="create-nomad-level">
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="cpf">CPF</SelectItem>
-                          <SelectItem value="email">E-mail</SelectItem>
-                          <SelectItem value="phone">Telefone</SelectItem>
-                          <SelectItem value="random">Aleatória</SelectItem>
+                          <SelectItem value="bronze">Bronze</SelectItem>
+                          <SelectItem value="silver">Silver</SelectItem>
+                          <SelectItem value="gold">Gold</SelectItem>
+                          <SelectItem value="platinum">Platinum</SelectItem>
+                          <SelectItem value="diamond">Diamond</SelectItem>
                         </SelectContent>
                       </Select>
                     </div>
-                  </div>
-                </CreateFormSection>
-              </>
-            )}
+                  </CreateFormSection>
 
-            {createWithOwnerForm.type !== "nomad" && usuarioPrincipalSection}
-          </div>
+                  <CreateFormSection
+                    icon={MapPin}
+                    title="Endereço"
+                    description="Localização do nômade."
+                  >
+                    <CreateWithOwnerAddressFields
+                      prefix="nomad"
+                      form={createWithOwnerForm}
+                      setForm={setCreateWithOwnerForm}
+                      cepLoading={createWithOwnerCepLoading}
+                      cepError={createWithOwnerCepError}
+                      onCepChange={handleCreateWithOwnerCepChange}
+                    />
+                  </CreateFormSection>
+
+                  <CreateFormSection
+                    icon={Wallet}
+                    title="Dados Financeiros"
+                    description="Informações de recebimento via Pix."
+                  >
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <div className="space-y-2">
+                        <Label htmlFor="create-nomad-pix-key">Chave PIX</Label>
+                        <Input
+                          id="create-nomad-pix-key"
+                          placeholder="CPF, e-mail, telefone ou chave aleatória"
+                          value={createWithOwnerForm.nomadPixKey}
+                          onChange={(e) =>
+                            setCreateWithOwnerForm((f) => ({
+                              ...f,
+                              nomadPixKey: e.target.value,
+                            }))
+                          }
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="create-nomad-pix-key-type">
+                          Tipo de chave PIX
+                        </Label>
+                        <Select
+                          value={createWithOwnerForm.nomadPixKeyType}
+                          onValueChange={(v) =>
+                            setCreateWithOwnerForm((f) => ({
+                              ...f,
+                              nomadPixKeyType: v,
+                            }))
+                          }
+                        >
+                          <SelectTrigger id="create-nomad-pix-key-type">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="cpf">CPF</SelectItem>
+                            <SelectItem value="email">E-mail</SelectItem>
+                            <SelectItem value="phone">Telefone</SelectItem>
+                            <SelectItem value="random">Aleatória</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </div>
+                  </CreateFormSection>
+                </>
+              )}
+
+              {createWithOwnerForm.type !== "nomad" && usuarioPrincipalSection}
+            </div>
           </div>
 
           <div className="shrink-0 flex items-center justify-between gap-3 px-1 py-4 border-t border-slate-100 dark:border-slate-800">
             <p
               className={`text-xs text-red-600 dark:text-red-400 transition-opacity ${
-                createWithOwnerErrorSummary ? "opacity-100" : "opacity-0 pointer-events-none"
+                createWithOwnerErrorSummary
+                  ? "opacity-100"
+                  : "opacity-0 pointer-events-none"
               }`}
               aria-live="polite"
             >
-              {createWithOwnerErrorSummary ? "Revise os campos destacados antes de continuar." : ""}
+              {createWithOwnerErrorSummary
+                ? "Revise os campos destacados antes de continuar."
+                : ""}
             </p>
             <div className="flex items-center gap-2 shrink-0">
               <Button
@@ -5634,223 +6293,267 @@ export default function EmpresasPage() {
                 onClick={handleCreateCompanyWithOwner}
                 disabled={createWithOwnerSubmitting}
               >
-                {createWithOwnerSubmitting && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+                {createWithOwnerSubmitting && (
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                )}
                 Criar
               </Button>
             </div>
           </div>
         </div>
 
-      {/* FASE 7 — descarte de cadastro com dados preenchidos (Cancelar/Voltar) */}
-      <ConfirmationDialog
-        open={createWithOwnerDiscardConfirmOpen}
-        onClose={() => setCreateWithOwnerDiscardConfirmOpen(false)}
-        onConfirm={handleDiscardCreateWithOwner}
-        title="Descartar cadastro?"
-        message="Os dados preenchidos ainda não foram salvos. Deseja descartá-los e voltar para a listagem?"
-        confirmText="Descartar e voltar"
-        cancelText="Continuar preenchendo"
-        destructive
-      />
+        {/* FASE 7 — descarte de cadastro com dados preenchidos (Cancelar/Voltar) */}
+        <ConfirmationDialog
+          open={createWithOwnerDiscardConfirmOpen}
+          onClose={() => setCreateWithOwnerDiscardConfirmOpen(false)}
+          onConfirm={handleDiscardCreateWithOwner}
+          title="Descartar cadastro?"
+          message="Os dados preenchidos ainda não foram salvos. Deseja descartá-los e voltar para a listagem?"
+          confirmText="Descartar e voltar"
+          cancelText="Continuar preenchendo"
+          destructive
+        />
 
-      <ConfirmationDialog
-        open={deleteDialog.open}
-        onClose={() => {
-          setDeleteDialog({ open: false, companyId: null, companyName: "" });
-          setDeleteDialogMembers([]);
-          setDeleteDialogActions({});
-        }}
-        onConfirm={handleConfirmDelete}
-        title="Excluir empresa"
-        message={
-          <div>
-            <p>
-              Tem certeza que deseja excluir "{deleteDialog.companyName}"? Esta
-              ação não pode ser desfeita. O ID ficará disponível para
-              reaproveitamento e os dados serão arquivados no histórico.
-            </p>
-            {(() => {
-              const company = companies.find((c) => c.id === deleteDialog.companyId);
-              if (company?.type !== "company") return null;
-              return (
-                <div className="mt-4">
-                  {deleteDialogLoadingMembers ? (
-                    <p className="text-xs text-slate-400">
-                      Carregando usuários vinculados...
-                    </p>
-                  ) : deleteDialogMembers.length > 0 ? (
-                    <div className="space-y-3">
-                      <div className="flex items-center justify-between gap-2">
-                        <span className="text-xs font-medium text-slate-500 dark:text-slate-400">
-                          Usuários vinculados ({deleteDialogMembers.length})
-                        </span>
-                        <Select
-                          onValueChange={(v) =>
-                            setDeleteDialogActions(
-                              Object.fromEntries(
-                                deleteDialogMembers.map((m) => [m.id, v as CompanyDeleteUserAction]),
-                              ),
-                            )
-                          }
-                        >
-                          <SelectTrigger className="h-7 w-40 text-xs">
-                            <SelectValue placeholder="Aplicar a todos" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="unlink">Desvincular</SelectItem>
-                            <SelectItem value="suspend">Pausar</SelectItem>
-                            <SelectItem value="delete">Excluir</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </div>
-                      <div className="space-y-2 max-h-52 overflow-y-auto pr-1">
-                        {deleteDialogMembers.map((m) => (
-                          <div
-                            key={m.id}
-                            className="flex items-center justify-between gap-2 rounded-lg border border-slate-200 dark:border-slate-700 px-3 py-2"
+        <ConfirmationDialog
+          open={deleteDialog.open}
+          onClose={() => {
+            setDeleteDialog({ open: false, companyId: null, companyName: "" });
+            setDeleteDialogMembers([]);
+            setDeleteDialogActions({});
+          }}
+          onConfirm={handleConfirmDelete}
+          title="Excluir empresa"
+          message={
+            <div>
+              <p>
+                Tem certeza que deseja excluir "{deleteDialog.companyName}"?
+                Esta ação não pode ser desfeita. O ID ficará disponível para
+                reaproveitamento e os dados serão arquivados no histórico.
+              </p>
+              {(() => {
+                const company = companies.find(
+                  (c) => c.id === deleteDialog.companyId,
+                );
+                if (company?.type !== "company") return null;
+                return (
+                  <div className="mt-4">
+                    {deleteDialogLoadingMembers ? (
+                      <p className="text-xs text-slate-400">
+                        Carregando usuários vinculados...
+                      </p>
+                    ) : deleteDialogMembers.length > 0 ? (
+                      <div className="space-y-3">
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="text-xs font-medium text-slate-500 dark:text-slate-400">
+                            Usuários vinculados ({deleteDialogMembers.length})
+                          </span>
+                          <Select
+                            onValueChange={(v) =>
+                              setDeleteDialogActions(
+                                Object.fromEntries(
+                                  deleteDialogMembers.map((m) => [
+                                    m.id,
+                                    v as CompanyDeleteUserAction,
+                                  ]),
+                                ),
+                              )
+                            }
                           >
-                            <div className="min-w-0">
-                              <p className="text-xs font-medium text-slate-700 dark:text-slate-200 truncate">
-                                {m.name}
-                              </p>
-                              <p className="text-[11px] text-slate-400 truncate">
-                                {m.email}
-                              </p>
-                            </div>
-                            <Select
-                              value={deleteDialogActions[m.id] ?? "unlink"}
-                              onValueChange={(v) =>
-                                setDeleteDialogActions((prev) => ({
-                                  ...prev,
-                                  [m.id]: v as CompanyDeleteUserAction,
-                                }))
-                              }
+                            <SelectTrigger className="h-7 w-40 text-xs">
+                              <SelectValue placeholder="Aplicar a todos" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="unlink">
+                                Desvincular
+                              </SelectItem>
+                              <SelectItem value="suspend">Pausar</SelectItem>
+                              <SelectItem value="delete">Excluir</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div className="space-y-2 max-h-52 overflow-y-auto pr-1">
+                          {deleteDialogMembers.map((m) => (
+                            <div
+                              key={m.id}
+                              className="flex items-center justify-between gap-2 rounded-lg border border-slate-200 dark:border-slate-700 px-3 py-2"
                             >
-                              <SelectTrigger className="h-7 w-32 text-xs shrink-0">
-                                <SelectValue />
-                              </SelectTrigger>
-                              <SelectContent>
-                                <SelectItem value="unlink">Desvincular</SelectItem>
-                                <SelectItem value="suspend">Pausar</SelectItem>
-                                <SelectItem value="delete">Excluir</SelectItem>
-                              </SelectContent>
-                            </Select>
-                          </div>
-                        ))}
+                              <div className="min-w-0">
+                                <p className="text-xs font-medium text-slate-700 dark:text-slate-200 truncate">
+                                  {m.name}
+                                </p>
+                                <p className="text-[11px] text-slate-400 truncate">
+                                  {m.email}
+                                </p>
+                              </div>
+                              <Select
+                                value={deleteDialogActions[m.id] ?? "unlink"}
+                                onValueChange={(v) =>
+                                  setDeleteDialogActions((prev) => ({
+                                    ...prev,
+                                    [m.id]: v as CompanyDeleteUserAction,
+                                  }))
+                                }
+                              >
+                                <SelectTrigger className="h-7 w-32 text-xs shrink-0">
+                                  <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="unlink">
+                                    Desvincular
+                                  </SelectItem>
+                                  <SelectItem value="suspend">
+                                    Pausar
+                                  </SelectItem>
+                                  <SelectItem value="delete">
+                                    Excluir
+                                  </SelectItem>
+                                </SelectContent>
+                              </Select>
+                            </div>
+                          ))}
+                        </div>
                       </div>
-                    </div>
-                  ) : (
-                    <p className="text-xs text-slate-400">
-                      Nenhum usuário vinculado a esta empresa.
-                    </p>
-                  )}
-                </div>
-              );
-            })()}
-          </div>
-        }
-        confirmText="Excluir"
-        cancelText="Cancelar"
-        destructive
-      />
+                    ) : (
+                      <p className="text-xs text-slate-400">
+                        Nenhum usuário vinculado a esta empresa.
+                      </p>
+                    )}
+                  </div>
+                );
+              })()}
+            </div>
+          }
+          confirmText="Excluir"
+          cancelText="Cancelar"
+          destructive
+        />
 
-      {/* Empresa Nomad — desativar/reativar (reversível, 1 etapa). Nomad é um
+        {/* Empresa Nomad — desativar/reativar (reversível, 1 etapa). Nomad é um
           tipo de empresa (CNPJ), gerida junto de Company/Agência — nunca um
           perfil profissional isolado. */}
-      <ConfirmationDialog
-        open={nomadStatusDialog.open}
-        onClose={() => setNomadStatusDialog((s) => ({ ...s, open: false }))}
-        onConfirm={confirmToggleNomadStatus}
-        title={nomadStatusDialog.willActivate ? "Reativar empresa Nomad" : "Desativar empresa Nomad"}
-        message={
-          nomadStatusDialog.willActivate
-            ? "A empresa Nomad volta a operar na plataforma imediatamente, com o mesmo CNPJ e histórico de antes."
-            : "A empresa Nomad não poderá operar nem atuar em tarefas enquanto estiver desativada. O CNPJ, o histórico e a carteira continuam intactos — é possível reativar a qualquer momento por aqui."
-        }
-        targetName={nomadStatusDialog.name}
-        targetDetail={nomadStatusDialog.email ? maskEmailForConfirmation(nomadStatusDialog.email) : undefined}
-        consequences={
-          nomadStatusDialog.willActivate
-            ? ["A empresa Nomad consegue fazer login e receber tarefas normalmente de novo."]
-            : ["O login fica bloqueado até alguém reativar por aqui.", "Nenhum dado é apagado."]
-        }
-        confirmText={nomadStatusDialog.willActivate ? "Reativar" : "Desativar"}
-        cancelText="Cancelar"
-        destructive={!nomadStatusDialog.willActivate}
-        attention={nomadStatusDialog.willActivate}
-      />
+        <ConfirmationDialog
+          open={nomadStatusDialog.open}
+          onClose={() => setNomadStatusDialog((s) => ({ ...s, open: false }))}
+          onConfirm={confirmToggleNomadStatus}
+          title={
+            nomadStatusDialog.willActivate
+              ? "Reativar empresa Nomad"
+              : "Desativar empresa Nomad"
+          }
+          message={
+            nomadStatusDialog.willActivate
+              ? "A empresa Nomad volta a operar na plataforma imediatamente, com o mesmo CNPJ e histórico de antes."
+              : "A empresa Nomad não poderá operar nem atuar em tarefas enquanto estiver desativada. O CNPJ, o histórico e a carteira continuam intactos — é possível reativar a qualquer momento por aqui."
+          }
+          targetName={nomadStatusDialog.name}
+          targetDetail={
+            nomadStatusDialog.email
+              ? maskEmailForConfirmation(nomadStatusDialog.email)
+              : undefined
+          }
+          consequences={
+            nomadStatusDialog.willActivate
+              ? [
+                  "A empresa Nomad consegue fazer login e receber tarefas normalmente de novo.",
+                ]
+              : [
+                  "O login fica bloqueado até alguém reativar por aqui.",
+                  "Nenhum dado é apagado.",
+                ]
+          }
+          confirmText={
+            nomadStatusDialog.willActivate ? "Reativar" : "Desativar"
+          }
+          cancelText="Cancelar"
+          destructive={!nomadStatusDialog.willActivate}
+          attention={nomadStatusDialog.willActivate}
+        />
 
-      {/* Empresa Nomad — excluir (irreversível, 2 etapas) — nunca apaga a
+        {/* Empresa Nomad — excluir (irreversível, 2 etapas) — nunca apaga a
           conta de login vinculada, só o cadastro empresarial, ver
           DELETE /api/nomades/:id. Bloqueada no backend se houver carteira,
           conta bancária, qualificações, saques ou tarefas vinculadas. */}
-      <ConfirmationDialog
-        open={nomadRemoveDialog.open}
-        onClose={() => setNomadRemoveDialog({ open: false, nomadId: null, name: "", email: "", relations: null })}
-        onConfirm={confirmRemoveNomadProfile}
-        title="Excluir empresa Nomad"
-        message="O cadastro empresarial (CNPJ, nível, dados de cadastro) será apagado do banco de dados — a conta de login vinculada não é apagada, mas fica desativada, já que deixa de fazer sentido acessar o portal Nomad sem uma empresa por trás."
-        twoStep
-        destructive
-        targetName={nomadRemoveDialog.name}
-        targetDetail={nomadRemoveDialog.email ? maskEmailForConfirmation(nomadRemoveDialog.email) : undefined}
-        consequences={[
-          "Esta ação é permanente — o cadastro empresarial é removido de vez.",
-          "A conta de login vinculada NÃO é apagada — só fica desativada, como um bloqueio.",
-          ...(nomadRemoveRelationsList(nomadRemoveDialog.relations).length > 0
-            ? [`Vínculos encontrados: ${nomadRemoveRelationsList(nomadRemoveDialog.relations).join(", ")}.`]
-            : []),
-        ]}
-        finalConfirmText="Excluir empresa definitivamente"
-      />
+        <ConfirmationDialog
+          open={nomadRemoveDialog.open}
+          onClose={() =>
+            setNomadRemoveDialog({
+              open: false,
+              nomadId: null,
+              name: "",
+              email: "",
+              relations: null,
+            })
+          }
+          onConfirm={confirmRemoveNomadProfile}
+          title="Excluir empresa Nomad"
+          message="O cadastro empresarial (CNPJ, nível, dados de cadastro) será apagado do banco de dados — a conta de login vinculada não é apagada, mas fica desativada, já que deixa de fazer sentido acessar o portal Nomad sem uma empresa por trás."
+          twoStep
+          destructive
+          targetName={nomadRemoveDialog.name}
+          targetDetail={
+            nomadRemoveDialog.email
+              ? maskEmailForConfirmation(nomadRemoveDialog.email)
+              : undefined
+          }
+          consequences={[
+            "Esta ação é permanente — o cadastro empresarial é removido de vez.",
+            "A conta de login vinculada NÃO é apagada — só fica desativada, como um bloqueio.",
+            ...(nomadRemoveRelationsList(nomadRemoveDialog.relations).length > 0
+              ? [
+                  `Vínculos encontrados: ${nomadRemoveRelationsList(nomadRemoveDialog.relations).join(", ")}.`,
+                ]
+              : []),
+          ]}
+          finalConfirmText="Excluir empresa definitivamente"
+        />
 
-      <ConfirmationDialog
-        open={pendingClose !== null}
-        onClose={() => setPendingClose(null)}
-        onConfirm={() => {
-          pendingClose?.();
-          setPendingClose(null);
-        }}
-        title="Alterações não salvas"
-        message="Você tem alterações não salvas. Deseja sair sem salvar?"
-        confirmText="Sair sem salvar"
-        cancelText="Cancelar"
-        destructive={false}
-      />
+        <ConfirmationDialog
+          open={pendingClose !== null}
+          onClose={() => setPendingClose(null)}
+          onConfirm={() => {
+            pendingClose?.();
+            setPendingClose(null);
+          }}
+          title="Alterações não salvas"
+          message="Você tem alterações não salvas. Deseja sair sem salvar?"
+          confirmText="Sair sem salvar"
+          cancelText="Cancelar"
+          destructive={false}
+        />
 
-      {selectedCompany && (
-        <>
-          <CompanyViewSlidePanel
-            open={viewPanelOpen}
-            onClose={() => {
-              setViewPanelOpen(false);
-              setSelectedCompany(null);
-              navigate("/admin/empresas", { replace: true });
-            }}
-            company={selectedCompany}
-            onCompanyUpdate={(updatedCompany) => {
-              // Update the companies list with the new data
-              setCompanies(
-                companies.map((c) =>
-                  c.id === updatedCompany.id ? updatedCompany : c,
-                ),
-              );
-              // Update the selected company to reflect changes
-              setSelectedCompany(updatedCompany);
-            }}
-          />
-          <CompanyEditSlidePanel
-            open={editPanelOpen}
-            onClose={() => {
-              setEditPanelOpen(false);
-              setSelectedCompany(null);
-            }}
-            company={selectedCompany}
-            onSave={handleSaveCompany}
-          />
-        </>
-      )}
-    </div>
+        {selectedCompany && (
+          <>
+            <CompanyViewSlidePanel
+              open={viewPanelOpen}
+              onClose={() => {
+                setViewPanelOpen(false);
+                setSelectedCompany(null);
+                navigate("/admin/empresas", { replace: true });
+              }}
+              company={selectedCompany}
+              onCompanyUpdate={(updatedCompany) => {
+                // Update the companies list with the new data
+                setCompanies(
+                  companies.map((c) =>
+                    c.id === updatedCompany.id ? updatedCompany : c,
+                  ),
+                );
+                // Update the selected company to reflect changes
+                setSelectedCompany(updatedCompany);
+              }}
+            />
+            <CompanyEditSlidePanel
+              open={editPanelOpen}
+              onClose={() => {
+                setEditPanelOpen(false);
+                setSelectedCompany(null);
+              }}
+              company={selectedCompany}
+              onSave={handleSaveCompany}
+            />
+          </>
+        )}
+      </div>
     </div>
   );
 }

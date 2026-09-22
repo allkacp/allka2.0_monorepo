@@ -21,6 +21,7 @@ import {
   CheckCircle2,
   PauseCircle,
   AlertCircle,
+  Info,
   TrendingUp,
   Activity,
   Clock,
@@ -87,6 +88,8 @@ import { UserViewHeader } from "@/components/user-view-header";
 import {
   LineChart,
   Line,
+  AreaChart,
+  Area,
   BarChart,
   Bar,
   XAxis,
@@ -141,6 +144,26 @@ interface AgencyFinancialData {
   plan: string;
   planDiscount: number;
 }
+
+type UserOverview = {
+  completed_stages: number;
+  completed_stages_30d: number;
+  activity_rate_30d: number;
+  last_login: string | null;
+  activity: Array<{ date: string; completed: number }>;
+  completion_areas: Array<{ name: string; completed: number }>;
+  recent_completions: Array<{
+    title: string;
+    task_title: string;
+    completed_at: string | null;
+  }>;
+  upcoming_tasks: Array<{
+    id: string;
+    title: string;
+    status: string;
+    due_date: string | null;
+  }>;
+};
 
 interface UserViewSlidePanelProps {
   open: boolean;
@@ -212,10 +235,6 @@ const createFakeUserData = (user: UserType | null): UserType => {
     ...(user || {}),
   } as UserType;
 };
-
-const accessChartData: any[] = [];
-
-const moduleUsageData: any[] = [];
 
 const permissionsByCategory = {
   Usuários: [
@@ -308,10 +327,19 @@ export function UserViewSlidePanel({
     updateUser,
   } = usePlatformUsers();
   const [onlineStatus, setOnlineStatus] = useState("online");
+  const [userOverview, setUserOverview] = useState<UserOverview | null>(null);
+  const [userOverviewLoading, setUserOverviewLoading] = useState(false);
+  const [overviewActivityPeriod, setOverviewActivityPeriod] = useState<
+    7 | 30 | 90
+  >(30);
   const [isEditMode, setIsEditMode] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [editedData, setEditedData] = useState<Partial<UserType>>({});
   const [isContaEditMode, setIsContaEditMode] = useState(false);
+  const [editingDataField, setEditingDataField] = useState<{
+    scope: "conta" | "dados";
+    field: string;
+  } | null>(null);
   const [contaEditedData, setContaEditedData] = useState<
     Partial<UserType> & { status?: string }
   >({});
@@ -349,7 +377,8 @@ export function UserViewSlidePanel({
     string[]
   >(["pagamentos"]);
   const [dadosOpenAccordions, setDadosOpenAccordions] = useState<string[]>([
-    "pessoais",
+    "dados-principais",
+    "contato",
   ]);
   const [securityOpenAccordions, setSecurityOpenAccordions] = useState<
     string[]
@@ -538,7 +567,12 @@ export function UserViewSlidePanel({
    * /api/permissions/profiles e o vínculo é `admin_profile_id`.
    */
   const [accessProfiles, setAccessProfiles] = useState<
-    { id: string; name: string; description?: string | null; is_master: boolean }[]
+    {
+      id: string;
+      name: string;
+      description?: string | null;
+      is_master: boolean;
+    }[]
   >([]);
 
   useEffect(() => {
@@ -547,7 +581,8 @@ export function UserViewSlidePanel({
     apiClient
       .getPermissionProfiles()
       .then((res: any) => {
-        if (!cancelado) setAccessProfiles(Array.isArray(res) ? res : (res?.data ?? []));
+        if (!cancelado)
+          setAccessProfiles(Array.isArray(res) ? res : (res?.data ?? []));
       })
       .catch(() => {
         // Só admin lê os perfis; para os demais a seção fica vazia.
@@ -702,6 +737,81 @@ export function UserViewSlidePanel({
 
   // Usar dados persistidos se existirem, caso contrário usar fakeUser
   const displayUser = { ...fakeUser, ...persistedUserData };
+  const hasUnsavedDataChanges =
+    Object.keys(contaEditedData).length > 0 ||
+    Object.keys(dadosEditedData).length > 0;
+
+  useEffect(() => {
+    if (!open || !user?.id || viewerRole !== "admin") {
+      setUserOverview(null);
+      return;
+    }
+    let cancelled = false;
+    setUserOverviewLoading(true);
+    apiClient
+      .getAdminUserOverview(user.id)
+      .then((response: any) => {
+        if (!cancelled)
+          setUserOverview((response?.data ?? response) as UserOverview);
+      })
+      .catch(() => {
+        if (!cancelled) setUserOverview(null);
+      })
+      .finally(() => {
+        if (!cancelled) setUserOverviewLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [open, user?.id, viewerRole]);
+
+  const accessChartData = (userOverview?.activity ?? []).map((point) => ({
+    date: new Date(`${point.date}T12:00:00`).toLocaleDateString("pt-BR", {
+      day: "2-digit",
+      month: "short",
+    }),
+    acessos: point.completed,
+  }));
+  const moduleUsageData = (userOverview?.completion_areas ?? []).map(
+    (area) => ({
+      nome: area.name,
+      uso: area.completed,
+    }),
+  );
+  // Dados ilustrativos ficam restritos ao ambiente local para a conta de
+  // demonstração. Em produção, a tela sempre usa somente os dados reais.
+  const isLocalViniciusDemo =
+    process.env.NODE_ENV !== "production" &&
+    displayUser?.email?.toLowerCase() === "cp@lamego.com.vc";
+  const demoActivityData = [
+    30, 42, 47, 68, 46, 73, 49, 61, 64, 115, 79, 76, 120, 87, 161, 112, 117, 86,
+    113, 74, 85, 79, 136, 142,
+  ].map((acessos, index) => ({
+    date: new Date(2026, 7, 22 + index).toLocaleDateString("pt-BR", {
+      day: "2-digit",
+      month: "short",
+    }),
+    acessos,
+  }));
+  const demoModuleUsageData = [
+    { nome: "Gestão de Contas", uso: 342, cor: "#3b6df6" },
+    { nome: "Relatórios", uso: 256, cor: "#9b5cf2" },
+    { nome: "Campanhas", uso: 198, cor: "#ec4cab" },
+    { nome: "Produtos", uso: 156, cor: "#f8a52b" },
+    { nome: "Financeiro", uso: 122, cor: "#48c88c" },
+    { nome: "Allkademy", uso: 98, cor: "#aa9af7" },
+  ];
+  const overviewActivityData = isLocalViniciusDemo
+    ? demoActivityData.slice(-overviewActivityPeriod)
+    : accessChartData.slice(-overviewActivityPeriod);
+  const overviewModuleUsageData = isLocalViniciusDemo
+    ? demoModuleUsageData
+    : moduleUsageData.map((item, index) => ({
+        ...item,
+        cor: ["#3b6df6", "#9b5cf2", "#ec4cab", "#f8a52b", "#48c88c", "#aa9af7"][
+          index % 6
+        ],
+      }));
 
   // Normalizar tipo de conta corretamente, sem fallback silencioso
   const rawAccountType = displayUser?.account_type || displayUser?.tipo;
@@ -773,118 +883,6 @@ export function UserViewSlidePanel({
           admin: "Sistema",
         },
       ]);
-    }
-
-    // Initialize security data on component mount
-    if (activeSessions.length === 0) {
-      setActiveSessions([
-        {
-          id: "session_001",
-          location: "São Paulo, SP",
-          ip: "187.45.123.45",
-          browser: "Chrome 131.0",
-          os: "macOS 14.2",
-          loginTime: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(),
-          status: "active",
-        },
-        {
-          id: "session_002",
-          location: "São Paulo, SP",
-          ip: "187.45.123.45",
-          browser: "Safari 17.2",
-          os: "iOS 17.2",
-          loginTime: new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString(),
-          status: "active",
-        },
-        {
-          id: "session_003",
-          location: "Rio de Janeiro, RJ",
-          ip: "189.23.234.56",
-          browser: "Firefox 121.0",
-          os: "Windows 11",
-          loginTime: new Date(
-            Date.now() - 7 * 24 * 60 * 60 * 1000,
-          ).toISOString(),
-          status: "expired",
-        },
-      ]);
-
-      setConnectedDevices([
-        {
-          id: "device_001",
-          name: "MacBook Pro de João",
-          type: "desktop",
-          lastAccess: new Date(Date.now() - 1 * 60 * 60 * 1000).toISOString(),
-          ip: "187.45.123.45",
-        },
-        {
-          id: "device_002",
-          name: "iPhone de João",
-          type: "mobile",
-          lastAccess: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(),
-          ip: "187.45.123.45",
-        },
-        {
-          id: "device_003",
-          name: "Computador do Escritório",
-          type: "desktop",
-          lastAccess: new Date(
-            Date.now() - 3 * 24 * 60 * 60 * 1000,
-          ).toISOString(),
-          ip: "192.168.1.100",
-        },
-      ]);
-
-      setSecurityLogs([
-        {
-          id: "log_001",
-          date: new Date().toISOString(),
-          action: "Login bem-sucedido",
-          ip: "187.45.123.45",
-          location: "São Paulo, SP",
-          admin: "Automático",
-        },
-        {
-          id: "log_002",
-          date: new Date(Date.now() - 1 * 60 * 60 * 1000).toISOString(),
-          action: "Alteração de dados cadastrais",
-          ip: "187.45.123.45",
-          location: "São Paulo, SP",
-          admin: "Admin User",
-        },
-        {
-          id: "log_003",
-          date: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(),
-          action: "2FA ativado",
-          ip: "187.45.123.45",
-          location: "São Paulo, SP",
-          admin: "Usuário",
-        },
-        {
-          id: "log_004",
-          date: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000).toISOString(),
-          action: "Tentativa de login inválida",
-          ip: "189.23.234.56",
-          location: "Rio de Janeiro, RJ",
-          admin: "Automático",
-        },
-        {
-          id: "log_005",
-          date: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(),
-          action: "Redefinição de senha",
-          ip: "192.168.1.100",
-          location: "Escritório",
-          admin: "Admin User",
-        },
-      ]);
-
-      setTwoFAActivationDate(
-        new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString(),
-      );
-      setTwoFALastValidation(
-        new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(),
-      );
-      setIs2FAEnabled(true);
     }
   }, []);
 
@@ -971,7 +969,11 @@ export function UserViewSlidePanel({
       fakeUser[field as keyof typeof fakeUser];
     // So campos escalares sao exibidos por aqui. Booleano e objeto viram
     // "" — e o que o React ja renderizava (nada) antes de o tipo existir.
-    if (valor == null || typeof valor === "boolean" || typeof valor === "object")
+    if (
+      valor == null ||
+      typeof valor === "boolean" ||
+      typeof valor === "object"
+    )
       return "";
     return String(valor);
   };
@@ -1029,6 +1031,7 @@ export function UserViewSlidePanel({
   const handleContaCancelEdit = () => {
     setIsContaEditMode(false);
     setContaEditedData({});
+    setEditingDataField(null);
     setShowConfirmDialog(false);
   };
 
@@ -1041,7 +1044,70 @@ export function UserViewSlidePanel({
   const handleDadosCancelEdit = () => {
     setIsDadosEditMode(false);
     setDadosEditedData({});
+    setEditingDataField(null);
     setShowDadosConfirmDialog(false);
+  };
+
+  const isDataFieldEditing = (scope: "conta" | "dados", field: string) =>
+    (scope === "conta" ? isContaEditMode : isDadosEditMode) ||
+    (editingDataField?.scope === scope && editingDataField.field === field);
+
+  const InlineFieldEditButton = ({
+    scope,
+    field,
+    label,
+  }: {
+    scope: "conta" | "dados";
+    field: string;
+    label: string;
+  }) => {
+    const active =
+      editingDataField?.scope === scope && editingDataField.field === field;
+    return (
+      <TooltipProvider>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <button
+              type="button"
+              onClick={(event) => {
+                event.stopPropagation();
+                if (!active) {
+                  setEditingDataField({ scope, field });
+                  return;
+                }
+                setEditingDataField(null);
+                const changed =
+                  scope === "conta"
+                    ? Object.keys(contaEditedData).length > 0
+                    : Object.keys(dadosEditedData).length > 0;
+                if (changed) {
+                  if (scope === "conta") setShowConfirmDialog(true);
+                  else setShowDadosConfirmDialog(true);
+                }
+              }}
+              className={cn(
+                "ml-auto inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border bg-white shadow-sm transition-all",
+                active
+                  ? "border-emerald-300 text-emerald-600 hover:bg-emerald-50"
+                  : "border-slate-200 text-blue-600 hover:-translate-y-0.5 hover:border-blue-300 hover:bg-blue-50 hover:shadow",
+              )}
+              aria-label={
+                active ? `Concluir edição de ${label}` : `Editar ${label}`
+              }
+            >
+              {active ? (
+                <Check className="h-4 w-4" />
+              ) : (
+                <Edit2 className="h-4 w-4" />
+              )}
+            </button>
+          </TooltipTrigger>
+          <TooltipContent>
+            {active ? "Concluir edição" : `Editar ${label}`}
+          </TooltipContent>
+        </Tooltip>
+      </TooltipProvider>
+    );
   };
 
   const handleDadosFieldChange = (field: string, value: any) => {
@@ -1054,7 +1120,8 @@ export function UserViewSlidePanel({
   const [cepError, setCepError] = useState("");
   const handleCepChange = async (rawCep: string) => {
     const digits = rawCep.replace(/\D/g, "").slice(0, 8);
-    const formatted = digits.length > 5 ? `${digits.slice(0, 5)}-${digits.slice(5)}` : digits;
+    const formatted =
+      digits.length > 5 ? `${digits.slice(0, 5)}-${digits.slice(5)}` : digits;
     handleDadosFieldChange("zip_code", formatted);
     setCepError("");
     if (digits.length !== 8) return;
@@ -1087,7 +1154,11 @@ export function UserViewSlidePanel({
       displayUser[field as keyof typeof displayUser];
     // So campos escalares sao exibidos por aqui. Booleano e objeto viram
     // "" — e o que o React ja renderizava (nada) antes de o tipo existir.
-    if (valor == null || typeof valor === "boolean" || typeof valor === "object")
+    if (
+      valor == null ||
+      typeof valor === "boolean" ||
+      typeof valor === "object"
+    )
       return "";
     return String(valor);
   };
@@ -1104,8 +1175,14 @@ export function UserViewSlidePanel({
       // demais (dados pessoais, contato extra, endereço, notas) vão pra
       // UserProfile, o backend separa e persiste os dois num upsert só
       // (ver PUT /api/users/:id).
-      const updated = await apiClient.updateUser(String(user.id), { ...dadosEditedData });
-      setPersistedUserData((prev) => ({ ...prev, ...dadosEditedData, ...(updated || {}) }));
+      const updated = await apiClient.updateUser(String(user.id), {
+        ...dadosEditedData,
+      });
+      setPersistedUserData((prev) => ({
+        ...prev,
+        ...dadosEditedData,
+        ...(updated || {}),
+      }));
       toast({
         title: "Sucesso!",
         description: "Dados atualizados com sucesso",
@@ -1148,7 +1225,11 @@ export function UserViewSlidePanel({
       displayUser[field as keyof typeof displayUser];
     // So campos escalares sao exibidos por aqui. Booleano e objeto viram
     // "" — e o que o React ja renderizava (nada) antes de o tipo existir.
-    if (valor == null || typeof valor === "boolean" || typeof valor === "object")
+    if (
+      valor == null ||
+      typeof valor === "boolean" ||
+      typeof valor === "object"
+    )
       return "";
     return String(valor);
   };
@@ -1371,7 +1452,7 @@ export function UserViewSlidePanel({
 
   // Security Handlers
   const handlePasswordReset = () => {
-    setPasswordResetMethod("email");
+    setPasswordResetMethod("link");
     setGeneratedResetLink("");
     setShowPasswordResetModal(true);
   };
@@ -1379,39 +1460,15 @@ export function UserViewSlidePanel({
   const handleConfirmPasswordReset = async () => {
     setIsSavingSecurityAction(true);
     try {
-      await new Promise((resolve) => setTimeout(resolve, 1000));
-
-      if (passwordResetMethod === "email") {
-        toast({
-          title: "Sucesso!",
-          description: "Email de redefinição enviado para " + displayUser.email,
-        });
-      } else if (passwordResetMethod === "link") {
-        const link = `https://allka.com/auth/reset-password?token=tk_${Date.now()}&user=${displayUser.id}`;
-        setGeneratedResetLink(link);
-        toast({
-          title: "Link gerado!",
-          description: "Copie o link para compartilhar com o usuário",
-        });
-      } else if (passwordResetMethod === "direct") {
-        const newPassword = Math.random().toString(36).substring(2, 15);
-        toast({
-          title: "Sucesso!",
-          description: "Senha redefinida para: " + newPassword,
-        });
-      }
-
-      const logEntry = {
-        id: `log_${Date.now()}`,
-        date: new Date().toISOString(),
-        action: `Redefinição de senha (${passwordResetMethod})`,
-        ip: "187.45.123.45",
-        location: "São Paulo, SP",
-        admin: "Admin User",
-      };
-      setSecurityLogs([logEntry, ...securityLogs]);
-
-      setShowPasswordResetModal(false);
+      const result = await apiClient.emitirPrimeiroAcesso(
+        String(displayUser.id),
+      );
+      setGeneratedResetLink(result.link);
+      toast({
+        title: "Link seguro gerado",
+        description:
+          "O link anterior foi invalidado. Copie o novo link para o usuário.",
+      });
     } catch (error) {
       console.error("Error resetting password:", error);
       toast({
@@ -1762,51 +1819,43 @@ export function UserViewSlidePanel({
       return;
     }
 
+    const changes = { ...dadosEditedData, ...contaEditedData };
+    if (Object.keys(changes).length === 0) {
+      setShowConfirmDialog(false);
+      setEditingDataField(null);
+      return;
+    }
+
     setIsSaving(true);
-
-    // Mesclar dados de conta + dados pessoais no mesmo payload
-    const updatePayload = {
-      ...displayUser,
-      ...dadosEditedData,
-      ...contaEditedData,
-      name: nameToSave,
-      email: emailToSave,
-      id: displayUser.id,
-    };
-
-    // Atualiza estado local imediatamente (optimistic update)
-    setPersistedUserData((prev) => ({ ...prev, ...updatePayload }));
-    toast({ title: "Sucesso!", description: "Dados atualizados com sucesso" });
-    setIsContaEditMode(false);
-    setContaEditedData({});
-    setIsDadosEditMode(false);
-    setDadosEditedData({});
-    setShowConfirmDialog(false);
-    setIsSaving(false);
-
-    // Sincroniza com a API — manda tudo que foi editado nos dois blocos
-    // (Dados da Conta + Dados Pessoais/Contato/Endereço/Notas). Antes só
-    // mandava name/email/phone/role/account_type, então tudo que vinha de
-    // dadosEditedData (CPF, RG, endereço, etc.) ficava só no estado local
-    // (optimistic update) e sumia ao recarregar a página.
     try {
-      const updated = await apiClient.updateUser(String(displayUser.id), {
-        ...dadosEditedData,
-        ...contaEditedData,
-        name: nameToSave,
-        email: emailToSave,
-      });
-      // A linha da TABELA (fora deste painel) só é corrigida depois da
-      // confirmação do servidor — o `setPersistedUserData` acima é só o
-      // estado otimista deste painel, que já existia antes.
+      // Envia somente os campos que realmente mudaram. Assim uma edição
+      // pontual de nome não regrava e-mail, endereço, função ou qualquer
+      // outro dado que o usuário não tocou.
+      const updated = await apiClient.updateUser(
+        String(displayUser.id),
+        changes,
+      );
+      setPersistedUserData((prev) => ({ ...prev, ...changes, ...updated }));
       if (onUserSaved) onUserSaved(updated);
       else onRefresh?.();
+      toast({
+        title: "Alterações salvas",
+        description: "Somente os campos modificados foram atualizados.",
+      });
+      setIsContaEditMode(false);
+      setContaEditedData({});
+      setIsDadosEditMode(false);
+      setDadosEditedData({});
+      setEditingDataField(null);
+      setShowConfirmDialog(false);
     } catch (error: any) {
       toast({
-        title: "Erro ao sincronizar",
-        description: error.message || "Sincronização com servidor falhou.",
+        title: "Não foi possível salvar",
+        description: error.message || "Confira os dados e tente novamente.",
         variant: "destructive",
       });
+    } finally {
+      setIsSaving(false);
     }
   };
 
@@ -1820,7 +1869,11 @@ export function UserViewSlidePanel({
       displayUser[field as keyof typeof displayUser];
     // So campos escalares sao exibidos aqui. Booleano e objeto viram "" —
     // e o que o React ja renderizava (nada) antes de o tipo existir.
-    if (valor == null || typeof valor === "boolean" || typeof valor === "object")
+    if (
+      valor == null ||
+      typeof valor === "boolean" ||
+      typeof valor === "object"
+    )
       return "";
     return String(valor);
   };
@@ -1871,7 +1924,7 @@ export function UserViewSlidePanel({
   };
 
   const handleStatusChange = (newStatus: UserStatus) => {
-    if (!isContaEditMode) return;
+    if (!isDataFieldEditing("conta", "status")) return;
     // O backend deriva is_active a partir daqui (ver routes/users.ts).
     handleContaFieldChange("status", newStatus);
   };
@@ -1935,17 +1988,24 @@ export function UserViewSlidePanel({
       // (rota dedicada "Meu Perfil") não há overlay nem empilhamento — o
       // zIndex é irrelevante e não há pin (a própria rota/URL é o marcador).
       zIndex={45}
-      pin={asPage ? undefined : {
-        id: `usuarios-view-${user?.id ?? "none"}`,
-        label: user?.name ? `Usuário: ${user.name}` : "Detalhes do usuário",
-        icon: UserIcon,
-        path: "/admin/usuarios",
-        activateKey: `view:${user?.id ?? ""}`,
-      }}
+      pin={
+        asPage
+          ? undefined
+          : {
+              id: `usuarios-view-${user?.id ?? "none"}`,
+              label: user?.name
+                ? `Usuário: ${user.name}`
+                : "Detalhes do usuário",
+              icon: UserIcon,
+              path: "/admin/usuarios",
+              activateKey: `view:${user?.id ?? ""}`,
+            }
+      }
     >
       <div className="flex flex-col flex-1 min-h-0 w-full">
         {/* Header - Modern and Premium */}
         <UserViewHeader
+          className="rounded-xl shadow-sm"
           user={displayUser}
           isEditMode={isEditMode}
           isSaving={isSaving}
@@ -1966,10 +2026,10 @@ export function UserViewSlidePanel({
         {/* Content with Tabs */}
         <Tabs
           defaultValue="visao-geral"
-          className="flex-1 flex flex-col min-h-0"
+          className="mt-0 flex flex-1 flex-col gap-0 min-h-0"
         >
           {/* Tab Navigation - Fixed */}
-          <div className="flex-shrink-0 bg-white px-[50px] pt-0 pb-[10px] overflow-x-auto">
+          <div className="flex-shrink-0 overflow-x-auto border-b border-slate-100 bg-white/95 px-0 py-0">
             {(() => {
               // "Permissões" gerencia perfil de acesso ADMIN, vínculo com
               // outras empresas e permissões por projeto — função exclusiva
@@ -1978,19 +2038,29 @@ export function UserViewSlidePanel({
               // pode ver essa aba; caso contrário um usuário comum veria e
               // poderia tentar editar seu próprio nível de acesso global no
               // autoatendimento "Meu Perfil".
-              const canSeePermissoes = viewerRole === "admin" || viewerRole === "partner";
-              const tabs = userAccountType === "agency" && agencyFinancial
-                ? ["visao-geral", "conta", "carteira", "seguranca"]
-                : canSeePermissoes
-                  ? ["visao-geral", "conta", "permissoes", "seguranca", "lgpd"]
-                  : ["visao-geral", "conta", "seguranca", "lgpd"];
+              const canSeePermissoes =
+                viewerRole === "admin" || viewerRole === "partner";
+              const tabs =
+                userAccountType === "agency" && agencyFinancial
+                  ? ["visao-geral", "conta", "carteira", "seguranca"]
+                  : canSeePermissoes
+                    ? [
+                        "visao-geral",
+                        "conta",
+                        "permissoes",
+                        "seguranca",
+                        "lgpd",
+                      ]
+                    : ["visao-geral", "conta", "seguranca", "lgpd"];
               return (
-                <TabsList className={`grid w-max gap-1 bg-transparent p-0 h-auto grid-cols-${tabs.length}`}>
+                <TabsList
+                  className={`grid h-auto w-max grid-cols-${tabs.length} gap-1 rounded-xl border border-slate-100 bg-slate-50/80 p-1 shadow-sm`}
+                >
                   {tabs.map((tab) => (
                     <TabsTrigger
                       key={tab}
                       value={tab}
-                      className="px-4 py-2 text-xs font-medium rounded-lg border border-transparent data-[state=active]:bg-blue-100 data-[state=active]:text-blue-700 data-[state=active]:border-blue-300 hover:bg-slate-100"
+                      className="h-8 rounded-lg border border-transparent px-4 text-xs font-semibold text-slate-600 transition-all hover:bg-white hover:text-slate-900 data-[state=active]:border-blue-200 data-[state=active]:bg-[linear-gradient(105deg,#EAF3FF_0%,#EEF1FF_52%,#F8EEFF_100%)] data-[state=active]:text-[#1554C0] data-[state=active]:shadow-sm"
                     >
                       {tab === "visao-geral" && "Visão Geral"}
                       {tab === "conta" && "Conta & Dados"}
@@ -2008,120 +2078,152 @@ export function UserViewSlidePanel({
           {/* Tab Content - Scrollable */}
           <TabsContent
             value="visao-geral"
-            className="flex-1 overflow-y-auto bg-slate-200 px-[50px] pt-[25px] pb-6 space-y-4 mt-0"
+            className="allka-users-scroll flex-1 overflow-y-auto bg-white px-0 pt-2 pb-2 space-y-3 mt-0"
           >
-            {/* Expandir toggle */}
-            <div className="flex items-center justify-end">
-              <button
-                onClick={() => {
-                  const keys = ["estatisticas-user", "info-principais"];
-                  const allOpen = keys.every((k) => openAccordions.includes(k));
-                  setOpenAccordions(
-                    allOpen
-                      ? openAccordions.filter((a) => !keys.includes(a))
-                      : [
-                          ...openAccordions,
-                          ...keys.filter((k) => !openAccordions.includes(k)),
-                        ],
-                  );
-                }}
-                className="flex items-center gap-2 group"
-              >
-                <span className="text-xs text-slate-500 group-hover:text-slate-700 transition-colors select-none">
-                  {["estatisticas-user", "info-principais"].every((k) =>
-                    openAccordions.includes(k),
-                  )
-                    ? "Fechar"
-                    : "Expandir"}
-                </span>
-                <div
-                  className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${
-                    ["estatisticas-user", "info-principais"].every((k) =>
-                      openAccordions.includes(k),
-                    )
-                      ? "bg-blue-500"
-                      : "bg-slate-300"
-                  }`}
-                >
-                  <div
-                    className={`absolute h-4 w-4 rounded-full bg-white shadow transition-transform duration-200 ${
-                      ["estatisticas-user", "info-principais"].every((k) =>
-                        openAccordions.includes(k),
-                      )
-                        ? "translate-x-4"
-                        : "translate-x-0.5"
-                    }`}
-                  />
-                </div>
-              </button>
-            </div>
-
             {/* Carteira da Agência */}
-            {userAccountType === "agency" && (
+            {userAccountType === "agency" &&
               (() => {
                 const mrr = (fakeUser as any).currentMrr ?? 0;
                 const totalProj = (fakeUser as any).totalProjects ?? 0;
                 const lvl = (fakeUser as any).partnerLevel ?? "bronze";
                 const fmtBRL = (v: number) =>
-                  v.toLocaleString("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 });
-                const levelCfg: Record<string, { emoji: string; label: string; gradient: string; text: string }> = {
-                  bronze:   { emoji: "🥉", label: "Bronze",   gradient: "from-amber-700 to-amber-500",   text: "text-amber-100" },
-                  silver:   { emoji: "🥈", label: "Prata",    gradient: "from-slate-500 to-slate-400",   text: "text-slate-100" },
-                  gold:     { emoji: "🥇", label: "Ouro",     gradient: "from-yellow-500 to-amber-400",  text: "text-yellow-100" },
-                  platinum: { emoji: "💎", label: "Platina",  gradient: "from-cyan-600 to-teal-500",     text: "text-cyan-100" },
-                  diamond:  { emoji: "✨", label: "Diamante", gradient: "from-violet-600 to-purple-500", text: "text-violet-100" },
+                  v.toLocaleString("pt-BR", {
+                    style: "currency",
+                    currency: "BRL",
+                    maximumFractionDigits: 0,
+                  });
+                const levelCfg: Record<
+                  string,
+                  {
+                    emoji: string;
+                    label: string;
+                    gradient: string;
+                    text: string;
+                  }
+                > = {
+                  bronze: {
+                    emoji: "🥉",
+                    label: "Bronze",
+                    gradient: "from-amber-700 to-amber-500",
+                    text: "text-amber-100",
+                  },
+                  silver: {
+                    emoji: "🥈",
+                    label: "Prata",
+                    gradient: "from-slate-500 to-slate-400",
+                    text: "text-slate-100",
+                  },
+                  gold: {
+                    emoji: "🥇",
+                    label: "Ouro",
+                    gradient: "from-yellow-500 to-amber-400",
+                    text: "text-yellow-100",
+                  },
+                  platinum: {
+                    emoji: "💎",
+                    label: "Platina",
+                    gradient: "from-cyan-600 to-teal-500",
+                    text: "text-cyan-100",
+                  },
+                  diamond: {
+                    emoji: "✨",
+                    label: "Diamante",
+                    gradient: "from-violet-600 to-purple-500",
+                    text: "text-violet-100",
+                  },
                 };
                 const cfg = levelCfg[lvl] ?? levelCfg.bronze;
                 return (
-                  <div className={`rounded-xl bg-gradient-to-r ${cfg.gradient} p-4 flex items-center gap-4 shadow-md`}>
+                  <div
+                    className={`rounded-xl bg-gradient-to-r ${cfg.gradient} p-4 flex items-center gap-4 shadow-md`}
+                  >
                     {/* Level badge */}
                     <div className="flex flex-col items-center gap-1 shrink-0">
                       <span className="text-3xl">{cfg.emoji}</span>
-                      <span className={`text-[10px] font-bold uppercase tracking-wider ${cfg.text} opacity-80`}>{cfg.label}</span>
+                      <span
+                        className={`text-[10px] font-bold uppercase tracking-wider ${cfg.text} opacity-80`}
+                      >
+                        {cfg.label}
+                      </span>
                     </div>
                     {/* Divider */}
                     <div className="w-px h-10 bg-white/20 shrink-0" />
                     {/* MRR */}
                     <div className="flex-1">
-                      <p className={`text-[10px] font-semibold uppercase tracking-wider ${cfg.text} opacity-70`}>MRR Mensal</p>
-                      <p className={`text-2xl font-black ${cfg.text} leading-tight`}>{fmtBRL(mrr)}</p>
-                      <p className={`text-[10px] ${cfg.text} opacity-60`}>receita recorrente mensal</p>
+                      <p
+                        className={`text-[10px] font-semibold uppercase tracking-wider ${cfg.text} opacity-70`}
+                      >
+                        MRR Mensal
+                      </p>
+                      <p
+                        className={`text-2xl font-black ${cfg.text} leading-tight`}
+                      >
+                        {fmtBRL(mrr)}
+                      </p>
+                      <p className={`text-[10px] ${cfg.text} opacity-60`}>
+                        receita recorrente mensal
+                      </p>
                     </div>
                     {/* Divider */}
                     <div className="w-px h-10 bg-white/20 shrink-0" />
                     {/* Projects */}
                     <div className="text-right shrink-0">
-                      <p className={`text-[10px] font-semibold uppercase tracking-wider ${cfg.text} opacity-70`}>Projetos</p>
-                      <p className={`text-2xl font-black ${cfg.text} leading-tight`}>{totalProj}</p>
-                      <p className={`text-[10px] ${cfg.text} opacity-60`}>no total</p>
+                      <p
+                        className={`text-[10px] font-semibold uppercase tracking-wider ${cfg.text} opacity-70`}
+                      >
+                        Projetos
+                      </p>
+                      <p
+                        className={`text-2xl font-black ${cfg.text} leading-tight`}
+                      >
+                        {totalProj}
+                      </p>
+                      <p className={`text-[10px] ${cfg.text} opacity-60`}>
+                        no total
+                      </p>
                     </div>
                   </div>
                 );
-              })()
-            )}
+              })()}
 
             {/* KPI Cards Row - 3 colunas compactas */}
             {(() => {
               const isCompany = userAccountType === "company";
               const isAgency = userAccountType === "agency";
-              const c1Data = isCompany
-                ? kpiCompanyCard1[kpiPeriodCard1]
-                : isAgency
-                  ? kpiAgencyCard1[kpiPeriodCard1]
-                  : kpiNomadeCard1[kpiPeriodCard1];
-              const c2DataNota = !isCompany
-                ? isAgency
-                  ? kpiAgencyCard2[kpiPeriodCard2]
-                  : kpiNomadeCard2[kpiPeriodCard2]
-                : null;
+              const c1Data = userOverview
+                ? {
+                    value: String(userOverview.completed_stages),
+                    change: `${userOverview.completed_stages_30d} concluída(s) nos últimos 30 dias`,
+                  }
+                : {
+                    value: "—",
+                    change: userOverviewLoading
+                      ? "Carregando dados reais…"
+                      : "Sem dados de execução",
+                  };
+              // A plataforma ainda não possui uma entidade de avaliações de
+              // usuário. Exibimos explicitamente ausência de dado em vez de
+              // uma nota fictícia.
+              const c2DataNota = {
+                score: 0,
+                stars: 0,
+                avaliacoes: 0,
+                change: "Sem avaliações registradas",
+              };
               const c2CompData = isCompany
                 ? kpiCompanyCard2[kpiPeriodCard2]
                 : null;
-              const c3Data = isCompany
-                ? kpiCompanyCard3[kpiPeriodCard3]
-                : isAgency
-                  ? kpiAgencyCard3[kpiPeriodCard3]
-                  : kpiNomadeCard3[kpiPeriodCard3];
+              const c3Data = userOverview
+                ? {
+                    value: `${userOverview.activity_rate_30d}%`,
+                    nivel: `${userOverview.completed_stages_30d} etapa(s) concluída(s) nos últimos 30 dias`,
+                  }
+                : {
+                    value: "—",
+                    nivel: userOverviewLoading
+                      ? "Carregando dados reais…"
+                      : "Sem atividade registrada",
+                  };
 
               const PeriodBtns = ({
                 active,
@@ -2150,335 +2252,408 @@ export function UserViewSlidePanel({
               );
 
               return (
-                <div className="grid grid-cols-3 gap-3">
-                  {/* Card 1 */}
-                  <div className="bg-gradient-to-br from-blue-50 to-blue-100 rounded-lg px-3 py-2.5 border border-blue-200">
-                    <div className="flex items-center justify-between mb-1">
-                      <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider leading-none">
-                        {isCompany
-                          ? "Projetos ativos"
-                          : isAgency
-                            ? "Tarefas distribuídas"
-                            : "Tarefas executadas"}
-                      </span>
-                      <div className="p-1 bg-white rounded-md border border-blue-200 flex-shrink-0">
-                        <TrendingUp className="h-3.5 w-3.5 text-blue-600" />
-                      </div>
+                <div className="grid grid-cols-4 gap-3">
+                  <div className="flex min-w-0 min-h-[118px] items-start gap-4 rounded-xl border border-slate-200 bg-white px-5 py-5 shadow-sm">
+                    <div className="mt-0.5 flex h-14 w-14 shrink-0 items-center justify-center rounded-xl bg-violet-100 text-violet-600">
+                      <CheckCircle2 className="h-6 w-6" />
                     </div>
-                    <div className="text-2xl font-bold text-slate-900 mb-1.5">
-                      {c1Data.value}
-                    </div>
-                    <PeriodBtns
-                      active={kpiPeriodCard1}
-                      setActive={setKpiPeriodCard1}
-                      activeColor="bg-blue-600 text-white"
-                    />
-                    <div className="text-[11px] text-slate-500">
-                      {c1Data.change} vs. últimos {kpiPeriodCard1} dias
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium text-slate-600">
+                        Tarefas executadas
+                      </p>
+                      <p className="mt-1 text-3xl font-extrabold leading-none text-slate-950">
+                        {c1Data.value}
+                      </p>
+                      <p
+                        className={`mt-3 truncate text-xs font-semibold ${userOverview?.completed_stages_30d ? "text-emerald-600" : "text-slate-500"}`}
+                      >
+                        {userOverview?.completed_stages_30d ? "↑ " : ""}
+                        {c1Data.change}
+                      </p>
                     </div>
                   </div>
 
-                  {/* Card 2 */}
-                  {isCompany ? (
-                    <div className="bg-gradient-to-br from-violet-50 to-violet-100 rounded-lg px-3 py-2.5 border border-violet-200">
-                      <div className="flex items-center justify-between mb-1">
-                        <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider leading-none">
-                          Receita gerada
-                        </span>
-                        <div className="p-1 bg-white rounded-md border border-violet-200 flex-shrink-0">
-                          <TrendingUp className="h-3.5 w-3.5 text-violet-600" />
-                        </div>
-                      </div>
-                      <div className="text-2xl font-bold text-slate-900 mb-1.5">
-                        {c2CompData!.value}
-                      </div>
-                      <PeriodBtns
-                        active={kpiPeriodCard2}
-                        setActive={setKpiPeriodCard2}
-                        activeColor="bg-violet-600 text-white"
-                      />
-                      <div className="text-[11px] text-slate-500">
-                        {c2CompData!.change} vs. últimos {kpiPeriodCard2} dias
-                      </div>
+                  <div className="flex min-w-0 min-h-[118px] items-start gap-4 rounded-xl border border-slate-200 bg-white px-5 py-5 shadow-sm">
+                    <div className="mt-0.5 flex h-14 w-14 shrink-0 items-center justify-center rounded-xl bg-amber-50 text-amber-500">
+                      <Star className="h-6 w-6" />
                     </div>
-                  ) : (
-                    <div className="bg-gradient-to-br from-amber-50 to-amber-100 rounded-lg px-3 py-2.5 border border-amber-200">
-                      <div className="flex items-center justify-between mb-1">
-                        <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider leading-none">
-                          Nota na plataforma
-                        </span>
-                        <div className="p-1 bg-white rounded-md border border-amber-200 flex-shrink-0">
-                          <Activity className="h-3.5 w-3.5 text-amber-600" />
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-1.5 mb-1.5">
-                        <span className="text-2xl font-bold text-slate-900">
-                          {c2DataNota!.score}
-                        </span>
-                        <div className="flex gap-0.5">
-                          {[1, 2, 3, 4, 5].map((s) => (
-                            <span
-                              key={s}
-                              className={`text-sm ${s <= c2DataNota!.stars ? "text-amber-400" : "text-slate-300"}`}
-                            >
-                              ★
-                            </span>
-                          ))}
-                        </div>
-                      </div>
-                      <PeriodBtns
-                        active={kpiPeriodCard2}
-                        setActive={setKpiPeriodCard2}
-                        activeColor="bg-amber-500 text-white"
-                      />
-                      <div className="text-[11px] text-slate-500">
-                        {c2DataNota!.avaliacoes} avaliações ·{" "}
-                        {c2DataNota!.change} últimos {kpiPeriodCard2}d
-                      </div>
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium text-slate-600">
+                        {isCompany ? "Receita gerada" : "Nota na plataforma"}
+                      </p>
+                      <p className="mt-1 text-3xl font-extrabold leading-none text-slate-950">
+                        {isCompany ? c2CompData!.value : "—"}
+                      </p>
+                      <p className="mt-3 truncate text-xs text-slate-500">
+                        {isCompany
+                          ? `${c2CompData!.change} · ${kpiPeriodCard2} dias`
+                          : c2DataNota.change}
+                      </p>
                     </div>
-                  )}
+                  </div>
 
-                  {/* Card 3 - Taxa de Atividade */}
-                  <div className="bg-gradient-to-br from-emerald-50 to-emerald-100 rounded-lg px-3 py-2.5 border border-emerald-200">
-                    <div className="flex items-center justify-between mb-1">
-                      <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider leading-none">
+                  <div className="flex min-w-0 min-h-[118px] items-start gap-4 rounded-xl border border-slate-200 bg-white px-5 py-5 shadow-sm">
+                    <div className="mt-0.5 flex h-14 w-14 shrink-0 items-center justify-center rounded-xl bg-emerald-100 text-emerald-600">
+                      <BarChart3 className="h-6 w-6" />
+                    </div>
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium text-slate-600">
                         Taxa de atividade
-                      </span>
-                      <div className="p-1 bg-white rounded-md border border-emerald-200 flex-shrink-0">
-                        <Zap className="h-3.5 w-3.5 text-emerald-600" />
-                      </div>
+                      </p>
+                      <p className="mt-1 text-3xl font-extrabold leading-none text-slate-950">
+                        {c3Data.value}
+                      </p>
+                      <p
+                        className={`mt-3 truncate text-xs font-semibold ${userOverview?.completed_stages_30d ? "text-emerald-600" : "text-slate-500"}`}
+                      >
+                        {c3Data.nivel}
+                      </p>
                     </div>
-                    <div className="text-2xl font-bold text-slate-900 mb-1.5">
-                      {c3Data.value}
+                  </div>
+
+                  <div className="flex min-w-0 min-h-[118px] items-start gap-4 rounded-xl border border-slate-200 bg-white px-5 py-5 shadow-sm">
+                    <div className="mt-0.5 flex h-14 w-14 shrink-0 items-center justify-center rounded-xl bg-blue-100 text-blue-600">
+                      <Clock className="h-6 w-6" />
                     </div>
-                    <PeriodBtns
-                      active={kpiPeriodCard3}
-                      setActive={setKpiPeriodCard3}
-                      activeColor="bg-emerald-600 text-white"
-                    />
-                    <div className="text-[11px] text-slate-500">
-                      Últimos {kpiPeriodCard3} dias · {c3Data.nivel}
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium text-slate-600">
+                        Último acesso
+                      </p>
+                      <p className="mt-1 truncate text-xl font-extrabold leading-none text-slate-950">
+                        {userOverview?.last_login
+                          ? new Date(userOverview.last_login).toLocaleString(
+                              "pt-BR",
+                              { dateStyle: "short", timeStyle: "short" },
+                            )
+                          : "Nunca acessou"}
+                      </p>
+                      <p className="mt-3 truncate text-xs text-slate-500">
+                        Registro de login da conta
+                      </p>
                     </div>
                   </div>
                 </div>
               );
             })()}
 
-            {/* Estatísticas - Accordion compacto */}
-            <Accordion
-              type="multiple"
-              value={openAccordions}
-              onValueChange={setOpenAccordions}
-              className="space-y-3"
-            >
-              <AccordionItem
-                value="estatisticas-user"
-                className="border border-slate-200 rounded-lg"
-              >
-                <AccordionTrigger className="px-3 py-2 bg-white hover:bg-slate-50 [&[data-state=open]]:bg-slate-50 rounded-t-lg text-xs">
-                  <div className="flex items-center gap-2">
-                    <BarChart3 className="h-4 w-4 text-slate-600" />
-                    <span className="font-semibold text-slate-900">
-                      Estatísticas de Uso
-                    </span>
-                  </div>
-                </AccordionTrigger>
-                <AccordionContent className="border-t border-slate-100 pb-0">
-                  <div className="px-3 py-3 rounded-b-lg">
-                    <div className="grid grid-cols-3 gap-2">
-                      <div className="p-2 bg-gradient-to-br from-emerald-50 to-emerald-100/50 border border-emerald-200/50 rounded-lg">
-                        <div className="flex items-center gap-1.5 mb-0.5">
-                          <Clock className="h-3 w-3 text-emerald-600" />
-                          <span className="text-[10px] font-medium text-emerald-900">
-                            Último login
-                          </span>
-                        </div>
-                        <p className="text-sm font-bold text-emerald-700">
-                          Hoje
-                        </p>
-                        <p className="text-[10px] text-emerald-600">
-                          14:30 (2h atrás)
-                        </p>
-                      </div>
-                      <div className="p-2 bg-gradient-to-br from-purple-50 to-purple-100/50 border border-purple-200/50 rounded-lg">
-                        <div className="flex items-center gap-1.5 mb-0.5">
-                          <Activity className="h-3 w-3 text-purple-600" />
-                          <span className="text-[10px] font-medium text-purple-900">
-                            Média sessão
-                          </span>
-                        </div>
-                        <p className="text-sm font-bold text-purple-700">
-                          18 min
-                        </p>
-                        <p className="text-[10px] text-purple-600">
-                          Tempo médio
-                        </p>
-                      </div>
-                      <div className="p-2 bg-gradient-to-br from-blue-50 to-blue-100/50 border border-blue-200/50 rounded-lg">
-                        <div className="flex items-center gap-1.5 mb-0.5">
-                          <TrendingUp className="h-3 w-3 text-blue-600" />
-                          <span className="text-[10px] font-medium text-blue-900">
-                            Progresso nota
-                          </span>
-                        </div>
-                        <p className="text-sm font-bold text-blue-700">90%</p>
-                        <div className="w-full bg-blue-200 rounded-full h-1 mt-1">
-                          <div
-                            className="bg-blue-500 h-1 rounded-full"
-                            style={{ width: "90%" }}
-                          />
-                        </div>
-                      </div>
+            <section className="grid grid-cols-[minmax(0,1.55fr)_minmax(300px,1fr)] gap-3">
+              <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+                <div className="mb-3 flex items-start justify-between gap-4">
+                  <div className="flex items-center gap-3">
+                    <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-blue-100 text-blue-600">
+                      <TrendingUp className="h-5 w-5" />
+                    </div>
+                    <div>
+                      <h3 className="text-sm font-bold text-slate-950">
+                        Atividade nos últimos {overviewActivityPeriod} dias
+                      </h3>
+                      <p className="text-xs text-slate-500">
+                        Total de ações realizadas na plataforma
+                      </p>
                     </div>
                   </div>
-                </AccordionContent>
-              </AccordionItem>
-            </Accordion>
-
-            {/* Charts - lado a lado compacto */}
-            <div className="grid grid-cols-2 gap-3">
-              <div className="bg-white rounded-lg p-3 border border-slate-200">
-                <h4 className="text-xs font-semibold text-slate-700 mb-2">
-                  Acessos (30 dias)
-                </h4>
-                <ResponsiveContainer width="100%" height={130}>
-                  <LineChart data={accessChartData}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-                    <XAxis dataKey="date" tick={{ fontSize: 9 }} />
-                    <YAxis tick={{ fontSize: 9 }} />
-                    <RechartsTooltip
-                      contentStyle={{
-                        backgroundColor: "#1e293b",
-                        border: "none",
-                        borderRadius: "4px",
-                        color: "#fff",
-                        fontSize: "11px",
-                      }}
-                    />
-                    <Line
-                      type="monotone"
-                      dataKey="acessos"
-                      stroke="#2563eb"
-                      strokeWidth={2}
-                      dot={{ fill: "#2563eb", r: 2 }}
-                    />
-                  </LineChart>
-                </ResponsiveContainer>
-              </div>
-              <div className="bg-white rounded-lg p-3 border border-slate-200">
-                <h4 className="text-xs font-semibold text-slate-700 mb-2">
-                  Módulos Mais Usados
-                </h4>
-                <ResponsiveContainer width="100%" height={130}>
-                  <BarChart
-                    data={moduleUsageData}
-                    layout="vertical"
-                    margin={{ top: 0, right: 20, left: 55, bottom: 0 }}
-                  >
-                    <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-                    <XAxis type="number" tick={{ fontSize: 9 }} />
-                    <YAxis
-                      dataKey="nome"
-                      type="category"
-                      tick={{ fontSize: 9 }}
-                      width={50}
-                    />
-                    <RechartsTooltip
-                      contentStyle={{
-                        backgroundColor: "#1e293b",
-                        border: "none",
-                        borderRadius: "4px",
-                        color: "#fff",
-                        fontSize: "11px",
-                      }}
-                    />
-                    <Bar dataKey="uso" fill="#3b82f6" radius={2} />
-                  </BarChart>
-                </ResponsiveContainer>
-              </div>
-            </div>
-
-            {/* Informações Principais - Accordion compacto */}
-            <Accordion
-              type="multiple"
-              value={openAccordions}
-              onValueChange={setOpenAccordions}
-              className="space-y-3"
-            >
-              <AccordionItem
-                value="info-principais"
-                className="border border-slate-200 rounded-lg"
-              >
-                <AccordionTrigger className="px-3 py-2 bg-white hover:bg-slate-50 [&[data-state=open]]:bg-slate-50 rounded-t-lg text-xs">
-                  <div className="flex items-center gap-2">
-                    <UserIcon className="h-4 w-4 text-blue-600" />
-                    <span className="font-semibold text-slate-900">
-                      Informações Principais
-                    </span>
-                  </div>
-                </AccordionTrigger>
-                <AccordionContent className="px-3 py-2 border-t border-slate-100 pb-3">
-                  <div className="space-y-2">
-                    <div className="flex justify-between items-center">
-                      <span className="text-xs text-slate-500">ID</span>
-                      <code className="bg-slate-100 px-1.5 py-0.5 rounded text-[10px] font-mono text-slate-700">
-                        {reducedUserCode(displayUser.user_code) || displayUser.id}
-                      </code>
-                    </div>
-                    <div className="flex justify-between items-center">
-                      <span className="text-xs text-slate-500">Tipo</span>
-                      {(() => {
-                        const normalized = userAccountType
-                          ? String(userAccountType).toLowerCase().trim()
-                          : null;
-                        if (normalized === "company")
-                          return (
-                            <Badge className="bg-purple-600 hover:bg-purple-700 text-white text-[10px] px-1.5 py-0">
-                              Company
-                            </Badge>
-                          );
-                        if (normalized === "nomad")
-                          return (
-                            <Badge className="btn-brand text-white text-[10px] px-1.5 py-0">
-                              Nomad
-                            </Badge>
-                          );
-                        if (normalized === "agency")
-                          return (
-                            <Badge className="bg-orange-600 hover:bg-orange-700 text-white text-[10px] px-1.5 py-0">
-                              Agency
-                            </Badge>
-                          );
-                        if (normalized)
-                          return (
-                            <Badge className="bg-slate-600 text-[10px] px-1.5 py-0">
-                              {userAccountType}
-                            </Badge>
-                          );
-                        return (
-                          <Badge className="bg-blue-600 text-[10px] px-1.5 py-0">
-                            {userAccountType || "—"}
-                          </Badge>
-                        );
-                      })()}
-                    </div>
-                    <div className="flex justify-between items-center">
-                      <span className="text-xs text-slate-500">Função</span>
-                      <Badge
-                        variant="outline"
-                        className="text-[10px] px-1.5 py-0"
+                  <div className="flex rounded-lg bg-slate-100 p-0.5 shadow-inner">
+                    {([7, 30, 90] as const).map((period) => (
+                      <button
+                        key={period}
+                        type="button"
+                        onClick={() => setOverviewActivityPeriod(period)}
+                        className={cn(
+                          "rounded-md px-3 py-1.5 text-xs font-semibold transition-all",
+                          overviewActivityPeriod === period
+                            ? "bg-[#3b6df6] text-white shadow-sm"
+                            : "text-slate-600 hover:bg-white",
+                        )}
                       >
-                        Admin
-                      </Badge>
-                    </div>
-                    <div className="flex justify-between items-center">
-                      <span className="text-xs text-slate-500">Status</span>
-                      <CheckCircle2 className="h-4 w-4 text-emerald-600" />
-                    </div>
+                        {period}d
+                      </button>
+                    ))}
                   </div>
-                </AccordionContent>
-              </AccordionItem>
-            </Accordion>
+                </div>
+                {overviewActivityData.length > 0 ? (
+                  <ResponsiveContainer width="100%" height={210}>
+                    <AreaChart
+                      data={overviewActivityData}
+                      margin={{ top: 10, right: 12, left: -16, bottom: 0 }}
+                    >
+                      <defs>
+                        <linearGradient
+                          id="user-activity-area"
+                          x1="0"
+                          y1="0"
+                          x2="0"
+                          y2="1"
+                        >
+                          <stop
+                            offset="0%"
+                            stopColor="#3b6df6"
+                            stopOpacity={0.28}
+                          />
+                          <stop
+                            offset="100%"
+                            stopColor="#3b6df6"
+                            stopOpacity={0.02}
+                          />
+                        </linearGradient>
+                      </defs>
+                      <CartesianGrid vertical={true} stroke="#e8edf5" />
+                      <XAxis
+                        dataKey="date"
+                        axisLine={false}
+                        tickLine={false}
+                        tick={{ fill: "#64748b", fontSize: 10 }}
+                        interval="preserveStartEnd"
+                      />
+                      <YAxis
+                        axisLine={false}
+                        tickLine={false}
+                        tick={{ fill: "#64748b", fontSize: 10 }}
+                        width={36}
+                      />
+                      <RechartsTooltip
+                        cursor={{ stroke: "#3b6df6", strokeDasharray: "3 3" }}
+                        contentStyle={{
+                          background: "#0f2458",
+                          border: "none",
+                          borderRadius: 8,
+                          color: "white",
+                          fontSize: 11,
+                          fontWeight: 700,
+                        }}
+                        formatter={(value: number) => [`${value} ações`, ""]}
+                      />
+                      <Area
+                        type="monotone"
+                        dataKey="acessos"
+                        stroke="#2667ff"
+                        strokeWidth={2.5}
+                        fill="url(#user-activity-area)"
+                        dot={false}
+                        activeDot={{
+                          r: 5,
+                          fill: "#2667ff",
+                          stroke: "white",
+                          strokeWidth: 2,
+                        }}
+                      />
+                    </AreaChart>
+                  </ResponsiveContainer>
+                ) : (
+                  <p className="flex h-[210px] items-center justify-center text-sm text-slate-400">
+                    Sem ações neste período.
+                  </p>
+                )}
+              </div>
+              <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+                <div className="mb-5 flex items-center gap-3">
+                  <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-violet-100 text-violet-600">
+                    <Building2 className="h-5 w-5" />
+                  </div>
+                  <div>
+                    <h3 className="text-sm font-bold text-slate-950">
+                      Módulos mais utilizados
+                    </h3>
+                    <p className="text-xs text-slate-500">
+                      Quantidade de acessos por módulo (últimos 30 dias)
+                    </p>
+                  </div>
+                </div>
+                {overviewModuleUsageData.length > 0 ? (
+                  <div className="space-y-3.5">
+                    {overviewModuleUsageData.map((module) => {
+                      const maximum = Math.max(
+                        ...overviewModuleUsageData.map((item) => item.uso),
+                        1,
+                      );
+                      return (
+                        <div
+                          key={module.nome}
+                          className="grid grid-cols-[105px_minmax(0,1fr)_30px] items-center gap-2 text-xs"
+                        >
+                          <span className="truncate font-medium text-slate-800">
+                            {module.nome}
+                          </span>
+                          <div className="h-3 rounded-full bg-slate-100">
+                            <div
+                              className="h-full rounded-full"
+                              style={{
+                                width: `${Math.max((module.uso / maximum) * 100, 8)}%`,
+                                backgroundColor: module.cor,
+                              }}
+                            />
+                          </div>
+                          <span className="text-right font-bold text-slate-800">
+                            {module.uso}
+                          </span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <p className="flex h-[210px] items-center justify-center text-sm text-slate-400">
+                    Ainda não há atividades categorizadas.
+                  </p>
+                )}
+              </div>
+            </section>
+
+            <section className="grid grid-cols-4 gap-3">
+              <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+                <div className="mb-4 flex items-center gap-3">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-blue-100 text-blue-600">
+                    <FileText className="h-5 w-5" />
+                  </div>
+                  <div>
+                    <h3 className="text-sm font-bold text-slate-950">
+                      Resumo da conta
+                    </h3>
+                    <p className="text-xs text-slate-500">
+                      Atividades recentes
+                    </p>
+                  </div>
+                </div>
+                {isLocalViniciusDemo ? (
+                  <div className="space-y-3 border-l border-slate-200 pl-4">
+                    {[
+                      ["Login realizado", "Hoje, 14:30", "bg-blue-500"],
+                      ["Acessou Relatórios", "Hoje, 11:12", "bg-violet-500"],
+                      ["Concluiu 5 tarefas", "Ontem, 16:10", "bg-emerald-500"],
+                    ].map(([title, time, color]) => (
+                      <div key={title} className="relative">
+                        <span
+                          className={cn(
+                            "absolute -left-[21px] top-1 h-2.5 w-2.5 rounded-full",
+                            color,
+                          )}
+                        />
+                        <p className="text-xs font-semibold text-slate-800">
+                          {title}
+                        </p>
+                        <p className="text-[11px] text-slate-500">{time}</p>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="flex h-[105px] items-center text-xs text-slate-400">
+                    Nenhuma atividade recente.
+                  </p>
+                )}
+              </div>
+              <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+                <div className="mb-4 flex items-center gap-3">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-violet-100 text-violet-600">
+                    <Clock className="h-5 w-5" />
+                  </div>
+                  <div>
+                    <h3 className="text-sm font-bold text-slate-950">
+                      Próximas ações
+                    </h3>
+                    <p className="text-xs text-slate-500">
+                      Tarefas e compromissos
+                    </p>
+                  </div>
+                </div>
+                {isLocalViniciusDemo ? (
+                  <div className="space-y-3">
+                    {[
+                      ["Revisar permissões de equipe", "Hoje · 17:00"],
+                      ["Analisar relatório mensal", "Amanhã · 09:00"],
+                      ["Acompanhar campanha Q3", "Amanhã · 14:00"],
+                    ].map(([title, time]) => (
+                      <div key={title} className="flex gap-2">
+                        <span className="mt-0.5 h-4 w-4 shrink-0 rounded-full border-2 border-slate-300" />
+                        <div className="min-w-0">
+                          <p className="truncate text-xs font-semibold text-slate-800">
+                            {title}
+                          </p>
+                          <p className="text-[11px] text-slate-500">{time}</p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="flex h-[105px] items-center text-xs text-slate-400">
+                    Nenhuma ação pendente.
+                  </p>
+                )}
+              </div>
+              <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+                <div className="mb-4 flex items-center gap-3">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-amber-100 text-amber-600">
+                    <Zap className="h-5 w-5" />
+                  </div>
+                  <div>
+                    <h3 className="text-sm font-bold text-slate-950">
+                      Insights rápidos
+                    </h3>
+                    <p className="text-xs text-slate-500">
+                      Indicadores da conta
+                    </p>
+                  </div>
+                </div>
+                {isLocalViniciusDemo ? (
+                  <div className="space-y-3">
+                    <div className="rounded-xl bg-emerald-50 p-2.5">
+                      <p className="text-xs font-bold text-emerald-800">
+                        Ótimo desempenho!
+                      </p>
+                      <p className="mt-0.5 text-[11px] leading-snug text-emerald-700">
+                        Atividade aumentou 12% nos últimos 30 dias.
+                      </p>
+                    </div>
+                    <p className="text-xs font-semibold text-slate-800">
+                      Você está entre os 10%
+                    </p>
+                    <p className="-mt-2 text-[11px] text-slate-500">
+                      de usuários mais ativos da plataforma.
+                    </p>
+                  </div>
+                ) : (
+                  <p className="flex h-[105px] items-center text-xs text-slate-400">
+                    Sem insights disponíveis.
+                  </p>
+                )}
+              </div>
+              <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+                <div className="mb-4 flex items-center gap-3">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-cyan-100 text-cyan-600">
+                    <UserIcon className="h-5 w-5" />
+                  </div>
+                  <div>
+                    <h3 className="text-sm font-bold text-slate-950">
+                      Informações principais
+                    </h3>
+                    <p className="text-xs text-slate-500">Dados da conta</p>
+                  </div>
+                </div>
+                <div className="space-y-2.5 text-xs">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-slate-500">ID</span>
+                    <code className="rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-mono text-slate-700">
+                      {reducedUserCode(displayUser.user_code) || displayUser.id}
+                    </code>
+                  </div>
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-slate-500">Tipo</span>
+                    <Badge className="bg-violet-100 px-2 py-0 text-[10px] text-violet-700 hover:bg-violet-100">
+                      {userAccountType || "Admin"}
+                    </Badge>
+                  </div>
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-slate-500">Função</span>
+                    <span className="font-semibold text-slate-800">
+                      Administrador
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-slate-500">Status</span>
+                    <span className="inline-flex items-center gap-1 font-semibold text-emerald-600">
+                      <CheckCircle2 className="h-3.5 w-3.5" /> Ativo
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </section>
           </TabsContent>
 
           {/* Carteira — agency only */}
@@ -2490,18 +2665,39 @@ export function UserViewSlidePanel({
               {(() => {
                 const af = agencyFinancial;
                 const fmtBRL = (v: number) =>
-                  v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
-                const paidTotal   = af.invoices.filter(i => i.status === "paid").reduce((s, i) => s + i.amount, 0);
-                const pendingTotal= af.invoices.filter(i => i.status === "pending" || i.status === "overdue").reduce((s, i) => s + i.amount, 0);
-                const overdueTotal= af.invoices.filter(i => i.status === "overdue").reduce((s, i) => s + i.amount, 0);
-                const saldoLiq    = af.projectRevenue - paidTotal;
+                  v.toLocaleString("pt-BR", {
+                    style: "currency",
+                    currency: "BRL",
+                  });
+                const paidTotal = af.invoices
+                  .filter((i) => i.status === "paid")
+                  .reduce((s, i) => s + i.amount, 0);
+                const pendingTotal = af.invoices
+                  .filter(
+                    (i) => i.status === "pending" || i.status === "overdue",
+                  )
+                  .reduce((s, i) => s + i.amount, 0);
+                const overdueTotal = af.invoices
+                  .filter((i) => i.status === "overdue")
+                  .reduce((s, i) => s + i.amount, 0);
+                const saldoLiq = af.projectRevenue - paidTotal;
 
-                const filtered = af.invoices.filter(i => walletStatusFilter === "all" || i.status === walletStatusFilter);
+                const filtered = af.invoices.filter(
+                  (i) =>
+                    walletStatusFilter === "all" ||
+                    i.status === walletStatusFilter,
+                );
 
                 const statusCfg = {
-                  pending: { label: "Pendente",  cls: "bg-amber-100 text-amber-700" },
-                  paid:    { label: "Paga",      cls: "bg-emerald-100 text-emerald-700" },
-                  overdue: { label: "Vencida",   cls: "bg-red-100 text-red-700" },
+                  pending: {
+                    label: "Pendente",
+                    cls: "bg-amber-100 text-amber-700",
+                  },
+                  paid: {
+                    label: "Paga",
+                    cls: "bg-emerald-100 text-emerald-700",
+                  },
+                  overdue: { label: "Vencida", cls: "bg-red-100 text-red-700" },
                 } as const;
 
                 return (
@@ -2514,10 +2710,16 @@ export function UserViewSlidePanel({
                           <div className="w-7 h-7 rounded-lg bg-emerald-100 flex items-center justify-center">
                             <TrendingUp className="h-4 w-4" />
                           </div>
-                          <span className="text-xs font-semibold uppercase tracking-wider">Entradas</span>
+                          <span className="text-xs font-semibold uppercase tracking-wider">
+                            Entradas
+                          </span>
                         </div>
-                        <p className="text-2xl font-black text-slate-900">{fmtBRL(af.projectRevenue)}</p>
-                        <p className="text-xs text-slate-400">receita total de projetos</p>
+                        <p className="text-2xl font-black text-slate-900">
+                          {fmtBRL(af.projectRevenue)}
+                        </p>
+                        <p className="text-xs text-slate-400">
+                          receita total de projetos
+                        </p>
                       </div>
                       {/* Saídas */}
                       <div className="bg-white rounded-xl border border-red-200 p-4 space-y-1">
@@ -2525,10 +2727,16 @@ export function UserViewSlidePanel({
                           <div className="w-7 h-7 rounded-lg bg-red-100 flex items-center justify-center">
                             <CreditCard className="h-4 w-4" />
                           </div>
-                          <span className="text-xs font-semibold uppercase tracking-wider">Saídas</span>
+                          <span className="text-xs font-semibold uppercase tracking-wider">
+                            Saídas
+                          </span>
                         </div>
-                        <p className="text-2xl font-black text-slate-900">{fmtBRL(paidTotal)}</p>
-                        <p className="text-xs text-slate-400">faturas pagas à Allka</p>
+                        <p className="text-2xl font-black text-slate-900">
+                          {fmtBRL(paidTotal)}
+                        </p>
+                        <p className="text-xs text-slate-400">
+                          faturas pagas à Allka
+                        </p>
                       </div>
                       {/* Saldo líquido */}
                       <div className="bg-white rounded-xl border border-blue-200 p-4 space-y-1">
@@ -2536,10 +2744,18 @@ export function UserViewSlidePanel({
                           <div className="w-7 h-7 rounded-lg bg-blue-100 flex items-center justify-center">
                             <Wallet className="h-4 w-4" />
                           </div>
-                          <span className="text-xs font-semibold uppercase tracking-wider">Saldo estimado</span>
+                          <span className="text-xs font-semibold uppercase tracking-wider">
+                            Saldo estimado
+                          </span>
                         </div>
-                        <p className={`text-2xl font-black ${saldoLiq >= 0 ? "text-emerald-700" : "text-red-600"}`}>{fmtBRL(saldoLiq)}</p>
-                        <p className="text-xs text-slate-400">entradas − saídas</p>
+                        <p
+                          className={`text-2xl font-black ${saldoLiq >= 0 ? "text-emerald-700" : "text-red-600"}`}
+                        >
+                          {fmtBRL(saldoLiq)}
+                        </p>
+                        <p className="text-xs text-slate-400">
+                          entradas − saídas
+                        </p>
                       </div>
                       {/* A vencer */}
                       <div className="bg-white rounded-xl border border-amber-200 p-4 space-y-1">
@@ -2547,29 +2763,48 @@ export function UserViewSlidePanel({
                           <div className="w-7 h-7 rounded-lg bg-amber-100 flex items-center justify-center">
                             <Clock className="h-4 w-4" />
                           </div>
-                          <span className="text-xs font-semibold uppercase tracking-wider">A vencer</span>
+                          <span className="text-xs font-semibold uppercase tracking-wider">
+                            A vencer
+                          </span>
                         </div>
-                        <p className="text-2xl font-black text-slate-900">{fmtBRL(pendingTotal)}</p>
+                        <p className="text-2xl font-black text-slate-900">
+                          {fmtBRL(pendingTotal)}
+                        </p>
                         {overdueTotal > 0 && (
-                          <p className="text-xs text-red-500 font-medium">{fmtBRL(overdueTotal)} vencido</p>
+                          <p className="text-xs text-red-500 font-medium">
+                            {fmtBRL(overdueTotal)} vencido
+                          </p>
                         )}
-                        <p className="text-xs text-slate-400">faturas pendentes</p>
+                        <p className="text-xs text-slate-400">
+                          faturas pendentes
+                        </p>
                       </div>
                     </div>
 
                     {/* ── MRR + Plano ──────────────────────────────── */}
                     <div className="bg-white rounded-xl border border-slate-200 p-4 flex items-center gap-4">
                       <div className="flex-1">
-                        <p className="text-xs text-slate-400 mb-0.5">Consumo mensal (MRR)</p>
-                        <p className="text-xl font-black text-slate-900">{fmtBRL(af.currentMrr)}<span className="text-sm font-normal text-slate-400">/mês</span></p>
+                        <p className="text-xs text-slate-400 mb-0.5">
+                          Consumo mensal (MRR)
+                        </p>
+                        <p className="text-xl font-black text-slate-900">
+                          {fmtBRL(af.currentMrr)}
+                          <span className="text-sm font-normal text-slate-400">
+                            /mês
+                          </span>
+                        </p>
                       </div>
                       <div className="h-10 w-px bg-slate-100" />
                       <div>
-                        <p className="text-xs text-slate-400 mb-1">Plano ativo</p>
+                        <p className="text-xs text-slate-400 mb-1">
+                          Plano ativo
+                        </p>
                         <span className="inline-flex items-center gap-1.5 bg-indigo-100 text-indigo-700 text-xs font-semibold px-3 py-1 rounded-full">
                           {af.plan ? `Plano R$ ${af.plan}` : "Freemium"}
                           {af.planDiscount > 0 && (
-                            <span className="bg-emerald-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full">-{af.planDiscount}%</span>
+                            <span className="bg-emerald-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full">
+                              -{af.planDiscount}%
+                            </span>
                           )}
                         </span>
                       </div>
@@ -2583,7 +2818,7 @@ export function UserViewSlidePanel({
                           Faturas Allka
                         </h3>
                         <div className="flex gap-1">
-                          {["all", "pending", "paid", "overdue"].map(s => (
+                          {["all", "pending", "paid", "overdue"].map((s) => (
                             <button
                               key={s}
                               onClick={() => setWalletStatusFilter(s)}
@@ -2593,33 +2828,53 @@ export function UserViewSlidePanel({
                                   : "bg-slate-100 text-slate-500 hover:bg-slate-200"
                               }`}
                             >
-                              {s === "all" ? "Todas" : statusCfg[s as keyof typeof statusCfg]?.label ?? s}
+                              {s === "all"
+                                ? "Todas"
+                                : (statusCfg[s as keyof typeof statusCfg]
+                                    ?.label ?? s)}
                             </button>
                           ))}
                         </div>
                       </div>
                       {filtered.length === 0 ? (
-                        <div className="py-10 text-center text-sm text-slate-400">Nenhuma fatura encontrada.</div>
+                        <div className="py-10 text-center text-sm text-slate-400">
+                          Nenhuma fatura encontrada.
+                        </div>
                       ) : (
                         <div className="divide-y divide-slate-50">
-                          {filtered.map(inv => {
+                          {filtered.map((inv) => {
                             const cfg = statusCfg[inv.status];
                             return (
-                              <div key={inv.id} className="flex items-center px-4 py-3 gap-3 hover:bg-slate-50 transition-colors">
+                              <div
+                                key={inv.id}
+                                className="flex items-center px-4 py-3 gap-3 hover:bg-slate-50 transition-colors"
+                              >
                                 <div className="flex-1 min-w-0">
                                   <div className="flex items-center gap-2 mb-0.5">
-                                    <span className="text-xs font-mono text-slate-400">{inv.number}</span>
-                                    <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${cfg?.cls}`}>
+                                    <span className="text-xs font-mono text-slate-400">
+                                      {inv.number}
+                                    </span>
+                                    <span
+                                      className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${cfg?.cls}`}
+                                    >
                                       {cfg?.label}
                                     </span>
                                   </div>
-                                  <p className="text-sm font-medium text-slate-800 truncate">{inv.description}</p>
+                                  <p className="text-sm font-medium text-slate-800 truncate">
+                                    {inv.description}
+                                  </p>
                                   <p className="text-[10px] text-slate-400 mt-0.5">
-                                    Venc. {new Date(inv.dueDate + "T00:00:00").toLocaleDateString("pt-BR")}
-                                    {inv.paidAt && ` · Pago em ${new Date(inv.paidAt).toLocaleDateString("pt-BR")}`}
+                                    Venc.{" "}
+                                    {new Date(
+                                      inv.dueDate + "T00:00:00",
+                                    ).toLocaleDateString("pt-BR")}
+                                    {inv.paidAt &&
+                                      ` · Pago em ${new Date(inv.paidAt).toLocaleDateString("pt-BR")}`}
                                   </p>
                                 </div>
-                                <p className={`text-sm font-bold shrink-0 ${inv.status === "overdue" ? "text-red-600" : inv.status === "paid" ? "text-emerald-700" : "text-slate-800"}`}>
+                                <p
+                                  className={`text-sm font-bold shrink-0 ${inv.status === "overdue" ? "text-red-600" : inv.status === "paid" ? "text-emerald-700" : "text-slate-800"}`}
+                                >
                                   {fmtBRL(inv.amount)}
                                 </p>
                               </div>
@@ -2637,110 +2892,10 @@ export function UserViewSlidePanel({
           {/* Conta + Dados Unificado */}
           <TabsContent
             value="conta"
-            className="flex-1 flex flex-col overflow-hidden bg-slate-200 dark:bg-background mt-0"
+            className="mt-0 flex flex-1 flex-col overflow-hidden bg-white dark:bg-background"
           >
-            {/* Header */}
-            <div className="flex items-center justify-between flex-shrink-0 px-[50px] pt-[25px] pb-4 bg-slate-200 dark:bg-background">
-              <h3 className="text-sm font-semibold text-slate-900">
-                Conta &amp; Dados
-              </h3>
-              <div className="flex items-center gap-2">
-                {/* Expandir toggle */}
-                <button
-                  onClick={() => {
-                    const allOpen = USER_DADOS_ALL_ACCORDIONS.every((a) =>
-                      dadosOpenAccordions.includes(a),
-                    );
-                    setDadosOpenAccordions(
-                      allOpen ? [] : USER_DADOS_ALL_ACCORDIONS,
-                    );
-                  }}
-                  className="flex items-center gap-2 group"
-                  title={
-                    USER_DADOS_ALL_ACCORDIONS.every((a) =>
-                      dadosOpenAccordions.includes(a),
-                    )
-                      ? "Fechar todos"
-                      : "Abrir todos"
-                  }
-                >
-                  <span className="text-xs text-slate-500 group-hover:text-slate-700 transition-colors select-none">
-                    {USER_DADOS_ALL_ACCORDIONS.every((a) =>
-                      dadosOpenAccordions.includes(a),
-                    )
-                      ? "Fechar"
-                      : "Expandir"}
-                  </span>
-                  <div
-                    className={`relative w-9 h-5 rounded-full transition-colors duration-200 ${
-                      USER_DADOS_ALL_ACCORDIONS.every((a) =>
-                        dadosOpenAccordions.includes(a),
-                      )
-                        ? "bg-blue-600"
-                        : "bg-slate-300"
-                    }`}
-                  >
-                    <div
-                      className={`absolute top-0.5 h-4 w-4 rounded-full bg-white shadow transition-transform duration-200 ${
-                        USER_DADOS_ALL_ACCORDIONS.every((a) =>
-                          dadosOpenAccordions.includes(a),
-                        )
-                          ? "translate-x-4"
-                          : "translate-x-0.5"
-                      }`}
-                    />
-                  </div>
-                </button>
-                {/* Edit/Save/Cancel */}
-                {!isContaEditMode && !isDadosEditMode ? (
-                  <Button
-                    onClick={() => {
-                      handleContaEditMode();
-                      handleDadosEditMode();
-                    }}
-                    size="sm"
-                    className="btn-brand"
-                  >
-                    <Edit2 className="h-4 w-4 mr-2" />
-                    Editar
-                  </Button>
-                ) : (
-                  <div className="flex gap-2">
-                    <Button
-                      onClick={handleContaSaveClick}
-                      size="sm"
-                      disabled={isSaving}
-                      className="btn-brand"
-                    >
-                      {isSaving ? (
-                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                      ) : (
-                        <Save className="h-4 w-4 mr-2" />
-                      )}
-                      {isSaving ? "Salvando..." : "Salvar"}
-                    </Button>
-                    <Button
-                      onClick={() => {
-                        setPendingCancelCallback(() => () => {
-                          handleContaCancelEdit();
-                          setIsDadosEditMode(false);
-                          setDadosEditedData({});
-                        });
-                        setShowCancelEditConfirm(true);
-                      }}
-                      size="sm"
-                      variant="outline"
-                    >
-                      <XCircle className="h-4 w-4 mr-2" />
-                      Cancelar
-                    </Button>
-                  </div>
-                )}
-              </div>
-            </div>
-
             {/* Accordions */}
-            <div className="flex-1 overflow-y-auto px-[50px] pb-6">
+            <div className="allka-users-scroll flex-1 overflow-y-auto px-0 pb-2">
               <Accordion
                 type="multiple"
                 value={dadosOpenAccordions}
@@ -2761,125 +2916,185 @@ export function UserViewSlidePanel({
                     </div>
                   </AccordionTrigger>
                   <AccordionContent className="px-3 py-3 border-t border-slate-100 bg-slate-50/30">
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-1.5">
+                    <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-3">
                       {/* Nome Completo */}
-                      <div className="bg-slate-100/70 rounded-lg px-2.5 py-2">
-                        <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 mb-1">
-                          Nome Completo
-                        </p>
-                        {isContaEditMode ? (
-                          <Input
-                            value={getContaDisplayValue("name") as string}
-                            onChange={(e) =>
-                              handleContaFieldChange("name", e.target.value)
-                            }
-                            className="border-slate-300 bg-white h-7 text-sm"
-                            placeholder="Nome completo"
-                          />
-                        ) : (
-                          <p className="text-sm font-semibold text-slate-800">
-                            {getContaDisplayValue("name")}
+                      <div className="flex min-h-[74px] items-center gap-3 rounded-xl border border-blue-200 bg-gradient-to-br from-white to-blue-50/60 px-3 py-2.5 shadow-sm">
+                        <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-blue-100 text-blue-600">
+                          <UserIcon className="h-5 w-5" />
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1">
+                            Nome completo
                           </p>
+                          {isDataFieldEditing("conta", "name") ? (
+                            <Input
+                              value={getContaDisplayValue("name") as string}
+                              onChange={(e) =>
+                                handleContaFieldChange("name", e.target.value)
+                              }
+                              autoFocus
+                              className="border-blue-300 bg-white h-8 text-sm"
+                              placeholder="Nome completo"
+                            />
+                          ) : (
+                            <p className="text-sm font-semibold text-slate-800">
+                              {getContaDisplayValue("name") || "—"}
+                            </p>
+                          )}
+                        </div>
+                        {!isContaEditMode && (
+                          <InlineFieldEditButton
+                            scope="conta"
+                            field="name"
+                            label="nome completo"
+                          />
                         )}
                       </div>
 
                       {/* Email */}
-                      <div className="bg-slate-100/70 rounded-lg px-2.5 py-2">
-                        <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 mb-1">
-                          Email
-                        </p>
-                        {isContaEditMode ? (
-                          <Input
-                            type="email"
-                            value={getContaDisplayValue("email") as string}
-                            onChange={(e) =>
-                              handleContaFieldChange("email", e.target.value)
-                            }
-                            className="border-slate-300 bg-white h-7 text-sm"
-                            placeholder="email@exemplo.com"
-                          />
-                        ) : (
-                          <p className="text-sm font-semibold text-slate-800 truncate">
-                            {getContaDisplayValue("email")}
+                      <div className="flex min-h-[74px] items-center gap-3 rounded-xl border border-slate-200 bg-white px-3 py-2.5 shadow-sm">
+                        <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-purple-100 text-purple-600">
+                          <Mail className="h-5 w-5" />
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 mb-1">
+                            Email
                           </p>
+                          {isDataFieldEditing("conta", "email") ? (
+                            <Input
+                              type="email"
+                              value={getContaDisplayValue("email") as string}
+                              onChange={(e) =>
+                                handleContaFieldChange("email", e.target.value)
+                              }
+                              autoFocus
+                              className="border-purple-300 bg-white h-8 text-sm"
+                              placeholder="email@exemplo.com"
+                            />
+                          ) : (
+                            <p className="text-sm font-semibold text-slate-800 truncate">
+                              {getContaDisplayValue("email")}
+                            </p>
+                          )}
+                        </div>
+                        {!isContaEditMode && (
+                          <InlineFieldEditButton
+                            scope="conta"
+                            field="email"
+                            label="e-mail"
+                          />
                         )}
                       </div>
 
                       {/* Username / Login */}
-                      <div className="bg-slate-100/70 rounded-lg px-2.5 py-2">
-                        <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 mb-1">
-                          Username / Login
-                        </p>
-                        <p className="text-sm font-semibold text-slate-800 truncate">
-                          {displayUser.email?.split("@")[0] || "username"}
-                        </p>
+                      <div className="flex min-h-[74px] items-center gap-3 rounded-xl border border-slate-200 bg-white px-3 py-2.5 shadow-sm">
+                        <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-emerald-100 text-emerald-600">
+                          <UserIcon className="h-5 w-5" />
+                        </div>
+                        <div className="min-w-0">
+                          <p className="mb-1 text-[10px] font-semibold uppercase tracking-wider text-slate-400">
+                            Login
+                          </p>
+                          <p className="truncate text-sm font-semibold text-slate-800">
+                            {displayUser.username ||
+                              displayUser.email?.split("@")[0] ||
+                              "—"}
+                          </p>
+                        </div>
                       </div>
 
                       {/* ID (reduzido) */}
-                      <div className="bg-slate-100/70 rounded-lg px-2.5 py-2">
-                        <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 mb-1">
-                          ID
-                        </p>
-                        <p className="text-sm font-semibold text-slate-800 font-mono">
-                          {reducedUserCode(displayUser.user_code) || "—"}
-                        </p>
-                      </div>
-
-                      {/* ID Interno */}
-                      <div className="bg-slate-100/70 rounded-lg px-2.5 py-2">
-                        <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 mb-1">
-                          ID Interno
-                        </p>
-                        <p className="text-sm font-semibold text-slate-800 font-mono">
-                          {displayUser.id}
-                        </p>
+                      <div className="flex min-h-[74px] items-center gap-3 rounded-xl border border-slate-200 bg-white px-3 py-2.5 shadow-sm">
+                        <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-amber-100 text-amber-600">
+                          <FileText className="h-5 w-5" />
+                        </div>
+                        <div className="min-w-0">
+                          <p className="mb-1 text-[10px] font-semibold uppercase tracking-wider text-slate-400">
+                            ID do usuário
+                          </p>
+                          <p className="font-mono text-sm font-semibold text-slate-800">
+                            {reducedUserCode(displayUser.user_code) || "—"}
+                          </p>
+                        </div>
                       </div>
 
                       {/* Data Criação */}
-                      <div className="bg-slate-100/70 rounded-lg px-2.5 py-2">
-                        <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 mb-1">
-                          Data de Criação
-                        </p>
-                        <p className="text-sm font-semibold text-slate-800">
-                          10 jan 2024
-                        </p>
+                      <div className="flex min-h-[64px] items-center gap-3 rounded-xl border border-slate-200 bg-white px-3 py-2.5 shadow-sm">
+                        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-amber-100 text-amber-600">
+                          <Clock className="h-5 w-5" />
+                        </div>
+                        <div className="min-w-0">
+                          <p className="mb-1 text-[10px] font-semibold uppercase tracking-wider text-slate-400">
+                            Data de criação
+                          </p>
+                          <p className="text-sm font-semibold text-slate-800">
+                            {displayUser.created_at
+                              ? new Date(displayUser.created_at).toLocaleString(
+                                  "pt-BR",
+                                )
+                              : "—"}
+                          </p>
+                        </div>
                       </div>
 
                       {/* Último Login */}
-                      <div className="bg-slate-100/70 rounded-lg px-2.5 py-2">
-                        <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 mb-1">
-                          Último Login
-                        </p>
-                        <p className="text-sm font-semibold text-slate-800">
-                          Hoje às 14:30
-                        </p>
+                      <div className="flex min-h-[64px] items-center gap-3 rounded-xl border border-slate-200 bg-white px-3 py-2.5 shadow-sm">
+                        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-blue-100 text-blue-600">
+                          <Clock className="h-5 w-5" />
+                        </div>
+                        <div className="min-w-0">
+                          <p className="mb-1 text-[10px] font-semibold uppercase tracking-wider text-slate-400">
+                            Último login
+                          </p>
+                          <p className="text-sm font-semibold text-slate-800">
+                            {displayUser.last_login
+                              ? new Date(displayUser.last_login).toLocaleString(
+                                  "pt-BR",
+                                )
+                              : "Nunca acessou"}
+                          </p>
+                        </div>
                       </div>
 
                       {/* Tipo de Usuário */}
-                      <div className="bg-slate-100/70 rounded-lg px-2.5 py-2 md:col-span-2">
-                        <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 mb-1">
-                          Tipo de Usuário
-                        </p>
-                        {isContaEditMode ? (
-                          <select
-                            value={
-                              (getContaDisplayValue("role") as string) ||
-                              "admin"
-                            }
-                            onChange={(e) =>
-                              handleContaFieldChange("role", e.target.value)
-                            }
-                            className="w-full border border-slate-300 rounded px-2 py-1 text-sm font-medium bg-white"
-                          >
-                            <option value="admin">Admin</option>
-                            <option value="nômade">Nômade</option>
-                            <option value="líder">Líder</option>
-                            <option value="usuário">Usuário</option>
-                          </select>
-                        ) : (
-                          <Badge className="bg-blue-100 text-blue-700 border border-blue-300 capitalize text-xs">
-                            {getContaDisplayValue("role")}
-                          </Badge>
+                      <div className="relative flex min-h-[64px] items-center gap-3 rounded-xl border border-slate-200 bg-white px-3 py-2.5 pr-12 shadow-sm">
+                        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-blue-100 text-blue-600">
+                          <UserIcon className="h-5 w-5" />
+                        </div>
+                        <div className="min-w-0">
+                          <p className="mb-1 text-[10px] font-semibold uppercase tracking-wider text-slate-400">
+                            Tipo de usuário
+                          </p>
+                          {isDataFieldEditing("conta", "role") ? (
+                            <select
+                              value={
+                                (getContaDisplayValue("role") as string) ||
+                                "admin"
+                              }
+                              onChange={(e) =>
+                                handleContaFieldChange("role", e.target.value)
+                              }
+                              className="w-full border border-slate-300 rounded px-2 py-1 text-sm font-medium bg-white"
+                            >
+                              <option value="admin">Admin</option>
+                              <option value="nômade">Nômade</option>
+                              <option value="líder">Líder</option>
+                              <option value="usuário">Usuário</option>
+                            </select>
+                          ) : (
+                            <Badge className="bg-blue-100 text-blue-700 border border-blue-300 capitalize text-xs">
+                              {getContaDisplayValue("role")}
+                            </Badge>
+                          )}
+                        </div>
+                        {!isContaEditMode && (
+                          <div className="mt-2">
+                            <InlineFieldEditButton
+                              scope="conta"
+                              field="role"
+                              label="tipo de usuário"
+                            />
+                          </div>
                         )}
                       </div>
                     </div>
@@ -2906,11 +3121,11 @@ export function UserViewSlidePanel({
                     </div>
                   </AccordionTrigger>
                   <AccordionContent className="px-3 py-3 border-t border-slate-100 bg-slate-50/30">
-                    <div className="bg-slate-100/70 rounded-lg px-2.5 py-2">
+                    <div className="relative bg-slate-100/70 rounded-lg px-2.5 py-2 pr-12">
                       <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 mb-1.5">
                         Status da Conta
                       </p>
-                      {isContaEditMode ? (
+                      {isDataFieldEditing("conta", "status") ? (
                         <div className="flex flex-wrap gap-2">
                           {(
                             [
@@ -2984,6 +3199,15 @@ export function UserViewSlidePanel({
                             getCurrentStatus().slice(1)}
                         </span>
                       )}
+                      {!isContaEditMode && (
+                        <div className="absolute right-2 top-2">
+                          <InlineFieldEditButton
+                            scope="conta"
+                            field="status"
+                            label="status da conta"
+                          />
+                        </div>
+                      )}
                     </div>
                   </AccordionContent>
                 </AccordionItem>
@@ -3003,11 +3227,11 @@ export function UserViewSlidePanel({
                   </AccordionTrigger>
                   <AccordionContent className="px-3 py-3 border-t border-slate-100 bg-slate-50/30">
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-1.5">
-                      <div className="bg-slate-100/70 rounded-lg px-2.5 py-2">
+                      <div className="relative bg-slate-100/70 rounded-lg px-2.5 py-2 pr-12">
                         <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 mb-1">
                           Nome Completo
                         </p>
-                        {isDadosEditMode ? (
+                        {isDataFieldEditing("dados", "name") ? (
                           <Input
                             value={getDadosDisplayValue("name") as string}
                             onChange={(e) =>
@@ -3020,12 +3244,21 @@ export function UserViewSlidePanel({
                             {getDadosDisplayValue("name")}
                           </p>
                         )}
+                        {!isDadosEditMode && (
+                          <div className="absolute right-2 top-2">
+                            <InlineFieldEditButton
+                              scope="dados"
+                              field="name"
+                              label="nome completo"
+                            />
+                          </div>
+                        )}
                       </div>
-                      <div className="bg-slate-100/70 rounded-lg px-2.5 py-2">
+                      <div className="relative bg-slate-100/70 rounded-lg px-2.5 py-2 pr-12">
                         <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 mb-1">
                           Nome Social
                         </p>
-                        {isDadosEditMode ? (
+                        {isDataFieldEditing("dados", "social_name") ? (
                           <Input
                             value={
                               (getDadosDisplayValue("social_name") as string) ||
@@ -3045,12 +3278,21 @@ export function UserViewSlidePanel({
                             {getDadosDisplayValue("social_name") || "—"}
                           </p>
                         )}
+                        {!isDadosEditMode && (
+                          <div className="absolute right-2 top-2">
+                            <InlineFieldEditButton
+                              scope="dados"
+                              field="social_name"
+                              label="nome social"
+                            />
+                          </div>
+                        )}
                       </div>
-                      <div className="bg-slate-100/70 rounded-lg px-2.5 py-2">
+                      <div className="relative bg-slate-100/70 rounded-lg px-2.5 py-2 pr-12">
                         <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 mb-1">
                           Data de Nascimento
                         </p>
-                        {isDadosEditMode ? (
+                        {isDataFieldEditing("dados", "birth_date") ? (
                           <Input
                             type="date"
                             value={
@@ -3067,16 +3309,24 @@ export function UserViewSlidePanel({
                           />
                         ) : (
                           <p className="text-sm font-semibold text-slate-800">
-                            {getDadosDisplayValue("birth_date") ||
-                              "15 mai 1990"}
+                            {getDadosDisplayValue("birth_date") || "—"}
                           </p>
                         )}
+                        {!isDadosEditMode && (
+                          <div className="absolute right-2 top-2">
+                            <InlineFieldEditButton
+                              scope="dados"
+                              field="birth_date"
+                              label="data de nascimento"
+                            />
+                          </div>
+                        )}
                       </div>
-                      <div className="bg-slate-100/70 rounded-lg px-2.5 py-2">
+                      <div className="relative bg-slate-100/70 rounded-lg px-2.5 py-2 pr-12">
                         <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 mb-1">
                           Sexo / Gênero
                         </p>
-                        {isDadosEditMode ? (
+                        {isDataFieldEditing("dados", "gender") ? (
                           <select
                             value={
                               (getDadosDisplayValue("gender") as string) || ""
@@ -3097,12 +3347,21 @@ export function UserViewSlidePanel({
                             {getDadosDisplayValue("gender") || "—"}
                           </p>
                         )}
+                        {!isDadosEditMode && (
+                          <div className="absolute right-2 top-2">
+                            <InlineFieldEditButton
+                              scope="dados"
+                              field="gender"
+                              label="gênero"
+                            />
+                          </div>
+                        )}
                       </div>
-                      <div className="bg-slate-100/70 rounded-lg px-2.5 py-2">
+                      <div className="relative bg-slate-100/70 rounded-lg px-2.5 py-2 pr-12">
                         <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 mb-1">
                           CPF / Documento
                         </p>
-                        {isDadosEditMode ? (
+                        {isDataFieldEditing("dados", "cpf") ? (
                           <Input
                             value={
                               (getDadosDisplayValue("cpf") as string) || ""
@@ -3118,12 +3377,21 @@ export function UserViewSlidePanel({
                             {getDadosDisplayValue("cpf") || "—"}
                           </p>
                         )}
+                        {!isDadosEditMode && (
+                          <div className="absolute right-2 top-2">
+                            <InlineFieldEditButton
+                              scope="dados"
+                              field="cpf"
+                              label="CPF ou documento"
+                            />
+                          </div>
+                        )}
                       </div>
-                      <div className="bg-slate-100/70 rounded-lg px-2.5 py-2">
+                      <div className="relative bg-slate-100/70 rounded-lg px-2.5 py-2 pr-12">
                         <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 mb-1">
                           RG
                         </p>
-                        {isDadosEditMode ? (
+                        {isDataFieldEditing("dados", "rg") ? (
                           <Input
                             value={(getDadosDisplayValue("rg") as string) || ""}
                             onChange={(e) =>
@@ -3136,6 +3404,15 @@ export function UserViewSlidePanel({
                           <p className="text-sm font-semibold text-slate-800">
                             {getDadosDisplayValue("rg") || "—"}
                           </p>
+                        )}
+                        {!isDadosEditMode && (
+                          <div className="absolute right-2 top-2">
+                            <InlineFieldEditButton
+                              scope="dados"
+                              field="rg"
+                              label="RG"
+                            />
+                          </div>
                         )}
                       </div>
                     </div>
@@ -3157,11 +3434,11 @@ export function UserViewSlidePanel({
                   </AccordionTrigger>
                   <AccordionContent className="px-3 py-3 border-t border-slate-100 bg-slate-50/30">
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-1.5">
-                      <div className="bg-slate-100/70 rounded-lg px-2.5 py-2 md:col-span-2">
+                      <div className="relative bg-slate-100/70 rounded-lg px-2.5 py-2 pr-12 md:col-span-2">
                         <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 mb-1">
                           Email
                         </p>
-                        {isDadosEditMode ? (
+                        {isDataFieldEditing("dados", "email") ? (
                           <Input
                             type="email"
                             value={getDadosDisplayValue("email") as string}
@@ -3175,12 +3452,21 @@ export function UserViewSlidePanel({
                             {getDadosDisplayValue("email")}
                           </p>
                         )}
+                        {!isDadosEditMode && (
+                          <div className="absolute right-2 top-2">
+                            <InlineFieldEditButton
+                              scope="dados"
+                              field="email"
+                              label="e-mail"
+                            />
+                          </div>
+                        )}
                       </div>
-                      <div className="bg-slate-100/70 rounded-lg px-2.5 py-2">
+                      <div className="relative bg-slate-100/70 rounded-lg px-2.5 py-2 pr-12">
                         <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 mb-1">
                           Telefone Principal
                         </p>
-                        {isDadosEditMode ? (
+                        {isDataFieldEditing("dados", "phone") ? (
                           <Input
                             type="tel"
                             value={
@@ -3197,12 +3483,21 @@ export function UserViewSlidePanel({
                             {getDadosDisplayValue("phone") || "—"}
                           </p>
                         )}
+                        {!isDadosEditMode && (
+                          <div className="absolute right-2 top-2">
+                            <InlineFieldEditButton
+                              scope="dados"
+                              field="phone"
+                              label="telefone principal"
+                            />
+                          </div>
+                        )}
                       </div>
-                      <div className="bg-slate-100/70 rounded-lg px-2.5 py-2">
+                      <div className="relative bg-slate-100/70 rounded-lg px-2.5 py-2 pr-12">
                         <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 mb-1">
                           WhatsApp
                         </p>
-                        {isDadosEditMode ? (
+                        {isDataFieldEditing("dados", "whatsapp") ? (
                           <Input
                             type="tel"
                             value={
@@ -3219,12 +3514,21 @@ export function UserViewSlidePanel({
                             {getDadosDisplayValue("whatsapp") || "—"}
                           </p>
                         )}
+                        {!isDadosEditMode && (
+                          <div className="absolute right-2 top-2">
+                            <InlineFieldEditButton
+                              scope="dados"
+                              field="whatsapp"
+                              label="WhatsApp"
+                            />
+                          </div>
+                        )}
                       </div>
-                      <div className="bg-slate-100/70 rounded-lg px-2.5 py-2">
+                      <div className="relative bg-slate-100/70 rounded-lg px-2.5 py-2 pr-12">
                         <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 mb-1">
                           Telefone Secundário
                         </p>
-                        {isDadosEditMode ? (
+                        {isDataFieldEditing("dados", "phone_secondary") ? (
                           <Input
                             type="tel"
                             value={
@@ -3246,6 +3550,15 @@ export function UserViewSlidePanel({
                             {getDadosDisplayValue("phone_secondary") || "—"}
                           </p>
                         )}
+                        {!isDadosEditMode && (
+                          <div className="absolute right-2 top-2">
+                            <InlineFieldEditButton
+                              scope="dados"
+                              field="phone_secondary"
+                              label="telefone secundário"
+                            />
+                          </div>
+                        )}
                       </div>
                     </div>
                   </AccordionContent>
@@ -3266,15 +3579,16 @@ export function UserViewSlidePanel({
                   </AccordionTrigger>
                   <AccordionContent className="px-3 py-3 border-t border-slate-100 bg-slate-50/30">
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-1.5">
-                      <div className="bg-slate-100/70 rounded-lg px-2.5 py-2">
+                      <div className="relative bg-slate-100/70 rounded-lg px-2.5 py-2 pr-12">
                         <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 mb-1">
                           CEP
                         </p>
-                        {isDadosEditMode ? (
+                        {isDataFieldEditing("dados", "zip_code") ? (
                           <div className="relative">
                             <Input
                               value={
-                                (getDadosDisplayValue("zip_code") as string) || ""
+                                (getDadosDisplayValue("zip_code") as string) ||
+                                ""
                               }
                               onChange={(e) => handleCepChange(e.target.value)}
                               className="border-slate-300 bg-white h-7 text-sm font-mono pr-7"
@@ -3290,15 +3604,27 @@ export function UserViewSlidePanel({
                             {getDadosDisplayValue("zip_code") || "—"}
                           </p>
                         )}
-                        {isDadosEditMode && cepError && (
-                          <p className="text-[10px] text-red-500 mt-1">{cepError}</p>
+                        {isDataFieldEditing("dados", "zip_code") &&
+                          cepError && (
+                            <p className="text-[10px] text-red-500 mt-1">
+                              {cepError}
+                            </p>
+                          )}
+                        {!isDadosEditMode && (
+                          <div className="absolute right-2 top-2">
+                            <InlineFieldEditButton
+                              scope="dados"
+                              field="zip_code"
+                              label="CEP"
+                            />
+                          </div>
                         )}
                       </div>
-                      <div className="bg-slate-100/70 rounded-lg px-2.5 py-2">
+                      <div className="relative bg-slate-100/70 rounded-lg px-2.5 py-2 pr-12">
                         <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 mb-1">
                           Rua
                         </p>
-                        {isDadosEditMode ? (
+                        {isDataFieldEditing("dados", "street") ? (
                           <Input
                             value={
                               (getDadosDisplayValue("street") as string) || ""
@@ -3314,12 +3640,21 @@ export function UserViewSlidePanel({
                             {getDadosDisplayValue("street") || "—"}
                           </p>
                         )}
+                        {!isDadosEditMode && (
+                          <div className="absolute right-2 top-2">
+                            <InlineFieldEditButton
+                              scope="dados"
+                              field="street"
+                              label="rua"
+                            />
+                          </div>
+                        )}
                       </div>
-                      <div className="bg-slate-100/70 rounded-lg px-2.5 py-2">
+                      <div className="relative bg-slate-100/70 rounded-lg px-2.5 py-2 pr-12">
                         <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 mb-1">
                           Número
                         </p>
-                        {isDadosEditMode ? (
+                        {isDataFieldEditing("dados", "number") ? (
                           <Input
                             value={
                               (getDadosDisplayValue("number") as string) || ""
@@ -3335,12 +3670,21 @@ export function UserViewSlidePanel({
                             {getDadosDisplayValue("number") || "—"}
                           </p>
                         )}
+                        {!isDadosEditMode && (
+                          <div className="absolute right-2 top-2">
+                            <InlineFieldEditButton
+                              scope="dados"
+                              field="number"
+                              label="número"
+                            />
+                          </div>
+                        )}
                       </div>
-                      <div className="bg-slate-100/70 rounded-lg px-2.5 py-2">
+                      <div className="relative bg-slate-100/70 rounded-lg px-2.5 py-2 pr-12">
                         <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 mb-1">
                           Complemento
                         </p>
-                        {isDadosEditMode ? (
+                        {isDataFieldEditing("dados", "complement") ? (
                           <Input
                             value={
                               (getDadosDisplayValue("complement") as string) ||
@@ -3360,12 +3704,21 @@ export function UserViewSlidePanel({
                             {getDadosDisplayValue("complement") || "—"}
                           </p>
                         )}
+                        {!isDadosEditMode && (
+                          <div className="absolute right-2 top-2">
+                            <InlineFieldEditButton
+                              scope="dados"
+                              field="complement"
+                              label="complemento"
+                            />
+                          </div>
+                        )}
                       </div>
-                      <div className="bg-slate-100/70 rounded-lg px-2.5 py-2">
+                      <div className="relative bg-slate-100/70 rounded-lg px-2.5 py-2 pr-12">
                         <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 mb-1">
                           Bairro
                         </p>
-                        {isDadosEditMode ? (
+                        {isDataFieldEditing("dados", "neighborhood") ? (
                           <Input
                             value={
                               (getDadosDisplayValue(
@@ -3386,12 +3739,21 @@ export function UserViewSlidePanel({
                             {getDadosDisplayValue("neighborhood") || "—"}
                           </p>
                         )}
+                        {!isDadosEditMode && (
+                          <div className="absolute right-2 top-2">
+                            <InlineFieldEditButton
+                              scope="dados"
+                              field="neighborhood"
+                              label="bairro"
+                            />
+                          </div>
+                        )}
                       </div>
-                      <div className="bg-slate-100/70 rounded-lg px-2.5 py-2">
+                      <div className="relative bg-slate-100/70 rounded-lg px-2.5 py-2 pr-12">
                         <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 mb-1">
                           Cidade
                         </p>
-                        {isDadosEditMode ? (
+                        {isDataFieldEditing("dados", "city") ? (
                           <Input
                             value={
                               (getDadosDisplayValue("city") as string) || ""
@@ -3407,12 +3769,21 @@ export function UserViewSlidePanel({
                             {getDadosDisplayValue("city") || "—"}
                           </p>
                         )}
+                        {!isDadosEditMode && (
+                          <div className="absolute right-2 top-2">
+                            <InlineFieldEditButton
+                              scope="dados"
+                              field="city"
+                              label="cidade"
+                            />
+                          </div>
+                        )}
                       </div>
-                      <div className="bg-slate-100/70 rounded-lg px-2.5 py-2">
+                      <div className="relative bg-slate-100/70 rounded-lg px-2.5 py-2 pr-12">
                         <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 mb-1">
                           Estado
                         </p>
-                        {isDadosEditMode ? (
+                        {isDataFieldEditing("dados", "state") ? (
                           <Input
                             value={
                               (getDadosDisplayValue("state") as string) || ""
@@ -3432,12 +3803,21 @@ export function UserViewSlidePanel({
                             {getDadosDisplayValue("state") || "—"}
                           </p>
                         )}
+                        {!isDadosEditMode && (
+                          <div className="absolute right-2 top-2">
+                            <InlineFieldEditButton
+                              scope="dados"
+                              field="state"
+                              label="estado"
+                            />
+                          </div>
+                        )}
                       </div>
-                      <div className="bg-slate-100/70 rounded-lg px-2.5 py-2">
+                      <div className="relative bg-slate-100/70 rounded-lg px-2.5 py-2 pr-12">
                         <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 mb-1">
                           País
                         </p>
-                        {isDadosEditMode ? (
+                        {isDataFieldEditing("dados", "country") ? (
                           <Input
                             value={
                               (getDadosDisplayValue("country") as string) ||
@@ -3454,80 +3834,110 @@ export function UserViewSlidePanel({
                             {getDadosDisplayValue("country") || "Brasil"}
                           </p>
                         )}
+                        {!isDadosEditMode && (
+                          <div className="absolute right-2 top-2">
+                            <InlineFieldEditButton
+                              scope="dados"
+                              field="country"
+                              label="país"
+                            />
+                          </div>
+                        )}
                       </div>
                     </div>
                   </AccordionContent>
                 </AccordionItem>
 
                 {/* 7. INFORMAÇÕES ADICIONAIS — visível apenas para admin e partner */}
-                {(viewerRole === "admin" || viewerRole === "partner") && <AccordionItem
-                  value="adicionais"
-                  className="border border-slate-200/80 rounded-xl overflow-hidden shadow-sm"
-                >
-                  <AccordionTrigger className="px-4 py-3 bg-white hover:bg-slate-50 [&[data-state=open]]:bg-slate-50">
-                    <div className="flex items-center gap-2">
-                      <AlertCircle className="h-4 w-4 text-purple-600" />
-                      <span className="text-xs font-semibold text-slate-700">
-                        Informações Adicionais
-                      </span>
-                    </div>
-                  </AccordionTrigger>
-                  <AccordionContent className="px-3 py-3 border-t border-slate-100 bg-slate-50/30">
-                    <div className="space-y-1.5">
-                      <div className="bg-slate-100/70 rounded-lg px-2.5 py-2">
-                        <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 mb-1">
-                          Observações Administrativas
-                        </p>
-                        {isDadosEditMode ? (
-                          <textarea
-                            value={
-                              (getDadosDisplayValue("admin_notes") as string) ||
-                              ""
-                            }
-                            onChange={(e) =>
-                              handleDadosFieldChange(
-                                "admin_notes",
-                                e.target.value,
-                              )
-                            }
-                            className="w-full border border-slate-300 rounded px-2 py-1.5 text-sm font-medium min-h-16 bg-white"
-                            placeholder="Notas visíveis para admin"
-                          />
-                        ) : (
-                          <p className="text-sm font-semibold text-slate-800 whitespace-pre-wrap">
-                            {getDadosDisplayValue("admin_notes") || "—"}
-                          </p>
-                        )}
+                {(viewerRole === "admin" || viewerRole === "partner") && (
+                  <AccordionItem
+                    value="adicionais"
+                    className="border border-slate-200/80 rounded-xl overflow-hidden shadow-sm"
+                  >
+                    <AccordionTrigger className="px-4 py-3 bg-white hover:bg-slate-50 [&[data-state=open]]:bg-slate-50">
+                      <div className="flex items-center gap-2">
+                        <AlertCircle className="h-4 w-4 text-purple-600" />
+                        <span className="text-xs font-semibold text-slate-700">
+                          Informações Adicionais
+                        </span>
                       </div>
-                      <div className="bg-slate-100/70 rounded-lg px-2.5 py-2">
-                        <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 mb-1">
-                          Notas Internas
-                        </p>
-                        {isDadosEditMode ? (
-                          <textarea
-                            value={
-                              (getDadosDisplayValue(
-                                "internal_notes",
-                              ) as string) || ""
-                            }
-                            onChange={(e) =>
-                              handleDadosFieldChange(
-                                "internal_notes",
-                                e.target.value,
-                              )
-                            }
-                            className="w-full border border-slate-300 rounded px-2 py-1.5 text-sm font-medium min-h-16 bg-white"
-                            placeholder="Notas internas do sistema"
-                          />
-                        ) : (
-                          <p className="text-sm font-semibold text-slate-800 whitespace-pre-wrap">
-                            {getDadosDisplayValue("internal_notes") || "—"}
+                    </AccordionTrigger>
+                    <AccordionContent className="px-3 py-3 border-t border-slate-100 bg-slate-50/30">
+                      <div className="space-y-1.5">
+                        <div className="relative bg-slate-100/70 rounded-lg px-2.5 py-2 pr-12">
+                          <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 mb-1">
+                            Observações Administrativas
                           </p>
-                        )}
+                          {isDataFieldEditing("dados", "admin_notes") ? (
+                            <textarea
+                              value={
+                                (getDadosDisplayValue(
+                                  "admin_notes",
+                                ) as string) || ""
+                              }
+                              onChange={(e) =>
+                                handleDadosFieldChange(
+                                  "admin_notes",
+                                  e.target.value,
+                                )
+                              }
+                              className="w-full border border-slate-300 rounded px-2 py-1.5 text-sm font-medium min-h-16 bg-white"
+                              placeholder="Notas visíveis para admin"
+                            />
+                          ) : (
+                            <p className="text-sm font-semibold text-slate-800 whitespace-pre-wrap">
+                              {getDadosDisplayValue("admin_notes") || "—"}
+                            </p>
+                          )}
+                          {!isDadosEditMode && (
+                            <div className="absolute right-2 top-2">
+                              <InlineFieldEditButton
+                                scope="dados"
+                                field="admin_notes"
+                                label="observações administrativas"
+                              />
+                            </div>
+                          )}
+                        </div>
+                        <div className="relative bg-slate-100/70 rounded-lg px-2.5 py-2 pr-12">
+                          <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 mb-1">
+                            Notas Internas
+                          </p>
+                          {isDataFieldEditing("dados", "internal_notes") ? (
+                            <textarea
+                              value={
+                                (getDadosDisplayValue(
+                                  "internal_notes",
+                                ) as string) || ""
+                              }
+                              onChange={(e) =>
+                                handleDadosFieldChange(
+                                  "internal_notes",
+                                  e.target.value,
+                                )
+                              }
+                              className="w-full border border-slate-300 rounded px-2 py-1.5 text-sm font-medium min-h-16 bg-white"
+                              placeholder="Notas internas do sistema"
+                            />
+                          ) : (
+                            <p className="text-sm font-semibold text-slate-800 whitespace-pre-wrap">
+                              {getDadosDisplayValue("internal_notes") || "—"}
+                            </p>
+                          )}
+                          {!isDadosEditMode && (
+                            <div className="absolute right-2 top-2">
+                              <InlineFieldEditButton
+                                scope="dados"
+                                field="internal_notes"
+                                label="notas internas"
+                              />
+                            </div>
+                          )}
+                        </div>
                       </div>
-                    </div>
-                  </AccordionContent>
-                </AccordionItem>}
+                    </AccordionContent>
+                  </AccordionItem>
+                )}
               </Accordion>
             </div>
           </TabsContent>
@@ -3535,62 +3945,9 @@ export function UserViewSlidePanel({
           {/* Permissões */}
           <TabsContent
             value="permissoes"
-            className="flex-1 flex flex-col overflow-hidden bg-slate-100 dark:bg-background mt-0"
+            className="mt-0 flex flex-1 flex-col overflow-hidden bg-white dark:bg-background"
           >
-            {/* Header */}
-            <div className="flex items-center justify-between flex-shrink-0 px-[50px] pt-5 pb-3 bg-slate-100 dark:bg-background">
-              <div className="flex items-center gap-2">
-                <Shield className="h-4 w-4 text-slate-600" />
-                <h3 className="text-sm font-semibold text-slate-900">
-                  Controle de Acesso
-                </h3>
-              </div>
-              <div className="flex items-center gap-2">
-                {!isPermissionsEditMode ? (
-                  <Button
-                    onClick={handlePermissionsEditMode}
-                    size="sm"
-                    variant="outline"
-                    className="h-7 px-3 text-xs gap-1.5 bg-white"
-                  >
-                    <Edit2 className="h-3 w-3" />
-                    Editar
-                  </Button>
-                ) : (
-                  <div className="flex gap-1.5">
-                    <Button
-                      onClick={handlePermissionsSaveClick}
-                      size="sm"
-                      disabled={isSaving}
-                      className="btn-brand h-7 px-3 text-xs gap-1.5"
-                    >
-                      {isSaving ? (
-                        <Loader2 className="h-3 w-3 animate-spin" />
-                      ) : (
-                        <Save className="h-3 w-3" />
-                      )}
-                      {isSaving ? "Salvando..." : "Salvar"}
-                    </Button>
-                    <Button
-                      onClick={() => {
-                        setPendingCancelCallback(
-                          () => handlePermissionsCancelEdit,
-                        );
-                        setShowCancelEditConfirm(true);
-                      }}
-                      size="sm"
-                      variant="outline"
-                      className="h-7 px-3 text-xs gap-1.5 bg-white"
-                    >
-                      <XCircle className="h-3 w-3" />
-                      Cancelar
-                    </Button>
-                  </div>
-                )}
-              </div>
-            </div>
-
-            <div className="flex-1 overflow-y-auto px-[50px] pb-6 space-y-3">
+            <div className="allka-users-scroll flex-1 space-y-3 overflow-y-auto px-0 pb-2 pt-2">
               {/* PERFIS DE PERMISSÃO */}
               {(() => {
                 // Perfis reais, vindos de /api/permissions/profiles. Antes
@@ -3603,104 +3960,222 @@ export function UserViewSlidePanel({
                     : (displayUser.admin_profile_id ?? null);
 
                 const cores = [
-                  { color: "bg-red-100 text-red-700 border-red-200", dot: "bg-red-500" },
-                  { color: "bg-blue-100 text-blue-700 border-blue-200", dot: "bg-blue-500" },
-                  { color: "bg-amber-100 text-amber-700 border-amber-200", dot: "bg-amber-500" },
-                  { color: "bg-green-100 text-green-700 border-green-200", dot: "bg-green-500" },
+                  {
+                    color: "bg-red-100 text-red-700 border-red-200",
+                    dot: "bg-red-500",
+                  },
+                  {
+                    color: "bg-blue-100 text-blue-700 border-blue-200",
+                    dot: "bg-blue-500",
+                  },
+                  {
+                    color: "bg-amber-100 text-amber-700 border-amber-200",
+                    dot: "bg-amber-500",
+                  },
+                  {
+                    color: "bg-green-100 text-green-700 border-green-200",
+                    dot: "bg-green-500",
+                  },
                 ];
+                const perfilSelecionado = accessProfiles.find(
+                  (profile) => profile.id === perfilAtual,
+                );
+                const permissionCount = (
+                  (displayUser.permissions as string[]) || []
+                ).length;
 
                 return (
-                  <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
-                    <div className="flex items-center gap-2 px-4 py-2.5 border-b border-slate-100">
-                      <Shield className="h-3.5 w-3.5 text-blue-600" />
-                      <span className="text-xs font-semibold text-slate-700 uppercase tracking-wide">
-                        Perfil de Acesso
-                      </span>
-                      <span className="ml-auto text-xs text-slate-400">
-                        Definidos em Permissões
-                      </span>
-                    </div>
-                    <div className="p-3 grid grid-cols-1 gap-1.5">
-                      {accessProfiles.length === 0 && (
-                        <p className="text-xs text-slate-400 px-1 py-2">
-                          Nenhum perfil de acesso cadastrado.
-                        </p>
-                      )}
-
-                      {/* Sem perfil: o usuário vale só pela Função. É o
-                          estado de quem nunca teve perfil atribuído. */}
-                      {accessProfiles.length > 0 && (
-                        <div
-                          onClick={() =>
-                            isPermissionsEditMode &&
-                            handlePermissionsFieldChange("admin_profile_id", null)
-                          }
-                          className={`flex items-center gap-3 px-3 py-2 rounded-lg border transition-all ${isPermissionsEditMode ? "cursor-pointer" : "cursor-default"} ${perfilAtual === null ? "border-blue-300 bg-blue-50" : "border-transparent hover:border-slate-200 hover:bg-slate-50"}`}
-                        >
-                          <span className="h-2 w-2 rounded-full flex-shrink-0 bg-slate-400" />
-                          <div className="flex-1 min-w-0">
-                            <div className="text-sm font-medium text-slate-900 leading-tight">
-                              Sem perfil
-                            </div>
-                            <div className="text-xs text-slate-500 truncate">
-                              Acesso definido apenas pela Função
-                            </div>
-                          </div>
-                          {perfilAtual === null && (
-                            <Badge className="text-[10px] px-1.5 py-0 bg-blue-100 text-blue-700 border border-blue-200 flex-shrink-0">
-                              Ativo
-                            </Badge>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+                      <div className="flex items-center gap-2 border-b border-slate-100 px-4 py-3">
+                        <Shield className="h-5 w-5 text-blue-600" />
+                        <span className="text-sm font-bold text-slate-900">
+                          Perfil de acesso
+                        </span>
+                        <div className="ml-auto flex items-center gap-1.5">
+                          {isPermissionsEditMode ? (
+                            <>
+                              <button
+                                type="button"
+                                onClick={handlePermissionsSaveClick}
+                                className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-emerald-200 bg-white text-emerald-600 shadow-sm hover:bg-emerald-50"
+                                aria-label="Salvar perfil de acesso"
+                              >
+                                <Check className="h-4 w-4" />
+                              </button>
+                              <button
+                                type="button"
+                                onClick={handlePermissionsCancelEdit}
+                                className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500 shadow-sm hover:bg-slate-50"
+                                aria-label="Cancelar edição do perfil"
+                              >
+                                <X className="h-4 w-4" />
+                              </button>
+                            </>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={handlePermissionsEditMode}
+                              className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 bg-white text-blue-600 shadow-sm transition-all hover:-translate-y-0.5 hover:border-blue-300 hover:bg-blue-50"
+                              aria-label="Editar perfil de acesso"
+                            >
+                              <Edit2 className="h-4 w-4" />
+                            </button>
                           )}
                         </div>
-                      )}
+                      </div>
+                      <div className="grid grid-cols-1 gap-1.5 p-3">
+                        {accessProfiles.length === 0 && (
+                          <p className="text-xs text-slate-400 px-1 py-2">
+                            Nenhum perfil de acesso cadastrado.
+                          </p>
+                        )}
 
-                      {accessProfiles.map((profile, i) => {
-                        const isSelected = perfilAtual === profile.id;
-                        const cor = cores[i % cores.length];
-                        return (
-                          <div
-                            key={profile.id}
-                            onClick={() =>
-                              isPermissionsEditMode &&
-                              handlePermissionsFieldChange(
-                                "admin_profile_id",
-                                profile.id,
-                              )
-                            }
-                            className={`flex items-center gap-3 px-3 py-2 rounded-lg border transition-all ${isPermissionsEditMode ? "cursor-pointer" : "cursor-default"} ${isSelected ? "border-blue-300 bg-blue-50" : "border-transparent hover:border-slate-200 hover:bg-slate-50"}`}
-                          >
-                            <span
-                              className={`h-2 w-2 rounded-full flex-shrink-0 ${cor.dot}`}
-                            />
-                            <div className="flex-1 min-w-0">
-                              <div className="text-sm font-medium text-slate-900 leading-tight">
-                                {profile.name}
-                                {profile.is_master && (
-                                  <span className="ml-1.5 text-[10px] font-semibold text-red-600">
-                                    acesso total
-                                  </span>
-                                )}
+                        {/* Sem perfil: o usuário vale só pela Função. É o
+                          estado de quem nunca teve perfil atribuído. */}
+                        {accessProfiles.length > 0 &&
+                          (isPermissionsEditMode || perfilAtual === null) && (
+                            <div
+                              onClick={() =>
+                                isPermissionsEditMode &&
+                                handlePermissionsFieldChange(
+                                  "admin_profile_id",
+                                  null,
+                                )
+                              }
+                              className={`flex items-center gap-3 px-3 py-2 rounded-lg border transition-all ${isPermissionsEditMode ? "cursor-pointer" : "cursor-default"} ${perfilAtual === null ? "border-blue-300 bg-blue-50" : "border-transparent hover:border-slate-200 hover:bg-slate-50"}`}
+                            >
+                              <span className="h-2 w-2 rounded-full flex-shrink-0 bg-slate-400" />
+                              <div className="flex-1 min-w-0">
+                                <div className="text-sm font-medium text-slate-900 leading-tight">
+                                  Sem perfil
+                                </div>
+                                <div className="text-xs text-slate-500 truncate">
+                                  Acesso definido apenas pela Função
+                                </div>
                               </div>
-                              <div className="text-xs text-slate-500 truncate">
-                                {profile.description || "Sem descrição"}
-                              </div>
+                              {perfilAtual === null && (
+                                <Badge className="text-[10px] px-1.5 py-0 bg-blue-100 text-blue-700 border border-blue-200 flex-shrink-0">
+                                  Ativo
+                                </Badge>
+                              )}
                             </div>
-                            {isSelected && (
-                              <Badge className="text-[10px] px-1.5 py-0 bg-blue-100 text-blue-700 border border-blue-200 flex-shrink-0">
-                                Ativo
-                              </Badge>
-                            )}
-                            {isPermissionsEditMode && !isSelected && (
-                              <div className="h-4 w-4 rounded-full border-2 border-slate-300 flex-shrink-0" />
-                            )}
-                            {isPermissionsEditMode && isSelected && (
-                              <div className="h-4 w-4 rounded-full border-2 border-blue-500 bg-blue-500 flex items-center justify-center flex-shrink-0">
-                                <Check className="h-2.5 w-2.5 text-white" />
+                          )}
+
+                        {accessProfiles.map((profile, i) => {
+                          const isSelected = perfilAtual === profile.id;
+                          const cor = cores[i % cores.length];
+                          if (!isPermissionsEditMode && !isSelected)
+                            return null;
+                          return (
+                            <div
+                              key={profile.id}
+                              onClick={() =>
+                                isPermissionsEditMode &&
+                                handlePermissionsFieldChange(
+                                  "admin_profile_id",
+                                  profile.id,
+                                )
+                              }
+                              className={`flex items-center gap-3 px-3 py-2 rounded-lg border transition-all ${isPermissionsEditMode ? "cursor-pointer" : "cursor-default"} ${isSelected ? "border-blue-300 bg-blue-50" : "border-transparent hover:border-slate-200 hover:bg-slate-50"}`}
+                            >
+                              <span
+                                className={`h-2 w-2 rounded-full flex-shrink-0 ${cor.dot}`}
+                              />
+                              <div className="flex-1 min-w-0">
+                                <div className="text-sm font-medium text-slate-900 leading-tight">
+                                  {profile.name}
+                                  {profile.is_master && (
+                                    <span className="ml-1.5 text-[10px] font-semibold text-red-600">
+                                      acesso total
+                                    </span>
+                                  )}
+                                </div>
+                                <div className="text-xs text-slate-500 truncate">
+                                  {profile.description || "Sem descrição"}
+                                </div>
                               </div>
-                            )}
+                              {isSelected && (
+                                <Badge className="text-[10px] px-1.5 py-0 bg-blue-100 text-blue-700 border border-blue-200 flex-shrink-0">
+                                  Ativo
+                                </Badge>
+                              )}
+                              {isPermissionsEditMode && !isSelected && (
+                                <div className="h-4 w-4 rounded-full border-2 border-slate-300 flex-shrink-0" />
+                              )}
+                              {isPermissionsEditMode && isSelected && (
+                                <div className="h-4 w-4 rounded-full border-2 border-blue-500 bg-blue-500 flex items-center justify-center flex-shrink-0">
+                                  <Check className="h-2.5 w-2.5 text-white" />
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })}
+                        {!isPermissionsEditMode &&
+                          perfilSelecionado?.is_master && (
+                            <div className="mx-1 mt-1 flex items-center gap-2 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-700">
+                              <CheckCircle2 className="h-4 w-4" />
+                              <span>Perfil com acesso total ao sistema</span>
+                            </div>
+                          )}
+                      </div>
+                    </div>
+
+                    <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+                      <div className="flex items-center gap-2 border-b border-slate-100 px-4 py-3">
+                        <BarChart3 className="h-5 w-5 text-blue-600" />
+                        <span className="text-sm font-bold text-slate-900">
+                          Resumo de acesso
+                        </span>
+                      </div>
+                      <div className="grid grid-cols-4 gap-2 p-3">
+                        {[
+                          {
+                            label: "perfil atribuído",
+                            value: perfilAtual ? 1 : 0,
+                            icon: <UserIcon className="h-5 w-5" />,
+                            color: "bg-blue-100 text-blue-600",
+                          },
+                          {
+                            label: "vínculos ativos",
+                            value: companyAssociations.length,
+                            icon: <Building2 className="h-5 w-5" />,
+                            color: "bg-violet-100 text-violet-600",
+                          },
+                          {
+                            label: "permissões ativas",
+                            value: permissionCount,
+                            icon: <Shield className="h-5 w-5" />,
+                            color: "bg-emerald-100 text-emerald-600",
+                          },
+                          {
+                            label: "restrições",
+                            value: 0,
+                            icon: <XCircle className="h-5 w-5" />,
+                            color: "bg-red-100 text-red-500",
+                          },
+                        ].map((item) => (
+                          <div
+                            key={item.label}
+                            className="rounded-xl border border-slate-200 bg-white p-3"
+                          >
+                            <div
+                              className={cn(
+                                "mb-2 flex h-9 w-9 items-center justify-center rounded-xl",
+                                item.color,
+                              )}
+                            >
+                              {item.icon}
+                            </div>
+                            <p className="text-xl font-extrabold leading-none text-slate-950">
+                              {item.value}
+                            </p>
+                            <p className="mt-1 text-[10px] leading-tight text-slate-500">
+                              {item.label}
+                            </p>
                           </div>
-                        );
-                      })}
+                        ))}
+                      </div>
                     </div>
                   </div>
                 );
@@ -3720,35 +4195,35 @@ export function UserViewSlidePanel({
                         .includes(linkSearchQuery.toLowerCase())),
                 );
                 return (
-                  <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
+                  <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
                     {/* Header */}
                     <div className="flex items-center gap-2 px-4 py-2.5 border-b border-slate-100">
-                      <Building2 className="h-3.5 w-3.5 text-indigo-600" />
-                      <span className="text-xs font-semibold text-slate-700 uppercase tracking-wide">
-                        Vínculos
+                      <Building2 className="h-5 w-5 text-blue-600" />
+                      <span className="text-sm font-bold text-slate-900">
+                        Vínculos de acesso
                       </span>
                       <Badge className="ml-1 text-[10px] px-1.5 bg-slate-100 text-slate-600 border-0">
                         {companyAssociations.length}
                       </Badge>
-                      {isPermissionsEditMode && (
-                        <button
-                          onClick={() => {
-                            setShowAddCompany((v) => !v);
-                            setLinkSearchQuery("");
-                          }}
-                          className={`ml-auto flex items-center gap-1 text-xs font-medium transition-colors ${showAddCompany ? "text-slate-500 hover:text-slate-700" : "text-blue-600 hover:text-blue-700"}`}
-                        >
-                          {showAddCompany ? (
-                            <>
-                              <XCircle className="h-3 w-3" /> Fechar
-                            </>
-                          ) : (
-                            <>
-                              <Plus className="h-3 w-3" /> Vincular
-                            </>
-                          )}
-                        </button>
-                      )}
+                      <button
+                        onClick={() => {
+                          if (!isPermissionsEditMode)
+                            handlePermissionsEditMode();
+                          setShowAddCompany((v) => !v);
+                          setLinkSearchQuery("");
+                        }}
+                        className={`ml-auto flex h-8 items-center gap-1.5 rounded-lg border px-3 text-xs font-semibold transition-colors ${showAddCompany ? "border-slate-200 text-slate-500 hover:bg-slate-50" : "border-blue-200 text-blue-600 hover:bg-blue-50"}`}
+                      >
+                        {showAddCompany ? (
+                          <>
+                            <XCircle className="h-3 w-3" /> Fechar
+                          </>
+                        ) : (
+                          <>
+                            <Plus className="h-3.5 w-3.5" /> Adicionar vínculo
+                          </>
+                        )}
+                      </button>
                     </div>
 
                     {/* Search Panel */}
@@ -3831,8 +4306,17 @@ export function UserViewSlidePanel({
                     {/* Linked List */}
                     <div className="divide-y divide-slate-100">
                       {companyAssociations.length === 0 && (
-                        <div className="px-4 py-4 text-center text-xs text-slate-400">
-                          Nenhum vínculo ativo
+                        <div className="m-3 rounded-xl border border-dashed border-blue-200 bg-blue-50/30 px-4 py-5 text-center">
+                          <div className="mx-auto mb-1 flex h-8 w-8 items-center justify-center rounded-full bg-blue-100 text-blue-600">
+                            <Building2 className="h-4 w-4" />
+                          </div>
+                          <p className="text-sm font-semibold text-slate-600">
+                            Nenhum vínculo ativo
+                          </p>
+                          <p className="mt-0.5 text-xs text-slate-400">
+                            Este usuário não possui vínculos de acesso com
+                            outras contas, empresas ou projetos.
+                          </p>
                         </div>
                       )}
                       {companyAssociations.map((assoc) => {
@@ -4121,19 +4605,19 @@ export function UserViewSlidePanel({
               })()}
 
               {/* PERMISSÕES INDIVIDUAIS */}
-              <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
-                <div className="flex items-center gap-2 px-4 py-2.5 border-b border-slate-100">
-                  <Lock className="h-3.5 w-3.5 text-slate-600" />
-                  <span className="text-xs font-semibold text-slate-700 uppercase tracking-wide">
-                    Permissões Individuais
+              <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+                <div className="flex items-center gap-2 border-b border-slate-100 px-4 py-3">
+                  <Shield className="h-5 w-5 text-blue-600" />
+                  <span className="text-sm font-bold text-slate-900">
+                    Permissões individuais
                   </span>
                   <span
                     className="text-[10px] text-slate-400 normal-case"
                     title="A permissão do usuário vem do perfil de acesso (Admin > Permissões). Esta lista é informativa e não é gravada por esta tela."
                   >
-                    (somente leitura)
+                    complementam o perfil atribuído
                   </span>
-                  <Badge className="ml-1 text-[10px] px-1.5 bg-emerald-100 text-emerald-700 border-0">
+                  <Badge className="ml-auto border-0 bg-emerald-100 px-2 text-[10px] text-emerald-700">
                     {isPermissionsEditMode
                       ? (permissionsEditedData.permissions || []).length
                       : ((displayUser.permissions as string[]) || [])
@@ -4205,13 +4689,23 @@ export function UserViewSlidePanel({
                     },
                   ].map((group) => (
                     <div key={group.group} className="px-4 py-2.5">
-                      <div className="flex items-center gap-1.5 mb-2">
+                      <div className="mb-2 flex items-center gap-2">
                         {group.icon}
-                        <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide">
+                        <span className="text-xs font-bold text-slate-800">
                           {group.group}
                         </span>
+                        <Badge className="border-0 bg-emerald-100 px-2 py-0 text-[10px] text-emerald-700">
+                          {
+                            group.perms.filter((permission) =>
+                              (
+                                (displayUser.permissions as string[]) || []
+                              ).includes(permission.id),
+                            ).length
+                          }{" "}
+                          ativas
+                        </Badge>
                       </div>
-                      <div className="flex flex-wrap gap-1.5">
+                      <div className="grid grid-cols-4 gap-2">
                         {group.perms.map((perm) => {
                           const currentPerms = isPermissionsEditMode
                             ? permissionsEditedData.permissions || []
@@ -4223,12 +4717,14 @@ export function UserViewSlidePanel({
                               // Somente leitura: ver a nota acima — nada
                               // aqui e persistido hoje.
                               disabled
-                              className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs font-medium border transition-all ${isPermissionsEditMode ? "cursor-pointer" : "cursor-default"} ${isActive ? "bg-emerald-50 text-emerald-700 border-emerald-200" : "bg-slate-50 text-slate-400 border-slate-200"} ${isPermissionsEditMode && isActive ? "hover:bg-red-50 hover:text-red-600 hover:border-red-200" : ""} ${isPermissionsEditMode && !isActive ? "hover:bg-emerald-50 hover:text-emerald-700 hover:border-emerald-200" : ""}`}
+                              className={`inline-flex min-h-12 items-center gap-2 rounded-lg border px-3 py-2 text-left text-xs font-semibold transition-all ${isPermissionsEditMode ? "cursor-pointer" : "cursor-default"} ${isActive ? "border-blue-200 bg-blue-50 text-blue-700" : "border-slate-200 bg-slate-50/60 text-slate-500"}`}
                             >
                               {isActive ? (
-                                <Check className="h-2.5 w-2.5" />
+                                <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded bg-blue-600 text-white">
+                                  <Check className="h-3 w-3" />
+                                </span>
                               ) : (
-                                <span className="h-2.5 w-2.5 rounded-full border border-current" />
+                                <span className="h-5 w-5 shrink-0 rounded border-2 border-slate-300 bg-white" />
                               )}
                               {perm.label}
                             </button>
@@ -4245,31 +4741,83 @@ export function UserViewSlidePanel({
           {/* Segurança */}
           <TabsContent
             value="seguranca"
-            className="flex-1 flex flex-col overflow-hidden bg-slate-200 dark:bg-background mt-0"
+            className="flex flex-1 flex-col overflow-hidden bg-white dark:bg-background mt-0"
           >
-            {/* Security Header */}
-            <div className="flex items-center justify-between flex-shrink-0 px-[50px] pt-[25px] pb-4 bg-slate-200 dark:bg-background">
-              <div className="flex items-center gap-3">
-                <h3 className="text-sm font-semibold text-slate-900">
-                  Segurança da Conta
-                </h3>
-                <Badge className="bg-emerald-100 text-emerald-700 font-semibold">
-                  Segura
-                </Badge>
+            <div className="allka-users-scroll flex-1 overflow-y-auto px-0 pb-2 pt-2">
+              <div className="mb-3 grid grid-cols-1 divide-y divide-slate-100 rounded-2xl border border-slate-200 bg-white shadow-sm sm:grid-cols-[minmax(0,1.8fr)_repeat(3,minmax(0,1fr))] sm:divide-x sm:divide-y-0">
+                <div className="flex items-center gap-4 p-4">
+                  <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-full border-4 border-emerald-500 bg-emerald-50 text-xl font-bold text-slate-900">
+                    {is2FAEnabled ? "92" : "68"}
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-bold text-slate-900">
+                      Nível de segurança
+                    </p>
+                    <div className="mt-2 h-2 overflow-hidden rounded-full bg-slate-200">
+                      <div
+                        className="h-full rounded-full bg-emerald-500"
+                        style={{ width: is2FAEnabled ? "92%" : "68%" }}
+                      />
+                    </div>
+                    <p className="mt-1 text-xs text-slate-500">
+                      Acompanhe as proteções desta conta.
+                    </p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-3 p-4">
+                  <div className="rounded-xl bg-emerald-50 p-2.5">
+                    <Lock className="h-5 w-5 text-emerald-600" />
+                  </div>
+                  <div>
+                    <p className="text-sm font-semibold text-slate-900">
+                      Senha protegida
+                    </p>
+                    <p className="text-xs text-slate-500">
+                      Redefinição disponível
+                    </p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-3 p-4">
+                  <div className="rounded-xl bg-emerald-50 p-2.5">
+                    <Shield className="h-5 w-5 text-emerald-600" />
+                  </div>
+                  <div>
+                    <p className="text-sm font-semibold text-slate-900">
+                      2FA {is2FAEnabled ? "ativado" : "inativo"}
+                    </p>
+                    <p className="text-xs text-slate-500">
+                      Proteção em dois fatores
+                    </p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-3 p-4">
+                  <div className="rounded-xl bg-blue-50 p-2.5">
+                    <Monitor className="h-5 w-5 text-blue-600" />
+                  </div>
+                  <div>
+                    <p className="text-sm font-semibold text-slate-900">
+                      {
+                        activeSessions.filter((s) => s.status === "active")
+                          .length
+                      }{" "}
+                      sessões ativas
+                    </p>
+                    <p className="text-xs text-slate-500">
+                      Dispositivos conectados
+                    </p>
+                  </div>
+                </div>
               </div>
-            </div>
-
-            <div className="flex-1 overflow-y-auto px-[50px] pb-6">
               <Accordion
                 type="multiple"
                 value={securityOpenAccordions}
                 onValueChange={setSecurityOpenAccordions}
-                className="space-y-3"
+                className="grid items-start gap-3 lg:grid-cols-2"
               >
                 {/* 1. AUTENTICAÇÃO E SENHA */}
                 <AccordionItem
                   value="auth"
-                  className="border border-slate-200 rounded-lg overflow-hidden"
+                  className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm lg:order-1"
                 >
                   <AccordionTrigger className="px-4 py-3 bg-white hover:bg-slate-50 [&[data-state=open]]:bg-slate-50">
                     <div className="flex items-center gap-2">
@@ -4284,21 +4832,20 @@ export function UserViewSlidePanel({
                       <div className="flex items-center justify-between mb-3">
                         <div>
                           <h4 className="font-semibold text-slate-900">
-                            Força da Senha
+                            Estado da senha
                           </h4>
                           <p className="text-xs text-slate-600 mt-1">
-                            Sua senha é forte e segura
+                            A senha nunca é exibida nem analisada no painel
+                            administrativo.
                           </p>
                         </div>
                         <Badge className="bg-emerald-100 text-emerald-700">
-                          Forte
+                          Protegida
                         </Badge>
                       </div>
-                      <div className="space-y-1 text-xs text-slate-600">
-                        <div>✓ Contém letras maiúsculas e minúsculas</div>
-                        <div>✓ Contém números</div>
-                        <div>✓ Contém caracteres especiais</div>
-                        <div>✓ Tem mais de 12 caracteres</div>
+                      <div className="text-xs text-slate-600">
+                        A redefinição emite um link real de primeiro acesso e
+                        invalida a credencial anterior.
                       </div>
                     </div>
 
@@ -4318,9 +4865,9 @@ export function UserViewSlidePanel({
                     </div>
 
                     <div className="text-xs text-slate-600 pt-2 border-t border-slate-200">
-                      <div>Última alteração: 45 dias atrás</div>
-                      <div className="text-slate-500 mt-1">
-                        Recomendamos alterar a senha a cada 90 dias
+                      <div>
+                        Por segurança, a data de alteração só será mostrada
+                        quando houver registro no servidor.
                       </div>
                     </div>
                   </AccordionContent>
@@ -4329,7 +4876,7 @@ export function UserViewSlidePanel({
                 {/* 2. AUTENTICAÇÃO EM DOIS FATORES */}
                 <AccordionItem
                   value="2fa"
-                  className="border border-slate-200 rounded-lg overflow-hidden"
+                  className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm lg:order-3"
                 >
                   <AccordionTrigger className="px-4 py-3 bg-white hover:bg-slate-50 [&[data-state=open]]:bg-slate-50">
                     <div className="flex items-center gap-2">
@@ -4386,15 +4933,11 @@ export function UserViewSlidePanel({
                     </div>
 
                     <Button
-                      onClick={handleToggle2FA}
-                      className={
-                        is2FAEnabled
-                          ? "bg-red-600 hover:bg-red-700 justify-start gap-2 w-full"
-                          : "btn-brand justify-start gap-2 w-full"
-                      }
+                      disabled
+                      className="w-full justify-start gap-2 bg-slate-100 text-slate-500"
                     >
                       <Smartphone className="h-4 w-4" />
-                      {is2FAEnabled ? "Desativar 2FA" : "Ativar 2FA"}
+                      2FA indisponível até a integração segura com o servidor
                     </Button>
                   </AccordionContent>
                 </AccordionItem>
@@ -4402,7 +4945,7 @@ export function UserViewSlidePanel({
                 {/* 3. SESSÕES ATIVAS */}
                 <AccordionItem
                   value="sessions"
-                  className="border border-slate-200 rounded-lg overflow-hidden"
+                  className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm lg:order-2"
                 >
                   <AccordionTrigger className="px-4 py-3 bg-white hover:bg-slate-50 [&[data-state=open]]:bg-slate-50">
                     <div className="flex items-center gap-2">
@@ -4419,6 +4962,18 @@ export function UserViewSlidePanel({
                     </div>
                   </AccordionTrigger>
                   <AccordionContent className="px-4 py-4 border-t border-slate-100 space-y-3">
+                    {activeSessions.length === 0 && (
+                      <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50/70 px-4 py-6 text-center">
+                        <Monitor className="mx-auto h-6 w-6 text-slate-300" />
+                        <p className="mt-2 text-sm font-semibold text-slate-700">
+                          Nenhuma sessão registrada
+                        </p>
+                        <p className="mt-0.5 text-xs text-slate-500">
+                          As sessões aparecerão aqui quando o servidor
+                          disponibilizar esse histórico.
+                        </p>
+                      </div>
+                    )}
                     {activeSessions.map((session) => (
                       <div
                         key={session.id}
@@ -4477,7 +5032,7 @@ export function UserViewSlidePanel({
                 {/* 4. DISPOSITIVOS CONECTADOS */}
                 <AccordionItem
                   value="devices"
-                  className="border border-slate-200 rounded-lg overflow-hidden"
+                  className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm lg:order-4"
                 >
                   <AccordionTrigger className="px-4 py-3 bg-white hover:bg-slate-50 [&[data-state=open]]:bg-slate-50">
                     <div className="flex items-center gap-2">
@@ -4491,6 +5046,17 @@ export function UserViewSlidePanel({
                     </div>
                   </AccordionTrigger>
                   <AccordionContent className="px-4 py-4 border-t border-slate-100 space-y-3">
+                    {connectedDevices.length === 0 && (
+                      <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50/70 px-4 py-6 text-center">
+                        <Tablet className="mx-auto h-6 w-6 text-slate-300" />
+                        <p className="mt-2 text-sm font-semibold text-slate-700">
+                          Nenhum dispositivo confiável registrado
+                        </p>
+                        <p className="mt-0.5 text-xs text-slate-500">
+                          Nenhum dispositivo foi informado pela conta.
+                        </p>
+                      </div>
+                    )}
                     {connectedDevices.map((device) => (
                       <div
                         key={device.id}
@@ -4539,7 +5105,7 @@ export function UserViewSlidePanel({
                 {/* 5. LOGS E AUDITORIA */}
                 <AccordionItem
                   value="audit"
-                  className="border border-slate-200 rounded-lg overflow-hidden"
+                  className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm lg:order-5 lg:col-span-2"
                 >
                   <AccordionTrigger className="px-4 py-3 bg-white hover:bg-slate-50 [&[data-state=open]]:bg-slate-50">
                     <div className="flex items-center gap-2">
@@ -4553,6 +5119,18 @@ export function UserViewSlidePanel({
                     </div>
                   </AccordionTrigger>
                   <AccordionContent className="px-4 py-4 border-t border-slate-100 space-y-3">
+                    {securityLogs.length === 0 && (
+                      <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50/70 px-4 py-6 text-center">
+                        <Activity className="mx-auto h-6 w-6 text-slate-300" />
+                        <p className="mt-2 text-sm font-semibold text-slate-700">
+                          Nenhum evento de segurança registrado
+                        </p>
+                        <p className="mt-0.5 text-xs text-slate-500">
+                          O histórico real aparecerá aqui conforme for
+                          registrado.
+                        </p>
+                      </div>
+                    )}
                     <div className="space-y-2 max-h-64 overflow-y-auto">
                       {securityLogs.slice(0, 5).map((log) => (
                         <div
@@ -4648,7 +5226,9 @@ export function UserViewSlidePanel({
               </AlertDialogDescription>
             </AlertDialogHeader>
             <div className="flex gap-3">
-              <AlertDialogCancel>Cancelar</AlertDialogCancel>
+              <AlertDialogCancel onClick={handleContaCancelEdit}>
+                Cancelar
+              </AlertDialogCancel>
               <AlertDialogAction
                 onClick={handleContaSaveConfirm}
                 disabled={isSaving}
@@ -4679,7 +5259,9 @@ export function UserViewSlidePanel({
               </AlertDialogDescription>
             </AlertDialogHeader>
             <div className="flex gap-3">
-              <AlertDialogCancel>Cancelar</AlertDialogCancel>
+              <AlertDialogCancel onClick={handleDadosCancelEdit}>
+                Cancelar
+              </AlertDialogCancel>
               <AlertDialogAction
                 onClick={handleDadosSaveConfirm}
                 disabled={isSaving}
@@ -4828,10 +5410,8 @@ export function UserViewSlidePanel({
                   R${" "}
                   {(
                     (walletAdjustType === "add"
-                      ? saldoCarteira +
-                        parseFloat(walletAdjustValue)
-                      : saldoCarteira -
-                        parseFloat(walletAdjustValue)) || 0
+                      ? saldoCarteira + parseFloat(walletAdjustValue)
+                      : saldoCarteira - parseFloat(walletAdjustValue)) || 0
                   ).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
                 </span>
               </div>
@@ -4874,10 +5454,11 @@ export function UserViewSlidePanel({
                   {permissionsEditedData.role}
                 </span>
               </div>
-
             </div>
             <div className="flex gap-3">
-              <AlertDialogCancel>Cancelar</AlertDialogCancel>
+              <AlertDialogCancel onClick={handlePermissionsCancelEdit}>
+                Cancelar
+              </AlertDialogCancel>
               <AlertDialogAction
                 onClick={handlePermissionsSaveConfirm}
                 disabled={isSaving}
@@ -5040,8 +5621,7 @@ export function UserViewSlidePanel({
                   R${" "}
                   {(creditType === "blocked"
                     ? saldoCarteira
-                    : saldoCarteira +
-                      parseFloat(creditAmount)
+                    : saldoCarteira + parseFloat(creditAmount)
                   ).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
                 </span>
               </div>
@@ -5227,114 +5807,53 @@ export function UserViewSlidePanel({
             <AlertDialogHeader>
               <AlertDialogTitle className="flex items-center gap-2">
                 <Key className="h-5 w-5" />
-                Redefinir Senha do Usuário
+                Gerar link seguro de acesso
               </AlertDialogTitle>
               <AlertDialogDescription>
-                Escolha o método para redefinir a senha de {displayUser.name}
+                Gere um novo link para {displayUser.name} definir a própria
+                senha. O link anterior será invalidado.
               </AlertDialogDescription>
             </AlertDialogHeader>
 
             <div className="space-y-4">
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
-                <Button
-                  onClick={() => {
-                    setPasswordResetMethod("email");
-                    setGeneratedResetLink("");
-                  }}
-                  className={
-                    passwordResetMethod === "email"
-                      ? "ring-2 ring-blue-600 bg-blue-50 text-slate-900 hover:bg-blue-100"
-                      : "bg-slate-100 hover:bg-slate-200 text-slate-900"
-                  }
-                >
-                  <Mail className="h-4 w-4 mr-2" />
-                  Por Email
-                </Button>
-                <Button
-                  onClick={() => setPasswordResetMethod("link")}
-                  className={
-                    passwordResetMethod === "link"
-                      ? "ring-2 ring-blue-600 bg-blue-50 text-slate-900 hover:bg-blue-100"
-                      : "bg-slate-100 hover:bg-slate-200 text-slate-900"
-                  }
-                >
-                  <Copy className="h-4 w-4 mr-2" />
-                  Gerar Link
-                </Button>
-                <Button
-                  onClick={() => setPasswordResetMethod("direct")}
-                  className={
-                    passwordResetMethod === "direct"
-                      ? "ring-2 ring-blue-600 bg-blue-50 text-slate-900 hover:bg-blue-100"
-                      : "bg-slate-100 hover:bg-slate-200 text-slate-900"
-                  }
-                >
-                  <Lock className="h-4 w-4 mr-2" />
-                  Redefinir Direto
-                </Button>
+              <div className="rounded-xl border border-blue-100 bg-blue-50 p-4 text-sm text-slate-700">
+                A plataforma ainda não possui envio de e-mail configurado. O
+                painel gera um link real e de uso controlado para você
+                encaminhar ao usuário.
               </div>
-
-              {passwordResetMethod === "email" && (
-                <div className="bg-blue-50 p-4 rounded-lg border border-blue-200">
-                  <p className="text-sm text-slate-900 mb-2">
-                    Um email será enviado para:
-                  </p>
-                  <p className="text-sm font-semibold text-blue-700">
-                    {displayUser.email}
-                  </p>
-                  <p className="text-xs text-slate-600 mt-2">
-                    O usuário terá 24 horas para completar a redefinição
-                  </p>
-                </div>
-              )}
-
-              {passwordResetMethod === "link" && (
-                <div className="space-y-2">
-                  {generatedResetLink ? (
-                    <div className="bg-emerald-50 p-4 rounded-lg border border-emerald-200">
-                      <p className="text-xs font-semibold text-slate-700 mb-2">
-                        Link de Redefinição Gerado:
-                      </p>
-                      <div className="flex gap-2">
-                        <Input
-                          value={generatedResetLink}
-                          readOnly
-                          className="text-xs"
-                        />
-                        <Button
-                          size="sm"
-                          onClick={() =>
-                            handleCopyToClipboard(generatedResetLink)
-                          }
-                          variant="outline"
-                        >
-                          <Copy className="h-4 w-4" />
-                        </Button>
-                      </div>
-                      <p className="text-xs text-slate-600 mt-2">
-                        Este link expira em 24 horas
-                      </p>
-                    </div>
-                  ) : (
-                    <p className="text-sm text-slate-600">
-                      Clique em "Gerar Link" para criar um link de redefinição
-                      único
+              <div className="space-y-2">
+                {generatedResetLink ? (
+                  <div className="bg-emerald-50 p-4 rounded-lg border border-emerald-200">
+                    <p className="text-xs font-semibold text-slate-700 mb-2">
+                      Link de Redefinição Gerado:
                     </p>
-                  )}
-                </div>
-              )}
-
-              {passwordResetMethod === "direct" && (
-                <div className="bg-amber-50 p-4 rounded-lg border border-amber-200">
-                  <p className="text-sm text-slate-900 mb-2">
-                    Uma nova senha será gerada automaticamente e compartilhada
-                    com você
+                    <div className="flex gap-2">
+                      <Input
+                        value={generatedResetLink}
+                        readOnly
+                        className="text-xs"
+                      />
+                      <Button
+                        size="sm"
+                        onClick={() =>
+                          handleCopyToClipboard(generatedResetLink)
+                        }
+                        variant="outline"
+                      >
+                        <Copy className="h-4 w-4" />
+                      </Button>
+                    </div>
+                    <p className="text-xs text-slate-600 mt-2">
+                      Use este link dentro do prazo informado pela plataforma.
+                    </p>
+                  </div>
+                ) : (
+                  <p className="text-sm text-slate-600">
+                    Clique em "Gerar Link" para criar um link de redefinição
+                    único
                   </p>
-                  <p className="text-xs text-amber-700 font-semibold mt-2">
-                    ⚠ Isso gera uma senha aleatória que será válida por 24 horas
-                  </p>
-                </div>
-              )}
+                )}
+              </div>
             </div>
 
             <div className="flex gap-3 justify-end">
@@ -5347,11 +5866,7 @@ export function UserViewSlidePanel({
                 {isSavingSecurityAction ? (
                   <Loader2 className="h-4 w-4 mr-2 animate-spin" />
                 ) : null}
-                {isSavingSecurityAction
-                  ? "Processando..."
-                  : passwordResetMethod === "link"
-                    ? "Gerar Link"
-                    : "Confirmar"}
+                {isSavingSecurityAction ? "Processando..." : "Gerar novo link"}
               </AlertDialogAction>
             </div>
           </AlertDialogContent>
@@ -5660,11 +6175,11 @@ function LgpdTabContent({
   return (
     <TabsContent
       value="lgpd"
-      className="flex-1 overflow-y-auto bg-slate-200 px-[50px] pt-[25px] pb-[80px] mt-0"
+      className="allka-users-scroll flex-1 overflow-y-auto bg-white px-0 pt-2 pb-2 mt-0"
     >
-      <div className="space-y-4">
+      <div className="grid items-start gap-3 lg:grid-cols-2">
         {/* Status card */}
-        <div className="bg-white rounded-xl p-5 border border-slate-200 shadow-sm space-y-4">
+        <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm space-y-3">
           <div className="flex items-center gap-2 mb-1">
             <Shield className="h-4 w-4 text-blue-600" />
             <h3 className="font-semibold text-sm text-slate-800">
@@ -5762,8 +6277,58 @@ function LgpdTabContent({
           </div>
         </div>
 
+        <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+          <div className="mb-3 flex items-center gap-2">
+            <div className="rounded-xl bg-violet-50 p-2">
+              <BarChart3 className="h-4 w-4 text-violet-600" />
+            </div>
+            <div>
+              <h3 className="text-sm font-semibold text-slate-800">
+                Resumo de privacidade
+              </h3>
+              <p className="text-xs text-slate-500">
+                Visão geral do status de privacidade.
+              </p>
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            <div className="rounded-xl border border-orange-100 bg-orange-50 p-3">
+              <p className="text-xs font-semibold text-orange-700">
+                {lgpdData?.consent_given
+                  ? "Consentimento ativo"
+                  : "Consentimento pendente"}
+              </p>
+              <p className="mt-1 text-xs text-slate-500">
+                {lgpdData?.consent_given
+                  ? "Consentimento registrado"
+                  : "Ainda não fornecido"}
+              </p>
+            </div>
+            <div className="rounded-xl border border-violet-100 bg-violet-50 p-3">
+              <p className="text-xl font-bold text-slate-900">
+                {purposes.length}
+              </p>
+              <p className="text-xs text-slate-500">Finalidades registradas</p>
+            </div>
+            <div className="rounded-xl border border-blue-100 bg-blue-50 p-3">
+              <p className="text-sm font-semibold text-slate-900">
+                {lgpdData?.data_export_requested
+                  ? "Solicitação ativa"
+                  : "Nenhuma"}
+              </p>
+              <p className="text-xs text-slate-500">Exportação de dados</p>
+            </div>
+            <div className="rounded-xl border border-emerald-100 bg-emerald-50 p-3">
+              <p className="text-sm font-semibold text-slate-900">
+                {lgpdData?.consent_date || "—"}
+              </p>
+              <p className="text-xs text-slate-500">Última atualização</p>
+            </div>
+          </div>
+        </div>
+
         {/* Finalidades */}
-        <div className="bg-white rounded-xl p-5 border border-slate-200 shadow-sm">
+        <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
           <h3 className="font-semibold text-sm text-slate-800 mb-3">
             Finalidades de Tratamento
           </h3>
@@ -5787,7 +6352,7 @@ function LgpdTabContent({
         </div>
 
         {/* Histórico de consentimento */}
-        <div className="bg-white rounded-xl p-5 border border-slate-200 shadow-sm">
+        <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
           <h3 className="font-semibold text-sm text-slate-800 mb-3">
             Histórico de Consentimento
           </h3>
@@ -5815,7 +6380,7 @@ function LgpdTabContent({
         </div>
 
         {/* Solicitações */}
-        <div className="bg-white rounded-xl p-5 border border-slate-200 shadow-sm space-y-3">
+        <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm space-y-3">
           <h3 className="font-semibold text-sm text-slate-800">
             Direitos do Titular (LGPD Art. 18)
           </h3>
@@ -5854,7 +6419,7 @@ function LgpdTabContent({
         </div>
 
         {/* Política de Privacidade */}
-        <div className="bg-white rounded-xl p-5 border border-slate-200 shadow-sm">
+        <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
           <h3 className="font-semibold text-sm text-slate-800 mb-2">
             Política de Privacidade
           </h3>

@@ -15,16 +15,17 @@ import { STANDARD_SHELL_PANEL_CLASS } from "@/components/standard-page-shell";
  *     </DashboardShellFrame>
  *   );
  */
-export const DashboardShellFrame = forwardRef<HTMLDivElement, { children: ReactNode }>(
-  function DashboardShellFrame({ children }, ref) {
-    return (
-      <div className={STANDARD_SHELL_PANEL_CLASS}>
-        <div className="relative h-full min-h-0 flex flex-col overflow-hidden">
-          <div className="flex-1 min-h-0 overflow-y-auto" ref={ref}>
-            <div className="container mx-auto space-y-4 px-0 py-0">{children}</div>
-          </div>
+export const DashboardShellFrame = forwardRef<
+  HTMLDivElement,
+  { children: ReactNode }
+>(function DashboardShellFrame({ children }, ref) {
+  return (
+    <div className={`${STANDARD_SHELL_PANEL_CLASS} !p-1.5 sm:!p-2`}>
+      <div className="relative h-full min-h-0 flex flex-col overflow-hidden">
+        <div className="flex-1 min-h-0 overflow-y-auto" ref={ref}>
+          <div className="mx-auto w-full space-y-3 px-0 py-0">{children}</div>
         </div>
       </div>
-    );
-  },
-);
+    </div>
+  );
+});
