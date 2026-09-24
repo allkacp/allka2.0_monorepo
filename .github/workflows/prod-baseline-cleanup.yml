@@ -34,6 +34,7 @@ concurrency:
 
 permissions:
   contents: read
+  packages: read
 
 jobs:
   cleanup:
@@ -49,15 +50,13 @@ jobs:
           VPS_USER: ${{ secrets.VPS_USER }}
           VPS_SSH_PORT: ${{ secrets.VPS_SSH_PORT }}
           VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
-          GHCR_PAT: ${{ secrets.GHCR_PAT }}
-          GHCR_USERNAME: ${{ secrets.GHCR_USERNAME }}
+          GHCR_PAT: ${{ github.token }}
+          GHCR_USERNAME: ${{ github.actor }}
         run: |
           : "${VPS_HOST:?Set the VPS_HOST secret}"
           : "${VPS_USER:?Set the VPS_USER secret}"
           : "${VPS_SSH_PORT:?Set the VPS_SSH_PORT secret}"
           : "${VPS_SSH_KEY:?Set the VPS_SSH_KEY secret}"
-          : "${GHCR_PAT:?Set the GHCR_PAT secret}"
-          : "${GHCR_USERNAME:?Set the GHCR_USERNAME secret}"
           if [ "$MODE" = "apply" ] && [ "$CONFIRM" != "APAGAR DADOS DO SERVIDOR" ]; then
             echo "::error::Para apply, informe exatamente: APAGAR DADOS DO SERVIDOR"
             exit 1
@@ -131,8 +130,8 @@ jobs:
           VPS_USER: ${{ secrets.VPS_USER }}
           VPS_SSH_PORT: ${{ secrets.VPS_SSH_PORT }}
           VPS_DEPLOY_PATH: ${{ secrets.VPS_DEPLOY_PATH || '/opt/allka-2026' }}
-          GHCR_PAT: ${{ secrets.GHCR_PAT }}
-          GHCR_USERNAME: ${{ secrets.GHCR_USERNAME }}
+          GHCR_PAT: ${{ github.token }}
+          GHCR_USERNAME: ${{ github.actor }}
         run: |
           VPS_HOST="$(echo -n "$VPS_HOST" | tr -d '[:space:]')"
           VPS_USER="$(echo -n "$VPS_USER" | tr -d '[:space:]')"
