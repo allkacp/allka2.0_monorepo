@@ -33,7 +33,7 @@ Pergunta antes de sair codando: **isso afeta frontend, backend ou banco?**
 | `package.json` do front                                                          | Frontend (rebuild com install)   |
 | `apps/backend/package.json`                                                           | Backend (instalar deps)          |
 
-Depois, consulte [deploy.md](./deploy.md) para saber o que subir.
+Depois, consulte [deploy-hostinger-kvm.md](./deploy-hostinger-kvm.md) para saber o que subir.
 
 ---
 
@@ -184,7 +184,7 @@ Quando fizer algo relevante:
 1. **Se mudou arquitetura ou criou padrão novo** → atualize o doc correspondente em `/docs`.
 2. **Se adicionou regra de negócio** → atualize `regras-de-negocio.md`.
 3. **Se criou tela nova** → adicione em `telas-e-funcionalidades.md`.
-4. **Se mudou variável de ambiente ou processo de deploy** → atualize `deploy.md`.
+4. **Se mudou variável de ambiente ou processo de deploy** → atualize `deploy-hostinger-kvm.md`.
 5. **Se criou seed novo** → mencione em `banco.md` e/ou `produtos.md`.
 
 Documentação desatualizada é pior que sem documentação. Gaste 5 minutos atualizando.

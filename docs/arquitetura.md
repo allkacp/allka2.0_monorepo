@@ -151,7 +151,7 @@ backend/
 | ------------- | ---------------------------------- |
 | `mock`        | (não usa)                          |
 | `development` | `http://localhost:3001/api`        |
-| `production`  | `https://api-dev.allka.com.vc/api` |
+| `production`  | `https://api.allka.store/api` |
 
 ### Autenticação
 

@@ -86,7 +86,7 @@ app.use(
       // Allow requests with no origin (mobile apps, curl, Postman)
       if (!origin) return callback(null, true);
       const allowed = [
-        "https://dev.allka.com.vc",
+        "https://allka.store",
         process.env.FRONTEND_URL ?? "",
       ].filter(Boolean);
       // Allow any localhost port in development

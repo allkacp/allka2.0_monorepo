@@ -91,8 +91,8 @@ O deploy principal de desenvolvimento roda no Hostinger KVM com containers separ
 
 | Serviço      | Imagem/infra                                    | Domínio                         |
 | ------------ | ----------------------------------------------- | ------------------------------- |
-| **Frontend** | imagem Nginx gerada por `docker/frontend.prod.Dockerfile` | `https://dev.allka.com.vc`      |
-| **Backend**  | imagem Node gerada por `docker/backend.prod.Dockerfile`    | `https://api-dev.allka.com.vc`  |
+| **Frontend** | imagem Nginx gerada por `docker/frontend.prod.Dockerfile` | `https://allka.store`           |
+| **Backend**  | imagem Node gerada por `docker/backend.prod.Dockerfile`    | `https://api.allka.store`       |
 | **Banco**    | `mysql:8.4` com volume Docker                   | rede interna do Compose         |
 | **Proxy**    | Caddy com HTTPS automático                      | portas 80/443 do VPS            |
 

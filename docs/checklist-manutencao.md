@@ -125,10 +125,10 @@ Checklists práticas para cada fase do trabalho.
 
 ### Smoke test (em até 5 minutos)
 
-- [ ] `https://app.allka.com.vc` carrega sem tela branca
+- [ ] `https://allka.store` carrega sem tela branca
 - [ ] Login funciona com usuário real
 - [ ] Uma página principal de cada portal abre (dashboard admin, empresa, nômade, agência, parceiro)
-- [ ] `https://api-dev.allka.com.vc/api/health` responde 200
+- [ ] `https://api.allka.store/api/health` responde 200
 - [ ] Fluxo da feature nova funciona em produção
 
 ### Verificações técnicas

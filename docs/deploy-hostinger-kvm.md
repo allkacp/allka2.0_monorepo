@@ -2,16 +2,16 @@
 
 Este projeto publica duas imagens no GHCR e faz deploy no VPS por SSH usando Docker Compose:
 
-- `dev.allka.com.vc`: frontend Nginx servido pelo Caddy.
-- `api-dev.allka.com.vc`: backend Express servido pelo Caddy.
+- `allka.store`: frontend Nginx servido pelo Caddy.
+- `api.allka.store`: backend Express servido pelo Caddy.
 - `mysql`: MySQL 8.4 em volume Docker no mesmo VPS.
 
 ## DNS
 
 Crie registros `A` apontando para o IP do KVM:
 
-- `dev.allka.com.vc`
-- `api-dev.allka.com.vc`
+- `allka.store`
+- `api.allka.store`
 
 ## Preparar o VPS
 
@@ -41,7 +41,7 @@ Opcionais:
 - `VPS_DEPLOY_PATH`: padrao `/opt/allka-2026`.
 - `MYSQL_DATABASE`: padrao `allka`.
 - `MYSQL_USER`: padrao `allka`.
-- `VITE_API_URL`: padrao `https://api-dev.allka.com.vc/api`.
+- `VITE_API_URL`: padrao `https://api.allka.store/api`.
 - `GHCR_PAT`: token com permissao de leitura de packages se o pacote GHCR ficar privado.
 
 Use senhas MySQL sem caracteres de URL como `@`, `/`, `:` e `#`, pois elas entram na `DATABASE_URL` do Prisma.
