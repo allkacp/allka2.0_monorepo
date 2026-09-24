@@ -15,3 +15,7 @@ Mais recente primeiro. Cada entrada diz o que subiu, por pasta, e o que NÃO sub
 **Docs/infra**
 - Removidas referências aos endereços antigos; criados `CLAUDE.md` e este registro.
 **NÃO subiu (dados):** a limpeza local para 16 usuários. O banco do servidor continua com os dados antigos até um procedimento de limpeza específico ser autorizado.
+
+## Problemas conhecidos (não bloqueiam deploy)
+- CI (`ci.yml`): testes de frontend desatualizados depois da reforma de telas (ex.: catálogo/produtos: "Serviço Demo", "Todos os pilares", "a partir de BRL 300.00", contagens 36/162). Os testes esperam o layout antigo; precisam ser reescritos para o layout novo. O deploy roda independente do CI.
+- Limpeza do banco do servidor: dry-run feito (servidor tem 1061 usuários; ficariam 16). `apply` aguarda autorização explícita do usuário.
