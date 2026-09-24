@@ -96,3 +96,8 @@ links-primeiro-acesso*.csv
 # comercial dos produtos e cópias de imagem, sempre fora do Git.
 /scratch/catalog2-package*/
 **/catalog2-package*/
+
+# Backups e dumps locais nunca vao pro Git
+backups/
+.kilo/
+/entregas/tarefa-22506/layout-site/

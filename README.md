@@ -96,7 +96,39 @@ O deploy principal de desenvolvimento roda no Hostinger KVM com containers separ
 | **Banco**    | `mysql:8.4` com volume Docker                   | rede interna do Compose         |
 | **Proxy**    | Caddy com HTTPS automático                      | portas 80/443 do VPS            |
 
-A workflow [deploy.yml](./.github/workflows/deploy.yml) publica imagens no GHCR, envia o Compose para o VPS por SSH, executa migrations MySQL e sobe os serviços. Guia completo em [docs/deploy-hostinger-kvm.md](./docs/deploy-hostinger-kvm.md). O guia antigo de cPanel continua em [docs/deploy.md](./docs/deploy.md) como referência histórica.
+As workflows [deploy-backend.yml](./.github/workflows/deploy-backend.yml) e [deploy-frontend.yml](./.github/workflows/deploy-frontend.yml) publicam imagens no GHCR, enviam o Compose para o VPS por SSH, executam as migrations do Prisma e sobem os serviços. Guia completo em [docs/deploy-hostinger-kvm.md](./docs/deploy-hostinger-kvm.md). (Os endereços antigos `dev.allka.com.vc` / `api-dev.allka.com.vc` e o guia de cPanel foram removidos — não são mais usados.)
+
+## Operação e deploy — LEIA ANTES DE QUALQUER TRABALHO (vale para qualquer pessoa ou IA: Claude, Codex, Copilot…)
+
+> Esta seção é a **fonte única** das regras de operação. `CLAUDE.md`, `AGENTS.md` e `.github/copilot-instructions.md` apenas apontam para cá.
+
+**Endereços:** site https://allka.store · API https://api.allka.store (`/api/health` → `{"status":"ok"}`) · servidor VPS Hostinger (Docker Compose + Caddy).
+
+### Código x dado (a regra que mais gera confusão)
+- **Deploy leva só CÓDIGO.** `git push allka2 HEAD:main` dispara `deploy-backend.yml` (se mudou `apps/backend/**`) e/ou `deploy-frontend.yml` (se mudou `apps/frontend/**`). O deploy do backend também aplica as migrations do Prisma no banco do servidor.
+- **Dados (usuários, empresas, projetos, produtos) NÃO sobem no deploy.** O banco local e o do servidor são separados: mudar dado local não muda o servidor.
+- Dado só sobe por procedimento explícito e guardado (abaixo). Nunca rodar script local apontando para o banco do servidor por conta própria.
+
+### Protocolo de deploy (seguir sempre, nesta ordem)
+1. `git status`; typecheck (`npx tsc --noEmit -p .`) e `npm run build` em `apps/backend` e `apps/frontend`.
+2. Ver o que vai subir desde o último deploy: `git diff --stat $(git describe --tags --match 'deploy-*' --abbrev=0)..HEAD`.
+3. Commitar e `git push allka2 HEAD:main`. Acompanhar com `gh run list --repo allkacp/allka2.0_monorepo` até **Deploy Backend** e **Deploy Frontend** ficarem verdes.
+4. Verificar no ar: API health, site 200 e um login.
+5. Marcar: `git tag deploy-AAAA-MM-DD-N && git push allka2 deploy-AAAA-MM-DD-N` e registrar em [docs/deploy-log.md](./docs/deploy-log.md).
+6. **Relatar ao usuário em linguagem simples:** quais pastas/áreas subiram (backend, frontend, banco/migrations, docs), o que mudou para o usuário em cada uma e o que **não** subiu (dados locais).
+7. CI acusando "schema.prisma divergente das migrations" → gerar a migration que falta (nunca `db push`). Timeout de SSH num workflow costuma ser transitório → `gh run rerun <id> --failed`.
+
+### Registro do que foi alterado
+Ao terminar qualquer alteração de arquivos, anotar em [docs/deploy-log.md](./docs/deploy-log.md), seção **"Pendente de deploy"** (pasta/área + o que mudou). Quando o usuário pedir deploy, subir só o que está pendente e listar no relatório. Depois do deploy, mover as anotações para a entrada do deploy.
+
+### Dados: produtos e limpeza do banco do servidor
+- **Produtos do catalog2 (preencher local → subir):** `npm run catalog2:export-prepared` (local, gera pacote fora do Git) → workflow manual **"Importar catálogo preparado em produção"** com `dry_run` primeiro e só depois `apply` (exige hash do manifesto, backup validado e a frase "TRANSFERIR PARA PRODUCAO"). Detalhes nos cabeçalhos de `apps/backend/src/scripts/catalog2-export-prepared-state.ts` e `catalog2-transfer-prepared-state.ts`. Só rodar `apply` com pedido explícito do usuário.
+- **Zerar/limpar dados do servidor:** operação destrutiva e irreversível. Exige backup do banco do servidor, ensaio numa cópia, mostrar as contagens ao usuário e confirmação explícita naquele momento.
+
+### Contas de teste e preferências do usuário
+- 16 usuários (12 reais do time + 4 fake: `company@`, `company2@`, `agency@`, `partner@allka.com.vc`), senha `123456` (decisão do usuário, vale também no servidor). Empresas/agências fake têm prefixo `[TESTE]`.
+- O usuário não é técnico: ao fechar cada tarefa, dar resumo curto em linguagem leiga (o que foi feito / deu certo / não deu certo / o que preciso dele).
+- Erros mostrados ao usuário sempre com o motivo exato, em português. Uma tela/componente compartilhado para todos os portais (muda só permissão/dado). Ações irreversíveis: confirmar antes.
 
 ---
 
